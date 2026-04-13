@@ -12,8 +12,83 @@ datasource db {
   provider = "postgresql"
 }
 
+//organization
+model Organization {
+  id          String @id @default(uuid())
+  name        String
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  employees   Employee[]
+  departments Department[]
+}
+
+//specific user 
 model User {
-  id    String @id @default(uuid())
-  email String @unique
-  name  String
+  id                String @id @default(uuid())
+  email             String? @unique
+  phone             String
+  password          String?
+  name              String
+  roleId            String
+  organizationId    String
+
+  role              Role @relation(fields: [roleId], references: [id])
+  organization      Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt         DateTime @default(now())
+}
+
+
+model Role {
+  id                String @id @default(uuid())
+  name              String
+  organizationId    String
+
+  users             User[]
+  permissions       RolePermission[]
+}
+
+model Permission {
+  id                String @id @default(uuid())
+  name              String @unique
+  description       String?
+
+  roles             RolePermission[]
+}
+
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model Employee {
+  id             String   @id @default(uuid())
+  firstName      String
+  lastName       String
+  email          String   @unique
+  departmentId   String?
+  organizationId String
+  userId         String?  @unique
+
+  department     Department? @relation(fields: [departmentId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt      DateTime @default(now())
+}
+
+
+model Department {
+  id             String   @id @default(uuid())
+  name           String
+  organizationId String
+
+  employees      Employee[]
+  organization   Organization @relation(fields: [organizationId], references: [id])
 }

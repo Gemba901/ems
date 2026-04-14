@@ -7,7 +7,7 @@ export interface JwtPayload {
     userId: String;
     organizationId: String
     roleId: String;
-    email: String;
+    email: String | null;
     phone: String;
 }
 
@@ -34,7 +34,7 @@ export class AuthService {
         if (!user) throw new UnauthorizedException('Invalid credentials');
 
         // compare password with hashed password
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await bcrypt.compare(password, user.password!);
         if (!isMatch) throw new UnauthorizedException('Invalid credentials');
 
         // create JWT payload and sign token

@@ -73,6 +73,7 @@ model Employee {
   firstName      String
   lastName       String
   email          String   @unique
+  phone          String?  @unique
   departmentId   String?
   organizationId String
   userId         String?  @unique

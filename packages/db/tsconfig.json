@@ -10,7 +10,8 @@
     "target": "ES2023",
     "skipLibCheck": true,
     "strictNullChecks": true,
-    "types": ["node"]
+    "types": ["node"],
+    "rootDir": "."
   },
   "include": ["index.ts", "generated/**/*.ts", "prisma/seed.ts"]
 }

@@ -43,7 +43,7 @@ RUN pnpm turbo run build --filter=api...
 # Stage 4: Production Runner
 FROM node:22-alpine AS runner
 WORKDIR /app
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
 # Secure the container by not running as root
 RUN addgroup --system --gid 1001 nestjs

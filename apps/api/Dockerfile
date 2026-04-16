@@ -1,6 +1,6 @@
 
 # Stage 1: Prune the workspace
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 RUN apk update && apk add --no-cache libc6-compat
 WORKDIR /app
 RUN npm install -g turbo
@@ -10,7 +10,7 @@ RUN turbo prune api --docker
 
 
 # Stage 2: Install dependencies
-FROM node:18-alpine AS installer
+FROM node:22-alpine AS installer
 RUN apk update && apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -26,7 +26,7 @@ RUN pnpm install --frozen-lockfile
 
 
 # Stage 3: Build the project
-FROM node:18-alpine AS sourcer
+FROM node:22-alpine AS sourcer
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -41,7 +41,7 @@ RUN pnpm turbo run build --filter=api...
 
 
 # Stage 4: Production Runner
-FROM node:18-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV production
 
@@ -57,7 +57,7 @@ COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/generated ./packages/
 COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/package.json ./packages/db/package.json
 
 EXPOSE 3001
-ENV PORT 3001
+ENV PORT=3001
 
 # Start the NestJS application
 CMD ["node", "apps/api/dist/main.js"]

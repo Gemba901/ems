@@ -31,8 +31,8 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY --from=installer /app/ .
 COPY --from=builder /app/out/full/ .
 
-# Generate Prisma Client (if Next.js uses it directly for server actions/API routes)
-RUN pnpm dlx prisma generate --schema=packages/db/prisma/schema.prisma
+# Generate Prisma Client using prisma.config.ts
+RUN cd packages/db && pnpm exec prisma generate
 
 # Build the Next.js frontend
 RUN pnpm turbo run build --filter=web...

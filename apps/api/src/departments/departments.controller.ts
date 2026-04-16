@@ -19,14 +19,14 @@ export class DepartmentsController {
 
     // both admins and managers can view departments in their organization
     @Get()
-    @Roles(Role.ADMIN, Role.MANAGER)
+    @Roles(Role.ADMIN, Role.MANAGEMENT)
     getDepartments(@Request() req) {
         return this.departmentsService.getDepartments(req.user.organizationId);
     }
 
     // both admins and managers can view a single department by id
     @Get(':id')
-    @Roles(Role.ADMIN, Role.MANAGER)
+    @Roles(Role.ADMIN, Role.MANAGEMENT)
     getDepartmentById(@Request() req) {
         return this.departmentsService.getDepartmentById(req.params.id);
     }

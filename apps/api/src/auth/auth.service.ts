@@ -72,7 +72,7 @@ export class AuthService {
         // generate a short lived token for password creation, valid for 15 minutes
         const setupToken = this.jwtService.sign({
             userId: user.id,
-            purpsose: 'FIRST_TIME_SETUP'
+            purpose: 'FIRST_TIME_SETUP'
         }, { expiresIn: '15m' });
 
         return {
@@ -87,9 +87,14 @@ export class AuthService {
             const decoded = this.jwtService.verify(setupToken);
 
             // check token purpose
-            if (decoded.purpsose !== 'FIRST_TIME_SETUP') {
+            if (decoded.purpose !== 'FIRST_TIME_SETUP') {
                 throw new UnauthorizedException('Invalid setup token');
             }
+
+            // check if user exists and password is not already set
+            const user = await this.prisma.user.findUnique({ where: { id: decoded.userId } });
+            if (!user) throw new UnauthorizedException('User not found');
+            if (user.password) throw new UnauthorizedException('Password already set. Please login.');
 
             // hash new password
             const hashedPassword = await bcrypt.hash(newPassword, 10);

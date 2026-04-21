@@ -1,3 +1,5 @@
+"use client";
+
 import { 
   Calendar, 
   CheckCircle2, 
@@ -18,9 +20,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { useAuthStore } from "@/store/auth.store";
 
 export default function EnterpriseDashboardPage() {
-  // --- MOCK DATA ---
+
+  const user = useAuthStore((state) => state.user);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
 
   const metrics = {
@@ -47,7 +51,6 @@ export default function EnterpriseDashboardPage() {
     { id: 4, title: "Review monthly fuel efficiency", tag: "Routine", tagColor: "bg-slate-100 text-slate-700", comments: 1, attachments: 0 },
   ];
 
-  // The newly added System Modules
   const systemModules = [
     { title: "Time & Attendance", description: "Log hours, view shifts & request leave", icon: CalendarClock, color: "text-blue-600", bg: "bg-blue-50", border: "hover:border-blue-200" },
     { title: "Payroll & Finance", description: "Access payslips, tax forms & expenses", icon: Receipt, color: "text-emerald-600", bg: "bg-emerald-50", border: "hover:border-emerald-200" },
@@ -61,7 +64,7 @@ export default function EnterpriseDashboardPage() {
       {/* 1. HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Welcome back, Rodgers Munene.</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Welcome back, {user?.name}.</h1>
           <p className="text-slate-500 mt-1 flex items-center gap-2">
             <Target className="h-4 w-4" />
             {today}

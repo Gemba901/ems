@@ -2,13 +2,16 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { Role } from 'src/common/enum/role.enum';
 
 export interface JwtPayload {
     userId: String;
-    organizationId: String
+    organizationId: String | null;
     roleId: String;
     email: String | null;
     phone: String;
+    organizationName: String;
+    roleLevel: Role
 }
 
 @Injectable()
@@ -27,6 +30,10 @@ export class AuthService {
                     { email: phoneOrEmail },
                     { phone: phoneOrEmail }
                 ]
+            },
+            include: {
+                organization: true,
+                role: true
             }
         });
 
@@ -42,41 +49,58 @@ export class AuthService {
             userId: user.id,
             organizationId: user.organizationId,
             roleId: user.roleId,
+            roleLevel: user.role.name.toUpperCase().replace(/\s+/g, '_') as Role,
             email: user.email,
             phone: user.phone,
+            organizationName: user.organization?.name || 'Unknown Organization',
         }
 
 
         return {
             accessToken: this.jwtService.sign(payload),
-            user: { name: user.name, ...payload }
+            user: { name: user.name,  ...payload }
         }
     }
 
     // first time login - verify if user exists and return setup token
     async verifyFirstTimeUser(phoneOrEmail: string) {
-
         const user = await this.prisma.user.findFirst({
             where: {
                 OR: [
                     { email: phoneOrEmail },
                     { phone: phoneOrEmail }
                 ]
+            },
+            include: {
+                organization: true 
             }
-        })
+        });
 
-        if (!user) throw new UnauthorizedException('Account not found! Please contact your administrator.');
+        if (!user) {
+            throw new UnauthorizedException('Account not found! Please contact your administrator.');
+        }
 
-        if (user.password) throw new UnauthorizedException('Account already setup! Please login with your password.');
+        const hasPassword = !!user.password;
 
-        // generate a short lived token for password creation, valid for 15 minutes
+        const responseData = {
+            identifier: phoneOrEmail,
+            hasPassword: hasPassword,
+            name: user.name,
+            orgName: user.organization?.name || 'Unknown Organization',
+        };
+
+        if (hasPassword) {
+            return responseData;
+        }
+
         const setupToken = this.jwtService.sign({
             userId: user.id,
             purpose: 'FIRST_TIME_SETUP'
         }, { expiresIn: '15m' });
 
+
         return {
-            message: 'User verified! Proceed to create password.',
+            ...responseData,
             setupToken
         };
     }

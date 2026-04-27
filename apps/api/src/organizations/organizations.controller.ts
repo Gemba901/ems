@@ -1,0 +1,165 @@
+import {
+    Controller,
+    Get,
+    Post,
+    Patch,
+    Delete,
+    Body,
+    Param,
+    Query,
+    UseGuards,
+    HttpCode,
+    HttpStatus,
+} from '@nestjs/common';
+import { OrganizationsService } from './organizations.service';
+import {
+    CreateOrganizationDto,
+    UpdateOrganizationDto,
+    UpdateOrgStatusDto,
+    OrgPaginationDto,
+    OrgEmployeePaginationDto,
+} from './dto/organizations.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from 'src/common/enum/role.enum';
+
+/**
+ * All routes in this controller are restricted to SUPER_ADMIN only.
+ * The guard is applied at the controller level so every endpoint inherits it.
+ */
+@Controller('organizations')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPER_ADMIN)
+export class OrganizationsController {
+    constructor(private readonly organizationsService: OrganizationsService) {}
+
+    // ── Platform stats ───────────────────────────────────────────────────────
+    /**
+     * GET /organizations/stats
+     * Returns aggregated platform-wide metrics.
+     * Declared before /:id to prevent "stats" being captured as a param.
+     */
+    @Get('stats')
+    getPlatformStats() {
+        return this.organizationsService.getPlatformStats();
+    }
+
+    // ── List ─────────────────────────────────────────────────────────────────
+    /**
+     * GET /organizations?page=1&limit=20
+     * Paginated list of all organizations with counts.
+     */
+    @Get()
+    listAll(@Query() dto: OrgPaginationDto) {
+        return this.organizationsService.listAll(dto);
+    }
+
+    // ── Single org ───────────────────────────────────────────────────────────
+    /**
+     * GET /organizations/:id
+     * Full organization detail including departments and counts.
+     */
+    @Get(':id')
+    getById(@Param('id') id: string) {
+        return this.organizationsService.getById(id);
+    }
+
+    /**
+     * GET /organizations/:id/stats
+     * Per-organization aggregate stats: employees, suggestions, rates, 30-day activity.
+     */
+    @Get(':id/stats')
+    getOrgStats(@Param('id') id: string) {
+        return this.organizationsService.getOrgStats(id);
+    }
+
+    /**
+     * GET /organizations/:id/departments
+     * All departments in this org with employee count per department.
+     */
+    @Get(':id/departments')
+    getDepartments(@Param('id') id: string) {
+        return this.organizationsService.getDepartments(id);
+    }
+
+    /**
+     * GET /organizations/:id/employees?page=1&limit=20&departmentId=xxx
+     * Paginated employee list. Optional departmentId filter.
+     */
+    @Get(':id/employees')
+    getEmployees(
+        @Param('id') id: string,
+        @Query() dto: OrgEmployeePaginationDto,
+    ) {
+        return this.organizationsService.getEmployees(id, dto);
+    }
+
+    /**
+     * GET /organizations/:id/suggestions?page=1&limit=20
+     * Paginated suggestions submitted by employees in this org.
+     */
+    @Get(':id/suggestions')
+    getSuggestions(
+        @Param('id') id: string,
+        @Query() dto: OrgPaginationDto,
+    ) {
+        return this.organizationsService.getSuggestions(id, dto);
+    }
+
+    /**
+     * GET /organizations/:id/roles
+     * All roles configured for this org with user count and permissions.
+     */
+    @Get(':id/roles')
+    getRoles(@Param('id') id: string) {
+        return this.organizationsService.getRoles(id);
+    }
+
+    // ── Mutations ────────────────────────────────────────────────────────────
+    /**
+     * POST /organizations
+     * Create a new organization. Automatically seeds 5 default roles.
+     */
+    @Post()
+    create(@Body() dto: CreateOrganizationDto) {
+        return this.organizationsService.create(dto);
+    }
+
+    /**
+     * PATCH /organizations/:id
+     * Update organization profile fields (name, logo, industry, contact info).
+     */
+    @Patch(':id')
+    update(
+        @Param('id') id: string,
+        @Body() dto: UpdateOrganizationDto,
+    ) {
+        return this.organizationsService.update(id, dto);
+    }
+
+    /**
+     * PATCH /organizations/:id/status
+     * Change org lifecycle status: ACTIVE | SUSPENDED | INACTIVE.
+     * SUSPENDED = read-only access still works, new logins blocked.
+     * INACTIVE  = required before hard delete.
+     */
+    @Patch(':id/status')
+    updateStatus(
+        @Param('id') id: string,
+        @Body() dto: UpdateOrgStatusDto,
+    ) {
+        return this.organizationsService.updateStatus(id, dto.status);
+    }
+
+    /**
+     * DELETE /organizations/:id
+     * Permanently deletes the org and all its data in a safe transaction order.
+     * Org must be INACTIVE first — prevents accidental deletion of live orgs.
+     */
+    @Delete(':id')
+    @HttpCode(HttpStatus.OK)
+    delete(@Param('id') id: string) {
+        return this.organizationsService.delete(id);
+    }
+}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle, Box, Loader2 } from "lucide-react";
 import { AuthService } from "@/services/auth.service";
+import Image from "next/image";
 
 interface IdentifierStepProps {
   onSuccess: (data: {
@@ -50,12 +51,15 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
       className="w-full sm:w-[420px] p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
     >
       <div className="flex flex-col items-center mb-8">
-        <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center mb-6 shadow-sm">
-          <Box className="text-white h-6 w-6" />
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-2">
-          GEOS
-        </h1>
+        {/* use real logo */}
+        <Image
+          src="/logo.png"
+          alt="GEMBA PMS"
+          width={96}
+          height={96}
+        />
+
+        
         <p className="text-sm text-slate-500 text-center">
           Enter your email or phone number to continue.
         </p>

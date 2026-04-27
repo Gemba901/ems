@@ -11,6 +11,7 @@ import {
   HelpCircle,
   BarChart2,
   LogOut,
+  MessageSquareText,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { useEffect } from "react";
@@ -56,12 +57,18 @@ export function Sidebar() {
       icon: Settings,
       allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT] 
     },
-    { 
-      name: "Reports", 
-      href: "/reports", 
+    {
+      name: "Reports",
+      href: "/reports",
       icon: BarChart2,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD] 
+      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]
     },
+    // {
+    //   name: "Suggestions",
+    //   href: "/sims",
+    //   icon: MessageSquareText,
+    //   allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE],
+    // },
   ];
 
   

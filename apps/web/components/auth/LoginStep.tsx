@@ -13,7 +13,7 @@ interface LoginStepProps {
   onBack: () => void;
 }
 
-export function LoginStep({ data, onBack }: LoginStepProps) {
+export function LoginStep({ data, onBack: _onBack }: LoginStepProps) {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [loading, setLoading] = useState(false);
@@ -25,10 +25,10 @@ export function LoginStep({ data, onBack }: LoginStepProps) {
     setLoading(true);
     
     try {
-        const response = await AuthService.login(data.identifier, password);       
+        const response = await AuthService.login(data.identifier, password);
 
         setAuth(response.user, response.accessToken);
-        router.push("/");
+        router.push(response.user.roleLevel === "SUPER_ADMIN" ? "/admin" : "/");
     } catch (error: any) {
         alert(error.message || "Login failed. Please try again.");
     } finally {

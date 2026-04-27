@@ -1,5 +1,6 @@
-"use client"
+"use client";
 
+import { use, useEffect, useState } from "react";
 import { IdentityCard } from "../../../../components/profile/IdentityCard";
 import { InfoGrid } from "../../../../components/profile/InfoGrid";
 import { MetricCard } from "../../../../components/profile/MetricCard";
@@ -9,34 +10,63 @@ import { RoleAccess } from "../../../../components/profile/RoleAccess";
 import { EmployeeProfileData } from "@/types/employee";
 import { Archive, BarChart2, Users } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
+import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
 
-async function getEmployeeData(id: string): Promise<EmployeeProfileData> {
-  const user = useAuthStore.getState().user;
-
+function mapToProfileData(emp: EmployeeApiResponse): EmployeeProfileData {
   return {
-    id: id,
-    employeeId: "EMP-90241",
-    name: user?.name || "??",
-    role: "Senior Software Engineer",
-    department: "Engineering Hub",
+    id: emp.id,
+    employeeId: `EMP-${emp.id.slice(0, 5).toUpperCase()}`,
+    name: `${emp.firstName} ${emp.lastName}`,
+    role: emp.user?.role?.name ?? "—",
+    department: emp.department?.name ?? "—",
     status: "Active",
-    email: "surya@gembapms.co.in",
-    phone: user?.phone || "+254 700 000 000",
-    dob: "Oct 14, 1994",
-    nationalId: "XXX-XX-9481",
-    address: "Nairobi, Kenya",
+    email: emp.email,
+    phone: emp.phone ?? emp.user?.phone ?? "—",
+    dob: "—",
+    nationalId: "—",
+    address: "—",
     employmentType: "Full-Time",
-    metrics: { projectsCompleted: 14, utilizationRate: 94.2, velocity: "A+" },
-    directReports: [{ name: "T1" }, { name: "T2" }],
+    directReports: [],
+    metrics: { projectsCompleted: 0, utilizationRate: 0, velocity: "—" },
   };
 }
 
-export default async function EmployeeProfilePage({
+export default function EmployeeProfilePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const employee = await getEmployeeData(params.id);
+  const { id } = use(params);
+  const { accessToken } = useAuthStore();
+  const [employee, setEmployee] = useState<EmployeeProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    setLoading(true);
+    EmployeeService.getById(id, accessToken)
+      .then((data) => setEmployee(mapToProfileData(data)))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [id, accessToken]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
+        Loading employee profile...
+      </div>
+    );
+  }
+
+  if (error || !employee) {
+    return (
+      <div className="flex items-center justify-center h-64 text-red-500 text-sm">
+        {error ?? "Employee not found."}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
@@ -68,9 +98,9 @@ export default async function EmployeeProfilePage({
           <HistoryTimeline
             history={[
               {
-                role: "CEO",
-                description: "Lead dev...",
-                date: "Since Jan 2024",
+                role: employee.role,
+                description: employee.department,
+                date: "—",
                 isCurrent: true,
               },
             ]}
@@ -80,48 +110,15 @@ export default async function EmployeeProfilePage({
         {/* Right Column */}
         <div className="col-span-2 flex flex-col gap-6">
           <OrgContext
-            supervisor={{
-              name: "Sarah Hernandez",
-              title: "VP of Engineering",
-              initials: "SH",
-            }}
-            directReports={[
-              {
-                initials: "T1",
-                name: "",
-              },
-              {
-                initials: "T2",
-                name: "",
-              },
-              {
-                initials: "T3",
-                name: "",
-              },
-              {
-                initials: "T4",
-                name: "",
-              },
-            ]}
+            supervisor={{ name: "—", title: "—", initials: "—" }}
+            directReports={[]}
           />
           <RoleAccess
-            roleName="Admin Access"
+            roleName={employee.role}
             permissions={[
-              {
-                title: "API Architecture",
-                description: "Full rights...",
-                icon: Archive,
-              },
-              {
-                title: "Financials",
-                description: "View-only...",
-                icon: BarChart2,
-              },
-              {
-                title: "Personnel",
-                description: "Approval rights...",
-                icon: Users,
-              },
+              { title: "API Architecture", description: "Full rights", icon: Archive },
+              { title: "Financials", description: "View-only", icon: BarChart2 },
+              { title: "Personnel", description: "Approval rights", icon: Users },
             ]}
           />
 

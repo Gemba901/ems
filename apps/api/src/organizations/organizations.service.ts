@@ -1,0 +1,414 @@
+import {
+    Injectable,
+    NotFoundException,
+    ConflictException,
+    BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { OrgStatus } from 'db';
+import {
+    CreateOrganizationDto,
+    UpdateOrganizationDto,
+    OrgPaginationDto,
+    OrgEmployeePaginationDto,
+} from './dto/organizations.dto';
+
+@Injectable()
+export class OrganizationsService {
+    constructor(private prisma: PrismaService) {}
+
+    // ── Platform-wide stats ──────────────────────────────────────────────────
+
+    async getPlatformStats() {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        const [
+            organizationCount,
+            employeeCount,
+            departmentCount,
+            suggestionCount,
+            activeCount,
+            suspendedCount,
+            inactiveCount,
+            recentOrgs,
+            recentEmployees,
+            suggestionsByStatus,
+        ] = await Promise.all([
+            this.prisma.organization.count(),
+            this.prisma.employee.count(),
+            this.prisma.department.count(),
+            this.prisma.suggestion.count(),
+            this.prisma.organization.count({ where: { status: OrgStatus.ACTIVE } }),
+            this.prisma.organization.count({ where: { status: OrgStatus.SUSPENDED } }),
+            this.prisma.organization.count({ where: { status: OrgStatus.INACTIVE } }),
+            this.prisma.organization.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+            this.prisma.employee.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+            this.prisma.suggestion.groupBy({
+                by: ['status'],
+                _count: { id: true },
+            }),
+        ]);
+
+        const suggestionMap = Object.fromEntries(
+            suggestionsByStatus.map((s) => [s.status, s._count.id]),
+        );
+
+        const implemented = suggestionMap['IMPLEMENTED'] ?? 0;
+        const implementationRate =
+            suggestionCount > 0 ? Math.round((implemented / suggestionCount) * 100) : 0;
+
+        return {
+            organizationCount,
+            employeeCount,
+            departmentCount,
+            suggestionCount,
+            implementationRate,
+            byStatus: {
+                active: activeCount,
+                suspended: suspendedCount,
+                inactive: inactiveCount,
+            },
+            last30Days: {
+                newOrganizations: recentOrgs,
+                newEmployees: recentEmployees,
+            },
+            suggestionsByStatus: suggestionMap,
+        };
+    }
+
+    // ── List all organizations ───────────────────────────────────────────────
+
+    async listAll(dto: OrgPaginationDto) {
+        const page  = dto.page  ?? 1;
+        const limit = dto.limit ?? 20;
+        const skip  = (page - 1) * limit;
+
+        const [organizations, total] = await Promise.all([
+            this.prisma.organization.findMany({
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    _count: {
+                        select: {
+                            employees:   true,
+                            departments: true,
+                            users:       true,
+                            suggestions: true,
+                        },
+                    },
+                },
+            }),
+            this.prisma.organization.count(),
+        ]);
+
+        return {
+            data: organizations,
+            pagination: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit),
+            },
+        };
+    }
+
+    // ── Get single organization ──────────────────────────────────────────────
+
+    async getById(id: string) {
+        const org = await this.prisma.organization.findUnique({
+            where: { id },
+            include: {
+                departments: {
+                    include: {
+                        _count: { select: { employees: true } },
+                    },
+                    orderBy: { name: 'asc' },
+                },
+                _count: {
+                    select: {
+                        employees:   true,
+                        departments: true,
+                        users:       true,
+                        suggestions: true,
+                    },
+                },
+            },
+        });
+
+        if (!org) throw new NotFoundException('Organization not found');
+        return org;
+    }
+
+    // ── Per-org aggregate stats ──────────────────────────────────────────────
+
+    async getOrgStats(id: string) {
+        await this.findOrFail(id);
+
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        const [counts, suggestionsByStatus, suggestionsByCategory, newEmployees, recentSuggestions] =
+            await Promise.all([
+                this.prisma.organization.findUnique({
+                    where: { id },
+                    include: {
+                        _count: {
+                            select: {
+                                employees:   true,
+                                departments: true,
+                                users:       true,
+                                suggestions: true,
+                            },
+                        },
+                    },
+                }),
+                this.prisma.suggestion.groupBy({
+                    by: ['status'],
+                    where: { organizationId: id },
+                    _count: { id: true },
+                }),
+                this.prisma.suggestion.groupBy({
+                    by: ['category'],
+                    where: { organizationId: id },
+                    _count: { id: true },
+                }),
+                this.prisma.employee.count({
+                    where: { organizationId: id, createdAt: { gte: thirtyDaysAgo } },
+                }),
+                this.prisma.suggestion.count({
+                    where: { organizationId: id, createdAt: { gte: thirtyDaysAgo } },
+                }),
+            ]);
+
+        const statusMap   = Object.fromEntries(suggestionsByStatus.map((s) => [s.status, s._count.id]));
+        const categoryMap = Object.fromEntries(suggestionsByCategory.map((c) => [c.category, c._count.id]));
+
+        const totalSuggestions = counts!._count.suggestions;
+        const implemented      = statusMap['IMPLEMENTED'] ?? 0;
+        const approved         = (statusMap['APPROVED'] ?? 0) + implemented;
+        const implementationRate =
+            totalSuggestions > 0 ? Math.round((implemented / totalSuggestions) * 100) : 0;
+        const approvalRate =
+            totalSuggestions > 0 ? Math.round((approved / totalSuggestions) * 100) : 0;
+
+        return {
+            employeeCount:   counts!._count.employees,
+            departmentCount: counts!._count.departments,
+            userCount:       counts!._count.users,
+            suggestionCount: totalSuggestions,
+            implementationRate,
+            approvalRate,
+            last30Days: {
+                newEmployees,
+                newSuggestions: recentSuggestions,
+            },
+            suggestionsByStatus:   statusMap,
+            suggestionsByCategory: categoryMap,
+        };
+    }
+
+    // ── Departments ──────────────────────────────────────────────────────────
+
+    async getDepartments(id: string) {
+        await this.findOrFail(id);
+
+        return this.prisma.department.findMany({
+            where: { organizationId: id },
+            include: {
+                _count: { select: { employees: true } },
+            },
+            orderBy: { name: 'asc' },
+        });
+    }
+
+    // ── Employees ────────────────────────────────────────────────────────────
+
+    async getEmployees(id: string, dto: OrgEmployeePaginationDto) {
+        await this.findOrFail(id);
+
+        const page  = dto.page  ?? 1;
+        const limit = dto.limit ?? 20;
+        const skip  = (page - 1) * limit;
+
+        const where: Record<string, unknown> = { organizationId: id };
+        if (dto.departmentId) where.departmentId = dto.departmentId;
+
+        const [employees, total] = await Promise.all([
+            this.prisma.employee.findMany({
+                where,
+                include: {
+                    department: true,
+                    user: { include: { role: true } },
+                },
+                skip,
+                take: limit,
+                orderBy: { lastName: 'asc' },
+            }),
+            this.prisma.employee.count({ where }),
+        ]);
+
+        return {
+            data: employees,
+            pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+        };
+    }
+
+    // ── Suggestions ──────────────────────────────────────────────────────────
+
+    async getSuggestions(id: string, dto: OrgPaginationDto) {
+        await this.findOrFail(id);
+
+        const page  = dto.page  ?? 1;
+        const limit = dto.limit ?? 20;
+        const skip  = (page - 1) * limit;
+
+        const [suggestions, total] = await Promise.all([
+            this.prisma.suggestion.findMany({
+                where: { organizationId: id },
+                include: {
+                    employee: {
+                        select: { id: true, firstName: true, lastName: true, department: true },
+                    },
+                    reviews: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 1,
+                        include: {
+                            reviewer: { select: { id: true, firstName: true, lastName: true } },
+                        },
+                    },
+                },
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.suggestion.count({ where: { organizationId: id } }),
+        ]);
+
+        return {
+            data: suggestions,
+            pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+        };
+    }
+
+    // ── Roles (global) ──────────────────────────────────────────────────────────
+
+    async getRoles(id: string) {
+        await this.findOrFail(id);
+
+        // Return all global roles (no longer per-organization)
+        return this.prisma.role.findMany({
+            include: {
+                _count: { select: { users: true } },
+                permissions: { include: { permission: true } },
+            },
+            orderBy: { id: 'asc' },
+        });
+    }
+
+    // ── Create organization ──────────────────────────────────────────────────
+
+    async create(dto: CreateOrganizationDto) {
+        // Check for duplicate name (case-insensitive)
+        const existing = await this.prisma.organization.findFirst({
+            where: { name: { equals: dto.name, mode: 'insensitive' } },
+        });
+        if (existing) throw new ConflictException('An organization with this name already exists');
+
+        // Global roles are seeded at the database level, no need to create per-org
+        return this.prisma.organization.create({
+            data: {
+                name:     dto.name,
+                logoUrl:  dto.logoUrl,
+                industry: dto.industry,
+                email:    dto.email,
+                phone:    dto.phone,
+                address:  dto.address,
+            },
+        });
+    }
+
+    // ── Update organization details ──────────────────────────────────────────
+
+    async update(id: string, dto: UpdateOrganizationDto) {
+        await this.findOrFail(id);
+
+        // Prevent duplicate name if name is being changed
+        if (dto.name) {
+            const duplicate = await this.prisma.organization.findFirst({
+                where: { name: { equals: dto.name, mode: 'insensitive' }, NOT: { id } },
+            });
+            if (duplicate) throw new ConflictException('An organization with this name already exists');
+        }
+
+        return this.prisma.organization.update({
+            where: { id },
+            data: {
+                ...(dto.name     !== undefined && { name:     dto.name }),
+                ...(dto.logoUrl  !== undefined && { logoUrl:  dto.logoUrl }),
+                ...(dto.industry !== undefined && { industry: dto.industry }),
+                ...(dto.email    !== undefined && { email:    dto.email }),
+                ...(dto.phone    !== undefined && { phone:    dto.phone }),
+                ...(dto.address  !== undefined && { address:  dto.address }),
+            },
+        });
+    }
+
+    // ── Update status (ACTIVE / SUSPENDED / INACTIVE) ────────────────────────
+
+    async updateStatus(id: string, status: OrgStatus) {
+        const org = await this.findOrFail(id);
+
+        if (org.status === status) {
+            throw new BadRequestException(`Organization is already ${status}`);
+        }
+
+        const updated = await this.prisma.organization.update({
+            where: { id },
+            data: { status },
+        });
+
+        return {
+            message: `Organization status updated to ${status}`,
+            organization: updated,
+        };
+    }
+
+    // ── Delete organization ──────────────────────────────────────────────────
+    // Hard delete: only allowed when org is INACTIVE to prevent accidental data loss.
+    // Deletes all dependent records in safe order inside a transaction.
+
+    async delete(id: string) {
+        const org = await this.findOrFail(id);
+
+        if (org.status !== OrgStatus.INACTIVE) {
+            throw new BadRequestException(
+                'Only INACTIVE organizations can be permanently deleted. Set status to INACTIVE first.',
+            );
+        }
+
+        await this.prisma.$transaction(async (tx) => {
+            // 1. Suggestion audit trail
+            await tx.suggestionReview.deleteMany({ where: { suggestion: { organizationId: id } } });
+            // 2. Suggestions
+            await tx.suggestion.deleteMany({ where: { organizationId: id } });
+            // 3. Employees (must come before users due to userId FK)
+            await tx.employee.deleteMany({ where: { organizationId: id } });
+            // 4. Users
+            await tx.user.deleteMany({ where: { organizationId: id } });
+            // 5. Departments
+            await tx.department.deleteMany({ where: { organizationId: id } });
+            // 6. Organization itself (roles are global, not deleted)
+            await tx.organization.delete({ where: { id } });
+        });
+
+        return { message: `Organization "${org.name}" permanently deleted` };
+    }
+
+    // ── Private helpers ──────────────────────────────────────────────────────
+
+    private async findOrFail(id: string) {
+        const org = await this.prisma.organization.findUnique({ where: { id } });
+        if (!org) throw new NotFoundException('Organization not found');
+        return org;
+    }
+}

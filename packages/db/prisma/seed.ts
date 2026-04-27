@@ -52,17 +52,14 @@ async function main() {
 
   console.log(`📊 Found ${results.length} rows in CSV.`);
 
-  // 3. Extract and Create Unique Roles
-  const uniqueRoles = [...new Set(results.map(r => r.role).filter(Boolean))];
-  const roleMap = new Map<string, string>(); // Maps roleName -> roleId
-  
-  for (const roleName of uniqueRoles) {
-    const role = await prisma.role.create({
-      data: { name: roleName, organizationId: org.id }
-    });
-    roleMap.set(roleName, role.id);
-  }
-  console.log(`✅ Created Roles: ${uniqueRoles.join(', ')}`);
+  // 3. Role map — global roles are seeded by migration, referenced by integer ID
+  const roleMap = new Map<string, number>([
+    ['SUPER_ADMIN', 1],
+    ['ADMIN',       2],
+    ['MANAGEMENT',  3],
+    ['HOD',         4],
+    ['EMPLOYEE',    5],
+  ]);
 
   // 4. Extract and Create Unique Departments
   const uniqueDepts = [...new Set(results.map(r => r.department).filter(Boolean))];
@@ -101,7 +98,7 @@ async function main() {
       // Generate a perfectly unique email based on their CSV ID to satisfy Employee.email @unique
       const dummyEmail = `${row.id}@sunveat.local`; 
 
-      const roleId = roleMap.get(row.role) ?? roleMap.values().next().value!;
+      const roleId = roleMap.get(row.role?.toUpperCase()) ?? 5; // default to EMPLOYEE
       const departmentId = row.department ? deptMap.get(row.department) : null;
 
       // Create User

@@ -37,7 +37,7 @@ export function Header() {
         </div>
 
         <Link
-          href={`/operations/employees/${user?.userId}`}
+          href="/operations/employees/me"
           className="flex items-center gap-3 p-1 rounded-xl transition-all hover:bg-slate-50 group"
         >
           <div className="text-right hidden sm:block">

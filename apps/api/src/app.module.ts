@@ -5,6 +5,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { EmployeeModule } from './employee/employee.module';
 import { DepartmentsModule } from './departments/departments.module';
+import { SimsModule } from './sims/sims.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -16,6 +18,8 @@ import { ConfigModule } from '@nestjs/config';
     AuthModule,
     EmployeeModule,
     DepartmentsModule,
+    SimsModule,
+    OrganizationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

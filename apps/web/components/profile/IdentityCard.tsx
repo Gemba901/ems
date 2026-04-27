@@ -13,9 +13,9 @@ export const IdentityCard = ({ employee }: { employee: EmployeeProfileData }) =>
       <div className="text-[10px] uppercase tracking-widest text-blue-600 font-mono mb-1">STAFF ID: {employee.employeeId}</div>
       <h2 className="text-xl font-bold text-slate-900 mb-1">{employee.name}</h2>
       <p className="text-sm text-slate-500 mb-3">{employee.role}</p>
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none">{employee.employmentType}</Badge>
-        <Badge className="bg-blue-50 text-blue-600 hover:bg-blue-100 border-none">{employee.department}</Badge>
+        <p className="text-blue-600 border-none text-xs rounded-2xl">{employee.department}</p>
       </div>
     </div>
   </div>

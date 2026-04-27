@@ -17,6 +17,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         if (payload.purpose === 'FIRST_TIME_SETUP') {
             throw new UnauthorizedException('This token cannot be used for api access.');
         }
-        return { userId: payload.userId, email: payload.email, organizationId: payload.organizationId, roleId: payload.roleId };
+        return { userId: payload.userId, email: payload.email, organizationId: payload.organizationId, roleId: payload.roleId, roleLevel: payload.roleLevel };
     }
 }

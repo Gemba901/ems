@@ -3,7 +3,7 @@ import { User } from "lucide-react";
 
 export const InfoGrid = ({ employee }: { employee: EmployeeProfileData }) => {
   const details = [
-    { label: "Email Address", value: employee.email },
+    { label: "Email Address", value: employee.email, fullWidth: true },
     { label: "Phone Number", value: employee.phone },
     { label: "Date of Birth", value: employee.dob },
     { label: "National ID", value: employee.nationalId },
@@ -20,7 +20,7 @@ export const InfoGrid = ({ employee }: { employee: EmployeeProfileData }) => {
         {details.map((item) => (
           <div key={item.label} className={item.fullWidth ? "col-span-2" : ""}>
             <div className="text-[9px] uppercase tracking-wider text-slate-400 font-mono mb-1.5">{item.label}</div>
-            <div className="text-sm font-medium text-slate-900">{item.value}</div>
+            <div className="text-sm font-medium text-slate-900 break-all">{item.value}</div>
           </div>
         ))}
       </div>

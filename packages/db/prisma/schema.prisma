@@ -12,15 +12,37 @@ datasource db {
   provider = "postgresql"
 }
 
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum RoleName {
+  SUPER_ADMIN
+  ADMIN
+  MANAGEMENT
+  HOD
+  EMPLOYEE
+}
+
 //organization
 model Organization {
-  id          String @id @default(uuid())
+  id          String    @id @default(uuid())
   name        String
-  createdAt   DateTime @default(now())
+  logoUrl     String?
+  industry    String?
+  email       String?
+  phone       String?
+  address     String?
+  status      OrgStatus @default(ACTIVE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   users       User[]
   employees   Employee[]
   departments Department[]
+  suggestions Suggestion[]
 }
 
 //specific user 
@@ -30,20 +52,20 @@ model User {
   phone             String
   password          String?
   name              String
-  roleId            String
+  roleId            Int
   organizationId    String
 
   role              Role @relation(fields: [roleId], references: [id])
   organization      Organization @relation(fields: [organizationId], references: [id])
+  employee          Employee?
 
   createdAt         DateTime @default(now())
 }
 
 
 model Role {
-  id                String @id @default(uuid())
-  name              String
-  organizationId    String
+  id                Int @id
+  name              RoleName @unique
 
   users             User[]
   permissions       RolePermission[]
@@ -59,7 +81,7 @@ model Permission {
 
 
 model RolePermission {
-  roleId       String
+  roleId       Int
   permissionId String
 
   role         Role       @relation(fields: [roleId], references: [id])
@@ -78,8 +100,11 @@ model Employee {
   organizationId String
   userId         String?  @unique
 
-  department     Department? @relation(fields: [departmentId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  department       Department?  @relation(fields: [departmentId], references: [id])
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  user             User?        @relation(fields: [userId], references: [id])
+  suggestions      Suggestion[]
+  suggestionReviews SuggestionReview[]
 
   createdAt      DateTime @default(now())
 }
@@ -92,4 +117,63 @@ model Department {
 
   employees      Employee[]
   organization   Organization @relation(fields: [organizationId], references: [id])
+}
+
+// SIMS: Suggestions and Idea Management System
+
+enum SuggestionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  NEEDS_CLARIFICATION
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+  ARCHIVED
+}
+
+enum SuggestionPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SuggestionCategory {
+  QUALITY
+  COST
+  DELIVERY
+  SAFETY
+  MORALE
+  TECHNOLOGY
+}
+
+model Suggestion {
+  id             String             @id @default(uuid())
+  title          String
+  description    String
+  status         SuggestionStatus   @default(SUBMITTED)
+  priority       SuggestionPriority @default(MEDIUM)
+  category       SuggestionCategory
+  isAnonymous    Boolean            @default(false)
+  employeeId     String
+  organizationId String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  employee       Employee     @relation(fields: [employeeId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  reviews        SuggestionReview[]
+}
+
+// Audit trail: every status change by management is recorded here
+model SuggestionReview {
+  id             String           @id @default(uuid())
+  suggestionId   String
+  reviewerId     String
+  statusChanged  SuggestionStatus
+  note           String?
+  createdAt      DateTime         @default(now())
+
+  suggestion     Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  reviewer       Employee   @relation(fields: [reviewerId], references: [id])
 }

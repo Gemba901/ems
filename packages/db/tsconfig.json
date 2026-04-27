@@ -13,5 +13,5 @@
     "types": ["node"],
     "rootDir": "."
   },
-  "include": ["index.ts", "generated/**/*.ts", "prisma/seed.ts"]
+  "include": ["index.ts", "generated/**/*.ts"]
 }

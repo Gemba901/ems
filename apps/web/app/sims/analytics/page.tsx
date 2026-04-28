@@ -8,7 +8,7 @@ import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus } from "@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
-  LineChart, Line, Area, AreaChart,
+  Area, AreaChart,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
 import { TrendingUp, TrendingDown, Minus, Target, Zap, Award, AlertTriangle } from "lucide-react";
@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-      <div className="px-8 py-6 max-w-7xl mx-auto space-y-6">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
         <div>

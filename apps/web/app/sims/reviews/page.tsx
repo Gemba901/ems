@@ -89,7 +89,7 @@ export default function ReviewsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-      <div className="px-8 py-6 max-w-7xl mx-auto space-y-5">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-5">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -157,7 +157,7 @@ export default function ReviewsPage() {
                     <div
                       key={s.id}
                       onClick={() => router.push(`/sims/${s.id}`)}
-                      className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50/70 cursor-pointer transition-colors group"
+                      className="flex items-center gap-3 px-4 py-4 sm:px-6 hover:bg-slate-50/70 cursor-pointer transition-colors group"
                     >
                       {/* Accent bar */}
                       <div className={`w-1 self-stretch rounded-full shrink-0 ${cfg.accentBar}`} />
@@ -209,14 +209,14 @@ export default function ReviewsPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); router.push(`/sims/${s.id}`); }}
-                          className="px-4 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                          className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
                         >
                           Review
                         </button>
-                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors" />
+                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors hidden sm:block" />
                       </div>
                     </div>
                   );

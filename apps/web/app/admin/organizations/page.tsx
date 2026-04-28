@@ -322,7 +322,7 @@ export default function AdminOrganizationsPage() {
         <div className="max-w-6xl mx-auto space-y-6">
 
             {/* Header */}
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Organizations</h1>
                     <p className="text-sm text-slate-500 mt-1">
@@ -331,7 +331,7 @@ export default function AdminOrganizationsPage() {
                 </div>
                 <button
                     onClick={() => setShowNewOrg(true)}
-                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm self-start"
                 >
                     <Plus className="h-4 w-4" /> New Organization
                 </button>
@@ -389,6 +389,7 @@ export default function AdminOrganizationsPage() {
                     )}
                 </div>
 
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
@@ -468,6 +469,7 @@ export default function AdminOrganizationsPage() {
                         })}
                     </tbody>
                 </table>
+                </div>
 
                 {/* Pagination */}
                 {!loading && filtered.length > PAGE_SIZE && (

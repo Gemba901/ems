@@ -65,7 +65,7 @@ export default function MyProfilePage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
-      <div className="flex justify-between items-end mb-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-8">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mb-2">
             Operations {">"} My Profile
@@ -111,7 +111,7 @@ export default function MyProfilePage() {
             ]}
           />
 
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <MetricCard
               title="Projects Completed"
               value={employee.metrics.projectsCompleted}

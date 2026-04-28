@@ -54,7 +54,7 @@ export default function NewSuggestionPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-8 py-6 max-w-7xl mx-auto">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto">
 
         {/* Back */}
         <Link href="/sims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">

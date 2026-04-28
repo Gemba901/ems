@@ -94,7 +94,7 @@ export default function MySuggestionsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-8 py-6 max-w-7xl mx-auto space-y-5">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-5">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -180,7 +180,7 @@ export default function MySuggestionsPage() {
                   <div
                     key={s.id}
                     onClick={() => router.push(`/sims/${s.id}`)}
-                    className="px-6 py-5 hover:bg-slate-50/70 cursor-pointer transition-colors group"
+                    className="px-4 py-4 sm:px-6 sm:py-5 hover:bg-slate-50/70 cursor-pointer transition-colors group"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">

@@ -429,15 +429,15 @@ export default function TeamDirectoryPage() {
             <p className="text-sm text-slate-500 mt-1">Manage and view team members across the organization.</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search employees..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-64"
+                className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-full sm:w-64"
               />
             </div>
 
@@ -476,6 +476,7 @@ export default function TeamDirectoryPage() {
 
         {/* Table */}
         <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
               <tr>
@@ -571,6 +572,7 @@ export default function TeamDirectoryPage() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination */}
           {!loading && !error && filtered.length > PAGE_SIZE && (

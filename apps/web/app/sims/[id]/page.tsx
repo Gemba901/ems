@@ -184,7 +184,7 @@ export default function SuggestionDetailPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-8 py-6 max-w-7xl mx-auto">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto">
 
         {/* Back link */}
         <Link href="/sims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
@@ -199,9 +199,9 @@ export default function SuggestionDetailPage() {
         {!loading && !error && suggestion && (
           <>
             {/* Title row */}
-            <div className="flex items-start justify-between gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
               <h1 className="text-2xl font-bold text-slate-900 leading-snug">{suggestion.title}</h1>
-              <span className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${STATUS_BADGE[suggestion.status]}`}>
+              <span className={`self-start shrink-0 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${STATUS_BADGE[suggestion.status]}`}>
                 {STATUS_LABELS[suggestion.status]}
               </span>
             </div>

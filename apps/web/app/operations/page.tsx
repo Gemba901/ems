@@ -1,6 +1,6 @@
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
-import { Settings, Activity, ShieldAlert, RefreshCw, Database } from "lucide-react";
+import { Activity, ShieldAlert, RefreshCw, Database } from "lucide-react";
 
 export default function OperationsPage() {
   // Mock Audit Log Data
@@ -14,7 +14,7 @@ export default function OperationsPage() {
   return (
     // Restricted to top-level management
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]}>
-      <div className="p-8 max-w-7xl mx-auto w-full">
+      <div className="max-w-7xl mx-auto w-full">
         
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
@@ -62,6 +62,7 @@ export default function OperationsPage() {
             <Activity className="h-5 w-5 text-slate-400" />
             <h2 className="font-semibold text-slate-800">Recent System Activity</h2>
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50/50 text-slate-500">
               <tr>
@@ -88,6 +89,7 @@ export default function OperationsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
       </div>

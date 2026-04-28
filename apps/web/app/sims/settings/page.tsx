@@ -82,7 +82,7 @@ const MODULE_STATS = [
 export default function SimsSettingsPage() {
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN]}>
-      <div className="px-8 py-6 max-w-7xl mx-auto space-y-6">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex items-center gap-3">

@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Settings } from "lucide-react";
+import { Bell, Menu, Settings } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/auth.store";
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const user = useAuthStore((state) => state.user);
 
   const getInitials = (name: string) => {
@@ -17,8 +21,15 @@ export function Header() {
   };
 
   return (
-    <header className="flex h-20 items-center justify-between px-8 bg-transparent">
-      <div className="flex items-center gap-12">
+    <header className="flex h-16 md:h-20 items-center justify-between px-4 md:px-8 bg-transparent">
+      <div className="flex items-center gap-3 md:gap-12">
+        <button
+          className="md:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100"
+          onClick={onMenuClick}
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
         <h1 className="text-xl font-bold tracking-tight text-slate-900">
           GEOS
         </h1>

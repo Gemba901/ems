@@ -144,7 +144,7 @@ export default function SimsOverviewPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-8 py-6 max-w-7xl mx-auto space-y-5">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-5">
 
         {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -324,7 +324,7 @@ export default function SimsOverviewPage() {
 
         {/* ── Table card ─────────────────────────────────────────────────── */}
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-100">
             <div className="flex flex-wrap items-center gap-2.5">
               <select
                 value={statusFilter}
@@ -352,12 +352,13 @@ export default function SimsOverviewPage() {
               </select>
             </div>
             {!loading && filtered.length > 0 && (
-              <p className="text-xs text-slate-400">
-                Displaying {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} items
+              <p className="text-xs text-slate-400 shrink-0">
+                {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
               </p>
             )}
           </div>
 
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
@@ -466,11 +467,12 @@ export default function SimsOverviewPage() {
               })}
             </tbody>
           </table>
+          </div>
 
           {!loading && filtered.length > 0 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 border-t border-slate-100">
               <p className="text-xs text-slate-400">
-                Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)} to {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} suggestions
+                Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} suggestions
               </p>
               <div className="flex items-center gap-2">
                 <button

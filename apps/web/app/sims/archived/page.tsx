@@ -52,7 +52,7 @@ export default function ArchivedPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-      <div className="px-8 py-6 max-w-7xl mx-auto space-y-6">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-6">
 
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center">
@@ -68,7 +68,7 @@ export default function ArchivedPage() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <div className="relative flex-1 min-w-50 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
@@ -153,7 +153,7 @@ export default function ArchivedPage() {
                   </div>
                   <p className="text-sm font-bold text-slate-700 truncate">{s.title}</p>
                   <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{s.description}</p>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-slate-400">
                     {s.employee ? (
                       <span>{s.employee.firstName} {s.employee.lastName} · {s.employee.department?.name ?? "—"}</span>
                     ) : (
@@ -161,7 +161,7 @@ export default function ArchivedPage() {
                     )}
                     <span>· {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                     {archiveReview?.note && (
-                      <span className="italic truncate max-w-[260px]">· "{archiveReview.note}"</span>
+                      <span className="italic truncate max-w-65">· "{archiveReview.note}"</span>
                     )}
                   </div>
                 </div>

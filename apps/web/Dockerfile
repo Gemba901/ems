@@ -31,7 +31,8 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY --from=installer /app/ .
 COPY --from=builder /app/out/full/ .
 
-# Build the Next.js frontend
+# Build the Next.js frontend (standalone mode required for Docker)
+ENV DOCKER_BUILD=true
 RUN pnpm turbo run build --filter=web...
 
 

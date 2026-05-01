@@ -13,5 +13,6 @@
     "types": ["node"],
     "rootDir": "."
   },
-  "include": ["index.ts", "generated/**/*.ts"]
+  "include": ["index.ts", "generated/**/*"]
 }
+

@@ -5,7 +5,8 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**"],
+      "env": ["DOCKER_BUILD", "NEXT_PUBLIC_API_URL", "PORT", "DATABASE_URL", "JWT_SECRET"]
     },
     "lint": {
       "dependsOn": ["^lint"]

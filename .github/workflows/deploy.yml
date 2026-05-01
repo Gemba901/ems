@@ -62,7 +62,7 @@ jobs:
             docker run -d \
               --name gemba-api \
               --restart unless-stopped \
-              -p 127.0.0.1:3001:3001 \
+              -p 5000:5000 \
               --env-file /home/ubuntu/.env \
               "$ECR_REGISTRY/gemba-api:latest"
             docker image prune -f

@@ -14,7 +14,7 @@ RUN apk update && apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Enable corepack for pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 COPY .gitignore .gitignore
 COPY --from=builder /app/out/json/ .
@@ -26,7 +26,7 @@ RUN pnpm install --frozen-lockfile
 # Stage 3: Build the project
 FROM node:22-alpine AS sourcer
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 COPY --from=installer /app/ .
 COPY --from=builder /app/out/full/ .

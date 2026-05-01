@@ -15,7 +15,7 @@ RUN apk update && apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Enable corepack for pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 COPY .gitignore .gitignore
 COPY --from=builder /app/out/json/ .
@@ -28,7 +28,7 @@ RUN pnpm install --frozen-lockfile
 # Stage 3: Build the project
 FROM node:22-alpine AS sourcer
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 COPY --from=installer /app/ .
 COPY --from=builder /app/out/full/ .
@@ -50,9 +50,11 @@ RUN addgroup --system --gid 1001 nestjs
 RUN adduser --system --uid 1001 nestjs
 USER nestjs
 
-# Copy only the compiled assets, node_modules, and Prisma client
+# Copy compiled assets, node_modules (root + workspace), and Prisma client
 COPY --from=sourcer --chown=nestjs:nestjs /app/node_modules ./node_modules
+COPY --from=sourcer --chown=nestjs:nestjs /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=sourcer --chown=nestjs:nestjs /app/apps/api/dist ./apps/api/dist
+COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/generated ./packages/db/generated
 COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/package.json ./packages/db/package.json
 

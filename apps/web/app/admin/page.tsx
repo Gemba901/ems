@@ -7,8 +7,9 @@ import { useAuthStore } from "@/store/auth.store";
 import { AdminService, PlatformStats, Organization } from "@/services/admin.service";
 import {
     Building2, Users, Lightbulb, TrendingUp,
-    ArrowUpRight, CircleDot, ChevronRight, Activity,
+    ArrowUpRight, CircleDot, ChevronRight, Activity, Puzzle,
 } from "lucide-react";
+import { AVAILABLE_MODULES } from "@/services/admin.service";
 
 const STATUS_CONFIG = {
     ACTIVE:    { label: "Active",    dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
@@ -116,7 +117,7 @@ export default function AdminDashboardPage() {
 
             {/* Status breakdown + Suggestion pipeline */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {/* Org health */}
+                {/* Org health + module usage */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
                     <div className="flex items-center gap-2 mb-5">
                         <Activity className="h-4 w-4 text-slate-400" />
@@ -149,6 +150,36 @@ export default function AdminDashboardPage() {
                                     </div>
                                 );
                             })}
+
+                            <div className="pt-3 border-t border-slate-100">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Puzzle className="h-3.5 w-3.5 text-slate-400" />
+                                    <p className="text-xs font-semibold text-slate-700">Module Usage</p>
+                                </div>
+                                <div className="space-y-2">
+                                    {AVAILABLE_MODULES.map(({ key, label, description }) => {
+                                        const count = stats?.moduleUsage?.[key] ?? 0;
+                                        const total = stats?.organizationCount || 1;
+                                        const pct   = Math.round((count / total) * 100);
+                                        return (
+                                            <div key={key}>
+                                                <div className="flex items-center justify-between text-xs mb-1.5">
+                                                    <span className="font-medium text-slate-700">{label}
+                                                        <span className="text-slate-400 font-normal ml-1">— {description}</span>
+                                                    </span>
+                                                    <span className="text-slate-400 tabular-nums">{count} org{count !== 1 ? "s" : ""}</span>
+                                                </div>
+                                                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full rounded-full bg-indigo-400"
+                                                        style={{ width: `${pct}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

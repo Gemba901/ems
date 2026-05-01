@@ -3,11 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
-import { AdminService, OrgDetail, OrgStats, OrgStatus } from "@/services/admin.service";
+import { AdminService, OrgDetail, OrgStats, OrgStatus, ModuleType, AVAILABLE_MODULES } from "@/services/admin.service";
 import {
     ArrowLeft, Building2, Users, Lightbulb, BarChart2,
     CircleDot, Mail, Phone, MapPin, Globe, ChevronDown,
-    EyeOff, CheckCircle2, Clock, AlertCircle,
+    EyeOff, CheckCircle2, Clock, AlertCircle, Puzzle, Loader2,
 } from "lucide-react";
 
 type Tab = "overview" | "employees" | "suggestions" | "roles";
@@ -57,6 +57,7 @@ export default function OrgDetailPage() {
     const [tabLoading, setTabLoading] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [updatingModules, setUpdatingModules] = useState(false);
 
     // Initial load
     useEffect(() => {
@@ -85,6 +86,23 @@ export default function OrgDetailPage() {
 
         fetch.catch(console.error).finally(() => setTabLoading(false));
     }, [tab, accessToken, id, loading]);
+
+    const handleModuleToggle = useCallback(async (mod: ModuleType) => {
+        if (!accessToken || !org) return;
+        setUpdatingModules(true);
+        const current = org.modules ?? [];
+        const updated = current.includes(mod)
+            ? current.filter((m) => m !== mod)
+            : [...current, mod];
+        try {
+            await AdminService.updateOrganization(accessToken, org.id, { modules: updated });
+            setOrg((prev) => prev ? { ...prev, modules: updated } : prev);
+        } catch (e: any) {
+            alert(e.message || "Failed to update modules");
+        } finally {
+            setUpdatingModules(false);
+        }
+    }, [accessToken, org]);
 
     const handleStatusChange = useCallback(async (status: OrgStatus) => {
         if (!accessToken || !org) return;
@@ -304,6 +322,47 @@ export default function OrgDetailPage() {
                                             <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                                 <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }} />
                                             </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Modules */}
+                        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                                <div className="flex items-center gap-2">
+                                    <Puzzle className="h-4 w-4 text-slate-400" />
+                                    <p className="text-sm font-semibold text-slate-800">Modules</p>
+                                </div>
+                                {updatingModules && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
+                            </div>
+                            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {AVAILABLE_MODULES.map(({ key, label, description }) => {
+                                    const active = (org.modules ?? []).includes(key);
+                                    return (
+                                        <div
+                                            key={key}
+                                            className={`flex items-center justify-between p-4 rounded-lg border ${active ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Puzzle className={`h-4 w-4 ${active ? "text-indigo-600" : "text-slate-300"}`} />
+                                                <div>
+                                                    <p className={`text-sm font-semibold ${active ? "text-indigo-700" : "text-slate-700"}`}>{label}</p>
+                                                    <p className="text-[11px] text-slate-400">{description}</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => handleModuleToggle(key)}
+                                                disabled={updatingModules}
+                                                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                                                    active
+                                                        ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                                                        : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                                }`}
+                                            >
+                                                {active ? "Disable" : "Enable"}
+                                            </button>
                                         </div>
                                     );
                                 })}

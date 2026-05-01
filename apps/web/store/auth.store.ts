@@ -19,8 +19,10 @@ interface AuthState {
     user: User | null;
     accessToken: string | null;
     isAuthenticated: boolean;
+    _hasHydrated: boolean;
     setAuth: (user: User, token: string) => void;
     logout: () => void;
+    setHasHydrated: (value: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -29,13 +31,17 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             accessToken: null,
             isAuthenticated: false,
+            _hasHydrated: false,
 
             setAuth: (user, token) => set({ user, accessToken: token, isAuthenticated: true }),
-
             logout: () => set({ user: null, accessToken: null, isAuthenticated: false }),
+            setHasHydrated: (value) => set({ _hasHydrated: value }),
         }),
         {
             name: "geos-auth-storage",
+            onRehydrateStorage: () => (state) => {
+                state?.setHasHydrated(true);
+            },
         }
     )
 );

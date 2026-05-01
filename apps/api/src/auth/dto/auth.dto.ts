@@ -34,3 +34,15 @@ export class LoginDto {
     @MinLength(6, { message: 'Password must be at least 6 characters' })
     password!: string;
 }
+
+export class SelectOrgDto {
+    @Expose()
+    @IsString()
+    @IsNotEmpty({ message: 'Selection token is required' })
+    selectionToken!: string;
+
+    @Expose()
+    @IsString()
+    @IsNotEmpty({ message: 'Organization ID is required' })
+    organizationId!: string;
+}

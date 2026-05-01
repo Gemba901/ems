@@ -41,7 +41,7 @@ export class SimsService {
 
   // Resolves the employee record for the currently authenticated user
   private async resolveEmployee(userId: string) {
-    const employee = await this.prisma.employee.findUnique({
+    const employee = await this.prisma.employee.findFirst({
       where: { userId },
       select: { id: true, departmentId: true },
     });

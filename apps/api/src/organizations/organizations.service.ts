@@ -4,8 +4,9 @@ import {
     ConflictException,
     BadRequestException,
 } from '@nestjs/common';
+import type { Prisma } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { OrgStatus } from 'db';
+import { OrgStatus, ModuleType } from 'db';
 import {
     CreateOrganizationDto,
     UpdateOrganizationDto,
@@ -33,6 +34,7 @@ export class OrganizationsService {
             recentOrgs,
             recentEmployees,
             suggestionsByStatus,
+            simsCount,
         ] = await Promise.all([
             this.prisma.organization.count(),
             this.prisma.employee.count(),
@@ -47,6 +49,7 @@ export class OrganizationsService {
                 by: ['status'],
                 _count: { id: true },
             }),
+            this.prisma.organization.count({ where: { modules: { has: ModuleType.SIMS } } }),
         ]);
 
         const suggestionMap = Object.fromEntries(
@@ -73,6 +76,9 @@ export class OrganizationsService {
                 newEmployees: recentEmployees,
             },
             suggestionsByStatus: suggestionMap,
+            moduleUsage: {
+                SIMS: simsCount,
+            },
         };
     }
 
@@ -91,10 +97,10 @@ export class OrganizationsService {
                 include: {
                     _count: {
                         select: {
-                            employees:   true,
-                            departments: true,
-                            users:       true,
-                            suggestions: true,
+                            employees:        true,
+                            departments:      true,
+                            userOrganizations: true,
+                            suggestions:      true,
                         },
                     },
                 },
@@ -127,10 +133,10 @@ export class OrganizationsService {
                 },
                 _count: {
                     select: {
-                        employees:   true,
-                        departments: true,
-                        users:       true,
-                        suggestions: true,
+                        employees:         true,
+                        departments:       true,
+                        userOrganizations: true,
+                        suggestions:       true,
                     },
                 },
             },
@@ -154,10 +160,10 @@ export class OrganizationsService {
                     include: {
                         _count: {
                             select: {
-                                employees:   true,
-                                departments: true,
-                                users:       true,
-                                suggestions: true,
+                                employees:         true,
+                                departments:       true,
+                                userOrganizations: true,
+                                suggestions:       true,
                             },
                         },
                     },
@@ -194,7 +200,7 @@ export class OrganizationsService {
         return {
             employeeCount:   counts!._count.employees,
             departmentCount: counts!._count.departments,
-            userCount:       counts!._count.users,
+            userCount:       counts!._count.userOrganizations,
             suggestionCount: totalSuggestions,
             implementationRate,
             approvalRate,
@@ -238,7 +244,14 @@ export class OrganizationsService {
                 where,
                 include: {
                     department: true,
-                    user: { include: { role: true } },
+                    user: {
+                        include: {
+                            organizations: {
+                                where: { organizationId: id },
+                                include: { role: true },
+                            },
+                        },
+                    },
                 },
                 skip,
                 take: limit,
@@ -296,9 +309,11 @@ export class OrganizationsService {
         await this.findOrFail(id);
 
         // Return all global roles (no longer per-organization)
+        const roleCountSelect: Prisma.RoleCountOutputTypeSelect = { userOrganizations: true };
+
         return this.prisma.role.findMany({
             include: {
-                _count: { select: { users: true } },
+                _count: { select: roleCountSelect },
                 permissions: { include: { permission: true } },
             },
             orderBy: { id: 'asc' },
@@ -308,22 +323,61 @@ export class OrganizationsService {
     // ── Create organization ──────────────────────────────────────────────────
 
     async create(dto: CreateOrganizationDto) {
-        // Check for duplicate name (case-insensitive)
+        // Check for duplicate org name (case-insensitive)
         const existing = await this.prisma.organization.findFirst({
             where: { name: { equals: dto.name, mode: 'insensitive' } },
         });
         if (existing) throw new ConflictException('An organization with this name already exists');
 
-        // Global roles are seeded at the database level, no need to create per-org
-        return this.prisma.organization.create({
-            data: {
-                name:     dto.name,
-                logoUrl:  dto.logoUrl,
-                industry: dto.industry,
-                email:    dto.email,
-                phone:    dto.phone,
-                address:  dto.address,
-            },
+        // Check admin email is not already in use
+        const existingUser = await this.prisma.user.findUnique({
+            where: { email: dto.adminEmail },
+        });
+        if (existingUser) throw new ConflictException('A user with this email already exists');
+
+        return this.prisma.$transaction(async (tx) => {
+            const org = await tx.organization.create({
+                data: {
+                    name:     dto.name,
+                    logoUrl:  dto.logoUrl,
+                    industry: dto.industry,
+                    email:    dto.email,
+                    phone:    dto.phone,
+                    address:  dto.address,
+                    modules:  dto.modules ?? [],
+                },
+            });
+
+            const adminRole = await tx.role.findUniqueOrThrow({ where: { name: 'ADMIN' } });
+
+            const user = await tx.user.create({
+                data: {
+                    name:  `${dto.adminFirstName} ${dto.adminLastName}`,
+                    email: dto.adminEmail,
+                    phone: dto.adminPhone,
+                },
+            });
+
+            await tx.userOrganization.create({
+                data: {
+                    userId:         user.id,
+                    organizationId: org.id,
+                    roleId:         adminRole.id,
+                },
+            });
+
+            await tx.employee.create({
+                data: {
+                    firstName:      dto.adminFirstName,
+                    lastName:       dto.adminLastName,
+                    email:          dto.adminEmail,
+                    phone:          dto.adminPhone,
+                    organizationId: org.id,
+                    userId:         user.id,
+                },
+            });
+
+            return org;
         });
     }
 
@@ -349,6 +403,7 @@ export class OrganizationsService {
                 ...(dto.email    !== undefined && { email:    dto.email }),
                 ...(dto.phone    !== undefined && { phone:    dto.phone }),
                 ...(dto.address  !== undefined && { address:  dto.address }),
+                ...(dto.modules  !== undefined && { modules:  dto.modules }),
             },
         });
     }
@@ -393,11 +448,13 @@ export class OrganizationsService {
             await tx.suggestion.deleteMany({ where: { organizationId: id } });
             // 3. Employees (must come before users due to userId FK)
             await tx.employee.deleteMany({ where: { organizationId: id } });
-            // 4. Users
-            await tx.user.deleteMany({ where: { organizationId: id } });
-            // 5. Departments
+            // 4. Organization memberships
+            await tx.userOrganization.deleteMany({ where: { organizationId: id } });
+            // 5. Orphaned users
+            await tx.user.deleteMany({ where: { organizations: { none: {} } } });
+            // 6. Departments
             await tx.department.deleteMany({ where: { organizationId: id } });
-            // 6. Organization itself (roles are global, not deleted)
+            // 7. Organization itself (roles are global, not deleted)
             await tx.organization.delete({ where: { id } });
         });
 

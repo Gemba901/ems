@@ -14,6 +14,11 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 
 export type OrgStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
+export type ModuleType = "SIMS";
+
+export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: string }[] = [
+    { key: "SIMS", label: "SIMS", description: "Suggestions & Idea Management" },
+];
 
 export interface Organization {
     id: string;
@@ -24,6 +29,7 @@ export interface Organization {
     phone: string | null;
     address: string | null;
     status: OrgStatus;
+    modules: ModuleType[];
     createdAt: string;
     updatedAt: string;
     _count: {
@@ -51,6 +57,7 @@ export interface PlatformStats {
     byStatus: { active: number; suspended: number; inactive: number };
     last30Days: { newOrganizations: number; newEmployees: number };
     suggestionsByStatus: Record<string, number>;
+    moduleUsage: Record<string, number>;
 }
 
 export interface OrgStats {
@@ -154,7 +161,7 @@ export const AdminService = {
         return handleResponse<any>(res);
     },
 
-    async createOrganization(token: string, data: Record<string, string>): Promise<any> {
+    async createOrganization(token: string, data: Record<string, string> & { modules?: ModuleType[]; adminFirstName: string; adminLastName: string; adminEmail: string; adminPhone: string }): Promise<any> {
         const res = await fetch(`${API_URL}/organizations`, {
             method: "POST",
             headers: authHeaders(token),

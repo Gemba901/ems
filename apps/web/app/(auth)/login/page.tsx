@@ -5,12 +5,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IdentifierStep } from "../../../components/auth/IdentifierStep";
 import { SetupStep } from "../../../components/auth/SetupStep";
 import { LoginStep } from "../../../components/auth/LoginStep";
+import { OrgPickerStep } from "../../../components/auth/OrgPickerStep";
 
 export type AuthState = {
   identifier: string;
   name?: string;
   orgName?: string;
   setupToken?: string;
+  organizations?: { id: string; name: string }[];
+  selectionToken?: string;
 };
 
 function AnimatedGear({
@@ -109,7 +112,7 @@ const GEARS: Omit<Parameters<typeof AnimatedGear>[0], "id">[] = [
 ];
 
 export default function AuthPage() {
-  const [step, setStep] = useState<"IDENTIFY" | "SETUP" | "LOGIN">("IDENTIFY");
+  const [step, setStep] = useState<"IDENTIFY" | "SETUP" | "LOGIN" | "ORG_SELECT">("IDENTIFY");
   const [data, setData] = useState<AuthState>({ identifier: "" });
 
   return (
@@ -159,7 +162,18 @@ export default function AuthPage() {
             )}
 
             {step === "LOGIN" && (
-              <LoginStep data={data} onBack={() => setStep("IDENTIFY")} />
+              <LoginStep
+                data={data}
+                onBack={() => setStep("IDENTIFY")}
+                onOrgRequired={(orgs, selectionToken) => {
+                  setData((d) => ({ ...d, organizations: orgs, selectionToken }));
+                  setStep("ORG_SELECT");
+                }}
+              />
+            )}
+
+            {step === "ORG_SELECT" && (
+              <OrgPickerStep data={data} onBack={() => setStep("LOGIN")} />
             )}
           </motion.div>
         </AnimatePresence>

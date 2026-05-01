@@ -18,6 +18,10 @@ enum OrgStatus {
   INACTIVE
 }
 
+enum ModuleType {
+  SIMS
+}
+
 enum RoleName {
   SUPER_ADMIN
   ADMIN
@@ -35,39 +39,48 @@ model Organization {
   email       String?
   phone       String?
   address     String?
-  status      OrgStatus @default(ACTIVE)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  status      OrgStatus  @default(ACTIVE)
+  modules     ModuleType[] @default([])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  users       User[]
+  userOrganizations UserOrganization[]
   employees   Employee[]
   departments Department[]
   suggestions Suggestion[]
 }
 
-//specific user 
+//specific user
 model User {
   id                String @id @default(uuid())
   email             String? @unique
   phone             String
   password          String?
   name              String
-  roleId            Int
-  organizationId    String
 
-  role              Role @relation(fields: [roleId], references: [id])
-  organization      Organization @relation(fields: [organizationId], references: [id])
-  employee          Employee?
+  organizations     UserOrganization[]
+  employees         Employee[]
 
   createdAt         DateTime @default(now())
 }
 
+model UserOrganization {
+  userId         String
+  organizationId String
+  roleId         Int
+
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  role           Role         @relation(fields: [roleId], references: [id])
+
+  @@id([userId, organizationId])
+}
 
 model Role {
   id                Int @id
   name              RoleName @unique
 
-  users             User[]
+  userOrganizations UserOrganization[]
   permissions       RolePermission[]
 }
 
@@ -94,11 +107,11 @@ model Employee {
   id             String   @id @default(uuid())
   firstName      String
   lastName       String
-  email          String   @unique
-  phone          String?  @unique
+  email          String
+  phone          String?
   departmentId   String?
   organizationId String
-  userId         String?  @unique
+  userId         String?
 
   department       Department?  @relation(fields: [departmentId], references: [id])
   organization     Organization @relation(fields: [organizationId], references: [id])
@@ -107,6 +120,9 @@ model Employee {
   suggestionReviews SuggestionReview[]
 
   createdAt      DateTime @default(now())
+
+  @@unique([email, organizationId])
+  @@unique([phone, organizationId])
 }
 
 

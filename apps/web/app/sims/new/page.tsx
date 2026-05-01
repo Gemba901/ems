@@ -78,7 +78,7 @@ export default function NewSuggestionPage() {
                 {/* Title */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                    Suggestion Title <span className="text-red-500">*</span>
+                    Problem Identified <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -93,7 +93,7 @@ export default function NewSuggestionPage() {
                 {/* Description */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                    Detailed Description <span className="text-red-500">*</span>
+                    My Suggestion for Improvement <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     required
@@ -147,7 +147,7 @@ export default function NewSuggestionPage() {
                 </div>
 
                 {/* Anonymous toggle */}
-                <div className="border border-slate-100 rounded-xl p-4 bg-slate-50">
+                {/* <div className="border border-slate-100 rounded-xl p-4 bg-slate-50">
                   <label className="flex items-center justify-between cursor-pointer">
                     <div>
                       <p className="text-sm font-semibold text-slate-700">Submit anonymously</p>
@@ -161,7 +161,7 @@ export default function NewSuggestionPage() {
                       <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${isAnonymous ? "translate-x-6" : "translate-x-1"}`} />
                     </button>
                   </label>
-                </div>
+                </div> */}
 
                 {error && (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>

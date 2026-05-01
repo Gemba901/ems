@@ -126,12 +126,13 @@ function AdminSidebar({ open, onClose }: AdminSidebarProps) {
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-    const { user, isAuthenticated } = useAuthStore();
+    const { user, isAuthenticated, _hasHydrated } = useAuthStore();
     const router = useRouter();
     const [ready, setReady] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     useEffect(() => {
+        if (!_hasHydrated) return;
         if (!isAuthenticated || !user) {
             router.replace("/login");
             return;
@@ -141,7 +142,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             return;
         }
         setReady(true);
-    }, [isAuthenticated, user, router]);
+    }, [_hasHydrated, isAuthenticated, user, router]);
 
     if (!ready) {
         return (

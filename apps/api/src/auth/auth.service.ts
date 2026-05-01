@@ -5,14 +5,43 @@ import * as bcrypt from 'bcrypt';
 import { Role } from 'src/common/enum/role.enum';
 
 export interface JwtPayload {
-    userId: String;
-    organizationId: String | null;
+    userId: string;
+    organizationId: string | null;
     roleId: number;
-    email: String | null;
-    phone: String;
-    organizationName: String;
-    roleLevel: Role
+    email: string | null;
+    phone: string;
+    organizationName: string;
+    roleLevel: Role;
 }
+
+type UserOrganizationRelation = {
+    organizationId: string;
+    roleId: number;
+    organization: { name: string };
+    role: { name: string };
+};
+
+type UserWithOrganizations = {
+    id: string;
+    email: string | null;
+    phone: string;
+    password: string | null;
+    name: string;
+    organizations: UserOrganizationRelation[];
+};
+
+type UserWithOrganizationOnly = {
+    id: string;
+    email: string | null;
+    phone: string;
+    password: string | null;
+    name: string;
+    organizations: Array<Pick<UserOrganizationRelation, 'organizationId' | 'organization'>>;
+};
+
+type UserOrganizationMembership = UserOrganizationRelation & {
+    user: { id: string; email: string | null; phone: string; name: string };
+};
 
 @Injectable()
 export class AuthService {
@@ -21,60 +50,91 @@ export class AuthService {
         private jwtService: JwtService,
     ) { }
 
-    // login via phone or email
-    async login(phoneOrEmail: string, password: string) {
-        // Try to find user by unique email or phone
-        let user = await this.prisma.user.findFirst({
-            where: {
-                OR: [
-                    { email: phoneOrEmail },
-                    { phone: phoneOrEmail }
-                ]
-            },
-            include: {
-                organization: true,
-                role: true
-            }
-        });
+    private buildJwt(user: { id: string; email: string | null; phone: string; name: string }, membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string } }) {
+        const payload: JwtPayload = {
+            userId: user.id,
+            organizationId: membership.organizationId,
+            roleId: membership.roleId,
+            roleLevel: membership.role.name.toUpperCase().replace(/\s+/g, '_') as Role,
+            email: user.email,
+            phone: user.phone,
+            organizationName: membership.organization.name,
+        };
+        return {
+            accessToken: this.jwtService.sign(payload),
+            user: { name: user.name, ...payload },
+        };
+    }
 
-        // throw error if user not found
+    async login(phoneOrEmail: string, password: string) {
+        const user = await this.prisma.user.findFirst({
+            where: { OR: [{ email: phoneOrEmail }, { phone: phoneOrEmail }] },
+            include: {
+                organizations: {
+                    include: { organization: true, role: true },
+                },
+            },
+        }) as UserWithOrganizations | null;
+
         if (!user) throw new UnauthorizedException('Invalid credentials');
 
-        // compare password with hashed password
         const isMatch = await bcrypt.compare(password, user.password!);
         if (!isMatch) throw new UnauthorizedException('Invalid credentials');
 
-        // create JWT payload and sign token
-        const payload: JwtPayload = {
-            userId: user.id,
-            organizationId: user.organizationId,
-            roleId: user.roleId,
-            roleLevel: user.role.name.toUpperCase().replace(/\s+/g, '_') as Role,
-            email: user.email,
-            phone: user.phone,
-            organizationName: user.organization?.name || 'Unknown Organization',
+        if (user.organizations.length === 1) {
+            return this.buildJwt(user, user.organizations[0]);
         }
 
+        // multiple orgs — return a short-lived selection token and the org list
+        const selectionToken = this.jwtService.sign(
+            { userId: user.id, purpose: 'ORG_SELECTION' },
+            { expiresIn: '10m' },
+        );
 
         return {
-            accessToken: this.jwtService.sign(payload),
-            user: { name: user.name,  ...payload }
-        }
+            requiresOrgSelection: true,
+            selectionToken,
+            organizations: user.organizations.map((m) => ({
+                id: m.organizationId,
+                name: m.organization.name,
+            })),
+        };
     }
 
-    // first time login - verify if user exists and return setup token
+    async selectOrg(selectionToken: string, organizationId: string) {
+        let decoded: any;
+        try {
+            decoded = this.jwtService.verify(selectionToken);
+        } catch {
+            throw new UnauthorizedException('Invalid or expired selection token');
+        }
+
+        if (decoded.purpose !== 'ORG_SELECTION') {
+            throw new UnauthorizedException('Invalid selection token');
+        }
+
+        const membership = await this.prisma.userOrganization.findUnique({
+            where: { userId_organizationId: { userId: decoded.userId, organizationId } },
+            include: { user: true, organization: true, role: true },
+        }) as UserOrganizationMembership | null;
+
+        if (!membership) throw new UnauthorizedException('You are not a member of this organization');
+
+        return this.buildJwt(membership.user, {
+            organizationId: membership.organizationId,
+            roleId: membership.roleId,
+            role: membership.role,
+            organization: membership.organization,
+        });
+    }
+
     async verifyFirstTimeUser(phoneOrEmail: string) {
         const user = await this.prisma.user.findFirst({
-            where: {
-                OR: [
-                    { email: phoneOrEmail },
-                    { phone: phoneOrEmail }
-                ]
-            },
+            where: { OR: [{ email: phoneOrEmail }, { phone: phoneOrEmail }] },
             include: {
-                organization: true 
-            }
-        });
+                organizations: { include: { organization: true } },
+            },
+        }) as UserWithOrganizationOnly | null;
 
         if (!user) {
             throw new UnauthorizedException('Account not found! Please contact your administrator.');
@@ -84,54 +144,53 @@ export class AuthService {
 
         const responseData = {
             identifier: phoneOrEmail,
-            hasPassword: hasPassword,
+            hasPassword,
             name: user.name,
-            orgName: user.organization?.name || 'Unknown Organization',
+            organizations: user.organizations.map((m) => ({
+                id: m.organizationId,
+                name: m.organization.name,
+            })),
         };
 
-        if (hasPassword) {
-            return responseData;
-        }
+        if (hasPassword) return responseData;
 
-        const setupToken = this.jwtService.sign({
-            userId: user.id,
-            purpose: 'FIRST_TIME_SETUP'
-        }, { expiresIn: '15m' });
+        const setupToken = this.jwtService.sign(
+            { userId: user.id, purpose: 'FIRST_TIME_SETUP' },
+            { expiresIn: '15m' },
+        );
 
-
-        return {
-            ...responseData,
-            setupToken
-        };
+        return { ...responseData, setupToken };
     }
 
     async createPassword(setupToken: string, newPassword: string) {
         try {
-            // verify token
             const decoded = this.jwtService.verify(setupToken);
 
-            // check token purpose
             if (decoded.purpose !== 'FIRST_TIME_SETUP') {
                 throw new UnauthorizedException('Invalid setup token');
             }
 
-            // check if user exists and password is not already set
             const user = await this.prisma.user.findUnique({ where: { id: decoded.userId } });
             if (!user) throw new UnauthorizedException('User not found');
             if (user.password) throw new UnauthorizedException('Password already set. Please login.');
 
-            // hash new password
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-            // update user with new password
             await this.prisma.user.update({
                 where: { id: decoded.userId },
-                data: { password: hashedPassword }
+                data: { password: hashedPassword },
             });
 
             return { message: 'Password created successfully! You can now login.' };
         } catch (error) {
             throw new UnauthorizedException('Invalid or expired setup token! Please try again.');
         }
+    }
+
+    async getMyOrg(organizationId: string) {
+        return this.prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { id: true, name: true, status: true, modules: true },
+        });
     }
 }

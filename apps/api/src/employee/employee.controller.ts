@@ -39,8 +39,8 @@ export class EmployeeController {
 
   // GET /employee/me — returns the employee profile for the logged-in user
   @Get('me')
-  async getMe(@CurrentUser() user: { userId: string }) {
-    return this.employeeService.getMyEmployeeProfile(user.userId);
+  async getMe(@CurrentUser() user: { userId: string; organizationId: string }) {
+    return this.employeeService.getMyEmployeeProfile(user.userId, user.organizationId);
   }
 
   // GET /employee/organization/:orgId/departments

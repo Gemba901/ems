@@ -4,10 +4,12 @@ import {
     IsOptional,
     IsEmail,
     IsEnum,
+    IsArray,
     IsNumber,
     Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ModuleType } from 'db';
 
 export class CreateOrganizationDto {
     @IsString()
@@ -33,6 +35,27 @@ export class CreateOrganizationDto {
     @IsOptional()
     @IsString()
     address?: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsEnum(ModuleType, { each: true })
+    modules?: ModuleType[];
+
+    // Initial admin user
+    @IsString()
+    @IsNotEmpty()
+    adminFirstName: string;
+
+    @IsString()
+    @IsNotEmpty()
+    adminLastName: string;
+
+    @IsEmail()
+    adminEmail: string;
+
+    @IsString()
+    @IsNotEmpty()
+    adminPhone: string;
 }
 
 export class UpdateOrganizationDto {
@@ -60,6 +83,11 @@ export class UpdateOrganizationDto {
     @IsOptional()
     @IsString()
     address?: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsEnum(ModuleType, { each: true })
+    modules?: ModuleType[];
 }
 
 export class UpdateOrgStatusDto {

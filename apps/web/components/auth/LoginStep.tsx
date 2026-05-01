@@ -11,9 +11,10 @@ import { useRouter } from "next/navigation";
 interface LoginStepProps {
   data: AuthState;
   onBack: () => void;
+  onOrgRequired: (organizations: { id: string; name: string }[], selectionToken: string) => void;
 }
 
-export function LoginStep({ data, onBack: _onBack }: LoginStepProps) {
+export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepProps) {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [loading, setLoading] = useState(false);
@@ -26,6 +27,11 @@ export function LoginStep({ data, onBack: _onBack }: LoginStepProps) {
     
     try {
         const response = await AuthService.login(data.identifier, password);
+
+        if (response.requiresOrgSelection) {
+            onOrgRequired(response.organizations, response.selectionToken);
+            return;
+        }
 
         setAuth(response.user, response.accessToken);
         router.push(response.user.roleLevel === "SUPER_ADMIN" ? "/admin" : "/");

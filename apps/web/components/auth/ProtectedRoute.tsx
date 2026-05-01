@@ -11,29 +11,24 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, _hasHydrated } = useAuthStore();
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    // Check if they are logged in at all
+    if (!_hasHydrated) return;
     if (!isAuthenticated || !user) {
       router.replace("/login");
       return;
     }
-
-    // Check if the route requires specific roles
     if (allowedRoles && allowedRoles.length > 0) {
       if (!allowedRoles.includes(user.roleLevel)) {
-        // Kick them to a generic dashboard or unauthorized page
-        router.replace("/dashboard"); 
+        router.replace("/dashboard");
         return;
       }
     }
-
-    // If they pass both checks, let them see the page
     setIsAuthorized(true);
-  }, [isAuthenticated, user, allowedRoles, router]);
+  }, [_hasHydrated, isAuthenticated, user, allowedRoles, router]);
 
   // Prevent the "flash" of content while checking
   if (!isAuthorized) {

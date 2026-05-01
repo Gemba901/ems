@@ -3,11 +3,11 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
-import { AdminService, Organization, OrgStatus } from "@/services/admin.service";
+import { AdminService, Organization, OrgStatus, ModuleType, AVAILABLE_MODULES } from "@/services/admin.service";
 import {
     Search, Plus, ChevronRight, ChevronLeft,
     CircleDot, Building2, X, Loader2,
-    Phone, Mail, MapPin, Briefcase, ImageIcon,
+    Phone, Mail, MapPin, Briefcase, ImageIcon, Puzzle,
 } from "lucide-react";
 
 // ── New Organization Drawer ───────────────────────────────────────────────────
@@ -23,9 +23,11 @@ const INDUSTRY_OPTIONS = [
     "Agriculture & Food",
     "Automotive",
     "Construction",
+    "System Development",
     "Education",
     "Energy & Utilities",
     "Finance & Banking",
+    "Food & Bevarage",
     "Healthcare",
     "Hospitality & Tourism",
     "Information Technology",
@@ -60,25 +62,51 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
     const [form, setForm] = useState({
         name: "", industry: "", email: "", phone: "", address: "", logoUrl: "",
     });
+    const [adminForm, setAdminForm] = useState({
+        firstName: "", lastName: "", email: "", phone: "",
+    });
+    const [selectedModules, setSelectedModules] = useState<ModuleType[]>([]);
 
     function set(field: keyof typeof form, value: string) {
         setForm(prev => ({ ...prev, [field]: value }));
         setError(null);
     }
 
+    function setAdmin(field: keyof typeof adminForm, value: string) {
+        setAdminForm(prev => ({ ...prev, [field]: value }));
+        setError(null);
+    }
+
+    function toggleModule(mod: ModuleType) {
+        setSelectedModules(prev =>
+            prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod]
+        );
+    }
+
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!form.name.trim()) { setError("Organization name is required."); return; }
+        if (!form.name.trim())         { setError("Organization name is required."); return; }
+        if (!adminForm.firstName.trim()) { setError("Admin first name is required."); return; }
+        if (!adminForm.lastName.trim())  { setError("Admin last name is required."); return; }
+        if (!adminForm.email.trim())     { setError("Admin email is required."); return; }
+        if (!adminForm.phone.trim())     { setError("Admin phone is required."); return; }
 
         setSubmitting(true);
         setError(null);
         try {
-            const payload: Record<string, string> = { name: form.name.trim() };
+            const payload: Record<string, string> & { modules?: ModuleType[]; adminFirstName: string; adminLastName: string; adminEmail: string; adminPhone: string } = {
+                name:           form.name.trim(),
+                adminFirstName: adminForm.firstName.trim(),
+                adminLastName:  adminForm.lastName.trim(),
+                adminEmail:     adminForm.email.trim(),
+                adminPhone:     adminForm.phone.trim(),
+            };
             if (form.industry) payload.industry = form.industry;
             if (form.email)    payload.email    = form.email.trim();
             if (form.phone)    payload.phone    = form.phone.trim();
             if (form.address)  payload.address  = form.address.trim();
             if (form.logoUrl)  payload.logoUrl  = form.logoUrl.trim();
+            payload.modules = selectedModules;
 
             const created = await AdminService.createOrganization(token, payload);
             onCreated(created);
@@ -92,6 +120,8 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
 
     function handleClose() {
         setForm({ name: "", industry: "", email: "", phone: "", address: "", logoUrl: "" });
+        setAdminForm({ firstName: "", lastName: "", email: "", phone: "" });
+        setSelectedModules([]);
         setError(null);
         onClose();
     }
@@ -218,6 +248,89 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
                         )}
                     </Field>
 
+                    <Field label="Modules">
+                        <div className="space-y-2">
+                            {AVAILABLE_MODULES.map(({ key, label, description }) => (
+                                <label
+                                    key={key}
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                                        selectedModules.includes(key)
+                                            ? "border-indigo-500 bg-indigo-50"
+                                            : "border-slate-200 bg-white hover:border-slate-300"
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedModules.includes(key)}
+                                        onChange={() => toggleModule(key)}
+                                        className="h-3.5 w-3.5 accent-indigo-600"
+                                    />
+                                    <Puzzle className={`h-3.5 w-3.5 shrink-0 ${selectedModules.includes(key) ? "text-indigo-600" : "text-slate-400"}`} />
+                                    <div>
+                                        <p className={`text-xs font-semibold ${selectedModules.includes(key) ? "text-indigo-700" : "text-slate-700"}`}>{label}</p>
+                                        <p className="text-[11px] text-slate-400">{description}</p>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    </Field>
+
+                    {/* Section divider */}
+                    <div className="flex items-center gap-3 pt-1">
+                        <div className="flex-1 h-px bg-slate-100" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Initial Admin</span>
+                        <div className="flex-1 h-px bg-slate-100" />
+                    </div>
+                    <p className="text-[11px] text-slate-400 -mt-2">
+                        This person will be the organization's first admin and can log in to onboard the rest of the team.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Field label="First Name" required>
+                            <input
+                                value={adminForm.firstName}
+                                onChange={e => setAdmin("firstName", e.target.value)}
+                                className={inputCls}
+                                placeholder="Jane"
+                            />
+                        </Field>
+                        <Field label="Last Name" required>
+                            <input
+                                value={adminForm.lastName}
+                                onChange={e => setAdmin("lastName", e.target.value)}
+                                className={inputCls}
+                                placeholder="Doe"
+                            />
+                        </Field>
+                    </div>
+
+                    <Field label="Admin Email" required>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                            <input
+                                type="email"
+                                value={adminForm.email}
+                                onChange={e => setAdmin("email", e.target.value)}
+                                className={`${inputCls} pl-9`}
+                                placeholder="admin@company.com"
+                            />
+                        </div>
+                    </Field>
+
+                    <Field label="Admin Phone" required>
+                        <div className="relative">
+                            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                            <input
+                                type="tel"
+                                value={adminForm.phone}
+                                onChange={e => setAdmin("phone", e.target.value)}
+                                className={`${inputCls} pl-9`}
+                                placeholder="254700000000"
+                            />
+                        </div>
+                        <p className="text-[11px] text-slate-400 pl-1">Include country code, e.g. 254712345678</p>
+                    </Field>
+
                     {error && (
                         <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2.5">
                             <X className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -229,7 +342,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
                 {/* Footer */}
                 <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/60">
                     <p className="text-[11px] text-slate-400">
-                        5 default roles will be created automatically.
+                        Org + admin account created atomically.
                     </p>
                     <div className="flex gap-2">
                         <button
@@ -242,7 +355,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
                         </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={submitting || !form.name.trim()}
+                            disabled={submitting || !form.name.trim() || !adminForm.firstName.trim() || !adminForm.lastName.trim() || !adminForm.email.trim() || !adminForm.phone.trim()}
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                         >
                             {submitting ? (
@@ -395,6 +508,7 @@ export default function AdminOrganizationsPage() {
                         <tr>
                             <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Organization</th>
                             <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Modules</th>
                             <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Employees</th>
                             <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Departments</th>
                             <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Suggestions</th>
@@ -405,7 +519,7 @@ export default function AdminOrganizationsPage() {
                     <tbody className="divide-y divide-slate-50 text-slate-700">
                         {loading && (
                             <tr>
-                                <td colSpan={7} className="px-6 py-14 text-center text-slate-400 text-sm">
+                                <td colSpan={8} className="px-6 py-14 text-center text-slate-400 text-sm">
                                     Loading organizations...
                                 </td>
                             </tr>
@@ -456,6 +570,19 @@ export default function AdminOrganizationsPage() {
                                         <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${sc.badge}`}>
                                             <CircleDot className="h-2.5 w-2.5" /> {sc.label}
                                         </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {org.modules && org.modules.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                                {org.modules.map(mod => (
+                                                    <span key={mod} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200">
+                                                        <Puzzle className="h-2.5 w-2.5" />{mod}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-[11px] text-slate-300">—</span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 tabular-nums text-slate-600">{org._count.employees}</td>
                                     <td className="px-6 py-4 tabular-nums text-slate-600">{org._count.departments}</td>

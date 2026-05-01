@@ -1,4 +1,4 @@
 {
   "buildCommand": "cd ../.. && pnpm turbo run build --filter=web",
-  "installCommand": "cd ../.. && npm install -g pnpm@9.15.9 && pnpm install --no-frozen-lockfile"
+  "installCommand": "cd ../.. && npx --yes pnpm@9.15.9 install --no-frozen-lockfile"
 }

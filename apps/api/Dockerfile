@@ -55,6 +55,7 @@ COPY --from=sourcer --chown=nestjs:nestjs /app/node_modules ./node_modules
 COPY --from=sourcer --chown=nestjs:nestjs /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=sourcer --chown=nestjs:nestjs /app/apps/api/dist ./apps/api/dist
 COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/node_modules ./packages/db/node_modules
+COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/dist ./packages/db/dist
 COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/generated ./packages/db/generated
 COPY --from=sourcer --chown=nestjs:nestjs /app/packages/db/package.json ./packages/db/package.json
 

@@ -46,12 +46,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] 
     },
     { 
-      name: "Team Directory", 
-      href: "/employees", 
-      icon: Users,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]
-    },
-    { 
       name: "Inventory", 
       href: "/inventory", 
       icon: Archive,

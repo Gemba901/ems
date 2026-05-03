@@ -98,12 +98,12 @@ export default function NewSuggestionPage() {
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
 
-          {/* LEFT — Form */}
+          {/* LEFT , Form */}
           <div className="xl:col-span-2">
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-slate-900">New Suggestion</h1>
               <p className="text-sm text-slate-500 mt-1">
-                Help us evolve. Submit your ideas across our QCDSMT pillars — every voice matters.
+                Help us evolve. Submit your ideas across our QCDSMT pillars, every voice matters.
               </p>
             </div>
 
@@ -150,7 +150,7 @@ export default function NewSuggestionPage() {
                     rows={6}
                     value={description}
                     onChange={(e) => { setDescription(e.target.value); setError(null); }}
-                    placeholder="Describe the current problem and your proposed solution. Be specific — include estimated cost or time savings where possible."
+                    placeholder="Describe the current problem and your proposed solution. Be specific , include estimated cost or time savings where possible."
                     className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all resize-none ${
                       description.length > 0 && description.length < DESC_MIN
                         ? "border-amber-300 focus:ring-amber-500/20 focus:border-amber-400"
@@ -262,7 +262,7 @@ export default function NewSuggestionPage() {
             </div>
           </div>
 
-          {/* RIGHT — Tips */}
+          {/* RIGHT , Tips */}
           <div className="xl:col-span-1 space-y-4">
             <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4">
@@ -289,9 +289,9 @@ export default function NewSuggestionPage() {
             <div className="bg-slate-800 rounded-2xl p-5 text-white">
               <TrendingUp className="h-5 w-5 text-slate-400 mb-3" />
               <blockquote className="text-sm leading-relaxed text-slate-200 italic">
-                "Innovation is the ability to see change as an opportunity — not a threat."
+                "Innovation is the ability to see change as an opportunity , not a threat."
               </blockquote>
-              <p className="text-xs text-slate-500 mt-3">— Steve Jobs</p>
+              <p className="text-xs text-slate-500 mt-3">, Steve Jobs</p>
             </div>
 
             <div className="bg-slate-900 rounded-2xl p-5 text-white">

@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
 
 
 @Injectable()
@@ -195,6 +196,61 @@ export class EmployeeService {
         }
 
         return updatedEmployee;
+    }
+
+    // admin updates their org's theme color
+    async updateCompanyTheme(organizationId: string, primaryColor: string) {
+        return (this.prisma.organization as any).update({
+            where: { id: organizationId },
+            data: { primaryColor },
+            select: { id: true, primaryColor: true },
+        });
+    }
+
+    // update an employee's role within their organization
+    async updateEmployeeRole(id: string, roleId: number, organizationId: string) {
+        const employee = await this.prisma.employee.findUnique({ where: { id } });
+        if (!employee) throw new BadRequestException('Employee not found');
+        if (employee.organizationId !== organizationId) throw new ForbiddenException('Cannot manage employees from another organization');
+        if (!employee.userId) throw new BadRequestException('Employee has no linked user account');
+
+        // Prevent assigning SUPER_ADMIN (id=1)
+        if (roleId === 1) throw new ForbiddenException('Cannot assign SUPER_ADMIN role');
+
+        const role = await this.prisma.role.findUnique({ where: { id: roleId } });
+        if (!role) throw new BadRequestException('Invalid role');
+
+        await this.prisma.userOrganization.update({
+            where: { userId_organizationId: { userId: employee.userId, organizationId } },
+            data: { roleId },
+        });
+
+        return { message: `Role updated to ${role.name}` };
+    }
+
+    // admin resets an employee's password
+    async resetEmployeePassword(id: string, newPassword: string, organizationId: string) {
+        const employee = await this.prisma.employee.findUnique({ where: { id } });
+        if (!employee) throw new BadRequestException('Employee not found');
+        if (employee.organizationId !== organizationId) throw new ForbiddenException('Cannot manage employees from another organization');
+        if (!employee.userId) throw new BadRequestException('Employee has no linked user account');
+
+        const hashed = await bcrypt.hash(newPassword, 10);
+        await this.prisma.user.update({ where: { id: employee.userId }, data: { password: hashed } });
+
+        return { message: 'Password reset successfully' };
+    }
+
+    // update employee avatar URL
+    async updateAvatar(id: string, avatarUrl: string) {
+        const employee = await this.prisma.employee.findUnique({ where: { id } });
+        if (!employee) throw new BadRequestException('Employee not found');
+
+        return (this.prisma.employee as any).update({
+            where: { id },
+            data: { avatarUrl },
+            include: { department: true, user: { include: { organizations: { include: { role: true } } } } },
+        });
     }
 
     // delete employee — removes org membership; deletes user only if they have no remaining memberships

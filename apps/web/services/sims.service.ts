@@ -30,9 +30,22 @@ export type SuggestionCategory =
   | "DELIVERY"
   | "SAFETY"
   | "MORALE"
-  | "TECHNOLOGY";
+  | "TECHNOLOGY"
+  | "UNKNOWN";
 
-export type SuggestionPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export const CATEGORY_WEIGHTS: Record<SuggestionCategory, number> = {
+  QUALITY:    3,
+  COST:       1.5,
+  DELIVERY:   2,
+  SAFETY:     1.5,
+  MORALE:     1,
+  TECHNOLOGY: 1,
+  UNKNOWN:    0,
+};
+
+export function calcWeight(categories: SuggestionCategory[]): number {
+  return categories.reduce((sum, c) => sum + (CATEGORY_WEIGHTS[c] ?? 0), 0);
+}
 
 export interface SuggestionReview {
   id: string;
@@ -40,6 +53,7 @@ export interface SuggestionReview {
   note: string | null;
   createdAt: string;
   reviewer: { id: string; firstName: string; lastName: string };
+  reviewerCommittee: { id: string; name: string; type: string } | null;
 }
 
 export interface Suggestion {
@@ -47,8 +61,7 @@ export interface Suggestion {
   title: string;
   description: string;
   status: SuggestionStatus;
-  priority: SuggestionPriority;
-  category: SuggestionCategory;
+  categories: SuggestionCategory[];
   isAnonymous: boolean;
   employeeId: string;
   organizationId: string;
@@ -66,14 +79,18 @@ export interface PaginatedSuggestions {
 export interface CreateSuggestionPayload {
   title: string;
   description: string;
-  category: SuggestionCategory;
-  priority?: SuggestionPriority;
+  categories: SuggestionCategory[];
   isAnonymous?: boolean;
 }
 
 export interface ReviewPayload {
   statusChanged: SuggestionStatus;
   note?: string;
+}
+
+export interface SuggestionSummary {
+  department: { total: number; byStatus: Record<string, number>; byCategory: Record<string, number> };
+  organization: { total: number; byStatus: Record<string, number>; byCategory: Record<string, number> };
 }
 
 function buildQuery(params: Record<string, string | number | undefined>) {
@@ -99,9 +116,14 @@ export const SimsService = {
     return handleResponse<Suggestion[]>(res);
   },
 
+  async getSummary(token: string): Promise<SuggestionSummary> {
+    const res = await fetch(`${API_URL}/sims/summary`, { headers: authHeaders(token) });
+    return handleResponse<SuggestionSummary>(res);
+  },
+
   async getDepartment(
     token: string,
-    params: { status?: SuggestionStatus; category?: SuggestionCategory; priority?: SuggestionPriority; page?: number; limit?: number },
+    params: { status?: SuggestionStatus; category?: SuggestionCategory; page?: number; limit?: number },
   ): Promise<PaginatedSuggestions> {
     const res = await fetch(`${API_URL}/sims/department${buildQuery(params)}`, {
       headers: authHeaders(token),
@@ -111,7 +133,7 @@ export const SimsService = {
 
   async getAll(
     token: string,
-    params: { status?: SuggestionStatus; category?: SuggestionCategory; priority?: SuggestionPriority; departmentId?: string; page?: number; limit?: number },
+    params: { status?: SuggestionStatus; category?: SuggestionCategory; departmentId?: string; page?: number; limit?: number },
   ): Promise<PaginatedSuggestions> {
     const res = await fetch(`${API_URL}/sims${buildQuery(params)}`, {
       headers: authHeaders(token),

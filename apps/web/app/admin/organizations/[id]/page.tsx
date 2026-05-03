@@ -4,13 +4,38 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { AdminService, OrgDetail, OrgStats, OrgStatus, ModuleType, AVAILABLE_MODULES } from "@/services/admin.service";
+import { EmployeeService } from "@/services/employee.service";
 import {
     ArrowLeft, Building2, Users, Lightbulb, BarChart2,
-    CircleDot, Mail, Phone, MapPin, Globe, ChevronDown,
-    EyeOff, CheckCircle2, Clock, AlertCircle, Puzzle, Loader2,
+    CircleDot, Mail, Phone, MapPin, ChevronDown,
+    EyeOff, Puzzle, Loader2, Filter, KeyRound, ShieldCheck, X,
 } from "lucide-react";
 
 type Tab = "overview" | "employees" | "suggestions" | "roles";
+
+const ROLE_OPTIONS = [
+    { value: 2, label: "Admin" },
+    { value: 3, label: "Management" },
+    { value: 4, label: "HR" },
+    { value: 5, label: "HOD" },
+    { value: 6, label: "Employee" },
+];
+
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                    <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                        <X className="h-4 w-4 text-slate-400" />
+                    </button>
+                </div>
+                <div className="px-6 py-5">{children}</div>
+            </div>
+        </div>
+    );
+}
 
 const STATUS_CONFIG: Record<OrgStatus, { label: string; badge: string; dot: string }> = {
     ACTIVE:    { label: "Active",    dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" },
@@ -52,12 +77,26 @@ export default function OrgDetailPage() {
     const [employees, setEmps]  = useState<any[]>([]);
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [roles, setRoles]     = useState<any[]>([]);
+    const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+    const [deptFilter, setDeptFilter]   = useState<string>("");
     const [tab, setTab]         = useState<Tab>("overview");
     const [loading, setLoading] = useState(true);
     const [tabLoading, setTabLoading] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [updatingModules, setUpdatingModules] = useState(false);
+
+    // Role change modal
+    const [roleModal, setRoleModal] = useState<{ emp: any } | null>(null);
+    const [selectedRoleId, setSelectedRoleId] = useState<number>(6);
+    const [savingRole, setSavingRole] = useState(false);
+    const [roleError, setRoleError] = useState<string | null>(null);
+
+    // Password reset modal
+    const [pwModal, setPwModal] = useState<{ emp: any } | null>(null);
+    const [newPassword, setNewPassword] = useState("");
+    const [savingPw, setSavingPw] = useState(false);
+    const [pwError, setPwError] = useState<string | null>(null);
 
     // Initial load
     useEffect(() => {
@@ -79,13 +118,21 @@ export default function OrgDetailPage() {
         setTabLoading(true);
         const fetch =
             tab === "employees"
-                ? AdminService.getOrgEmployees(accessToken, id).then((r) => setEmps(r.data))
+                ? AdminService.getOrgEmployees(accessToken, id, 1, 100, deptFilter || undefined).then((r) => setEmps(r.data))
                 : tab === "suggestions"
                 ? AdminService.getOrgSuggestions(accessToken, id).then((r) => setSuggestions(r.data))
                 : AdminService.getOrgRoles(accessToken, id).then(setRoles);
 
         fetch.catch(console.error).finally(() => setTabLoading(false));
-    }, [tab, accessToken, id, loading]);
+    }, [tab, accessToken, id, loading, deptFilter]);
+
+    // Pre-load departments for filter
+    useEffect(() => {
+        if (!accessToken || !id || loading) return;
+        EmployeeService.getDepartments(id, accessToken)
+            .then(setDepartments)
+            .catch(console.error);
+    }, [accessToken, id, loading]);
 
     const handleModuleToggle = useCallback(async (mod: ModuleType) => {
         if (!accessToken || !org) return;
@@ -118,6 +165,53 @@ export default function OrgDetailPage() {
         }
     }, [accessToken, org]);
 
+    const openRoleModal = (emp: any) => {
+        const currentRoleId = emp.user?.organizations?.[0]?.role?.id ?? 6;
+        setSelectedRoleId(currentRoleId);
+        setRoleError(null);
+        setRoleModal({ emp });
+    };
+
+    const handleRoleSave = async () => {
+        if (!accessToken || !roleModal) return;
+        setSavingRole(true);
+        setRoleError(null);
+        try {
+            await EmployeeService.updateRole(roleModal.emp.id, selectedRoleId, accessToken);
+            setEmps((prev) => prev.map((e) =>
+                e.id === roleModal.emp.id
+                    ? { ...e, user: { ...e.user, organizations: [{ ...e.user?.organizations?.[0], role: { id: selectedRoleId, name: ROLE_OPTIONS.find(r => r.value === selectedRoleId)?.label?.toUpperCase() ?? "" } }] } }
+                    : e
+            ));
+            setRoleModal(null);
+        } catch (e: any) {
+            setRoleError(e.message || "Failed to update role");
+        } finally {
+            setSavingRole(false);
+        }
+    };
+
+    const openPwModal = (emp: any) => {
+        setNewPassword("");
+        setPwError(null);
+        setPwModal({ emp });
+    };
+
+    const handlePasswordSave = async () => {
+        if (!accessToken || !pwModal) return;
+        if (newPassword.length < 8) { setPwError("Password must be at least 8 characters"); return; }
+        setSavingPw(true);
+        setPwError(null);
+        try {
+            await EmployeeService.resetPassword(pwModal.emp.id, newPassword, accessToken);
+            setPwModal(null);
+        } catch (e: any) {
+            setPwError(e.message || "Failed to reset password");
+        } finally {
+            setSavingPw(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64 text-slate-400 text-sm gap-2">
@@ -147,6 +241,7 @@ export default function OrgDetailPage() {
     ];
 
     return (
+        <>
         <div className="max-w-6xl mx-auto space-y-6">
 
             {/* Back */}
@@ -374,6 +469,27 @@ export default function OrgDetailPage() {
                 {/* Employees tab */}
                 {!tabLoading && tab === "employees" && (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        {/* Dept filter toolbar */}
+                        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100">
+                            <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <select
+                                value={deptFilter}
+                                onChange={(e) => setDeptFilter(e.target.value)}
+                                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 bg-white"
+                            >
+                                <option value="">All departments</option>
+                                {departments.map((d) => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                            </select>
+                            {deptFilter && (
+                                <button onClick={() => setDeptFilter("")} className="text-xs text-indigo-600 hover:underline">
+                                    Clear
+                                </button>
+                            )}
+                            <span className="ml-auto text-[11px] text-slate-400">{employees.length} shown</span>
+                        </div>
+
                         <table className="w-full text-sm">
                             <thead className="bg-slate-50 border-b border-slate-100">
                                 <tr>
@@ -381,35 +497,61 @@ export default function OrgDetailPage() {
                                     <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Email</th>
                                     <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Department</th>
                                     <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Role</th>
+                                    <th className="px-6 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                                 {employees.length === 0 && (
-                                    <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 text-sm">No employees found</td></tr>
+                                    <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">No employees found</td></tr>
                                 )}
-                                {employees.map((emp) => (
-                                    <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-7 w-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
-                                                    {emp.firstName[0]}{emp.lastName[0]}
+                                {employees.map((emp) => {
+                                    const roleName = emp.user?.organizations?.[0]?.role?.name ?? emp.user?.role?.name ?? "—";
+                                    return (
+                                        <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    {emp.avatarUrl ? (
+                                                        <img src={emp.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover shrink-0 border border-slate-200" />
+                                                    ) : (
+                                                        <div className="h-7 w-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                                            {emp.firstName[0]}{emp.lastName[0]}
+                                                        </div>
+                                                    )}
+                                                    <span className="font-medium text-slate-900">{emp.firstName} {emp.lastName}</span>
                                                 </div>
-                                                <span className="font-medium text-slate-900">{emp.firstName} {emp.lastName}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-500">{emp.email}</td>
-                                        <td className="px-6 py-4">
-                                            {emp.department ? (
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
-                                                    {emp.department.name}
-                                                </span>
-                                            ) : <span className="text-slate-300">—</span>}
-                                        </td>
-                                        <td className="px-6 py-4 text-xs text-slate-500 capitalize">
-                                            {emp.user?.role?.name?.replace(/_/g, " ").toLowerCase() ?? "—"}
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-500">{emp.email}</td>
+                                            <td className="px-6 py-4">
+                                                {emp.department ? (
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                                                        {emp.department.name}
+                                                    </span>
+                                                ) : <span className="text-slate-300">—</span>}
+                                            </td>
+                                            <td className="px-6 py-4 text-xs text-slate-500 capitalize">
+                                                {roleName.replace(/_/g, " ").toLowerCase()}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <button
+                                                        onClick={() => openRoleModal(emp)}
+                                                        title="Change role"
+                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                    >
+                                                        <ShieldCheck className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openPwModal(emp)}
+                                                        title="Reset password"
+                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                    >
+                                                        <KeyRound className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -491,5 +633,68 @@ export default function OrgDetailPage() {
                 )}
             </div>
         </div>
+
+        {/* Role change modal */}
+        {roleModal && (
+            <Modal title={`Change Role — ${roleModal.emp.firstName} ${roleModal.emp.lastName}`} onClose={() => setRoleModal(null)}>
+                <div className="space-y-4">
+                    <p className="text-xs text-slate-500">Select a new role for this employee within the organization.</p>
+                    <select
+                        value={selectedRoleId}
+                        onChange={(e) => setSelectedRoleId(Number(e.target.value))}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    >
+                        {ROLE_OPTIONS.map((r) => (
+                            <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                    </select>
+                    {roleError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{roleError}</p>}
+                    <div className="flex justify-end gap-2 pt-1">
+                        <button onClick={() => setRoleModal(null)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleRoleSave}
+                            disabled={savingRole}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            {savingRole ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                            Save Role
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        )}
+
+        {/* Password reset modal */}
+        {pwModal && (
+            <Modal title={`Reset Password — ${pwModal.emp.firstName} ${pwModal.emp.lastName}`} onClose={() => setPwModal(null)}>
+                <div className="space-y-4">
+                    <p className="text-xs text-slate-500">Set a new temporary password. The employee can change it after logging in.</p>
+                    <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => { setNewPassword(e.target.value); setPwError(null); }}
+                        placeholder="New password (min. 8 characters)"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    />
+                    {pwError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{pwError}</p>}
+                    <div className="flex justify-end gap-2 pt-1">
+                        <button onClick={() => setPwModal(null)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handlePasswordSave}
+                            disabled={savingPw || newPassword.length < 8}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            {savingPw ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+                            Reset Password
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        )}
+        </>
     );
 }

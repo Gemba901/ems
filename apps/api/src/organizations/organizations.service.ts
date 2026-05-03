@@ -3,7 +3,10 @@ import {
     NotFoundException,
     ConflictException,
     BadRequestException,
+    Inject,
 } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import type { Prisma } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OrgStatus, ModuleType } from 'db';
@@ -14,13 +17,24 @@ import {
     OrgEmployeePaginationDto,
 } from './dto/organizations.dto';
 
+const CACHE_KEYS = {
+    PLATFORM_STATS: 'platform:stats',
+    ORG_LIST: 'org:list',
+} as const;
+
 @Injectable()
 export class OrganizationsService {
-    constructor(private prisma: PrismaService) {}
+    constructor(
+        private prisma: PrismaService,
+        @Inject(CACHE_MANAGER) private cache: Cache,
+    ) {}
 
     // ── Platform-wide stats ──────────────────────────────────────────────────
 
     async getPlatformStats() {
+        const cached = await this.cache.get(CACHE_KEYS.PLATFORM_STATS);
+        if (cached) return cached;
+
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
         const [
@@ -60,7 +74,7 @@ export class OrganizationsService {
         const implementationRate =
             suggestionCount > 0 ? Math.round((implemented / suggestionCount) * 100) : 0;
 
-        return {
+        const result = {
             organizationCount,
             employeeCount,
             departmentCount,
@@ -80,6 +94,9 @@ export class OrganizationsService {
                 SIMS: simsCount,
             },
         };
+
+        await this.cache.set(CACHE_KEYS.PLATFORM_STATS, result, 60_000);
+        return result;
     }
 
     // ── List all organizations ───────────────────────────────────────────────
@@ -173,10 +190,9 @@ export class OrganizationsService {
                     where: { organizationId: id },
                     _count: { id: true },
                 }),
-                this.prisma.suggestion.groupBy({
-                    by: ['category'],
+                this.prisma.suggestion.findMany({
                     where: { organizationId: id },
-                    _count: { id: true },
+                    select: { categories: true },
                 }),
                 this.prisma.employee.count({
                     where: { organizationId: id, createdAt: { gte: thirtyDaysAgo } },
@@ -187,7 +203,12 @@ export class OrganizationsService {
             ]);
 
         const statusMap   = Object.fromEntries(suggestionsByStatus.map((s) => [s.status, s._count.id]));
-        const categoryMap = Object.fromEntries(suggestionsByCategory.map((c) => [c.category, c._count.id]));
+        const categoryMap: Record<string, number> = {};
+        for (const s of suggestionsByCategory) {
+            for (const cat of s.categories) {
+                categoryMap[cat] = (categoryMap[cat] ?? 0) + 1;
+            }
+        }
 
         const totalSuggestions = counts!._count.suggestions;
         const implemented      = statusMap['IMPLEMENTED'] ?? 0;
@@ -377,7 +398,23 @@ export class OrganizationsService {
                 },
             });
 
-            return org;
+                await this.cache.del(CACHE_KEYS.PLATFORM_STATS);
+            await this.cache.del(CACHE_KEYS.ORG_LIST);
+
+            // Re-fetch with _count so the response matches the list shape
+            return tx.organization.findUniqueOrThrow({
+                where: { id: org.id },
+                include: {
+                    _count: {
+                        select: {
+                            employees:         true,
+                            departments:       true,
+                            userOrganizations: true,
+                            suggestions:       true,
+                        },
+                    },
+                },
+            });
         });
     }
 
@@ -394,16 +431,17 @@ export class OrganizationsService {
             if (duplicate) throw new ConflictException('An organization with this name already exists');
         }
 
-        return this.prisma.organization.update({
+        return (this.prisma.organization as any).update({
             where: { id },
             data: {
-                ...(dto.name     !== undefined && { name:     dto.name }),
-                ...(dto.logoUrl  !== undefined && { logoUrl:  dto.logoUrl }),
-                ...(dto.industry !== undefined && { industry: dto.industry }),
-                ...(dto.email    !== undefined && { email:    dto.email }),
-                ...(dto.phone    !== undefined && { phone:    dto.phone }),
-                ...(dto.address  !== undefined && { address:  dto.address }),
-                ...(dto.modules  !== undefined && { modules:  dto.modules }),
+                ...(dto.name         !== undefined && { name:         dto.name }),
+                ...(dto.logoUrl      !== undefined && { logoUrl:      dto.logoUrl }),
+                ...(dto.industry     !== undefined && { industry:     dto.industry }),
+                ...(dto.email        !== undefined && { email:        dto.email }),
+                ...(dto.phone        !== undefined && { phone:        dto.phone }),
+                ...(dto.address      !== undefined && { address:      dto.address }),
+                ...(dto.modules      !== undefined && { modules:      dto.modules }),
+                ...(dto.primaryColor !== undefined && { primaryColor: dto.primaryColor }),
             },
         });
     }
@@ -421,6 +459,9 @@ export class OrganizationsService {
             where: { id },
             data: { status },
         });
+
+        await this.cache.del(CACHE_KEYS.PLATFORM_STATS);
+        await this.cache.del(CACHE_KEYS.ORG_LIST);
 
         return {
             message: `Organization status updated to ${status}`,

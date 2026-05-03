@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
-import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory } from "@/services/sims.service";
+import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory, calcWeight } from "@/services/sims.service";
 import { AlertCircle, Clock, HelpCircle, ChevronRight, EyeOff } from "lucide-react";
 
 const REVIEW_STATUSES: SuggestionStatus[] = ["SUBMITTED", "UNDER_REVIEW", "NEEDS_CLARIFICATION"];
@@ -44,17 +44,14 @@ const SECTION_CONFIG: Record<string, {
   },
 };
 
-const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
-  QUALITY:    "bg-blue-100 text-blue-700",
-  COST:       "bg-emerald-100 text-emerald-700",
-  DELIVERY:   "bg-purple-100 text-purple-700",
-  SAFETY:     "bg-red-100 text-red-700",
-  MORALE:     "bg-amber-100 text-amber-700",
-  TECHNOLOGY: "bg-indigo-100 text-indigo-700",
-};
-
-const PRIORITY_DOT: Record<string, string> = {
-  LOW: "bg-slate-300", MEDIUM: "bg-blue-400", HIGH: "bg-amber-400", CRITICAL: "bg-red-500",
+const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
+  QUALITY:    { label: "Quality",    badge: "bg-blue-100 text-blue-700" },
+  COST:       { label: "Cost",       badge: "bg-emerald-100 text-emerald-700" },
+  DELIVERY:   { label: "Delivery",   badge: "bg-purple-100 text-purple-700" },
+  SAFETY:     { label: "Safety",     badge: "bg-red-100 text-red-700" },
+  MORALE:     { label: "Morale",     badge: "bg-amber-100 text-amber-700" },
+  TECHNOLOGY: { label: "Technology", badge: "bg-indigo-100 text-indigo-700" },
+  UNKNOWN:    { label: "Unknown",    badge: "bg-slate-100 text-slate-500" },
 };
 
 export default function ReviewsPage() {
@@ -151,7 +148,6 @@ export default function ReviewsPage() {
               {/* Cards */}
               <div className="divide-y divide-slate-50">
                 {group.map((s) => {
-                  const catBadge = CATEGORY_BADGE[s.category];
                   const daysSince = Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 86400000);
                   return (
                     <div
@@ -165,13 +161,17 @@ export default function ReviewsPage() {
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${catBadge}`}>
-                            {s.category.charAt(0) + s.category.slice(1).toLowerCase()}
-                          </span>
-                          {s.priority && (
-                            <span className="flex items-center gap-1.5">
-                              <span className={`h-2 w-2 rounded-full ${PRIORITY_DOT[s.priority]}`} />
-                              <span className="text-xs text-slate-500 capitalize">{s.priority.toLowerCase()} priority</span>
+                          {s.categories.map((c) => {
+                            const catCfg = CATEGORY_CONFIG[c as SuggestionCategory];
+                            return catCfg ? (
+                              <span key={c} className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${catCfg.badge}`}>
+                                {catCfg.label}
+                              </span>
+                            ) : null;
+                          })}
+                          {calcWeight(s.categories) > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-100">
+                              W {calcWeight(s.categories).toFixed(1)}
                             </span>
                           )}
                         </div>

@@ -8,18 +8,17 @@ import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionCategory } from "@/services/sims.service";
 import { Archive, EyeOff, ChevronRight, Search, X } from "lucide-react";
 
-const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
-  QUALITY:    "bg-blue-100 text-blue-700",
-  COST:       "bg-emerald-100 text-emerald-700",
-  DELIVERY:   "bg-purple-100 text-purple-700",
-  SAFETY:     "bg-red-100 text-red-700",
-  MORALE:     "bg-amber-100 text-amber-700",
-  TECHNOLOGY: "bg-indigo-100 text-indigo-700",
+const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
+  QUALITY:    { label: "Quality",    badge: "bg-blue-100 text-blue-700" },
+  COST:       { label: "Cost",       badge: "bg-emerald-100 text-emerald-700" },
+  DELIVERY:   { label: "Delivery",   badge: "bg-purple-100 text-purple-700" },
+  SAFETY:     { label: "Safety",     badge: "bg-red-100 text-red-700" },
+  MORALE:     { label: "Morale",     badge: "bg-amber-100 text-amber-700" },
+  TECHNOLOGY: { label: "Technology", badge: "bg-indigo-100 text-indigo-700" },
+  UNKNOWN:    { label: "Unknown",    badge: "bg-slate-100 text-slate-500" },
 };
 
-const PRIORITY_DOT: Record<string, string> = {
-  LOW: "bg-slate-300", MEDIUM: "bg-blue-400", HIGH: "bg-amber-400", CRITICAL: "bg-red-500",
-};
+const ALL_CATEGORIES: SuggestionCategory[] = ["QUALITY","COST","DELIVERY","SAFETY","MORALE","TECHNOLOGY","UNKNOWN"];
 
 export default function ArchivedPage() {
   const router = useRouter();
@@ -36,17 +35,12 @@ export default function ArchivedPage() {
     const fetch = role === Role.HOD
       ? SimsService.getDepartment(accessToken, { status: "ARCHIVED", limit: 500 }).then((r) => r.data)
       : SimsService.getAll(accessToken, { status: "ARCHIVED", limit: 500 }).then((r) => r.data);
-    fetch
-      .then(setSuggestions)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    fetch.then(setSuggestions).catch(console.error).finally(() => setLoading(false));
   }, [accessToken, role]);
-
-  const categories = Object.keys(CATEGORY_BADGE) as SuggestionCategory[];
 
   const displayed = suggestions.filter((s) => {
     const matchSearch = !search || s.title.toLowerCase().includes(search.toLowerCase()) || s.description.toLowerCase().includes(search.toLowerCase());
-    const matchCat = !categoryFilter || s.category === categoryFilter;
+    const matchCat = !categoryFilter || s.categories.includes(categoryFilter as SuggestionCategory);
     return matchSearch && matchCat;
   });
 
@@ -91,22 +85,20 @@ export default function ArchivedPage() {
             >
               All Categories
             </button>
-            {categories.map((cat) => (
+            {ALL_CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat === categoryFilter ? "" : cat)}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${categoryFilter === cat ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"}`}
               >
-                {cat.charAt(0) + cat.slice(1).toLowerCase()}
+                {CATEGORY_CONFIG[cat].label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Loading */}
         {loading && <p className="text-slate-400 text-sm py-12 text-center">Loading archived suggestions...</p>}
 
-        {/* Empty */}
         {!loading && displayed.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-20 text-slate-400">
             <div className="h-14 w-14 rounded-full bg-slate-50 flex items-center justify-center">
@@ -114,26 +106,21 @@ export default function ArchivedPage() {
             </div>
             <p className="text-sm font-semibold text-slate-500">No archived suggestions found</p>
             {(search || categoryFilter) && (
-              <button
-                onClick={() => { setSearch(""); setCategoryFilter(""); }}
-                className="text-xs text-blue-600 hover:underline"
-              >
+              <button onClick={() => { setSearch(""); setCategoryFilter(""); }} className="text-xs text-blue-600 hover:underline">
                 Clear filters
               </button>
             )}
           </div>
         )}
 
-        {/* Results count */}
         {!loading && displayed.length > 0 && (search || categoryFilter) && (
           <p className="text-xs text-slate-400">{displayed.length} of {suggestions.length} results</p>
         )}
 
-        {/* Cards */}
         <div className="space-y-2">
           {!loading && displayed.map((s) => {
-            const catBadge = CATEGORY_BADGE[s.category];
             const archiveReview = [...s.reviews].reverse().find((r) => r.statusChanged === "ARCHIVED");
+            const dt = new Date(s.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
             return (
               <div
                 key={s.id}
@@ -142,13 +129,14 @@ export default function ArchivedPage() {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${catBadge}`}>
-                      {s.category.charAt(0) + s.category.slice(1).toLowerCase()}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className={`h-2 w-2 rounded-full ${PRIORITY_DOT[s.priority]}`} />
-                      <span className="text-xs text-slate-400 capitalize">{s.priority.toLowerCase()}</span>
-                    </span>
+                    {s.categories.map((c) => {
+                      const cfg = CATEGORY_CONFIG[c as SuggestionCategory];
+                      return cfg ? (
+                        <span key={c} className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${cfg.badge}`}>
+                          {cfg.label}
+                        </span>
+                      ) : null;
+                    })}
                     <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 font-semibold uppercase tracking-wider">Archived</span>
                   </div>
                   <p className="text-sm font-bold text-slate-700 truncate">{s.title}</p>
@@ -159,7 +147,7 @@ export default function ArchivedPage() {
                     ) : (
                       <span className="flex items-center gap-1"><EyeOff className="h-3 w-3" /> Anonymous</span>
                     )}
-                    <span>· {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    <span>· {dt}</span>
                     {archiveReview?.note && (
                       <span className="italic truncate max-w-65">· "{archiveReview.note}"</span>
                     )}

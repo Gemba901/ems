@@ -22,11 +22,12 @@ const CATEGORY_COLORS: Record<SuggestionCategory, string> = {
   SAFETY:     "#ef4444",
   MORALE:     "#f59e0b",
   TECHNOLOGY: "#6366f1",
+  UNKNOWN:    "#94a3b8",
 };
 
 const CATEGORY_LABELS: Record<SuggestionCategory, string> = {
   QUALITY: "Quality", COST: "Cost", DELIVERY: "Delivery",
-  SAFETY: "Safety", MORALE: "Morale", TECHNOLOGY: "Technology",
+  SAFETY: "Safety", MORALE: "Morale", TECHNOLOGY: "Technology", UNKNOWN: "Unknown",
 };
 
 const STATUS_COLORS: Record<SuggestionStatus, string> = {
@@ -138,10 +139,10 @@ export default function AnalyticsPage() {
   const categoryData = useMemo(() =>
     ALL_CATEGORIES.map((cat) => ({
       name: CATEGORY_LABELS[cat],
-      value: suggestions.filter((s) => s.category === cat).length,
+      value: suggestions.filter((s) => s.categories.includes(cat)).length,
       color: CATEGORY_COLORS[cat],
-      implemented: suggestions.filter((s) => s.category === cat && s.status === "IMPLEMENTED").length,
-      approved:    suggestions.filter((s) => s.category === cat && ["APPROVED","IMPLEMENTED"].includes(s.status)).length,
+      implemented: suggestions.filter((s) => s.categories.includes(cat) && s.status === "IMPLEMENTED").length,
+      approved:    suggestions.filter((s) => s.categories.includes(cat) && ["APPROVED","IMPLEMENTED"].includes(s.status)).length,
     })),
     [suggestions]
   );
@@ -172,7 +173,7 @@ export default function AnalyticsPage() {
 
   const radarData = useMemo(() =>
     ALL_CATEGORIES.map((cat) => {
-      const catSugs = suggestions.filter((s) => s.category === cat);
+      const catSugs = suggestions.filter((s) => s.categories.includes(cat));
       const total   = catSugs.length;
       const impl    = catSugs.filter((s) => s.status === "IMPLEMENTED").length;
       return {
@@ -182,14 +183,6 @@ export default function AnalyticsPage() {
         successRate: total > 0 ? Math.round((impl / total) * 100) : 0,
       };
     }),
-    [suggestions]
-  );
-
-  const priorityData = useMemo(() =>
-    ["CRITICAL","HIGH","MEDIUM","LOW"].map((p) => ({
-      name: p.charAt(0) + p.slice(1).toLowerCase(),
-      value: suggestions.filter((s) => s.priority === p).length,
-    })),
     [suggestions]
   );
 
@@ -281,37 +274,24 @@ export default function AnalyticsPage() {
             </ChartCard>
           </div>
 
-          <ChartCard title="Priority Distribution" subtitle="Breakdown by impact priority">
+          <ChartCard title="Category Weightage" subtitle="Total weight score per QCDSMT category">
             <div className="space-y-3 mt-2">
-              {priorityData.map((p) => {
-                const total = kpis.total || 1;
-                const pct   = Math.round((p.value / total) * 100);
-                const color = p.name === "Critical" ? "bg-red-500" : p.name === "High" ? "bg-amber-400" : p.name === "Medium" ? "bg-blue-400" : "bg-slate-300";
+              {categoryData.filter((c) => c.value > 0).map((c) => {
+                const maxVal = Math.max(...categoryData.map((x) => x.value), 1);
+                const pct    = Math.round((c.value / maxVal) * 100);
                 return (
-                  <div key={p.name}>
+                  <div key={c.name}>
                     <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="font-semibold text-slate-700">{p.name}</span>
-                      <span className="text-slate-400">{p.value} ({pct}%)</span>
+                      <span className="font-semibold text-slate-700">{c.name}</span>
+                      <span className="text-slate-400">{c.value} suggestion{c.value !== 1 ? "s" : ""}</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: c.color }} />
                     </div>
                   </div>
                 );
               })}
             </div>
-
-            {/* Mini pie */}
-            <ResponsiveContainer width="100%" height={140} className="mt-4">
-              <PieChart>
-                <Pie data={priorityData} cx="50%" cy="50%" outerRadius={55} dataKey="value" paddingAngle={2}>
-                  {priorityData.map((_, i) => (
-                    <Cell key={i} fill={["#ef4444","#f59e0b","#3b82f6","#94a3b8"][i]} stroke="none" />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle} />
-              </PieChart>
-            </ResponsiveContainer>
           </ChartCard>
         </div>
 

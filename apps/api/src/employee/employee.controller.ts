@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -11,7 +12,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { EmployeeService } from './employee.service';
-import { CreateEmployeeDto, UpdateEmployeeDto, PaginationDto } from './dto/employee.dto';
+import { CreateEmployeeDto, UpdateEmployeeDto, UpdateEmployeeRoleDto, ResetPasswordDto, UpdateAvatarDto, PaginationDto } from './dto/employee.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -149,5 +150,47 @@ export class EmployeeController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   async remove(@Param('id') id: string) {
     return this.employeeService.deleteEmployee(id);
+  }
+
+  // PATCH /employee/company/theme — admin updates their company's primary color
+  @Patch('company/theme')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  async updateCompanyTheme(
+    @Body() body: { primaryColor: string },
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.employeeService.updateCompanyTheme(user.organizationId, body.primaryColor);
+  }
+
+  // PATCH /employee/:id/role — change an employee's role within the org
+  @Patch(':id/role')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  async updateRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateEmployeeRoleDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.employeeService.updateEmployeeRole(id, dto.roleId, user.organizationId);
+  }
+
+  // PATCH /employee/:id/reset-password — admin sets a new password for an employee
+  @Patch(':id/reset-password')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  async resetPassword(
+    @Param('id') id: string,
+    @Body() dto: ResetPasswordDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.employeeService.resetEmployeePassword(id, dto.newPassword, user.organizationId);
+  }
+
+  // PATCH /employee/:id/avatar — update avatar URL
+  @Patch(':id/avatar')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE)
+  async updateAvatar(
+    @Param('id') id: string,
+    @Body() dto: UpdateAvatarDto,
+  ) {
+    return this.employeeService.updateAvatar(id, dto.avatarUrl);
   }
 }

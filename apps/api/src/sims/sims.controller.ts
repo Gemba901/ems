@@ -43,6 +43,16 @@ export class SimsController {
   }
 
   /**
+   * GET /sims/summary
+   * Aggregated, anonymised counts for the current user's department and org.
+   * Available to all roles.
+   */
+  @Get('summary')
+  async getSummary(@CurrentUser() user: { userId: string; organizationId: string }) {
+    return this.simsService.getSummary(user.userId, user.organizationId);
+  }
+
+  /**
    * GET /sims/department
    * HOD views all suggestions from their department.
    */

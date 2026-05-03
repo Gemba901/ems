@@ -139,7 +139,7 @@ export default function AuthPage() {
       />
 
       {/* Form card */}
-      <div className="relative z-10">
+      <div className="relative z-10 w-full flex justify-center">
         <AnimatePresence mode="wait">
           <motion.div
             key={step}

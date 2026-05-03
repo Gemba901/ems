@@ -11,7 +11,8 @@ import {
   HelpCircle,
   BarChart2,
   LogOut,
-  MessageSquareText,
+  UserCog,
+  Stethoscope,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { useEffect } from "react";
@@ -68,6 +69,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       icon: BarChart2,
       allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]
     },
+    {
+      name: "HR",
+      href: "/hr",
+      icon: Stethoscope,
+      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR]
+    },
+    {
+      name: "Settings",
+      href: "/settings",
+      icon: UserCog,
+      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN]
+    },
     // {
     //   name: "Suggestions",
     //   href: "/sims",
@@ -99,9 +112,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
       <aside className={`
         fixed z-50 flex flex-col bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-slate-100 transition-all duration-300 ease-in-out overflow-hidden group
-        top-0 bottom-0 left-0 w-64 border-r rounded-none
+        top-0 left-0 h-dvh w-64 border-r rounded-none
         ${open ? "translate-x-0" : "-translate-x-full"}
-        md:left-4 md:top-4 md:bottom-4 md:rounded-2xl md:border md:translate-x-0 md:w-16 md:hover:w-64
+        md:left-4 md:top-4 md:h-[calc(100dvh-2rem)] md:rounded-2xl md:border md:translate-x-0 md:w-16 md:hover:w-64
       `}>
 
         {/* Top Logo */}
@@ -116,7 +129,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 flex flex-col gap-2 px-3 mt-4">
+        <nav className="flex-1 flex flex-col gap-2 px-3 mt-4 overflow-y-auto min-h-0">
           {filteredNav.map((item) => {
             const isActive = pathname === item.href;
 

@@ -63,6 +63,31 @@ export class UpdateEmployeeDto {
   departmentId?: string;
 }
 
+// DTO for changing an employee's role
+export class UpdateEmployeeRoleDto {
+  @Expose()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'Role ID must be a number' })
+  @IsNotEmpty({ message: 'Role ID is required' })
+  roleId!: number;
+}
+
+// DTO for admin password reset
+export class ResetPasswordDto {
+  @Expose()
+  @IsString()
+  @IsNotEmpty({ message: 'New password is required' })
+  newPassword!: string;
+}
+
+// DTO for updating avatar
+export class UpdateAvatarDto {
+  @Expose()
+  @IsString()
+  @IsNotEmpty({ message: 'Avatar URL is required' })
+  avatarUrl!: string;
+}
+
 // DTO for pagination query parameters
 export class PaginationDto {
   @Expose()

@@ -1,6 +1,9 @@
-import { IsString, IsNotEmpty, IsEnum, IsOptional, IsBoolean, IsNumber, Min } from 'class-validator';
+import {
+  IsString, IsNotEmpty, IsEnum, IsOptional, IsBoolean,
+  IsNumber, Min, IsArray, ArrayMinSize,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { SuggestionCategory, SuggestionPriority, SuggestionStatus } from 'db';
+import { SuggestionCategory, SuggestionStatus } from 'db';
 
 export class CreateSuggestionDto {
   @IsString()
@@ -11,12 +14,10 @@ export class CreateSuggestionDto {
   @IsNotEmpty({ message: 'Description is required' })
   description!: string;
 
-  @IsEnum(SuggestionCategory, { message: 'Invalid category' })
-  category!: SuggestionCategory;
-
-  @IsEnum(SuggestionPriority, { message: 'Invalid priority' })
-  @IsOptional()
-  priority?: SuggestionPriority;
+  @IsArray({ message: 'Categories must be an array' })
+  @ArrayMinSize(1, { message: 'At least one category is required' })
+  @IsEnum(SuggestionCategory, { each: true, message: 'Invalid category value' })
+  categories!: SuggestionCategory[];
 
   @IsBoolean()
   @IsOptional()
@@ -40,10 +41,6 @@ export class QuerySuggestionsDto {
   @IsEnum(SuggestionCategory)
   @IsOptional()
   category?: SuggestionCategory;
-
-  @IsEnum(SuggestionPriority)
-  @IsOptional()
-  priority?: SuggestionPriority;
 
   @IsString()
   @IsOptional()

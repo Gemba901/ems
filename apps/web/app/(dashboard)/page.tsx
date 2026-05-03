@@ -18,7 +18,6 @@ import {
   ChevronRight,
   FileEdit,
   ListChecks,
-  Star,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -158,13 +157,6 @@ export default function DashboardPage() {
 
   const firstName = user?.name?.split(" ")[0] ?? "there";
   const role = user?.roleLevel?.replace(/_/g, " ") ?? "";
-  const initials = user?.name
-    ?.split(" ")
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() ?? "?";
-
   useEffect(() => {
     if (!accessToken) return;
     AuthService.getMyOrg(accessToken)
@@ -180,6 +172,8 @@ export default function DashboardPage() {
   const upcomingToShow = UPCOMING_MODULES.filter(
     (m) => !activeModules.includes((m as any).key)
   );
+
+  const canSeeExploreMore = ["SUPER_ADMIN", "ADMIN", "MANAGEMENT"].includes(user?.roleLevel ?? "");
 
   return (
     <div className="max-w-7xl mx-auto space-y-10 pb-16">
@@ -277,39 +271,41 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {/* ── Explore more ───────────────────────────────────────────────────── */}
-      <section>
-        <div className="flex items-center gap-3 mb-5">
-          <Sparkles className="h-4 w-4 text-indigo-400" />
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Explore More</h2>
-            <p className="text-sm text-slate-500 mt-0.5">More modules coming to the Gemba platform</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {upcomingToShow.map((mod) => (
-            <div
-              key={mod.label}
-              className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm opacity-80 hover:opacity-100 transition-opacity"
-            >
-              <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${mod.bg} mb-3`}>
-                <mod.icon className={`h-4 w-4 ${mod.color}`} />
-              </div>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-bold text-slate-900">{mod.label}</p>
-                  <p className={`text-[11px] font-semibold mt-0.5 ${mod.color}`}>{mod.tagline}</p>
-                </div>
-                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">
-                  Soon
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed line-clamp-2">{mod.description}</p>
+      {/* ── Explore more — management and above only ───────────────────────── */}
+      {canSeeExploreMore && upcomingToShow.length > 0 && (
+        <section>
+          <div className="flex items-center gap-3 mb-5">
+            <Sparkles className="h-4 w-4 text-indigo-400" />
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Explore More</h2>
+              <p className="text-sm text-slate-500 mt-0.5">More modules coming to the Gemba platform</p>
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {upcomingToShow.map((mod) => (
+              <div
+                key={mod.label}
+                className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm opacity-80 hover:opacity-100 transition-opacity"
+              >
+                <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${mod.bg} mb-3`}>
+                  <mod.icon className={`h-4 w-4 ${mod.color}`} />
+                </div>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{mod.label}</p>
+                    <p className={`text-[11px] font-semibold mt-0.5 ${mod.color}`}>{mod.tagline}</p>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">
+                    Soon
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2 leading-relaxed line-clamp-2">{mod.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
     </div>
   );

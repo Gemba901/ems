@@ -169,4 +169,13 @@ export const AdminService = {
         });
         return handleResponse<any>(res);
     },
+
+    async updateCompanyTheme(token: string, primaryColor: string): Promise<{ id: string; primaryColor: string }> {
+        const res = await fetch(`${API_URL}/employee/company/theme`, {
+            method: "PATCH",
+            headers: authHeaders(token),
+            body: JSON.stringify({ primaryColor }),
+        });
+        return handleResponse<{ id: string; primaryColor: string }>(res);
+    },
 };

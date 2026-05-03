@@ -22,17 +22,14 @@ const STATUS_CONFIG: Record<SuggestionStatus, { label: string; badge: string; ic
   ARCHIVED:            { label: "Archived",            badge: "bg-slate-100 text-slate-500",     icon: <Archive className="h-3.5 w-3.5" /> },
 };
 
-const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
-  QUALITY:    "bg-blue-100 text-blue-700",
-  COST:       "bg-emerald-100 text-emerald-700",
-  DELIVERY:   "bg-purple-100 text-purple-700",
-  SAFETY:     "bg-red-100 text-red-700",
-  MORALE:     "bg-amber-100 text-amber-700",
-  TECHNOLOGY: "bg-indigo-100 text-indigo-700",
-};
-
-const PRIORITY_DOT: Record<string, string> = {
-  LOW: "bg-slate-300", MEDIUM: "bg-blue-400", HIGH: "bg-amber-400", CRITICAL: "bg-red-500",
+const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
+  QUALITY:    { label: "Quality",    badge: "bg-blue-100 text-blue-700" },
+  COST:       { label: "Cost",       badge: "bg-emerald-100 text-emerald-700" },
+  DELIVERY:   { label: "Delivery",   badge: "bg-purple-100 text-purple-700" },
+  SAFETY:     { label: "Safety",     badge: "bg-red-100 text-red-700" },
+  MORALE:     { label: "Morale",     badge: "bg-amber-100 text-amber-700" },
+  TECHNOLOGY: { label: "Technology", badge: "bg-indigo-100 text-indigo-700" },
+  UNKNOWN:    { label: "Unknown",    badge: "bg-slate-100 text-slate-500" },
 };
 
 export default function MySuggestionsPage() {
@@ -171,10 +168,10 @@ export default function MySuggestionsPage() {
             <div className="divide-y divide-slate-50">
               {displayed.map((s) => {
                 const status = STATUS_CONFIG[s.status];
-                const catBadge = CATEGORY_BADGE[s.category] ?? "bg-slate-100 text-slate-600";
                 const latestReview = s.reviews[s.reviews.length - 1];
-                const date = new Date(s.createdAt).toLocaleDateString("en-US", {
+                const date = new Date(s.createdAt).toLocaleString("en-US", {
                   month: "short", day: "numeric", year: "numeric",
+                  hour: "numeric", minute: "2-digit",
                 });
                 return (
                   <div
@@ -189,15 +186,14 @@ export default function MySuggestionsPage() {
                           <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${status.badge}`}>
                             {status.icon}{status.label}
                           </span>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${catBadge}`}>
-                            {s.category.charAt(0) + s.category.slice(1).toLowerCase()}
-                          </span>
-                          {s.priority && (
-                            <span className="flex items-center gap-1.5">
-                              <span className={`h-2 w-2 rounded-full ${PRIORITY_DOT[s.priority]}`} />
-                              <span className="text-[11px] text-slate-400 capitalize">{s.priority.toLowerCase()} priority</span>
-                            </span>
-                          )}
+                          {s.categories.map((c) => {
+                            const cfg = CATEGORY_CONFIG[c as SuggestionCategory];
+                            return cfg ? (
+                              <span key={c} className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${cfg.badge}`}>
+                                {cfg.label}
+                              </span>
+                            ) : null;
+                          })}
                           {s.isAnonymous && (
                             <span className="text-[10px] text-slate-400 italic">Anonymous</span>
                           )}

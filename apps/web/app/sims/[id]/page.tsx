@@ -12,6 +12,9 @@ import {
   Suggestion,
   SuggestionReview,
   SuggestionStatus,
+  SuggestionCategory,
+  calcWeight,
+  CATEGORY_WEIGHTS,
 } from "@/services/sims.service";
 import {
   ArrowLeft,
@@ -44,14 +47,22 @@ const STATUS_BADGE: Record<SuggestionStatus, string> = {
   ARCHIVED:            "bg-slate-100 text-slate-500",
 };
 
-const CATEGORY_BADGE: Record<string, string> = {
-  QUALITY:    "bg-blue-100 text-blue-700",
-  COST:       "bg-emerald-100 text-emerald-700",
-  DELIVERY:   "bg-purple-100 text-purple-700",
-  SAFETY:     "bg-red-100 text-red-700",
-  MORALE:     "bg-amber-100 text-amber-700",
-  TECHNOLOGY: "bg-indigo-100 text-indigo-700",
+const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
+  QUALITY:    { label: "Quality",    badge: "bg-blue-100 text-blue-700" },
+  COST:       { label: "Cost",       badge: "bg-emerald-100 text-emerald-700" },
+  DELIVERY:   { label: "Delivery",   badge: "bg-purple-100 text-purple-700" },
+  SAFETY:     { label: "Safety",     badge: "bg-red-100 text-red-700" },
+  MORALE:     { label: "Morale",     badge: "bg-amber-100 text-amber-700" },
+  TECHNOLOGY: { label: "Technology", badge: "bg-indigo-100 text-indigo-700" },
+  UNKNOWN:    { label: "Unknown",    badge: "bg-slate-100 text-slate-500" },
 };
+
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  });
+}
 
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
   SUBMITTED:           ["UNDER_REVIEW", "ARCHIVED"],
@@ -100,9 +111,7 @@ function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; revie
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Submitted</span>
-              <span className="text-xs text-slate-400">
-                {new Date(suggestion.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-              </span>
+              <span className="text-xs text-slate-400">{formatDateTime(suggestion.createdAt)}</span>
             </div>
             <p className="text-xs text-slate-500 mt-1">Originator: <span className="font-medium text-slate-600">{submitter}</span></p>
           </div>
@@ -118,13 +127,17 @@ function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; revie
                 <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${STATUS_BADGE[r.statusChanged]}`}>
                   {STATUS_LABELS[r.statusChanged]}
                 </span>
-                <span className="text-xs text-slate-400">
-                  {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </span>
+                <span className="text-xs text-slate-400">{formatDateTime(r.createdAt)}</span>
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 Reviewer: <span className="font-medium text-slate-600">{r.reviewer.firstName} {r.reviewer.lastName}</span>
               </p>
+              {r.reviewerCommittee && (
+                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-400" />
+                  {r.reviewerCommittee.name}
+                </p>
+              )}
               {r.note && (
                 <blockquote className="mt-3 pt-3 border-t border-slate-200 text-sm text-slate-600 italic leading-relaxed">
                   "{r.note}"
@@ -217,16 +230,27 @@ export default function SuggestionDetailPage() {
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{suggestion.description}</p>
 
                   {/* Metadata grid */}
-                  <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="border border-slate-100 rounded-xl p-3">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Category</p>
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${CATEGORY_BADGE[suggestion.category] ?? "bg-slate-100 text-slate-600"}`}>
-                        {suggestion.category.charAt(0) + suggestion.category.slice(1).toLowerCase()}
-                      </span>
-                    </div>
-                    <div className="border border-slate-100 rounded-xl p-3">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Priority</p>
-                      <p className="text-sm font-semibold text-slate-800 capitalize">{suggestion.priority.toLowerCase()}</p>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                        {suggestion.categories.length > 1 ? "Categories" : "Category"}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {suggestion.categories.map((c) => {
+                          const cfg = CATEGORY_CONFIG[c as SuggestionCategory];
+                          return cfg ? (
+                            <span key={c} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.badge}`}>
+                              {cfg.label}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                      {/* Weightage — visible to reviewers only */}
+                      {context && (
+                        <p className="text-[10px] text-slate-400 mt-2">
+                          Weight: <span className="font-bold text-slate-600">{calcWeight(suggestion.categories).toFixed(1)}</span>
+                        </p>
+                      )}
                     </div>
                     <div className="border border-slate-100 rounded-xl p-3">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Submitted By</p>
@@ -241,11 +265,9 @@ export default function SuggestionDetailPage() {
                         </div>
                       )}
                     </div>
-                    <div className="border border-slate-100 rounded-xl p-3">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Date</p>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {new Date(suggestion.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      </p>
+                    <div className="border border-slate-100 rounded-xl p-3 sm:col-span-2">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Submitted At</p>
+                      <p className="text-sm font-semibold text-slate-800">{formatDateTime(suggestion.createdAt)}</p>
                     </div>
                   </div>
                 </div>

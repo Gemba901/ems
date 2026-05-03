@@ -88,6 +88,10 @@ export class UpdateOrganizationDto {
     @IsArray()
     @IsEnum(ModuleType, { each: true })
     modules?: ModuleType[];
+
+    @IsOptional()
+    @IsString()
+    primaryColor?: string;
 }
 
 export class UpdateOrgStatusDto {

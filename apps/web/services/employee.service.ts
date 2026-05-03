@@ -24,6 +24,7 @@ export interface EmployeeApiResponse {
     departmentId: string | null;
     organizationId: string;
     userId: string | null;
+    avatarUrl: string | null;
     createdAt: string;
     department: { id: string; name: string; organizationId: string } | null;
     user: {
@@ -34,6 +35,7 @@ export interface EmployeeApiResponse {
         roleId: string;
         organizationId: string;
         role: { id: string; name: string } | null;
+        organizations?: { role: { id: number; name: string } }[];
     } | null;
 }
 
@@ -106,5 +108,32 @@ export const EmployeeService = {
             headers: authHeaders(token),
         });
         return handleResponse<{ message: string }>(res);
+    },
+
+    async updateRole(id: string, roleId: number, token: string): Promise<{ message: string }> {
+        const res = await fetch(`${API_URL}/employee/${id}/role`, {
+            method: "PATCH",
+            headers: authHeaders(token),
+            body: JSON.stringify({ roleId }),
+        });
+        return handleResponse<{ message: string }>(res);
+    },
+
+    async resetPassword(id: string, newPassword: string, token: string): Promise<{ message: string }> {
+        const res = await fetch(`${API_URL}/employee/${id}/reset-password`, {
+            method: "PATCH",
+            headers: authHeaders(token),
+            body: JSON.stringify({ newPassword }),
+        });
+        return handleResponse<{ message: string }>(res);
+    },
+
+    async updateAvatar(id: string, avatarUrl: string, token: string): Promise<EmployeeApiResponse> {
+        const res = await fetch(`${API_URL}/employee/${id}/avatar`, {
+            method: "PATCH",
+            headers: authHeaders(token),
+            body: JSON.stringify({ avatarUrl }),
+        });
+        return handleResponse<EmployeeApiResponse>(res);
     },
 };

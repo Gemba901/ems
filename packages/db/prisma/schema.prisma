@@ -22,10 +22,21 @@ enum ModuleType {
   SIMS
 }
 
+enum CommitteeType {
+  QUALITY
+  COST
+  DELIVERY
+  SAFETY
+  MORALE
+  TECHNOLOGY
+  GENERAL
+}
+
 enum RoleName {
   SUPER_ADMIN
   ADMIN
   MANAGEMENT
+  HR
   HOD
   EMPLOYEE
 }
@@ -41,6 +52,7 @@ model Organization {
   address     String?
   status      OrgStatus  @default(ACTIVE)
   modules     ModuleType[] @default([])
+  primaryColor String?    @default("#4F46E5")
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -48,6 +60,7 @@ model Organization {
   employees   Employee[]
   departments Department[]
   suggestions Suggestion[]
+  committees  SteeringCommittee[]
 }
 
 //specific user
@@ -112,12 +125,14 @@ model Employee {
   departmentId   String?
   organizationId String
   userId         String?
+  avatarUrl      String?
 
   department       Department?  @relation(fields: [departmentId], references: [id])
   organization     Organization @relation(fields: [organizationId], references: [id])
   user             User?        @relation(fields: [userId], references: [id])
   suggestions      Suggestion[]
   suggestionReviews SuggestionReview[]
+  committeeMembers  SteeringCommitteeMember[]
 
   createdAt      DateTime @default(now())
 
@@ -135,6 +150,28 @@ model Department {
   organization   Organization @relation(fields: [organizationId], references: [id])
 }
 
+model SteeringCommittee {
+  id             String        @id @default(uuid())
+  name           String
+  type           CommitteeType
+  organizationId String
+  createdAt      DateTime      @default(now())
+
+  organization   Organization              @relation(fields: [organizationId], references: [id])
+  members        SteeringCommitteeMember[]
+  reviews        SuggestionReview[]
+}
+
+model SteeringCommitteeMember {
+  committeeId  String
+  employeeId   String
+
+  committee    SteeringCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  employee     Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([committeeId, employeeId])
+}
+
 // SIMS: Suggestions and Idea Management System
 
 enum SuggestionStatus {
@@ -147,13 +184,6 @@ enum SuggestionStatus {
   ARCHIVED
 }
 
-enum SuggestionPriority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
 enum SuggestionCategory {
   QUALITY
   COST
@@ -161,35 +191,37 @@ enum SuggestionCategory {
   SAFETY
   MORALE
   TECHNOLOGY
+  UNKNOWN
 }
 
 model Suggestion {
-  id             String             @id @default(uuid())
+  id             String               @id @default(uuid())
   title          String
   description    String
-  status         SuggestionStatus   @default(SUBMITTED)
-  priority       SuggestionPriority @default(MEDIUM)
-  category       SuggestionCategory
-  isAnonymous    Boolean            @default(false)
+  status         SuggestionStatus     @default(SUBMITTED)
+  categories     SuggestionCategory[] @default([])
+  isAnonymous    Boolean              @default(false)
   employeeId     String
   organizationId String
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
   employee       Employee     @relation(fields: [employeeId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
   reviews        SuggestionReview[]
 }
 
-// Audit trail: every status change by management is recorded here
+// Audit trail: every status change by a committee member is recorded here
 model SuggestionReview {
-  id             String           @id @default(uuid())
-  suggestionId   String
-  reviewerId     String
-  statusChanged  SuggestionStatus
-  note           String?
-  createdAt      DateTime         @default(now())
+  id                  String           @id @default(uuid())
+  suggestionId        String
+  reviewerId          String
+  reviewerCommitteeId String?
+  statusChanged       SuggestionStatus
+  note                String?
+  createdAt           DateTime         @default(now())
 
-  suggestion     Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
-  reviewer       Employee   @relation(fields: [reviewerId], references: [id])
+  suggestion          Suggestion         @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  reviewer            Employee           @relation(fields: [reviewerId], references: [id])
+  reviewerCommittee   SteeringCommittee? @relation(fields: [reviewerCommitteeId], references: [id], onDelete: SetNull)
 }

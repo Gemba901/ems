@@ -64,7 +64,7 @@ export function SetupStep({ data, onComplete }: SetupStepProps) {
       className="w-full max-w-4xl bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden flex flex-col md:flex-row"
     >
       {/* Left Pane: Context */}
-      <div className="w-full md:w-5/12 bg-[#F1F0EC] p-10 flex flex-col justify-between relative overflow-hidden">
+      <div className="w-full md:w-5/12 bg-[#F1F0EC] p-6 md:p-10 flex flex-col justify-between relative overflow-hidden">
         <div className="z-10">
           <div className="flex items-center space-x-3 mb-12">
             <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
@@ -102,7 +102,7 @@ export function SetupStep({ data, onComplete }: SetupStepProps) {
       </div>
 
       {/* Right Pane: Form */}
-      <div className="w-full md:w-7/12 p-10 lg:p-14">
+      <div className="w-full md:w-7/12 p-6 md:p-10 lg:p-14">
         <div className="mb-8">
           <div className="text-[10px] uppercase tracking-widest text-blue-600 font-mono mb-3">
             Step 02 — Security

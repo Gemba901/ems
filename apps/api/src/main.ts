@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,9 +13,10 @@ async function bootstrap() {
     allowedHeader: 'Content-Type, Accept, Authorization',
   });
   app.useGlobalPipes(new ValidationPipe({
-    whitelist: true, // Strip properties that do not have any decorators
-  }))
-  
+    whitelist: true,
+  }));
+  app.useGlobalInterceptors(new LoggingInterceptor());
+
   await app.listen(process.env.PORT ?? 5001);
 }
 bootstrap();

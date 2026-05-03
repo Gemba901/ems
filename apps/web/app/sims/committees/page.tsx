@@ -160,7 +160,7 @@ export default function CommitteesPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-5xl mx-auto space-y-5">
+      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-5">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">

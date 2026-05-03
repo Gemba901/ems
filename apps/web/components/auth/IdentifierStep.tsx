@@ -104,7 +104,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="w-full sm:w-[420px] p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
+      className="w-full sm:w-[420px] mx-auto p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
     >
       <div className="flex flex-col items-center mb-8">
         <Image src="/logo.png" alt="GEMBA PMS" width={96} height={96} />

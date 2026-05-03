@@ -117,7 +117,7 @@ export default function AuthPage() {
 
   return (
     <main
-      className="min-h-screen flex items-center justify-center p-6 font-sans relative overflow-hidden"
+      className="min-h-screen flex items-center justify-center px-4 py-8 sm:p-6 font-sans relative overflow-hidden"
       style={{
         background: "linear-gradient(135deg, #1a2744 0%, #0d1627 60%, #162040 100%)",
       }}
@@ -147,6 +147,7 @@ export default function AuthPage() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="w-full"
           >
             {step === "IDENTIFY" && (
               <IdentifierStep

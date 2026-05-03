@@ -61,7 +61,7 @@ export function SetupStep({ data, onComplete }: SetupStepProps) {
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      className="w-full max-w-4xl bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden flex flex-col md:flex-row"
+      className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden flex flex-col md:flex-row"
     >
       {/* Left Pane: Context */}
       <div className="w-full md:w-5/12 bg-[#F1F0EC] p-6 md:p-10 flex flex-col justify-between relative overflow-hidden">

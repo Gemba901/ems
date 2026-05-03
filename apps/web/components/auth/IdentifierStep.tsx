@@ -154,11 +154,11 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
                 <button
                   type="button"
                   onClick={() => setShowCodes(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-3 bg-slate-50 border-r border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors h-full"
+                  className="flex items-center gap-1 px-2.5 py-3 bg-slate-50 border-r border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors h-full whitespace-nowrap"
                 >
-                  <span>{selected.flag}</span>
-                  <span className="text-slate-500">+{selected.code}</span>
-                  <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${showCodes ? "rotate-180" : ""}`} />
+                  <span className="text-base leading-none">{selected.flag}</span>
+                  <span className="text-slate-500 text-xs">+{selected.code}</span>
+                  <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform shrink-0 ${showCodes ? "rotate-180" : ""}`} />
                 </button>
 
                 {showCodes && (
@@ -194,7 +194,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
                 if (showCodes) setShowCodes(false);
               }}
               placeholder={mode === "phone" ? "e.g. 712 345 678" : "e.g. jane@company.com"}
-              className="flex-1 px-4 py-3 bg-white text-sm outline-none placeholder:text-slate-400"
+              className="flex-1 min-w-0 px-3 py-3 bg-white text-sm outline-none placeholder:text-slate-400"
             />
           </div>
 

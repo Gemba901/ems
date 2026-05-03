@@ -241,23 +241,6 @@ export default function NewSuggestionPage() {
                   )}
                 </div>
 
-                {/* Anonymous toggle */}
-                <div className="border border-slate-100 rounded-xl p-4 bg-slate-50">
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">Submit anonymously</p>
-                      <p className="text-xs text-slate-400 mt-0.5">Reviewers will see your idea but not your name</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsAnonymous((v) => !v)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${isAnonymous ? "bg-blue-600" : "bg-slate-200"}`}
-                    >
-                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${isAnonymous ? "translate-x-6" : "translate-x-1"}`} />
-                    </button>
-                  </label>
-                </div>
-
                 {error && (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>
                 )}

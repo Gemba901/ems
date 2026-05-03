@@ -159,7 +159,7 @@ function ThemeSection() {
 export default function SettingsPage() {
     return (
         <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN]}>
-            <div className="max-w-2xl mx-auto space-y-8">
+            <div className="max-w-4xl mx-auto space-y-8">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Company Settings</h1>
                     <p className="text-sm text-slate-500 mt-1">Customize your workspace and manage organization preferences.</p>

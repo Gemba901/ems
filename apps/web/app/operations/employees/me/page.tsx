@@ -90,7 +90,7 @@ export default function MyProfilePage() {
   const staffId = `EMP-${employee.id.slice(0, 5).toUpperCase()}`;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-12">
+    <div className="max-w-5xl mx-auto space-y-6 pb-12">
 
       {/* Header */}
       <div className="flex items-center gap-4">

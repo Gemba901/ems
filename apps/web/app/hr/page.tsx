@@ -2,15 +2,16 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
     Users, Building2, Search, X, ChevronRight,
-    TrendingUp, UserCheck, Briefcase,
+    TrendingUp, UserCheck, Briefcase, ChevronLeft,
 } from "lucide-react";
+
+const PAGE_SIZE = 12;
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: React.ElementType; color: string }) {
     return (
@@ -35,6 +36,7 @@ function HRContent() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [deptFilter, setDeptFilter] = useState("");
+    const [page, setPage] = useState(1);
 
     const orgId = user?.organizationId ?? "";
 
@@ -60,6 +62,12 @@ function HRContent() {
             return matchSearch && matchDept;
         });
     }, [employees, search, deptFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+    const handleSearchChange = (val: string) => { setSearch(val); setPage(1); };
+    const handleDeptChange = (val: string) => { setDeptFilter(val); setPage(1); };
 
     // Org-level stats derived from employees
     const byDept = useMemo(() => {
@@ -100,19 +108,19 @@ function HRContent() {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                             <input
                                 value={search}
-                                onChange={(e) => setSearch(e.target.value)}
+                                onChange={(e) => handleSearchChange(e.target.value)}
                                 placeholder="Search employees…"
                                 className="w-full pl-8 pr-8 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                             />
                             {search && (
-                                <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                                <button onClick={() => handleSearchChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
                                     <X className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
                                 </button>
                             )}
                         </div>
                         <select
                             value={deptFilter}
-                            onChange={(e) => setDeptFilter(e.target.value)}
+                            onChange={(e) => handleDeptChange(e.target.value)}
                             className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
                         >
                             <option value="">All departments</option>
@@ -149,7 +157,7 @@ function HRContent() {
                                         <td colSpan={4} className="px-5 py-10 text-center text-slate-400 text-sm">No employees match your filters.</td>
                                     </tr>
                                 )}
-                                {!loading && filtered.map((emp) => {
+                                {!loading && paginated.map((emp) => {
                                     const roleName = emp.user?.organizations?.[0]?.role?.name ?? emp.user?.role?.name ?? "—";
                                     return (
                                         <tr
@@ -189,6 +197,55 @@ function HRContent() {
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Pagination */}
+                    {!loading && totalPages > 1 && (
+                        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+                            <p className="text-xs text-slate-400">
+                                Page {page} of {totalPages} · {filtered.length} employees
+                            </p>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                                    .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                                        if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                                        acc.push(p);
+                                        return acc;
+                                    }, [])
+                                    .map((p, i) =>
+                                        p === "…" ? (
+                                            <span key={`ellipsis-${i}`} className="px-1 text-xs text-slate-300">…</span>
+                                        ) : (
+                                            <button
+                                                key={p}
+                                                onClick={() => setPage(p as number)}
+                                                className={`min-w-[28px] h-7 rounded-lg text-xs font-medium transition-colors ${
+                                                    page === p
+                                                        ? "bg-indigo-600 text-white"
+                                                        : "text-slate-600 hover:bg-slate-100"
+                                                }`}
+                                            >
+                                                {p}
+                                            </button>
+                                        )
+                                    )}
+                                <button
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Department breakdown */}

@@ -6,11 +6,15 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+    : ['https://ems-web-swart.vercel.app', 'https://ems.gembapms.co.in'];
+
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'https://ems-web-swart.vercel.app',
+    origin: allowedOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
-    allowedHeader: 'Content-Type, Accept, Authorization',
+    allowedHeaders: 'Content-Type, Accept, Authorization',
   });
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,

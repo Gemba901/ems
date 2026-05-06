@@ -84,7 +84,7 @@ export default function MyProfilePage() {
   };
 
   const fullName = `${employee.firstName} ${employee.lastName}`;
-  const role = employee.user?.role?.name ?? authUser?.roleLevel ?? "—";
+  const role = employee.user?.organizations?.[0]?.role?.name ?? authUser?.roleLevel ?? "—";
   const department = employee.department?.name ?? "—";
   const phone = employee.phone ?? employee.user?.phone ?? null;
   const staffId = `EMP-${employee.id.slice(0, 5).toUpperCase()}`;

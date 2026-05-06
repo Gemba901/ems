@@ -95,7 +95,7 @@ function HRContent() {
                     <StatCard label="Total Employees"   value={employees.length}    icon={Users}      color="bg-sky-50 text-sky-600" />
                     <StatCard label="Departments"       value={departments.length}  icon={Building2}  color="bg-indigo-50 text-indigo-600" />
                     <StatCard label="With Accounts"     value={withAccounts}        icon={UserCheck}  color="bg-emerald-50 text-emerald-600" />
-                    <StatCard label="Active Roles"      value={new Set(employees.map(e => e.user?.role?.name).filter(Boolean)).size}  icon={Briefcase}  color="bg-amber-50 text-amber-600" />
+                    <StatCard label="Active Roles"      value={new Set(employees.map(e => e.user?.organizations?.[0]?.role?.name).filter(Boolean)).size}  icon={Briefcase}  color="bg-amber-50 text-amber-600" />
                 </div>
             )}
 
@@ -158,7 +158,7 @@ function HRContent() {
                                     </tr>
                                 )}
                                 {!loading && paginated.map((emp) => {
-                                    const roleName = emp.user?.organizations?.[0]?.role?.name ?? emp.user?.role?.name ?? "—";
+                                    const roleName = emp.user?.organizations?.[0]?.role?.name ?? "—";
                                     return (
                                         <tr
                                             key={emp.id}

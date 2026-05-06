@@ -504,7 +504,7 @@ export default function OrgDetailPage() {
                                     <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">No employees found</td></tr>
                                 )}
                                 {employees.map((emp) => {
-                                    const roleName = emp.user?.organizations?.[0]?.role?.name ?? emp.user?.role?.name ?? "—";
+                                    const roleName = emp.user?.organizations?.[0]?.role?.name ?? "—";
                                     return (
                                         <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors">
                                             <td className="px-6 py-4">

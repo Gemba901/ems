@@ -15,8 +15,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json();
 }
 
+// SUBMITTED removed — suggestions begin at UNDER_REVIEW
 export type SuggestionStatus =
-  | "SUBMITTED"
   | "UNDER_REVIEW"
   | "NEEDS_CLARIFICATION"
   | "APPROVED"
@@ -56,6 +56,12 @@ export interface SuggestionReview {
   reviewerCommittee: { id: string; name: string; type: string } | null;
 }
 
+export interface AssignedCommittee {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export interface Suggestion {
   id: string;
   title: string;
@@ -65,6 +71,8 @@ export interface Suggestion {
   isAnonymous: boolean;
   employeeId: string;
   organizationId: string;
+  committeeId: string | null;
+  committee: AssignedCommittee | null;
   createdAt: string;
   updatedAt: string;
   employee: { id: string; firstName: string; lastName: string; department: { id: string; name: string } | null } | null;
@@ -133,9 +141,27 @@ export const SimsService = {
 
   async getAll(
     token: string,
-    params: { status?: SuggestionStatus; category?: SuggestionCategory; departmentId?: string; page?: number; limit?: number },
+    params: {
+      status?: SuggestionStatus;
+      category?: SuggestionCategory;
+      departmentId?: string;
+      committeeId?: string;
+      page?: number;
+      limit?: number;
+    },
   ): Promise<PaginatedSuggestions> {
     const res = await fetch(`${API_URL}/sims${buildQuery(params)}`, {
+      headers: authHeaders(token),
+    });
+    return handleResponse<PaginatedSuggestions>(res);
+  },
+
+  // Suggestions assigned to the current user's committees
+  async getQueue(
+    token: string,
+    params: { status?: SuggestionStatus; category?: SuggestionCategory; page?: number; limit?: number },
+  ): Promise<PaginatedSuggestions> {
+    const res = await fetch(`${API_URL}/sims/queue${buildQuery(params)}`, {
       headers: authHeaders(token),
     });
     return handleResponse<PaginatedSuggestions>(res);
@@ -146,11 +172,29 @@ export const SimsService = {
     return handleResponse<Suggestion>(res);
   },
 
+  async assignCommittee(id: string, committeeId: string, token: string): Promise<Suggestion> {
+    const res = await fetch(`${API_URL}/sims/${id}/assign`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify({ committeeId }),
+    });
+    return handleResponse<Suggestion>(res);
+  },
+
   async review(id: string, data: ReviewPayload, token: string): Promise<SuggestionReview> {
     const res = await fetch(`${API_URL}/sims/${id}/review`, {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
+    });
+    return handleResponse<SuggestionReview>(res);
+  },
+
+  async clarify(id: string, note: string, token: string): Promise<SuggestionReview> {
+    const res = await fetch(`${API_URL}/sims/${id}/clarify`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify({ note }),
     });
     return handleResponse<SuggestionReview>(res);
   },

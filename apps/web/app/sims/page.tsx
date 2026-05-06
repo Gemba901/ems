@@ -30,7 +30,6 @@ const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; dot: string; 
 };
 
 const STATUS_CONFIG: Record<SuggestionStatus, { label: string; dot: string; text: string }> = {
-  SUBMITTED:           { label: "Submitted",           dot: "bg-blue-500",    text: "text-blue-700" },
   UNDER_REVIEW:        { label: "Under Review",        dot: "bg-amber-500",   text: "text-amber-700" },
   NEEDS_CLARIFICATION: { label: "Needs Clarification", dot: "bg-orange-500",  text: "text-orange-700" },
   APPROVED:            { label: "Approved",            dot: "bg-green-500",   text: "text-green-700" },
@@ -39,7 +38,7 @@ const STATUS_CONFIG: Record<SuggestionStatus, { label: string; dot: string; text
   ARCHIVED:            { label: "Archived",            dot: "bg-slate-400",   text: "text-slate-500" },
 };
 
-const ALL_STATUSES:   SuggestionStatus[]   = ["SUBMITTED","UNDER_REVIEW","NEEDS_CLARIFICATION","APPROVED","REJECTED","IMPLEMENTED","ARCHIVED"];
+const ALL_STATUSES:   SuggestionStatus[]   = ["UNDER_REVIEW","NEEDS_CLARIFICATION","APPROVED","REJECTED","IMPLEMENTED","ARCHIVED"];
 const ALL_CATEGORIES: SuggestionCategory[] = ["QUALITY","COST","DELIVERY","SAFETY","MORALE","TECHNOLOGY","UNKNOWN"];
 
 function formatDateTime(iso: string) {
@@ -135,7 +134,7 @@ export default function SimsOverviewPage() {
 
   const metrics = useMemo(() => {
     const total              = allSuggestions.length;
-    const pending            = allSuggestions.filter((s) => ["SUBMITTED","UNDER_REVIEW"].includes(s.status)).length;
+    const pending            = allSuggestions.filter((s) => ["UNDER_REVIEW"].includes(s.status)).length;
     const implemented        = allSuggestions.filter((s) => s.status === "IMPLEMENTED").length;
     const needsClarification = allSuggestions.filter((s) => s.status === "NEEDS_CLARIFICATION").length;
     const successRate        = total > 0 ? Math.round((implemented / total) * 100) : 0;
@@ -152,7 +151,7 @@ export default function SimsOverviewPage() {
 
   const stuckItems = useMemo(() =>
     allSuggestions.filter((s) => {
-      if (!["SUBMITTED","UNDER_REVIEW"].includes(s.status)) return false;
+      if (!["UNDER_REVIEW"].includes(s.status)) return false;
       return Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 86400000) >= 7;
     }),
     [allSuggestions]
@@ -265,78 +264,6 @@ export default function SimsOverviewPage() {
           </div>
         )}
 
-        {/* Recently Implemented */}
-        {isReviewer && !loading && recentWins.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Award className="h-4 w-4 text-emerald-500" />
-                <p className="text-sm font-bold text-slate-800">Recently Implemented</p>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{recentWins.length}</span>
-              </div>
-              <Link href="/sims/archived" className="text-xs text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1">
-                View all <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {recentWins.map((s) => (
-                <div key={s.id} onClick={() => router.push(`/sims/${s.id}`)}
-                  className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-emerald-100 cursor-pointer transition-all group">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="h-9 w-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    </div>
-                  </div>
-                  <p className="text-sm font-semibold text-slate-900 leading-snug line-clamp-2 mb-2">{s.title}</p>
-                  <CategoryBadges categories={s.categories} showWeight={true} isReviewer={true} />
-                  <div className="flex items-center justify-between mt-3">
-                    {s.employee ? (
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-5 w-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-bold shrink-0">
-                          {s.employee.firstName[0]}{s.employee.lastName[0]}
-                        </div>
-                        <span className="text-xs text-slate-500 truncate max-w-[100px]">{s.employee.firstName} {s.employee.lastName}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 text-xs text-slate-400"><EyeOff className="h-3 w-3" /> Anonymous</div>
-                    )}
-                    <span className="text-[11px] text-slate-400 shrink-0">{formatDateTime(s.createdAt)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Needs Attention strip */}
-        {isReviewer && !loading && (clarifyItems.length > 0 || stuckItems.length > 0) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {clarifyItems.length > 0 && (
-              <Link href="/sims/reviews" className="flex items-center gap-4 bg-orange-50 border border-orange-200 rounded-2xl px-5 py-4 hover:bg-orange-100/60 transition-colors group">
-                <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="h-5 w-5 text-orange-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-orange-800">{clarifyItems.length} item{clarifyItems.length !== 1 ? "s" : ""} blocked</p>
-                  <p className="text-xs text-orange-600 mt-0.5">Employees are waiting for a response.</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-orange-400 group-hover:text-orange-600 shrink-0" />
-              </Link>
-            )}
-            {stuckItems.length > 0 && (
-              <Link href="/sims/reviews" className="flex items-center gap-4 bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 hover:bg-blue-100/60 transition-colors group">
-                <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
-                  <Clock className="h-5 w-5 text-blue-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-blue-800">{stuckItems.length} suggestion{stuckItems.length !== 1 ? "s" : ""} waiting 7+ days</p>
-                  <p className="text-xs text-blue-600 mt-0.5">Unreviewed submissions.</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-blue-400 group-hover:text-blue-600 shrink-0" />
-              </Link>
-            )}
-          </div>
-        )}
 
         {/* Table */}
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">

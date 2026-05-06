@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SimsService } from './sims.service';
-import { CreateSuggestionDto, QuerySuggestionsDto, ReviewSuggestionDto } from './dto/sims.dto';
+import { CreateSuggestionDto, QuerySuggestionsDto, ReviewSuggestionDto, AssignCommitteeDto, ClarifyDto } from './dto/sims.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -79,6 +79,19 @@ export class SimsController {
   }
 
   /**
+   * GET /sims/queue
+   * Returns suggestions assigned to the caller's committee(s).
+   * Available to any authenticated user who is a committee member.
+   */
+  @Get('queue')
+  async getQueue(
+    @Query() query: QuerySuggestionsDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.simsService.getCommitteeSuggestions(user.userId, user.organizationId, query);
+  }
+
+  /**
    * GET /sims/:id
    * Full detail for one suggestion — access enforced per role in the service.
    */
@@ -91,16 +104,45 @@ export class SimsController {
   }
 
   /**
+   * PATCH /sims/:id/assign
+   * Assigns a suggestion to a steering committee.
+   * Admin and Management only.
+   */
+  @Patch(':id/assign')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
+  async assign(
+    @Param('id') id: string,
+    @Body() dto: AssignCommitteeDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.simsService.assignCommittee(id, dto, user.organizationId);
+  }
+
+  /**
    * PATCH /sims/:id/review
-   * HOD, Management, and Admin can change status and add a review note.
+   * Any authenticated user who is a member of the assigned committee can review.
+   * Membership is enforced in the service — no role restriction here.
    */
   @Patch(':id/review')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD)
   async review(
     @Param('id') id: string,
     @Body() dto: ReviewSuggestionDto,
-    @CurrentUser() user: { userId: string; roleLevel: string; organizationId: string },
+    @CurrentUser() user: { userId: string; organizationId: string },
   ) {
-    return this.simsService.reviewSuggestion(id, dto, user.userId, user.roleLevel, user.organizationId);
+    return this.simsService.reviewSuggestion(id, dto, user.userId, user.organizationId);
+  }
+
+  /**
+   * PATCH /sims/:id/clarify
+   * The suggestion's author responds to a NEEDS_CLARIFICATION request.
+   * Moves status back to UNDER_REVIEW for the next committee meeting.
+   */
+  @Patch(':id/clarify')
+  async clarify(
+    @Param('id') id: string,
+    @Body() dto: ClarifyDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.simsService.respondToClarification(id, dto, user.userId, user.organizationId);
   }
 }

@@ -44,7 +44,6 @@ const STATUS_CONFIG: Record<OrgStatus, { label: string; badge: string; dot: stri
 };
 
 const SIM_STATUS_BADGE: Record<string, string> = {
-    SUBMITTED:           "bg-sky-100 text-sky-700",
     UNDER_REVIEW:        "bg-amber-100 text-amber-700",
     NEEDS_CLARIFICATION: "bg-orange-100 text-orange-700",
     APPROVED:            "bg-indigo-100 text-indigo-700",

@@ -33,6 +33,18 @@ export class ReviewSuggestionDto {
   note?: string;
 }
 
+export class AssignCommitteeDto {
+  @IsString()
+  @IsNotEmpty({ message: 'committeeId is required' })
+  committeeId!: string;
+}
+
+export class ClarifyDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Clarification note is required' })
+  note!: string;
+}
+
 export class QuerySuggestionsDto {
   @IsEnum(SuggestionStatus)
   @IsOptional()
@@ -45,6 +57,10 @@ export class QuerySuggestionsDto {
   @IsString()
   @IsOptional()
   departmentId?: string;
+
+  @IsString()
+  @IsOptional()
+  committeeId?: string;
 
   @Type(() => Number)
   @IsNumber()

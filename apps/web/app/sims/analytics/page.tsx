@@ -31,7 +31,6 @@ const CATEGORY_LABELS: Record<SuggestionCategory, string> = {
 };
 
 const STATUS_COLORS: Record<SuggestionStatus, string> = {
-  SUBMITTED:           "#3b82f6",
   UNDER_REVIEW:        "#f59e0b",
   NEEDS_CLARIFICATION: "#f97316",
   APPROVED:            "#22c55e",
@@ -41,7 +40,7 @@ const STATUS_COLORS: Record<SuggestionStatus, string> = {
 };
 
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
-  SUBMITTED: "Submitted", UNDER_REVIEW: "Under Review", NEEDS_CLARIFICATION: "Needs Clarification",
+  UNDER_REVIEW: "Under Review", NEEDS_CLARIFICATION: "Needs Clarification",
   APPROVED: "Approved", REJECTED: "Rejected", IMPLEMENTED: "Implemented", ARCHIVED: "Archived",
 };
 
@@ -128,7 +127,7 @@ export default function AnalyticsPage() {
     const implemented = suggestions.filter((s) => s.status === "IMPLEMENTED").length;
     const approved    = suggestions.filter((s) => ["APPROVED","IMPLEMENTED"].includes(s.status)).length;
     const rejected    = suggestions.filter((s) => s.status === "REJECTED").length;
-    const pending     = suggestions.filter((s) => ["SUBMITTED","UNDER_REVIEW"].includes(s.status)).length;
+    const pending     = suggestions.filter((s) => ["UNDER_REVIEW"].includes(s.status)).length;
     const clarify     = suggestions.filter((s) => s.status === "NEEDS_CLARIFICATION").length;
     const impRate     = total > 0 ? Math.round((implemented / total) * 100) : 0;
     const approvalRate= total > 0 ? Math.round((approved / total) * 100)    : 0;

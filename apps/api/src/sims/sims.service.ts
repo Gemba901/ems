@@ -7,16 +7,22 @@ import {
 import { SuggestionStatus } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
-import { CreateSuggestionDto, QuerySuggestionsDto, ReviewSuggestionDto } from './dto/sims.dto';
+import {
+  CreateSuggestionDto,
+  QuerySuggestionsDto,
+  ReviewSuggestionDto,
+  AssignCommitteeDto,
+  ClarifyDto,
+} from './dto/sims.dto';
 
+// SUBMITTED removed — suggestions begin life at UNDER_REVIEW
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
-  SUBMITTED: ['UNDER_REVIEW', 'ARCHIVED'],
-  UNDER_REVIEW: ['NEEDS_CLARIFICATION', 'APPROVED', 'REJECTED', 'ARCHIVED'],
+  UNDER_REVIEW:        ['NEEDS_CLARIFICATION', 'APPROVED', 'REJECTED', 'ARCHIVED'],
   NEEDS_CLARIFICATION: ['UNDER_REVIEW', 'ARCHIVED'],
-  APPROVED: ['IMPLEMENTED', 'ARCHIVED'],
-  REJECTED: ['ARCHIVED'],
-  IMPLEMENTED: ['ARCHIVED'],
-  ARCHIVED: [],
+  APPROVED:            ['IMPLEMENTED', 'ARCHIVED'],
+  REJECTED:            ['ARCHIVED'],
+  IMPLEMENTED:         ['ARCHIVED'],
+  ARCHIVED:            [],
 };
 
 const employeeSelect = {
@@ -25,6 +31,8 @@ const employeeSelect = {
   lastName: true,
   department: { select: { id: true, name: true } },
 };
+
+const committeeSelect = { id: true, name: true, type: true };
 
 const reviewInclude = {
   reviews: {
@@ -35,18 +43,24 @@ const reviewInclude = {
       note: true,
       createdAt: true,
       reviewer: { select: { id: true, firstName: true, lastName: true } },
-      reviewerCommittee: { select: { id: true, name: true, type: true } },
+      reviewerCommittee: { select: committeeSelect },
     },
   },
+};
+
+const suggestionInclude = {
+  employee: { select: employeeSelect },
+  committee: { select: committeeSelect },
+  ...reviewInclude,
 };
 
 @Injectable()
 export class SimsService {
   constructor(private prisma: PrismaService) {}
 
-  private async resolveEmployee(userId: string) {
+  private async resolveEmployee(userId: string, organizationId?: string) {
     const employee = await this.prisma.employee.findFirst({
-      where: { userId },
+      where: { userId, ...(organizationId && { organizationId }) },
       select: { id: true, departmentId: true, organizationId: true },
     });
     if (!employee) throw new ForbiddenException('No employee profile linked to your account');
@@ -58,37 +72,62 @@ export class SimsService {
     return { ...suggestion, employee: null };
   }
 
+  // ── Submit ────────────────────────────────────────────────────────────────
+
   async submitSuggestion(dto: CreateSuggestionDto, userId: string, organizationId: string) {
     const employee = await this.resolveEmployee(userId);
-
     return this.prisma.suggestion.create({
       data: {
         title: dto.title,
         description: dto.description,
         categories: dto.categories,
         isAnonymous: dto.isAnonymous ?? false,
+        status: 'UNDER_REVIEW',
         employeeId: employee.id,
         organizationId,
       },
     });
   }
 
+  // ── Assign committee (Admin / Management) ─────────────────────────────────
+
+  async assignCommittee(suggestionId: string, dto: AssignCommitteeDto, organizationId: string) {
+    const suggestion = await this.prisma.suggestion.findUnique({ where: { id: suggestionId } });
+    if (!suggestion || suggestion.organizationId !== organizationId) {
+      throw new NotFoundException('Suggestion not found');
+    }
+    if (suggestion.status === 'ARCHIVED') {
+      throw new BadRequestException('Cannot assign a committee to an archived suggestion');
+    }
+
+    const committee = await this.prisma.steeringCommittee.findUnique({ where: { id: dto.committeeId } });
+    if (!committee || committee.organizationId !== organizationId) {
+      throw new NotFoundException('Committee not found');
+    }
+
+    return this.prisma.suggestion.update({
+      where: { id: suggestionId },
+      data: { committeeId: dto.committeeId },
+      include: suggestionInclude,
+    });
+  }
+
+  // ── Query ─────────────────────────────────────────────────────────────────
+
   async getMySuggestions(userId: string) {
     const employee = await this.resolveEmployee(userId);
     return this.prisma.suggestion.findMany({
       where: { employeeId: employee.id },
       orderBy: { createdAt: 'desc' },
-      include: reviewInclude,
+      include: { committee: { select: committeeSelect }, ...reviewInclude },
     });
   }
 
   async getDepartmentSuggestions(userId: string, query: QuerySuggestionsDto) {
     const employee = await this.resolveEmployee(userId);
-    if (!employee.departmentId) {
-      throw new ForbiddenException('Your account is not assigned to a department');
-    }
+    if (!employee.departmentId) throw new ForbiddenException('Your account is not assigned to a department');
 
-    const { status, category, page, limit } = query;
+    const { status, category, committeeId, page, limit } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -96,14 +135,11 @@ export class SimsService {
       employee: { departmentId: employee.departmentId },
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
+      ...(committeeId && { committeeId }),
     };
 
     const [data, total] = await Promise.all([
-      this.prisma.suggestion.findMany({
-        where, skip, take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: { employee: { select: employeeSelect }, ...reviewInclude },
-      }),
+      this.prisma.suggestion.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: suggestionInclude }),
       this.prisma.suggestion.count({ where }),
     ]);
 
@@ -114,7 +150,7 @@ export class SimsService {
   }
 
   async getAllSuggestions(organizationId: string, query: QuerySuggestionsDto) {
-    const { status, category, departmentId, page, limit } = query;
+    const { status, category, departmentId, committeeId, page, limit } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -122,14 +158,43 @@ export class SimsService {
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
       ...(departmentId && { employee: { departmentId } }),
+      ...(committeeId && { committeeId }),
     };
 
     const [data, total] = await Promise.all([
-      this.prisma.suggestion.findMany({
-        where, skip, take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: { employee: { select: employeeSelect }, ...reviewInclude },
-      }),
+      this.prisma.suggestion.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: suggestionInclude }),
+      this.prisma.suggestion.count({ where }),
+    ]);
+
+    return {
+      data: data.map(this.maskAnonymous),
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    };
+  }
+
+  // Returns only suggestions assigned to the caller's committees
+  async getCommitteeSuggestions(userId: string, organizationId: string, query: QuerySuggestionsDto) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+
+    const memberships = await this.prisma.steeringCommitteeMember.findMany({
+      where: { employeeId: employee.id, committee: { organizationId } },
+      select: { committeeId: true },
+    });
+    if (memberships.length === 0) throw new ForbiddenException('You are not a member of any steering committee');
+
+    const committeeIds = memberships.map((m) => m.committeeId);
+    const { status, category, page, limit } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      organizationId,
+      committeeId: { in: committeeIds },
+      ...(status && { status }),
+      ...(category && { categories: { has: category } }),
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.suggestion.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: suggestionInclude }),
       this.prisma.suggestion.count({ where }),
     ]);
 
@@ -144,8 +209,13 @@ export class SimsService {
       where: { id },
       include: {
         employee: {
-          select: { id: true, firstName: true, lastName: true, userId: true, departmentId: true, department: { select: { id: true, name: true } } },
+          select: {
+            id: true, firstName: true, lastName: true,
+            userId: true, departmentId: true,
+            department: { select: { id: true, name: true } },
+          },
         },
+        committee: { select: committeeSelect },
         ...reviewInclude,
       },
     });
@@ -156,15 +226,13 @@ export class SimsService {
 
     if (roleLevel === Role.EMPLOYEE) {
       const employee = await this.resolveEmployee(userId);
-      if (suggestion.employeeId !== employee.id) {
-        throw new ForbiddenException('You can only view your own suggestions');
-      }
+      if (suggestion.employeeId !== employee.id) throw new ForbiddenException('You can only view your own suggestions');
       return suggestion;
     }
 
     if (roleLevel === Role.HOD) {
       const employee = await this.resolveEmployee(userId);
-      if (suggestion.employee.departmentId !== employee.departmentId) {
+      if (suggestion.employee?.departmentId !== employee.departmentId) {
         throw new ForbiddenException('You can only view suggestions from your department');
       }
     }
@@ -172,7 +240,6 @@ export class SimsService {
     return this.maskAnonymous(suggestion);
   }
 
-  // Aggregated, anonymised summary available to all roles
   async getSummary(userId: string, organizationId: string) {
     const employee = await this.resolveEmployee(userId);
 
@@ -194,9 +261,7 @@ export class SimsService {
       const byCategory: Record<string, number> = {};
       for (const s of list) {
         byStatus[s.status] = (byStatus[s.status] ?? 0) + 1;
-        for (const c of s.categories) {
-          byCategory[c] = (byCategory[c] ?? 0) + 1;
-        }
+        for (const c of s.categories) byCategory[c] = (byCategory[c] ?? 0) + 1;
       }
       return { total: list.length, byStatus, byCategory };
     };
@@ -207,41 +272,35 @@ export class SimsService {
     };
   }
 
-  async reviewSuggestion(id: string, dto: ReviewSuggestionDto, userId: string, roleLevel: string, organizationId: string) {
-    const suggestion = await this.prisma.suggestion.findUnique({
-      where: { id },
-      include: { employee: { select: { departmentId: true } } },
+  // ── Review (committee members only) ───────────────────────────────────────
+
+  async reviewSuggestion(
+    id: string,
+    dto: ReviewSuggestionDto,
+    userId: string,
+    organizationId: string,
+  ) {
+    const suggestion = await this.prisma.suggestion.findUnique({ where: { id } });
+
+    if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
+
+    if (!suggestion.committeeId) {
+      throw new BadRequestException('This suggestion has not been assigned to a committee yet');
+    }
+
+    const reviewer = await this.resolveEmployee(userId, organizationId);
+
+    const membership = await this.prisma.steeringCommitteeMember.findUnique({
+      where: { committeeId_employeeId: { committeeId: suggestion.committeeId, employeeId: reviewer.id } },
     });
 
-    if (!suggestion || suggestion.organizationId !== organizationId) {
-      throw new NotFoundException('Suggestion not found');
-    }
-
-    const reviewer = await this.resolveEmployee(userId);
-
-    if (roleLevel === Role.HOD) {
-      if (suggestion.employee.departmentId !== reviewer.departmentId) {
-        throw new ForbiddenException('You can only review suggestions from your department');
-      }
-    }
-
-    let reviewerCommitteeId: string | null = null;
-    if (roleLevel !== Role.SUPER_ADMIN) {
-      const membership = await this.prisma.steeringCommitteeMember.findFirst({
-        where: { employeeId: reviewer.id, committee: { organizationId } },
-        select: { committeeId: true },
-      });
-      if (!membership) {
-        throw new ForbiddenException('Only steering committee members can review suggestions');
-      }
-      reviewerCommitteeId = membership.committeeId;
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of the committee assigned to this suggestion');
     }
 
     const allowed = ALLOWED_TRANSITIONS[suggestion.status];
     if (!allowed.includes(dto.statusChanged)) {
-      throw new BadRequestException(
-        `Cannot move suggestion from ${suggestion.status} to ${dto.statusChanged}`,
-      );
+      throw new BadRequestException(`Cannot move suggestion from ${suggestion.status} to ${dto.statusChanged}`);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -250,13 +309,45 @@ export class SimsService {
         data: {
           suggestionId: id,
           reviewerId: reviewer.id,
-          reviewerCommitteeId,
+          reviewerCommitteeId: suggestion.committeeId,
           statusChanged: dto.statusChanged,
           note: dto.note,
         },
         include: {
           reviewer: { select: { id: true, firstName: true, lastName: true } },
-          reviewerCommittee: { select: { id: true, name: true, type: true } },
+          reviewerCommittee: { select: committeeSelect },
+        },
+      });
+    });
+  }
+
+  // ── Employee clarification response ───────────────────────────────────────
+
+  async respondToClarification(id: string, dto: ClarifyDto, userId: string, organizationId: string) {
+    const suggestion = await this.prisma.suggestion.findUnique({ where: { id } });
+    if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
+    if (suggestion.status !== 'NEEDS_CLARIFICATION') {
+      throw new BadRequestException('This suggestion is not awaiting clarification');
+    }
+
+    const employee = await this.resolveEmployee(userId);
+    if (suggestion.employeeId !== employee.id) {
+      throw new ForbiddenException('You can only respond to your own suggestions');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.suggestion.update({ where: { id }, data: { status: 'UNDER_REVIEW' } });
+      return tx.suggestionReview.create({
+        data: {
+          suggestionId: id,
+          reviewerId: employee.id,
+          reviewerCommitteeId: null,
+          statusChanged: 'UNDER_REVIEW',
+          note: dto.note,
+        },
+        include: {
+          reviewer: { select: { id: true, firstName: true, lastName: true } },
+          reviewerCommittee: { select: committeeSelect },
         },
       });
     });

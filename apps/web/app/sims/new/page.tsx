@@ -7,7 +7,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, SuggestionCategory } from "@/services/sims.service";
-import { ArrowLeft, Send, Lightbulb, TrendingUp, Shield, CheckSquare, Square } from "lucide-react";
+import { ArrowLeft, Send, CheckSquare, Square } from "lucide-react";
 import { useToast } from "@/contexts/toast.context";
 
 const QCDSMT_CATEGORIES: { value: SuggestionCategory; label: string; description: string; color: string }[] = [
@@ -20,6 +20,47 @@ const QCDSMT_CATEGORIES: { value: SuggestionCategory; label: string; description
 ];
 
 const ALL_QCDSMT: SuggestionCategory[] = QCDSMT_CATEGORIES.map((c) => c.value);
+
+const CATEGORY_GUIDE: { label: string; summary: string; action: string; items: string[]; color: string }[] = [
+  { label: "Quality",    summary: "Better product, service, or work accuracy.", action: "Reduces",  items: ["Defects", "Errors", "Rework", "Complaints"],              color: "text-blue-700" },
+  { label: "Cost",       summary: "Lower cost or better use of resources.",      action: "Reduces",  items: ["Waste", "Loss", "Overtime", "Energy"],                    color: "text-emerald-700" },
+  { label: "Delivery",   summary: "Faster and smoother workflow.",               action: "Reduces",  items: ["Delay", "Waiting", "Searching", "Lead time"],             color: "text-purple-700" },
+  { label: "Safety",     summary: "Safer workplace with lower risk.",             action: "Removes",  items: ["Hazards", "Unsafe acts", "Injury risk"],                  color: "text-red-700" },
+  { label: "Morale",     summary: "Easier and better work for people.",           action: "Reduces",  items: ["Stress", "Confusion", "Frustration"],                     color: "text-amber-700" },
+  { label: "Technology", summary: "Better tools, systems, data, or digital work.", action: "Improves", items: ["Software", "Automation", "Dashboards", "Tracking"],     color: "text-indigo-700" },
+];
+
+const FIVE_W2H: { key: string; desc: string }[] = [
+  { key: "What",     desc: "What problem or improvement opportunity do you see?" },
+  { key: "Where",    desc: "Where is it happening? Department, line, machine, area, or process." },
+  { key: "When",     desc: "When does it happen? Shift, time, frequency, or situation." },
+  { key: "Who",      desc: "Who is affected? Operator, supervisor, customer, team, or department." },
+  { key: "Why",      desc: "Why is it important? Delay, waste, defect, risk, confusion, or extra cost." },
+  { key: "How",      desc: "How can it be improved? Suggest a practical solution." },
+  { key: "How Much", desc: "What impact is expected? Time saving, cost saving, waste reduction, risk reduction, or easier work." },
+];
+
+const EXAMPLES: { context: string; suggestion: string; impact: { cat: string; note: string; color: string }[] }[] = [
+  {
+    context: "Operators on Packing Line 2 spend time searching for tape and cutters during the morning shift.",
+    suggestion: "Fix a small shadow board near the line.",
+    impact: [
+      { cat: "Delivery", note: "Reduces searching time and packing delay.",                    color: "text-purple-700" },
+      { cat: "Morale",   note: "Makes work easier and reduces frustration.",                   color: "text-amber-700" },
+      { cat: "Safety",   note: "Keeps tools in the correct place and reduces unsafe handling.", color: "text-red-700" },
+    ],
+  },
+  {
+    context: "Truck loading and offloading takes too much time because cartons are handled manually.",
+    suggestion: "Use a movable conveyor that can go inside the truck or container. Barcode scanning or sensors can also be added for dispatch control.",
+    impact: [
+      { cat: "Delivery",   note: "Reduces loading and offloading time.",       color: "text-purple-700" },
+      { cat: "Morale",     note: "Reduces hard manual work for the team.",     color: "text-amber-700" },
+      { cat: "Quality",    note: "Reduces carton damage and wrong dispatch.",  color: "text-blue-700" },
+      { cat: "Technology", note: "Supports barcode or sensor-based control.",  color: "text-indigo-700" },
+    ],
+  },
+];
 
 const TITLE_MIN = 10;
 const TITLE_MAX = 200;
@@ -262,50 +303,78 @@ export default function NewSuggestionPage() {
             </div>
           </div>
 
-          {/* RIGHT , Tips */}
-          <div className="xl:col-span-1 space-y-4">
-            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="h-8 w-8 bg-blue-50 rounded-xl flex items-center justify-center">
-                  <Lightbulb className="h-4 w-4 text-blue-600" />
-                </div>
-                <p className="text-sm font-bold text-slate-800">Tips for success</p>
+          {/* RIGHT — Submission Guide */}
+          <div className="xl:col-span-1">
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-6">
+              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+                <p className="text-sm font-bold text-slate-800">Submission Guide</p>
+                <p className="text-xs text-slate-500 mt-0.5">Category explanations, writing tips & examples</p>
               </div>
-              <ul className="space-y-2.5 text-sm text-slate-600">
-                {[
-                  "Be specific about the current challenge.",
-                  "Include estimated cost or time savings.",
-                  "You can select multiple QCDSMT categories.",
-                  "Describe both the problem and your solution.",
-                ].map((tip) => (
-                  <li key={tip} className="flex items-start gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0" />
-                    {tip}
-                  </li>
-                ))}
-              </ul>
-            </div>
 
-            <div className="bg-slate-800 rounded-2xl p-5 text-white">
-              <TrendingUp className="h-5 w-5 text-slate-400 mb-3" />
-              <blockquote className="text-sm leading-relaxed text-slate-200 italic">
-                "Innovation is the ability to see change as an opportunity , not a threat."
-              </blockquote>
-              <p className="text-xs text-slate-500 mt-3">, Steve Jobs</p>
-            </div>
+              <div className="overflow-y-auto max-h-[calc(100vh-10rem)] divide-y divide-slate-100">
 
-            <div className="bg-slate-900 rounded-2xl p-5 text-white">
-              <div className="flex items-center gap-2 mb-4">
-                <Shield className="h-4 w-4 text-slate-400" />
-                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">QCDSMT Categories</p>
-              </div>
-              <div className="space-y-2">
-                {QCDSMT_CATEGORIES.map((c) => (
-                  <div key={c.value} className="flex items-center justify-between">
-                    <span className="text-sm text-slate-300 font-medium">{c.label}</span>
-                    <span className="text-xs text-slate-500 text-right max-w-[140px] leading-snug">{c.description}</span>
+                {/* Section 1 — QCDSMT Category Explanation */}
+                <div className="px-5 py-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">QCDSMT Category Explanation</p>
+                  <div className="space-y-4">
+                    {CATEGORY_GUIDE.map((c) => (
+                      <div key={c.label}>
+                        <span className={`text-[11px] font-bold mb-1 block ${c.color}`}>{c.label}</span>
+                        <p className="text-xs text-slate-700 mb-0.5">{c.summary}</p>
+                        <p className="text-[11px] text-slate-400">
+                          <span className="font-semibold text-slate-500">{c.action}:</span>{" "}
+                          {c.items.join(" · ")}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                {/* Section 2 — How to Write a Good Suggestion */}
+                <div className="px-5 py-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">How to Write a Good Suggestion</p>
+                  <p className="text-xs text-slate-600 mb-3">
+                    A good suggestion should be <span className="font-semibold text-slate-800">simple, clear, and useful</span>. It should explain the problem, the suggested improvement, and the expected impact.
+                  </p>
+                  <p className="text-xs text-slate-500 mb-2">Try to cover <span className="font-semibold text-slate-700">5W2H</span> where possible:</p>
+                  <div className="space-y-2">
+                    {FIVE_W2H.map((w) => (
+                      <div key={w.key} className="flex gap-2">
+                        <span className="text-[11px] font-bold text-slate-700 shrink-0 w-14">{w.key}</span>
+                        <span className="text-[11px] text-slate-500 leading-relaxed">{w.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
+                    <span className="font-semibold text-slate-500">Note:</span> You do not need to answer every point perfectly. Just explain clearly so the suggestion can be reviewed and acted on.
+                  </p>
+                </div>
+
+                {/* Section 3 — Examples */}
+                <div className="px-5 py-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Examples</p>
+                  <div className="space-y-5">
+                    {EXAMPLES.map((ex, i) => (
+                      <div key={i}>
+                        <p className="text-[11px] font-bold text-slate-600 mb-1">Example {i + 1}</p>
+                        <p className="text-xs text-slate-500 leading-relaxed mb-2">{ex.context}</p>
+                        <p className="text-xs text-slate-700 mb-2">
+                          <span className="font-semibold">Suggestion:</span> {ex.suggestion}
+                        </p>
+                        <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Expected Impact:</p>
+                        <div className="space-y-1">
+                          {ex.impact.map((imp) => (
+                            <div key={imp.cat} className="flex gap-1.5 items-baseline">
+                              <span className={`text-[10px] font-bold shrink-0 ${imp.color}`}>{imp.cat}</span>
+                              <span className="text-[11px] text-slate-500 leading-relaxed">{imp.note}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>

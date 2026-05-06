@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { RoleGuard } from "@/components/auth/RoleGuard";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import {
@@ -14,8 +13,8 @@ import {
   SuggestionStatus,
   SuggestionCategory,
   calcWeight,
-  CATEGORY_WEIGHTS,
 } from "@/services/sims.service";
+import { CommitteeService, SteeringCommittee } from "@/services/committee.service";
 import {
   ArrowLeft,
   Clock,
@@ -25,10 +24,11 @@ import {
   Archive,
   EyeOff,
   Info,
+  Users,
+  MessageSquare,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
-  SUBMITTED:           "Submitted",
   UNDER_REVIEW:        "Under Review",
   NEEDS_CLARIFICATION: "Needs Clarification",
   APPROVED:            "Approved",
@@ -38,7 +38,6 @@ const STATUS_LABELS: Record<SuggestionStatus, string> = {
 };
 
 const STATUS_BADGE: Record<SuggestionStatus, string> = {
-  SUBMITTED:           "bg-blue-100 text-blue-700",
   UNDER_REVIEW:        "bg-amber-100 text-amber-700",
   NEEDS_CLARIFICATION: "bg-orange-100 text-orange-700",
   APPROVED:            "bg-green-100 text-green-700",
@@ -65,7 +64,6 @@ function formatDateTime(iso: string) {
 }
 
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
-  SUBMITTED:           ["UNDER_REVIEW", "ARCHIVED"],
   UNDER_REVIEW:        ["NEEDS_CLARIFICATION", "APPROVED", "REJECTED", "ARCHIVED"],
   NEEDS_CLARIFICATION: ["UNDER_REVIEW", "ARCHIVED"],
   APPROVED:            ["IMPLEMENTED", "ARCHIVED"],
@@ -74,12 +72,6 @@ const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
   ARCHIVED:            [],
 };
 
-const REVIEWER_CONTEXT: Partial<Record<Role, { title: string; body: string; bg: string }>> = {
-  [Role.SUPER_ADMIN]: { title: "Super Admin View", body: "You have full authority to approve, reject, or implement any suggestion across the organisation.", bg: "bg-blue-600" },
-  [Role.ADMIN]:       { title: "Admin View",        body: "Your reviews are visible to department leads. Ensure a cost-benefit assessment is considered before final approval.", bg: "bg-blue-600" },
-  [Role.MANAGEMENT]:  { title: "Management View",   body: "Review this suggestion with operational impact in mind. Coordinate with HODs before moving to Approved.", bg: "bg-slate-700" },
-  [Role.HOD]:         { title: "HOD View",          body: "You are reviewing a suggestion from your department. Add your assessment before escalating to management.", bg: "bg-slate-700" },
-};
 
 function TimelineIcon({ status }: { status: SuggestionStatus }) {
   const cls = "h-3.5 w-3.5";
@@ -91,7 +83,6 @@ function TimelineIcon({ status }: { status: SuggestionStatus }) {
 }
 
 function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; reviews: SuggestionReview[] }) {
-  // Synthetic initial submission entry
   const submitter = suggestion.isAnonymous
     ? "Anonymous"
     : suggestion.employee
@@ -102,15 +93,13 @@ function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; revie
     <div className="space-y-1">
       <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4">Review History</h3>
       <ol className="relative border-l border-slate-200 space-y-5 pl-6">
-
-        {/* Synthetic "Submitted" entry */}
         <li className="relative">
           <div className="absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full bg-white border-2 border-slate-200">
             <Clock className="h-3.5 w-3.5 text-slate-400" />
           </div>
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Submitted</span>
+              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Under Review</span>
               <span className="text-xs text-slate-400">{formatDateTime(suggestion.createdAt)}</span>
             </div>
             <p className="text-xs text-slate-500 mt-1">Originator: <span className="font-medium text-slate-600">{submitter}</span></p>
@@ -130,7 +119,7 @@ function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; revie
                 <span className="text-xs text-slate-400">{formatDateTime(r.createdAt)}</span>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Reviewer: <span className="font-medium text-slate-600">{r.reviewer.firstName} {r.reviewer.lastName}</span>
+                By: <span className="font-medium text-slate-600">{r.reviewer.firstName} {r.reviewer.lastName}</span>
               </p>
               {r.reviewerCommittee && (
                 <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
@@ -156,21 +145,44 @@ export default function SuggestionDetailPage() {
   const { user, accessToken } = useAuthStore();
   const role = user?.roleLevel;
 
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+  const [suggestion, setSuggestion]   = useState<Suggestion | null>(null);
+  const [committees, setCommittees]   = useState<SteeringCommittee[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState<string | null>(null);
 
-  const [newStatus, setNewStatus]   = useState<SuggestionStatus | "">("");
-  const [note, setNote]             = useState("");
-  const [reviewing, setReviewing]   = useState(false);
+  // Review form
+  const [newStatus, setNewStatus]     = useState<SuggestionStatus | "">("");
+  const [note, setNote]               = useState("");
+  const [reviewing, setReviewing]     = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
-  const context = role ? REVIEWER_CONTEXT[role] : undefined;
+  // Committee assignment
+  const [assignCommitteeId, setAssignCommitteeId] = useState("");
+  const [assigning, setAssigning]                 = useState(false);
+  const [assignError, setAssignError]             = useState<string | null>(null);
+
+  // Clarification response
+  const [clarifyNote, setClarifyNote]   = useState("");
+  const [clarifying, setClarifying]     = useState(false);
+  const [clarifyError, setClarifyError] = useState<string | null>(null);
+
+  const canAssignCommittee = role === Role.ADMIN || role === Role.SUPER_ADMIN || role === Role.MANAGEMENT;
+  const isEmployee = role === Role.EMPLOYEE;
+
+  const reload = () => {
+    if (!accessToken || !id) return;
+    SimsService.getById(id, accessToken).then(setSuggestion).catch(() => {});
+  };
 
   useEffect(() => {
     if (!accessToken || !id) return;
-    SimsService.getById(id, accessToken)
-      .then(setSuggestion)
+    const fetches: Promise<any>[] = [
+      SimsService.getById(id, accessToken).then(setSuggestion),
+    ];
+    if (canAssignCommittee) {
+      fetches.push(CommitteeService.list(accessToken).then(setCommittees));
+    }
+    Promise.all(fetches)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id, accessToken]);
@@ -180,7 +192,6 @@ export default function SuggestionDetailPage() {
     if (!accessToken || !newStatus || !suggestion) return;
     setReviewing(true);
     setReviewError(null);
-
     SimsService.review(suggestion.id, { statusChanged: newStatus, note: note || undefined }, accessToken)
       .then((review) => {
         setSuggestion((prev) =>
@@ -193,13 +204,42 @@ export default function SuggestionDetailPage() {
       .finally(() => setReviewing(false));
   };
 
+  const handleAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessToken || !assignCommitteeId || !suggestion) return;
+    setAssigning(true);
+    setAssignError(null);
+    SimsService.assignCommittee(suggestion.id, assignCommitteeId, accessToken)
+      .then((updated) => {
+        setSuggestion(updated);
+        setAssignCommitteeId("");
+      })
+      .catch((err) => setAssignError(err.message))
+      .finally(() => setAssigning(false));
+  };
+
+  const handleClarify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessToken || !clarifyNote.trim() || !suggestion) return;
+    setClarifying(true);
+    setClarifyError(null);
+    SimsService.clarify(suggestion.id, clarifyNote, accessToken)
+      .then((review) => {
+        setSuggestion((prev) =>
+          prev ? { ...prev, status: "UNDER_REVIEW", reviews: [...prev.reviews, review] } : prev
+        );
+        setClarifyNote("");
+      })
+      .catch((err) => setClarifyError(err.message))
+      .finally(() => setClarifying(false));
+  };
+
   const allowedNext = suggestion ? ALLOWED_TRANSITIONS[suggestion.status] : [];
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
       <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto">
 
-        {/* Back link */}
         <Link href="/sims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back to Suggestions
         </Link>
@@ -211,7 +251,6 @@ export default function SuggestionDetailPage() {
 
         {!loading && !error && suggestion && (
           <>
-            {/* Title row */}
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
               <h1 className="text-2xl font-bold text-slate-900 leading-snug">{suggestion.title}</h1>
               <span className={`self-start shrink-0 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${STATUS_BADGE[suggestion.status]}`}>
@@ -223,13 +262,10 @@ export default function SuggestionDetailPage() {
 
               {/* LEFT — Proposal + Timeline */}
               <div className="xl:col-span-2 space-y-5">
-
-                {/* Proposal text */}
                 <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Detailed Proposal</p>
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{suggestion.description}</p>
 
-                  {/* Metadata grid */}
                   <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="border border-slate-100 rounded-xl p-3">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
@@ -245,8 +281,7 @@ export default function SuggestionDetailPage() {
                           ) : null;
                         })}
                       </div>
-                      {/* Weightage — visible to reviewers only */}
-                      {context && (
+                      {calcWeight(suggestion.categories) > 0 && (
                         <p className="text-[10px] text-slate-400 mt-2">
                           Weight: <span className="font-bold text-slate-600">{calcWeight(suggestion.categories).toFixed(1)}</span>
                         </p>
@@ -272,19 +307,108 @@ export default function SuggestionDetailPage() {
                   </div>
                 </div>
 
-                {/* Timeline */}
                 <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
                   <ReviewTimeline suggestion={suggestion} reviews={suggestion.reviews} />
                 </div>
               </div>
 
-              {/* RIGHT — Review form + context card */}
+              {/* RIGHT — Actions */}
               <div className="xl:col-span-1 space-y-4">
 
-                <RoleGuard allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-                  {/* Review form */}
+                {/* ── Committee Assignment (Admin / Management) ── */}
+                {canAssignCommittee && (
+                  <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Users className="h-4 w-4 text-slate-400" />
+                      <h2 className="text-sm font-bold text-slate-800">Assigned Committee</h2>
+                    </div>
+
+                    {suggestion.committee ? (
+                      <div className="mb-4 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+                        <span className="text-xs font-semibold text-blue-700">{suggestion.committee.name}</span>
+                        <span className="ml-auto text-[10px] font-bold uppercase tracking-widest text-blue-400 bg-blue-100 px-2 py-0.5 rounded">
+                          {suggestion.committee.type}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic mb-4">No committee assigned — this suggestion is pending assignment.</p>
+                    )}
+
+                    {suggestion.status !== "ARCHIVED" && (
+                      <form onSubmit={handleAssign} className="space-y-3">
+                        <select
+                          required
+                          value={assignCommitteeId}
+                          onChange={(e) => setAssignCommitteeId(e.target.value)}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                        >
+                          <option value="">{suggestion.committee ? "Reassign to..." : "Select committee..."}</option>
+                          {committees.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                          ))}
+                        </select>
+                        {assignError && (
+                          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{assignError}</p>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={assigning || !assignCommitteeId}
+                          className="w-full bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+                        >
+                          {assigning ? "Assigning..." : suggestion.committee ? "Reassign" : "Assign Committee"}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Clarification Response (Employee, own suggestion) ── */}
+                {isEmployee && suggestion.status === "NEEDS_CLARIFICATION" && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <MessageSquare className="h-4 w-4 text-orange-500" />
+                      <h2 className="text-sm font-bold text-orange-800">Clarification Requested</h2>
+                    </div>
+                    <p className="text-xs text-orange-700 mb-4 leading-relaxed">
+                      The review committee has requested more information. Provide your clarification below — your response will return this suggestion to the review queue.
+                    </p>
+                    {suggestion.reviews.filter(r => r.statusChanged === "NEEDS_CLARIFICATION").slice(-1).map(r => r.note).filter(Boolean).map((n, i) => (
+                      <blockquote key={i} className="text-xs text-orange-700 italic border-l-2 border-orange-300 pl-3 mb-4">"{n}"</blockquote>
+                    ))}
+                    <form onSubmit={handleClarify} className="space-y-3">
+                      <textarea
+                        rows={4}
+                        required
+                        value={clarifyNote}
+                        onChange={(e) => setClarifyNote(e.target.value)}
+                        placeholder="Provide additional context or details..."
+                        className="w-full border border-orange-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 transition-all resize-none"
+                      />
+                      {clarifyError && (
+                        <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{clarifyError}</p>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={clarifying || !clarifyNote.trim()}
+                        className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                      >
+                        {clarifying ? "Sending..." : "Submit Clarification"}
+                      </button>
+                    </form>
+                  </div>
+                )}
+
+                {/* ── Review Form (committee members only — enforced server-side) ── */}
+                {suggestion.committeeId && (
                   <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm sticky top-6">
-                    <h2 className="text-sm font-bold text-slate-800 mb-5">Add a Review</h2>
+                    <div className="flex items-center gap-2 mb-5">
+                      <h2 className="text-sm font-bold text-slate-800">Add a Review</h2>
+                      {suggestion.committee && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-100">
+                          <Users className="h-2.5 w-2.5" /> {suggestion.committee.name}
+                        </span>
+                      )}
+                    </div>
 
                     {allowedNext.length === 0 ? (
                       <div className="flex items-start gap-3 text-sm text-slate-400 bg-slate-50 rounded-xl p-4">
@@ -337,15 +461,8 @@ export default function SuggestionDetailPage() {
                       </form>
                     )}
                   </div>
+                )}
 
-                  {/* Role context card */}
-                  {context && (
-                    <div className={`${context.bg} rounded-2xl p-5 text-white`}>
-                      <p className="text-sm font-bold mb-2">{context.title}</p>
-                      <p className="text-xs leading-relaxed opacity-90">{context.body}</p>
-                    </div>
-                  )}
-                </RoleGuard>
               </div>
             </div>
           </>

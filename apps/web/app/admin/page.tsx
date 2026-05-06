@@ -195,7 +195,6 @@ export default function AdminDashboardPage() {
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {[
-                                { label: "Submitted",    key: "SUBMITTED",           color: "text-sky-600",     bg: "bg-sky-50" },
                                 { label: "Under Review", key: "UNDER_REVIEW",        color: "text-amber-600",   bg: "bg-amber-50" },
                                 { label: "Needs Input",  key: "NEEDS_CLARIFICATION", color: "text-orange-600",  bg: "bg-orange-50" },
                                 { label: "Approved",     key: "APPROVED",            color: "text-indigo-600",  bg: "bg-indigo-50" },

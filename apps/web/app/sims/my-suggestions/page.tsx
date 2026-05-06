@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 
 const STATUS_CONFIG: Record<SuggestionStatus, { label: string; badge: string; icon: React.ReactNode }> = {
-  SUBMITTED:           { label: "Submitted",           badge: "bg-blue-100 text-blue-700",       icon: <Clock className="h-3.5 w-3.5" /> },
   UNDER_REVIEW:        { label: "Under Review",        badge: "bg-amber-100 text-amber-700",     icon: <Clock className="h-3.5 w-3.5" /> },
   NEEDS_CLARIFICATION: { label: "Needs Clarification", badge: "bg-orange-100 text-orange-700",   icon: <AlertCircle className="h-3.5 w-3.5" /> },
   APPROVED:            { label: "Approved",            badge: "bg-green-100 text-green-700",     icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
@@ -51,7 +50,7 @@ export default function MySuggestionsPage() {
 
   const counts = {
     total:    suggestions.length,
-    active:   suggestions.filter((s) => ["SUBMITTED", "UNDER_REVIEW", "NEEDS_CLARIFICATION"].includes(s.status)).length,
+    active:   suggestions.filter((s) => ["UNDER_REVIEW", "NEEDS_CLARIFICATION"].includes(s.status)).length,
     approved: suggestions.filter((s) => ["APPROVED", "IMPLEMENTED"].includes(s.status)).length,
     closed:   suggestions.filter((s) => ["REJECTED", "ARCHIVED"].includes(s.status)).length,
   };

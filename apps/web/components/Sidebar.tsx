@@ -13,6 +13,7 @@ import {
   LogOut,
   UserCog,
   Stethoscope,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { useEffect } from "react";
@@ -51,11 +52,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       icon: Archive,
       allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD] 
     },
-    { 
-      name: "Operations", 
-      href: "/operations", 
+    {
+      name: "Operations",
+      href: "/operations",
       icon: Settings,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT] 
+      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]
+    },
+    {
+      name: "Committees",
+      href: "/operations/committees",
+      icon: ShieldCheck,
+      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]
     },
     {
       name: "Reports",

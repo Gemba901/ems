@@ -11,7 +11,7 @@ import {
   Archive,
   Settings,
   ArrowLeft,
-  ShieldCheck,
+  ClipboardList,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
@@ -39,16 +39,16 @@ export function SimsSidebar({ open = false, onClose }: SimsSidebarProps) {
       allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]
     },
     {
+      name: "Committee Queue",
+      href: "/sims/queue",
+      icon: ClipboardList,
+      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]
+    },
+    {
       name: "Reviews",
       href: "/sims/reviews",
       icon: MessageSquareText,
       allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]
-    },
-    {
-      name: "Committees",
-      href: "/sims/committees",
-      icon: ShieldCheck,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]
     },
     {
       name: "Analytics",

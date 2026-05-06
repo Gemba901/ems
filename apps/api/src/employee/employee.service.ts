@@ -121,6 +121,9 @@ export class EmployeeService {
                         organizations: { include: { role: true } },
                     },
                 },
+                committeeMembers: {
+                    include: { committee: true },
+                },
             },
         });
         if (!employee) throw new BadRequestException('Employee not found');

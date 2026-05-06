@@ -6,9 +6,9 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory, calcWeight } from "@/services/sims.service";
-import { AlertCircle, Clock, HelpCircle, ChevronRight, EyeOff } from "lucide-react";
+import { AlertCircle, Clock, HelpCircle, ChevronRight, EyeOff, Users, Inbox } from "lucide-react";
 
-const REVIEW_STATUSES: SuggestionStatus[] = ["SUBMITTED", "UNDER_REVIEW", "NEEDS_CLARIFICATION"];
+const REVIEW_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "NEEDS_CLARIFICATION"];
 
 const SECTION_CONFIG: Record<string, {
   label: string;
@@ -18,6 +18,14 @@ const SECTION_CONFIG: Record<string, {
   icon: React.ReactNode;
   accentBar: string;
 }> = {
+  UNASSIGNED: {
+    label: "Pending Assignment",
+    description: "These suggestions have no committee assigned yet — assign one so the weekly review can proceed.",
+    badge: "bg-slate-200 text-slate-600",
+    headerBg: "bg-slate-50 border-slate-200",
+    icon: <Inbox className="h-4 w-4 text-slate-500" />,
+    accentBar: "bg-slate-300",
+  },
   NEEDS_CLARIFICATION: {
     label: "Needs Clarification",
     description: "Employee response required before review can continue.",
@@ -26,17 +34,9 @@ const SECTION_CONFIG: Record<string, {
     icon: <HelpCircle className="h-4 w-4 text-orange-500" />,
     accentBar: "bg-orange-400",
   },
-  SUBMITTED: {
-    label: "New Submissions",
-    description: "Freshly submitted — awaiting first review.",
-    badge: "bg-blue-100 text-blue-700",
-    headerBg: "bg-blue-50 border-blue-100",
-    icon: <Clock className="h-4 w-4 text-blue-500" />,
-    accentBar: "bg-blue-400",
-  },
   UNDER_REVIEW: {
     label: "Under Review",
-    description: "Already in progress — complete or escalate.",
+    description: "Assigned to a committee — awaiting the weekly meeting.",
     badge: "bg-amber-100 text-amber-700",
     headerBg: "bg-amber-50 border-amber-100",
     icon: <AlertCircle className="h-4 w-4 text-amber-500" />,
@@ -54,6 +54,75 @@ const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string
   UNKNOWN:    { label: "Unknown",    badge: "bg-slate-100 text-slate-500" },
 };
 
+function SuggestionCard({ s, accentBar, router }: { s: Suggestion; accentBar: string; router: ReturnType<typeof useRouter> }) {
+  const daysSince = Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 86400000);
+  return (
+    <div
+      onClick={() => router.push(`/sims/${s.id}`)}
+      className="flex items-center gap-3 px-4 py-4 sm:px-6 hover:bg-slate-50/70 cursor-pointer transition-colors group"
+    >
+      <div className={`w-1 self-stretch rounded-full shrink-0 ${accentBar}`} />
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+          {s.categories.map((c) => {
+            const catCfg = CATEGORY_CONFIG[c as SuggestionCategory];
+            return catCfg ? (
+              <span key={c} className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${catCfg.badge}`}>
+                {catCfg.label}
+              </span>
+            ) : null;
+          })}
+          {calcWeight(s.categories) > 0 && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-100">
+              W {calcWeight(s.categories).toFixed(1)}
+            </span>
+          )}
+          {s.committee && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-100">
+              <Users className="h-2.5 w-2.5" /> {s.committee.name}
+            </span>
+          )}
+        </div>
+
+        <p className="text-sm font-semibold text-slate-900 truncate">{s.title}</p>
+
+        <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400 flex-wrap">
+          {s.employee ? (
+            <div className="flex items-center gap-1.5">
+              <div className="h-4 w-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-bold shrink-0">
+                {s.employee.firstName[0]}{s.employee.lastName[0]}
+              </div>
+              <span>{s.employee.firstName} {s.employee.lastName}</span>
+              {s.employee.department?.name && (
+                <><span className="text-slate-300">·</span><span>{s.employee.department.name}</span></>
+              )}
+            </div>
+          ) : (
+            <span className="flex items-center gap-1"><EyeOff className="h-3 w-3" /> Anonymous</span>
+          )}
+          <span className="text-slate-300">·</span>
+          <span>{daysSince === 0 ? "Today" : `${daysSince}d ago`}</span>
+          {s.reviews.length > 0 && (
+            <><span className="text-slate-300">·</span>
+            <span>{s.reviews.length} prior review{s.reviews.length !== 1 ? "s" : ""}</span></>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={(e) => { e.stopPropagation(); router.push(`/sims/${s.id}`); }}
+          className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
+        >
+          Review
+        </button>
+        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors hidden sm:block" />
+      </div>
+    </div>
+  );
+}
+
 export default function ReviewsPage() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
@@ -61,6 +130,8 @@ export default function ReviewsPage() {
 
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const canAssign = role === Role.ADMIN || role === Role.SUPER_ADMIN || role === Role.MANAGEMENT;
 
   useEffect(() => {
     if (!accessToken || !role) return;
@@ -74,15 +145,31 @@ export default function ReviewsPage() {
   }, [accessToken, role]);
 
   const grouped = useMemo(() => {
-    const groups: Record<string, Suggestion[]> = {
-      NEEDS_CLARIFICATION: [], SUBMITTED: [], UNDER_REVIEW: [],
-    };
-    suggestions.forEach((s) => { groups[s.status]?.push(s); });
-    return groups;
+    const unassigned: Suggestion[] = [];
+    const needsClarification: Suggestion[] = [];
+    const underReview: Suggestion[] = [];
+
+    suggestions.forEach((s) => {
+      if (s.status === "NEEDS_CLARIFICATION") {
+        needsClarification.push(s);
+      } else if (!s.committeeId) {
+        unassigned.push(s);
+      } else {
+        underReview.push(s);
+      }
+    });
+
+    return { UNASSIGNED: unassigned, NEEDS_CLARIFICATION: needsClarification, UNDER_REVIEW: underReview };
   }, [suggestions]);
 
   const totalPending = suggestions.length;
-  const urgentCount = grouped.NEEDS_CLARIFICATION?.length ?? 0;
+  const urgentCount = grouped.NEEDS_CLARIFICATION.length;
+  const unassignedCount = grouped.UNASSIGNED.length;
+
+  const visibleSections = (canAssign
+    ? ["UNASSIGNED", "NEEDS_CLARIFICATION", "UNDER_REVIEW"]
+    : ["NEEDS_CLARIFICATION", "UNDER_REVIEW"]
+  ) as (keyof typeof grouped)[];
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
@@ -95,17 +182,24 @@ export default function ReviewsPage() {
             <p className="text-sm text-slate-500 mt-1">
               {loading
                 ? "Loading..."
-                : `${totalPending} suggestion${totalPending !== 1 ? "s" : ""} awaiting action.`}
+                : `${totalPending} suggestion${totalPending !== 1 ? "s" : ""} awaiting action`}
             </p>
           </div>
 
-          {/* Urgent banner */}
-          {!loading && urgentCount > 0 && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-xl text-sm shrink-0">
-              <HelpCircle className="h-4 w-4 text-orange-500 shrink-0" />
-              <span className="text-orange-700 font-medium">{urgentCount} blocked — need clarification</span>
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2 shrink-0">
+            {!loading && unassignedCount > 0 && canAssign && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm">
+                <Inbox className="h-4 w-4 text-slate-500 shrink-0" />
+                <span className="text-slate-700 font-medium">{unassignedCount} unassigned</span>
+              </div>
+            )}
+            {!loading && urgentCount > 0 && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-xl text-sm">
+                <HelpCircle className="h-4 w-4 text-orange-500 shrink-0" />
+                <span className="text-orange-700 font-medium">{urgentCount} need clarification</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {loading && (
@@ -122,14 +216,13 @@ export default function ReviewsPage() {
           </div>
         )}
 
-        {!loading && REVIEW_STATUSES.map((status) => {
+        {!loading && visibleSections.map((status) => {
           const group = grouped[status];
           if (!group || group.length === 0) return null;
           const cfg = SECTION_CONFIG[status];
 
           return (
             <div key={status} className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-              {/* Section header */}
               <div className={`flex items-center justify-between px-6 py-4 border-b ${cfg.headerBg}`}>
                 <div className="flex items-center gap-2.5">
                   {cfg.icon}
@@ -145,82 +238,10 @@ export default function ReviewsPage() {
                 </div>
               </div>
 
-              {/* Cards */}
               <div className="divide-y divide-slate-50">
-                {group.map((s) => {
-                  const daysSince = Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 86400000);
-                  return (
-                    <div
-                      key={s.id}
-                      onClick={() => router.push(`/sims/${s.id}`)}
-                      className="flex items-center gap-3 px-4 py-4 sm:px-6 hover:bg-slate-50/70 cursor-pointer transition-colors group"
-                    >
-                      {/* Accent bar */}
-                      <div className={`w-1 self-stretch rounded-full shrink-0 ${cfg.accentBar}`} />
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                          {s.categories.map((c) => {
-                            const catCfg = CATEGORY_CONFIG[c as SuggestionCategory];
-                            return catCfg ? (
-                              <span key={c} className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${catCfg.badge}`}>
-                                {catCfg.label}
-                              </span>
-                            ) : null;
-                          })}
-                          {calcWeight(s.categories) > 0 && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-100">
-                              W {calcWeight(s.categories).toFixed(1)}
-                            </span>
-                          )}
-                        </div>
-
-                        <p className="text-sm font-semibold text-slate-900 truncate">{s.title}</p>
-
-                        <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400 flex-wrap">
-                          {s.employee ? (
-                            <div className="flex items-center gap-1.5">
-                              <div className="h-4 w-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-bold shrink-0">
-                                {s.employee.firstName[0]}{s.employee.lastName[0]}
-                              </div>
-                              <span>{s.employee.firstName} {s.employee.lastName}</span>
-                              {s.employee.department?.name && (
-                                <span className="text-slate-300">·</span>
-                              )}
-                              {s.employee.department?.name && (
-                                <span>{s.employee.department.name}</span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="flex items-center gap-1">
-                              <EyeOff className="h-3 w-3" /> Anonymous
-                            </span>
-                          )}
-                          <span className="text-slate-300">·</span>
-                          <span>{daysSince === 0 ? "Today" : `${daysSince}d ago`}</span>
-                          {s.reviews.length > 0 && (
-                            <>
-                              <span className="text-slate-300">·</span>
-                              <span>{s.reviews.length} prior review{s.reviews.length !== 1 ? "s" : ""}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/sims/${s.id}`); }}
-                          className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
-                        >
-                          Review
-                        </button>
-                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors hidden sm:block" />
-                      </div>
-                    </div>
-                  );
-                })}
+                {group.map((s) => (
+                  <SuggestionCard key={s.id} s={s} accentBar={cfg.accentBar} router={router} />
+                ))}
               </div>
             </div>
           );

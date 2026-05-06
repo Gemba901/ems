@@ -27,15 +27,22 @@ export interface EmployeeApiResponse {
     avatarUrl: string | null;
     createdAt: string;
     department: { id: string; name: string; organizationId: string } | null;
+    committeeMembers: {
+        committeeId: string;
+        employeeId: string;
+        committee: { id: string; name: string; type: string; organizationId: string };
+    }[];
     user: {
         id: string;
         email: string | null;
         phone: string;
         name: string;
-        roleId: string;
-        organizationId: string;
-        role: { id: string; name: string } | null;
-        organizations?: { role: { id: number; name: string } }[];
+        organizations: {
+            userId: string;
+            organizationId: string;
+            roleId: number;
+            role: { id: number; name: string };
+        }[];
     } | null;
 }
 

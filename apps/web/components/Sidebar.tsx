@@ -119,18 +119,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       `}>
 
         {/* Top Logo */}
-        <div className="flex items-center h-20 px-3 shrink-0">
+        <div className="flex items-center h-20 px-3 shrink-0 overflow-hidden">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center bg-blue-600 rounded-xl shadow-sm ml-0.5 transition-transform group-hover:scale-105">
             <Box className="h-5 w-5 text-white" />
           </div>
-          <div className={`ml-4 flex flex-col whitespace-nowrap ${open ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity duration-300`}>
-            <span className="text-sm font-bold tracking-wide text-slate-900">{user?.organizationName || "Workspace"}</span>
+          <div className={`ml-4 min-w-0 flex flex-col whitespace-nowrap ${open ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity duration-300`}>
+            <span className="text-sm font-bold tracking-wide text-slate-900 truncate">{user?.organizationName || "Workspace"}</span>
             <span className="text-[9px] font-semibold tracking-widest text-slate-400 uppercase">Workspace</span>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 flex flex-col gap-2 px-3 mt-4 overflow-y-auto min-h-0">
+        <nav className="flex-1 flex flex-col gap-2 px-3 mt-4 overflow-y-auto overflow-x-hidden min-h-0">
           {filteredNav.map((item) => {
             const isActive = pathname === item.href;
 

@@ -10,25 +10,25 @@ import { SimsService, SuggestionCategory } from "@/services/sims.service";
 import { ArrowLeft, Send, CheckSquare, Square } from "lucide-react";
 import { useToast } from "@/contexts/toast.context";
 
-const QCDSMT_CATEGORIES: { value: SuggestionCategory; label: string; description: string; color: string }[] = [
-  { value: "QUALITY",    label: "Quality",    description: "Product or process quality",     color: "border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-400" },
-  { value: "COST",       label: "Cost",       description: "Cost reduction / efficiency",    color: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-400" },
-  { value: "DELIVERY",   label: "Delivery",   description: "Speed, logistics, turnaround",   color: "border-purple-200 bg-purple-50 text-purple-700 hover:border-purple-400" },
-  { value: "SAFETY",     label: "Safety",     description: "Workplace safety & risk",        color: "border-red-200 bg-red-50 text-red-700 hover:border-red-400" },
-  { value: "MORALE",     label: "Morale",     description: "Employee wellbeing & culture",   color: "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-400" },
-  { value: "TECHNOLOGY", label: "Technology", description: "Tools, systems, digital",        color: "border-indigo-200 bg-indigo-50 text-indigo-700 hover:border-indigo-400" },
+const QCDSMT_CATEGORIES: {
+  value: SuggestionCategory;
+  label: string;
+  summary: string;
+  action: string;
+  items: string[];
+  selectedCls: string;
+  labelColor: string;
+  itemColor: string;
+}[] = [
+  { value: "QUALITY",    label: "Quality",    summary: "Better product, service, or work accuracy.", action: "Reduces",  items: ["Defects", "Errors", "Rework", "Complaints"],          selectedCls: "border-blue-300 bg-blue-50",   labelColor: "text-blue-700",   itemColor: "text-blue-500" },
+  { value: "COST",       label: "Cost",       summary: "Lower cost or better use of resources.",      action: "Reduces",  items: ["Waste", "Loss", "Overtime", "Energy"],                 selectedCls: "border-green-300 bg-green-50", labelColor: "text-green-700",  itemColor: "text-green-500" },
+  { value: "DELIVERY",   label: "Delivery",   summary: "Faster and smoother workflow.",               action: "Reduces",  items: ["Delay", "Waiting", "Searching", "Lead time"],          selectedCls: "border-orange-300 bg-orange-50", labelColor: "text-orange-700", itemColor: "text-orange-500" },
+  { value: "SAFETY",     label: "Safety",     summary: "Safer workplace with lower risk.",             action: "Removes",  items: ["Hazards", "Unsafe acts", "Injury risk"],               selectedCls: "border-red-300 bg-red-50",     labelColor: "text-red-700",    itemColor: "text-red-500" },
+  { value: "MORALE",     label: "Morale",     summary: "Easier and better work for people.",           action: "Reduces",  items: ["Stress", "Confusion", "Frustration"],                  selectedCls: "border-red-300 bg-red-50",     labelColor: "text-red-700",    itemColor: "text-red-500" },
+  { value: "TECHNOLOGY", label: "Technology", summary: "Better tools, systems, data, or digital work.", action: "Improves", items: ["Software", "Automation", "Dashboards", "Tracking"], selectedCls: "border-slate-400 bg-slate-50",  labelColor: "text-slate-700",  itemColor: "text-slate-500" },
 ];
 
 const ALL_QCDSMT: SuggestionCategory[] = QCDSMT_CATEGORIES.map((c) => c.value);
-
-const CATEGORY_GUIDE: { label: string; summary: string; action: string; items: string[]; color: string }[] = [
-  { label: "Quality",    summary: "Better product, service, or work accuracy.", action: "Reduces",  items: ["Defects", "Errors", "Rework", "Complaints"],              color: "text-blue-700" },
-  { label: "Cost",       summary: "Lower cost or better use of resources.",      action: "Reduces",  items: ["Waste", "Loss", "Overtime", "Energy"],                    color: "text-emerald-700" },
-  { label: "Delivery",   summary: "Faster and smoother workflow.",               action: "Reduces",  items: ["Delay", "Waiting", "Searching", "Lead time"],             color: "text-purple-700" },
-  { label: "Safety",     summary: "Safer workplace with lower risk.",             action: "Removes",  items: ["Hazards", "Unsafe acts", "Injury risk"],                  color: "text-red-700" },
-  { label: "Morale",     summary: "Easier and better work for people.",           action: "Reduces",  items: ["Stress", "Confusion", "Frustration"],                     color: "text-amber-700" },
-  { label: "Technology", summary: "Better tools, systems, data, or digital work.", action: "Improves", items: ["Software", "Automation", "Dashboards", "Tracking"],     color: "text-indigo-700" },
-];
 
 const FIVE_W2H: { key: string; desc: string }[] = [
   { key: "What",     desc: "What problem or improvement opportunity do you see?" },
@@ -40,27 +40,16 @@ const FIVE_W2H: { key: string; desc: string }[] = [
   { key: "How Much", desc: "What impact is expected? Time saving, cost saving, waste reduction, risk reduction, or easier work." },
 ];
 
-const EXAMPLES: { context: string; suggestion: string; impact: { cat: string; note: string; color: string }[] }[] = [
-  {
-    context: "Operators on Packing Line 2 spend time searching for tape and cutters during the morning shift.",
-    suggestion: "Fix a small shadow board near the line.",
-    impact: [
-      { cat: "Delivery", note: "Reduces searching time and packing delay.",                    color: "text-purple-700" },
-      { cat: "Morale",   note: "Makes work easier and reduces frustration.",                   color: "text-amber-700" },
-      { cat: "Safety",   note: "Keeps tools in the correct place and reduces unsafe handling.", color: "text-red-700" },
-    ],
-  },
-  {
-    context: "Truck loading and offloading takes too much time because cartons are handled manually.",
-    suggestion: "Use a movable conveyor that can go inside the truck or container. Barcode scanning or sensors can also be added for dispatch control.",
-    impact: [
-      { cat: "Delivery",   note: "Reduces loading and offloading time.",       color: "text-purple-700" },
-      { cat: "Morale",     note: "Reduces hard manual work for the team.",     color: "text-amber-700" },
-      { cat: "Quality",    note: "Reduces carton damage and wrong dispatch.",  color: "text-blue-700" },
-      { cat: "Technology", note: "Supports barcode or sensor-based control.",  color: "text-indigo-700" },
-    ],
-  },
-];
+const EXAMPLE = {
+  context: "Truck loading and offloading takes too much time because cartons are handled manually.",
+  suggestion: "Use a movable conveyor that can go inside the truck or container. Barcode scanning or sensors can also be added for dispatch control.",
+  impact: [
+    { cat: "Delivery",   note: "Reduces loading and offloading time.",      color: "text-orange-700" },
+    { cat: "Morale",     note: "Reduces hard manual work for the team.",    color: "text-red-700" },
+    { cat: "Quality",    note: "Reduces carton damage and wrong dispatch.", color: "text-blue-700" },
+    { cat: "Technology", note: "Supports barcode or sensor-based control.", color: "text-slate-600" },
+  ],
+};
 
 const TITLE_MIN = 10;
 const TITLE_MAX = 200;
@@ -237,19 +226,24 @@ export default function NewSuggestionPage() {
                             isUnknownSelected
                               ? "border-slate-100 bg-slate-50 opacity-40 cursor-not-allowed"
                               : selected
-                                ? `${cat.color} border-opacity-100 ring-1 ring-current/20`
+                                ? `${cat.selectedCls} border-opacity-100`
                                 : `border-slate-200 bg-white hover:border-slate-300`
                           }`}
                         >
                           <div className="mt-0.5 shrink-0">
                             {selected
-                              ? <CheckSquare className="h-3.5 w-3.5" />
+                              ? <CheckSquare className={`h-3.5 w-3.5 ${cat.labelColor}`} />
                               : <Square className="h-3.5 w-3.5 text-slate-300" />
                             }
                           </div>
-                          <div>
-                            <p className="text-xs font-semibold leading-none mb-0.5">{cat.label}</p>
-                            <p className="text-[10px] text-slate-400 leading-snug">{cat.description}</p>
+                          <div className="min-w-0">
+                            <p className={`text-xs font-bold leading-none mb-1 ${selected ? cat.labelColor : "text-slate-700"}`}>
+                              {cat.label}
+                            </p>
+                            <p className="text-[10px] text-slate-500 leading-snug mb-1">{cat.summary}</p>
+                            <p className={`text-[9px] leading-snug ${selected ? cat.itemColor : "text-slate-400"}`}>
+                              {cat.action}: {cat.items.join(" · ")}
+                            </p>
                           </div>
                         </button>
                       );
@@ -308,29 +302,12 @@ export default function NewSuggestionPage() {
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-6">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
                 <p className="text-sm font-bold text-slate-800">Submission Guide</p>
-                <p className="text-xs text-slate-500 mt-0.5">Category explanations, writing tips & examples</p>
+                <p className="text-xs text-slate-500 mt-0.5">Writing tips & example</p>
               </div>
 
               <div className="overflow-y-auto max-h-[calc(100vh-10rem)] divide-y divide-slate-100">
 
-                {/* Section 1 — QCDSMT Category Explanation */}
-                <div className="px-5 py-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">QCDSMT Category Explanation</p>
-                  <div className="space-y-4">
-                    {CATEGORY_GUIDE.map((c) => (
-                      <div key={c.label}>
-                        <span className={`text-[11px] font-bold mb-1 block ${c.color}`}>{c.label}</span>
-                        <p className="text-xs text-slate-700 mb-0.5">{c.summary}</p>
-                        <p className="text-[11px] text-slate-400">
-                          <span className="font-semibold text-slate-500">{c.action}:</span>{" "}
-                          {c.items.join(" · ")}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Section 2 — How to Write a Good Suggestion */}
+                {/* Section 1 — How to Write a Good Suggestion */}
                 <div className="px-5 py-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">How to Write a Good Suggestion</p>
                   <p className="text-xs text-slate-600 mb-3">
@@ -350,26 +327,19 @@ export default function NewSuggestionPage() {
                   </p>
                 </div>
 
-                {/* Section 3 — Examples */}
+                {/* Section 2 — Example */}
                 <div className="px-5 py-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Examples</p>
-                  <div className="space-y-5">
-                    {EXAMPLES.map((ex, i) => (
-                      <div key={i}>
-                        <p className="text-[11px] font-bold text-slate-600 mb-1">Example {i + 1}</p>
-                        <p className="text-xs text-slate-500 leading-relaxed mb-2">{ex.context}</p>
-                        <p className="text-xs text-slate-700 mb-2">
-                          <span className="font-semibold">Suggestion:</span> {ex.suggestion}
-                        </p>
-                        <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Expected Impact:</p>
-                        <div className="space-y-1">
-                          {ex.impact.map((imp) => (
-                            <div key={imp.cat} className="flex gap-1.5 items-baseline">
-                              <span className={`text-[10px] font-bold shrink-0 ${imp.color}`}>{imp.cat}</span>
-                              <span className="text-[11px] text-slate-500 leading-relaxed">{imp.note}</span>
-                            </div>
-                          ))}
-                        </div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Example</p>
+                  <p className="text-xs text-slate-500 leading-relaxed mb-2">{EXAMPLE.context}</p>
+                  <p className="text-xs text-slate-700 mb-2">
+                    <span className="font-semibold">Suggestion:</span> {EXAMPLE.suggestion}
+                  </p>
+                  <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Expected Impact:</p>
+                  <div className="space-y-1">
+                    {EXAMPLE.impact.map((imp) => (
+                      <div key={imp.cat} className="flex gap-1.5 items-baseline">
+                        <span className={`text-[10px] font-bold shrink-0 ${imp.color}`}>{imp.cat}</span>
+                        <span className="text-[11px] text-slate-500 leading-relaxed">{imp.note}</span>
                       </div>
                     ))}
                   </div>

@@ -14,7 +14,7 @@ import {
   SuggestionCategory,
   calcWeight,
 } from "@/services/sims.service";
-import { CommitteeService, SteeringCommittee } from "@/services/committee.service";
+import { CommitteeService, SteeringCommittee, MyCommittee } from "@/services/committee.service";
 import {
   ArrowLeft,
   Clock,
@@ -147,6 +147,7 @@ export default function SuggestionDetailPage() {
 
   const [suggestion, setSuggestion]   = useState<Suggestion | null>(null);
   const [committees, setCommittees]   = useState<SteeringCommittee[]>([]);
+  const [myCommittees, setMyCommittees] = useState<MyCommittee[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
 
@@ -168,6 +169,7 @@ export default function SuggestionDetailPage() {
 
   const canAssignCommittee = role === Role.ADMIN || role === Role.SUPER_ADMIN || role === Role.MANAGEMENT;
   const isEmployee = role === Role.EMPLOYEE;
+  const isPrivilegedReviewer = canAssignCommittee || role === Role.HOD;
 
   const reload = () => {
     if (!accessToken || !id) return;
@@ -178,6 +180,7 @@ export default function SuggestionDetailPage() {
     if (!accessToken || !id) return;
     const fetches: Promise<any>[] = [
       SimsService.getById(id, accessToken).then(setSuggestion),
+      CommitteeService.getMyCommittees(accessToken).then(setMyCommittees).catch(() => {}),
     ];
     if (canAssignCommittee) {
       fetches.push(CommitteeService.list(accessToken).then(setCommittees));
@@ -235,6 +238,11 @@ export default function SuggestionDetailPage() {
   };
 
   const allowedNext = suggestion ? ALLOWED_TRANSITIONS[suggestion.status] : [];
+
+  const isOnAssignedCommittee = suggestion?.committeeId
+    ? myCommittees.some((c) => c.id === suggestion.committeeId)
+    : false;
+  const canReview = isPrivilegedReviewer || isOnAssignedCommittee;
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
@@ -398,8 +406,8 @@ export default function SuggestionDetailPage() {
                   </div>
                 )}
 
-                {/* ── Review Form (committee members only — enforced server-side) ── */}
-                {suggestion.committeeId && (
+                {/* ── Review Form (privileged roles + assigned committee members) ── */}
+                {suggestion.committeeId && canReview && (
                   <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm sticky top-6">
                     <div className="flex items-center gap-2 mb-5">
                       <h2 className="text-sm font-bold text-slate-800">Add a Review</h2>

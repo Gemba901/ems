@@ -10,6 +10,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { CommitteeModule } from './committee/committee.module';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
+import { QuotesModule } from './quotes/quotes.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { CacheModule } from '@nestjs/cache-manager';
     SimsModule,
     OrganizationsModule,
     CommitteeModule,
+    QuotesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

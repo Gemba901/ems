@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
+import DashboardHero from "@/components/DashboardHero";
 
 // Module registry
 
@@ -135,52 +136,6 @@ const UPCOMING_MODULES: Omit<ModuleConfig, "key" | "href" | "actions">[] = [
   },
 ];
 
-// Helpers
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
-
-function currentWeek(): number {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  return Math.ceil(((now.getTime() - start.getTime()) / 86_400_000 + start.getDay() + 1) / 7);
-}
-
-interface RoleContext {
-  subtitle: string;
-  action: { label: string; href: string; icon: React.ElementType };
-}
-
-const ROLE_CONTEXT: Record<string, RoleContext> = {
-  SUPER_ADMIN: {
-    subtitle: "Full platform access across all organizations",
-    action: { label: "All Organizations", href: "/admin/organizations", icon: Building2 },
-  },
-  ADMIN: {
-    subtitle: "Managing your organization's people & platform",
-    action: { label: "Employee Directory", href: "/operations/employees", icon: Users },
-  },
-  MANAGEMENT: {
-    subtitle: "Organization performance & team insights",
-    action: { label: "SIMS Analytics", href: "/sims/analytics", icon: BarChart3 },
-  },
-  HR: {
-    subtitle: "People operations & employee management",
-    action: { label: "Employee Directory", href: "/operations/employees", icon: Users },
-  },
-  HOD: {
-    subtitle: "Leading your department & reviewing suggestions",
-    action: { label: "Review Suggestions", href: "/sims/reviews", icon: ListChecks },
-  },
-  EMPLOYEE: {
-    subtitle: "Your workspace — share ideas, track progress",
-    action: { label: "Submit an Idea", href: "/sims/new", icon: FileEdit },
-  },
-};
 
 // Page
 
@@ -189,15 +144,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const [activeModules, setActiveModules] = useState<string[]>([]);
   const [loadingModules, setLoadingModules] = useState(true);
-
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
-  });
-
-  const firstName = user?.name?.split(" ")[0] ?? "there";
-  const role = user?.roleLevel?.replace(/_/g, " ") ?? "";
-  const roleCtx = ROLE_CONTEXT[user?.roleLevel ?? ""] ?? null;
-  const week = currentWeek();
   useEffect(() => {
     if (!accessToken) return;
     AuthService.getMyOrg(accessToken)
@@ -219,55 +165,7 @@ export default function DashboardPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-10 pb-16">
 
-      {/* Welcome header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 px-8 py-8 shadow-lg">
-        <div className="pointer-events-none absolute -top-10 -right-10 h-48 w-48 rounded-full bg-indigo-500/10" />
-        <div className="pointer-events-none absolute -bottom-8 -left-8 h-36 w-36 rounded-full bg-blue-500/10" />
-        <div className="pointer-events-none absolute top-0 right-0 h-full w-1/3 bg-gradient-to-l from-indigo-600/5 to-transparent" />
-
-        <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mb-3">
-              Gemba Enterprise Platform
-            </p>
-            <p className="text-slate-400 text-sm mb-1">
-              {today}
-              <span className="mx-2 text-slate-600">·</span>
-              <span className="text-slate-500">Week {week}</span>
-            </p>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              {greeting()}, {firstName}.
-            </h1>
-            {roleCtx && (
-              <p className="text-slate-400 text-sm mt-1">{roleCtx.subtitle}</p>
-            )}
-            <div className="flex flex-wrap items-center gap-2 mt-4">
-              <span className="text-xs font-semibold bg-white/10 text-white px-2.5 py-1 rounded-full">
-                {user?.organizationName}
-              </span>
-              <span className="text-xs font-semibold bg-indigo-500/30 text-indigo-200 px-2.5 py-1 rounded-full capitalize">
-                {role.toLowerCase()}
-              </span>
-              {!loadingModules && (
-                <span className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-full">
-                  {enabledModules.length} module{enabledModules.length !== 1 ? "s" : ""} active
-                </span>
-              )}
-            </div>
-          </div>
-
-          {roleCtx && (
-            <Link
-              href={roleCtx.action.href}
-              className="shrink-0 flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-xl border border-white/10 transition-colors"
-            >
-              <roleCtx.action.icon className="h-4 w-4" />
-              {roleCtx.action.label}
-              <ChevronRight className="h-4 w-4 ml-0.5" />
-            </Link>
-          )}
-        </div>
-      </div>
+      <DashboardHero />
 
       {/* Active modules */}
       <section>

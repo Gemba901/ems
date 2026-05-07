@@ -10,6 +10,7 @@
     "target": "ES2023",
     "skipLibCheck": true,
     "strictNullChecks": true,
+    "resolveJsonModule": true,
     "types": ["node"],
     "rootDir": "."
   },

@@ -31,7 +31,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Menu className="h-5 w-5" />
         </button>
         <h1 className="text-xl font-bold tracking-tight text-slate-900">
-          GEOS
+          BEES
         </h1>
       </div>
 

@@ -8,7 +8,7 @@ async function bootstrap() {
 
   const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : ['https://ems-web-swart.vercel.app', 'https://ems.gembapms.co.in'];
+    : ['https://ems-web-swart.vercel.app', 'https://ems.gembapms.co.in', 'http://localhost:3000'];
 
   app.enableCors({
     origin: allowedOrigins,

@@ -63,7 +63,7 @@ export function NotificationsBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-80 rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div className="fixed left-2 right-2 top-20 z-50 rounded-xl border border-slate-200 bg-white shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-80">
           {/* header */}
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <span className="text-sm font-semibold text-slate-900">Notifications</span>
@@ -79,7 +79,7 @@ export function NotificationsBell() {
           </div>
 
           {/* list */}
-          <div className="max-h-96 overflow-y-auto">
+          <div className="max-h-[60vh] overflow-y-auto sm:max-h-96">
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
@@ -105,9 +105,9 @@ export function NotificationsBell() {
                           : "bg-blue-500"
                       } ${n.isRead ? "opacity-0" : ""}`}
                     />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{n.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-wrap break-words">{n.message}</p>
+                    <div className="min-w-0 w-full">
+                      <p className="text-xs font-semibold text-slate-800">{n.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 break-words">{n.message}</p>
                       <p className="text-[10px] text-slate-400 mt-1">
                         {new Date(n.createdAt).toLocaleDateString("en-US", {
                           month: "short",

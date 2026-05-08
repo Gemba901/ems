@@ -52,6 +52,13 @@ enum RoleName {
   EMPLOYEE
 }
 
+enum NotificationType {
+  ACTION_REQUIRED // user must do something
+  INFO            // information update
+  REMINDER        // time based nudge
+  ALERT           // urgent/system-lever
+}
+
 //organization
 model Organization {
   id          String    @id @default(uuid())
@@ -144,6 +151,7 @@ model Employee {
   suggestions      Suggestion[]
   suggestionReviews SuggestionReview[]
   committeeMembers  SteeringCommitteeMember[]
+  notifications     Notification[]
 
   createdAt      DateTime @default(now())
 
@@ -201,6 +209,24 @@ model Quotes {
   updatedAt   DateTime @updatedAt
 
   @@map("quotes")
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  module      String    // "SIMS", "LEAVE", "ATTENDANCE", "HR"
+  title       String
+  message     String
+  isRead      Boolean   @default(false)
+  actionUrl   String?
+  metadata    Json?     // any extra structured data the module wants to attach
+  createdAt  DateTime   @default(now())
+
+  @@index([employeeId, isRead])
+  @@index([employeeId, createdAt])
+  @@index([employeeId, module])
 }
 
 // SIMS: Suggestions and Idea Management System

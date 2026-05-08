@@ -11,6 +11,7 @@ import { CommitteeModule } from './committee/committee.module';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { QuotesModule } from './quotes/quotes.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { QuotesModule } from './quotes/quotes.module';
     OrganizationsModule,
     CommitteeModule,
     QuotesModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

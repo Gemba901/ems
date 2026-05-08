@@ -14,15 +14,16 @@ import {
   AssignCommitteeDto,
   ClarifyDto,
 } from './dto/sims.dto';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 // SUBMITTED removed — suggestions begin life at UNDER_REVIEW
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
-  UNDER_REVIEW:        ['NEEDS_CLARIFICATION', 'APPROVED', 'REJECTED', 'ARCHIVED'],
+  UNDER_REVIEW: ['NEEDS_CLARIFICATION', 'APPROVED', 'REJECTED', 'ARCHIVED'],
   NEEDS_CLARIFICATION: ['UNDER_REVIEW', 'ARCHIVED'],
-  APPROVED:            ['IMPLEMENTED', 'ARCHIVED'],
-  REJECTED:            ['ARCHIVED'],
-  IMPLEMENTED:         ['ARCHIVED'],
-  ARCHIVED:            [],
+  APPROVED: ['IMPLEMENTED', 'ARCHIVED'],
+  REJECTED: ['ARCHIVED'],
+  IMPLEMENTED: ['ARCHIVED'],
+  ARCHIVED: [],
 };
 
 const employeeSelect = {
@@ -56,7 +57,10 @@ const suggestionInclude = {
 
 @Injectable()
 export class SimsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) { }
 
   private async resolveEmployee(userId: string, organizationId?: string) {
     const employee = await this.prisma.employee.findFirst({
@@ -72,11 +76,12 @@ export class SimsService {
     return { ...suggestion, employee: null };
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // Submit new suggestion 
 
   async submitSuggestion(dto: CreateSuggestionDto, userId: string, organizationId: string) {
-    const employee = await this.resolveEmployee(userId);
-    return this.prisma.suggestion.create({
+    const employee = await this.resolveEmployee(userId, organizationId);
+
+    const suggestion = await this.prisma.suggestion.create({
       data: {
         title: dto.title,
         description: dto.description,
@@ -85,11 +90,36 @@ export class SimsService {
         status: 'UNDER_REVIEW',
         employeeId: employee.id,
         organizationId,
-      },
+      }
     });
+
+    // notify admins/management about new suggestion
+    
+
+    const admins = await this.prisma.employee.findMany({
+      where: {
+        organizationId,
+        user: { organizations: { some: { organizationId, role: { name: { in: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT] } } } } },
+      },
+      select: { id: true },
+    });
+
+    await this.notifications.createMany(
+      admins.map((a) => ({
+        employeeId: a.id,
+        type: 'INFO' as const,
+        module: 'SIMS',
+        title: 'New suggestion submitted',
+        message: `A new suggestion "${suggestion.title}" has been submitted and is awaiting committee assignment.`,
+        actionUrl: `/sims/${suggestion.id}`,
+        metadata: { suggestionId: suggestion.id },
+      }))
+    )
+
+    return suggestion;
   }
 
-  // ── Assign committee (Admin / Management) ─────────────────────────────────
+  // Assign committee (Admin / Management) 
 
   async assignCommittee(suggestionId: string, dto: AssignCommitteeDto, organizationId: string) {
     const suggestion = await this.prisma.suggestion.findUnique({ where: { id: suggestionId } });
@@ -105,15 +135,34 @@ export class SimsService {
       throw new NotFoundException('Committee not found');
     }
 
-    return this.prisma.suggestion.update({
+    const updated = await this.prisma.suggestion.update({
       where: { id: suggestionId },
       data: { committeeId: dto.committeeId },
       include: suggestionInclude,
     });
+
+    // notify committee members about new assignment
+    const members = await this.prisma.steeringCommitteeMember.findMany({
+      where: { committeeId: dto.committeeId },
+      select: { employeeId: true },
+    });
+
+    await this.notifications.createMany(
+      members.map((m) => ({
+        employeeId: m.employeeId,
+        type: 'ACTION_REQUIRED' as const,
+        module: 'SIMS',
+        title: 'New suggestion in your queue',
+        message: `"${updated.title}" has been assigned to your committee for review.`,
+        actionUrl: `/sims/${suggestionId}`,
+        metadata: { suggestionId },
+      })),
+    );
+
+    return updated;
   }
 
-  // ── Query ─────────────────────────────────────────────────────────────────
-
+  // Query
   async getMySuggestions(userId: string) {
     const employee = await this.resolveEmployee(userId);
     return this.prisma.suggestion.findMany({
@@ -246,9 +295,9 @@ export class SimsService {
     const [deptSuggestions, orgSuggestions] = await Promise.all([
       employee.departmentId
         ? this.prisma.suggestion.findMany({
-            where: { organizationId, employee: { departmentId: employee.departmentId } },
-            select: { status: true, categories: true },
-          })
+          where: { organizationId, employee: { departmentId: employee.departmentId } },
+          select: { status: true, categories: true },
+        })
         : Promise.resolve([]),
       this.prisma.suggestion.findMany({
         where: { organizationId },
@@ -272,7 +321,7 @@ export class SimsService {
     };
   }
 
-  // ── Review (committee members only) ───────────────────────────────────────
+  // Review (committee members only)
 
   async reviewSuggestion(
     id: string,
@@ -303,7 +352,7 @@ export class SimsService {
       throw new BadRequestException(`Cannot move suggestion from ${suggestion.status} to ${dto.statusChanged}`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const review = await this.prisma.$transaction(async (tx) => {
       await tx.suggestion.update({ where: { id }, data: { status: dto.statusChanged } });
       return tx.suggestionReview.create({
         data: {
@@ -319,9 +368,24 @@ export class SimsService {
         },
       });
     });
+
+    // notify employee about status change
+    await this.notifications.create({
+      employeeId: suggestion.employeeId,
+      type: dto.statusChanged === 'NEEDS_CLARIFICATION' ? 'ACTION_REQUIRED' : 'INFO',
+      module: 'SIMS',
+      title: `Your suggestion has been ${dto.statusChanged.toLowerCase().replace('_', ' ')}`,
+      message: dto.note
+        ? `Reviewer note: ${dto.note}`
+        : `Your suggestion "${suggestion.title}" status has been updated.`,
+      actionUrl: `/sims/${id}`,
+      metadata: { suggestionId: id, newStatus: dto.statusChanged },
+    });
+
+    return review;
   }
 
-  // ── Employee clarification response ───────────────────────────────────────
+  // Employee clarification response
 
   async respondToClarification(id: string, dto: ClarifyDto, userId: string, organizationId: string) {
     const suggestion = await this.prisma.suggestion.findUnique({ where: { id } });
@@ -335,7 +399,7 @@ export class SimsService {
       throw new ForbiddenException('You can only respond to your own suggestions');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const review = await this.prisma.$transaction(async (tx) => {
       await tx.suggestion.update({ where: { id }, data: { status: 'UNDER_REVIEW' } });
       return tx.suggestionReview.create({
         data: {
@@ -351,5 +415,26 @@ export class SimsService {
         },
       });
     });
+
+    if (!suggestion.committeeId) return review;
+
+    // notify committee members about clarification response
+    const members = await this.prisma.steeringCommitteeMember.findMany({
+      where: { committeeId: suggestion.committeeId },
+      select: { employeeId: true },
+    });
+
+    await this.notifications.createMany(
+      members.map((m) => ({
+        employeeId: m.employeeId,
+        type: 'INFO' as const,
+        module: 'SIMS',
+        title: 'Clarification received',
+        message: `An employee has responded to a clarification request on "${suggestion.title}".`,
+        actionUrl: `/sims/${id}`,
+        metadata: { suggestionId: id },
+      })),
+    );
+    return review;
   }
 }

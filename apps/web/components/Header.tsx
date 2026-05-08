@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Menu, Settings } from "lucide-react";
+import { Menu, Settings } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/auth.store";
+import { NotificationsBell } from "./NotificationsBell";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -37,11 +38,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3">
-          <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors">
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-blue-600"></span>
-          </button>
-
+          <NotificationsBell />
           <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
             <Settings className="h-5 w-5" />
           </button>

@@ -6,7 +6,8 @@ import { AuthService } from "@/services/auth.service";
 import { AdminService } from "@/services/admin.service";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
-import { Palette, Check, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Palette, Check, Loader2, Bell, ChevronRight } from "lucide-react";
 
 const PRESET_COLORS = [
     { label: "Indigo",   value: "#4F46E5" },
@@ -165,6 +166,24 @@ export default function SettingsPage() {
                     <p className="text-sm text-slate-500 mt-1">Customize your workspace and manage organization preferences.</p>
                 </div>
                 <ThemeSection />
+                <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Communication</p>
+                    <Link
+                        href="/settings/notifications"
+                        className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-blue-200 hover:bg-blue-50/30 transition-colors group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-blue-50 flex items-center justify-center">
+                                <Bell className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-slate-900">Broadcast Notifications</p>
+                                <p className="text-xs text-slate-400">Send a notification to all employees in your organization</p>
+                            </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                    </Link>
+                </div>
             </div>
         </ProtectedRoute>
     );

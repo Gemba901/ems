@@ -9,16 +9,15 @@ import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory } from "@/services/sims.service";
 import {
   Plus, Lightbulb, ChevronRight, Clock, CheckCircle2,
-  XCircle, AlertCircle, Archive, TrendingUp,
+  XCircle, AlertCircle,
 } from "lucide-react";
 
 const STATUS_CONFIG: Record<SuggestionStatus, { label: string; badge: string; icon: React.ReactNode }> = {
-  UNDER_REVIEW:        { label: "Under Review",        badge: "bg-amber-100 text-amber-700",     icon: <Clock className="h-3.5 w-3.5" /> },
-  NEEDS_CLARIFICATION: { label: "Needs Clarification", badge: "bg-orange-100 text-orange-700",   icon: <AlertCircle className="h-3.5 w-3.5" /> },
-  APPROVED:            { label: "Approved",            badge: "bg-green-100 text-green-700",     icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  REJECTED:            { label: "Rejected",            badge: "bg-red-100 text-red-700",         icon: <XCircle className="h-3.5 w-3.5" /> },
-  IMPLEMENTED:         { label: "Implemented",         badge: "bg-emerald-100 text-emerald-700", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  ARCHIVED:            { label: "Archived",            badge: "bg-slate-100 text-slate-500",     icon: <Archive className="h-3.5 w-3.5" /> },
+  UNDER_REVIEW:                { label: "Under Review",               badge: "bg-amber-100 text-amber-700",   icon: <Clock className="h-3.5 w-3.5" /> },
+  ON_HOLD:                     { label: "On Hold",                    badge: "bg-orange-100 text-orange-700", icon: <AlertCircle className="h-3.5 w-3.5" /> },
+  SELECTED_FOR_SGA:            { label: "Selected for SGA",           badge: "bg-indigo-100 text-indigo-700", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  APPROVED_FOR_IMPLEMENTATION: { label: "Approved for Implementation", badge: "bg-emerald-100 text-emerald-700", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  REJECTED:                    { label: "Rejected",                   badge: "bg-red-100 text-red-700",       icon: <XCircle className="h-3.5 w-3.5" /> },
 };
 
 const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
@@ -50,9 +49,9 @@ export default function MySuggestionsPage() {
 
   const counts = {
     total:    suggestions.length,
-    active:   suggestions.filter((s) => ["UNDER_REVIEW", "NEEDS_CLARIFICATION"].includes(s.status)).length,
-    approved: suggestions.filter((s) => ["APPROVED", "IMPLEMENTED"].includes(s.status)).length,
-    closed:   suggestions.filter((s) => ["REJECTED", "ARCHIVED"].includes(s.status)).length,
+    active:   suggestions.filter((s) => ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"].includes(s.status)).length,
+    approved: suggestions.filter((s) => s.status === "APPROVED_FOR_IMPLEMENTATION").length,
+    closed:   suggestions.filter((s) => s.status === "REJECTED").length,
   };
 
   const successRate = counts.total > 0 ? Math.round((counts.approved / counts.total) * 100) : 0;
@@ -73,16 +72,16 @@ export default function MySuggestionsPage() {
       sub: counts.active > 0 ? <span className="text-amber-600">Awaiting review</span> : null,
     },
     {
-      label: "Approved / Implemented",
+      label: "Approved for Impl.",
       value: counts.approved,
       icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,
       iconBg: "bg-emerald-50",
-      sub: counts.total > 0 ? <span className="text-emerald-600">Success rate: {successRate}%</span> : null,
+      sub: counts.total > 0 ? <span className="text-emerald-600">Approval rate: {successRate}%</span> : null,
     },
     {
-      label: "Closed",
+      label: "Rejected",
       value: counts.closed,
-      icon: <TrendingUp className="h-5 w-5 text-slate-400" />,
+      icon: <XCircle className="h-5 w-5 text-slate-400" />,
       iconBg: "bg-slate-50",
       sub: null,
     },

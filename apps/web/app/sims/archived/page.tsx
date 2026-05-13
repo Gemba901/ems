@@ -5,8 +5,19 @@ import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
-import { SimsService, Suggestion, SuggestionCategory } from "@/services/sims.service";
-import { Archive, EyeOff, ChevronRight, Search, X } from "lucide-react";
+import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus } from "@/services/sims.service";
+import { CheckCircle2, XCircle, EyeOff, ChevronRight, Search, X } from "lucide-react";
+
+const RESOLVED_STATUSES: SuggestionStatus[] = ["APPROVED_FOR_IMPLEMENTATION", "REJECTED"];
+
+const STATUS_BADGE: Record<string, string> = {
+  APPROVED_FOR_IMPLEMENTATION: "bg-emerald-100 text-emerald-700",
+  REJECTED:                    "bg-red-100 text-red-700",
+};
+const STATUS_LABEL: Record<string, string> = {
+  APPROVED_FOR_IMPLEMENTATION: "Approved for Implementation",
+  REJECTED:                    "Rejected",
+};
 
 const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
   QUALITY:    { label: "Quality",    badge: "bg-blue-100 text-blue-700" },
@@ -32,10 +43,13 @@ export default function ArchivedPage() {
 
   useEffect(() => {
     if (!accessToken || !role) return;
-    const fetch = role === Role.HOD
-      ? SimsService.getDepartment(accessToken, { status: "ARCHIVED", limit: 500 }).then((r) => r.data)
-      : SimsService.getAll(accessToken, { status: "ARCHIVED", limit: 500 }).then((r) => r.data);
-    fetch.then(setSuggestions).catch(console.error).finally(() => setLoading(false));
+    const fetchAll = (status: SuggestionStatus) => role === Role.HOD
+      ? SimsService.getDepartment(accessToken, { status, limit: 500 }).then((r) => r.data)
+      : SimsService.getAll(accessToken, { status, limit: 500 }).then((r) => r.data);
+    Promise.all(RESOLVED_STATUSES.map(fetchAll))
+      .then((results) => setSuggestions(results.flat()))
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [accessToken, role]);
 
   const displayed = suggestions.filter((s) => {
@@ -50,12 +64,12 @@ export default function ArchivedPage() {
 
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center">
-            <Archive className="h-5 w-5 text-slate-500" />
+            <CheckCircle2 className="h-5 w-5 text-slate-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Archived Suggestions</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Closed Suggestions</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              {loading ? "Loading..." : `${suggestions.length} archived suggestion${suggestions.length !== 1 ? "s" : ""}`}
+              {loading ? "Loading..." : `${suggestions.length} resolved suggestion${suggestions.length !== 1 ? "s" : ""}`}
             </p>
           </div>
         </div>
@@ -97,14 +111,14 @@ export default function ArchivedPage() {
           </div>
         </div>
 
-        {loading && <p className="text-slate-400 text-sm py-12 text-center">Loading archived suggestions...</p>}
+        {loading && <p className="text-slate-400 text-sm py-12 text-center">Loading closed suggestions...</p>}
 
         {!loading && displayed.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-20 text-slate-400">
             <div className="h-14 w-14 rounded-full bg-slate-50 flex items-center justify-center">
-              <Archive className="h-7 w-7 text-slate-300" />
+              <CheckCircle2 className="h-7 w-7 text-slate-300" />
             </div>
-            <p className="text-sm font-semibold text-slate-500">No archived suggestions found</p>
+            <p className="text-sm font-semibold text-slate-500">No closed suggestions found</p>
             {(search || categoryFilter) && (
               <button onClick={() => { setSearch(""); setCategoryFilter(""); }} className="text-xs text-blue-600 hover:underline">
                 Clear filters
@@ -119,7 +133,7 @@ export default function ArchivedPage() {
 
         <div className="space-y-2">
           {!loading && displayed.map((s) => {
-            const archiveReview = [...s.reviews].reverse().find((r) => r.statusChanged === "ARCHIVED");
+            const lastReview = [...s.reviews].reverse()[0];
             const dt = new Date(s.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
             return (
               <div
@@ -137,7 +151,9 @@ export default function ArchivedPage() {
                         </span>
                       ) : null;
                     })}
-                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 font-semibold uppercase tracking-wider">Archived</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${STATUS_BADGE[s.status] ?? "bg-slate-100 text-slate-400"}`}>
+                      {STATUS_LABEL[s.status] ?? s.status}
+                    </span>
                   </div>
                   <p className="text-sm font-bold text-slate-700 truncate">{s.title}</p>
                   <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{s.description}</p>
@@ -148,8 +164,8 @@ export default function ArchivedPage() {
                       <span className="flex items-center gap-1"><EyeOff className="h-3 w-3" /> Anonymous</span>
                     )}
                     <span>· {dt}</span>
-                    {archiveReview?.note && (
-                      <span className="italic truncate max-w-65">· "{archiveReview.note}"</span>
+                    {lastReview?.note && (
+                      <span className="italic truncate max-w-65">· "{lastReview.note}"</span>
                     )}
                   </div>
                 </div>

@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory, calcWeight } from "@/services/sims.service";
 import { AlertCircle, Clock, HelpCircle, ChevronRight, EyeOff, Users, Inbox } from "lucide-react";
 
-const REVIEW_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "NEEDS_CLARIFICATION"];
+const REVIEW_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"];
 
 const SECTION_CONFIG: Record<string, {
   label: string;
@@ -26,13 +26,21 @@ const SECTION_CONFIG: Record<string, {
     icon: <Inbox className="h-4 w-4 text-slate-500" />,
     accentBar: "bg-slate-300",
   },
-  NEEDS_CLARIFICATION: {
-    label: "Needs Clarification",
-    description: "Employee response required before review can continue.",
+  ON_HOLD: {
+    label: "On Hold",
+    description: "Paused — awaiting further information or a decision.",
     badge: "bg-orange-100 text-orange-700",
     headerBg: "bg-orange-50 border-orange-100",
     icon: <HelpCircle className="h-4 w-4 text-orange-500" />,
     accentBar: "bg-orange-400",
+  },
+  SELECTED_FOR_SGA: {
+    label: "Selected for SGA",
+    description: "Escalated to a Small Group Activity for deeper evaluation.",
+    badge: "bg-indigo-100 text-indigo-700",
+    headerBg: "bg-indigo-50 border-indigo-100",
+    icon: <AlertCircle className="h-4 w-4 text-indigo-500" />,
+    accentBar: "bg-indigo-400",
   },
   UNDER_REVIEW: {
     label: "Under Review",
@@ -146,12 +154,15 @@ export default function ReviewsPage() {
 
   const grouped = useMemo(() => {
     const unassigned: Suggestion[] = [];
-    const needsClarification: Suggestion[] = [];
+    const onHold: Suggestion[] = [];
+    const selectedForSGA: Suggestion[] = [];
     const underReview: Suggestion[] = [];
 
     suggestions.forEach((s) => {
-      if (s.status === "NEEDS_CLARIFICATION") {
-        needsClarification.push(s);
+      if (s.status === "ON_HOLD") {
+        onHold.push(s);
+      } else if (s.status === "SELECTED_FOR_SGA") {
+        selectedForSGA.push(s);
       } else if (!s.committeeId) {
         unassigned.push(s);
       } else {
@@ -159,16 +170,16 @@ export default function ReviewsPage() {
       }
     });
 
-    return { UNASSIGNED: unassigned, NEEDS_CLARIFICATION: needsClarification, UNDER_REVIEW: underReview };
+    return { UNASSIGNED: unassigned, ON_HOLD: onHold, SELECTED_FOR_SGA: selectedForSGA, UNDER_REVIEW: underReview };
   }, [suggestions]);
 
   const totalPending = suggestions.length;
-  const urgentCount = grouped.NEEDS_CLARIFICATION.length;
+  const urgentCount = grouped.ON_HOLD.length;
   const unassignedCount = grouped.UNASSIGNED.length;
 
   const visibleSections = (canAssign
-    ? ["UNASSIGNED", "NEEDS_CLARIFICATION", "UNDER_REVIEW"]
-    : ["NEEDS_CLARIFICATION", "UNDER_REVIEW"]
+    ? ["UNASSIGNED", "ON_HOLD", "SELECTED_FOR_SGA", "UNDER_REVIEW"]
+    : ["ON_HOLD", "SELECTED_FOR_SGA", "UNDER_REVIEW"]
   ) as (keyof typeof grouped)[];
 
   return (
@@ -196,7 +207,7 @@ export default function ReviewsPage() {
             {!loading && urgentCount > 0 && (
               <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-xl text-sm">
                 <HelpCircle className="h-4 w-4 text-orange-500 shrink-0" />
-                <span className="text-orange-700 font-medium">{urgentCount} need clarification</span>
+                <span className="text-orange-700 font-medium">{urgentCount} on hold</span>
               </div>
             )}
           </div>

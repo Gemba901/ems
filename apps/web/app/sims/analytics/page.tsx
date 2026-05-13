@@ -31,17 +31,16 @@ const CATEGORY_LABELS: Record<SuggestionCategory, string> = {
 };
 
 const STATUS_COLORS: Record<SuggestionStatus, string> = {
-  UNDER_REVIEW:        "#f59e0b",
-  NEEDS_CLARIFICATION: "#f97316",
-  APPROVED:            "#22c55e",
-  REJECTED:            "#ef4444",
-  IMPLEMENTED:         "#10b981",
-  ARCHIVED:            "#94a3b8",
+  UNDER_REVIEW:                "#f59e0b",
+  ON_HOLD:                     "#f97316",
+  SELECTED_FOR_SGA:            "#6366f1",
+  APPROVED_FOR_IMPLEMENTATION: "#10b981",
+  REJECTED:                    "#ef4444",
 };
 
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
-  UNDER_REVIEW: "Under Review", NEEDS_CLARIFICATION: "Needs Clarification",
-  APPROVED: "Approved", REJECTED: "Rejected", IMPLEMENTED: "Implemented", ARCHIVED: "Archived",
+  UNDER_REVIEW: "Under Review", ON_HOLD: "On Hold",
+  SELECTED_FOR_SGA: "Selected for SGA", APPROVED_FOR_IMPLEMENTATION: "Approved for Impl.", REJECTED: "Rejected",
 };
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_COLORS) as SuggestionCategory[];
@@ -124,15 +123,13 @@ export default function AnalyticsPage() {
 
   const kpis = useMemo(() => {
     const total       = suggestions.length;
-    const implemented = suggestions.filter((s) => s.status === "IMPLEMENTED").length;
-    const approved    = suggestions.filter((s) => ["APPROVED","IMPLEMENTED"].includes(s.status)).length;
+    const approved    = suggestions.filter((s) => s.status === "APPROVED_FOR_IMPLEMENTATION").length;
     const rejected    = suggestions.filter((s) => s.status === "REJECTED").length;
-    const pending     = suggestions.filter((s) => ["UNDER_REVIEW"].includes(s.status)).length;
-    const clarify     = suggestions.filter((s) => s.status === "NEEDS_CLARIFICATION").length;
-    const impRate     = total > 0 ? Math.round((implemented / total) * 100) : 0;
-    const approvalRate= total > 0 ? Math.round((approved / total) * 100)    : 0;
-    const rejRate     = total > 0 ? Math.round((rejected / total) * 100)    : 0;
-    return { total, implemented, approved, rejected, pending, clarify, impRate, approvalRate, rejRate };
+    const pending     = suggestions.filter((s) => ["UNDER_REVIEW", "SELECTED_FOR_SGA"].includes(s.status)).length;
+    const onHold      = suggestions.filter((s) => s.status === "ON_HOLD").length;
+    const approvalRate= total > 0 ? Math.round((approved / total) * 100) : 0;
+    const rejRate     = total > 0 ? Math.round((rejected / total) * 100) : 0;
+    return { total, implemented: approved, approved, rejected, pending, clarify: onHold, impRate: approvalRate, approvalRate, rejRate };
   }, [suggestions]);
 
   const categoryData = useMemo(() =>
@@ -140,8 +137,8 @@ export default function AnalyticsPage() {
       name: CATEGORY_LABELS[cat],
       value: suggestions.filter((s) => s.categories.includes(cat)).length,
       color: CATEGORY_COLORS[cat],
-      implemented: suggestions.filter((s) => s.categories.includes(cat) && s.status === "IMPLEMENTED").length,
-      approved:    suggestions.filter((s) => s.categories.includes(cat) && ["APPROVED","IMPLEMENTED"].includes(s.status)).length,
+      implemented: suggestions.filter((s) => s.categories.includes(cat) && s.status === "APPROVED_FOR_IMPLEMENTATION").length,
+      approved:    suggestions.filter((s) => s.categories.includes(cat) && s.status === "APPROVED_FOR_IMPLEMENTATION").length,
     })),
     [suggestions]
   );
@@ -161,8 +158,8 @@ export default function AnalyticsPage() {
       const dept = s.employee?.department?.name ?? "Unknown";
       if (!map[dept]) map[dept] = { total: 0, implemented: 0, approved: 0 };
       map[dept].total++;
-      if (s.status === "IMPLEMENTED") map[dept].implemented++;
-      if (["APPROVED","IMPLEMENTED"].includes(s.status)) map[dept].approved++;
+      if (s.status === "APPROVED_FOR_IMPLEMENTATION") map[dept].implemented++;
+      if (s.status === "APPROVED_FOR_IMPLEMENTATION") map[dept].approved++;
     });
     return Object.entries(map)
       .map(([dept, d]) => ({ dept, ...d, rate: d.total > 0 ? Math.round((d.implemented / d.total) * 100) : 0 }))
@@ -174,7 +171,7 @@ export default function AnalyticsPage() {
     ALL_CATEGORIES.map((cat) => {
       const catSugs = suggestions.filter((s) => s.categories.includes(cat));
       const total   = catSugs.length;
-      const impl    = catSugs.filter((s) => s.status === "IMPLEMENTED").length;
+      const impl    = catSugs.filter((s) => s.status === "APPROVED_FOR_IMPLEMENTATION").length;
       return {
         category: CATEGORY_LABELS[cat],
         submissions: total,

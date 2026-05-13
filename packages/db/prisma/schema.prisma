@@ -233,11 +233,10 @@ model Notification {
 
 enum SuggestionStatus {
   UNDER_REVIEW
-  NEEDS_CLARIFICATION
-  APPROVED
+  APPROVED_FOR_IMPLEMENTATION
   REJECTED
-  IMPLEMENTED
-  ARCHIVED
+  ON_HOLD
+  SELECTED_FOR_SGA
 }
 
 enum SuggestionCategory {

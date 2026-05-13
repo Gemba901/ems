@@ -102,7 +102,7 @@ export default function AdminDashboardPage() {
                 <StatCard
                     label="Suggestions"
                     value={loading ? "—" : stats?.suggestionCount ?? 0}
-                    sub={loading ? undefined : `${stats?.suggestionsByStatus?.["IMPLEMENTED"] ?? 0} implemented`}
+                    sub={loading ? undefined : `${stats?.suggestionsByStatus?.["APPROVED_FOR_IMPLEMENTATION"] ?? 0} approved`}
                     icon={Lightbulb}
                     accent="bg-amber-50 text-amber-600"
                 />
@@ -195,11 +195,11 @@ export default function AdminDashboardPage() {
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {[
-                                { label: "Under Review", key: "UNDER_REVIEW",        color: "text-amber-600",   bg: "bg-amber-50" },
-                                { label: "Needs Input",  key: "NEEDS_CLARIFICATION", color: "text-orange-600",  bg: "bg-orange-50" },
-                                { label: "Approved",     key: "APPROVED",            color: "text-indigo-600",  bg: "bg-indigo-50" },
-                                { label: "Implemented",  key: "IMPLEMENTED",         color: "text-emerald-600", bg: "bg-emerald-50" },
-                                { label: "Rejected",     key: "REJECTED",            color: "text-red-500",     bg: "bg-red-50" },
+                                { label: "Under Review",  key: "UNDER_REVIEW",                color: "text-amber-600",   bg: "bg-amber-50"   },
+                                { label: "On Hold",       key: "ON_HOLD",                     color: "text-orange-600",  bg: "bg-orange-50"  },
+                                { label: "Sel. for SGA",  key: "SELECTED_FOR_SGA",            color: "text-indigo-600",  bg: "bg-indigo-50"  },
+                                { label: "Approved",      key: "APPROVED_FOR_IMPLEMENTATION", color: "text-emerald-600", bg: "bg-emerald-50" },
+                                { label: "Rejected",      key: "REJECTED",                    color: "text-red-500",     bg: "bg-red-50"     },
                             ].map(({ label, key, color, bg }) => (
                                 <div key={key} className={`${bg} rounded-lg px-4 py-3`}>
                                     <p className={`text-xl font-bold tabular-nums ${color}`}>

@@ -87,6 +87,7 @@ export class EmployeeService {
         return this.prisma.department.findMany({
             where: { organizationId },
             orderBy: { name: 'asc' },
+            include: { _count: { select: { employees: true } } },
         });
     }
 
@@ -130,24 +131,58 @@ export class EmployeeService {
         return employee;
     }
 
-    // get all employees in an organization with pagination
-    async getEmployeesByOrganization(organizationId: string, skip: number = 0, take: number = 10) {
+    // get all employees in an organization with pagination, optional search and department filter
+    async getEmployeesByOrganization(
+        organizationId: string,
+        skip: number = 0,
+        take: number = 10,
+        search?: string,
+        departmentId?: string,
+    ) {
+        const where: any = { organizationId };
+        if (departmentId) where.departmentId = departmentId;
+        if (search) {
+            where.OR = [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName:  { contains: search, mode: 'insensitive' } },
+                { email:     { contains: search, mode: 'insensitive' } },
+            ];
+        }
         return this.prisma.employee.findMany({
-            where: { organizationId },
+            where,
             include: {
                 department: true,
-                user: true,
+                user: {
+                    include: {
+                        organizations: {
+                            where: { organizationId },
+                            include: { role: true },
+                        },
+                    },
+                },
             },
+            orderBy: { firstName: 'asc' },
             skip,
             take,
         });
     }
 
-    // count total employees in an organization
-    async countEmployeesByOrganization(organizationId: string): Promise<number> {
-        return this.prisma.employee.count({
-            where: { organizationId }
-        });
+    // count employees in an organization, respecting the same filters as getEmployeesByOrganization
+    async countEmployeesByOrganization(
+        organizationId: string,
+        search?: string,
+        departmentId?: string,
+    ): Promise<number> {
+        const where: any = { organizationId };
+        if (departmentId) where.departmentId = departmentId;
+        if (search) {
+            where.OR = [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName:  { contains: search, mode: 'insensitive' } },
+                { email:     { contains: search, mode: 'insensitive' } },
+            ];
+        }
+        return this.prisma.employee.count({ where });
     }
 
     // get employees in a specific department with pagination
@@ -199,6 +234,70 @@ export class EmployeeService {
         }
 
         return updatedEmployee;
+    }
+
+    // aggregate workforce stats for the HR reports page
+    async getOrganizationStats(organizationId: string) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const [total, withActiveAccounts, recentlyAdded, departments, roleGroups, recentEmployees] = await Promise.all([
+            this.prisma.employee.count({ where: { organizationId } }),
+            // Only count employees whose linked user has actually set a password
+            this.prisma.employee.count({
+                where: { organizationId, user: { password: { not: null } } },
+            }),
+            this.prisma.employee.count({ where: { organizationId, createdAt: { gte: thirtyDaysAgo } } }),
+            this.prisma.department.findMany({
+                where: { organizationId },
+                include: { _count: { select: { employees: true } } },
+                orderBy: { name: 'asc' },
+            }),
+            this.prisma.userOrganization.groupBy({
+                by: ['roleId'],
+                where: { organizationId },
+                _count: { roleId: true },
+            }),
+            this.prisma.employee.findMany({
+                where: { organizationId },
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+                include: {
+                    department: { select: { name: true } },
+                    user: { select: { password: true } },
+                },
+            }),
+        ]);
+
+        const roles = roleGroups.length
+            ? await this.prisma.role.findMany({ where: { id: { in: roleGroups.map(r => r.roleId) } } })
+            : [];
+
+        return {
+            total,
+            withAccounts: withActiveAccounts,
+            withoutAccounts: total - withActiveAccounts,
+            recentlyAdded,
+            byDepartment: departments
+                .map(d => ({ name: d.name, count: d._count.employees }))
+                .filter(d => d.count > 0)
+                .sort((a, b) => b.count - a.count),
+            byRole: roleGroups
+                .map(r => ({
+                    name: roles.find(role => role.id === r.roleId)?.name ?? 'Unknown',
+                    count: r._count.roleId,
+                }))
+                .sort((a, b) => b.count - a.count),
+            recentEmployees: recentEmployees.map(e => ({
+                id: e.id,
+                firstName: e.firstName,
+                lastName: e.lastName,
+                email: e.email,
+                department: e.department?.name ?? null,
+                createdAt: e.createdAt.toISOString(),
+                hasActiveAccount: e.user?.password != null,
+            })),
+        };
     }
 
     // admin updates their org's theme color

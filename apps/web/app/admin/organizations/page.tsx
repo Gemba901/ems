@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { AdminService, Organization, OrgStatus, ModuleType, AVAILABLE_MODULES } from "@/services/admin.service";
+import { uploadImage } from "@/services/uploads.service";
 import {
     Search, Plus, ChevronRight, ChevronLeft,
     CircleDot, Building2, X, Loader2,
@@ -66,6 +67,8 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
         firstName: "", lastName: "", email: "", phone: "",
     });
     const [selectedModules, setSelectedModules] = useState<ModuleType[]>([]);
+    const [logoUploading, setLogoUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     function set(field: keyof typeof form, value: string) {
         setForm(prev => ({ ...prev, [field]: value }));
@@ -81,6 +84,24 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
         setSelectedModules(prev =>
             prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod]
         );
+    }
+
+    async function handleLogoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setLogoUploading(true);
+        setError(null);
+
+        try {
+            const { fileUrl } = await uploadImage(file, "logos", token);
+            set("logoUrl", fileUrl);
+        } catch (err: any) {
+            setError(err.message || "Failed to upload logo.");
+        } finally {
+            setLogoUploading(false);
+            e.target.value = "";
+        }
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -122,6 +143,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
         setForm({ name: "", industry: "", email: "", phone: "", address: "", logoUrl: "" });
         setAdminForm({ firstName: "", lastName: "", email: "", phone: "" });
         setSelectedModules([]);
+        setLogoUploading(false);
         setError(null);
         onClose();
     }
@@ -225,18 +247,27 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
                     </Field>
 
                     <Field label="Logo URL">
-                        <div className="relative">
-                            <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                            <input
-                                type="url"
-                                value={form.logoUrl}
-                                onChange={e => set("logoUrl", e.target.value)}
-                                className={`${inputCls} pl-9`}
-                                placeholder="https://..."
-                            />
+                        <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileInputRef}
+                            className="hidden"
+                            onChange={handleLogoSelect}
+                        />
+                        <div className="flex flex-col gap-2">
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={logoUploading}
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                                {logoUploading ? "Uploading logo…" : form.logoUrl ? "Replace logo" : "Upload logo"}
+                            </button>
+                            <p className="text-xs text-slate-400">PNG, JPG, or GIF. The logo preview updates automatically.</p>
                         </div>
                         {form.logoUrl && (
-                            <div className="flex items-center gap-2 mt-1.5">
+                            <div className="flex items-center gap-2 mt-3">
                                 <img
                                     src={form.logoUrl}
                                     alt="preview"
@@ -355,7 +386,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
                         </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={submitting || !form.name.trim() || !adminForm.firstName.trim() || !adminForm.lastName.trim() || !adminForm.email.trim() || !adminForm.phone.trim()}
+                            disabled={submitting || logoUploading || !form.name.trim() || !adminForm.firstName.trim() || !adminForm.lastName.trim() || !adminForm.email.trim() || !adminForm.phone.trim()}
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                         >
                             {submitting ? (

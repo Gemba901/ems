@@ -11,6 +11,7 @@ interface User {
     phone: string;
     organizationId: string | null;
     organizationName: string;
+    organizationUrl: string | null;
     roleId: string;
     roleLevel: Role;
 }

@@ -11,13 +11,14 @@ export interface JwtPayload {
     email: string | null;
     phone: string;
     organizationName: string;
+    organizationUrl: string | null;
     roleLevel: Role;
 }
 
 type UserOrganizationRelation = {
     organizationId: string;
     roleId: number;
-    organization: { name: string };
+    organization: { name: string; logoUrl: string | null };
     role: { name: string };
 };
 
@@ -50,7 +51,7 @@ export class AuthService {
         private jwtService: JwtService,
     ) { }
 
-    private buildJwt(user: { id: string; email: string | null; phone: string; name: string }, membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string } }) {
+    private buildJwt(user: { id: string; email: string | null; phone: string; name: string }, membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null } }) {
         const payload: JwtPayload = {
             userId: user.id,
             organizationId: membership.organizationId,
@@ -59,6 +60,7 @@ export class AuthService {
             email: user.email,
             phone: user.phone,
             organizationName: membership.organization.name,
+            organizationUrl: membership.organization.logoUrl,
         };
         return {
             accessToken: this.jwtService.sign(payload),
@@ -97,6 +99,7 @@ export class AuthService {
             organizations: user.organizations.map((m) => ({
                 id: m.organizationId,
                 name: m.organization.name,
+                organizationUrl: m.organization.logoUrl,
             })),
         };
     }
@@ -149,6 +152,7 @@ export class AuthService {
             organizations: user.organizations.map((m) => ({
                 id: m.organizationId,
                 name: m.organization.name,
+                organizationUrl: m.organization.logoUrl,
             })),
         };
 
@@ -190,7 +194,7 @@ export class AuthService {
     async getMyOrg(organizationId: string) {
         return this.prisma.organization.findUnique({
             where: { id: organizationId },
-            select: { id: true, name: true, status: true, modules: true },
+            select: { id: true, name: true, status: true, modules: true, logoUrl: true, primaryColor: true },
         });
     }
 }

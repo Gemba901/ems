@@ -103,4 +103,14 @@ export class PaginationDto {
   @Min(1, { message: 'Limit must be at least 1' })
   @IsOptional()
   limit: number = 10;
+
+  @Expose()
+  @IsString()
+  @IsOptional()
+  search?: string;
+
+  @Expose()
+  @IsString()
+  @IsOptional()
+  departmentId?: string;
 }

@@ -1,0 +1,380 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuthStore } from "@/store/auth.store";
+import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import { Role } from "@/types/role";
+import {
+    Users, Search, Loader2, Check, ShieldCheck, AlertCircle, UserX,
+    ChevronLeft, ChevronRight,
+} from "lucide-react";
+
+const PAGE_SIZE = 10;
+
+const ASSIGNABLE_ROLES: { id: number; name: string; label: string }[] = [
+    { id: 2, name: "ADMIN",      label: "Administrator"       },
+    { id: 3, name: "MANAGEMENT", label: "Management"          },
+    { id: 6, name: "HR",         label: "Human Resources"     },
+    { id: 4, name: "HOD",        label: "Head of Department"  },
+    { id: 5, name: "EMPLOYEE",   label: "Employee"            },
+];
+
+const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
+    SUPER_ADMIN: { bg: "bg-purple-100", text: "text-purple-700" },
+    ADMIN:       { bg: "bg-indigo-100", text: "text-indigo-700" },
+    MANAGEMENT:  { bg: "bg-blue-100",   text: "text-blue-700"   },
+    HR:          { bg: "bg-rose-100",   text: "text-rose-700"   },
+    HOD:         { bg: "bg-amber-100",  text: "text-amber-700"  },
+    EMPLOYEE:    { bg: "bg-slate-100",  text: "text-slate-600"  },
+};
+
+function getInitials(firstName: string, lastName: string) {
+    return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
+}
+
+function getRoleForEmployee(emp: EmployeeApiResponse): { id: number; name: string } | null {
+    return emp.user?.organizations?.[0]?.role ?? null;
+}
+
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+function MemberRow({
+    emp,
+    token,
+    onRoleUpdated,
+}: {
+    emp: EmployeeApiResponse;
+    token: string;
+    onRoleUpdated: (empId: string, roleId: number, roleName: string) => void;
+}) {
+    const currentRole = getRoleForEmployee(emp);
+    const [selectedId, setSelectedId] = useState<number>(currentRole?.id ?? 5);
+    const [saveState, setSaveState] = useState<SaveState>("idle");
+    const [errorMsg, setErrorMsg] = useState("");
+
+    // keep local selection in sync when parent refreshes data (e.g. page change)
+    useEffect(() => {
+        setSelectedId(currentRole?.id ?? 5);
+        setSaveState("idle");
+        setErrorMsg("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [emp.id]);
+
+    const isDirty = selectedId !== (currentRole?.id ?? 5);
+    const hasAccount = !!emp.userId;
+
+    const handleSave = async () => {
+        setSaveState("saving");
+        setErrorMsg("");
+        try {
+            await EmployeeService.updateRole(emp.id, selectedId, token);
+            const role = ASSIGNABLE_ROLES.find((r) => r.id === selectedId);
+            onRoleUpdated(emp.id, selectedId, role?.name ?? "");
+            setSaveState("saved");
+            setTimeout(() => setSaveState("idle"), 2500);
+        } catch (e: any) {
+            setErrorMsg(e.message || "Failed to update role");
+            setSaveState("error");
+            setTimeout(() => setSaveState("idle"), 3500);
+        }
+    };
+
+    const handleReset = () => {
+        setSelectedId(currentRole?.id ?? 5);
+        setSaveState("idle");
+        setErrorMsg("");
+    };
+
+    const roleColor = currentRole ? (ROLE_COLORS[currentRole.name] ?? ROLE_COLORS.EMPLOYEE) : null;
+
+    return (
+        <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+            {/* Avatar + Name */}
+            <td className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-slate-800 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {getInitials(emp.firstName, emp.lastName)}
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 truncate">
+                            {emp.firstName} {emp.lastName}
+                        </p>
+                        <p className="text-xs text-slate-400 truncate">{emp.email}</p>
+                    </div>
+                </div>
+            </td>
+
+            {/* Department */}
+            <td className="px-4 py-3 hidden md:table-cell">
+                <span className="text-sm text-slate-500">
+                    {emp.department?.name ?? <span className="text-slate-300 italic">Unassigned</span>}
+                </span>
+            </td>
+
+            {/* Current role badge */}
+            <td className="px-4 py-3 hidden sm:table-cell">
+                {hasAccount && roleColor ? (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor.bg} ${roleColor.text}`}>
+                        {currentRole?.name ?? "—"}
+                    </span>
+                ) : (
+                    <span className="text-xs text-slate-300 italic flex items-center gap-1">
+                        <UserX className="h-3 w-3" /> No account
+                    </span>
+                )}
+            </td>
+
+            {/* Role selector + actions */}
+            <td className="px-4 py-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {hasAccount ? (
+                        <>
+                            <select
+                                value={selectedId}
+                                onChange={(e) => { setSelectedId(Number(e.target.value)); setSaveState("idle"); setErrorMsg(""); }}
+                                disabled={saveState === "saving"}
+                                className={`text-sm border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-colors disabled:opacity-50 ${
+                                    isDirty ? "border-indigo-300 text-indigo-700" : "border-slate-200 text-slate-700"
+                                }`}
+                            >
+                                {ASSIGNABLE_ROLES.map((r) => (
+                                    <option key={r.id} value={r.id}>{r.label}</option>
+                                ))}
+                            </select>
+
+                            {isDirty && (
+                                <>
+                                    <button
+                                        onClick={handleSave}
+                                        disabled={saveState === "saving"}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                                    >
+                                        {saveState === "saving" ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                            <Check className="h-3.5 w-3.5" />
+                                        )}
+                                        Save
+                                    </button>
+                                    <button
+                                        onClick={handleReset}
+                                        className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                                    >
+                                        Reset
+                                    </button>
+                                </>
+                            )}
+
+                            {saveState === "saved" && !isDirty && (
+                                <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                                    <Check className="h-3.5 w-3.5" /> Saved
+                                </span>
+                            )}
+
+                            {saveState === "error" && (
+                                <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                                    <AlertCircle className="h-3.5 w-3.5" /> {errorMsg}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="text-xs text-slate-300 italic">No user account linked</span>
+                    )}
+                </div>
+            </td>
+        </tr>
+    );
+}
+
+function MembersContent() {
+    const { user, accessToken } = useAuthStore();
+
+    const [employees, setEmployees] = useState<EmployeeApiResponse[]>([]);
+    const [total, setTotal] = useState<number | null>(null);
+    const [totalPages, setTotalPages] = useState(1);
+    const [loading, setLoading] = useState(true);
+
+    const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [page, setPage] = useState(1);
+
+    const orgId = user?.organizationId ?? "";
+
+    // debounce search
+    useEffect(() => {
+        const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 350);
+        return () => clearTimeout(t);
+    }, [search]);
+
+    // fetch page from server
+    useEffect(() => {
+        if (!accessToken || !orgId) return;
+        setLoading(true);
+        EmployeeService.getByOrganization(orgId, accessToken, page, PAGE_SIZE, debouncedSearch || undefined)
+            .then((res) => {
+                setEmployees(res.data);
+                setTotal(res.pagination.total);
+                setTotalPages(Math.max(1, res.pagination.pages));
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [accessToken, orgId, page, debouncedSearch]);
+
+    const handleRoleUpdated = (empId: string, roleId: number, roleName: string) => {
+        setEmployees((prev) =>
+            prev.map((e) => {
+                if (e.id !== empId || !e.user) return e;
+                return {
+                    ...e,
+                    user: {
+                        ...e.user,
+                        organizations: e.user.organizations.map((o) => ({
+                            ...o,
+                            roleId,
+                            role: { id: roleId, name: roleName },
+                        })),
+                    },
+                };
+            }),
+        );
+    };
+
+    const startIndex = (page - 1) * PAGE_SIZE + 1;
+    const endIndex = Math.min(page * PAGE_SIZE, total ?? 0);
+
+    return (
+        <div className="max-w-7xl mx-auto space-y-6">
+            {/* Page header */}
+            <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                    <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">Team Members</h1>
+                    <p className="text-sm text-slate-500">Manage roles for everyone in your organization.</p>
+                </div>
+            </div>
+
+            {/* Search + count */}
+            <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <input
+                        type="text"
+                        placeholder="Search by name, email or department…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    />
+                </div>
+                {total !== null && (
+                    <span className="text-sm text-slate-400 font-medium shrink-0">
+                        {total} member{total !== 1 ? "s" : ""}
+                    </span>
+                )}
+            </div>
+
+            {/* Table card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                {loading ? (
+                    <div className="flex items-center justify-center py-16 gap-3 text-slate-400">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span className="text-sm">Loading members…</span>
+                    </div>
+                ) : employees.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+                        <Users className="h-8 w-8" />
+                        <p className="text-sm">
+                            {debouncedSearch ? "No members match your search." : "No members found."}
+                        </p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-slate-100 bg-slate-50">
+                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Member</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Department</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Current Role</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Assign Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {employees.map((emp) => (
+                                        <MemberRow
+                                            key={emp.id}
+                                            emp={emp}
+                                            token={accessToken ?? ""}
+                                            onRoleUpdated={handleRoleUpdated}
+                                        />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination footer */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50">
+                                <p className="text-xs text-slate-500">
+                                    Showing {startIndex}–{endIndex} of {total} members
+                                </p>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        disabled={page === 1}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                                        .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                                            if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                                            acc.push(p);
+                                            return acc;
+                                        }, [])
+                                        .map((p, i) =>
+                                            p === "…" ? (
+                                                <span key={`ellipsis-${i}`} className="px-1 text-xs text-slate-300">…</span>
+                                            ) : (
+                                                <button
+                                                    key={p}
+                                                    onClick={() => setPage(p as number)}
+                                                    className={`h-7 w-7 text-xs font-semibold rounded-lg transition-colors ${
+                                                        p === page
+                                                            ? "bg-indigo-600 text-white border border-indigo-600"
+                                                            : "border border-slate-200 text-slate-600 hover:bg-white hover:border-slate-300"
+                                                    }`}
+                                                >
+                                                    {p}
+                                                </button>
+                                            )
+                                        )}
+
+                                    <button
+                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={page === totalPages}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export default function MembersPage() {
+    return (
+        <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN]}>
+            <MembersContent />
+        </ProtectedRoute>
+    );
+}

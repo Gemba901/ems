@@ -12,6 +12,7 @@ import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { QuotesModule } from './quotes/quotes.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     CommitteeModule,
     QuotesModule,
     NotificationsModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

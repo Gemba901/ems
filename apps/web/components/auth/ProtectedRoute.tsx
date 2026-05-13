@@ -23,7 +23,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
     }
     if (allowedRoles && allowedRoles.length > 0) {
       if (!allowedRoles.includes(user.roleLevel)) {
-        router.replace("/dashboard");
+        router.replace("/");
         return;
       }
     }

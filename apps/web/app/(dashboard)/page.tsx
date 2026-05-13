@@ -23,6 +23,7 @@ import {
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import DashboardHero from "@/components/DashboardHero";
+import DashboardRoleSection from "@/components/DashboardRoleSection";
 
 // Module registry
 
@@ -166,6 +167,8 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto space-y-10 pb-16">
 
       <DashboardHero />
+
+      <DashboardRoleSection />
 
       {/* Active modules */}
       <section>

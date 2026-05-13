@@ -1,105 +1,415 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
-    Users, Building2, Search, X, ChevronRight,
-    TrendingUp, UserCheck, Briefcase, ChevronLeft,
+    Building2, Search, X, ChevronRight, TrendingUp,
+    ChevronLeft, Loader2, BarChart3, UserPlus,
+    CheckCircle2, ArrowRight, AlertCircle,
 } from "lucide-react";
+import Link from "next/link";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 15;
 
-function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: React.ElementType; color: string }) {
+const ASSIGNABLE_ROLES = [
+    { id: 2, label: "Admin" },
+    { id: 6, label: "HR" },
+    { id: 3, label: "Management" },
+    { id: 4, label: "Head of Department" },
+    { id: 5, label: "Employee" },
+];
+
+// ─── Onboarding slide-over ────────────────────────────────────────────────────
+
+interface OnboardingPanelProps {
+    open: boolean;
+    onClose: () => void;
+    departments: { id: string; name: string }[];
+    accessToken: string;
+    onSuccess: (name: string) => void;
+}
+
+function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }: OnboardingPanelProps) {
+    const [step, setStep] = useState<1 | 2>(1);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const [firstName, setFirstName]       = useState("");
+    const [lastName,  setLastName]        = useState("");
+    const [email,     setEmail]           = useState("");
+    const [phone,     setPhone]           = useState("");
+    const [deptId,    setDeptId]          = useState("");
+    const [roleId,    setRoleId]          = useState<number>(5);
+
+    function resetForm() {
+        setStep(1);
+        setFirstName(""); setLastName(""); setEmail("");
+        setPhone(""); setDeptId(""); setRoleId(5);
+        setError(null);
+    }
+
+    function handleClose() {
+        resetForm();
+        onClose();
+    }
+
+    function isValidPhone(p: string) {
+        return /^[71]\d{8}$/.test(p.replace(/\s/g, ""));
+    }
+
+    function canProceed() {
+        return (
+            firstName.trim() !== "" &&
+            lastName.trim() !== "" &&
+            /\S+@\S+\.\S+/.test(email) &&
+            isValidPhone(phone)
+        );
+    }
+
+    async function handleSubmit() {
+        setError(null);
+        setSubmitting(true);
+        try {
+            await EmployeeService.onboard(
+                { firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: `+254${phone.trim()}`, departmentId: deptId || undefined, roleId },
+                accessToken,
+            );
+            const fullName = `${firstName.trim()} ${lastName.trim()}`;
+            resetForm();
+            onSuccess(fullName);
+        } catch (e: any) {
+            setError(e.message || "Failed to onboard employee.");
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    const inputCls = "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400 transition-all";
+    const labelCls = "block text-xs font-semibold text-slate-600 mb-1.5";
+
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
-            <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-                <Icon className="h-5 w-5" />
+        <>
+            {/* Backdrop */}
+            <div
+                className={`fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                onClick={handleClose}
+            />
+
+            {/* Panel */}
+            <div
+                className={`fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
+            >
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                            <UserPlus className="h-4 w-4 text-indigo-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-slate-900">Onboard Employee</p>
+                            <p className="text-[11px] text-slate-400">Step {step} of 2</p>
+                        </div>
+                    </div>
+                    <button onClick={handleClose} className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+
+                {/* Step indicator */}
+                <div className="flex items-center gap-2 px-6 pt-5">
+                    {[1, 2].map((s) => (
+                        <div key={s} className="flex items-center gap-2 flex-1">
+                            <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 transition-colors ${step >= s ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-400"}`}>
+                                {step > s ? <CheckCircle2 className="h-3.5 w-3.5" /> : s}
+                            </div>
+                            <span className={`text-xs font-medium ${step >= s ? "text-slate-700" : "text-slate-400"}`}>
+                                {s === 1 ? "Personal details" : "Role & department"}
+                            </span>
+                            {s < 2 && <div className={`flex-1 h-px ${step > s ? "bg-indigo-300" : "bg-slate-200"}`} />}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+
+                    {error && (
+                        <div className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                            <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                            <p className="text-sm text-red-600">{error}</p>
+                        </div>
+                    )}
+
+                    {step === 1 && (
+                        <>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className={labelCls}>First name <span className="text-red-400">*</span></label>
+                                    <input
+                                        value={firstName}
+                                        onChange={(e) => setFirstName(e.target.value)}
+                                        placeholder="e.g. Jane"
+                                        className={inputCls}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div>
+                                    <label className={labelCls}>Last name <span className="text-red-400">*</span></label>
+                                    <input
+                                        value={lastName}
+                                        onChange={(e) => setLastName(e.target.value)}
+                                        placeholder="e.g. Doe"
+                                        className={inputCls}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className={labelCls}>Work email <span className="text-red-400">*</span></label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="jane.doe@company.com"
+                                    className={inputCls}
+                                />
+                                <p className="text-[11px] text-slate-400 mt-1.5">This will be their login email once they set a password.</p>
+                            </div>
+
+                            <div>
+                                <label className={labelCls}>Phone number <span className="text-red-400">*</span></label>
+                                <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50/50 focus-within:ring-2 focus-within:ring-indigo-500/25 focus-within:border-indigo-400 transition-all">
+                                    <span className="flex items-center px-3 text-sm font-medium text-slate-500 bg-slate-100 border-r border-slate-200 shrink-0 gap-1.5">
+                                        🇰🇪 +254
+                                    </span>
+                                    <input
+                                        type="tel"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                                        placeholder="700 000 000"
+                                        maxLength={9}
+                                        className="flex-1 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none bg-transparent"
+                                    />
+                                </div>
+                                <p className="text-[11px] text-slate-400 mt-1.5">Enter 9 digits after +254 (e.g. 712 345 678).</p>
+                            </div>
+                        </>
+                    )}
+
+                    {step === 2 && (
+                        <>
+                            {/* Preview chip */}
+                            <div className="flex items-center gap-3 bg-indigo-50 rounded-xl px-4 py-3">
+                                <div className="h-9 w-9 rounded-full bg-indigo-200 flex items-center justify-center text-sm font-bold text-indigo-700 shrink-0">
+                                    {firstName[0]?.toUpperCase()}{lastName[0]?.toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-indigo-900">{firstName} {lastName}</p>
+                                    <p className="text-xs text-indigo-500 truncate">{email}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className={labelCls}>Role <span className="text-red-400">*</span></label>
+                                <select
+                                    value={roleId}
+                                    onChange={(e) => setRoleId(Number(e.target.value))}
+                                    className={inputCls}
+                                >
+                                    {ASSIGNABLE_ROLES.map((r) => (
+                                        <option key={r.id} value={r.id}>{r.label}</option>
+                                    ))}
+                                </select>
+                                <p className="text-[11px] text-slate-400 mt-1.5">You can change this later from the members settings.</p>
+                            </div>
+
+                            <div>
+                                <label className={labelCls}>Department <span className="text-slate-300 font-normal">(optional)</span></label>
+                                <select
+                                    value={deptId}
+                                    onChange={(e) => setDeptId(e.target.value)}
+                                    className={inputCls}
+                                >
+                                    <option value="">Not assigned yet</option>
+                                    {departments.map((d) => (
+                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Summary card */}
+                            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2 text-xs">
+                                <p className="font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Summary</p>
+                                <div className="flex justify-between"><span className="text-slate-500">Name</span><span className="font-medium text-slate-900">{firstName} {lastName}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Email</span><span className="font-medium text-slate-900 truncate max-w-[200px]">{email}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Phone</span><span className="font-medium text-slate-900">+254 {phone}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Role</span><span className="font-medium text-slate-900">{ASSIGNABLE_ROLES.find(r => r.id === roleId)?.label}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Department</span><span className="font-medium text-slate-900">{departments.find(d => d.id === deptId)?.name ?? "Unassigned"}</span></div>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-slate-100 px-6 py-4 flex items-center justify-between gap-3">
+                    {step === 1 ? (
+                        <button onClick={handleClose} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
+                            Cancel
+                        </button>
+                    ) : (
+                        <button onClick={() => { setStep(1); setError(null); }} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors">
+                            <ChevronLeft className="h-4 w-4" /> Back
+                        </button>
+                    )}
+
+                    {step === 1 ? (
+                        <button
+                            onClick={() => { setError(null); setStep(2); }}
+                            disabled={!canProceed()}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Next <ArrowRight className="h-4 w-4" />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleSubmit}
+                            disabled={submitting}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Onboarding…</> : "Confirm & Onboard"}
+                        </button>
+                    )}
+                </div>
             </div>
-            <div>
-                <p className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{value}</p>
-                <p className="text-xs text-slate-400 mt-0.5 font-medium">{label}</p>
+        </>
+    );
+}
+
+// ─── Success toast ────────────────────────────────────────────────────────────
+
+function SuccessToast({ name, onDismiss, onAnother }: { name: string; onDismiss: () => void; onAnother: () => void }) {
+    useEffect(() => {
+        const t = setTimeout(onDismiss, 6000);
+        return () => clearTimeout(t);
+    }, [onDismiss]);
+
+    return (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-white border border-emerald-200 shadow-xl rounded-2xl px-5 py-4 animate-in slide-in-from-bottom-4 duration-300">
+            <div className="h-9 w-9 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            </div>
+            <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">{name} onboarded</p>
+                <p className="text-xs text-slate-400">They can now set a password to log in.</p>
+            </div>
+            <div className="flex items-center gap-2 ml-2 shrink-0">
+                <button onClick={onAnother} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors whitespace-nowrap">
+                    + Add another
+                </button>
+                <button onClick={onDismiss} className="text-slate-300 hover:text-slate-500 transition-colors">
+                    <X className="h-4 w-4" />
+                </button>
             </div>
         </div>
     );
 }
+
+// ─── Main content ─────────────────────────────────────────────────────────────
 
 function HRContent() {
     const { user, accessToken } = useAuthStore();
     const router = useRouter();
 
     const [employees, setEmployees] = useState<EmployeeApiResponse[]>([]);
-    const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+    const [total, setTotal] = useState<number | null>(null);
+    const [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(true);
+
     const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [deptFilter, setDeptFilter] = useState("");
     const [page, setPage] = useState(1);
+
+    const [departments, setDepartments] = useState<{ id: string; name: string; _count: { employees: number } }[]>([]);
+
+    // onboarding state
+    const [panelOpen, setPanelOpen] = useState(false);
+    const [successName, setSuccessName] = useState<string | null>(null);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     const orgId = user?.organizationId ?? "";
 
     useEffect(() => {
+        const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 350);
+        return () => clearTimeout(t);
+    }, [search]);
+
+    useEffect(() => { setPage(1); }, [deptFilter]);
+
+    useEffect(() => {
         if (!accessToken || !orgId) return;
-        Promise.all([
-            EmployeeService.getByOrganization(orgId, accessToken, 1, 200),
-            EmployeeService.getDepartments(orgId, accessToken),
-        ])
-            .then(([empRes, depts]) => {
-                setEmployees(empRes.data);
-                setDepartments(depts);
+        EmployeeService.getDepartments(orgId, accessToken)
+            .then(setDepartments)
+            .catch(console.error);
+    }, [accessToken, orgId, refreshKey]);
+
+    useEffect(() => {
+        if (!accessToken || !orgId) return;
+        setLoading(true);
+        EmployeeService.getByOrganization(orgId, accessToken, page, PAGE_SIZE, debouncedSearch || undefined, deptFilter || undefined)
+            .then((res) => {
+                setEmployees(res.data);
+                setTotal(res.pagination.total);
+                setTotalPages(Math.max(1, res.pagination.pages));
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [accessToken, orgId]);
+    }, [accessToken, orgId, page, debouncedSearch, deptFilter, refreshKey]);
 
-    const filtered = useMemo(() => {
-        const q = search.toLowerCase();
-        return employees.filter((e) => {
-            const matchSearch = !q || `${e.firstName} ${e.lastName}`.toLowerCase().includes(q) || e.email.toLowerCase().includes(q);
-            const matchDept = !deptFilter || e.departmentId === deptFilter;
-            return matchSearch && matchDept;
-        });
-    }, [employees, search, deptFilter]);
+    const totalDeptEmployees = departments.reduce((s, d) => s + d._count.employees, 0);
 
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-    const handleSearchChange = (val: string) => { setSearch(val); setPage(1); };
-    const handleDeptChange = (val: string) => { setDeptFilter(val); setPage(1); };
-
-    // Org-level stats derived from employees
-    const byDept = useMemo(() => {
-        const map: Record<string, number> = {};
-        for (const e of employees) {
-            const name = e.department?.name ?? "Unassigned";
-            map[name] = (map[name] ?? 0) + 1;
-        }
-        return Object.entries(map).sort((a, b) => b[1] - a[1]);
-    }, [employees]);
-
-    const withAccounts = employees.filter((e) => e.userId).length;
+    function handleOnboardSuccess(name: string) {
+        setPanelOpen(false);
+        setSuccessName(name);
+        setRefreshKey((k) => k + 1);
+        setPage(1);
+    }
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900">HR Dashboard</h1>
-                <p className="text-sm text-slate-500 mt-1">Manage and review your organization's workforce.</p>
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">Employee Directory</h1>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {total !== null
+                            ? `${total.toLocaleString()} employee${total !== 1 ? "s" : ""} · ${departments.length} department${departments.length !== 1 ? "s" : ""}`
+                            : "Loading…"}
+                    </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                        href="/hr/reports"
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                    >
+                        <BarChart3 className="h-3.5 w-3.5" />
+                        Analytics
+                    </Link>
+                    <button
+                        onClick={() => setPanelOpen(true)}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+                    >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Onboard Employee
+                    </button>
+                </div>
             </div>
 
-            {/* KPI row */}
-            {!loading && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard label="Total Employees"   value={employees.length}    icon={Users}      color="bg-sky-50 text-sky-600" />
-                    <StatCard label="Departments"       value={departments.length}  icon={Building2}  color="bg-indigo-50 text-indigo-600" />
-                    <StatCard label="With Accounts"     value={withAccounts}        icon={UserCheck}  color="bg-emerald-50 text-emerald-600" />
-                    <StatCard label="Active Roles"      value={new Set(employees.map(e => e.user?.organizations?.[0]?.role?.name).filter(Boolean)).size}  icon={Briefcase}  color="bg-amber-50 text-amber-600" />
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
                 {/* Employee table */}
                 <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     {/* Toolbar */}
@@ -108,19 +418,19 @@ function HRContent() {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                             <input
                                 value={search}
-                                onChange={(e) => handleSearchChange(e.target.value)}
+                                onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search employees…"
                                 className="w-full pl-8 pr-8 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                             />
                             {search && (
-                                <button onClick={() => handleSearchChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                                <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
                                     <X className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
                                 </button>
                             )}
                         </div>
                         <select
                             value={deptFilter}
-                            onChange={(e) => handleDeptChange(e.target.value)}
+                            onChange={(e) => setDeptFilter(e.target.value)}
                             className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
                         >
                             <option value="">All departments</option>
@@ -128,7 +438,11 @@ function HRContent() {
                                 <option key={d.id} value={d.id}>{d.name}</option>
                             ))}
                         </select>
-                        <span className="ml-auto text-[11px] text-slate-400 whitespace-nowrap">{filtered.length} of {employees.length}</span>
+                        {total !== null && (
+                            <span className="ml-auto text-[11px] text-slate-400 whitespace-nowrap">
+                                {total} employee{total !== 1 ? "s" : ""}
+                            </span>
+                        )}
                     </div>
 
                     <div className="overflow-x-auto">
@@ -142,22 +456,37 @@ function HRContent() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {loading && (
+                                {loading ? (
                                     <tr>
-                                        <td colSpan={4} className="px-5 py-10 text-center text-slate-400 text-sm">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <div className="h-4 w-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                                        <td colSpan={4} className="px-5 py-10 text-center">
+                                            <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
+                                                <Loader2 className="h-4 w-4 animate-spin" />
                                                 Loading employees…
                                             </div>
                                         </td>
                                     </tr>
-                                )}
-                                {!loading && filtered.length === 0 && (
+                                ) : employees.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-5 py-10 text-center text-slate-400 text-sm">No employees match your filters.</td>
+                                        <td colSpan={4} className="px-5 py-10 text-center">
+                                            <div className="flex flex-col items-center gap-3">
+                                                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                                    <UserPlus className="h-5 w-5 text-slate-400" />
+                                                </div>
+                                                <p className="text-sm text-slate-400">
+                                                    {search || deptFilter ? "No employees match your filters." : "No employees yet."}
+                                                </p>
+                                                {!search && !deptFilter && (
+                                                    <button
+                                                        onClick={() => setPanelOpen(true)}
+                                                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                                    >
+                                                        Onboard your first employee →
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
-                                )}
-                                {!loading && paginated.map((emp) => {
+                                ) : employees.map((emp) => {
                                     const roleName = emp.user?.organizations?.[0]?.role?.name ?? "—";
                                     return (
                                         <tr
@@ -202,7 +531,7 @@ function HRContent() {
                     {!loading && totalPages > 1 && (
                         <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
                             <p className="text-xs text-slate-400">
-                                Page {page} of {totalPages} · {filtered.length} employees
+                                Page {page} of {totalPages} · {total} employees
                             </p>
                             <div className="flex items-center gap-1">
                                 <button
@@ -227,9 +556,7 @@ function HRContent() {
                                                 key={p}
                                                 onClick={() => setPage(p as number)}
                                                 className={`min-w-[28px] h-7 rounded-lg text-xs font-medium transition-colors ${
-                                                    page === p
-                                                        ? "bg-indigo-600 text-white"
-                                                        : "text-slate-600 hover:bg-slate-100"
+                                                    page === p ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100"
                                                 }`}
                                             >
                                                 {p}
@@ -248,28 +575,26 @@ function HRContent() {
                     )}
                 </div>
 
-                {/* Department breakdown */}
+                {/* Department sidebar */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
                         <TrendingUp className="h-4 w-4 text-slate-400" />
                         <p className="text-sm font-semibold text-slate-800">Headcount by Department</p>
                     </div>
                     <div className="p-5 space-y-3">
-                        {loading && (
+                        {departments.length === 0 && (
                             <div className="flex items-center gap-2 text-xs text-slate-400 py-4 justify-center">
-                                <div className="h-3 w-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                                <Loader2 className="h-3 w-3 animate-spin" />
                                 Loading…
                             </div>
                         )}
-                        {!loading && byDept.length === 0 && (
-                            <p className="text-xs text-slate-400 text-center py-4">No department data</p>
-                        )}
-                        {!loading && byDept.map(([name, count]) => {
-                            const pct = employees.length > 0 ? Math.round((count / employees.length) * 100) : 0;
+                        {departments.map((dept) => {
+                            const count = dept._count.employees;
+                            const pct = totalDeptEmployees > 0 ? Math.round((count / totalDeptEmployees) * 100) : 0;
                             return (
-                                <div key={name}>
+                                <div key={dept.id}>
                                     <div className="flex items-center justify-between text-xs mb-1">
-                                        <span className="font-medium text-slate-700 truncate max-w-[140px]">{name}</span>
+                                        <span className="font-medium text-slate-700 truncate max-w-[140px]">{dept.name}</span>
                                         <span className="text-slate-400 tabular-nums shrink-0 ml-2">{count} ({pct}%)</span>
                                     </div>
                                     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -281,6 +606,24 @@ function HRContent() {
                     </div>
                 </div>
             </div>
+
+            {/* Onboarding slide-over */}
+            <OnboardingPanel
+                open={panelOpen}
+                onClose={() => setPanelOpen(false)}
+                departments={departments}
+                accessToken={accessToken ?? ""}
+                onSuccess={handleOnboardSuccess}
+            />
+
+            {/* Success toast */}
+            {successName && (
+                <SuccessToast
+                    name={successName}
+                    onDismiss={() => setSuccessName(null)}
+                    onAnother={() => { setSuccessName(null); setPanelOpen(true); }}
+                />
+            )}
         </div>
     );
 }

@@ -18,12 +18,11 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 
 // SUBMITTED removed — suggestions begin life at UNDER_REVIEW
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
-  UNDER_REVIEW: ['NEEDS_CLARIFICATION', 'APPROVED', 'REJECTED', 'ARCHIVED'],
-  NEEDS_CLARIFICATION: ['UNDER_REVIEW', 'ARCHIVED'],
-  APPROVED: ['IMPLEMENTED', 'ARCHIVED'],
-  REJECTED: ['ARCHIVED'],
-  IMPLEMENTED: ['ARCHIVED'],
-  ARCHIVED: [],
+  UNDER_REVIEW:               ['ON_HOLD', 'SELECTED_FOR_SGA', 'APPROVED_FOR_IMPLEMENTATION', 'REJECTED'],
+  ON_HOLD:                    ['UNDER_REVIEW', 'SELECTED_FOR_SGA', 'APPROVED_FOR_IMPLEMENTATION', 'REJECTED'],
+  SELECTED_FOR_SGA:           ['UNDER_REVIEW', 'ON_HOLD', 'APPROVED_FOR_IMPLEMENTATION', 'REJECTED'],
+  APPROVED_FOR_IMPLEMENTATION: [],
+  REJECTED:                   [],
 };
 
 const employeeSelect = {
@@ -126,8 +125,8 @@ export class SimsService {
     if (!suggestion || suggestion.organizationId !== organizationId) {
       throw new NotFoundException('Suggestion not found');
     }
-    if (suggestion.status === 'ARCHIVED') {
-      throw new BadRequestException('Cannot assign a committee to an archived suggestion');
+    if (ALLOWED_TRANSITIONS[suggestion.status].length === 0) {
+      throw new BadRequestException('Cannot assign a committee to a finalised suggestion');
     }
 
     const committee = await this.prisma.steeringCommittee.findUnique({ where: { id: dto.committeeId } });
@@ -372,9 +371,9 @@ export class SimsService {
     // notify employee about status change
     await this.notifications.create({
       employeeId: suggestion.employeeId,
-      type: dto.statusChanged === 'NEEDS_CLARIFICATION' ? 'ACTION_REQUIRED' : 'INFO',
+      type: dto.statusChanged === 'REJECTED' ? 'ACTION_REQUIRED' : 'INFO',
       module: 'SIMS',
-      title: `Your suggestion has been ${dto.statusChanged.toLowerCase().replace('_', ' ')}`,
+      title: `Your suggestion has been ${dto.statusChanged.toLowerCase().replace(/_/g, ' ')}`,
       message: dto.note
         ? `Reviewer note: ${dto.note}`
         : `Your suggestion "${suggestion.title}" status has been updated.`,
@@ -385,56 +384,4 @@ export class SimsService {
     return review;
   }
 
-  // Employee clarification response
-
-  async respondToClarification(id: string, dto: ClarifyDto, userId: string, organizationId: string) {
-    const suggestion = await this.prisma.suggestion.findUnique({ where: { id } });
-    if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
-    if (suggestion.status !== 'NEEDS_CLARIFICATION') {
-      throw new BadRequestException('This suggestion is not awaiting clarification');
-    }
-
-    const employee = await this.resolveEmployee(userId);
-    if (suggestion.employeeId !== employee.id) {
-      throw new ForbiddenException('You can only respond to your own suggestions');
-    }
-
-    const review = await this.prisma.$transaction(async (tx) => {
-      await tx.suggestion.update({ where: { id }, data: { status: 'UNDER_REVIEW' } });
-      return tx.suggestionReview.create({
-        data: {
-          suggestionId: id,
-          reviewerId: employee.id,
-          reviewerCommitteeId: null,
-          statusChanged: 'UNDER_REVIEW',
-          note: dto.note,
-        },
-        include: {
-          reviewer: { select: { id: true, firstName: true, lastName: true } },
-          reviewerCommittee: { select: committeeSelect },
-        },
-      });
-    });
-
-    if (!suggestion.committeeId) return review;
-
-    // notify committee members about clarification response
-    const members = await this.prisma.steeringCommitteeMember.findMany({
-      where: { committeeId: suggestion.committeeId },
-      select: { employeeId: true },
-    });
-
-    await this.notifications.createMany(
-      members.map((m) => ({
-        employeeId: m.employeeId,
-        type: 'INFO' as const,
-        module: 'SIMS',
-        title: 'Clarification received',
-        message: `An employee has responded to a clarification request on "${suggestion.title}".`,
-        actionUrl: `/sims/${id}`,
-        metadata: { suggestionId: id },
-      })),
-    );
-    return review;
-  }
 }

@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 interface LoginStepProps {
   data: AuthState;
   onBack: () => void;
-  onOrgRequired: (organizations: { id: string; name: string }[], selectionToken: string) => void;
+  onOrgRequired: (organizations: { id: string; name: string; organizationUrl: string | null }[], selectionToken: string) => void;
 }
 
 export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepProps) {

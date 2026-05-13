@@ -148,7 +148,7 @@ function BroadcastForm() {
 export default function NotificationsSettingsPage() {
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]}>
-      <div className="max-w-4xl mx-auto py-10 px-4">
+      <div className="max-w-7xl mx-auto py-10 px-4">
         <BroadcastForm />
       </div>
     </ProtectedRoute>

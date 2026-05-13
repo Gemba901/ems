@@ -12,7 +12,7 @@ interface IdentifierStepProps {
     hasPassword: boolean;
     name?: string;
     orgName?: string;
-    organizations?: { id: string; name: string }[];
+    organizations?: { id: string; name: string; organizationUrl: string | null }[];
     setupToken?: string;
   }) => void;
 }
@@ -83,7 +83,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
 
     try {
       const response = await AuthService.verifyIdentifier(resolved);
-      const orgs: { id: string; name: string }[] = response.organizations ?? [];
+      const orgs: { id: string; name: string; organizationUrl: string | null }[] = response.organizations ?? [];
       onSuccess({
         identifier: resolved,
         hasPassword: response.hasPassword,

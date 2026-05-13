@@ -301,15 +301,15 @@ export default function NewSuggestionPage() {
           <div className="xl:col-span-1">
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-6">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
-                <p className="text-sm font-bold text-slate-800">Submission Guide</p>
-                <p className="text-xs text-slate-500 mt-0.5">Writing tips & example</p>
+                <p className="text-sm font-bold text-slate-800">Writing tips & example</p>
+                
               </div>
 
               <div className="overflow-y-auto max-h-[calc(100vh-10rem)] divide-y divide-slate-100">
 
                 {/* Section 1 — How to Write a Good Suggestion */}
                 <div className="px-5 py-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">How to Write a Good Suggestion</p>
+                  {/* <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">How to Write a Good Suggestion</p> */}
                   <p className="text-xs text-slate-600 mb-3">
                     A good suggestion should be <span className="font-semibold text-slate-800">simple, clear, and useful</span>. It should explain the problem, the suggested improvement, and the expected impact.
                   </p>
@@ -322,9 +322,6 @@ export default function NewSuggestionPage() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
-                    <span className="font-semibold text-slate-500">Note:</span> You do not need to answer every point perfectly. Just explain clearly so the suggestion can be reviewed and acted on.
-                  </p>
                 </div>
 
                 {/* Section 2 — Example */}

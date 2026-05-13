@@ -57,7 +57,7 @@ export const AuthService = {
         return res.json();
     },
 
-    async getMyOrg(token: string): Promise<{ id: string; name: string; status: string; modules: string[] }> {
+    async getMyOrg(token: string): Promise<{ id: string; name: string; status: string; modules: string[]; logoUrl: string | null; primaryColor: string | null }> {
         const res = await fetch(`${API_URL}/auth/my-org`, {
             headers: { Authorization: `Bearer ${token}` },
         });

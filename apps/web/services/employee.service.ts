@@ -56,15 +56,38 @@ export interface EmployeeListResponse {
     };
 }
 
+export interface OrgStatsResponse {
+    total: number;
+    withAccounts: number;
+    withoutAccounts: number;
+    recentlyAdded: number;
+    byDepartment: { name: string; count: number }[];
+    byRole: { name: string; count: number }[];
+    recentEmployees: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+        department: string | null;
+        createdAt: string;
+        hasActiveAccount: boolean;
+    }[];
+}
+
 export const EmployeeService = {
     async getByOrganization(
         orgId: string,
         token: string,
         page = 1,
         limit = 20,
+        search?: string,
+        departmentId?: string,
     ): Promise<EmployeeListResponse> {
+        const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+        if (search)       params.set('search',       search);
+        if (departmentId) params.set('departmentId', departmentId);
         const res = await fetch(
-            `${API_URL}/employee/organization/${orgId}?page=${page}&limit=${limit}`,
+            `${API_URL}/employee/organization/${orgId}?${params}`,
             { headers: authHeaders(token) },
         );
         return handleResponse<EmployeeListResponse>(res);
@@ -84,11 +107,32 @@ export const EmployeeService = {
         return handleResponse<EmployeeApiResponse>(res);
     },
 
-    async getDepartments(orgId: string, token: string): Promise<{ id: string; name: string }[]> {
+    async getDepartments(orgId: string, token: string): Promise<{ id: string; name: string; _count: { employees: number } }[]> {
         const res = await fetch(`${API_URL}/employee/organization/${orgId}/departments`, {
             headers: authHeaders(token),
         });
-        return handleResponse<{ id: string; name: string }[]>(res);
+        return handleResponse<{ id: string; name: string; _count: { employees: number } }[]>(res);
+    },
+
+    async getOrgStats(orgId: string, token: string): Promise<OrgStatsResponse> {
+        const res = await fetch(`${API_URL}/employee/organization/${orgId}/stats`, {
+            headers: authHeaders(token),
+        });
+        return handleResponse<OrgStatsResponse>(res);
+    },
+
+    async getByDepartment(
+        deptId: string,
+        token: string,
+        page = 1,
+        limit = 20,
+    ): Promise<EmployeeListResponse> {
+        const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+        const res = await fetch(
+            `${API_URL}/employee/department/${deptId}?${params}`,
+            { headers: authHeaders(token) },
+        );
+        return handleResponse<EmployeeListResponse>(res);
     },
 
     async onboard(data: Record<string, unknown>, token: string): Promise<EmployeeApiResponse> {

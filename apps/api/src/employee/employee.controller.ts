@@ -46,7 +46,7 @@ export class EmployeeController {
 
   // GET /employee/organization/:orgId/departments
   @Get('organization/:orgId/departments')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR)
   async getDepartments(@Param('orgId') orgId: string) {
     return this.employeeService.getDepartmentsByOrganization(orgId);
   }
@@ -61,18 +61,25 @@ export class EmployeeController {
     return this.employeeService.getEmployeeById(id);
   }
 
+  // GET /employee/organization/:orgId/stats — workforce analytics for HR reports
+  @Get('organization/:orgId/stats')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getOrgStats(@Param('orgId') orgId: string) {
+    return this.employeeService.getOrganizationStats(orgId);
+  }
+
   /**
    * Get all employees in an organization with pagination
    * SUPER_ADMIN, ADMIN, and MANAGEMENT can view all organization employees
    * GET /employee/organization/:orgId?page=1&limit=10
    */
   @Get('organization/:orgId')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR)
   async getByOrganization(
     @Param('orgId') orgId: string,
     @Query() paginationDto: PaginationDto,
   ) {
-    const { page = 1, limit = 10 } = paginationDto;
+    const { page = 1, limit = 10, search, departmentId } = paginationDto;
 
     if (page < 1 || limit < 1) {
       throw new BadRequestException('Page and limit must be greater than 0');
@@ -81,8 +88,8 @@ export class EmployeeController {
     const skip = (page - 1) * limit;
 
     const [employees, total] = await Promise.all([
-      this.employeeService.getEmployeesByOrganization(orgId, skip, limit),
-      this.employeeService.countEmployeesByOrganization(orgId),
+      this.employeeService.getEmployeesByOrganization(orgId, skip, limit, search, departmentId),
+      this.employeeService.countEmployeesByOrganization(orgId, search, departmentId),
     ]);
 
     return {

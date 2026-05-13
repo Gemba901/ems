@@ -13,7 +13,7 @@ export default function OperationsPage() {
 
   return (
     // Restricted to top-level management
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]}>
+    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
       <div className="max-w-7xl mx-auto w-full">
         
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">

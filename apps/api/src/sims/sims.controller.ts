@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SimsService } from './sims.service';
-import { CreateSuggestionDto, QuerySuggestionsDto, ReviewSuggestionDto, AssignCommitteeDto, ClarifyDto } from './dto/sims.dto';
+import { CreateSuggestionDto, QuerySuggestionsDto, ReviewSuggestionDto, AssignCommitteeDto } from './dto/sims.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -132,17 +132,4 @@ export class SimsController {
     return this.simsService.reviewSuggestion(id, dto, user.userId, user.organizationId);
   }
 
-  /**
-   * PATCH /sims/:id/clarify
-   * The suggestion's author responds to a NEEDS_CLARIFICATION request.
-   * Moves status back to UNDER_REVIEW for the next committee meeting.
-   */
-  @Patch(':id/clarify')
-  async clarify(
-    @Param('id') id: string,
-    @Body() dto: ClarifyDto,
-    @CurrentUser() user: { userId: string; organizationId: string },
-  ) {
-    return this.simsService.respondToClarification(id, dto, user.userId, user.organizationId);
-  }
 }

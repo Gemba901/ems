@@ -12,7 +12,7 @@ export type AuthState = {
   name?: string;
   orgName?: string;
   setupToken?: string;
-  organizations?: { id: string; name: string }[];
+  organizations?: { id: string; name: string; organizationUrl: string | null }[];
   selectionToken?: string;
 };
 

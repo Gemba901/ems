@@ -15,14 +15,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json();
 }
 
-// SUBMITTED removed — suggestions begin at UNDER_REVIEW
 export type SuggestionStatus =
   | "UNDER_REVIEW"
-  | "NEEDS_CLARIFICATION"
-  | "APPROVED"
+  | "APPROVED_FOR_IMPLEMENTATION"
   | "REJECTED"
-  | "IMPLEMENTED"
-  | "ARCHIVED";
+  | "ON_HOLD"
+  | "SELECTED_FOR_SGA";
 
 export type SuggestionCategory =
   | "QUALITY"
@@ -190,12 +188,4 @@ export const SimsService = {
     return handleResponse<SuggestionReview>(res);
   },
 
-  async clarify(id: string, note: string, token: string): Promise<SuggestionReview> {
-    const res = await fetch(`${API_URL}/sims/${id}/clarify`, {
-      method: "PATCH",
-      headers: authHeaders(token),
-      body: JSON.stringify({ note }),
-    });
-    return handleResponse<SuggestionReview>(res);
-  },
 };

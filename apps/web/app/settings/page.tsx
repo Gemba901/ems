@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import { AdminService } from "@/services/admin.service";
+import { uploadImage } from "@/services/uploads.service";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import Link from "next/link";
-import { Palette, Check, Loader2, Bell, ChevronRight } from "lucide-react";
+import { Palette, Check, Loader2, Bell, ChevronRight, ShieldCheck, ImageIcon } from "lucide-react";
 
 const PRESET_COLORS = [
     { label: "Indigo",   value: "#4F46E5" },
@@ -157,17 +158,119 @@ function ThemeSection() {
     );
 }
 
+function LogoSection() {
+    const { accessToken, user, setAuth } = useAuthStore();
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [orgId, setOrgId] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        if (!accessToken) return;
+        AuthService.getMyOrg(accessToken)
+            .then((org) => {
+                setLogoUrl(org.logoUrl);
+                setOrgId(org.id);
+                if (user && org.logoUrl !== user.organizationUrl) {
+                    setAuth({ ...user, organizationUrl: org.logoUrl }, accessToken);
+                }
+            })
+            .catch(console.error);
+    }, [accessToken, setAuth, user]);
+
+    const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !accessToken || !orgId) return;
+
+        setUploading(true);
+        try {
+            const { fileUrl } = await uploadImage(file, "logos", accessToken);
+            setLogoUrl(fileUrl);
+            await AdminService.updateOrganization(accessToken, orgId, { logoUrl: fileUrl });
+            if (user) setAuth({ ...user, organizationUrl: fileUrl }, accessToken);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setUploading(false);
+            e.target.value = "";
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+            <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                    <ImageIcon className="h-4 w-4 text-slate-600" />
+                </div>
+                <div>
+                    <p className="text-sm font-semibold text-slate-900">Organization Logo</p>
+                    <p className="text-xs text-slate-400">Upload a logo for your organization. It will update immediately and be saved for your org.</p>
+                </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-[auto_1fr] items-center">
+                <div className="h-24 w-24 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+                    {logoUrl ? (
+                        <img src={logoUrl} alt="Organization logo" className="h-full w-full object-cover" />
+                    ) : (
+                        <span className="text-xs text-slate-400">No logo yet</span>
+                    )}
+                </div>
+                <div className="space-y-2">
+                    <input
+                        type="file"
+                        accept="image/*"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleLogoChange}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        {uploading ? "Uploading…" : "Upload new logo"}
+                    </button>
+                    <p className="text-xs text-slate-400">Accepted formats: PNG, JPG, GIF.</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function SettingsPage() {
     return (
         <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN]}>
-            <div className="max-w-4xl mx-auto space-y-8">
+            <div className="max-w-7xl mx-auto space-y-8">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Company Settings</h1>
                     <p className="text-sm text-slate-500 mt-1">Customize your workspace and manage organization preferences.</p>
                 </div>
+                <LogoSection />
                 <ThemeSection />
-                <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Communication</p>
+                <div className="space-y-3">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">People</p>
+                    <Link
+                        href="/settings/members"
+                        className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                <ShieldCheck className="h-4 w-4 text-indigo-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-slate-900">Team Members & Roles</p>
+                                <p className="text-xs text-slate-400">Assign and manage roles for everyone in your organization</p>
+                            </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+                    </Link>
+                </div>
+
+                <div className="space-y-3">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Communication</p>
                     <Link
                         href="/settings/notifications"
                         className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-blue-200 hover:bg-blue-50/30 transition-colors group"

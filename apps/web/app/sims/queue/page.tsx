@@ -25,11 +25,17 @@ const STATUS_CONFIG: Record<string, { label: string; badge: string; icon: React.
     icon: <AlertCircle className="h-4 w-4 text-amber-500" />,
     accentBar: "bg-amber-400",
   },
-  NEEDS_CLARIFICATION: {
-    label: "Needs Clarification",
+  ON_HOLD: {
+    label: "On Hold",
     badge: "bg-orange-100 text-orange-700",
     icon: <HelpCircle className="h-4 w-4 text-orange-500" />,
     accentBar: "bg-orange-400",
+  },
+  SELECTED_FOR_SGA: {
+    label: "Selected for SGA",
+    badge: "bg-indigo-100 text-indigo-700",
+    icon: <AlertCircle className="h-4 w-4 text-indigo-500" />,
+    accentBar: "bg-indigo-400",
   },
 };
 
@@ -110,7 +116,7 @@ export default function QueuePage() {
     SimsService.getQueue(accessToken, { limit: 500 })
       .then((r) => {
         const active = r.data.filter((s) =>
-          (["UNDER_REVIEW", "NEEDS_CLARIFICATION"] as SuggestionStatus[]).includes(s.status)
+          (["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"] as SuggestionStatus[]).includes(s.status)
         );
         setSuggestions(active);
       })
@@ -121,7 +127,8 @@ export default function QueuePage() {
   }, [accessToken]);
 
   const underReview = suggestions.filter((s) => s.status === "UNDER_REVIEW");
-  const needsClarification = suggestions.filter((s) => s.status === "NEEDS_CLARIFICATION");
+  const onHold = suggestions.filter((s) => s.status === "ON_HOLD");
+  const selectedForSGA = suggestions.filter((s) => s.status === "SELECTED_FOR_SGA");
 
   const committeeNames = [...new Set(suggestions.map((s) => s.committee?.name).filter(Boolean))];
 
@@ -201,22 +208,43 @@ export default function QueuePage() {
           </div>
         )}
 
-        {/* Needs Clarification section */}
-        {!loading && needsClarification.length > 0 && (
+        {/* On Hold section */}
+        {!loading && onHold.length > 0 && (
           <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
             <div className="flex items-center gap-2.5 px-6 py-4 border-b bg-orange-50 border-orange-100">
               <HelpCircle className="h-4 w-4 text-orange-500" />
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-slate-800">Needs Clarification</h2>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">{needsClarification.length}</span>
+                  <h2 className="text-sm font-bold text-slate-800">On Hold</h2>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">{onHold.length}</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">Waiting for the employee to respond before review can continue.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Paused — awaiting further information or a decision.</p>
               </div>
             </div>
             <div className="divide-y divide-slate-50">
-              {needsClarification.map((s) => (
+              {onHold.map((s) => (
                 <QueueCard key={s.id} s={s} accentBar="bg-orange-400" router={router} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Selected for SGA section */}
+        {!loading && selectedForSGA.length > 0 && (
+          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2.5 px-6 py-4 border-b bg-indigo-50 border-indigo-100">
+              <AlertCircle className="h-4 w-4 text-indigo-500" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-slate-800">Selected for SGA</h2>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{selectedForSGA.length}</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">Escalated to a Small Group Activity for deeper evaluation.</p>
+              </div>
+            </div>
+            <div className="divide-y divide-slate-50">
+              {selectedForSGA.map((s) => (
+                <QueueCard key={s.id} s={s} accentBar="bg-indigo-400" router={router} />
               ))}
             </div>
           </div>

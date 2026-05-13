@@ -21,29 +21,25 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Archive,
   EyeOff,
   Info,
   Users,
-  MessageSquare,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
-  UNDER_REVIEW:        "Under Review",
-  NEEDS_CLARIFICATION: "Needs Clarification",
-  APPROVED:            "Approved",
-  REJECTED:            "Rejected",
-  IMPLEMENTED:         "Implemented",
-  ARCHIVED:            "Archived",
+  UNDER_REVIEW:                "Under Review",
+  ON_HOLD:                     "On Hold",
+  SELECTED_FOR_SGA:            "Selected for SGA",
+  APPROVED_FOR_IMPLEMENTATION: "Approved for Implementation",
+  REJECTED:                    "Rejected",
 };
 
 const STATUS_BADGE: Record<SuggestionStatus, string> = {
-  UNDER_REVIEW:        "bg-amber-100 text-amber-700",
-  NEEDS_CLARIFICATION: "bg-orange-100 text-orange-700",
-  APPROVED:            "bg-green-100 text-green-700",
-  REJECTED:            "bg-red-100 text-red-700",
-  IMPLEMENTED:         "bg-emerald-100 text-emerald-700",
-  ARCHIVED:            "bg-slate-100 text-slate-500",
+  UNDER_REVIEW:                "bg-amber-100 text-amber-700",
+  ON_HOLD:                     "bg-orange-100 text-orange-700",
+  SELECTED_FOR_SGA:            "bg-indigo-100 text-indigo-700",
+  APPROVED_FOR_IMPLEMENTATION: "bg-emerald-100 text-emerald-700",
+  REJECTED:                    "bg-red-100 text-red-700",
 };
 
 const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
@@ -64,21 +60,20 @@ function formatDateTime(iso: string) {
 }
 
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
-  UNDER_REVIEW:        ["NEEDS_CLARIFICATION", "APPROVED", "REJECTED", "ARCHIVED"],
-  NEEDS_CLARIFICATION: ["UNDER_REVIEW", "ARCHIVED"],
-  APPROVED:            ["IMPLEMENTED", "ARCHIVED"],
-  REJECTED:            ["ARCHIVED"],
-  IMPLEMENTED:         ["ARCHIVED"],
-  ARCHIVED:            [],
+  UNDER_REVIEW:               ["ON_HOLD", "SELECTED_FOR_SGA", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
+  ON_HOLD:                    ["UNDER_REVIEW", "SELECTED_FOR_SGA", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
+  SELECTED_FOR_SGA:           ["UNDER_REVIEW", "ON_HOLD", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
+  APPROVED_FOR_IMPLEMENTATION: [],
+  REJECTED:                   [],
 };
 
 
 function TimelineIcon({ status }: { status: SuggestionStatus }) {
   const cls = "h-3.5 w-3.5";
-  if (status === "APPROVED" || status === "IMPLEMENTED") return <CheckCircle2 className={`${cls} text-emerald-500`} />;
-  if (status === "REJECTED")            return <XCircle    className={`${cls} text-red-500`} />;
-  if (status === "NEEDS_CLARIFICATION") return <AlertCircle className={`${cls} text-orange-500`} />;
-  if (status === "ARCHIVED")            return <Archive    className={`${cls} text-slate-400`} />;
+  if (status === "APPROVED_FOR_IMPLEMENTATION") return <CheckCircle2 className={`${cls} text-emerald-500`} />;
+  if (status === "REJECTED")                    return <XCircle      className={`${cls} text-red-500`} />;
+  if (status === "ON_HOLD")                     return <AlertCircle  className={`${cls} text-orange-500`} />;
+  if (status === "SELECTED_FOR_SGA")            return <AlertCircle  className={`${cls} text-indigo-500`} />;
   return <Clock className={`${cls} text-slate-400`} />;
 }
 
@@ -162,11 +157,6 @@ export default function SuggestionDetailPage() {
   const [assigning, setAssigning]                 = useState(false);
   const [assignError, setAssignError]             = useState<string | null>(null);
 
-  // Clarification response
-  const [clarifyNote, setClarifyNote]   = useState("");
-  const [clarifying, setClarifying]     = useState(false);
-  const [clarifyError, setClarifyError] = useState<string | null>(null);
-
   const canAssignCommittee = role === Role.ADMIN || role === Role.SUPER_ADMIN || role === Role.MANAGEMENT;
   const isEmployee = role === Role.EMPLOYEE;
   const isPrivilegedReviewer = canAssignCommittee || role === Role.HOD;
@@ -219,22 +209,6 @@ export default function SuggestionDetailPage() {
       })
       .catch((err) => setAssignError(err.message))
       .finally(() => setAssigning(false));
-  };
-
-  const handleClarify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!accessToken || !clarifyNote.trim() || !suggestion) return;
-    setClarifying(true);
-    setClarifyError(null);
-    SimsService.clarify(suggestion.id, clarifyNote, accessToken)
-      .then((review) => {
-        setSuggestion((prev) =>
-          prev ? { ...prev, status: "UNDER_REVIEW", reviews: [...prev.reviews, review] } : prev
-        );
-        setClarifyNote("");
-      })
-      .catch((err) => setClarifyError(err.message))
-      .finally(() => setClarifying(false));
   };
 
   const allowedNext = suggestion ? ALLOWED_TRANSITIONS[suggestion.status] : [];
@@ -342,7 +316,7 @@ export default function SuggestionDetailPage() {
                       <p className="text-xs text-slate-400 italic mb-4">No committee assigned — this suggestion is pending assignment.</p>
                     )}
 
-                    {suggestion.status !== "ARCHIVED" && (
+                    {allowedNext.length > 0 && (
                       <form onSubmit={handleAssign} className="space-y-3">
                         <select
                           required
@@ -370,41 +344,6 @@ export default function SuggestionDetailPage() {
                   </div>
                 )}
 
-                {/* ── Clarification Response (Employee, own suggestion) ── */}
-                {isEmployee && suggestion.status === "NEEDS_CLARIFICATION" && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <MessageSquare className="h-4 w-4 text-orange-500" />
-                      <h2 className="text-sm font-bold text-orange-800">Clarification Requested</h2>
-                    </div>
-                    <p className="text-xs text-orange-700 mb-4 leading-relaxed">
-                      The review committee has requested more information. Provide your clarification below — your response will return this suggestion to the review queue.
-                    </p>
-                    {suggestion.reviews.filter(r => r.statusChanged === "NEEDS_CLARIFICATION").slice(-1).map(r => r.note).filter(Boolean).map((n, i) => (
-                      <blockquote key={i} className="text-xs text-orange-700 italic border-l-2 border-orange-300 pl-3 mb-4">"{n}"</blockquote>
-                    ))}
-                    <form onSubmit={handleClarify} className="space-y-3">
-                      <textarea
-                        rows={4}
-                        required
-                        value={clarifyNote}
-                        onChange={(e) => setClarifyNote(e.target.value)}
-                        placeholder="Provide additional context or details..."
-                        className="w-full border border-orange-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400 transition-all resize-none"
-                      />
-                      {clarifyError && (
-                        <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{clarifyError}</p>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={clarifying || !clarifyNote.trim()}
-                        className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                      >
-                        {clarifying ? "Sending..." : "Submit Clarification"}
-                      </button>
-                    </form>
-                  </div>
-                )}
 
                 {/* ── Review Form (privileged roles + assigned committee members) ── */}
                 {suggestion.committeeId && canReview && (
@@ -421,7 +360,7 @@ export default function SuggestionDetailPage() {
                     {allowedNext.length === 0 ? (
                       <div className="flex items-start gap-3 text-sm text-slate-400 bg-slate-50 rounded-xl p-4">
                         <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                        This suggestion is archived and cannot be updated further.
+                        This suggestion has reached its final status and cannot be updated further.
                       </div>
                     ) : (
                       <form onSubmit={handleReview} className="space-y-4">

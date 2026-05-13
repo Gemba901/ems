@@ -30,15 +30,14 @@ const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; dot: string; 
 };
 
 const STATUS_CONFIG: Record<SuggestionStatus, { label: string; dot: string; text: string }> = {
-  UNDER_REVIEW:        { label: "Under Review",        dot: "bg-amber-500",   text: "text-amber-700" },
-  NEEDS_CLARIFICATION: { label: "Needs Clarification", dot: "bg-orange-500",  text: "text-orange-700" },
-  APPROVED:            { label: "Approved",            dot: "bg-green-500",   text: "text-green-700" },
-  REJECTED:            { label: "Rejected",            dot: "bg-red-500",     text: "text-red-700" },
-  IMPLEMENTED:         { label: "Implemented",         dot: "bg-emerald-500", text: "text-emerald-700" },
-  ARCHIVED:            { label: "Archived",            dot: "bg-slate-400",   text: "text-slate-500" },
+  UNDER_REVIEW:                { label: "Under Review",               dot: "bg-amber-500",   text: "text-amber-700"   },
+  ON_HOLD:                     { label: "On Hold",                    dot: "bg-orange-500",  text: "text-orange-700"  },
+  SELECTED_FOR_SGA:            { label: "Selected for SGA",           dot: "bg-indigo-500",  text: "text-indigo-700"  },
+  APPROVED_FOR_IMPLEMENTATION: { label: "Approved for Implementation", dot: "bg-emerald-500", text: "text-emerald-700" },
+  REJECTED:                    { label: "Rejected",                   dot: "bg-red-500",     text: "text-red-700"     },
 };
 
-const ALL_STATUSES:   SuggestionStatus[]   = ["UNDER_REVIEW","NEEDS_CLARIFICATION","APPROVED","REJECTED","IMPLEMENTED","ARCHIVED"];
+const ALL_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW","ON_HOLD","SELECTED_FOR_SGA","APPROVED_FOR_IMPLEMENTATION","REJECTED"];
 const ALL_CATEGORIES: SuggestionCategory[] = ["QUALITY","COST","DELIVERY","SAFETY","MORALE","TECHNOLOGY","UNKNOWN"];
 
 function formatDateTime(iso: string) {
@@ -134,16 +133,16 @@ export default function SimsOverviewPage() {
 
   const metrics = useMemo(() => {
     const total              = allSuggestions.length;
-    const pending            = allSuggestions.filter((s) => ["UNDER_REVIEW"].includes(s.status)).length;
-    const implemented        = allSuggestions.filter((s) => s.status === "IMPLEMENTED").length;
-    const needsClarification = allSuggestions.filter((s) => s.status === "NEEDS_CLARIFICATION").length;
-    const successRate        = total > 0 ? Math.round((implemented / total) * 100) : 0;
-    return { total, pending, implemented, needsClarification, successRate };
+    const pending   = allSuggestions.filter((s) => ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"].includes(s.status)).length;
+    const approved  = allSuggestions.filter((s) => s.status === "APPROVED_FOR_IMPLEMENTATION").length;
+    const onHold    = allSuggestions.filter((s) => s.status === "ON_HOLD").length;
+    const successRate = total > 0 ? Math.round((approved / total) * 100) : 0;
+    return { total, pending, implemented: approved, needsClarification: onHold, successRate };
   }, [allSuggestions]);
 
   const recentWins = useMemo(() =>
     allSuggestions
-      .filter((s) => s.status === "IMPLEMENTED")
+      .filter((s) => s.status === "APPROVED_FOR_IMPLEMENTATION")
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 3),
     [allSuggestions]
@@ -151,14 +150,14 @@ export default function SimsOverviewPage() {
 
   const stuckItems = useMemo(() =>
     allSuggestions.filter((s) => {
-      if (!["UNDER_REVIEW"].includes(s.status)) return false;
+      if (!["UNDER_REVIEW", "SELECTED_FOR_SGA"].includes(s.status)) return false;
       return Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 86400000) >= 7;
     }),
     [allSuggestions]
   );
 
   const clarifyItems = useMemo(() =>
-    allSuggestions.filter((s) => s.status === "NEEDS_CLARIFICATION"),
+    allSuggestions.filter((s) => s.status === "ON_HOLD"),
     [allSuggestions]
   );
 
@@ -249,8 +248,8 @@ export default function SimsOverviewPage() {
             {[
               { label: "Total Suggestions",     value: metrics.total,              sub: null,                                                                          icon: <Lightbulb className="h-5 w-5 text-blue-600" />,   iconBg: "bg-blue-50" },
               { label: "Pending Review",         value: metrics.pending,            sub: metrics.pending > 0 ? <span className="text-amber-500">Requires attention</span> : null, icon: <Clock className="h-5 w-5 text-amber-500" />,     iconBg: "bg-amber-50" },
-              { label: "Implemented",            value: metrics.implemented,        sub: <span className="text-emerald-600">Success rate: {metrics.successRate}%</span>, icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />, iconBg: "bg-emerald-50" },
-              { label: "Needs Clarification",   value: metrics.needsClarification, sub: metrics.needsClarification > 0 ? <span className="text-red-500">Blocked items</span> : null, icon: <AlertCircle className="h-5 w-5 text-red-500" />,  iconBg: "bg-red-50" },
+              { label: "Approved for Impl.",      value: metrics.implemented,        sub: <span className="text-emerald-600">Approval rate: {metrics.successRate}%</span>, icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />, iconBg: "bg-emerald-50" },
+              { label: "On Hold",               value: metrics.needsClarification, sub: metrics.needsClarification > 0 ? <span className="text-orange-500">Paused items</span> : null, icon: <AlertCircle className="h-5 w-5 text-orange-500" />, iconBg: "bg-orange-50" },
             ].map((m) => (
               <div key={m.label} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
                 <p className="text-xs font-medium text-slate-500">{m.label}</p>

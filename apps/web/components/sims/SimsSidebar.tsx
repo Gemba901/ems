@@ -146,7 +146,7 @@ export function SimsSidebar({ open = false, onClose }: SimsSidebarProps) {
             <div className="flex shrink-0 w-10 items-center justify-center">
               <Archive className="h-5 w-5" />
             </div>
-            <span className={labelClass}>Archived</span>
+            <span className={labelClass}>Closed</span>
           </Link>
 
           <Link

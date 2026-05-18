@@ -11,10 +11,11 @@ import {
   Suggestion,
   SuggestionReview,
   SuggestionStatus,
+  ImplementationStatus,
   SuggestionCategory,
   calcWeight,
 } from "@/services/sims.service";
-import { CommitteeService, SteeringCommittee, MyCommittee } from "@/services/committee.service";
+import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
 import {
   ArrowLeft,
   Clock,
@@ -23,7 +24,8 @@ import {
   AlertCircle,
   EyeOff,
   Info,
-  Users,
+  TrendingUp,
+  User,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
@@ -40,6 +42,32 @@ const STATUS_BADGE: Record<SuggestionStatus, string> = {
   SELECTED_FOR_SGA:            "bg-indigo-100 text-indigo-700",
   APPROVED_FOR_IMPLEMENTATION: "bg-emerald-100 text-emerald-700",
   REJECTED:                    "bg-red-100 text-red-700",
+};
+
+const IMPLEMENTATION_STATUS_LABELS: Record<ImplementationStatus, string> = {
+  WORK_IN_PROGRESS: "Work in Progress",
+  VERY_SLOW_WORK_IN_PROGRESS: "Very Slow Work in Progress",
+  GOOD_WORK_IN_PROGRESS: "Good Work in Progress",
+  SLOW_PROGRESS: "Slow Progress",
+  IMPLEMENTED: "Implemented",
+  SHIFTED_TO_SGA: "Shifted to SGA",
+  PREVIOUSLY_IMPLEMENTED: "Previously Implemented",
+  UNDER_CONSULTATION: "Under Consultation",
+  IMPRACTICAL: "Impractical",
+  SAVED_FOR_LATER: "Saved for Later",
+};
+
+const IMPLEMENTATION_STATUS_BADGE: Record<ImplementationStatus, string> = {
+  WORK_IN_PROGRESS: "bg-blue-100 text-blue-700",
+  VERY_SLOW_WORK_IN_PROGRESS: "bg-rose-100 text-rose-700",
+  GOOD_WORK_IN_PROGRESS: "bg-emerald-100 text-emerald-700",
+  SLOW_PROGRESS: "bg-orange-100 text-orange-700",
+  IMPLEMENTED: "bg-green-100 text-green-700",
+  SHIFTED_TO_SGA: "bg-purple-100 text-purple-700",
+  PREVIOUSLY_IMPLEMENTED: "bg-slate-100 text-slate-700",
+  UNDER_CONSULTATION: "bg-indigo-100 text-indigo-700",
+  IMPRACTICAL: "bg-red-100 text-red-700",
+  SAVED_FOR_LATER: "bg-amber-100 text-amber-700",
 };
 
 const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
@@ -63,7 +91,7 @@ const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
   UNDER_REVIEW:               ["ON_HOLD", "SELECTED_FOR_SGA", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
   ON_HOLD:                    ["UNDER_REVIEW", "SELECTED_FOR_SGA", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
   SELECTED_FOR_SGA:           ["UNDER_REVIEW", "ON_HOLD", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
-  APPROVED_FOR_IMPLEMENTATION: [],
+  APPROVED_FOR_IMPLEMENTATION: ["REJECTED", "SELECTED_FOR_SGA"],
   REJECTED:                   [],
 };
 
@@ -116,12 +144,6 @@ function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; revie
               <p className="text-xs text-slate-500 mt-1">
                 By: <span className="font-medium text-slate-600">{r.reviewer.firstName} {r.reviewer.lastName}</span>
               </p>
-              {r.reviewerCommittee && (
-                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-400" />
-                  {r.reviewerCommittee.name}
-                </p>
-              )}
               {r.note && (
                 <blockquote className="mt-3 pt-3 border-t border-slate-200 text-sm text-slate-600 italic leading-relaxed">
                   "{r.note}"
@@ -137,29 +159,34 @@ function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; revie
 
 export default function SuggestionDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { user, accessToken } = useAuthStore();
-  const role = user?.roleLevel;
+  const { user: authUser, accessToken } = useAuthStore();
+  const role = authUser?.roleLevel;
 
   const [suggestion, setSuggestion]   = useState<Suggestion | null>(null);
-  const [committees, setCommittees]   = useState<SteeringCommittee[]>([]);
-  const [myCommittees, setMyCommittees] = useState<MyCommittee[]>([]);
+  const [currentUser, setCurrentUser]   = useState<EmployeeApiResponse | null>(null);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
 
   // Review form
   const [newStatus, setNewStatus]     = useState<SuggestionStatus | "">("");
   const [note, setNote]               = useState("");
+  const [implStatus, setImplStatus]   = useState<ImplementationStatus | "">("");
+  const [implNote, setImplNote]       = useState("");
   const [reviewing, setReviewing]     = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
-  // Committee assignment
-  const [assignCommitteeId, setAssignCommitteeId] = useState("");
-  const [assigning, setAssigning]                 = useState(false);
-  const [assignError, setAssignError]             = useState<string | null>(null);
+  // Implementation status update (for HOD/Admin)
+  const [showImplUpdate, setShowImplUpdate] = useState(false);
+  const [updatingImpl, setUpdatingImpl]     = useState(false);
+  const [implUpdateError, setImplUpdateError] = useState<string | null>(null);
 
-  const canAssignCommittee = role === Role.ADMIN || role === Role.SUPER_ADMIN || role === Role.MANAGEMENT;
-  const isEmployee = role === Role.EMPLOYEE;
-  const isPrivilegedReviewer = canAssignCommittee || role === Role.HOD;
+  const isSuperAdmin = role === Role.SUPER_ADMIN;
+  const isReviewerRole = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
+  const isHODOfDept = role === Role.HOD && suggestion?.employee?.department?.id === currentUser?.departmentId;
+  const isAssignedHOD = suggestion?.hodId === currentUser?.id;
+  
+  const canReview = isReviewerRole || isHODOfDept;
+  const canUpdateImplementation = isReviewerRole || isHODOfDept;
 
   const reload = () => {
     if (!accessToken || !id) return;
@@ -170,11 +197,8 @@ export default function SuggestionDetailPage() {
     if (!accessToken || !id) return;
     const fetches: Promise<any>[] = [
       SimsService.getById(id, accessToken).then(setSuggestion),
-      CommitteeService.getMyCommittees(accessToken).then(setMyCommittees).catch(() => {}),
+      EmployeeService.getMe(accessToken).then(setCurrentUser).catch(() => {}),
     ];
-    if (canAssignCommittee) {
-      fetches.push(CommitteeService.list(accessToken).then(setCommittees));
-    }
     Promise.all(fetches)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -185,38 +209,51 @@ export default function SuggestionDetailPage() {
     if (!accessToken || !newStatus || !suggestion) return;
     setReviewing(true);
     setReviewError(null);
-    SimsService.review(suggestion.id, { statusChanged: newStatus, note: note || undefined }, accessToken)
-      .then((review) => {
-        setSuggestion((prev) =>
-          prev ? { ...prev, status: newStatus, reviews: [...prev.reviews, review] } : prev
-        );
+    SimsService.review(
+      suggestion.id, 
+      { 
+        statusChanged: newStatus, 
+        note: note || undefined,
+        implementationStatus: implStatus || undefined,
+        implementationNote: implNote || undefined
+      }, 
+      accessToken
+    )
+      .then(() => {
+        reload();
         setNewStatus("");
         setNote("");
+        setImplStatus("");
+        setImplNote("");
       })
       .catch((err) => setReviewError(err.message))
       .finally(() => setReviewing(false));
   };
 
-  const handleAssign = async (e: React.FormEvent) => {
+  const handleUpdateImplementation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken || !assignCommitteeId || !suggestion) return;
-    setAssigning(true);
-    setAssignError(null);
-    SimsService.assignCommittee(suggestion.id, assignCommitteeId, accessToken)
+    if (!accessToken || !implStatus || !suggestion) return;
+    setUpdatingImpl(true);
+    setImplUpdateError(null);
+    SimsService.updateImplementation(
+      suggestion.id, 
+      { 
+        implementationStatus: implStatus as ImplementationStatus, 
+        implementationNote: implNote || undefined 
+      }, 
+      accessToken
+    )
       .then((updated) => {
         setSuggestion(updated);
-        setAssignCommitteeId("");
+        setShowImplUpdate(false);
+        setImplStatus("");
+        setImplNote("");
       })
-      .catch((err) => setAssignError(err.message))
-      .finally(() => setAssigning(false));
+      .catch((err) => setImplUpdateError(err.message))
+      .finally(() => setUpdatingImpl(false));
   };
 
   const allowedNext = suggestion ? ALLOWED_TRANSITIONS[suggestion.status] : [];
-
-  const isOnAssignedCommittee = suggestion?.committeeId
-    ? myCommittees.some((c) => c.id === suggestion.committeeId)
-    : false;
-  const canReview = isPrivilegedReviewer || isOnAssignedCommittee;
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
@@ -234,10 +271,19 @@ export default function SuggestionDetailPage() {
         {!loading && !error && suggestion && (
           <>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
-              <h1 className="text-2xl font-bold text-slate-900 leading-snug">{suggestion.title}</h1>
-              <span className={`self-start shrink-0 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${STATUS_BADGE[suggestion.status]}`}>
-                {STATUS_LABELS[suggestion.status]}
-              </span>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 leading-snug mb-2">{suggestion.title}</h1>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className={`text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${STATUS_BADGE[suggestion.status]}`}>
+                    {STATUS_LABELS[suggestion.status]}
+                  </span>
+                  {suggestion.implementationStatus && (
+                    <span className={`text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${IMPLEMENTATION_STATUS_BADGE[suggestion.implementationStatus]}`}>
+                      {IMPLEMENTATION_STATUS_LABELS[suggestion.implementationStatus]}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -247,6 +293,16 @@ export default function SuggestionDetailPage() {
                 <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Detailed Proposal</p>
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{suggestion.description}</p>
+                  {suggestion.imageUrl && (
+                    <div className="mt-5 rounded-xl overflow-hidden border border-slate-100">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={suggestion.imageUrl}
+                        alt="Supporting image"
+                        className="w-full max-h-96 object-contain bg-slate-50"
+                      />
+                    </div>
+                  )}
 
                   <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="border border-slate-100 rounded-xl p-3">
@@ -282,12 +338,30 @@ export default function SuggestionDetailPage() {
                         </div>
                       )}
                     </div>
-                    <div className="border border-slate-100 rounded-xl p-3 sm:col-span-2">
+                    <div className="border border-slate-100 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Assigned HOD</p>
+                      {suggestion.hod ? (
+                        <p className="text-sm font-semibold text-slate-800">{suggestion.hod.firstName} {suggestion.hod.lastName}</p>
+                      ) : (
+                        <p className="text-sm italic text-slate-400">Pending assignment</p>
+                      )}
+                    </div>
+                    <div className="border border-slate-100 rounded-xl p-3">
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Submitted At</p>
                       <p className="text-sm font-semibold text-slate-800">{formatDateTime(suggestion.createdAt)}</p>
                     </div>
                   </div>
                 </div>
+
+                {suggestion.implementationNote && (
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <TrendingUp className="h-4 w-4 text-emerald-600" />
+                      <h3 className="text-sm font-bold text-emerald-900 uppercase tracking-widest">Implementation Direction</h3>
+                    </div>
+                    <p className="text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap italic">"{suggestion.implementationNote}"</p>
+                  </div>
+                )}
 
                 <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
                   <ReviewTimeline suggestion={suggestion} reviews={suggestion.reviews} />
@@ -297,47 +371,61 @@ export default function SuggestionDetailPage() {
               {/* RIGHT — Actions */}
               <div className="xl:col-span-1 space-y-4">
 
-                {/* ── Committee Assignment (Admin / Management) ── */}
-                {canAssignCommittee && (
+                {/* ── Implementation Progress (HOD/Admin) ── */}
+                {canUpdateImplementation && suggestion.status === "APPROVED_FOR_IMPLEMENTATION" && (
                   <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Users className="h-4 w-4 text-slate-400" />
-                      <h2 className="text-sm font-bold text-slate-800">Assigned Committee</h2>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-slate-400" />
+                        <h2 className="text-sm font-bold text-slate-800">Implementation</h2>
+                      </div>
+                      <button 
+                        onClick={() => setShowImplUpdate(!showImplUpdate)}
+                        className="text-blue-600 hover:text-blue-700 text-xs font-semibold flex items-center gap-1"
+                      >
+                        {showImplUpdate ? "Cancel" : "Update Status"}
+                      </button>
                     </div>
 
-                    {suggestion.committee ? (
-                      <div className="mb-4 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
-                        <span className="text-xs font-semibold text-blue-700">{suggestion.committee.name}</span>
-                        <span className="ml-auto text-[10px] font-bold uppercase tracking-widest text-blue-400 bg-blue-100 px-2 py-0.5 rounded">
-                          {suggestion.committee.type}
-                        </span>
+                    {!showImplUpdate ? (
+                      <div className="space-y-3">
+                        {suggestion.implementationStatus ? (
+                          <div className={`text-xs font-bold px-3 py-2 rounded-xl text-center ${IMPLEMENTATION_STATUS_BADGE[suggestion.implementationStatus]}`}>
+                            {IMPLEMENTATION_STATUS_LABELS[suggestion.implementationStatus]}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">No implementation updates yet.</p>
+                        )}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 italic mb-4">No committee assigned — this suggestion is pending assignment.</p>
-                    )}
-
-                    {allowedNext.length > 0 && (
-                      <form onSubmit={handleAssign} className="space-y-3">
+                      <form onSubmit={handleUpdateImplementation} className="space-y-3">
                         <select
                           required
-                          value={assignCommitteeId}
-                          onChange={(e) => setAssignCommitteeId(e.target.value)}
+                          value={implStatus}
+                          onChange={(e) => setImplStatus(e.target.value as ImplementationStatus)}
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                         >
-                          <option value="">{suggestion.committee ? "Reassign to..." : "Select committee..."}</option>
-                          {committees.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                          <option value="">Select status...</option>
+                          {Object.entries(IMPLEMENTATION_STATUS_LABELS).map(([val, label]) => (
+                            <option key={val} value={val}>{label}</option>
                           ))}
                         </select>
-                        {assignError && (
-                          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{assignError}</p>
+                        <textarea
+                          rows={3}
+                          value={implNote}
+                          onChange={(e) => setImplNote(e.target.value)}
+                          placeholder="Implementation notes..."
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+                        />
+                        {implUpdateError && (
+                          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{implUpdateError}</p>
                         )}
                         <button
                           type="submit"
-                          disabled={assigning || !assignCommitteeId}
-                          className="w-full bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+                          disabled={updatingImpl || !implStatus}
+                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
                         >
-                          {assigning ? "Assigning..." : suggestion.committee ? "Reassign" : "Assign Committee"}
+                          {updatingImpl ? "Updating..." : "Update Progress"}
                         </button>
                       </form>
                     )}
@@ -345,14 +433,14 @@ export default function SuggestionDetailPage() {
                 )}
 
 
-                {/* ── Review Form (privileged roles + assigned committee members) ── */}
-                {suggestion.committeeId && canReview && (
+                {/* ── Review Form (HODs and Admins) ── */}
+                {canReview && (
                   <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm sticky top-6">
                     <div className="flex items-center gap-2 mb-5">
                       <h2 className="text-sm font-bold text-slate-800">Add a Review</h2>
-                      {suggestion.committee && (
+                      {isAssignedHOD && (
                         <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-100">
-                          <Users className="h-2.5 w-2.5" /> {suggestion.committee.name}
+                          <User className="h-2.5 w-2.5" /> Assigned HOD
                         </span>
                       )}
                     </div>
@@ -360,7 +448,7 @@ export default function SuggestionDetailPage() {
                     {allowedNext.length === 0 ? (
                       <div className="flex items-start gap-3 text-sm text-slate-400 bg-slate-50 rounded-xl p-4">
                         <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                        This suggestion has reached its final status and cannot be updated further.
+                        Final status reached.
                       </div>
                     ) : (
                       <form onSubmit={handleReview} className="space-y-4">
@@ -381,6 +469,51 @@ export default function SuggestionDetailPage() {
                           </select>
                         </div>
 
+                        {newStatus !== "" && (
+                          <div className="space-y-4 pt-2 border-t border-slate-100">
+                             <div>
+                              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                {newStatus === "REJECTED" ? "Reason for Rejection" : 
+                                 newStatus === "ON_HOLD" ? "Reason for Holding" : 
+                                 "Implementation Status / Reason"}
+                              </label>
+                              <select
+                                value={implStatus}
+                                onChange={(e) => setImplStatus(e.target.value as ImplementationStatus)}
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                              >
+                                <option value="">Select (optional)...</option>
+                                {Object.entries(IMPLEMENTATION_STATUS_LABELS)
+                                  .filter(([val]) => {
+                                    if (newStatus === "REJECTED" && val === "IMPLEMENTED") return false;
+                                    return true;
+                                  })
+                                  .map(([val, label]) => (
+                                  <option key={val} value={val}>{label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                {newStatus === "REJECTED" ? "Rejection Details" : 
+                                 newStatus === "ON_HOLD" ? "Hold Details" : 
+                                 "Implementation Direction / Note"}
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={implNote}
+                                onChange={(e) => setImplNote(e.target.value)}
+                                placeholder={
+                                  newStatus === "REJECTED" ? "Why is this being rejected?" :
+                                  newStatus === "ON_HOLD" ? "What is needed to proceed?" :
+                                  "Give direction or notes for implementation..."
+                                }
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                             Review Notes
@@ -389,7 +522,7 @@ export default function SuggestionDetailPage() {
                             rows={4}
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
-                            placeholder="Enter your evaluation or next steps..."
+                            placeholder="Enter evaluation notes..."
                             className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
                           />
                         </div>

@@ -39,10 +39,10 @@ export function SimsSidebar({ open = false, onClose }: SimsSidebarProps) {
       allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]
     },
     {
-      name: "Committee Queue",
+      name: "Review Queue",
       href: "/sims/queue",
       icon: ClipboardList,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]
+      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]
     },
     {
       name: "Reviews",

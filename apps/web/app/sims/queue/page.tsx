@@ -6,7 +6,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus, calcWeight } from "@/services/sims.service";
-import { ChevronRight, EyeOff, Users, Clock, AlertCircle, HelpCircle, Inbox } from "lucide-react";
+import { ChevronRight, EyeOff, Clock, AlertCircle, HelpCircle } from "lucide-react";
 
 const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
   QUALITY:    "bg-blue-100 text-blue-700",
@@ -16,27 +16,6 @@ const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
   MORALE:     "bg-amber-100 text-amber-700",
   TECHNOLOGY: "bg-indigo-100 text-indigo-700",
   UNKNOWN:    "bg-slate-100 text-slate-500",
-};
-
-const STATUS_CONFIG: Record<string, { label: string; badge: string; icon: React.ReactNode; accentBar: string }> = {
-  UNDER_REVIEW: {
-    label: "Ready for Review",
-    badge: "bg-amber-100 text-amber-700",
-    icon: <AlertCircle className="h-4 w-4 text-amber-500" />,
-    accentBar: "bg-amber-400",
-  },
-  ON_HOLD: {
-    label: "On Hold",
-    badge: "bg-orange-100 text-orange-700",
-    icon: <HelpCircle className="h-4 w-4 text-orange-500" />,
-    accentBar: "bg-orange-400",
-  },
-  SELECTED_FOR_SGA: {
-    label: "Selected for SGA",
-    badge: "bg-indigo-100 text-indigo-700",
-    icon: <AlertCircle className="h-4 w-4 text-indigo-500" />,
-    accentBar: "bg-indigo-400",
-  },
 };
 
 function QueueCard({ s, accentBar, router }: { s: Suggestion; accentBar: string; router: ReturnType<typeof useRouter> }) {
@@ -103,87 +82,64 @@ function QueueCard({ s, accentBar, router }: { s: Suggestion; accentBar: string;
   );
 }
 
+const ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT] as const;
+
 export default function QueuePage() {
   const router = useRouter();
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
 
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [notMember, setNotMember] = useState(false);
+
+  const isHOD = user?.roleLevel === Role.HOD;
 
   useEffect(() => {
-    if (!accessToken) return;
-    SimsService.getQueue(accessToken, { limit: 500 })
-      .then((r) => {
-        const active = r.data.filter((s) =>
-          (["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"] as SuggestionStatus[]).includes(s.status)
-        );
-        setSuggestions(active);
-      })
-      .catch((err: Error) => {
-        if (err.message?.toLowerCase().includes("not a member")) setNotMember(true);
-      })
+    if (!accessToken || !user?.roleLevel) return;
+
+    const ACTIVE_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"];
+
+    const fetch = ADMIN_ROLES.includes(user.roleLevel as typeof ADMIN_ROLES[number])
+      ? SimsService.getAll(accessToken, { limit: 500 }).then((r) => r.data)
+      : SimsService.getQueue(accessToken, { limit: 500 }).then((r) => r.data);
+
+    fetch
+      .then((data) => setSuggestions(data.filter((s) => ACTIVE_STATUSES.includes(s.status))))
+      .catch(() => setSuggestions([]))
       .finally(() => setLoading(false));
-  }, [accessToken]);
+  }, [accessToken, user?.roleLevel]);
 
   const underReview = suggestions.filter((s) => s.status === "UNDER_REVIEW");
   const onHold = suggestions.filter((s) => s.status === "ON_HOLD");
   const selectedForSGA = suggestions.filter((s) => s.status === "SELECTED_FOR_SGA");
 
-  const committeeNames = [...new Set(suggestions.map((s) => s.committee?.name).filter(Boolean))];
-
   return (
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
+    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
       <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-5">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">My Committee Queue</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{isHOD ? "Department Review Queue" : "Review Queue"}</h1>
             <p className="text-sm text-slate-500 mt-1">
               {loading
                 ? "Loading..."
-                : notMember
-                  ? "You are not assigned to any steering committee"
-                  : `${suggestions.length} suggestion${suggestions.length !== 1 ? "s" : ""} awaiting your committee's review`}
+                : `${suggestions.length} suggestion${suggestions.length !== 1 ? "s" : ""} awaiting your review`}
             </p>
           </div>
-
-          {!loading && !notMember && committeeNames.length > 0 && (
-            <div className="flex flex-wrap gap-2 shrink-0">
-              {committeeNames.map((name) => (
-                <div key={name} className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl text-sm">
-                  <Users className="h-4 w-4 text-blue-500 shrink-0" />
-                  <span className="text-blue-700 font-medium">{name}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {loading && (
-          <p className="text-slate-400 text-sm py-10 text-center">Loading your committee queue...</p>
-        )}
-
-        {/* Not a committee member */}
-        {!loading && notMember && (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col items-center gap-3 py-20">
-            <div className="h-14 w-14 rounded-full bg-slate-50 flex items-center justify-center">
-              <Users className="h-7 w-7 text-slate-300" />
-            </div>
-            <p className="text-sm font-semibold text-slate-600">Not a committee member</p>
-            <p className="text-xs text-slate-400">You have not been assigned to any steering committee yet.</p>
-          </div>
+          <p className="text-slate-400 text-sm py-10 text-center">Loading your review queue...</p>
         )}
 
         {/* All caught up */}
-        {!loading && !notMember && suggestions.length === 0 && (
+        {!loading && suggestions.length === 0 && (
           <div className="bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col items-center gap-3 py-20">
             <div className="h-14 w-14 rounded-full bg-emerald-50 flex items-center justify-center">
               <Clock className="h-7 w-7 text-emerald-400" />
             </div>
             <p className="text-sm font-semibold text-slate-600">Queue is clear!</p>
-            <p className="text-xs text-slate-400">No suggestions are currently waiting for your committee's review.</p>
+            <p className="text-xs text-slate-400">No suggestions are currently waiting for your review.</p>
           </div>
         )}
 
@@ -197,7 +153,7 @@ export default function QueuePage() {
                   <h2 className="text-sm font-bold text-slate-800">Ready for Review</h2>
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{underReview.length}</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">Awaiting your committee's decision at the next meeting.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Awaiting decision or feedback.</p>
               </div>
             </div>
             <div className="divide-y divide-slate-50">

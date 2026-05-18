@@ -6,7 +6,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory, calcWeight } from "@/services/sims.service";
-import { AlertCircle, Clock, HelpCircle, ChevronRight, EyeOff, Users, Inbox } from "lucide-react";
+import { AlertCircle, Clock, HelpCircle, ChevronRight, EyeOff, Inbox } from "lucide-react";
 
 const REVIEW_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"];
 
@@ -18,14 +18,6 @@ const SECTION_CONFIG: Record<string, {
   icon: React.ReactNode;
   accentBar: string;
 }> = {
-  UNASSIGNED: {
-    label: "Pending Assignment",
-    description: "These suggestions have no committee assigned yet — assign one so the weekly review can proceed.",
-    badge: "bg-slate-200 text-slate-600",
-    headerBg: "bg-slate-50 border-slate-200",
-    icon: <Inbox className="h-4 w-4 text-slate-500" />,
-    accentBar: "bg-slate-300",
-  },
   ON_HOLD: {
     label: "On Hold",
     description: "Paused — awaiting further information or a decision.",
@@ -44,7 +36,7 @@ const SECTION_CONFIG: Record<string, {
   },
   UNDER_REVIEW: {
     label: "Under Review",
-    description: "Assigned to a committee — awaiting the weekly meeting.",
+    description: "Suggestions awaiting evaluation and approval.",
     badge: "bg-amber-100 text-amber-700",
     headerBg: "bg-amber-50 border-amber-100",
     icon: <AlertCircle className="h-4 w-4 text-amber-500" />,
@@ -84,11 +76,6 @@ function SuggestionCard({ s, accentBar, router }: { s: Suggestion; accentBar: st
           {calcWeight(s.categories) > 0 && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-100">
               W {calcWeight(s.categories).toFixed(1)}
-            </span>
-          )}
-          {s.committee && (
-            <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-100">
-              <Users className="h-2.5 w-2.5" /> {s.committee.name}
             </span>
           )}
         </div>
@@ -139,12 +126,10 @@ export default function ReviewsPage() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const canAssign = role === Role.ADMIN || role === Role.SUPER_ADMIN || role === Role.MANAGEMENT;
-
   useEffect(() => {
     if (!accessToken || !role) return;
     const fetch = role === Role.HOD
-      ? SimsService.getDepartment(accessToken, { limit: 500 }).then((r) => r.data)
+      ? SimsService.getQueue(accessToken, { limit: 500 }).then((r) => r.data)
       : SimsService.getAll(accessToken, { limit: 500 }).then((r) => r.data);
     fetch
       .then((data) => setSuggestions(data.filter((s) => REVIEW_STATUSES.includes(s.status))))
@@ -153,7 +138,6 @@ export default function ReviewsPage() {
   }, [accessToken, role]);
 
   const grouped = useMemo(() => {
-    const unassigned: Suggestion[] = [];
     const onHold: Suggestion[] = [];
     const selectedForSGA: Suggestion[] = [];
     const underReview: Suggestion[] = [];
@@ -163,24 +147,18 @@ export default function ReviewsPage() {
         onHold.push(s);
       } else if (s.status === "SELECTED_FOR_SGA") {
         selectedForSGA.push(s);
-      } else if (!s.committeeId) {
-        unassigned.push(s);
       } else {
         underReview.push(s);
       }
     });
 
-    return { UNASSIGNED: unassigned, ON_HOLD: onHold, SELECTED_FOR_SGA: selectedForSGA, UNDER_REVIEW: underReview };
+    return { ON_HOLD: onHold, SELECTED_FOR_SGA: selectedForSGA, UNDER_REVIEW: underReview };
   }, [suggestions]);
 
   const totalPending = suggestions.length;
   const urgentCount = grouped.ON_HOLD.length;
-  const unassignedCount = grouped.UNASSIGNED.length;
 
-  const visibleSections = (canAssign
-    ? ["UNASSIGNED", "ON_HOLD", "SELECTED_FOR_SGA", "UNDER_REVIEW"]
-    : ["ON_HOLD", "SELECTED_FOR_SGA", "UNDER_REVIEW"]
-  ) as (keyof typeof grouped)[];
+  const visibleSections = ["ON_HOLD", "SELECTED_FOR_SGA", "UNDER_REVIEW"] as (keyof typeof grouped)[];
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
@@ -198,12 +176,6 @@ export default function ReviewsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 shrink-0">
-            {!loading && unassignedCount > 0 && canAssign && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm">
-                <Inbox className="h-4 w-4 text-slate-500 shrink-0" />
-                <span className="text-slate-700 font-medium">{unassignedCount} unassigned</span>
-              </div>
-            )}
             {!loading && urgentCount > 0 && (
               <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-xl text-sm">
                 <HelpCircle className="h-4 w-4 text-orange-500 shrink-0" />

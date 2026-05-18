@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { useAuthStore } from "@/store/auth.store";
+import { ChatWidget } from "@/components/chat/ChatWidget";
+import { EmsCompletionBanner } from "@/components/EmsCompletionBanner";
 
 export default function DashboardLayout({
   children,
@@ -42,11 +44,12 @@ export default function DashboardLayout({
 
       <div className="md:pl-24 flex flex-col min-h-screen transition-all duration-300">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-
+        <EmsCompletionBanner />
         <main className="flex-1 p-4 md:p-8">
           {children}
         </main>
       </div>
+      <ChatWidget />
     </div>
   );
 }

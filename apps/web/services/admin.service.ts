@@ -30,6 +30,7 @@ export interface Organization {
     address: string | null;
     status: OrgStatus;
     modules: ModuleType[];
+    isAdminOrg: boolean;
     createdAt: string;
     updatedAt: string;
     _count: {
@@ -177,5 +178,13 @@ export const AdminService = {
             body: JSON.stringify({ primaryColor }),
         });
         return handleResponse<{ id: string; primaryColor: string }>(res);
+    },
+
+    async setAdminOrg(token: string, orgId: string): Promise<{ message: string; organization: Organization }> {
+        const res = await fetch(`${API_URL}/organizations/${orgId}/set-admin-org`, {
+            method: "PATCH",
+            headers: authHeaders(token),
+        });
+        return handleResponse(res);
     },
 };

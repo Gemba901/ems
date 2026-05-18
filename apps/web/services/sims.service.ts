@@ -22,6 +22,18 @@ export type SuggestionStatus =
   | "ON_HOLD"
   | "SELECTED_FOR_SGA";
 
+export type ImplementationStatus =
+  | "WORK_IN_PROGRESS"
+  | "VERY_SLOW_WORK_IN_PROGRESS"
+  | "GOOD_WORK_IN_PROGRESS"
+  | "SLOW_PROGRESS"
+  | "IMPLEMENTED"
+  | "SHIFTED_TO_SGA"
+  | "PREVIOUSLY_IMPLEMENTED"
+  | "UNDER_CONSULTATION"
+  | "IMPRACTICAL"
+  | "SAVED_FOR_LATER";
+
 export type SuggestionCategory =
   | "QUALITY"
   | "COST"
@@ -51,26 +63,22 @@ export interface SuggestionReview {
   note: string | null;
   createdAt: string;
   reviewer: { id: string; firstName: string; lastName: string };
-  reviewerCommittee: { id: string; name: string; type: string } | null;
-}
-
-export interface AssignedCommittee {
-  id: string;
-  name: string;
-  type: string;
 }
 
 export interface Suggestion {
   id: string;
   title: string;
   description: string;
+  imageUrl: string | null;
   status: SuggestionStatus;
+  implementationStatus: ImplementationStatus | null;
+  implementationNote: string | null;
   categories: SuggestionCategory[];
   isAnonymous: boolean;
   employeeId: string;
   organizationId: string;
-  committeeId: string | null;
-  committee: AssignedCommittee | null;
+  hodId: string | null;
+  hod: { id: string; firstName: string; lastName: string } | null;
   createdAt: string;
   updatedAt: string;
   employee: { id: string; firstName: string; lastName: string; department: { id: string; name: string } | null } | null;
@@ -87,11 +95,19 @@ export interface CreateSuggestionPayload {
   description: string;
   categories: SuggestionCategory[];
   isAnonymous?: boolean;
+  imageUrl?: string;
 }
 
 export interface ReviewPayload {
   statusChanged: SuggestionStatus;
   note?: string;
+  implementationStatus?: ImplementationStatus;
+  implementationNote?: string;
+}
+
+export interface UpdateImplementationPayload {
+  implementationStatus: ImplementationStatus;
+  implementationNote?: string;
 }
 
 export interface SuggestionSummary {
@@ -105,6 +121,17 @@ function buildQuery(params: Record<string, string | number | undefined>) {
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
     .join("&");
   return q ? `?${q}` : "";
+}
+
+export async function uploadSuggestionImage(file: File, token: string): Promise<string> {
+  const presignRes = await fetch(`${API_URL}/uploads/presigned-url`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: "suggestions" }),
+  });
+  const { uploadUrl, fileUrl } = await handleResponse<{ uploadUrl: string; fileUrl: string }>(presignRes);
+  await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+  return fileUrl;
 }
 
 export const SimsService = {
@@ -143,7 +170,6 @@ export const SimsService = {
       status?: SuggestionStatus;
       category?: SuggestionCategory;
       departmentId?: string;
-      committeeId?: string;
       page?: number;
       limit?: number;
     },
@@ -154,7 +180,7 @@ export const SimsService = {
     return handleResponse<PaginatedSuggestions>(res);
   },
 
-  // Suggestions assigned to the current user's committees
+  // Suggestions assigned to the current user for review (as HOD)
   async getQueue(
     token: string,
     params: { status?: SuggestionStatus; category?: SuggestionCategory; page?: number; limit?: number },
@@ -170,15 +196,6 @@ export const SimsService = {
     return handleResponse<Suggestion>(res);
   },
 
-  async assignCommittee(id: string, committeeId: string, token: string): Promise<Suggestion> {
-    const res = await fetch(`${API_URL}/sims/${id}/assign`, {
-      method: "PATCH",
-      headers: authHeaders(token),
-      body: JSON.stringify({ committeeId }),
-    });
-    return handleResponse<Suggestion>(res);
-  },
-
   async review(id: string, data: ReviewPayload, token: string): Promise<SuggestionReview> {
     const res = await fetch(`${API_URL}/sims/${id}/review`, {
       method: "PATCH",
@@ -186,6 +203,15 @@ export const SimsService = {
       body: JSON.stringify(data),
     });
     return handleResponse<SuggestionReview>(res);
+  },
+
+  async updateImplementation(id: string, data: UpdateImplementationPayload, token: string): Promise<Suggestion> {
+    const res = await fetch(`${API_URL}/sims/${id}/implementation`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<Suggestion>(res);
   },
 
 };

@@ -4,24 +4,23 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SuggestionStatus } from 'db';
+import { SuggestionStatus, ImplementationStatus } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import {
   CreateSuggestionDto,
   QuerySuggestionsDto,
   ReviewSuggestionDto,
-  AssignCommitteeDto,
-  ClarifyDto,
+  UpdateImplementationDto,
 } from './dto/sims.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 
-// SUBMITTED removed — suggestions begin life at UNDER_REVIEW
+// Suggestions begin life at UNDER_REVIEW
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
   UNDER_REVIEW:               ['ON_HOLD', 'SELECTED_FOR_SGA', 'APPROVED_FOR_IMPLEMENTATION', 'REJECTED'],
   ON_HOLD:                    ['UNDER_REVIEW', 'SELECTED_FOR_SGA', 'APPROVED_FOR_IMPLEMENTATION', 'REJECTED'],
   SELECTED_FOR_SGA:           ['UNDER_REVIEW', 'ON_HOLD', 'APPROVED_FOR_IMPLEMENTATION', 'REJECTED'],
-  APPROVED_FOR_IMPLEMENTATION: [],
+  APPROVED_FOR_IMPLEMENTATION: ['REJECTED', 'SELECTED_FOR_SGA'],
   REJECTED:                   [],
 };
 
@@ -32,8 +31,6 @@ const employeeSelect = {
   department: { select: { id: true, name: true } },
 };
 
-const committeeSelect = { id: true, name: true, type: true };
-
 const reviewInclude = {
   reviews: {
     orderBy: { createdAt: 'asc' as const },
@@ -43,14 +40,13 @@ const reviewInclude = {
       note: true,
       createdAt: true,
       reviewer: { select: { id: true, firstName: true, lastName: true } },
-      reviewerCommittee: { select: committeeSelect },
     },
   },
 };
 
 const suggestionInclude = {
   employee: { select: employeeSelect },
-  committee: { select: committeeSelect },
+  hod: { select: employeeSelect },
   ...reviewInclude,
 };
 
@@ -70,6 +66,25 @@ export class SimsService {
     return employee;
   }
 
+  private async findDepartmentHODs(departmentId: string, organizationId: string) {
+    const hods = await this.prisma.employee.findMany({
+      where: {
+        departmentId,
+        organizationId,
+        user: {
+          organizations: {
+            some: {
+              organizationId,
+              role: { name: Role.HOD },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+    return hods.map((h) => h.id);
+  }
+
   private maskAnonymous(suggestion: any) {
     if (!suggestion.isAnonymous) return suggestion;
     return { ...suggestion, employee: null };
@@ -80,21 +95,43 @@ export class SimsService {
   async submitSuggestion(dto: CreateSuggestionDto, userId: string, organizationId: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
+    if (!employee.departmentId) {
+        throw new BadRequestException('You must be assigned to a department to submit a suggestion');
+    }
+
+    const hodIds = await this.findDepartmentHODs(employee.departmentId, organizationId);
+    
     const suggestion = await this.prisma.suggestion.create({
       data: {
         title: dto.title,
         description: dto.description,
         categories: dto.categories,
         isAnonymous: dto.isAnonymous ?? false,
+        imageUrl: dto.imageUrl ?? null,
         status: 'UNDER_REVIEW',
         employeeId: employee.id,
         organizationId,
+        hodId: hodIds[0] || null,
       }
     });
 
-    // notify admins/management about new suggestion
-    
+    // notify HODs about new suggestion
+    for (const hodId of hodIds) {
+        // Don't notify yourself if you are an HOD submitting a suggestion
+        if (hodId === employee.id) continue;
 
+        await this.notifications.create({
+            employeeId: hodId,
+            type: 'ACTION_REQUIRED',
+            module: 'SIMS',
+            title: 'New suggestion for review',
+            message: `A new suggestion "${suggestion.title}" has been submitted in your department.`,
+            actionUrl: `/sims/${suggestion.id}`,
+            metadata: { suggestionId: suggestion.id },
+        });
+    }
+
+    // notify admins/management
     const admins = await this.prisma.employee.findMany({
       where: {
         organizationId,
@@ -109,7 +146,7 @@ export class SimsService {
         type: 'INFO' as const,
         module: 'SIMS',
         title: 'New suggestion submitted',
-        message: `A new suggestion "${suggestion.title}" has been submitted and is awaiting committee assignment.`,
+        message: `A new suggestion "${suggestion.title}" has been submitted.`,
         actionUrl: `/sims/${suggestion.id}`,
         metadata: { suggestionId: suggestion.id },
       }))
@@ -118,56 +155,13 @@ export class SimsService {
     return suggestion;
   }
 
-  // Assign committee (Admin / Management) 
-
-  async assignCommittee(suggestionId: string, dto: AssignCommitteeDto, organizationId: string) {
-    const suggestion = await this.prisma.suggestion.findUnique({ where: { id: suggestionId } });
-    if (!suggestion || suggestion.organizationId !== organizationId) {
-      throw new NotFoundException('Suggestion not found');
-    }
-    if (ALLOWED_TRANSITIONS[suggestion.status].length === 0) {
-      throw new BadRequestException('Cannot assign a committee to a finalised suggestion');
-    }
-
-    const committee = await this.prisma.steeringCommittee.findUnique({ where: { id: dto.committeeId } });
-    if (!committee || committee.organizationId !== organizationId) {
-      throw new NotFoundException('Committee not found');
-    }
-
-    const updated = await this.prisma.suggestion.update({
-      where: { id: suggestionId },
-      data: { committeeId: dto.committeeId },
-      include: suggestionInclude,
-    });
-
-    // notify committee members about new assignment
-    const members = await this.prisma.steeringCommitteeMember.findMany({
-      where: { committeeId: dto.committeeId },
-      select: { employeeId: true },
-    });
-
-    await this.notifications.createMany(
-      members.map((m) => ({
-        employeeId: m.employeeId,
-        type: 'ACTION_REQUIRED' as const,
-        module: 'SIMS',
-        title: 'New suggestion in your queue',
-        message: `"${updated.title}" has been assigned to your committee for review.`,
-        actionUrl: `/sims/${suggestionId}`,
-        metadata: { suggestionId },
-      })),
-    );
-
-    return updated;
-  }
-
   // Query
   async getMySuggestions(userId: string) {
     const employee = await this.resolveEmployee(userId);
     return this.prisma.suggestion.findMany({
       where: { employeeId: employee.id },
       orderBy: { createdAt: 'desc' },
-      include: { committee: { select: committeeSelect }, ...reviewInclude },
+      include: { hod: { select: employeeSelect }, ...reviewInclude },
     });
   }
 
@@ -175,7 +169,7 @@ export class SimsService {
     const employee = await this.resolveEmployee(userId);
     if (!employee.departmentId) throw new ForbiddenException('Your account is not assigned to a department');
 
-    const { status, category, committeeId, page, limit } = query;
+    const { status, category, page, limit } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -183,7 +177,6 @@ export class SimsService {
       employee: { departmentId: employee.departmentId },
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
-      ...(committeeId && { committeeId }),
     };
 
     const [data, total] = await Promise.all([
@@ -198,7 +191,7 @@ export class SimsService {
   }
 
   async getAllSuggestions(organizationId: string, query: QuerySuggestionsDto) {
-    const { status, category, departmentId, committeeId, page, limit } = query;
+    const { status, category, departmentId, page, limit } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -206,7 +199,6 @@ export class SimsService {
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
       ...(departmentId && { employee: { departmentId } }),
-      ...(committeeId && { committeeId }),
     };
 
     const [data, total] = await Promise.all([
@@ -220,23 +212,19 @@ export class SimsService {
     };
   }
 
-  // Returns only suggestions assigned to the caller's committees
-  async getCommitteeSuggestions(userId: string, organizationId: string, query: QuerySuggestionsDto) {
+  // Returns suggestions for the caller's department (as HOD)
+  async getHODQueue(userId: string, organizationId: string, query: QuerySuggestionsDto) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
-    const memberships = await this.prisma.steeringCommitteeMember.findMany({
-      where: { employeeId: employee.id, committee: { organizationId } },
-      select: { committeeId: true },
-    });
-    if (memberships.length === 0) throw new ForbiddenException('You are not a member of any steering committee');
-
-    const committeeIds = memberships.map((m) => m.committeeId);
     const { status, category, page, limit } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {
       organizationId,
-      committeeId: { in: committeeIds },
+      employee: { 
+        departmentId: employee.departmentId,
+        id: { not: employee.id }, // HODs don't review their own suggestions
+      },
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
     };
@@ -263,7 +251,7 @@ export class SimsService {
             department: { select: { id: true, name: true } },
           },
         },
-        committee: { select: committeeSelect },
+        hod: { select: employeeSelect },
         ...reviewInclude,
       },
     });
@@ -320,7 +308,7 @@ export class SimsService {
     };
   }
 
-  // Review (committee members only)
+  // Review (HODs and Admins)
 
   async reviewSuggestion(
     id: string,
@@ -328,22 +316,32 @@ export class SimsService {
     userId: string,
     organizationId: string,
   ) {
-    const suggestion = await this.prisma.suggestion.findUnique({ where: { id } });
+    const suggestion = await this.prisma.suggestion.findUnique({
+      where: { id },
+      include: { employee: { select: { id: true, departmentId: true } } }
+    });
 
     if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
 
-    if (!suggestion.committeeId) {
-      throw new BadRequestException('This suggestion has not been assigned to a committee yet');
-    }
-
     const reviewer = await this.resolveEmployee(userId, organizationId);
 
-    const membership = await this.prisma.steeringCommitteeMember.findUnique({
-      where: { committeeId_employeeId: { committeeId: suggestion.committeeId, employeeId: reviewer.id } },
+    // Check authorization: Must be an HOD in the same department (or Super Admin)
+    const userOrgs = await this.prisma.userOrganization.findMany({
+        where: { userId, organizationId },
+        include: { role: true }
     });
+    const roles = userOrgs.map(uo => uo.role.name);
+  
+    const isDepartmentHOD = roles.includes(Role.HOD) && reviewer.departmentId === suggestion.employee?.departmentId;
+    const isSuperAdmin = roles.includes(Role.SUPER_ADMIN);
 
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of the committee assigned to this suggestion');
+    if (!isDepartmentHOD && !isSuperAdmin) {
+        throw new ForbiddenException('Only a department HOD or admin can review this suggestion');
+    }
+
+    // Prevent HOD from reviewing their own suggestion
+    if (suggestion.employeeId === reviewer.id && !isSuperAdmin) {
+        throw new ForbiddenException('You cannot review your own suggestion');
     }
 
     const allowed = ALLOWED_TRANSITIONS[suggestion.status];
@@ -351,19 +349,31 @@ export class SimsService {
       throw new BadRequestException(`Cannot move suggestion from ${suggestion.status} to ${dto.statusChanged}`);
     }
 
+    // Logic: once rejected, cannot be marked as implemented
+    if (dto.statusChanged === 'REJECTED' && dto.implementationStatus === 'IMPLEMENTED') {
+      throw new BadRequestException('A rejected suggestion cannot be marked as implemented');
+    }
+
     const review = await this.prisma.$transaction(async (tx) => {
-      await tx.suggestion.update({ where: { id }, data: { status: dto.statusChanged } });
+      await tx.suggestion.update({
+        where: { id },
+        data: {
+          status: dto.statusChanged,
+          ...(dto.implementationStatus && { implementationStatus: dto.implementationStatus }),
+          ...(dto.implementationNote && { implementationNote: dto.implementationNote }),
+          // Optionally update the assigned hodId to the person who actually reviewed it
+          hodId: reviewer.id,
+        }
+      });
       return tx.suggestionReview.create({
         data: {
           suggestionId: id,
           reviewerId: reviewer.id,
-          reviewerCommitteeId: suggestion.committeeId,
           statusChanged: dto.statusChanged,
           note: dto.note,
         },
         include: {
           reviewer: { select: { id: true, firstName: true, lastName: true } },
-          reviewerCommittee: { select: committeeSelect },
         },
       });
     });
@@ -382,6 +392,62 @@ export class SimsService {
     });
 
     return review;
+  }
+
+  async updateImplementationStatus(
+    id: string,
+    dto: UpdateImplementationDto,
+    userId: string,
+    organizationId: string,
+  ) {
+    const suggestion = await this.prisma.suggestion.findUnique({
+      where: { id },
+      include: { employee: { select: { departmentId: true } } }
+    });
+
+    if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
+
+    if (suggestion.status === 'REJECTED' && dto.implementationStatus === 'IMPLEMENTED') {
+      throw new BadRequestException('A rejected suggestion cannot be marked as implemented');
+    }
+
+    const updater = await this.resolveEmployee(userId, organizationId);
+
+    // Check authorization: Must be an HOD in the same department (or Super Admin)
+    const userOrgs = await this.prisma.userOrganization.findMany({
+      where: { userId, organizationId },
+      include: { role: true }
+    });
+    const roles = userOrgs.map(uo => uo.role.name);
+
+    const isDepartmentHOD = roles.includes(Role.HOD) && updater.departmentId === suggestion.employee?.departmentId;
+    const isSuperAdmin = roles.includes(Role.SUPER_ADMIN);
+
+    if (!isDepartmentHOD && !isSuperAdmin) {
+        throw new ForbiddenException('Only a department HOD or admin can update implementation status');
+    }
+
+    const updated = await this.prisma.suggestion.update({
+      where: { id },
+      data: {
+        implementationStatus: dto.implementationStatus,
+        ...(dto.implementationNote && { implementationNote: dto.implementationNote }),
+      },
+      include: suggestionInclude,
+    });
+
+    // notify employee
+    await this.notifications.create({
+      employeeId: suggestion.employeeId,
+      type: 'INFO',
+      module: 'SIMS',
+      title: 'Implementation progress updated',
+      message: `The implementation status of your suggestion "${suggestion.title}" is now "${dto.implementationStatus.toLowerCase().replace(/_/g, ' ')}".`,
+      actionUrl: `/sims/${id}`,
+      metadata: { suggestionId: id, implementationStatus: dto.implementationStatus },
+    });
+
+    return updated;
   }
 
 }

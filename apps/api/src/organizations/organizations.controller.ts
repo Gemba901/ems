@@ -139,6 +139,16 @@ export class OrganizationsController {
     }
 
     /**
+     * PATCH /organizations/:id/set-admin-org
+     * Designate this organization as the platform company (Gemba PMS).
+     * Unsets any previous admin org. Only one org can hold this flag at a time.
+     */
+    @Patch(':id/set-admin-org')
+    setAdminOrg(@Param('id') id: string) {
+        return this.organizationsService.setAdminOrg(id);
+    }
+
+    /**
      * PATCH /organizations/:id/status
      * Change org lifecycle status: ACTIVE | SUSPENDED | INACTIVE.
      * SUSPENDED = read-only access still works, new logins blocked.

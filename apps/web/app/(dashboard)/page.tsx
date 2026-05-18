@@ -19,15 +19,20 @@ import {
   FileEdit,
   ListChecks,
   Building2,
+  Inbox,
+  ClipboardList,
+  CalendarDays,
+  UserCircle,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import DashboardHero from "@/components/DashboardHero";
 import DashboardRoleSection from "@/components/DashboardRoleSection";
+import { Role } from "@/types/role";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -39,7 +44,9 @@ interface ModuleConfig {
   bg: string;
   ring: string;
   href?: string;
-  actions?: { label: string; href: string; icon: React.ElementType }[];
+  /** If set, this module always shows for these roles (not org-gated). */
+  systemRoles?: Role[];
+  actions?: { label: string; href: string; icon: React.ElementType; roles?: Role[] }[];
 }
 
 const MODULE_REGISTRY: Record<string, ModuleConfig> = {
@@ -56,6 +63,39 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     actions: [
       { label: "Submit an idea",    href: "/sims/new",            icon: FileEdit   },
       { label: "My submissions",    href: "/sims/my-suggestions", icon: ListChecks },
+      { label: "Review Queue",      href: "/sims/queue",          icon: Inbox, roles: [Role.HOD, Role.ADMIN, Role.SUPER_ADMIN, Role.MANAGEMENT] },
+    ],
+  },
+  EMS: {
+    key: "EMS",
+    label: "EMS",
+    tagline: "Employee Master Data",
+    description: "Manage employee records, track data completeness, and ensure all staff profiles are up to date across the organization.",
+    icon: ClipboardList,
+    color: "text-indigo-600",
+    bg: "bg-indigo-50",
+    ring: "ring-indigo-200",
+    href: "/ems",
+    systemRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE],
+    actions: [
+      { label: "EMS Dashboard",   href: "/ems",            icon: BarChart3,   roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
+      { label: "View Employees",  href: "/ems/employees",  icon: Users,       roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
+      { label: "My Profile",      href: "/ems/my-profile", icon: UserCircle,  roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
+    ],
+  },
+  CALENDAR: {
+    key: "CALENDAR",
+    label: "Calendar",
+    tagline: "Visit Scheduling",
+    description: "View and schedule consultancy visits, request meeting dates, and keep your team aligned on upcoming engagements.",
+    icon: CalendarDays,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    ring: "ring-blue-200",
+    href: "/calendar",
+    systemRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+    actions: [
+      { label: "View Calendar", href: "/calendar", icon: CalendarDays },
     ],
   },
 };
@@ -153,9 +193,19 @@ export default function DashboardPage() {
       .finally(() => setLoadingModules(false));
   }, [accessToken]);
 
-  const enabledModules = activeModules
+  const orgModules = activeModules
     .map((key) => MODULE_REGISTRY[key])
     .filter(Boolean);
+
+  const systemModules = Object.values(MODULE_REGISTRY).filter(
+    (mod) =>
+      mod.systemRoles &&
+      user?.roleLevel &&
+      mod.systemRoles.includes(user.roleLevel as Role) &&
+      !activeModules.includes(mod.key),
+  );
+
+  const enabledModules = [...orgModules, ...systemModules];
 
   const upcomingToShow = UPCOMING_MODULES.filter(
     (m) => !activeModules.includes((m as any).key)
@@ -219,18 +269,20 @@ export default function DashboardPage() {
 
                 {mod.actions && (
                   <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-1.5">
-                    {mod.actions.map((action) => (
-                      <Link
-                        key={action.href}
-                        href={action.href}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-2 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors"
-                      >
-                        <action.icon className="h-3.5 w-3.5 shrink-0" />
-                        {action.label}
-                        <ChevronRight className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </Link>
-                    ))}
+                    {mod.actions
+                      .filter((action) => !action.roles || (user?.roleLevel && action.roles.includes(user.roleLevel as Role)))
+                      .map((action) => (
+                        <Link
+                          key={action.href}
+                          href={action.href}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-2 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+                        >
+                          <action.icon className="h-3.5 w-3.5 shrink-0" />
+                          {action.label}
+                          <ChevronRight className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </Link>
+                      ))}
                   </div>
                 )}
               </div>

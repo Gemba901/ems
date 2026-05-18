@@ -59,6 +59,31 @@ enum NotificationType {
   ALERT           // urgent/system-lever
 }
 
+// EMS: Employee Master Data
+enum EmploymentStatus {
+  ACTIVE
+  PROBATION
+  RESIGNED
+  TERMINATED
+  RETIRED
+  SUSPENDED
+  ABSCONDED
+  CONTRACT_ENDED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum SkillLevel {
+  LEVEL_1 // Learner
+  LEVEL_2 // Can Work with Support
+  LEVEL_3 // Can Work Independently
+  LEVEL_4 // Can Train Others
+}
+
 //organization
 model Organization {
   id          String    @id @default(uuid())
@@ -71,6 +96,7 @@ model Organization {
   status      OrgStatus  @default(ACTIVE)
   modules     ModuleType[] @default([])
   primaryColor String?    @default("#4F46E5")
+  isAdminOrg  Boolean    @default(false)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -79,6 +105,8 @@ model Organization {
   departments Department[]
   suggestions Suggestion[]
   committees  SteeringCommittee[]
+  consultancyVisits ConsultancyVisit[]
+  visitRequests     VisitRequest[]
 }
 
 //specific user
@@ -91,6 +119,8 @@ model User {
 
   organizations     UserOrganization[]
   employees         Employee[]
+  createdVisits     ConsultancyVisit[]
+  visitRequests     VisitRequest[]
 
   createdAt         DateTime @default(now())
 }
@@ -145,10 +175,36 @@ model Employee {
   userId         String?
   avatarUrl      String?
 
+  // EMS: Identity group
+  employeeCode   String?
+  gender         Gender?
+  dateOfBirth    DateTime?
+  nationalId     String?
+
+  // EMS: Work Allocation group
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  jobTitle         String?
+  dateJoined       DateTime?
+  workStation      String?
+
+  // EMS: Role & Responsibility group
+  jobDescription   String?
+
+  // EMS: Contact group (phone + email above; extras below)
+  homeAddress                  String?
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
+
+  // EMS: Skill group
+  skillLevel     SkillLevel?
+  trainingNeeded Boolean?
+
   department       Department?  @relation(fields: [departmentId], references: [id])
   organization     Organization @relation(fields: [organizationId], references: [id])
   user             User?        @relation(fields: [userId], references: [id])
-  suggestions      Suggestion[]
+  suggestions      Suggestion[] @relation("EmployeeSuggestions")
+  hodSuggestions   Suggestion[] @relation("HODSuggestions")
   suggestionReviews SuggestionReview[]
   committeeMembers  SteeringCommitteeMember[]
   notifications     Notification[]
@@ -178,8 +234,6 @@ model SteeringCommittee {
 
   organization   Organization              @relation(fields: [organizationId], references: [id])
   members        SteeringCommitteeMember[]
-  suggestions    Suggestion[]
-  reviews        SuggestionReview[]
 }
 
 model SteeringCommitteeMember {
@@ -239,6 +293,19 @@ enum SuggestionStatus {
   SELECTED_FOR_SGA
 }
 
+enum ImplementationStatus {
+  WORK_IN_PROGRESS
+  VERY_SLOW_WORK_IN_PROGRESS
+  GOOD_WORK_IN_PROGRESS
+  SLOW_PROGRESS
+  IMPLEMENTED
+  SHIFTED_TO_SGA
+  PREVIOUSLY_IMPLEMENTED
+  UNDER_CONSULTATION
+  IMPRACTICAL
+  SAVED_FOR_LATER
+}
+
 enum SuggestionCategory {
   QUALITY
   COST
@@ -250,35 +317,86 @@ enum SuggestionCategory {
 }
 
 model Suggestion {
-  id             String               @id @default(uuid())
-  title          String
-  description    String
-  status         SuggestionStatus     @default(UNDER_REVIEW)
-  categories     SuggestionCategory[] @default([])
-  isAnonymous    Boolean              @default(false)
-  employeeId     String
-  organizationId String
-  committeeId    String?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                   String                @id @default(uuid())
+  title                String
+  description          String
+  imageUrl             String?
+  status               SuggestionStatus      @default(UNDER_REVIEW)
+  implementationStatus ImplementationStatus?
+  implementationNote   String?
+  categories           SuggestionCategory[]  @default([])
+  isAnonymous          Boolean               @default(false)
+  employeeId           String
+  organizationId       String
+  hodId                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
-  employee       Employee              @relation(fields: [employeeId], references: [id])
-  organization   Organization          @relation(fields: [organizationId], references: [id])
-  committee      SteeringCommittee?    @relation(fields: [committeeId], references: [id], onDelete: SetNull)
-  reviews        SuggestionReview[]
+  employee     Employee           @relation("EmployeeSuggestions", fields: [employeeId], references: [id])
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  hod          Employee?          @relation("HODSuggestions", fields: [hodId], references: [id], onDelete: SetNull)
+  reviews      SuggestionReview[]
 }
 
-// Audit trail: every status change by a committee member is recorded here
+// Audit trail: every status change by a reviewer is recorded here
 model SuggestionReview {
   id                  String           @id @default(uuid())
   suggestionId        String
   reviewerId          String
-  reviewerCommitteeId String?
   statusChanged       SuggestionStatus
   note                String?
   createdAt           DateTime         @default(now())
 
   suggestion          Suggestion         @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
   reviewer            Employee           @relation(fields: [reviewerId], references: [id])
-  reviewerCommittee   SteeringCommittee? @relation(fields: [reviewerCommitteeId], references: [id], onDelete: SetNull)
 }
+
+// ── Calendar: Consultancy Visit Scheduling ────────────────────────────────────
+
+enum VisitStatus {
+  TENTATIVE
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum VisitRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ConsultancyVisit {
+  id             String      @id @default(uuid())
+  title          String
+  clientOrgId    String
+  date           DateTime
+  startTime      String?
+  endTime        String?
+  status         VisitStatus @default(TENTATIVE)
+  notes          String?         // visible to the client org
+  internalNotes  String?         // only visible to Gemba admins (SUPER_ADMIN)
+  createdById    String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  clientOrg      Organization @relation(fields: [clientOrgId], references: [id])
+  createdBy      User         @relation(fields: [createdById], references: [id])
+}
+
+model VisitRequest {
+  id              String             @id @default(uuid())
+  organizationId  String
+  requestedDate   DateTime
+  preferredTime   String?
+  message         String?
+  status          VisitRequestStatus @default(PENDING)
+  responseNote    String?
+  createdById     String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  createdBy       User         @relation(fields: [createdById], references: [id])
+}
+   

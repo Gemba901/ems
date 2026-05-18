@@ -13,6 +13,8 @@ import {
   Lightbulb,
   Building2,
   Stethoscope,
+  SlidersHorizontal,
+  CalendarDays,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { Role } from "@/types/role";
@@ -77,11 +79,25 @@ const NAV_ITEMS = [
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
   },
   {
+    name: "Calendar",
+    href: "/calendar",
+    icon: CalendarDays,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+  },
+  {
     name: "Settings",
     href: "/settings",
     icon: Settings,
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN],
+  },
+  {
+    name: "Admin Console",
+    href: "/admin",
+    icon: SlidersHorizontal,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN],
   },
 ];
 

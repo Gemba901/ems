@@ -13,7 +13,7 @@ import {
 import {
   Plus, Download, EyeOff, Eye, MoreHorizontal, Lightbulb,
   Clock, CheckCircle2, AlertCircle, Award, AlertTriangle, ChevronRight,
-  ShieldCheck, BarChart2,
+  ShieldCheck, BarChart2, Inbox,
 } from "lucide-react";
 import { CommitteeService, MyCommittee } from "@/services/committee.service";
 
@@ -190,12 +190,17 @@ export default function SimsOverviewPage() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {isReviewer && (
-              <button
-                onClick={() => exportToCSV(filtered)}
-                className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm"
-              >
-                <Download className="h-4 w-4" /> Export CSV
-              </button>
+              <>
+                <button
+                  onClick={() => exportToCSV(filtered)}
+                  className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm"
+                >
+                  <Download className="h-4 w-4" /> Export CSV
+                </button>
+                <Link href="/sims/queue" className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm">
+                  <Inbox className="h-4 w-4 text-blue-500" /> Review Queue
+                </Link>
+              </>
             )}
             <Link href="/sims/new" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm">
               <Plus className="h-4 w-4" /> New Suggestion
@@ -395,4 +400,4 @@ export default function SimsOverviewPage() {
       </div>
     </ProtectedRoute>
   );
-} 
+}

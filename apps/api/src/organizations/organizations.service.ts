@@ -502,6 +502,30 @@ export class OrganizationsService {
         return { message: `Organization "${org.name}" permanently deleted` };
     }
 
+    // ── Set admin org ────────────────────────────────────────────────────────
+    // Only one organization can be the platform company at any time.
+    // Calling this unsets any previous admin org, then marks the given org.
+
+    async setAdminOrg(id: string) {
+        await this.findOrFail(id);
+
+        await this.prisma.$transaction(async (tx) => {
+            await (tx.organization as any).updateMany({
+                where: { isAdminOrg: true },
+                data:  { isAdminOrg: false },
+            });
+            await (tx.organization as any).update({
+                where: { id },
+                data:  { isAdminOrg: true },
+            });
+        });
+
+        await this.cache.del(CACHE_KEYS.ORG_LIST);
+
+        const org = await this.prisma.organization.findUniqueOrThrow({ where: { id } });
+        return { message: `"${org.name}" is now the platform company`, organization: org };
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────────
 
     private async findOrFail(id: string) {

@@ -554,7 +554,7 @@ function EmployeeSection() {
           iconBg="bg-white shadow-sm" iconColor="text-amber-600" numColor="text-amber-900"
           labelColor="text-amber-700" subColor="text-amber-400" loading={loading}
           ring={{ pct: 100, stroke: "stroke-amber-300", track: "stroke-amber-100" }} />
-        <DashStat label="Under Review" value={orgReview} sub="Getting committee attention"
+        <DashStat label="Under Review" value={orgReview} sub="Awaiting evaluation"
           icon={Clock} gradient="from-indigo-50 to-indigo-100/60" border="border-indigo-200"
           iconBg="bg-white shadow-sm" iconColor="text-indigo-600" numColor="text-indigo-900"
           labelColor="text-indigo-700" subColor="text-indigo-400" loading={loading}

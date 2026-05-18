@@ -3,7 +3,7 @@ import {
   IsNumber, Min, IsArray, ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SuggestionCategory, SuggestionStatus } from 'db';
+import { SuggestionCategory, SuggestionStatus, ImplementationStatus } from 'db';
 
 export class CreateSuggestionDto {
   @IsString()
@@ -22,6 +22,10 @@ export class CreateSuggestionDto {
   @IsBoolean()
   @IsOptional()
   isAnonymous?: boolean;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
 }
 
 export class ReviewSuggestionDto {
@@ -31,18 +35,24 @@ export class ReviewSuggestionDto {
   @IsString()
   @IsOptional()
   note?: string;
+
+  @IsEnum(ImplementationStatus, { message: 'Invalid implementation status' })
+  @IsOptional()
+  implementationStatus?: ImplementationStatus;
+
+  @IsString()
+  @IsOptional()
+  implementationNote?: string;
 }
 
-export class AssignCommitteeDto {
-  @IsString()
-  @IsNotEmpty({ message: 'committeeId is required' })
-  committeeId!: string;
-}
+export class UpdateImplementationDto {
+  @IsEnum(ImplementationStatus, { message: 'Invalid implementation status' })
+  @IsNotEmpty({ message: 'Implementation status is required' })
+  implementationStatus!: ImplementationStatus;
 
-export class ClarifyDto {
   @IsString()
-  @IsNotEmpty({ message: 'Clarification note is required' })
-  note!: string;
+  @IsOptional()
+  implementationNote?: string;
 }
 
 export class QuerySuggestionsDto {
@@ -57,10 +67,6 @@ export class QuerySuggestionsDto {
   @IsString()
   @IsOptional()
   departmentId?: string;
-
-  @IsString()
-  @IsOptional()
-  committeeId?: string;
 
   @Type(() => Number)
   @IsNumber()

@@ -28,7 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/sims/analytics": "Analytics",
   "/sims/archived": "Archived",
   "/sims/settings": "SIMS Settings",
-  "/sims/committees": "Committees",
+  "/calendar": "Calendar",
   "/support": "Support",
 };
 

@@ -13,11 +13,13 @@ import {
     Menu,
     Shield,
     X,
+    Settings,
 } from "lucide-react";
 
 const NAV = [
     { label: "Dashboard",     href: "/admin",               icon: LayoutDashboard },
     { label: "Organizations", href: "/admin/organizations",  icon: Building2 },
+    { label: "Settings",      href: "/admin/settings",       icon: Settings },
 ];
 
 interface AdminSidebarProps {

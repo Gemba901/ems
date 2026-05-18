@@ -194,7 +194,7 @@ export class AuthService {
     async getMyOrg(organizationId: string) {
         return this.prisma.organization.findUnique({
             where: { id: organizationId },
-            select: { id: true, name: true, status: true, modules: true, logoUrl: true, primaryColor: true },
+            select: { id: true, name: true, status: true, modules: true, logoUrl: true, primaryColor: true, isAdminOrg: true },
         });
     }
 }

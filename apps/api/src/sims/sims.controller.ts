@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SimsService } from './sims.service';
-import { CreateSuggestionDto, QuerySuggestionsDto, ReviewSuggestionDto, AssignCommitteeDto } from './dto/sims.dto';
+import { CreateSuggestionDto, QuerySuggestionsDto, ReviewSuggestionDto, UpdateImplementationDto } from './dto/sims.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -80,15 +80,16 @@ export class SimsController {
 
   /**
    * GET /sims/queue
-   * Returns suggestions assigned to the caller's committee(s).
-   * Available to any authenticated user who is a committee member.
+   * Returns suggestions assigned to the caller for review (as HOD).
+   * Available to HODs.
    */
   @Get('queue')
+  @Roles(Role.HOD, Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
   async getQueue(
     @Query() query: QuerySuggestionsDto,
     @CurrentUser() user: { userId: string; organizationId: string },
   ) {
-    return this.simsService.getCommitteeSuggestions(user.userId, user.organizationId, query);
+    return this.simsService.getHODQueue(user.userId, user.organizationId, query);
   }
 
   /**
@@ -104,24 +105,8 @@ export class SimsController {
   }
 
   /**
-   * PATCH /sims/:id/assign
-   * Assigns a suggestion to a steering committee.
-   * Admin and Management only.
-   */
-  @Patch(':id/assign')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
-  async assign(
-    @Param('id') id: string,
-    @Body() dto: AssignCommitteeDto,
-    @CurrentUser() user: { organizationId: string },
-  ) {
-    return this.simsService.assignCommittee(id, dto, user.organizationId);
-  }
-
-  /**
    * PATCH /sims/:id/review
-   * Any authenticated user who is a member of the assigned committee can review.
-   * Membership is enforced in the service — no role restriction here.
+   * HODs and Admin/Management can review.
    */
   @Patch(':id/review')
   async review(
@@ -130,6 +115,20 @@ export class SimsController {
     @CurrentUser() user: { userId: string; organizationId: string },
   ) {
     return this.simsService.reviewSuggestion(id, dto, user.userId, user.organizationId);
+  }
+
+  /**
+   * PATCH /sims/:id/implementation
+   * Update implementation progress.
+   * HOD and Admin/Management only (enforced in service).
+   */
+  @Patch(':id/implementation')
+  async updateImplementation(
+    @Param('id') id: string,
+    @Body() dto: UpdateImplementationDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.simsService.updateImplementationStatus(id, dto, user.userId, user.organizationId);
   }
 
 }

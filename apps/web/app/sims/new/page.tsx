@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
-import { SimsService, SuggestionCategory } from "@/services/sims.service";
-import { ArrowLeft, Send, CheckSquare, Square } from "lucide-react";
-import { useToast } from "@/contexts/toast.context";
+import { SimsService, SuggestionCategory, uploadSuggestionImage } from "@/services/sims.service";
+import { SpeechToTextButton } from "@/components/ui/SpeechToTextButton";
+import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, X, Loader2 } from "lucide-react";
 
 const QCDSMT_CATEGORIES: {
   value: SuggestionCategory;
@@ -51,6 +51,63 @@ const EXAMPLE = {
   ],
 };
 
+const AUTO_CLOSE_MS = 6000;
+
+function SuccessModal({ name, onClose }: { name: string; onClose: () => void }) {
+  const [progress, setProgress] = useState(100);
+  const startRef = useRef(Date.now());
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const tick = () => {
+      const elapsed = Date.now() - startRef.current;
+      const remaining = Math.max(0, 100 - (elapsed / AUTO_CLOSE_MS) * 100);
+      setProgress(remaining);
+      if (remaining > 0) {
+        frameRef.current = requestAnimationFrame(tick);
+      } else {
+        onClose();
+      }
+    };
+    frameRef.current = requestAnimationFrame(tick);
+    return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
+  }, [onClose]);
+
+  const firstName = name.split(" ")[0];
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5 animate-in zoom-in-95 fade-in">
+        <div className="h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center">
+          <CheckCircle2 className="h-9 w-9 text-emerald-500" />
+        </div>
+
+        <div className="text-center space-y-1.5">
+          <h2 className="text-xl font-bold text-slate-900">Thank you, {firstName}!</h2>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            Your suggestion has been submitted and is now under review. We appreciate your contribution.
+          </p>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors"
+        >
+          OK
+        </button>
+
+        {/* Auto-close progress bar */}
+        <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-emerald-400 rounded-full transition-none"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TITLE_MIN = 10;
 const TITLE_MAX = 200;
 const DESC_MIN  = 20;
@@ -67,8 +124,7 @@ function validate(title: string, description: string, categories: SuggestionCate
 
 export default function NewSuggestionPage() {
   const router      = useRouter();
-  const { accessToken } = useAuthStore();
-  const { toast } = useToast();
+  const { accessToken, user } = useAuthStore();
 
   const [title, setTitle]             = useState("");
   const [description, setDescription] = useState("");
@@ -77,6 +133,41 @@ export default function NewSuggestionPage() {
   const [submitting, setSubmitting]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [successRedirect, setSuccessRedirect] = useState<string | null>(null);
+
+  // Image upload state
+  const [imageFile, setImageFile]       = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setError("Only image files are allowed."); return; }
+    if (file.size > 10 * 1024 * 1024) { setError("Image must be under 10 MB."); return; }
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setError(null);
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImagePreview(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  // Speech-to-text handlers
+  const appendToTitle = useCallback((transcript: string) => {
+    setTitle((prev) => (prev ? `${prev} ${transcript}` : transcript).slice(0, TITLE_MAX));
+    setError(null);
+  }, []);
+
+  const appendToDescription = useCallback((transcript: string) => {
+    setDescription((prev) => (prev ? `${prev} ${transcript}` : transcript).slice(0, DESC_MAX));
+    setError(null);
+  }, []);
 
   const toggleCategory = (val: SuggestionCategory) => {
     setCategories((prev) =>
@@ -101,17 +192,29 @@ export default function NewSuggestionPage() {
     e.preventDefault();
     const validationError = validate(title, description, categories);
     if (validationError) { setError(validationError); return; }
-
     if (!accessToken) return;
+
     setSubmitting(true);
     setError(null);
 
-    SimsService.submit({ title: title.trim(), description: description.trim(), categories, isAnonymous }, accessToken)
-      .then((created) => {
-        toast("Thank you for your suggestion! It has been submitted for review.", "success");
-        router.push(`/sims/${created.id}`);
-      })
-      .catch((err) => { setError(err.message); setSubmitting(false); });
+    try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        setImageUploading(true);
+        imageUrl = await uploadSuggestionImage(imageFile, accessToken);
+        setImageUploading(false);
+      }
+
+      const created = await SimsService.submit(
+        { title: title.trim(), description: description.trim(), categories, isAnonymous, imageUrl },
+        accessToken,
+      );
+      setSuccessRedirect(`/sims/${created.id}`);
+    } catch (err: unknown) {
+      setImageUploading(false);
+      setError(err instanceof Error ? err.message : "Submission failed");
+      setSubmitting(false);
+    }
   };
 
   const isUnknownSelected = categories.includes("UNKNOWN");
@@ -120,6 +223,12 @@ export default function NewSuggestionPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
+      {successRedirect && (
+        <SuccessModal
+          name={user?.name ?? "there"}
+          onClose={() => router.push(successRedirect)}
+        />
+      )}
       <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto">
 
         <Link href="/sims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
@@ -150,17 +259,20 @@ export default function NewSuggestionPage() {
                       {title.length}/{TITLE_MAX}
                     </span>
                   </div>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => { setTitle(e.target.value); setError(null); }}
-                    placeholder="e.g., Reduce rework rate in the Assembly line"
-                    className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all ${
-                      title.length > 0 && title.length < TITLE_MIN
-                        ? "border-amber-300 focus:ring-amber-500/20 focus:border-amber-400"
-                        : "border-slate-200 focus:ring-blue-500/20 focus:border-blue-400"
-                    }`}
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => { setTitle(e.target.value); setError(null); }}
+                      placeholder="e.g., Reduce rework rate in the Assembly line"
+                      className={`flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all ${
+                        title.length > 0 && title.length < TITLE_MIN
+                          ? "border-amber-300 focus:ring-amber-500/20 focus:border-amber-400"
+                          : "border-slate-200 focus:ring-blue-500/20 focus:border-blue-400"
+                      }`}
+                    />
+                    <SpeechToTextButton onResult={appendToTitle} disabled={submitting} />
+                  </div>
                   {title.length > 0 && title.length < TITLE_MIN && (
                     <p className="text-xs text-amber-600 mt-1">{TITLE_MIN - title.length} more characters needed</p>
                   )}
@@ -172,15 +284,18 @@ export default function NewSuggestionPage() {
                     <label className="text-sm font-semibold text-slate-700">
                       My Suggestion for Improvement <span className="text-red-500">*</span>
                     </label>
-                    <span className={`text-xs ${description.length > DESC_MAX ? "text-red-500" : "text-slate-400"}`}>
-                      {description.length}/{DESC_MAX}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs ${description.length > DESC_MAX ? "text-red-500" : "text-slate-400"}`}>
+                        {description.length}/{DESC_MAX}
+                      </span>
+                      <SpeechToTextButton onResult={appendToDescription} disabled={submitting} />
+                    </div>
                   </div>
                   <textarea
                     rows={6}
                     value={description}
                     onChange={(e) => { setDescription(e.target.value); setError(null); }}
-                    placeholder="Describe the current problem and your proposed solution. Be specific , include estimated cost or time savings where possible."
+                    placeholder="Describe the current problem and your proposed solution. Be specific, include estimated cost or time savings where possible."
                     className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all resize-none ${
                       description.length > 0 && description.length < DESC_MIN
                         ? "border-amber-300 focus:ring-amber-500/20 focus:border-amber-400"
@@ -190,6 +305,42 @@ export default function NewSuggestionPage() {
                   {description.length > 0 && description.length < DESC_MIN && (
                     <p className="text-xs text-amber-600 mt-1">{DESC_MIN - description.length} more characters needed</p>
                   )}
+                </div>
+
+                {/* Image upload */}
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+                    Supporting Image <span className="text-xs font-normal text-slate-400">(optional)</span>
+                  </label>
+                  {imagePreview ? (
+                    <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imagePreview} alt="Preview" className="w-full max-h-60 object-contain" />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 h-7 w-7 rounded-full bg-slate-900/60 hover:bg-slate-900/80 flex items-center justify-center text-white transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl py-5 text-sm text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                      Click to attach an image
+                    </button>
+                  )}
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
                 </div>
 
                 {/* Category multi-select */}
@@ -286,8 +437,13 @@ export default function NewSuggestionPage() {
                     disabled={!canSubmit}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                   >
-                    <Send className="h-4 w-4" />
-                    {submitting ? "Submitting..." : "Submit Suggestion"}
+                    {imageUploading ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Uploading image...</>
+                    ) : submitting ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
+                    ) : (
+                      <><Send className="h-4 w-4" /> Submit Suggestion</>
+                    )}
                   </button>
                   <Link href="/sims" className="px-5 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
                     Cancel

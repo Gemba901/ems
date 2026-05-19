@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
@@ -10,6 +10,7 @@ import {
   completionColor, completionBg,
 } from "@/services/ems.service";
 import { Search, ChevronLeft, ChevronRight, Loader2, ArrowLeft } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 const PAGE_SIZE = 20;
 
@@ -28,31 +29,24 @@ function CompletionPill({ pct }: { pct: number }) {
 
 export default function EmsEmployeesPage() {
   const { accessToken } = useAuthStore();
-  const [employees, setEmployees] = useState<EmployeeWithCompletion[]>([]);
-  const [total, setTotal]         = useState(0);
-  const [pages, setPages]         = useState(1);
   const [page, setPage]           = useState(1);
   const [search, setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<EmploymentStatus | "">("");
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!accessToken) return;
-    setLoading(true);
-    EmsService.getEmployees(accessToken, {
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["ems-employees", page, statusFilter],
+    queryFn: () => EmsService.getEmployees(accessToken!, {
       page,
       limit: PAGE_SIZE,
       employmentStatus: statusFilter || undefined,
-    })
-      .then(({ data, pagination }) => {
-        setEmployees(data);
-        setTotal(pagination.total);
-        setPages(pagination.pages);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [accessToken, page, statusFilter]);
+    }),
+    enabled: !!accessToken,
+  });
+
+  const employees: EmployeeWithCompletion[] = data?.data ?? [];
+  const total = data?.pagination.total ?? 0;
+  const pages = data?.pagination.pages ?? 1;
+  const error = queryError ? (queryError as any).message : null;
 
   const filtered = search.trim()
     ? employees.filter((e) =>

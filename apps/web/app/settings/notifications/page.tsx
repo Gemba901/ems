@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { broadcastNotification, NotificationType } from "@/services/notifications.service";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
+import { useMutation } from "@tanstack/react-query";
 
 const TYPES: { value: NotificationType; label: string; description: string }[] = [
   { value: "INFO", label: "Info", description: "General update or announcement" },
@@ -20,32 +21,31 @@ function BroadcastForm() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [actionUrl, setActionUrl] = useState("");
-  const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!accessToken) return;
-    setSending(true);
-    setError(null);
-    try {
-      await broadcastNotification(accessToken, {
-        type,
-        title,
-        message,
-        ...(actionUrl && { actionUrl }),
-      });
+  const sendMutation = useMutation({
+    mutationFn: () => broadcastNotification(accessToken!, {
+      type,
+      title,
+      message,
+      ...(actionUrl && { actionUrl }),
+    }),
+    onSuccess: () => {
       setSent(true);
       setTitle("");
       setMessage("");
       setActionUrl("");
       setTimeout(() => setSent(false), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSending(false);
-    }
+    },
+  });
+
+  const sending = sendMutation.isPending;
+  const error = sendMutation.error ? (sendMutation.error as any).message : null;
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken) return;
+    sendMutation.mutate();
   }
 
   return (

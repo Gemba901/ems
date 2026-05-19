@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarService,
-  CalendarVisit, CalendarRequest,
+  CalendarVisit, CalendarRequest, CalendarBlock, CalendarBlockType,
   AdminOrg, ClientOrg, VisitStatus,
   VISIT_STATUS_LABELS, VISIT_STATUS_COLOR, VISIT_DOT_COLOR, REQUEST_STATUS_COLOR,
   CreateVisitPayload,
@@ -14,7 +15,7 @@ import {
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, CheckCircle2,
   Clock, Building2, FileText, Lock, Send, Trash2, Edit2,
-  ShieldAlert, Settings,
+  ShieldAlert, Settings, BanIcon, CalendarX2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -127,50 +128,71 @@ function VisitCard({
 export default function CalendarPage() {
   const { accessToken, user } = useAuthStore();
   const isAdmin = user?.roleLevel === Role.SUPER_ADMIN;
+  const queryClient = useQueryClient();
 
   const now = new Date();
   const [year,  setYear]  = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
-  // undefined = loading, null = not configured
-  const [adminOrg, setAdminOrg] = useState<AdminOrg | null | undefined>(undefined);
-
-  const [visits,   setVisits]   = useState<CalendarVisit[]>([]);
-  const [requests, setRequests] = useState<CalendarRequest[]>([]);
-  const [orgs,     setOrgs]     = useState<ClientOrg[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
-
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showCreate,  setShowCreate]  = useState(false);
   const [editingVisit, setEditingVisit] = useState<CalendarVisit | null>(null);
   const [showRequest, setShowRequest] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showBlockForm, setShowBlockForm] = useState(false);
 
   const todayStr = today();
 
-  const load = useCallback(() => {
-    if (!accessToken) return;
-    setLoading(true);
-    setError(null);
-    CalendarService.getMonthVisits(year, month, accessToken)
-      .then(({ visits: v, requests: r }) => { setVisits(v); setRequests(r); })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [accessToken, year, month]);
+  // Query: admin org config (undefined = loading, null = not configured)
+  const { data: adminOrg, isLoading: adminOrgLoading } = useQuery({
+    queryKey: ["calendar-admin-org"],
+    queryFn: () => CalendarService.getAdminOrg(accessToken!).catch(() => null),
+    enabled: !!accessToken,
+    // Use undefined as placeholder while loading so existing loading guard still works
+  });
+  // While the adminOrg query hasn't resolved yet, treat as undefined (loading)
+  const adminOrgResolved: AdminOrg | null | undefined = adminOrgLoading ? undefined : (adminOrg ?? null);
 
-  useEffect(() => { load(); }, [load]);
+  // Query: month visits + requests
+  const { data: monthData, isLoading: loading, error: monthError } = useQuery({
+    queryKey: ["calendar-month", year, month],
+    queryFn: () => CalendarService.getMonthVisits(year, month, accessToken!),
+    enabled: !!accessToken,
+  });
 
-  useEffect(() => {
-    if (!accessToken) return;
-    CalendarService.getAdminOrg(accessToken)
-      .then(setAdminOrg)
-      .catch(() => setAdminOrg(null));
-  }, [accessToken]);
+  const visits: CalendarVisit[]     = monthData?.visits   ?? [];
+  const requests: CalendarRequest[] = monthData?.requests ?? [];
+  const blocks: CalendarBlock[]     = monthData?.blocks   ?? [];
+  const error = monthError ? (monthError as any).message : deleteError;
 
-  useEffect(() => {
-    if (!accessToken || !isAdmin) return;
-    CalendarService.getClientOrganizations(accessToken).then(setOrgs).catch(() => {});
-  }, [accessToken, isAdmin]);
+  // Map blocks by date for quick lookup
+  const blockByDate: Record<string, CalendarBlock> = {};
+  for (const b of blocks) blockByDate[b.date] = b;
+
+  // Query: client organizations (admin only, lazy)
+  const { data: orgs = [] } = useQuery({
+    queryKey: ["calendar-client-orgs"],
+    queryFn: () => CalendarService.getClientOrganizations(accessToken!),
+    enabled: !!accessToken && isAdmin,
+  });
+
+  // Mutation: delete visit
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => CalendarService.deleteVisit(id, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] });
+      setSelectedDay(null);
+    },
+    onError: (e: unknown) => {
+      setDeleteError(e instanceof Error ? e.message : "Delete failed");
+    },
+  });
+
+  // Mutation: remove calendar block
+  const unblockMutation = useMutation({
+    mutationFn: (id: string) => CalendarService.deleteBlock(id, accessToken!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] }),
+  });
 
   const prevMonth = () => {
     if (month === 1) { setYear((y) => y - 1); setMonth(12); }
@@ -201,18 +223,13 @@ export default function CalendarPage() {
   const daysInMonth  = getDaysInMonth(year, month);
   const firstDayOfWeek = getFirstDayOfWeek(year, month);
 
-  const handleDeleteVisit = async (id: string) => {
+  const handleDeleteVisit = (id: string) => {
     if (!accessToken || !confirm("Delete this visit?")) return;
-    try {
-      await CalendarService.deleteVisit(id, accessToken);
-      load();
-      setSelectedDay(null);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Delete failed");
-    }
+    setDeleteError(null);
+    deleteMutation.mutate(id);
   };
 
-  if (adminOrg === undefined) {
+  if (adminOrgResolved === undefined) {
     return (
       <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
         <div className="flex items-center justify-center min-h-[60vh] text-slate-400 gap-2 text-sm">
@@ -222,7 +239,7 @@ export default function CalendarPage() {
     );
   }
 
-  if (adminOrg === null) {
+  if (adminOrgResolved === null) {
     return (
       <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
         <div className="max-w-lg mx-auto mt-24 text-center space-y-5 px-4">
@@ -298,6 +315,8 @@ export default function CalendarPage() {
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-purple-400" />Your request</span>
             </>
           )}
+          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-red-200" />Public Holiday</span>
+          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-amber-200" />Busy Day</span>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
@@ -347,9 +366,16 @@ export default function CalendarPage() {
                   const hasOwn     = dayVisits.some((v) => v.isOwn);
                   const hasOccupied = dayVisits.some((v) => !v.isOwn);
                   const hasRequest  = dayRequests.length > 0;
+                  const block       = blockByDate[dateStr];
 
                   const colIndex = (firstDayOfWeek + day - 1) % 7;
                   const isLastCol = colIndex === 6;
+
+                  const blockBg = block
+                    ? block.type === "HOLIDAY"
+                      ? isSelected ? "bg-red-100" : "bg-red-50 hover:bg-red-100"
+                      : isSelected ? "bg-amber-100" : "bg-amber-50 hover:bg-amber-100"
+                    : isSelected ? "bg-blue-50" : "hover:bg-slate-50";
 
                   return (
                     <div
@@ -357,37 +383,53 @@ export default function CalendarPage() {
                       onClick={() => setSelectedDay(isSelected ? null : dateStr)}
                       className={`min-h-[80px] p-2 border-b border-r border-slate-50 cursor-pointer transition-all ${
                         isLastCol ? "border-r-0" : ""
-                      } ${isSelected ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                      } ${blockBg}`}
                     >
                       {/* Day number */}
                       <div className={`h-6 w-6 flex items-center justify-center rounded-full text-xs font-semibold mb-1 ${
                         isToday
                           ? "bg-blue-600 text-white"
-                          : isSelected
+                          : isSelected && !block
                             ? "bg-blue-100 text-blue-700"
-                            : "text-slate-600"
+                            : block?.type === "HOLIDAY"
+                              ? "text-red-600"
+                              : block?.type === "BUSY_DAY"
+                                ? "text-amber-700"
+                                : "text-slate-600"
                       }`}>
                         {day}
                       </div>
 
+                      {/* Block indicator */}
+                      {block && (
+                        <div className={`text-[9px] font-bold truncate leading-tight mt-0.5 ${
+                          block.type === "HOLIDAY" ? "text-red-500" : "text-amber-600"
+                        }`}>
+                          {block.type === "HOLIDAY" ? "🏖 " : "🚫 "}
+                          {block.label ?? (block.type === "HOLIDAY" ? "Holiday" : "Busy")}
+                        </div>
+                      )}
+
                       {/* Dots */}
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {isAdmin
-                          ? dayVisits.map((v) => (
-                              <span key={v.id} className={`h-2 w-2 rounded-full ${VISIT_DOT_COLOR[v.status]}`} title={v.title} />
-                            ))
-                          : (
-                            <>
-                              {hasOwn     && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
-                              {hasOccupied && <span className="h-2 w-2 rounded-full bg-slate-300" />}
-                            </>
-                          )
-                        }
-                        {hasRequest && <span className="h-2 w-2 rounded-full bg-purple-400" />}
-                      </div>
+                      {!block && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {isAdmin
+                            ? dayVisits.map((v) => (
+                                <span key={v.id} className={`h-2 w-2 rounded-full ${VISIT_DOT_COLOR[v.status]}`} title={v.title} />
+                              ))
+                            : (
+                              <>
+                                {hasOwn      && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+                                {hasOccupied && <span className="h-2 w-2 rounded-full bg-slate-300" />}
+                              </>
+                            )
+                          }
+                          {hasRequest && <span className="h-2 w-2 rounded-full bg-purple-400" />}
+                        </div>
+                      )}
 
                       {/* Mini labels for admin */}
-                      {isAdmin && dayVisits.length > 0 && (
+                      {isAdmin && !block && dayVisits.length > 0 && (
                         <div className="mt-1 space-y-0.5">
                           {dayVisits.slice(0, 2).map((v) => (
                             <p key={v.id} className="text-[9px] text-slate-500 truncate leading-tight">
@@ -408,92 +450,154 @@ export default function CalendarPage() {
 
           {/* Right panel — day detail or empty state */}
           <div className="xl:col-span-1">
-            {selectedDay ? (
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-6">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">
-                      {new Date(selectedDay + "T00:00:00").toLocaleDateString("en-GB", {
-                        weekday: "long", day: "numeric", month: "long",
-                      })}
-                    </p>
-                    {selectedDay === todayStr && (
-                      <span className="text-[10px] font-bold text-blue-600">Today</span>
-                    )}
-                  </div>
-                  <button onClick={() => setSelectedDay(null)} className="text-slate-400 hover:text-slate-600">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="p-4 space-y-3 max-h-[calc(100vh-14rem)] overflow-y-auto">
-                  {selectedDayVisits.length === 0 && selectedDayRequests.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-sm text-slate-400">No visits scheduled</p>
-                      {!isAdmin && (
-                        <button
-                          onClick={() => setShowRequest(true)}
-                          className="mt-3 flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 mx-auto transition-colors"
-                        >
-                          <Plus className="h-3.5 w-3.5" /> Request a visit
-                        </button>
+            {selectedDay ? (() => {
+              const selectedBlock = blockByDate[selectedDay];
+              return (
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-6">
+                  <div className={`px-5 py-4 border-b flex items-center justify-between ${
+                    selectedBlock?.type === "HOLIDAY"
+                      ? "border-red-100 bg-red-50"
+                      : selectedBlock?.type === "BUSY_DAY"
+                        ? "border-amber-100 bg-amber-50"
+                        : "border-slate-100 bg-slate-50"
+                  }`}>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">
+                        {new Date(selectedDay + "T00:00:00").toLocaleDateString("en-GB", {
+                          weekday: "long", day: "numeric", month: "long",
+                        })}
+                      </p>
+                      {selectedDay === todayStr && (
+                        <span className="text-[10px] font-bold text-blue-600">Today</span>
                       )}
                     </div>
-                  ) : (
-                    <>
-                      {selectedDayVisits.map((v) => (
-                        <VisitCard
-                          key={v.id}
-                          visit={v}
-                          isAdmin={isAdmin}
-                          onEdit={setEditingVisit}
-                          onDelete={handleDeleteVisit}
-                        />
-                      ))}
+                    <button onClick={() => setSelectedDay(null)} className="text-slate-400 hover:text-slate-600">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
 
-                      {selectedDayRequests.map((r) => (
-                        <div key={r.id} className="rounded-xl border border-purple-100 bg-purple-50 p-3 space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-                            <p className="text-sm font-semibold text-purple-700">
-                              {r.isOwn ? "Your visit request" : r.organizationName}
-                            </p>
-                            <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${REQUEST_STATUS_COLOR[r.status]}`}>
-                              {r.status}
-                            </span>
-                          </div>
-                          {r.preferredTime && (
-                            <p className="text-xs text-purple-600">Preferred time: {r.preferredTime}</p>
-                          )}
-                          {r.message && <p className="text-xs text-slate-500">{r.message}</p>}
-                          {r.responseNote && (
-                            <p className="text-xs text-slate-500 border-t border-purple-100 pt-1.5">
-                              Response: {r.responseNote}
-                            </p>
-                          )}
-                          {isAdmin && r.status === "PENDING" && (
-                            <RequestActions
-                              requestId={r.id}
-                              token={accessToken!}
-                              onDone={load}
-                            />
-                          )}
+                  <div className="p-4 space-y-3 max-h-[calc(100vh-14rem)] overflow-y-auto">
+
+                    {/* Block banner */}
+                    {selectedBlock && (
+                      <div className={`rounded-xl p-3 flex items-start gap-3 ${
+                        selectedBlock.type === "HOLIDAY"
+                          ? "bg-red-50 border border-red-100"
+                          : "bg-amber-50 border border-amber-100"
+                      }`}>
+                        <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${
+                          selectedBlock.type === "HOLIDAY" ? "bg-red-100" : "bg-amber-100"
+                        }`}>
+                          {selectedBlock.type === "HOLIDAY"
+                            ? <CalendarX2 className="h-3.5 w-3.5 text-red-500" />
+                            : <BanIcon className="h-3.5 w-3.5 text-amber-500" />}
                         </div>
-                      ))}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-bold ${
+                            selectedBlock.type === "HOLIDAY" ? "text-red-700" : "text-amber-700"
+                          }`}>
+                            {selectedBlock.type === "HOLIDAY" ? "Public Holiday" : "Busy Day"}
+                          </p>
+                          <p className={`text-xs mt-0.5 ${
+                            selectedBlock.type === "HOLIDAY" ? "text-red-600" : "text-amber-600"
+                          }`}>
+                            {selectedBlock.label ?? "No visits can be scheduled on this day."}
+                          </p>
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={() => unblockMutation.mutate(selectedBlock.id)}
+                            disabled={unblockMutation.isPending}
+                            className="shrink-0 text-xs text-slate-400 hover:text-red-500 transition-colors"
+                            title="Remove block"
+                          >
+                            {unblockMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
+                      </div>
+                    )}
 
-                      {!isAdmin && selectedDayVisits.every((v) => !v.isOwn) && (
+                    {/* Visits and requests (still shown even on blocked days for admin info) */}
+                    {selectedDayVisits.length === 0 && selectedDayRequests.length === 0 && !selectedBlock ? (
+                      <div className="text-center py-8">
+                        <p className="text-sm text-slate-400">No visits scheduled</p>
+                        {!isAdmin && (
+                          <button
+                            onClick={() => setShowRequest(true)}
+                            className="mt-3 flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 mx-auto transition-colors"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Request a visit
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        {selectedDayVisits.map((v) => (
+                          <VisitCard
+                            key={v.id}
+                            visit={v}
+                            isAdmin={isAdmin}
+                            onEdit={setEditingVisit}
+                            onDelete={handleDeleteVisit}
+                          />
+                        ))}
+
+                        {selectedDayRequests.map((r) => (
+                          <div key={r.id} className="rounded-xl border border-purple-100 bg-purple-50 p-3 space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                              <p className="text-sm font-semibold text-purple-700">
+                                {r.isOwn ? "Your visit request" : r.organizationName}
+                              </p>
+                              <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${REQUEST_STATUS_COLOR[r.status]}`}>
+                                {r.status}
+                              </span>
+                            </div>
+                            {r.preferredTime && (
+                              <p className="text-xs text-purple-600">Preferred time: {r.preferredTime}</p>
+                            )}
+                            {r.message && <p className="text-xs text-slate-500">{r.message}</p>}
+                            {r.responseNote && (
+                              <p className="text-xs text-slate-500 border-t border-purple-100 pt-1.5">
+                                Response: {r.responseNote}
+                              </p>
+                            )}
+                            {isAdmin && r.status === "PENDING" && (
+                              <RequestActions
+                                requestId={r.id}
+                                token={accessToken!}
+                                onDone={() => queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] })}
+                              />
+                            )}
+                          </div>
+                        ))}
+
+                        {!isAdmin && !selectedBlock && selectedDayVisits.every((v) => !v.isOwn) && (
+                          <button
+                            onClick={() => setShowRequest(true)}
+                            className="w-full mt-1 flex items-center justify-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 transition-colors py-2"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Request a visit on this day
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {/* Admin: mark day as busy / holiday */}
+                    {isAdmin && !selectedBlock && (
+                      <div className="border-t border-slate-100 pt-3">
                         <button
-                          onClick={() => setShowRequest(true)}
-                          className="w-full mt-1 flex items-center justify-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 transition-colors py-2"
+                          onClick={() => setShowBlockForm(true)}
+                          className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-amber-600 transition-colors py-1.5"
                         >
-                          <Plus className="h-3.5 w-3.5" /> Request a visit on this day
+                          <BanIcon className="h-3.5 w-3.5" /> Mark day as unavailable
                         </button>
-                      )}
-                    </>
-                  )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : (
+              );
+            })() : (
               <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 text-center text-slate-400 text-sm">
                 <p className="text-slate-300 text-4xl mb-3">📅</p>
                 <p className="font-medium text-slate-500">Select a day</p>
@@ -512,7 +616,7 @@ export default function CalendarPage() {
           editing={editingVisit}
           defaultDate={selectedDay ?? undefined}
           onClose={() => { setShowCreate(false); setEditingVisit(null); }}
-          onSaved={() => { setShowCreate(false); setEditingVisit(null); load(); }}
+          onSaved={() => { setShowCreate(false); setEditingVisit(null); queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] }); }}
         />
       )}
 
@@ -522,7 +626,20 @@ export default function CalendarPage() {
           token={accessToken!}
           defaultDate={selectedDay ?? undefined}
           onClose={() => setShowRequest(false)}
-          onSaved={() => { setShowRequest(false); load(); }}
+          onSaved={() => { setShowRequest(false); queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] }); }}
+        />
+      )}
+
+      {/* Block day modal (admin only) */}
+      {showBlockForm && isAdmin && selectedDay && (
+        <BlockDayModal
+          token={accessToken!}
+          date={selectedDay}
+          onClose={() => setShowBlockForm(false)}
+          onSaved={() => {
+            setShowBlockForm(false);
+            queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] });
+          }}
         />
       )}
     </ProtectedRoute>
@@ -706,6 +823,104 @@ function RequestModal({
             <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {saving ? "Sending…" : "Send Request"}
+            </button>
+            <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-slate-600 hover:bg-slate-100 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Block Day Modal (admin only) ──────────────────────────────────────────────
+
+function BlockDayModal({
+  token, date, onClose, onSaved,
+}: {
+  token: string;
+  date: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [type,  setType]  = useState<CalendarBlockType>("BUSY_DAY");
+  const [label, setLabel] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
+
+  const displayDate = new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true); setError(null);
+    try {
+      await CalendarService.createBlock(
+        { date, type, label: label.trim() || undefined },
+        token,
+      );
+      onSaved();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to block day");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all";
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 fade-in">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h2 className="text-base font-bold text-slate-900">Mark Day Unavailable</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <p className="text-xs text-slate-500">{displayDate}</p>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 block mb-2">Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["BUSY_DAY", "HOLIDAY"] as CalendarBlockType[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                    type === t
+                      ? t === "HOLIDAY"
+                        ? "bg-red-50 border-red-300 text-red-700"
+                        : "bg-amber-50 border-amber-300 text-amber-700"
+                      : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  {t === "HOLIDAY" ? "🏖 Public Holiday" : "🚫 Busy Day"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 block mb-1">
+              Label <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              className={inputCls}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={type === "HOLIDAY" ? "e.g. Eid al-Fitr" : "e.g. Team offsite"}
+            />
+          </div>
+          {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+          <div className="flex gap-3 pt-1">
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BanIcon className="h-4 w-4" />}
+              {saving ? "Saving…" : "Block This Day"}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-slate-600 hover:bg-slate-100 transition-colors">
               Cancel

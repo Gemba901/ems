@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ElementType } from "react";
+import { useState, type ElementType } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
@@ -12,7 +13,7 @@ import {
 import {
   Users, AlertCircle, UserCheck, ChevronRight, Loader2,
   BarChart3, Activity, TrendingUp, ClipboardList,
-} from "lucide-react";
+} from "lucide-react"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -108,17 +109,14 @@ function ProportionStrip({ segments }: { segments: { pct: number; color: string;
 
 export default function EmsDashboardPage() {
   const { accessToken } = useAuthStore();
-  const [dashboard, setDashboard] = useState<EmsDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!accessToken) return;
-    EmsService.getDashboard(accessToken)
-      .then(setDashboard)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [accessToken]);
+  const { data: dashboard, isLoading: loading, error } = useQuery({
+    queryKey: ["ems-dashboard"],
+    queryFn: () => EmsService.getDashboard(accessToken!),
+    enabled: !!accessToken,
+});
+
+
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
@@ -130,7 +128,7 @@ export default function EmsDashboardPage() {
           </div>
         )}
         {error && (
-          <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-100">{error}</div>
+          <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-100">{error.message}</div>
         )}
 
         {dashboard && (() => {

@@ -16,6 +16,14 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export type VisitStatus = "TENTATIVE" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
 export type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type CalendarBlockType = "HOLIDAY" | "BUSY_DAY";
+
+export interface CalendarBlock {
+  id: string;
+  date: string; // YYYY-MM-DD
+  type: CalendarBlockType;
+  label: string | null;
+}
 
 export interface CalendarVisit {
   id: string;
@@ -131,7 +139,7 @@ export const CalendarService = {
     year: number,
     month: number,
     token: string,
-  ): Promise<{ visits: CalendarVisit[]; requests: CalendarRequest[] }> {
+  ): Promise<{ visits: CalendarVisit[]; requests: CalendarRequest[]; blocks: CalendarBlock[] }> {
     const res = await fetch(`${API_URL}/calendar/visits?year=${year}&month=${month}`, {
       headers: authHeaders(token),
     });
@@ -202,5 +210,25 @@ export const CalendarService = {
   async getAdminOrg(token: string): Promise<AdminOrg | null> {
     const res = await fetch(`${API_URL}/calendar/admin-org`, { headers: authHeaders(token) });
     return handleResponse(res);
+  },
+
+  async createBlock(
+    data: { date: string; type: CalendarBlockType; label?: string },
+    token: string,
+  ): Promise<CalendarBlock> {
+    const res = await fetch(`${API_URL}/calendar/blocks`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  async deleteBlock(id: string, token: string): Promise<void> {
+    const res = await fetch(`${API_URL}/calendar/blocks/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    });
+    await handleResponse(res);
   },
 };

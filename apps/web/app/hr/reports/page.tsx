@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, OrgStatsResponse } from "@/services/employee.service";
+import { useQuery } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
@@ -234,25 +235,22 @@ function RecentHiresTable({ employees, loading }: { employees: OrgStatsResponse[
 
 function ReportsContent() {
     const { user, accessToken } = useAuthStore();
-    const [stats, setStats] = useState<OrgStatsResponse | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
     const orgId = user?.organizationId ?? "";
 
-    useEffect(() => {
-        if (!accessToken || !orgId) return;
-        EmployeeService.getOrgStats(orgId, accessToken)
-            .then(setStats)
-            .catch((e) => setError(e.message || "Failed to load reports"))
-            .finally(() => setLoading(false));
-    }, [accessToken, orgId]);
+    const { data: stats, isLoading: loading, error: queryError } = useQuery({
+        queryKey: ["hr-reports"],
+        queryFn: () => EmployeeService.getOrgStats(orgId, accessToken!),
+        enabled: !!accessToken && !!orgId,
+    });
 
-    const activePct = stats && stats.total > 0
-        ? Math.round((stats.withAccounts / stats.total) * 100) : 0;
-    const pendingPct = 100 - activePct;
-    const newPct = stats && stats.total > 0
-        ? Math.round((stats.recentlyAdded / stats.total) * 100) : 0;
+    const error = queryError ? (queryError as any).message || "Failed to load reports" : null;
+
+    const activePct = useMemo(() => stats && stats.total > 0
+        ? Math.round((stats.withAccounts / stats.total) * 100) : 0, [stats]);
+    const pendingPct = useMemo(() => 100 - activePct, [activePct]);
+    const newPct = useMemo(() => stats && stats.total > 0
+        ? Math.round((stats.recentlyAdded / stats.total) * 100) : 0, [stats]);
 
     return (
         <div className="max-w-6xl mx-auto space-y-6">

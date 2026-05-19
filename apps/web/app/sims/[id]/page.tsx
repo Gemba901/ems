@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -16,6 +16,7 @@ import {
   calcWeight,
 } from "@/services/sims.service";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Clock,
@@ -160,97 +161,91 @@ function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; revie
 export default function SuggestionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user: authUser, accessToken } = useAuthStore();
+  const queryClient = useQueryClient();
   const role = authUser?.roleLevel;
 
-  const [suggestion, setSuggestion]   = useState<Suggestion | null>(null);
-  const [currentUser, setCurrentUser]   = useState<EmployeeApiResponse | null>(null);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState<string | null>(null);
-
-  // Review form
+  // Review form state
   const [newStatus, setNewStatus]     = useState<SuggestionStatus | "">("");
   const [note, setNote]               = useState("");
   const [implStatus, setImplStatus]   = useState<ImplementationStatus | "">("");
   const [implNote, setImplNote]       = useState("");
-  const [reviewing, setReviewing]     = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
-  // Implementation status update (for HOD/Admin)
+  // Implementation status update
   const [showImplUpdate, setShowImplUpdate] = useState(false);
-  const [updatingImpl, setUpdatingImpl]     = useState(false);
   const [implUpdateError, setImplUpdateError] = useState<string | null>(null);
+
+  const { data: suggestion, isLoading: suggestionLoading, error: suggestionErr } = useQuery({
+    queryKey: ["sims-detail", id],
+    queryFn: () => SimsService.getById(id!, accessToken!),
+    enabled: !!accessToken && !!id,
+  });
+
+  const { data: currentUser } = useQuery({
+    queryKey: ["employee-me"],
+    queryFn: () => EmployeeService.getMe(accessToken!),
+    enabled: !!accessToken,
+  });
+
+  const loading = suggestionLoading;
+  const error = suggestionErr ? (suggestionErr as any).message : null;
 
   const isSuperAdmin = role === Role.SUPER_ADMIN;
   const isReviewerRole = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
   const isHODOfDept = role === Role.HOD && suggestion?.employee?.department?.id === currentUser?.departmentId;
   const isAssignedHOD = suggestion?.hodId === currentUser?.id;
-  
+
   const canReview = isReviewerRole || isHODOfDept;
   const canUpdateImplementation = isReviewerRole || isHODOfDept;
 
-  const reload = () => {
-    if (!accessToken || !id) return;
-    SimsService.getById(id, accessToken).then(setSuggestion).catch(() => {});
-  };
+  const reviewMutation = useMutation({
+    mutationFn: (payload: { statusChanged: SuggestionStatus; note?: string; implementationStatus?: ImplementationStatus; implementationNote?: string }) =>
+      SimsService.review(suggestion!.id, payload, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sims-detail", id] });
+      setNewStatus("");
+      setNote("");
+      setImplStatus("");
+      setImplNote("");
+    },
+    onError: (err: any) => setReviewError(err.message),
+  });
 
-  useEffect(() => {
-    if (!accessToken || !id) return;
-    const fetches: Promise<any>[] = [
-      SimsService.getById(id, accessToken).then(setSuggestion),
-      EmployeeService.getMe(accessToken).then(setCurrentUser).catch(() => {}),
-    ];
-    Promise.all(fetches)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [id, accessToken]);
+  const implMutation = useMutation({
+    mutationFn: (payload: { implementationStatus: ImplementationStatus; implementationNote?: string }) =>
+      SimsService.updateImplementation(suggestion!.id, payload, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sims-detail", id] });
+      setShowImplUpdate(false);
+      setImplStatus("");
+      setImplNote("");
+    },
+    onError: (err: any) => setImplUpdateError(err.message),
+  });
 
-  const handleReview = async (e: React.FormEvent) => {
+  const reviewing = reviewMutation.isPending;
+  const updatingImpl = implMutation.isPending;
+
+  const handleReview = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken || !newStatus || !suggestion) return;
-    setReviewing(true);
+    if (!newStatus || !suggestion) return;
     setReviewError(null);
-    SimsService.review(
-      suggestion.id, 
-      { 
-        statusChanged: newStatus, 
-        note: note || undefined,
-        implementationStatus: implStatus || undefined,
-        implementationNote: implNote || undefined
-      }, 
-      accessToken
-    )
-      .then(() => {
-        reload();
-        setNewStatus("");
-        setNote("");
-        setImplStatus("");
-        setImplNote("");
-      })
-      .catch((err) => setReviewError(err.message))
-      .finally(() => setReviewing(false));
+    reviewMutation.mutate({
+      statusChanged: newStatus,
+      note: note || undefined,
+      implementationStatus: implStatus || undefined,
+      implementationNote: implNote || undefined,
+    });
   };
 
-  const handleUpdateImplementation = async (e: React.FormEvent) => {
+  const handleUpdateImplementation = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken || !implStatus || !suggestion) return;
-    setUpdatingImpl(true);
+    if (!implStatus || !suggestion) return;
     setImplUpdateError(null);
-    SimsService.updateImplementation(
-      suggestion.id, 
-      { 
-        implementationStatus: implStatus as ImplementationStatus, 
-        implementationNote: implNote || undefined 
-      }, 
-      accessToken
-    )
-      .then((updated) => {
-        setSuggestion(updated);
-        setShowImplUpdate(false);
-        setImplStatus("");
-        setImplNote("");
-      })
-      .catch((err) => setImplUpdateError(err.message))
-      .finally(() => setUpdatingImpl(false));
+    implMutation.mutate({
+      implementationStatus: implStatus as ImplementationStatus,
+      implementationNote: implNote || undefined,
+    });
   };
 
   const allowedNext = suggestion ? ALLOWED_TRANSITIONS[suggestion.status] : [];

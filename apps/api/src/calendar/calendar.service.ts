@@ -1,10 +1,11 @@
 import {
-  Injectable, NotFoundException, ForbiddenException,
+  Injectable, NotFoundException, BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import {
   CreateVisitDto, UpdateVisitDto, CreateVisitRequestDto, RespondToRequestDto,
+  CreateCalendarBlockDto,
 } from './dto/calendar.dto';
 
 const ORG_SELECT = { id: true, name: true, logoUrl: true };
@@ -19,6 +20,21 @@ export class CalendarService {
 
   // ── Visits ────────────────────────────────────────────────────────────────
 
+  private async assertDateNotBlocked(dateStr: string) {
+    const date = new Date(dateStr);
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dayEnd   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    const block = await (this.prisma as any).calendarBlock.findFirst({
+      where: { date: { gte: dayStart, lte: dayEnd } },
+    });
+    if (block) {
+      const reason = block.type === 'HOLIDAY'
+        ? `public holiday${block.label ? ` (${block.label})` : ''}`
+        : `busy day${block.label ? ` (${block.label})` : ''}`;
+      throw new BadRequestException(`Cannot schedule on a ${reason}`);
+    }
+  }
+
   /** Returns all visits for a month. Privacy-aware. */
   async getMonthVisits(
     year: number,
@@ -28,6 +44,12 @@ export class CalendarService {
   ) {
     const start = new Date(year, month - 1, 1);
     const end   = new Date(year, month, 0, 23, 59, 59);
+
+    const blocks = await (this.prisma as any).calendarBlock.findMany({
+      where: { date: { gte: start, lte: end } },
+      select: { id: true, date: true, type: true, label: true },
+      orderBy: { date: 'asc' },
+    });
 
     const visits = await this.prisma.consultancyVisit.findMany({
       where: {
@@ -120,11 +142,19 @@ export class CalendarService {
       isOwn: r.organizationId === organizationId,
     }));
 
-    return { visits: mappedVisits, requests: mappedRequests };
+    const mappedBlocks = blocks.map((b: any) => ({
+      id: b.id,
+      date: b.date.toISOString().split('T')[0],
+      type: b.type,
+      label: b.label,
+    }));
+
+    return { visits: mappedVisits, requests: mappedRequests, blocks: mappedBlocks };
   }
 
   /** SUPER_ADMIN: create a visit */
   async createVisit(dto: CreateVisitDto, userId: string) {
+    await this.assertDateNotBlocked(dto.date);
     const org = await this.prisma.organization.findUnique({ where: { id: dto.clientOrgId }, select: { id: true } });
     if (!org) throw new NotFoundException('Client organization not found');
 
@@ -186,6 +216,7 @@ export class CalendarService {
 
   /** Any client: submit a visit request */
   async createRequest(dto: CreateVisitRequestDto, organizationId: string, userId: string) {
+    await this.assertDateNotBlocked(dto.requestedDate);
     return this.prisma.visitRequest.create({
       data: {
         organizationId,
@@ -225,6 +256,30 @@ export class CalendarService {
       data: { status: dto.status, responseNote: dto.responseNote },
       select: { id: true, status: true, responseNote: true, organization: { select: ORG_SELECT } },
     });
+  }
+
+  // ── Calendar Blocks (holidays / busy days) ────────────────────────────────
+
+  async createBlock(dto: CreateCalendarBlockDto, userId: string) {
+    const date = new Date(dto.date);
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dayEnd   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    const existing = await (this.prisma as any).calendarBlock.findFirst({
+      where: { date: { gte: dayStart, lte: dayEnd } },
+    });
+    if (existing) throw new BadRequestException('This day is already blocked');
+
+    return (this.prisma as any).calendarBlock.create({
+      data: { date: dayStart, type: dto.type, label: dto.label, createdById: userId },
+      select: { id: true, date: true, type: true, label: true },
+    });
+  }
+
+  async deleteBlock(id: string) {
+    const block = await (this.prisma as any).calendarBlock.findUnique({ where: { id }, select: { id: true } });
+    if (!block) throw new NotFoundException('Block not found');
+    await (this.prisma as any).calendarBlock.delete({ where: { id } });
+    return { message: 'Block removed' };
   }
 
   /** SUPER_ADMIN: list client organizations — excludes the admin/platform org */

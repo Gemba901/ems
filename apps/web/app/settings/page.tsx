@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import { AdminService } from "@/services/admin.service";
 import { uploadImage } from "@/services/uploads.service";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import Link from "next/link";
@@ -23,42 +24,42 @@ const PRESET_COLORS = [
 
 function ThemeSection() {
     const { accessToken } = useAuthStore();
-    const [currentColor, setCurrentColor] = useState("#4F46E5");
+    const queryClient = useQueryClient();
     const [selected, setSelected] = useState("#4F46E5");
     const [custom, setCustom] = useState("");
-    const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (!accessToken) return;
-        AuthService.getMyOrg(accessToken)
-            .then((org) => {
-                const color = (org as any).primaryColor ?? "#4F46E5";
-                setCurrentColor(color);
-                setSelected(color);
-                if (!PRESET_COLORS.find((p) => p.value === color)) setCustom(color);
-            })
-            .catch(console.error);
-    }, [accessToken]);
+    const { data: orgData } = useQuery({
+        queryKey: ["settings"],
+        queryFn: () => AuthService.getMyOrg(accessToken!),
+        enabled: !!accessToken,
+        onSuccess: (org: any) => {
+            const color = org.primaryColor ?? "#4F46E5";
+            setSelected(color);
+            if (!PRESET_COLORS.find((p) => p.value === color)) setCustom(color);
+        },
+    } as any);
 
+    const currentColor = (orgData as any)?.primaryColor ?? "#4F46E5";
     const activeColor = custom || selected;
 
-    const handleSave = async () => {
-        if (!accessToken) return;
-        setSaving(true);
-        setError(null);
-        setSaved(false);
-        try {
-            await AdminService.updateCompanyTheme(accessToken, activeColor);
-            setCurrentColor(activeColor);
+    const saveMutation = useMutation({
+        mutationFn: (color: string) => AdminService.updateCompanyTheme(accessToken!, color),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["settings"] });
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
-        } catch (e: any) {
-            setError(e.message || "Failed to save theme");
-        } finally {
-            setSaving(false);
-        }
+        },
+        onError: (e: any) => setError(e.message || "Failed to save theme"),
+    });
+
+    const saving = saveMutation.isPending;
+
+    const handleSave = () => {
+        setError(null);
+        setSaved(false);
+        saveMutation.mutate(activeColor);
     };
 
     return (
@@ -160,23 +161,18 @@ function ThemeSection() {
 
 function LogoSection() {
     const { accessToken, user, setAuth } = useAuthStore();
-    const [logoUrl, setLogoUrl] = useState<string | null>(null);
-    const [orgId, setOrgId] = useState<string | null>(null);
+    const queryClient = useQueryClient();
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-    useEffect(() => {
-        if (!accessToken) return;
-        AuthService.getMyOrg(accessToken)
-            .then((org) => {
-                setLogoUrl(org.logoUrl);
-                setOrgId(org.id);
-                if (user && org.logoUrl !== user.organizationUrl) {
-                    setAuth({ ...user, organizationUrl: org.logoUrl }, accessToken);
-                }
-            })
-            .catch(console.error);
-    }, [accessToken, setAuth, user]);
+    const { data: orgData } = useQuery({
+        queryKey: ["settings"],
+        queryFn: () => AuthService.getMyOrg(accessToken!),
+        enabled: !!accessToken,
+    });
+
+    const logoUrl = orgData?.logoUrl ?? null;
+    const orgId = orgData?.id ?? null;
 
     const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -185,8 +181,8 @@ function LogoSection() {
         setUploading(true);
         try {
             const { fileUrl } = await uploadImage(file, "logos", accessToken);
-            setLogoUrl(fileUrl);
             await AdminService.updateOrganization(accessToken, orgId, { logoUrl: fileUrl });
+            queryClient.invalidateQueries({ queryKey: ["settings"] });
             if (user) setAuth({ ...user, organizationUrl: fileUrl }, accessToken);
         } catch (err) {
             console.error(err);

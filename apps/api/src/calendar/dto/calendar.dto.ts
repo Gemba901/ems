@@ -2,6 +2,22 @@ import {
   IsString, IsNotEmpty, IsOptional, IsEnum, IsDateString,
 } from 'class-validator';
 
+export enum CalendarBlockTypeDto {
+  HOLIDAY = 'HOLIDAY',
+  BUSY_DAY = 'BUSY_DAY',
+}
+
+export class CreateCalendarBlockDto {
+  @IsDateString()
+  date!: string;
+
+  @IsEnum(CalendarBlockTypeDto)
+  type!: CalendarBlockTypeDto;
+
+  @IsString() @IsOptional()
+  label?: string;
+}
+
 export enum VisitStatusDto {
   TENTATIVE  = 'TENTATIVE',
   CONFIRMED  = 'CONFIRMED',

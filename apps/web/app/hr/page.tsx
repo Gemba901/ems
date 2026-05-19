@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
@@ -323,23 +324,16 @@ function SuccessToast({ name, onDismiss, onAnother }: { name: string; onDismiss:
 function HRContent() {
     const { user, accessToken } = useAuthStore();
     const router = useRouter();
-
-    const [employees, setEmployees] = useState<EmployeeApiResponse[]>([]);
-    const [total, setTotal] = useState<number | null>(null);
-    const [totalPages, setTotalPages] = useState(1);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
 
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [deptFilter, setDeptFilter] = useState("");
     const [page, setPage] = useState(1);
 
-    const [departments, setDepartments] = useState<{ id: string; name: string; _count: { employees: number } }[]>([]);
-
     // onboarding state
     const [panelOpen, setPanelOpen] = useState(false);
     const [successName, setSuccessName] = useState<string | null>(null);
-    const [refreshKey, setRefreshKey] = useState(0);
 
     const orgId = user?.organizationId ?? "";
 
@@ -350,32 +344,29 @@ function HRContent() {
 
     useEffect(() => { setPage(1); }, [deptFilter]);
 
-    useEffect(() => {
-        if (!accessToken || !orgId) return;
-        EmployeeService.getDepartments(orgId, accessToken)
-            .then(setDepartments)
-            .catch(console.error);
-    }, [accessToken, orgId, refreshKey]);
+    const { data: departments = [] } = useQuery({
+        queryKey: ["departments", orgId],
+        queryFn: () => EmployeeService.getDepartments(orgId, accessToken!),
+        enabled: !!accessToken && !!orgId,
+    });
 
-    useEffect(() => {
-        if (!accessToken || !orgId) return;
-        setLoading(true);
-        EmployeeService.getByOrganization(orgId, accessToken, page, PAGE_SIZE, debouncedSearch || undefined, deptFilter || undefined)
-            .then((res) => {
-                setEmployees(res.data);
-                setTotal(res.pagination.total);
-                setTotalPages(Math.max(1, res.pagination.pages));
-            })
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, [accessToken, orgId, page, debouncedSearch, deptFilter, refreshKey]);
+    const { data: empData, isLoading: loading } = useQuery({
+        queryKey: ["employees", orgId, page, debouncedSearch, deptFilter],
+        queryFn: () => EmployeeService.getByOrganization(orgId, accessToken!, page, PAGE_SIZE, debouncedSearch || undefined, deptFilter || undefined),
+        enabled: !!accessToken && !!orgId,
+    });
+
+    const employees: EmployeeApiResponse[] = empData?.data ?? [];
+    const total = empData?.pagination.total ?? null;
+    const totalPages = Math.max(1, empData?.pagination.pages ?? 1);
 
     const totalDeptEmployees = departments.reduce((s, d) => s + d._count.employees, 0);
 
     function handleOnboardSuccess(name: string) {
         setPanelOpen(false);
         setSuccessName(name);
-        setRefreshKey((k) => k + 1);
+        queryClient.invalidateQueries({ queryKey: ["departments", orgId] });
+        queryClient.invalidateQueries({ queryKey: ["employees", orgId] });
         setPage(1);
     }
 

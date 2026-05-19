@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus } from "@/services/sims.service";
+import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -108,16 +109,13 @@ export default function AnalyticsPage() {
   const { user, accessToken } = useAuthStore();
   const role = user?.roleLevel;
 
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!accessToken || !role) return;
-    const fetch = role === Role.HOD
-      ? SimsService.getDepartment(accessToken, { limit: 1000 }).then((r) => r.data)
-      : SimsService.getAll(accessToken, { limit: 1000 }).then((r) => r.data);
-    fetch.then(setSuggestions).catch(console.error).finally(() => setLoading(false));
-  }, [accessToken, role]);
+  const { data: suggestions = [], isLoading: loading } = useQuery({
+    queryKey: ["sims-analytics", role],
+    queryFn: () => role === Role.HOD
+      ? SimsService.getDepartment(accessToken!, { limit: 1000 }).then((r) => r.data)
+      : SimsService.getAll(accessToken!, { limit: 1000 }).then((r) => r.data),
+    enabled: !!accessToken && !!role,
+  });
 
   // ── Derived data ────────────────────────────────────────────────────────
 

@@ -121,6 +121,7 @@ model User {
   employees         Employee[]
   createdVisits     ConsultancyVisit[]
   visitRequests     VisitRequest[]
+  calendarBlocks    CalendarBlock[]
 
   createdAt         DateTime @default(now())
 }
@@ -398,5 +399,21 @@ model VisitRequest {
 
   organization    Organization @relation(fields: [organizationId], references: [id])
   createdBy       User         @relation(fields: [createdById], references: [id])
+}
+
+enum CalendarBlockType {
+  HOLIDAY
+  BUSY_DAY
+}
+
+model CalendarBlock {
+  id          String            @id @default(uuid())
+  date        DateTime
+  type        CalendarBlockType
+  label       String?
+  createdById String
+  createdAt   DateTime          @default(now())
+
+  createdBy   User              @relation(fields: [createdById], references: [id])
 }
    

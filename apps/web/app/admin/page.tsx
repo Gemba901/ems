@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
 import { AdminService, PlatformStats, Organization } from "@/services/admin.service";
+import { useQuery } from "@tanstack/react-query";
 import {
     Building2, Users, Lightbulb, TrendingUp,
     ArrowUpRight, CircleDot, ChevronRight, Activity, Puzzle,
@@ -46,20 +46,20 @@ export default function AdminDashboardPage() {
     const { accessToken } = useAuthStore();
     const router = useRouter();
 
-    const [stats, setStats]   = useState<PlatformStats | null>(null);
-    const [orgs, setOrgs]     = useState<Organization[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data: stats, isLoading: statsLoading } = useQuery({
+        queryKey: ["platform-stats"],
+        queryFn: () => AdminService.getPlatformStats(accessToken!),
+        enabled: !!accessToken,
+    });
 
-    useEffect(() => {
-        if (!accessToken) return;
-        Promise.all([
-            AdminService.getPlatformStats(accessToken),
-            AdminService.listOrganizations(accessToken, 1, 5),
-        ])
-            .then(([s, o]) => { setStats(s); setOrgs(o.data); })
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, [accessToken]);
+    const { data: orgsData, isLoading: orgsLoading } = useQuery({
+        queryKey: ["organizations", 1, 5],
+        queryFn: () => AdminService.listOrganizations(accessToken!, 1, 5),
+        enabled: !!accessToken,
+    });
+
+    const loading = statsLoading || orgsLoading;
+    const orgs = orgsData?.data ?? [];
 
     const today = new Date().toLocaleDateString("en-US", {
         weekday: "long", month: "long", day: "numeric", year: "numeric",

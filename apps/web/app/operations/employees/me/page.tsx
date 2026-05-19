@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   User,
@@ -35,22 +36,33 @@ export default function MyProfilePage() {
   const router = useRouter();
   const { accessToken, user: authUser } = useAuthStore();
   const { toast } = useToast();
-  const [employee, setEmployee] = useState<EmployeeApiResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   // Avatar edit state
   const [avatarModal, setAvatarModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [savingAvatar, setSavingAvatar] = useState(false);
 
-  useEffect(() => {
-    if (!accessToken) return;
-    EmployeeService.getMe(accessToken)
-      .then(setEmployee)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [accessToken]);
+  const { data: employee, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["employee-me"],
+    queryFn: () => EmployeeService.getMe(accessToken!),
+    enabled: !!accessToken,
+  });
+
+  const error = queryError ? (queryError as any).message : null;
+
+  const avatarMutation = useMutation({
+    mutationFn: (url: string) => EmployeeService.updateAvatar(employee!.id, url, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employee-me"] });
+      setAvatarModal(false);
+      toast("Profile picture updated!", "success");
+    },
+    onError: (e: any) => {
+      toast(e.message || "Failed to update avatar", "error");
+    },
+  });
+
+  const savingAvatar = avatarMutation.isPending;
 
   if (loading) {
     return (
@@ -69,18 +81,8 @@ export default function MyProfilePage() {
   }
 
   const handleAvatarSave = async () => {
-    if (!accessToken || !employee || !avatarUrl.trim()) return;
-    setSavingAvatar(true);
-    try {
-      const updated = await EmployeeService.updateAvatar(employee.id, avatarUrl.trim(), accessToken);
-      setEmployee(updated);
-      setAvatarModal(false);
-      toast("Profile picture updated!", "success");
-    } catch (e: any) {
-      toast(e.message || "Failed to update avatar", "error");
-    } finally {
-      setSavingAvatar(false);
-    }
+    if (!avatarUrl.trim()) return;
+    avatarMutation.mutate(avatarUrl.trim());
   };
 
   const fullName = `${employee.firstName} ${employee.lastName}`;

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory, calcWeight } from "@/services/sims.service";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Clock, HelpCircle, ChevronRight, EyeOff, Inbox } from "lucide-react";
 
 const REVIEW_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"];
@@ -123,19 +124,17 @@ export default function ReviewsPage() {
   const { user, accessToken } = useAuthStore();
   const role = user?.roleLevel;
 
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!accessToken || !role) return;
-    const fetch = role === Role.HOD
-      ? SimsService.getQueue(accessToken, { limit: 500 }).then((r) => r.data)
-      : SimsService.getAll(accessToken, { limit: 500 }).then((r) => r.data);
-    fetch
-      .then((data) => setSuggestions(data.filter((s) => REVIEW_STATUSES.includes(s.status))))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [accessToken, role]);
+  const { data: suggestions = [], isLoading: loading } = useQuery({
+    queryKey: ["sims-reviews", role],
+    queryFn: async () => {
+      const fetch = role === Role.HOD
+        ? SimsService.getQueue(accessToken!, { limit: 500 }).then((r) => r.data)
+        : SimsService.getAll(accessToken!, { limit: 500 }).then((r) => r.data);
+      const data = await fetch;
+      return data.filter((s) => REVIEW_STATUSES.includes(s.status));
+    },
+    enabled: !!accessToken && !!role,
+  });
 
   const grouped = useMemo(() => {
     const onHold: Suggestion[] = [];

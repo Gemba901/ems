@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory } from "@/services/sims.service";
+import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Lightbulb, ChevronRight, Clock, CheckCircle2,
   XCircle, AlertCircle,
@@ -33,17 +34,13 @@ const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string
 export default function MySuggestionsPage() {
   const router = useRouter();
   const { accessToken } = useAuthStore();
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<SuggestionStatus | "">("");
 
-  useEffect(() => {
-    if (!accessToken) return;
-    SimsService.getMine(accessToken)
-      .then(setSuggestions)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [accessToken]);
+  const { data: suggestions = [], isLoading: loading } = useQuery({
+    queryKey: ["sims-my"],
+    queryFn: () => SimsService.getMine(accessToken!),
+    enabled: !!accessToken,
+  });
 
   const displayed = filter ? suggestions.filter((s) => s.status === filter) : suggestions;
 

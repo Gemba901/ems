@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import { useQuery } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
@@ -26,46 +27,33 @@ function DeptContent() {
     const { user, accessToken } = useAuthStore();
     const router = useRouter();
 
-    const [deptId,   setDeptId]   = useState<string | null>(null);
-    const [deptName, setDeptName] = useState<string>("");
-    const [profileLoading, setProfileLoading] = useState(true);
-    const [profileError,   setProfileError]   = useState<string | null>(null);
-
-    const [employees,   setEmployees]   = useState<EmployeeApiResponse[]>([]);
-    const [total,       setTotal]       = useState<number | null>(null);
-    const [totalPages,  setTotalPages]  = useState(1);
-    const [page,        setPage]        = useState(1);
-    const [listLoading, setListLoading] = useState(false);
+    const [page, setPage] = useState(1);
 
     // Step 1: resolve the HOD's own department
-    useEffect(() => {
-        if (!accessToken) return;
-        EmployeeService.getMe(accessToken)
-            .then((emp) => {
-                if (!emp.departmentId) {
-                    setProfileError("You are not assigned to a department yet.");
-                    return;
-                }
-                setDeptId(emp.departmentId);
-                setDeptName(emp.department?.name ?? "My Department");
-            })
-            .catch(() => setProfileError("Could not load your profile."))
-            .finally(() => setProfileLoading(false));
-    }, [accessToken]);
+    const { data: profileData, isLoading: profileLoading, error: profileErr } = useQuery({
+        queryKey: ["hod-profile"],
+        queryFn: () => EmployeeService.getMe(accessToken!),
+        enabled: !!accessToken,
+    });
+
+    const deptId = profileData?.departmentId ?? null;
+    const deptName = profileData?.department?.name ?? "My Department";
+    const profileError = profileErr
+        ? "Could not load your profile."
+        : profileData && !profileData.departmentId
+            ? "You are not assigned to a department yet."
+            : null;
 
     // Step 2: load department employees whenever deptId or page changes
-    useEffect(() => {
-        if (!accessToken || !deptId) return;
-        setListLoading(true);
-        EmployeeService.getByDepartment(deptId, accessToken, page, PAGE_SIZE)
-            .then((res) => {
-                setEmployees(res.data);
-                setTotal(res.pagination.total);
-                setTotalPages(Math.max(1, res.pagination.pages));
-            })
-            .catch(console.error)
-            .finally(() => setListLoading(false));
-    }, [accessToken, deptId, page]);
+    const { data: listData, isLoading: listLoading } = useQuery({
+        queryKey: ["employees-dept", deptId, page],
+        queryFn: () => EmployeeService.getByDepartment(deptId!, accessToken!, page, PAGE_SIZE),
+        enabled: !!accessToken && !!deptId,
+    });
+
+    const employees: EmployeeApiResponse[] = listData?.data ?? [];
+    const total = listData?.pagination.total ?? null;
+    const totalPages = Math.max(1, listData?.pagination.pages ?? 1);
 
     if (profileLoading) {
         return (

@@ -10,6 +10,7 @@ import {
     CircleDot, Mail, Phone, MapPin, ChevronDown,
     EyeOff, Puzzle, Loader2, Filter, KeyRound, ShieldCheck, X,
 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type Tab = "overview" | "employees" | "suggestions" | "roles";
 
@@ -69,6 +70,17 @@ export default function OrgDetailPage() {
     const { id }     = useParams<{ id: string }>();
     const router     = useRouter();
     const { accessToken } = useAuthStore();
+    const queryClient = useQueryClient();
+
+    const statusMutation = useMutation({
+  mutationFn: (status: OrgStatus) =>
+    AdminService.updateOrgStatus(accessToken!, id, status),
+  onSuccess: (_, status) => {
+    setOrg((prev) => prev ? { ...prev, status } : prev);
+    queryClient.invalidateQueries({ queryKey: ["organizations"] });
+  },
+});
+
 
     const [org, setOrg]         = useState<OrgDetail | null>(null);
     const [stats, setStats]     = useState<OrgStats | null>(null);
@@ -81,7 +93,6 @@ export default function OrgDetailPage() {
     const [loading, setLoading] = useState(true);
     const [tabLoading, setTabLoading] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
-    const [updatingStatus, setUpdatingStatus] = useState(false);
     const [updatingModules, setUpdatingModules] = useState(false);
 
     // Role change modal
@@ -149,19 +160,11 @@ export default function OrgDetailPage() {
         }
     }, [accessToken, org]);
 
-    const handleStatusChange = useCallback(async (status: OrgStatus) => {
-        if (!accessToken || !org) return;
-        setUpdatingStatus(true);
-        setStatusOpen(false);
-        try {
-            await AdminService.updateOrgStatus(accessToken, org.id, status);
-            setOrg((prev) => prev ? { ...prev, status } : prev);
-        } catch (e: any) {
-            alert(e.message || "Failed to update status");
-        } finally {
-            setUpdatingStatus(false);
-        }
-    }, [accessToken, org]);
+    const handleStatusChange = (status: OrgStatus) => {
+  setStatusOpen(false);
+  statusMutation.mutate(status);
+};
+
 
     const openRoleModal = (emp: any) => {
         const currentRoleId = emp.user?.organizations?.[0]?.role?.id ?? 6;
@@ -279,10 +282,10 @@ export default function OrgDetailPage() {
                     <div className="relative">
                         <button
                             onClick={() => setStatusOpen((o) => !o)}
-                            disabled={updatingStatus}
+                            disabled={statusMutation.isPending}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
                         >
-                            {updatingStatus ? "Updating..." : "Change Status"}
+                            {statusMutation.isPending ? "Updating..." : "Change Status"}
                             <ChevronDown className="h-4 w-4 text-slate-400" />
                         </button>
                         {statusOpen && (

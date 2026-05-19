@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use } from "react";
 import { IdentityCard } from "../../../../components/profile/IdentityCard";
 import { InfoGrid } from "../../../../components/profile/InfoGrid";
 import { CommitteesCard } from "../../../../components/profile/CommitteesCard";
@@ -9,6 +9,7 @@ import { HistoryTimeline } from "../../../../components/profile/HistoryTimeline"
 import { EmployeeProfileData } from "@/types/employee";
 import { useAuthStore, Role } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 function mapToProfileData(emp: EmployeeApiResponse): EmployeeProfileData {
   const userOrg = emp.user?.organizations?.find(
@@ -48,11 +49,7 @@ export default function EmployeeProfilePage({
 }) {
   const { id } = use(params);
   const { accessToken, user: viewer } = useAuthStore();
-
-  const [employee, setEmployee] = useState<EmployeeProfileData | null>(null);
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const viewerRole = viewer?.roleLevel;
   const isAdminOrHr =
@@ -62,29 +59,52 @@ export default function EmployeeProfilePage({
   const isAdminOnly =
     viewerRole === Role.ADMIN || viewerRole === Role.SUPER_ADMIN;
 
-  const reload = () => {
-    if (!accessToken) return;
-    EmployeeService.getById(id, accessToken)
-      .then((data) => setEmployee(mapToProfileData(data)))
-      .catch((err) => setError(err.message));
-  };
+  const { data: empRaw, isLoading: empLoading, error: empError } = useQuery({
+    queryKey: ["employee", id],
+    queryFn: () => EmployeeService.getById(id, accessToken!),
+    enabled: !!accessToken,
+  });
 
-  useEffect(() => {
-    if (!accessToken) return;
-    setLoading(true);
-    Promise.all([
-      EmployeeService.getById(id, accessToken),
-      isAdminOrHr && viewer?.organizationId
-        ? EmployeeService.getDepartments(viewer.organizationId, accessToken)
-        : Promise.resolve([]),
-    ])
-      .then(([emp, depts]) => {
-        setEmployee(mapToProfileData(emp));
-        setDepartments(depts);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [id, accessToken]);
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments", viewer?.organizationId],
+    queryFn: () => EmployeeService.getDepartments(viewer!.organizationId!, accessToken!),
+    enabled: !!accessToken && isAdminOrHr && !!viewer?.organizationId,
+  });
+
+  const loading = empLoading;
+  const error = empError ? (empError as any).message : null;
+  const employee = empRaw ? mapToProfileData(empRaw) : null;
+
+  const avatarMutation = useMutation({
+    mutationFn: (avatarUrl: string) => EmployeeService.updateAvatar(id, avatarUrl, accessToken!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employee", id] }),
+  });
+
+  const personalInfoMutation = useMutation({
+    mutationFn: (data: { firstName: string; lastName: string; email: string; phone: string }) =>
+      EmployeeService.update(id, data, accessToken!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employee", id] }),
+  });
+
+  const roleMutation = useMutation({
+    mutationFn: (roleId: number) => EmployeeService.updateRole(id, roleId, accessToken!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employee", id] }),
+  });
+
+  const departmentMutation = useMutation({
+    mutationFn: (departmentId: string) => EmployeeService.update(
+      id,
+      {
+        firstName: employee!.firstName,
+        lastName: employee!.lastName,
+        email: employee!.email,
+        phone: employee!.phone === "—" ? undefined : employee!.phone,
+        departmentId: departmentId || null,
+      },
+      accessToken!,
+    ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employee", id] }),
+  });
 
   if (loading) {
     return (
@@ -106,8 +126,7 @@ export default function EmployeeProfilePage({
   const canEditAvatar = viewer?.userId === employee.userId;
 
   const handleAvatarSave = async (avatarUrl: string) => {
-    await EmployeeService.updateAvatar(employee.id, avatarUrl, accessToken!);
-    reload();
+    await avatarMutation.mutateAsync(avatarUrl);
   };
 
   const handlePersonalInfoSave = async (data: {
@@ -116,28 +135,15 @@ export default function EmployeeProfilePage({
     email: string;
     phone: string;
   }) => {
-    await EmployeeService.update(employee.id, data, accessToken!);
-    reload();
+    await personalInfoMutation.mutateAsync(data);
   };
 
   const handleRoleSave = async (roleId: number) => {
-    await EmployeeService.updateRole(employee.id, roleId, accessToken!);
-    reload();
+    await roleMutation.mutateAsync(roleId);
   };
 
   const handleDepartmentSave = async (departmentId: string) => {
-    await EmployeeService.update(
-      employee.id,
-      {
-        firstName: employee.firstName,
-        lastName: employee.lastName,
-        email: employee.email,
-        phone: employee.phone === "—" ? undefined : employee.phone,
-        departmentId: departmentId || null,
-      },
-      accessToken!,
-    );
-    reload();
+    await departmentMutation.mutateAsync(departmentId);
   };
 
   return (

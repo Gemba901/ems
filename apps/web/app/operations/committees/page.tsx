@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -11,6 +11,7 @@ import {
   CreateCommitteePayload,
 } from "@/services/committee.service";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Users,
   Plus,
@@ -48,91 +49,98 @@ const ALL_TYPES: CommitteeType[] = [
 
 export default function CommitteesPage() {
   const { user, accessToken } = useAuthStore();
+  const queryClient = useQueryClient();
   const role = user?.roleLevel;
   const isAdmin = role === Role.SUPER_ADMIN || role === Role.ADMIN;
-
-  const [committees, setCommittees] = useState<SteeringCommittee[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState<string | null>(null);
 
   // Create committee form
   const [showCreate, setShowCreate]   = useState(false);
   const [newName, setNewName]         = useState("");
   const [newType, setNewType]         = useState<CommitteeType>("GENERAL");
-  const [creating, setCreating]       = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
   // Add member panel
   const [addingTo, setAddingTo]       = useState<string | null>(null);
-  const [employees, setEmployees]     = useState<EmployeeApiResponse[]>([]);
-  const [empLoading, setEmpLoading]   = useState(false);
   const [addError, setAddError]       = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
 
   // Expanded committee
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (!accessToken) return;
-    CommitteeService.list(accessToken)
-      .then(setCommittees)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [accessToken]);
+  const { data: committees = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["committees"],
+    queryFn: () => CommitteeService.list(accessToken!),
+    enabled: !!accessToken,
+  });
 
-  const loadEmployees = () => {
-    if (!accessToken || !user?.organizationId || employees.length > 0) return;
-    setEmpLoading(true);
-    EmployeeService.getByOrganization(user.organizationId, accessToken, 1, 200)
-      .then((r) => setEmployees(r.data))
-      .catch(() => {})
-      .finally(() => setEmpLoading(false));
-  };
+  const error = queryError ? (queryError as any).message : null;
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const { data: empData, isLoading: empLoading } = useQuery({
+    queryKey: ["employees-all", user?.organizationId],
+    queryFn: () => EmployeeService.getByOrganization(user!.organizationId!, accessToken!, 1, 200),
+    enabled: !!accessToken && !!user?.organizationId && !!addingTo,
+  });
+
+  const employees: EmployeeApiResponse[] = empData?.data ?? [];
+
+  const createMutation = useMutation({
+    mutationFn: (payload: CreateCommitteePayload) => CommitteeService.create(payload, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["committees"] });
+      setNewName("");
+      setNewType("GENERAL");
+      setShowCreate(false);
+    },
+    onError: (e: any) => setCreateError(e.message),
+  });
+
+  const addMemberMutation = useMutation({
+    mutationFn: ({ committeeId, employeeId }: { committeeId: string; employeeId: string }) =>
+      CommitteeService.addMember(committeeId, employeeId, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["committees"] });
+      setAddingTo(null);
+      setMemberSearch("");
+    },
+    onError: (e: any) => setAddError(e.message),
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: ({ committeeId, employeeId }: { committeeId: string; employeeId: string }) =>
+      CommitteeService.removeMember(committeeId, employeeId, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["committees"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => CommitteeService.deleteCommittee(id, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["committees"] });
+    },
+  });
+
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken || !newName.trim()) return;
-    setCreating(true);
+    if (!newName.trim()) return;
     setCreateError(null);
-    const payload: CreateCommitteePayload = { name: newName.trim(), type: newType };
-    CommitteeService.create(payload, accessToken)
-      .then((c) => {
-        setCommittees((prev) => [...prev, c]);
-        setNewName("");
-        setNewType("GENERAL");
-        setShowCreate(false);
-      })
-      .catch((e) => setCreateError(e.message))
-      .finally(() => setCreating(false));
+    createMutation.mutate({ name: newName.trim(), type: newType });
   };
 
-  const handleAddMember = async (committeeId: string, employeeId: string) => {
-    if (!accessToken) return;
+  const handleAddMember = (committeeId: string, employeeId: string) => {
     setAddError(null);
-    CommitteeService.addMember(committeeId, employeeId, accessToken)
-      .then((updated) => {
-        setCommittees((prev) => prev.map((c) => c.id === committeeId ? updated : c));
-        setAddingTo(null);
-        setMemberSearch("");
-      })
-      .catch((e) => setAddError(e.message));
+    addMemberMutation.mutate({ committeeId, employeeId });
   };
 
-  const handleRemoveMember = async (committeeId: string, employeeId: string) => {
-    if (!accessToken) return;
-    CommitteeService.removeMember(committeeId, employeeId, accessToken)
-      .then((updated) => {
-        setCommittees((prev) => prev.map((c) => c.id === committeeId ? updated : c));
-      })
-      .catch(() => {});
+  const handleRemoveMember = (committeeId: string, employeeId: string) => {
+    removeMemberMutation.mutate({ committeeId, employeeId });
   };
 
-  const handleDeleteCommittee = async (id: string) => {
-    if (!accessToken) return;
-    CommitteeService.deleteCommittee(id, accessToken)
-      .then(() => setCommittees((prev) => prev.filter((c) => c.id !== id)))
-      .catch(() => {});
+  const handleDeleteCommittee = (id: string) => {
+    deleteMutation.mutate(id);
   };
+
+  const creating = createMutation.isPending;
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -279,7 +287,6 @@ export default function CommitteesPage() {
                           setAddingTo(isAddingHere ? null : committee.id);
                           setAddError(null);
                           setMemberSearch("");
-                          loadEmployees();
                           if (!isExpanded) toggleExpand(committee.id);
                         }}
                         className="flex items-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"

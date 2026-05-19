@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import { AdminService, type Organization } from "@/services/admin.service";
 import {
     Palette, Check, Loader2, Building2, ShieldCheck, Search,
 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const PRESET_COLORS = [
     { label: "Indigo",   value: "#4F46E5" },
@@ -21,88 +22,91 @@ const PRESET_COLORS = [
 
 export default function AdminSettingsPage() {
     const { accessToken } = useAuthStore();
+    const queryClient = useQueryClient();
 
-    // Brand color
-    const [currentColor, setCurrentColor] = useState("#4F46E5");
+    // Brand color UI state
     const [selected, setSelected]         = useState("#4F46E5");
     const [custom, setCustom]             = useState("");
-    const [saving, setSaving]             = useState(false);
     const [saved, setSaved]               = useState(false);
     const [colorError, setColorError]     = useState<string | null>(null);
 
-    // Platform identity
-    const [orgs, setOrgs]                     = useState<Organization[]>([]);
-    const [orgsLoading, setOrgsLoading]       = useState(true);
-    const [adminOrgId, setAdminOrgId]         = useState<string | null>(null);
+    // Platform identity UI state
     const [pendingOrgId, setPendingOrgId]     = useState<string | null>(null);
     const [search, setSearch]                 = useState("");
-    const [settingAdmin, setSettingAdmin]     = useState(false);
     const [adminSaved, setAdminSaved]         = useState(false);
     const [adminError, setAdminError]         = useState<string | null>(null);
 
-    useEffect(() => {
-        if (!accessToken) return;
+    const { data: settingsData } = useQuery({
+        queryKey: ["settings"],
+        queryFn: async () => {
+            const org = await AuthService.getMyOrg(accessToken!);
+            return org as any;
+        },
+        enabled: !!accessToken,
+        onSuccess: (org: any) => {
+            const color = org.primaryColor ?? "#4F46E5";
+            setSelected(color);
+            if (!PRESET_COLORS.find(p => p.value === color)) setCustom(color);
+        },
+    } as any);
 
-        // Load own org color
-        AuthService.getMyOrg(accessToken)
-            .then((org) => {
-                const o = org as any;
-                const color = o.primaryColor ?? "#4F46E5";
-                setCurrentColor(color);
-                setSelected(color);
-                if (!PRESET_COLORS.find(p => p.value === color)) setCustom(color);
-            })
-            .catch(console.error);
+    const currentColor = (settingsData as any)?.primaryColor ?? "#4F46E5";
 
-        // Load all orgs
-        AdminService.listOrganizations(accessToken, 1, 200)
-            .then(({ data }) => {
-                setOrgs(data);
-                const current = data.find(o => o.isAdminOrg);
-                if (current) {
-                    setAdminOrgId(current.id);
-                    setPendingOrgId(current.id);
-                }
-            })
-            .catch(console.error)
-            .finally(() => setOrgsLoading(false));
-    }, [accessToken]);
+    const { data: orgsData, isLoading: orgsLoading } = useQuery({
+        queryKey: ["admin-settings-orgs"],
+        queryFn: () => AdminService.listOrganizations(accessToken!, 1, 200),
+        enabled: !!accessToken,
+        onSuccess: ({ data }: { data: Organization[] }) => {
+            const current = data.find((o: Organization) => o.isAdminOrg);
+            if (current && pendingOrgId === null) {
+                setPendingOrgId(current.id);
+            }
+        },
+    } as any) as { data: import("@/services/admin.service").PaginatedResponse<Organization> | undefined; isLoading: boolean };
+
+    const orgs: Organization[] = orgsData?.data ?? [];
+    const adminOrgId = orgs.find(o => o.isAdminOrg)?.id ?? null;
 
     const activeColor = custom || selected;
 
-    const handleSetAdminOrg = async () => {
-        if (!accessToken || !pendingOrgId || pendingOrgId === adminOrgId) return;
-        setSettingAdmin(true);
-        setAdminError(null);
-        try {
-            await AdminService.setAdminOrg(accessToken, pendingOrgId);
-            setAdminOrgId(pendingOrgId);
-            setOrgs(prev => prev.map(o => ({ ...o, isAdminOrg: o.id === pendingOrgId })));
+    const adminOrgMutation = useMutation({
+        mutationFn: (orgId: string) => AdminService.setAdminOrg(accessToken!, orgId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin-settings-orgs"] });
             setAdminSaved(true);
             setTimeout(() => setAdminSaved(false), 3000);
-        } catch (e: any) {
+        },
+        onError: (e: any) => {
             setAdminError(e.message || "Failed to set platform company");
-        } finally {
-            setSettingAdmin(false);
-        }
-    };
+        },
+    });
 
-    const handleSaveColor = async () => {
-        if (!accessToken) return;
-        setSaving(true);
-        setColorError(null);
-        setSaved(false);
-        try {
-            await AdminService.updateCompanyTheme(accessToken, activeColor);
-            setCurrentColor(activeColor);
+    const colorMutation = useMutation({
+        mutationFn: (color: string) => AdminService.updateCompanyTheme(accessToken!, color),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["settings"] });
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
-        } catch (e: any) {
+        },
+        onError: (e: any) => {
             setColorError(e.message || "Failed to save theme");
-        } finally {
-            setSaving(false);
-        }
+        },
+    });
+
+    const handleSetAdminOrg = () => {
+        if (!pendingOrgId || pendingOrgId === adminOrgId) return;
+        setAdminError(null);
+        adminOrgMutation.mutate(pendingOrgId);
     };
+
+    const handleSaveColor = () => {
+        setColorError(null);
+        setSaved(false);
+        colorMutation.mutate(activeColor);
+    };
+
+    const saving = colorMutation.isPending;
+    const settingAdmin = adminOrgMutation.isPending;
 
     const filtered = orgs.filter(o =>
         o.name.toLowerCase().includes(search.toLowerCase())

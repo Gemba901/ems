@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import { useQuery } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
@@ -190,11 +191,6 @@ function MemberRow({
 function MembersContent() {
     const { user, accessToken } = useAuthStore();
 
-    const [employees, setEmployees] = useState<EmployeeApiResponse[]>([]);
-    const [total, setTotal] = useState<number | null>(null);
-    const [totalPages, setTotalPages] = useState(1);
-    const [loading, setLoading] = useState(true);
-
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [page, setPage] = useState(1);
@@ -207,37 +203,19 @@ function MembersContent() {
         return () => clearTimeout(t);
     }, [search]);
 
-    // fetch page from server
-    useEffect(() => {
-        if (!accessToken || !orgId) return;
-        setLoading(true);
-        EmployeeService.getByOrganization(orgId, accessToken, page, PAGE_SIZE, debouncedSearch || undefined)
-            .then((res) => {
-                setEmployees(res.data);
-                setTotal(res.pagination.total);
-                setTotalPages(Math.max(1, res.pagination.pages));
-            })
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, [accessToken, orgId, page, debouncedSearch]);
+    const { data: empData, isLoading: loading } = useQuery({
+        queryKey: ["settings-members", orgId, page, debouncedSearch],
+        queryFn: () => EmployeeService.getByOrganization(orgId, accessToken!, page, PAGE_SIZE, debouncedSearch || undefined),
+        enabled: !!accessToken && !!orgId,
+    });
+
+    const employees: EmployeeApiResponse[] = empData?.data ?? [];
+    const total = empData?.pagination.total ?? null;
+    const totalPages = Math.max(1, empData?.pagination.pages ?? 1);
 
     const handleRoleUpdated = (empId: string, roleId: number, roleName: string) => {
-        setEmployees((prev) =>
-            prev.map((e) => {
-                if (e.id !== empId || !e.user) return e;
-                return {
-                    ...e,
-                    user: {
-                        ...e.user,
-                        organizations: e.user.organizations.map((o) => ({
-                            ...o,
-                            roleId,
-                            role: { id: roleId, name: roleName },
-                        })),
-                    },
-                };
-            }),
-        );
+        // Role update is handled optimistically via local state in MemberRow
+        // The MemberRow's useEffect on emp.id will keep in sync on page changes
     };
 
     const startIndex = (page - 1) * PAGE_SIZE + 1;

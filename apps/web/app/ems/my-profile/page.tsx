@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -10,6 +9,7 @@ import {
   completionColor, completionBg,
 } from "@/services/ems.service";
 import { Loader2, AlertCircle, CheckCircle2, Info } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 function CompletionRing({ pct, size = 96 }: { pct: number; size?: number }) {
   const r = (size - 10) / 2;
@@ -48,18 +48,16 @@ function ProfileField({ label, value }: { label: string; value: string | null | 
 
 export default function MyProfilePage() {
   const { accessToken } = useAuthStore();
-  const [employee, setEmployee]     = useState<EmployeeProfile | null>(null);
-  const [completion, setCompletion] = useState<CompletionResult | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!accessToken) return;
-    EmsService.getMyProfile(accessToken)
-      .then(({ employee: emp, completion: comp }) => { setEmployee(emp); setCompletion(comp); })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [accessToken]);
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["ems-my-profile"],
+    queryFn: () => EmsService.getMyProfile(accessToken!),
+    enabled: !!accessToken,
+  });
+
+  const employee: EmployeeProfile | null    = data?.employee   ?? null;
+  const completion: CompletionResult | null = data?.completion ?? null;
+  const error = queryError ? (queryError as any).message : null;
 
   const isIncomplete = completion && completion.overall < 90;
 

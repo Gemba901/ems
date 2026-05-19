@@ -4,6 +4,7 @@ import {
 import { CalendarService } from './calendar.service';
 import {
   CreateVisitDto, UpdateVisitDto, CreateVisitRequestDto, RespondToRequestDto,
+  CreateCalendarBlockDto,
 } from './dto/calendar.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -90,5 +91,22 @@ export class CalendarController {
   @Get('admin-org')
   async getAdminOrg() {
     return this.calendar.getAdminOrg();
+  }
+
+  /** POST /calendar/blocks — SUPER_ADMIN marks a day as holiday or busy */
+  @Post('blocks')
+  @Roles(Role.SUPER_ADMIN)
+  async createBlock(
+    @Body() dto: CreateCalendarBlockDto,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.calendar.createBlock(dto, user.userId);
+  }
+
+  /** DELETE /calendar/blocks/:id — SUPER_ADMIN removes a block */
+  @Delete('blocks/:id')
+  @Roles(Role.SUPER_ADMIN)
+  async deleteBlock(@Param('id') id: string) {
+    return this.calendar.deleteBlock(id);
   }
 }

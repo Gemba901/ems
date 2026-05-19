@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ElementType } from "react";
+import { useState, type ElementType } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -15,6 +15,7 @@ import {
   ArrowLeft, Save, Loader2, CheckCircle2,
   ClipboardList, User, Briefcase, FileText, Phone, TrendingUp,
 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -112,64 +113,66 @@ const readonlyCls = `${inputCls} bg-slate-50 text-slate-500 cursor-default`;
 export default function EmployeeEmsEditPage() {
   const { id } = useParams<{ id: string }>();
   const { accessToken } = useAuthStore();
+  const queryClient = useQueryClient();
 
-  const [employee, setEmployee]     = useState<EmployeeProfile | null>(null);
-  const [completion, setCompletion] = useState<CompletionResult | null>(null);
-  const [form, setForm]             = useState<UpdateEmployeeEmsPayload>({});
-  const [loading, setLoading]       = useState(true);
-  const [saving, setSaving]         = useState(false);
-  const [saved, setSaved]           = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [form, setForm] = useState<UpdateEmployeeEmsPayload>({});
+  const [formInitialized, setFormInitialized] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (!accessToken || !id) return;
-    EmsService.getEmployee(id, accessToken)
-      .then(({ employee: emp, completion: comp }) => {
-        setEmployee(emp);
-        setCompletion(comp);
-        setForm({
-          employeeCode:                    emp.employeeCode ?? "",
-          gender:                          emp.gender ?? undefined,
-          dateOfBirth:                     emp.dateOfBirth ? emp.dateOfBirth.split("T")[0] : "",
-          nationalId:                      emp.nationalId ?? "",
-          employmentStatus:                emp.employmentStatus,
-          jobTitle:                        emp.jobTitle ?? "",
-          dateJoined:                      emp.dateJoined ? emp.dateJoined.split("T")[0] : "",
-          workStation:                     emp.workStation ?? "",
-          jobDescription:                  emp.jobDescription ?? "",
-          homeAddress:                     emp.homeAddress ?? "",
-          emergencyContactName:            emp.emergencyContactName ?? "",
-          emergencyContactPhone:           emp.emergencyContactPhone ?? "",
-          emergencyContactRelationship:    emp.emergencyContactRelationship ?? "",
-          skillLevel:                      emp.skillLevel ?? undefined,
-          trainingNeeded:                  emp.trainingNeeded ?? false,
-        });
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [accessToken, id]);
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ["ems-employee", id],
+    queryFn: () => EmsService.getEmployee(id!, accessToken!),
+    enabled: !!accessToken && !!id,
+  });
+
+  // Initialize form once data loads
+  if (data && !formInitialized) {
+    const emp = data.employee;
+    setForm({
+      employeeCode:                 emp.employeeCode ?? "",
+      gender:                       emp.gender ?? undefined,
+      dateOfBirth:                  emp.dateOfBirth ? emp.dateOfBirth.split("T")[0] : "",
+      nationalId:                   emp.nationalId ?? "",
+      employmentStatus:             emp.employmentStatus,
+      jobTitle:                     emp.jobTitle ?? "",
+      dateJoined:                   emp.dateJoined ? emp.dateJoined.split("T")[0] : "",
+      workStation:                  emp.workStation ?? "",
+      jobDescription:               emp.jobDescription ?? "",
+      homeAddress:                  emp.homeAddress ?? "",
+      emergencyContactName:         emp.emergencyContactName ?? "",
+      emergencyContactPhone:        emp.emergencyContactPhone ?? "",
+      emergencyContactRelationship: emp.emergencyContactRelationship ?? "",
+      skillLevel:                   emp.skillLevel ?? undefined,
+      trainingNeeded:               emp.trainingNeeded ?? false,
+    });
+    setFormInitialized(true);
+  }
+
+  const employee: EmployeeProfile | null   = data?.employee ?? null;
+  const completion: CompletionResult | null = data?.completion ?? null;
+  const error = queryError ? (queryError as any).message : null;
+
+  const saveMutation = useMutation({
+    mutationFn: () => EmsService.updateEmployee(id!, form, accessToken!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    },
+  });
 
   const set = (key: keyof UpdateEmployeeEmsPayload, value: unknown) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!accessToken || !id) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const { employee: emp, completion: comp } = await EmsService.updateEmployee(id, form, accessToken);
-      setEmployee(emp);
-      setCompletion(comp);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
+    saveMutation.mutate();
   };
+
+  const saving = saveMutation.isPending;
+  const saveError = saveMutation.error ? (saveMutation.error as any).message : null;
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
@@ -203,8 +206,8 @@ export default function EmployeeEmsEditPage() {
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         )}
-        {error && (
-          <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
+        {(error || saveError) && (
+          <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl">{error || saveError}</div>
         )}
 
         {employee && completion && (

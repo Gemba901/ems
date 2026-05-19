@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService } from "@/services/employee.service";
 import { SimsService, Suggestion, SuggestionStatus } from "@/services/sims.service";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
   CalendarDays,
@@ -98,52 +99,35 @@ const plannedReports = [
 
 export default function ReportsPage() {
   const { user, accessToken } = useAuthStore();
-  const [departments, setDepartments] = useState<DepartmentMetric[]>([]);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const orgId = user?.organizationId;
   const role = user?.roleLevel;
   const isHod = role === Role.HOD;
 
-  useEffect(() => {
-    if (!accessToken || !orgId || !role) return;
+  const { data: departmentRaw = [], isLoading: deptsLoading, error: deptsError } = useQuery({
+    queryKey: ["departments", orgId],
+    queryFn: () => EmployeeService.getDepartments(orgId!, accessToken!),
+    enabled: !!accessToken && !!orgId,
+  });
 
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
+  const { data: suggestionRaw, isLoading: simsLoading, error: simsError } = useQuery({
+    queryKey: ["reports", isHod],
+    queryFn: () => isHod
+      ? SimsService.getDepartment(accessToken!, { limit: 1000 }).then((res) => res.data)
+      : SimsService.getAll(accessToken!, { limit: 1000 }).then((res) => res.data),
+    enabled: !!accessToken && !!orgId && !!role,
+  });
 
-    const suggestionsRequest = isHod
-      ? SimsService.getDepartment(accessToken, { limit: 1000 }).then((res) => res.data)
-      : SimsService.getAll(accessToken, { limit: 1000 }).then((res) => res.data);
+  const departments: DepartmentMetric[] = useMemo(() =>
+    departmentRaw.map((d) => ({ id: d.id, name: d.name, count: d._count.employees })),
+  [departmentRaw]);
 
-    Promise.all([
-      EmployeeService.getDepartments(orgId, accessToken),
-      suggestionsRequest,
-    ])
-      .then(([departmentResponse, suggestionResponse]) => {
-        if (cancelled) return;
-        setDepartments(
-          departmentResponse.map((department) => ({
-            id: department.id,
-            name: department.name,
-            count: department._count.employees,
-          })),
-        );
-        setSuggestions(suggestionResponse);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message || "Failed to load reports.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, orgId, role, isHod]);
+  const suggestions: Suggestion[] = suggestionRaw ?? [];
+  const loading = deptsLoading || simsLoading;
+  const errorMsg = deptsError || simsError
+    ? ((deptsError || simsError) as any).message || "Failed to load reports."
+    : null;
+  const error = errorMsg;
 
   const metrics = useMemo(() => {
     const totalHeadcount = departments.reduce((sum, department) => sum + department.count, 0);

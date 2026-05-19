@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -26,6 +25,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
+import { useQuery } from "@tanstack/react-query";
 import DashboardHero from "@/components/DashboardHero";
 import DashboardRoleSection from "@/components/DashboardRoleSection";
 import { Role } from "@/types/role";
@@ -183,15 +183,14 @@ const UPCOMING_MODULES: Omit<ModuleConfig, "key" | "href" | "actions">[] = [
 export default function DashboardPage() {
   const { user, accessToken } = useAuthStore();
   const router = useRouter();
-  const [activeModules, setActiveModules] = useState<string[]>([]);
-  const [loadingModules, setLoadingModules] = useState(true);
-  useEffect(() => {
-    if (!accessToken) return;
-    AuthService.getMyOrg(accessToken)
-      .then((org) => setActiveModules(org.modules ?? []))
-      .catch(() => setActiveModules([]))
-      .finally(() => setLoadingModules(false));
-  }, [accessToken]);
+
+  const { data: orgData, isLoading: loadingModules } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => AuthService.getMyOrg(accessToken!),
+    enabled: !!accessToken,
+  });
+
+  const activeModules: string[] = orgData?.modules ?? [];
 
   const orgModules = activeModules
     .map((key) => MODULE_REGISTRY[key])

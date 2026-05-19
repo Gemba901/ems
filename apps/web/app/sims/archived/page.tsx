@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus } from "@/services/sims.service";
+import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, XCircle, EyeOff, ChevronRight, Search, X } from "lucide-react";
 
 const RESOLVED_STATUSES: SuggestionStatus[] = ["APPROVED_FOR_IMPLEMENTATION", "REJECTED"];
@@ -36,21 +37,20 @@ export default function ArchivedPage() {
   const { user, accessToken } = useAuthStore();
   const role = user?.roleLevel;
 
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<SuggestionCategory | "">("");
 
-  useEffect(() => {
-    if (!accessToken || !role) return;
-    const fetchAll = (status: SuggestionStatus) => role === Role.HOD
-      ? SimsService.getDepartment(accessToken, { status, limit: 500 }).then((r) => r.data)
-      : SimsService.getAll(accessToken, { status, limit: 500 }).then((r) => r.data);
-    Promise.all(RESOLVED_STATUSES.map(fetchAll))
-      .then((results) => setSuggestions(results.flat()))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [accessToken, role]);
+  const { data: suggestions = [], isLoading: loading } = useQuery({
+    queryKey: ["sims-archived", role],
+    queryFn: async () => {
+      const fetchAll = (status: SuggestionStatus) => role === Role.HOD
+        ? SimsService.getDepartment(accessToken!, { status, limit: 500 }).then((r) => r.data)
+        : SimsService.getAll(accessToken!, { status, limit: 500 }).then((r) => r.data);
+      const results = await Promise.all(RESOLVED_STATUSES.map(fetchAll));
+      return results.flat();
+    },
+    enabled: !!accessToken && !!role,
+  });
 
   const displayed = suggestions.filter((s) => {
     const matchSearch = !search || s.title.toLowerCase().includes(search.toLowerCase()) || s.description.toLowerCase().includes(search.toLowerCase());

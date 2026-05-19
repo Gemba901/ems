@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus, calcWeight } from "@/services/sims.service";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, EyeOff, Clock, AlertCircle, HelpCircle } from "lucide-react";
 
 const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
@@ -83,30 +83,25 @@ function QueueCard({ s, accentBar, router }: { s: Suggestion; accentBar: string;
 }
 
 const ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT] as const;
+const ACTIVE_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"];
 
 export default function QueuePage() {
   const router = useRouter();
   const { accessToken, user } = useAuthStore();
 
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const isHOD = user?.roleLevel === Role.HOD;
 
-  useEffect(() => {
-    if (!accessToken || !user?.roleLevel) return;
-
-    const ACTIVE_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"];
-
-    const fetch = ADMIN_ROLES.includes(user.roleLevel as typeof ADMIN_ROLES[number])
-      ? SimsService.getAll(accessToken, { limit: 500 }).then((r) => r.data)
-      : SimsService.getQueue(accessToken, { limit: 500 }).then((r) => r.data);
-
-    fetch
-      .then((data) => setSuggestions(data.filter((s) => ACTIVE_STATUSES.includes(s.status))))
-      .catch(() => setSuggestions([]))
-      .finally(() => setLoading(false));
-  }, [accessToken, user?.roleLevel]);
+  const { data: suggestions = [], isLoading: loading } = useQuery({
+    queryKey: ["sims-queue", user?.roleLevel],
+    queryFn: async () => {
+      const fetch = ADMIN_ROLES.includes(user!.roleLevel as typeof ADMIN_ROLES[number])
+        ? SimsService.getAll(accessToken!, { limit: 500 }).then((r) => r.data)
+        : SimsService.getQueue(accessToken!, { limit: 500 }).then((r) => r.data);
+      const data = await fetch;
+      return data.filter((s) => ACTIVE_STATUSES.includes(s.status));
+    },
+    enabled: !!accessToken && !!user?.roleLevel,
+  });
 
   const underReview = suggestions.filter((s) => s.status === "UNDER_REVIEW");
   const onHold = suggestions.filter((s) => s.status === "ON_HOLD");

@@ -7,6 +7,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, SuggestionCategory, uploadSuggestionImage } from "@/services/sims.service";
+import { useMutation } from "@tanstack/react-query";
 import { SpeechToTextButton } from "@/components/ui/SpeechToTextButton";
 import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, X, Loader2 } from "lucide-react";
 
@@ -130,7 +131,6 @@ export default function NewSuggestionPage() {
   const [description, setDescription] = useState("");
   const [categories, setCategories]   = useState<SuggestionCategory[]>([]);
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [submitting, setSubmitting]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [successRedirect, setSuccessRedirect] = useState<string | null>(null);
@@ -140,6 +140,30 @@ export default function NewSuggestionPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const submitMutation = useMutation({
+    mutationFn: async (payload: { title: string; description: string; categories: SuggestionCategory[]; isAnonymous: boolean; imageFile: File | null }) => {
+      let imageUrl: string | undefined;
+      if (payload.imageFile) {
+        setImageUploading(true);
+        imageUrl = await uploadSuggestionImage(payload.imageFile, accessToken!);
+        setImageUploading(false);
+      }
+      return SimsService.submit(
+        { title: payload.title, description: payload.description, categories: payload.categories, isAnonymous: payload.isAnonymous, imageUrl },
+        accessToken!,
+      );
+    },
+    onSuccess: (created) => {
+      setSuccessRedirect(`/sims/${created.id}`);
+    },
+    onError: (err: any) => {
+      setImageUploading(false);
+      setError(err instanceof Error ? err.message : "Submission failed");
+    },
+  });
+
+  const submitting = submitMutation.isPending;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -188,33 +212,14 @@ export default function NewSuggestionPage() {
 
   const clearCategories = () => setCategories([]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validationError = validate(title, description, categories);
     if (validationError) { setError(validationError); return; }
     if (!accessToken) return;
 
-    setSubmitting(true);
     setError(null);
-
-    try {
-      let imageUrl: string | undefined;
-      if (imageFile) {
-        setImageUploading(true);
-        imageUrl = await uploadSuggestionImage(imageFile, accessToken);
-        setImageUploading(false);
-      }
-
-      const created = await SimsService.submit(
-        { title: title.trim(), description: description.trim(), categories, isAnonymous, imageUrl },
-        accessToken,
-      );
-      setSuccessRedirect(`/sims/${created.id}`);
-    } catch (err: unknown) {
-      setImageUploading(false);
-      setError(err instanceof Error ? err.message : "Submission failed");
-      setSubmitting(false);
-    }
+    submitMutation.mutate({ title: title.trim(), description: description.trim(), categories, isAnonymous, imageFile });
   };
 
   const isUnknownSelected = categories.includes("UNKNOWN");

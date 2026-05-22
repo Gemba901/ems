@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export interface ChatMessage {
@@ -6,14 +7,14 @@ export interface ChatMessage {
 }
 
 export async function sendMessage(messages: ChatMessage[], token: string): Promise<string> {
-  const res = await fetch(`${API_URL}/chat`, {
+  const res = await apiClient(`${API_URL}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ messages }),
-  });
+  }, token);
 
   if (!res.ok) throw new Error('Failed to send message');
   const data = await res.json();

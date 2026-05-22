@@ -17,6 +17,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
+import { AuthService } from "@/services/auth.service";
 import { Role } from "@/types/role";
 
 interface SidebarProps {
@@ -115,7 +116,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await AuthService.logout();
     logout();
     router.push("/login");
   };

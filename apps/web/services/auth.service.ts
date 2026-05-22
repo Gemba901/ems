@@ -32,6 +32,7 @@ export const AuthService = {
     async login(identifier: string, password: string) {
         const res = await fetch(`${API_URL}/auth/login`, {
             method: "POST",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ phoneOrEmail: identifier, password }),
         });
@@ -46,6 +47,7 @@ export const AuthService = {
     async selectOrg(selectionToken: string, organizationId: string) {
         const res = await fetch(`${API_URL}/auth/select-org`, {
             method: "POST",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ selectionToken, organizationId }),
         });
@@ -57,8 +59,16 @@ export const AuthService = {
         return res.json();
     },
 
+    async logout() {
+        await fetch(`${API_URL}/auth/logout`, {
+            method: "POST",
+            credentials: "include",
+        }).catch(() => {});
+    },
+
     async getMyOrg(token: string): Promise<{ id: string; name: string; status: string; modules: string[]; logoUrl: string | null; primaryColor: string | null }> {
         const res = await fetch(`${API_URL}/auth/my-org`, {
+            credentials: "include",
             headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Failed to load organization info.");

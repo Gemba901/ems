@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders(token: string) {
@@ -82,7 +83,7 @@ export interface PaginatedResponse<T> {
 
 export const AdminService = {
     async getPlatformStats(token: string): Promise<PlatformStats> {
-        const res = await fetch(`${API_URL}/organizations/stats`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/organizations/stats`, { headers: authHeaders(token) }, token);
         return handleResponse<PlatformStats>(res);
     },
 
@@ -91,21 +92,21 @@ export const AdminService = {
         page = 1,
         limit = 20,
     ): Promise<PaginatedResponse<Organization>> {
-        const res = await fetch(`${API_URL}/organizations?page=${page}&limit=${limit}`, {
+        const res = await apiClient(`${API_URL}/organizations?page=${page}&limit=${limit}`, {
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<PaginatedResponse<Organization>>(res);
     },
 
     async getOrganization(token: string, id: string): Promise<OrgDetail> {
-        const res = await fetch(`${API_URL}/organizations/${id}`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/organizations/${id}`, { headers: authHeaders(token) }, token);
         return handleResponse<OrgDetail>(res);
     },
 
     async getOrgStats(token: string, id: string): Promise<OrgStats> {
-        const res = await fetch(`${API_URL}/organizations/${id}/stats`, {
+        const res = await apiClient(`${API_URL}/organizations/${id}/stats`, {
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<OrgStats>(res);
     },
 
@@ -118,9 +119,9 @@ export const AdminService = {
     ): Promise<PaginatedResponse<any>> {
         const params = new URLSearchParams({ page: String(page), limit: String(limit) });
         if (departmentId) params.set("departmentId", departmentId);
-        const res = await fetch(`${API_URL}/organizations/${id}/employees?${params}`, {
+        const res = await apiClient(`${API_URL}/organizations/${id}/employees?${params}`, {
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<PaginatedResponse<any>>(res);
     },
 
@@ -138,53 +139,53 @@ export const AdminService = {
     },
 
     async getOrgRoles(token: string, id: string): Promise<any[]> {
-        const res = await fetch(`${API_URL}/organizations/${id}/roles`, {
+        const res = await apiClient(`${API_URL}/organizations/${id}/roles`, {
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<any[]>(res);
     },
 
     async updateOrgStatus(token: string, id: string, status: OrgStatus): Promise<any> {
-        const res = await fetch(`${API_URL}/organizations/${id}/status`, {
+        const res = await apiClient(`${API_URL}/organizations/${id}/status`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify({ status }),
-        });
+        }, token);
         return handleResponse<any>(res);
     },
 
     async updateOrganization(token: string, id: string, data: Partial<Organization>): Promise<any> {
-        const res = await fetch(`${API_URL}/organizations/${id}`, {
+        const res = await apiClient(`${API_URL}/organizations/${id}`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify(data),
-        });
+        }, token);
         return handleResponse<any>(res);
     },
 
     async createOrganization(token: string, data: Record<string, string> & { modules?: ModuleType[]; adminFirstName: string; adminLastName: string; adminEmail: string; adminPhone: string }): Promise<any> {
-        const res = await fetch(`${API_URL}/organizations`, {
+        const res = await apiClient(`${API_URL}/organizations`, {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify(data),
-        });
+        }, token);
         return handleResponse<any>(res);
     },
 
     async updateCompanyTheme(token: string, primaryColor: string): Promise<{ id: string; primaryColor: string }> {
-        const res = await fetch(`${API_URL}/employee/company/theme`, {
+        const res = await apiClient(`${API_URL}/employee/company/theme`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify({ primaryColor }),
-        });
+        }, token);
         return handleResponse<{ id: string; primaryColor: string }>(res);
     },
 
     async setAdminOrg(token: string, orgId: string): Promise<{ message: string; organization: Organization }> {
-        const res = await fetch(`${API_URL}/organizations/${orgId}/set-admin-org`, {
+        const res = await apiClient(`${API_URL}/organizations/${orgId}/set-admin-org`, {
             method: "PATCH",
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse(res);
     },
 };

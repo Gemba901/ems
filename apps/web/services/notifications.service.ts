@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders(token: string) {
@@ -56,18 +57,18 @@ export async function getNotifications(
 }
 
 export async function markNotificationRead(token: string, id: string): Promise<void> {
-  const res = await fetch(`${API_URL}/notifications/${id}/read`, {
+  const res = await apiClient(`${API_URL}/notifications/${id}/read`, {
     method: "PATCH",
     headers: authHeaders(token),
-  });
+  }, token);
   return handleResponse<void>(res);
 }
 
 export async function markAllNotificationsRead(token: string): Promise<void> {
-  const res = await fetch(`${API_URL}/notifications/read-all`, {
+  const res = await apiClient(`${API_URL}/notifications/read-all`, {
     method: "PATCH",
     headers: authHeaders(token),
-  });
+  }, token);
   return handleResponse<void>(res);
 }
 
@@ -75,10 +76,10 @@ export async function broadcastNotification(
   token: string,
   dto: BroadcastNotificationDto,
 ): Promise<void> {
-  const res = await fetch(`${API_URL}/notifications/broadcast`, {
+  const res = await apiClient(`${API_URL}/notifications/broadcast`, {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({ ...dto, module: "SYSTEM" }),
-  });
+  }, token);
   return handleResponse<void>(res);
 }

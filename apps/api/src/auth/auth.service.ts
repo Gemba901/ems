@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { Role } from 'src/common/enum/role.enum';
 
 export interface JwtPayload {
@@ -44,6 +45,8 @@ type UserOrganizationMembership = UserOrganizationRelation & {
     user: { id: string; email: string | null; phone: string; name: string };
 };
 
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 @Injectable()
 export class AuthService {
     constructor(
@@ -51,7 +54,18 @@ export class AuthService {
         private jwtService: JwtService,
     ) { }
 
-    private buildJwt(user: { id: string; email: string | null; phone: string; name: string }, membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null } }) {
+    private hashToken(raw: string): string {
+        return crypto.createHash('sha256').update(raw).digest('hex');
+    }
+
+    private generateRawRefreshToken(): string {
+        return crypto.randomBytes(64).toString('hex');
+    }
+
+    private async buildJwt(
+        user: { id: string; email: string | null; phone: string; name: string },
+        membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null } },
+    ) {
         const payload: JwtPayload = {
             userId: user.id,
             organizationId: membership.organizationId,
@@ -62,8 +76,20 @@ export class AuthService {
             organizationName: membership.organization.name,
             organizationUrl: membership.organization.logoUrl,
         };
+
+        const accessToken = this.jwtService.sign(payload);
+
+        const rawRefreshToken = this.generateRawRefreshToken();
+        const tokenHash = this.hashToken(rawRefreshToken);
+        const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+
+        await this.prisma.refreshToken.create({
+            data: { tokenHash, userId: user.id, organizationId: membership.organizationId, expiresAt },
+        });
+
         return {
-            accessToken: this.jwtService.sign(payload),
+            accessToken,
+            refreshToken: rawRefreshToken,
             user: { name: user.name, ...payload },
         };
     }
@@ -129,6 +155,39 @@ export class AuthService {
             role: membership.role,
             organization: membership.organization,
         });
+    }
+
+    async refresh(rawRefreshToken: string) {
+        const tokenHash = this.hashToken(rawRefreshToken);
+
+        const stored = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
+
+        if (!stored || stored.expiresAt < new Date()) {
+            if (stored) await this.prisma.refreshToken.delete({ where: { tokenHash } });
+            throw new UnauthorizedException('Invalid or expired refresh token');
+        }
+
+        const membership = await this.prisma.userOrganization.findUnique({
+            where: { userId_organizationId: { userId: stored.userId, organizationId: stored.organizationId } },
+            include: { user: true, organization: true, role: true },
+        }) as UserOrganizationMembership | null;
+
+        if (!membership) throw new UnauthorizedException('User membership not found');
+
+        // Rotate: delete old token before issuing new one
+        await this.prisma.refreshToken.delete({ where: { tokenHash } });
+
+        return this.buildJwt(membership.user, {
+            organizationId: membership.organizationId,
+            roleId: membership.roleId,
+            role: membership.role,
+            organization: membership.organization,
+        });
+    }
+
+    async revokeRefreshToken(rawRefreshToken: string) {
+        const tokenHash = this.hashToken(rawRefreshToken);
+        await this.prisma.refreshToken.deleteMany({ where: { tokenHash } });
     }
 
     async verifyFirstTimeUser(phoneOrEmail: string) {

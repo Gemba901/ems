@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders(token: string) {
@@ -140,40 +141,40 @@ export const CalendarService = {
     month: number,
     token: string,
   ): Promise<{ visits: CalendarVisit[]; requests: CalendarRequest[]; blocks: CalendarBlock[] }> {
-    const res = await fetch(`${API_URL}/calendar/visits?year=${year}&month=${month}`, {
+    const res = await apiClient(`${API_URL}/calendar/visits?year=${year}&month=${month}`, {
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse(res);
   },
 
   async createVisit(data: CreateVisitPayload, token: string): Promise<CalendarVisit> {
-    const res = await fetch(`${API_URL}/calendar/visits`, {
+    const res = await apiClient(`${API_URL}/calendar/visits`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse(res);
   },
 
   async updateVisit(id: string, data: UpdateVisitPayload, token: string): Promise<CalendarVisit> {
-    const res = await fetch(`${API_URL}/calendar/visits/${id}`, {
+    const res = await apiClient(`${API_URL}/calendar/visits/${id}`, {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse(res);
   },
 
   async deleteVisit(id: string, token: string): Promise<void> {
-    const res = await fetch(`${API_URL}/calendar/visits/${id}`, {
+    const res = await apiClient(`${API_URL}/calendar/visits/${id}`, {
       method: "DELETE",
       headers: authHeaders(token),
-    });
+    }, token);
     await handleResponse(res);
   },
 
   async getRequests(token: string): Promise<VisitRequest[]> {
-    const res = await fetch(`${API_URL}/calendar/requests`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/calendar/requests`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
 
@@ -181,11 +182,11 @@ export const CalendarService = {
     data: { requestedDate: string; preferredTime?: string; message?: string },
     token: string,
   ): Promise<VisitRequest> {
-    const res = await fetch(`${API_URL}/calendar/requests`, {
+    const res = await apiClient(`${API_URL}/calendar/requests`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse(res);
   },
 
@@ -194,21 +195,21 @@ export const CalendarService = {
     data: { status: RequestStatus; responseNote?: string },
     token: string,
   ): Promise<VisitRequest> {
-    const res = await fetch(`${API_URL}/calendar/requests/${id}/respond`, {
+    const res = await apiClient(`${API_URL}/calendar/requests/${id}/respond`, {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse(res);
   },
 
   async getClientOrganizations(token: string): Promise<ClientOrg[]> {
-    const res = await fetch(`${API_URL}/calendar/organizations`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/calendar/organizations`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
 
   async getAdminOrg(token: string): Promise<AdminOrg | null> {
-    const res = await fetch(`${API_URL}/calendar/admin-org`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/calendar/admin-org`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
 
@@ -216,19 +217,19 @@ export const CalendarService = {
     data: { date: string; type: CalendarBlockType; label?: string },
     token: string,
   ): Promise<CalendarBlock> {
-    const res = await fetch(`${API_URL}/calendar/blocks`, {
+    const res = await apiClient(`${API_URL}/calendar/blocks`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse(res);
   },
 
   async deleteBlock(id: string, token: string): Promise<void> {
-    const res = await fetch(`${API_URL}/calendar/blocks/${id}`, {
+    const res = await apiClient(`${API_URL}/calendar/blocks/${id}`, {
       method: "DELETE",
       headers: authHeaders(token),
-    });
+    }, token);
     await handleResponse(res);
   },
 };

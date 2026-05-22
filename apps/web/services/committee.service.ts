@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders(token: string) {
@@ -57,57 +58,57 @@ export interface CreateCommitteePayload {
 
 export const CommitteeService = {
   async getMyCommittees(token: string): Promise<MyCommittee[]> {
-    const res = await fetch(`${API_URL}/committees/me`, {
+    const res = await apiClient(`${API_URL}/committees/me`, {
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse<MyCommittee[]>(res);
   },
 
   async list(token: string): Promise<SteeringCommittee[]> {
-    const res = await fetch(`${API_URL}/committees`, {
+    const res = await apiClient(`${API_URL}/committees`, {
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse<SteeringCommittee[]>(res);
   },
 
   async create(data: CreateCommitteePayload, token: string): Promise<SteeringCommittee> {
-    const res = await fetch(`${API_URL}/committees`, {
+    const res = await apiClient(`${API_URL}/committees`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse<SteeringCommittee>(res);
   },
 
   async getById(id: string, token: string): Promise<SteeringCommittee> {
-    const res = await fetch(`${API_URL}/committees/${id}`, {
+    const res = await apiClient(`${API_URL}/committees/${id}`, {
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse<SteeringCommittee>(res);
   },
 
   async addMember(committeeId: string, employeeId: string, token: string): Promise<SteeringCommittee> {
-    const res = await fetch(`${API_URL}/committees/${committeeId}/members`, {
+    const res = await apiClient(`${API_URL}/committees/${committeeId}/members`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify({ employeeId }),
-    });
+    }, token);
     return handleResponse<SteeringCommittee>(res);
   },
 
   async removeMember(committeeId: string, employeeId: string, token: string): Promise<SteeringCommittee> {
-    const res = await fetch(`${API_URL}/committees/${committeeId}/members/${employeeId}`, {
+    const res = await apiClient(`${API_URL}/committees/${committeeId}/members/${employeeId}`, {
       method: "DELETE",
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse<SteeringCommittee>(res);
   },
 
   async deleteCommittee(id: string, token: string): Promise<{ message: string }> {
-    const res = await fetch(`${API_URL}/committees/${id}`, {
+    const res = await apiClient(`${API_URL}/committees/${id}`, {
       method: "DELETE",
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse<{ message: string }>(res);
   },
 };

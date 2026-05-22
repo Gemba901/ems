@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders(token: string) {
@@ -86,38 +87,39 @@ export const EmployeeService = {
         const params = new URLSearchParams({ page: String(page), limit: String(limit) });
         if (search)       params.set('search',       search);
         if (departmentId) params.set('departmentId', departmentId);
-        const res = await fetch(
+        const res = await apiClient(
             `${API_URL}/employee/organization/${orgId}?${params}`,
             { headers: authHeaders(token) },
+            token,
         );
         return handleResponse<EmployeeListResponse>(res);
     },
 
     async getMe(token: string): Promise<EmployeeApiResponse> {
-        const res = await fetch(`${API_URL}/employee/me`, {
+        const res = await apiClient(`${API_URL}/employee/me`, {
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<EmployeeApiResponse>(res);
     },
 
     async getById(id: string, token: string): Promise<EmployeeApiResponse> {
-        const res = await fetch(`${API_URL}/employee/${id}`, {
+        const res = await apiClient(`${API_URL}/employee/${id}`, {
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<EmployeeApiResponse>(res);
     },
 
     async getDepartments(orgId: string, token: string): Promise<{ id: string; name: string; _count: { employees: number } }[]> {
-        const res = await fetch(`${API_URL}/employee/organization/${orgId}/departments`, {
+        const res = await apiClient(`${API_URL}/employee/organization/${orgId}/departments`, {
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<{ id: string; name: string; _count: { employees: number } }[]>(res);
     },
 
     async getOrgStats(orgId: string, token: string): Promise<OrgStatsResponse> {
-        const res = await fetch(`${API_URL}/employee/organization/${orgId}/stats`, {
+        const res = await apiClient(`${API_URL}/employee/organization/${orgId}/stats`, {
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<OrgStatsResponse>(res);
     },
 
@@ -128,63 +130,64 @@ export const EmployeeService = {
         limit = 20,
     ): Promise<EmployeeListResponse> {
         const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-        const res = await fetch(
+        const res = await apiClient(
             `${API_URL}/employee/department/${deptId}?${params}`,
             { headers: authHeaders(token) },
+            token,
         );
         return handleResponse<EmployeeListResponse>(res);
     },
 
     async onboard(data: Record<string, unknown>, token: string): Promise<EmployeeApiResponse> {
-        const res = await fetch(`${API_URL}/employee/onboard`, {
+        const res = await apiClient(`${API_URL}/employee/onboard`, {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify(data),
-        });
+        }, token);
         return handleResponse<EmployeeApiResponse>(res);
     },
 
     async update(id: string, data: Record<string, unknown>, token: string): Promise<EmployeeApiResponse> {
-        const res = await fetch(`${API_URL}/employee/${id}`, {
+        const res = await apiClient(`${API_URL}/employee/${id}`, {
             method: "PUT",
             headers: authHeaders(token),
             body: JSON.stringify(data),
-        });
+        }, token);
         return handleResponse<EmployeeApiResponse>(res);
     },
 
     async remove(id: string, token: string): Promise<{ message: string }> {
-        const res = await fetch(`${API_URL}/employee/${id}`, {
+        const res = await apiClient(`${API_URL}/employee/${id}`, {
             method: "DELETE",
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse<{ message: string }>(res);
     },
 
     async updateRole(id: string, roleId: number, token: string): Promise<{ message: string }> {
-        const res = await fetch(`${API_URL}/employee/${id}/role`, {
+        const res = await apiClient(`${API_URL}/employee/${id}/role`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify({ roleId }),
-        });
+        }, token);
         return handleResponse<{ message: string }>(res);
     },
 
     async resetPassword(id: string, newPassword: string, token: string): Promise<{ message: string }> {
-        const res = await fetch(`${API_URL}/employee/${id}/reset-password`, {
+        const res = await apiClient(`${API_URL}/employee/${id}/reset-password`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify({ newPassword }),
-        });
+        }, token);
         return handleResponse<{ message: string }>(res);
     },
 
     async updateAvatar(id: string, avatarUrl: string, token: string): Promise<EmployeeApiResponse> {
-        const res = await fetch(`${API_URL}/employee/${id}/avatar`, {
+        const res = await apiClient(`${API_URL}/employee/${id}/avatar`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify({ avatarUrl }),
-        });
+        }, token);
         return handleResponse<EmployeeApiResponse>(res);
     },
 };

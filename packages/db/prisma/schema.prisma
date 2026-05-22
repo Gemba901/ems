@@ -122,8 +122,22 @@ model User {
   createdVisits     ConsultancyVisit[]
   visitRequests     VisitRequest[]
   calendarBlocks    CalendarBlock[]
+  refreshTokens     RefreshToken[]
 
   createdAt         DateTime @default(now())
+}
+
+model RefreshToken {
+  id             String   @id @default(uuid())
+  tokenHash      String   @unique
+  userId         String
+  organizationId String
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model UserOrganization {

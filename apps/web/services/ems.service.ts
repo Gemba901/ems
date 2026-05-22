@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders(token: string) {
@@ -144,12 +145,12 @@ export interface UpdateEmployeeEmsPayload {
 
 export const EmsService = {
   async getMyProfile(token: string): Promise<{ employee: EmployeeProfile; completion: CompletionResult }> {
-    const res = await fetch(`${API_URL}/ems/me`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/ems/me`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
 
   async getDashboard(token: string): Promise<EmsDashboard> {
-    const res = await fetch(`${API_URL}/ems/dashboard`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/ems/dashboard`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
 
@@ -161,12 +162,12 @@ export const EmsService = {
       .filter(([, v]) => v !== undefined)
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
       .join("&");
-    const res = await fetch(`${API_URL}/ems/employees${q ? `?${q}` : ""}`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/ems/employees${q ? `?${q}` : ""}`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
 
   async getEmployee(id: string, token: string): Promise<{ employee: EmployeeProfile; completion: CompletionResult }> {
-    const res = await fetch(`${API_URL}/ems/employees/${id}`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/ems/employees/${id}`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
 
@@ -175,11 +176,11 @@ export const EmsService = {
     data: UpdateEmployeeEmsPayload,
     token: string,
   ): Promise<{ employee: EmployeeProfile; completion: CompletionResult }> {
-    const res = await fetch(`${API_URL}/ems/employees/${id}`, {
+    const res = await apiClient(`${API_URL}/ems/employees/${id}`, {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse(res);
   },
 };

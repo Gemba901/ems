@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
+import { AuthService } from "@/services/auth.service";
 import { Role } from "@/types/role";
 import {
     LayoutDashboard,
@@ -36,7 +37,8 @@ function AdminSidebar({ open, onClose }: AdminSidebarProps) {
         ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
         : "SA";
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        await AuthService.logout();
         logout();
         router.replace("/login");
     };

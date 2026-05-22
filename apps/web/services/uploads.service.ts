@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders(token: string) {
@@ -25,14 +26,14 @@ export async function uploadImage(file: File, folder: string, token: string): Pr
         folder,
     };
 
-    const response = await fetch(`${API_URL}/uploads/presigned-url`, {
+    const response = await apiClient(`${API_URL}/uploads/presigned-url`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             ...authHeaders(token),
         },
         body: JSON.stringify(payload),
-    });
+    }, token);
 
     const { uploadUrl, fileUrl, key } = await handleResponse<UploadResult>(response);
 

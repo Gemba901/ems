@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api-client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function authHeaders(token: string) {
@@ -124,11 +125,11 @@ function buildQuery(params: Record<string, string | number | undefined>) {
 }
 
 export async function uploadSuggestionImage(file: File, token: string): Promise<string> {
-  const presignRes = await fetch(`${API_URL}/uploads/presigned-url`, {
+  const presignRes = await apiClient(`${API_URL}/uploads/presigned-url`, {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: "suggestions" }),
-  });
+  }, token);
   const { uploadUrl, fileUrl } = await handleResponse<{ uploadUrl: string; fileUrl: string }>(presignRes);
   await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
   return fileUrl;
@@ -136,21 +137,21 @@ export async function uploadSuggestionImage(file: File, token: string): Promise<
 
 export const SimsService = {
   async submit(data: CreateSuggestionPayload, token: string): Promise<Suggestion> {
-    const res = await fetch(`${API_URL}/sims`, {
+    const res = await apiClient(`${API_URL}/sims`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse<Suggestion>(res);
   },
 
   async getMine(token: string): Promise<Suggestion[]> {
-    const res = await fetch(`${API_URL}/sims/me`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/sims/me`, { headers: authHeaders(token) }, token);
     return handleResponse<Suggestion[]>(res);
   },
 
   async getSummary(token: string): Promise<SuggestionSummary> {
-    const res = await fetch(`${API_URL}/sims/summary`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/sims/summary`, { headers: authHeaders(token) }, token);
     return handleResponse<SuggestionSummary>(res);
   },
 
@@ -158,9 +159,9 @@ export const SimsService = {
     token: string,
     params: { status?: SuggestionStatus; category?: SuggestionCategory; page?: number; limit?: number },
   ): Promise<PaginatedSuggestions> {
-    const res = await fetch(`${API_URL}/sims/department${buildQuery(params)}`, {
+    const res = await apiClient(`${API_URL}/sims/department${buildQuery(params)}`, {
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse<PaginatedSuggestions>(res);
   },
 
@@ -174,9 +175,9 @@ export const SimsService = {
       limit?: number;
     },
   ): Promise<PaginatedSuggestions> {
-    const res = await fetch(`${API_URL}/sims${buildQuery(params)}`, {
+    const res = await apiClient(`${API_URL}/sims${buildQuery(params)}`, {
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse<PaginatedSuggestions>(res);
   },
 
@@ -185,32 +186,32 @@ export const SimsService = {
     token: string,
     params: { status?: SuggestionStatus; category?: SuggestionCategory; page?: number; limit?: number },
   ): Promise<PaginatedSuggestions> {
-    const res = await fetch(`${API_URL}/sims/queue${buildQuery(params)}`, {
+    const res = await apiClient(`${API_URL}/sims/queue${buildQuery(params)}`, {
       headers: authHeaders(token),
-    });
+    }, token);
     return handleResponse<PaginatedSuggestions>(res);
   },
 
   async getById(id: string, token: string): Promise<Suggestion> {
-    const res = await fetch(`${API_URL}/sims/${id}`, { headers: authHeaders(token) });
+    const res = await apiClient(`${API_URL}/sims/${id}`, { headers: authHeaders(token) }, token);
     return handleResponse<Suggestion>(res);
   },
 
   async review(id: string, data: ReviewPayload, token: string): Promise<SuggestionReview> {
-    const res = await fetch(`${API_URL}/sims/${id}/review`, {
+    const res = await apiClient(`${API_URL}/sims/${id}/review`, {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse<SuggestionReview>(res);
   },
 
   async updateImplementation(id: string, data: UpdateImplementationPayload, token: string): Promise<Suggestion> {
-    const res = await fetch(`${API_URL}/sims/${id}/implementation`, {
+    const res = await apiClient(`${API_URL}/sims/${id}/implementation`, {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
-    });
+    }, token);
     return handleResponse<Suggestion>(res);
   },
 

@@ -94,6 +94,7 @@ export default function OrgDetailPage() {
     const [tabLoading, setTabLoading] = useState(false);
     const [statusOpen, setStatusOpen] = useState(false);
     const [updatingModules, setUpdatingModules] = useState(false);
+    const [moduleError, setModuleError] = useState<string | null>(null);
 
     // Role change modal
     const [roleModal, setRoleModal] = useState<{ emp: any } | null>(null);
@@ -153,8 +154,9 @@ export default function OrgDetailPage() {
         try {
             await AdminService.updateOrganization(accessToken, org.id, { modules: updated });
             setOrg((prev) => prev ? { ...prev, modules: updated } : prev);
+            setModuleError(null);
         } catch (e: any) {
-            alert(e.message || "Failed to update modules");
+            setModuleError(e.message || "Failed to update modules.");
         } finally {
             setUpdatingModules(false);
         }
@@ -432,6 +434,9 @@ export default function OrgDetailPage() {
                                     <p className="text-sm font-semibold text-slate-800">Modules</p>
                                 </div>
                                 {updatingModules && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
+                                {moduleError && !updatingModules && (
+                                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1">{moduleError}</p>
+                                )}
                             </div>
                             <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {AVAILABLE_MODULES.map(({ key, label, description }) => {

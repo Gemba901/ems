@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth.store";
+import { apiClient } from "@/lib/api-client";
 import { BarChart3, Building2, FileEdit, ListChecks, Users } from "lucide-react";
 
 function greeting(): string {
@@ -61,9 +62,7 @@ export default function DashboardHero() {
 
   useEffect(() => {
     if (!accessToken) return;
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/quotes/daily`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    apiClient(`${process.env.NEXT_PUBLIC_API_URL}/quotes/daily`, {}, accessToken)
       .then((r) => r.json())
       .then((data) => {
         if (data.quote) setDailyQuote({ quote: data.quote, author: data.author });

@@ -46,7 +46,7 @@ const INDUSTRY_OPTIONS = [
   "Education",
   "Energy & Utilities",
   "Finance & Banking",
-  "Food & Bevarage",
+  "Food & Beverage",
   "Healthcare",
   "Hospitality & Tourism",
   "Information Technology",
@@ -183,7 +183,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
       if (form.logoUrl) payload.logoUrl = form.logoUrl.trim();
       payload.modules = selectedModules;
 
-      const created = await AdminService.createOrganization(token, payload);
+      await AdminService.createOrganization(token, payload);
       onCreated();
       handleClose();
     } catch (err: any) {

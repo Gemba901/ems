@@ -76,10 +76,15 @@ export function SetupStep({ data, onComplete }: SetupStepProps) {
           </div>
 
           <h2 className="text-3xl font-semibold tracking-tight text-slate-900 leading-tight mb-4">
-            Welcome to
+            Welcome,
             <br />
-            {data.orgName},<br />
-            {data.name}
+            {data.name || "there"}
+            {data.orgName ? (
+              <>
+                <br />
+                <span className="text-blue-600">{data.orgName}</span>
+              </>
+            ) : null}
           </h2>
           <p className="text-slate-600 text-sm leading-relaxed">
             Since this is your first time, please set a secure password for your

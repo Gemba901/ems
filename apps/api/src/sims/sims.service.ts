@@ -90,17 +90,33 @@ export class SimsService {
     return { ...suggestion, employee: null };
   }
 
-  // Submit new suggestion 
+  // Submit new suggestion
 
-  async submitSuggestion(dto: CreateSuggestionDto, userId: string, organizationId: string) {
+  async submitSuggestion(dto: CreateSuggestionDto, userId: string, organizationId: string, role: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
-    if (!employee.departmentId) {
+    const isPrivileged = [Role.HOD, Role.MANAGEMENT, Role.ADMIN, Role.SUPER_ADMIN].includes(role as Role);
+
+    let targetDepartmentId: string | null;
+
+    if (isPrivileged && dto.departmentId) {
+      // Privileged roles may direct their suggestion to any department in the org
+      const dept = await this.prisma.department.findFirst({
+        where: { id: dto.departmentId, organizationId },
+        select: { id: true },
+      });
+      if (!dept) throw new BadRequestException('Selected department not found in this organization');
+      targetDepartmentId = dto.departmentId;
+    } else {
+      // Employees are tied to their own department
+      if (!employee.departmentId) {
         throw new BadRequestException('You must be assigned to a department to submit a suggestion');
+      }
+      targetDepartmentId = employee.departmentId;
     }
 
-    const hodIds = await this.findDepartmentHODs(employee.departmentId, organizationId);
-    
+    const hodIds = await this.findDepartmentHODs(targetDepartmentId, organizationId);
+
     const suggestion = await this.prisma.suggestion.create({
       data: {
         title: dto.title,
@@ -111,6 +127,7 @@ export class SimsService {
         status: 'UNDER_REVIEW',
         employeeId: employee.id,
         organizationId,
+        departmentId: targetDepartmentId,
         hodId: hodIds[0] || null,
       }
     });
@@ -174,7 +191,7 @@ export class SimsService {
 
     const where: any = {
       organizationId: employee.organizationId,
-      employee: { departmentId: employee.departmentId },
+      departmentId: employee.departmentId,
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
     };
@@ -198,7 +215,7 @@ export class SimsService {
       organizationId,
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
-      ...(departmentId && { employee: { departmentId } }),
+      ...(departmentId && { departmentId }),
     };
 
     const [data, total] = await Promise.all([
@@ -221,10 +238,8 @@ export class SimsService {
 
     const where: any = {
       organizationId,
-      employee: { 
-        departmentId: employee.departmentId,
-        id: { not: employee.id }, // HODs don't review their own suggestions
-      },
+      departmentId: employee.departmentId,
+      employeeId: { not: employee.id }, // HODs don't review their own suggestions
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
     };
@@ -268,7 +283,7 @@ export class SimsService {
 
     if (roleLevel === Role.HOD) {
       const employee = await this.resolveEmployee(userId);
-      if (suggestion.employee?.departmentId !== employee.departmentId) {
+      if (suggestion.departmentId !== employee.departmentId) {
         throw new ForbiddenException('You can only view suggestions from your department');
       }
     }
@@ -282,7 +297,7 @@ export class SimsService {
     const [deptSuggestions, orgSuggestions] = await Promise.all([
       employee.departmentId
         ? this.prisma.suggestion.findMany({
-          where: { organizationId, employee: { departmentId: employee.departmentId } },
+          where: { organizationId, departmentId: employee.departmentId },
           select: { status: true, categories: true },
         })
         : Promise.resolve([]),
@@ -332,10 +347,11 @@ export class SimsService {
     });
     const roles = userOrgs.map(uo => uo.role.name);
   
-    const isDepartmentHOD = roles.includes(Role.HOD) && reviewer.departmentId === suggestion.employee?.departmentId;
+    const isDepartmentHOD = roles.includes(Role.HOD) && reviewer.departmentId === suggestion.departmentId;
     const isSuperAdmin = roles.includes(Role.SUPER_ADMIN);
+    const isAdminOrMgmt = roles.some(r => [Role.ADMIN, Role.MANAGEMENT].includes(r as Role));
 
-    if (!isDepartmentHOD && !isSuperAdmin) {
+    if (!isDepartmentHOD && !isSuperAdmin && !isAdminOrMgmt) {
         throw new ForbiddenException('Only a department HOD or admin can review this suggestion');
     }
 

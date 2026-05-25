@@ -238,6 +238,7 @@ model Department {
 
   employees      Employee[]
   organization   Organization @relation(fields: [organizationId], references: [id])
+  suggestions    Suggestion[]
 }
 
 model SteeringCommittee {
@@ -343,12 +344,14 @@ model Suggestion {
   isAnonymous          Boolean               @default(false)
   employeeId           String
   organizationId       String
+  departmentId         String?
   hodId                String?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
   employee     Employee           @relation("EmployeeSuggestions", fields: [employeeId], references: [id])
   organization Organization       @relation(fields: [organizationId], references: [id])
+  department   Department?        @relation(fields: [departmentId], references: [id])
   hod          Employee?          @relation("HODSuggestions", fields: [hodId], references: [id], onDelete: SetNull)
   reviews      SuggestionReview[]
 }

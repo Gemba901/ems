@@ -98,9 +98,9 @@ export function OrgPickerStep({ data, onBack }: OrgPickerStepProps) {
         type="button"
         onClick={onBack}
         disabled={loading}
-        className="mt-6 w-full text-xs text-slate-400 hover:text-slate-600 transition-colors font-mono uppercase tracking-widest disabled:opacity-50"
+        className="mt-4 w-full text-sm text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50 py-2"
       >
-        Back
+        ← Back
       </button>
 
       <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-mono space-x-2 tracking-widest uppercase">

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, User, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Loader2, User, ArrowRight, AlertCircle } from "lucide-react";
 import type { AuthState } from "../../app/(auth)/login/page"; 
 import { AuthService } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth.store"; 
@@ -20,11 +20,13 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
+    setError(null);
     try {
         const response = await AuthService.login(data.identifier, password);
 
@@ -35,8 +37,8 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
 
         setAuth(response.user, response.accessToken);
         router.push(response.user.roleLevel === "SUPER_ADMIN" ? "/admin" : "/");
-    } catch (error: any) {
-        alert(error.message || "Login failed. Please try again.");
+    } catch (err: any) {
+        setError(err.message || "Incorrect password. Please try again.");
     } finally {
         setLoading(false);
     }
@@ -77,11 +79,8 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <label className="text-[11px] uppercase tracking-wider text-slate-500 font-mono">Enter Password</label>
-            <a href="#" className="text-[11px] uppercase tracking-wider text-blue-600 hover:text-blue-700 font-mono transition-colors">
-              Forgot Password?
-            </a>
+          <div className="flex items-center">
+            <label className="text-[11px] uppercase tracking-wider text-slate-500 font-mono">Password</label>
           </div>
           <div className="relative">
             <input
@@ -101,6 +100,17 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
             </button>
           </div>
         </div>
+
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="flex items-center text-red-500 text-xs font-medium"
+          >
+            <AlertCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+            {error}
+          </motion.div>
+        )}
 
         <button
           type="submit"

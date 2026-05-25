@@ -28,9 +28,9 @@ export class SimsController {
   @Post()
   async submit(
     @Body() dto: CreateSuggestionDto,
-    @CurrentUser() user: { userId: string; organizationId: string },
+    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string },
   ) {
-    return this.simsService.submitSuggestion(dto, user.userId, user.organizationId);
+    return this.simsService.submitSuggestion(dto, user.userId, user.organizationId, user.roleLevel);
   }
 
   /**

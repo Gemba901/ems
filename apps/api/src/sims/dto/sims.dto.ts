@@ -26,6 +26,11 @@ export class CreateSuggestionDto {
   @IsString()
   @IsOptional()
   imageUrl?: string;
+
+  /** HOD / MANAGEMENT / ADMIN may target a specific department. Ignored for EMPLOYEE role. */
+  @IsString()
+  @IsOptional()
+  departmentId?: string;
 }
 
 export class ReviewSuggestionDto {

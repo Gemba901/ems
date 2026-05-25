@@ -97,6 +97,7 @@ export interface CreateSuggestionPayload {
   categories: SuggestionCategory[];
   isAnonymous?: boolean;
   imageUrl?: string;
+  departmentId?: string;
 }
 
 export interface ReviewPayload {

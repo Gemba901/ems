@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/auth.store";
 import { NotificationsBell } from "./NotificationsBell";
 
@@ -14,12 +14,16 @@ interface HeaderProps {
 const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
   "/hr": "Human Resources",
+  "/hr/reports": "HR Reports",
   "/operations": "Operations",
   "/operations/committees": "Committees",
   "/reports": "Reports",
-  "/inventory": "Inventory",
   "/settings": "Settings",
+  "/settings/members": "Members",
   "/settings/notifications": "Notifications",
+  "/ems": "Employee Master System",
+  "/ems/employees": "Employees",
+  "/ems/my-profile": "My Profile",
   "/sims": "Suggestions",
   "/sims/new": "New Suggestion",
   "/sims/my-suggestions": "My Suggestions",
@@ -29,13 +33,14 @@ const PAGE_TITLES: Record<string, string> = {
   "/sims/archived": "Archived",
   "/sims/settings": "SIMS Settings",
   "/calendar": "Calendar",
-  "/support": "Support",
+  "/department": "My Department",
 };
 
 function resolveTitle(pathname: string): string {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith("/operations/employees/me")) return "My Profile";
   if (pathname.startsWith("/operations/employees/")) return "Employee Profile";
+  if (pathname.startsWith("/ems/employees/")) return "Employee Details";
   if (pathname.startsWith("/sims/")) return "Suggestions";
   if (pathname.startsWith("/admin/organizations/")) return "Organization";
   if (pathname.startsWith("/admin")) return "Admin Console";
@@ -64,11 +69,10 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Menu className="h-5 w-5" />
         </button>
 
-        {/* BEES brand mark */}
         <div className="flex items-center gap-2">
           <div className="flex items-center justify-center h-7 px-2 rounded-lg bg-indigo-600">
             <span className="text-[11px] font-black tracking-widest text-white leading-none">
-              BEES
+              GEMBA
             </span>
           </div>
           {pageTitle && (
@@ -98,7 +102,6 @@ export function Header({ onMenuClick }: HeaderProps) {
           </div>
 
           <Avatar className="h-8 w-8 rounded-full border-2 border-white shadow-sm">
-            <AvatarImage src="/placeholder.png" alt={user?.name || "User"} />
             <AvatarFallback className="bg-indigo-600 text-white text-xs font-bold">
               {user?.name ? getInitials(user.name) : "U"}
             </AvatarFallback>

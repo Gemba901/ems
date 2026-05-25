@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Users, Building2, BarChart3, Settings, Lightbulb,
+  Users, Building2, BarChart3, Lightbulb,
   ListChecks, FileEdit, UserCircle, ShieldCheck,
-  ClipboardList, ArrowRight, TrendingUp, Archive,
+  ClipboardList, ArrowRight, TrendingUp, Settings,
   Stethoscope, UserCheck, UserX, Layers,
   MessageSquare, CheckCheck, Clock, Loader2,
 } from "lucide-react";
@@ -227,7 +227,7 @@ function AdminSection() {
         <SectionHeader title="Additional Access" subtitle="Other areas you can manage" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ActionCard label="Committees" description="Manage review committees" href="/operations/committees" icon={ShieldCheck} color="text-violet-600" bg="bg-violet-50" />
-          <ActionCard label="Inventory" description="Track company assets and equipment" href="/inventory" icon={Archive} color="text-orange-600" bg="bg-orange-50" />
+          <ActionCard label="Settings" description="Configure your organization" href="/settings" icon={Settings} color="text-slate-600" bg="bg-slate-100" />
         </div>
       </div>
     </section>

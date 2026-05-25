@@ -7,7 +7,8 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, SuggestionCategory, uploadSuggestionImage } from "@/services/sims.service";
-import { useMutation } from "@tanstack/react-query";
+import { EmployeeService } from "@/services/employee.service";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { SpeechToTextButton } from "@/components/ui/SpeechToTextButton";
 import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, X, Loader2 } from "lucide-react";
 
@@ -114,26 +115,38 @@ const TITLE_MAX = 200;
 const DESC_MIN  = 20;
 const DESC_MAX  = 2000;
 
-function validate(title: string, description: string, categories: SuggestionCategory[]) {
+function validate(title: string, description: string, categories: SuggestionCategory[], isPrivileged: boolean, departmentId: string) {
   if (title.trim().length < TITLE_MIN) return `Title must be at least ${TITLE_MIN} characters.`;
   if (title.trim().length > TITLE_MAX) return `Title must be under ${TITLE_MAX} characters.`;
   if (description.trim().length < DESC_MIN) return `Description must be at least ${DESC_MIN} characters.`;
   if (description.trim().length > DESC_MAX) return `Description must be under ${DESC_MAX} characters.`;
   if (categories.length === 0) return "Please select at least one category.";
+  if (isPrivileged && !departmentId) return "Please select a department for this suggestion.";
   return null;
 }
+
+const PRIVILEGED_ROLES = [Role.HOD, Role.MANAGEMENT, Role.ADMIN, Role.SUPER_ADMIN];
 
 export default function NewSuggestionPage() {
   const router      = useRouter();
   const { accessToken, user } = useAuthStore();
 
+  const isPrivileged = user ? PRIVILEGED_ROLES.includes(user.roleLevel) : false;
+
   const [title, setTitle]             = useState("");
   const [description, setDescription] = useState("");
   const [categories, setCategories]   = useState<SuggestionCategory[]>([]);
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [departmentId, setDepartmentId] = useState<string>("");
   const [error, setError]             = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [successRedirect, setSuccessRedirect] = useState<string | null>(null);
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments", user?.organizationId],
+    queryFn: () => EmployeeService.getDepartments(user!.organizationId!, accessToken!),
+    enabled: isPrivileged && !!user?.organizationId && !!accessToken,
+  });
 
   // Image upload state
   const [imageFile, setImageFile]       = useState<File | null>(null);
@@ -142,7 +155,7 @@ export default function NewSuggestionPage() {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const submitMutation = useMutation({
-    mutationFn: async (payload: { title: string; description: string; categories: SuggestionCategory[]; isAnonymous: boolean; imageFile: File | null }) => {
+    mutationFn: async (payload: { title: string; description: string; categories: SuggestionCategory[]; isAnonymous: boolean; imageFile: File | null; departmentId?: string }) => {
       let imageUrl: string | undefined;
       if (payload.imageFile) {
         setImageUploading(true);
@@ -150,7 +163,7 @@ export default function NewSuggestionPage() {
         setImageUploading(false);
       }
       return SimsService.submit(
-        { title: payload.title, description: payload.description, categories: payload.categories, isAnonymous: payload.isAnonymous, imageUrl },
+        { title: payload.title, description: payload.description, categories: payload.categories, isAnonymous: payload.isAnonymous, imageUrl, departmentId: payload.departmentId },
         accessToken!,
       );
     },
@@ -214,17 +227,24 @@ export default function NewSuggestionPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const validationError = validate(title, description, categories);
+    const validationError = validate(title, description, categories, isPrivileged, departmentId);
     if (validationError) { setError(validationError); return; }
     if (!accessToken) return;
 
     setError(null);
-    submitMutation.mutate({ title: title.trim(), description: description.trim(), categories, isAnonymous, imageFile });
+    submitMutation.mutate({
+      title: title.trim(),
+      description: description.trim(),
+      categories,
+      isAnonymous,
+      imageFile,
+      departmentId: isPrivileged && departmentId ? departmentId : undefined,
+    });
   };
 
   const isUnknownSelected = categories.includes("UNKNOWN");
   const isAllSelected     = ALL_QCDSMT.every((c) => categories.includes(c));
-  const canSubmit         = !submitting && categories.length > 0 && title.trim().length >= TITLE_MIN && description.trim().length >= DESC_MIN;
+  const canSubmit         = !submitting && categories.length > 0 && title.trim().length >= TITLE_MIN && description.trim().length >= DESC_MIN && (!isPrivileged || !!departmentId);
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
@@ -253,6 +273,30 @@ export default function NewSuggestionPage() {
 
             <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
               <form onSubmit={handleSubmit} className="space-y-6">
+
+                {/* Department picker — only for HOD / Management / Admin */}
+                {isPrivileged && (
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+                      Target Department <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={departmentId}
+                      onChange={(e) => { setDepartmentId(e.target.value); setError(null); }}
+                      className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all bg-white ${
+                        !departmentId
+                          ? "border-slate-200 focus:ring-blue-500/20 focus:border-blue-400 text-slate-400"
+                          : "border-slate-200 focus:ring-blue-500/20 focus:border-blue-400 text-slate-900"
+                      }`}
+                    >
+                      <option value="">Select a department…</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-400 mt-1">Your suggestion will be directed to this department for review.</p>
+                  </div>
+                )}
 
                 {/* Title */}
                 <div>

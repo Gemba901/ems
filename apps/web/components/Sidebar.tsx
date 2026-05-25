@@ -4,9 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutGrid,
-  Archive,
   Settings,
-  HelpCircle,
   BarChart2,
   LogOut,
   ShieldCheck,
@@ -166,7 +164,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <span className="text-xs font-bold text-white">{orgInitial}</span>
+              <span className="text-xs font-bold text-white bg-indigo-600 h-full w-full flex items-center justify-center">{orgInitial}</span>
             )}
           </div>
           <div className={`ml-3 min-w-0 flex flex-col ${fadeIn}`}>
@@ -222,17 +220,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
         {/* Footer actions */}
         <div className="pb-3 px-2 flex flex-col gap-1">
-          <Link
-            href="/support"
-            onClick={onClose}
-            className="flex items-center h-10 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
-          >
-            <div className="flex shrink-0 w-10 items-center justify-center">
-              <HelpCircle className="h-4.5 w-4.5" />
-            </div>
-            <span className={`ml-1 text-sm font-medium ${fadeIn}`}>Support</span>
-          </Link>
-
           <button
             onClick={handleLogout}
             className="flex items-center h-10 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors w-full"

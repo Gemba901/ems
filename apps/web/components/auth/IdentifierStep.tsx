@@ -228,15 +228,10 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
         </button>
       </form>
 
-      <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col items-center space-y-4">
-        <div className="text-[10px] uppercase tracking-widest text-slate-400 font-mono">
-          Security Layer: V2.4.0
-        </div>
-        <div className="flex items-center space-x-3 text-xs text-slate-500">
-          <a href="#" className="hover:text-slate-800 transition-colors">Privacy Policy</a>
-          <span className="w-1 h-1 rounded-full bg-slate-300" />
-          <a href="#" className="hover:text-slate-800 transition-colors">Terms of Service</a>
-        </div>
+      <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-mono space-x-2 tracking-widest uppercase">
+        <span>Gemba PMS</span>
+        <span className="text-slate-200">|</span>
+        <span>Enterprise Management</span>
       </div>
     </motion.div>
   );

@@ -15,12 +15,15 @@ import {
     Shield,
     X,
     Settings,
+    Home
 } from "lucide-react";
 
 const NAV = [
     { label: "Dashboard",     href: "/admin",               icon: LayoutDashboard },
     { label: "Organizations", href: "/admin/organizations",  icon: Building2 },
     { label: "Settings",      href: "/admin/settings",       icon: Settings },
+    { label: "Main App",      href: "/",                icon: Home },
+    
 ];
 
 interface AdminSidebarProps {
@@ -83,7 +86,9 @@ function AdminSidebar({ open, onClose }: AdminSidebarProps) {
                     <p className="text-[10px] text-white/20 uppercase tracking-widest px-3 pb-2 font-medium">Platform</p>
                     {NAV.map(({ label, href, icon: Icon }) => {
                         const isActive =
-                            href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+                            href === "/" || href === "/admin"
+                                ? pathname === href
+                                : pathname.startsWith(href);
                         return (
                             <Link
                                 key={href}

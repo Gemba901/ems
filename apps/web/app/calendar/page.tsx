@@ -140,6 +140,12 @@ export default function CalendarPage() {
   const [showRequest, setShowRequest] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showBlockForm, setShowBlockForm] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string>("");
+  const isFiltered = activeFilter !== "";
+  // Only pass clientOrgId to the backend when the filter is an actual org (not a block-type filter)
+  const filterOrgId = activeFilter !== "HOLIDAY" && activeFilter !== "BUSY_DAY"
+    ? (activeFilter || undefined)
+    : undefined;
 
   const todayStr = today();
 
@@ -155,8 +161,8 @@ export default function CalendarPage() {
 
   // Query: month visits + requests
   const { data: monthData, isLoading: loading, error: monthError } = useQuery({
-    queryKey: ["calendar-month", year, month],
-    queryFn: () => CalendarService.getMonthVisits(year, month, accessToken!),
+    queryKey: ["calendar-month", year, month, activeFilter],
+    queryFn: () => CalendarService.getMonthVisits(year, month, accessToken!, filterOrgId),
     enabled: !!accessToken,
   });
 
@@ -276,29 +282,51 @@ export default function CalendarPage() {
       <div className="max-w-7xl mx-auto space-y-4">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Calendar</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               {isAdmin ? "Manage consultancy visits across all clients" : "Your upcoming visits and availability"}
             </p>
           </div>
-          {isAdmin && (
-            <button
-              onClick={() => { setShowCreate(true); setEditingVisit(null); }}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-            >
-              <Plus className="h-4 w-4" /> Schedule Visit
-            </button>
-          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            {isAdmin && (
+              <select
+                value={activeFilter}
+                onChange={(e) => { setActiveFilter(e.target.value); setSelectedDay(null); }}
+                className="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all min-w-[160px]"
+              >
+                <option value="">All</option>
+                {orgs.length > 0 && (
+                  <optgroup label="By Client">
+                    {orgs.map((o) => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Availability">
+                  <option value="HOLIDAY">Public Holidays</option>
+                  <option value="BUSY_DAY">Busy Days</option>
+                </optgroup>
+              </select>
+            )}
+            {isAdmin && (
+              <button
+                onClick={() => { setShowCreate(true); setEditingVisit(null); }}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              >
+                <Plus className="h-4 w-4" /> Schedule Visit
+              </button>
+            )}
+          </div>
         </div>
 
         {error && (
           <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
         )}
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+        {/* Legend — grid view only */}
+        {!isFiltered && <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
           {isAdmin ? (
             <>
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Confirmed</span>
@@ -309,16 +337,37 @@ export default function CalendarPage() {
             </>
           ) : (
             <>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Your confirmed visit</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Confirmed visit</span>
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" />Tentative</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-slate-300" />Occupied</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-400" />Completed</span>
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-purple-400" />Your request</span>
             </>
           )}
           <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-red-200" />Public Holiday</span>
           <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-amber-200" />Busy Day</span>
-        </div>
+        </div>}
 
+        {isFiltered ? (
+          <AgendaView
+            activeFilter={activeFilter}
+            filterLabel={
+              activeFilter === "HOLIDAY" ? "Public Holidays"
+              : activeFilter === "BUSY_DAY" ? "Busy Days"
+              : orgs.find((o) => o.id === activeFilter)?.name ?? ""}
+            visits={visits}
+            requests={requests}
+            blocks={blocks}
+            isAdmin={isAdmin}
+            loading={loading}
+            year={year}
+            month={month}
+            onEdit={setEditingVisit}
+            onDelete={handleDeleteVisit}
+            onClearFilter={() => setActiveFilter("")}
+            token={accessToken!}
+            onRequestDone={() => queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] })}
+          />
+        ) : (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
 
           {/* Calendar grid */}
@@ -363,8 +412,7 @@ export default function CalendarPage() {
                   const dayRequests = dayData?.requests ?? [];
                   const isToday    = dateStr === todayStr;
                   const isSelected = dateStr === selectedDay;
-                  const hasOwn     = dayVisits.some((v) => v.isOwn);
-                  const hasOccupied = dayVisits.some((v) => !v.isOwn);
+                  const hasOwn     = dayVisits.length > 0;
                   const hasRequest  = dayRequests.length > 0;
                   const block       = blockByDate[dateStr];
 
@@ -419,8 +467,9 @@ export default function CalendarPage() {
                               ))
                             : (
                               <>
-                                {hasOwn      && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
-                                {hasOccupied && <span className="h-2 w-2 rounded-full bg-slate-300" />}
+                                {hasOwn && dayVisits.map((v) => (
+                                  <span key={v.id} className={`h-2 w-2 rounded-full ${VISIT_DOT_COLOR[v.status]}`} />
+                                ))}
                               </>
                             )
                           }
@@ -606,6 +655,7 @@ export default function CalendarPage() {
             )}
           </div>
         </div>
+        )} {/* end isFiltered conditional */}
       </div>
 
       {/* Create / Edit Visit modal (admin only) */}
@@ -643,6 +693,243 @@ export default function CalendarPage() {
         />
       )}
     </ProtectedRoute>
+  );
+}
+
+// ── Agenda (list) view ────────────────────────────────────────────────────────
+
+type AgendaItem =
+  | { kind: "VISIT";    date: string; data: CalendarVisit }
+  | { kind: "REQUEST";  date: string; data: CalendarRequest }
+  | { kind: "BLOCK";    date: string; data: CalendarBlock };
+
+function AgendaView({
+  activeFilter, filterLabel,
+  visits, requests, blocks,
+  isAdmin, loading,
+  year, month,
+  onEdit, onDelete, onClearFilter,
+  token, onRequestDone,
+}: {
+  activeFilter: string;
+  filterLabel: string;
+  visits: CalendarVisit[];
+  requests: CalendarRequest[];
+  blocks: CalendarBlock[];
+  isAdmin: boolean;
+  loading: boolean;
+  year: number;
+  month: number;
+  onEdit: (v: CalendarVisit) => void;
+  onDelete: (id: string) => void;
+  onClearFilter: () => void;
+  token: string;
+  onRequestDone: () => void;
+}) {
+  const isBlockFilter = activeFilter === "HOLIDAY" || activeFilter === "BUSY_DAY";
+
+  const items: AgendaItem[] = isBlockFilter
+    ? blocks
+        .filter((b) => b.type === activeFilter)
+        .map((b) => ({ kind: "BLOCK" as const, date: b.date, data: b }))
+    : [
+        ...visits.map((v) => ({ kind: "VISIT" as const, date: v.date, data: v })),
+        ...requests.map((r) => ({ kind: "REQUEST" as const, date: r.date, data: r })),
+      ];
+
+  const byDate: Record<string, AgendaItem[]> = {};
+  for (const item of items) {
+    if (!byDate[item.date]) byDate[item.date] = [];
+    byDate[item.date].push(item);
+  }
+  const dates = Object.keys(byDate).sort();
+
+  return (
+    <div className="space-y-3">
+      {/* Agenda header */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          <span className="font-semibold text-slate-700">{filterLabel}</span>
+          {" · "}{MONTHS[month - 1]} {year}
+        </p>
+        <button
+          onClick={onClearFilter}
+          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
+        >
+          <X className="h-3 w-3" /> Show calendar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="bg-white border border-slate-100 rounded-2xl flex items-center justify-center py-16 text-slate-400 gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        </div>
+      ) : dates.length === 0 ? (
+        <div className="bg-white border border-slate-100 rounded-2xl p-14 text-center text-slate-400">
+          <p className="text-4xl mb-3">📅</p>
+          <p className="font-medium text-slate-500">Nothing to show</p>
+          <p className="text-xs mt-1">No {filterLabel.toLowerCase()} in {MONTHS[month - 1]} {year}</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          {dates.map((date, idx) => {
+            const d = new Date(date + "T00:00:00");
+            const isToday = date === today();
+            return (
+              <div
+                key={date}
+                className={`flex min-h-[72px] ${idx < dates.length - 1 ? "border-b border-slate-100" : ""}`}
+              >
+                {/* Date column */}
+                <div className={`w-[72px] shrink-0 flex flex-col items-center justify-center py-4 border-r border-slate-100 ${isToday ? "bg-blue-50" : "bg-slate-50/60"}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-wider ${isToday ? "text-blue-500" : "text-slate-400"}`}>
+                    {d.toLocaleDateString("en-GB", { weekday: "short" })}
+                  </p>
+                  <p className={`text-2xl font-light leading-none mt-0.5 ${isToday ? "text-blue-600" : "text-slate-700"}`}>
+                    {d.getDate()}
+                  </p>
+                  <p className={`text-[10px] mt-0.5 ${isToday ? "text-blue-400" : "text-slate-400"}`}>
+                    {d.toLocaleDateString("en-GB", { month: "short" })}
+                  </p>
+                </div>
+
+                {/* Events column */}
+                <div className="flex-1 px-4 py-3 space-y-2">
+                  {byDate[date].map((item) => {
+                    if (item.kind === "VISIT") {
+                      return (
+                        <AgendaVisitRow
+                          key={item.data.id}
+                          visit={item.data}
+                          isAdmin={isAdmin}
+                          onEdit={onEdit}
+                          onDelete={onDelete}
+                        />
+                      );
+                    }
+                    if (item.kind === "REQUEST") {
+                      return (
+                        <AgendaRequestRow
+                          key={item.data.id}
+                          request={item.data}
+                          isAdmin={isAdmin}
+                          token={token}
+                          onDone={onRequestDone}
+                        />
+                      );
+                    }
+                    return (
+                      <AgendaBlockRow key={item.data.id} block={item.data} />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgendaVisitRow({
+  visit, isAdmin, onEdit, onDelete,
+}: {
+  visit: CalendarVisit;
+  isAdmin: boolean;
+  onEdit: (v: CalendarVisit) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+      <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${VISIT_DOT_COLOR[visit.status]}`} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-slate-800 leading-tight">{visit.title}</p>
+        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+          {visit.clientOrgName && (
+            <span className="flex items-center gap-1 text-xs text-slate-500">
+              <Building2 className="h-3 w-3" /> {visit.clientOrgName}
+            </span>
+          )}
+          {(visit.startTime || visit.endTime) && (
+            <span className="flex items-center gap-1 text-xs text-slate-400">
+              <Clock className="h-3 w-3" />
+              {visit.startTime ?? ""}{visit.endTime ? ` – ${visit.endTime}` : ""}
+            </span>
+          )}
+        </div>
+        {visit.notes && (
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">{visit.notes}</p>
+        )}
+        {isAdmin && visit.internalNotes && (
+          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mt-1">
+            {visit.internalNotes}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <StatusBadge status={visit.status} />
+        {isAdmin && (
+          <>
+            <button onClick={() => onEdit(visit)} className="text-slate-300 hover:text-blue-500 transition-colors">
+              <Edit2 className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => onDelete(visit.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgendaRequestRow({
+  request, isAdmin, token, onDone,
+}: {
+  request: CalendarRequest;
+  isAdmin: boolean;
+  token: string;
+  onDone: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-purple-100 bg-purple-50 px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <FileText className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+        <p className="text-sm font-semibold text-purple-700 flex-1">
+          {request.isOwn ? "Your visit request" : request.organizationName}
+        </p>
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${REQUEST_STATUS_COLOR[request.status]}`}>
+          {request.status}
+        </span>
+      </div>
+      {request.preferredTime && (
+        <p className="text-xs text-purple-600">Preferred: {request.preferredTime}</p>
+      )}
+      {request.message && <p className="text-xs text-slate-500">{request.message}</p>}
+      {request.responseNote && (
+        <p className="text-xs text-slate-500 border-t border-purple-100 pt-1.5">Response: {request.responseNote}</p>
+      )}
+      {isAdmin && request.status === "PENDING" && (
+        <RequestActions requestId={request.id} token={token} onDone={onDone} />
+      )}
+    </div>
+  );
+}
+
+function AgendaBlockRow({ block }: { block: CalendarBlock }) {
+  const isHoliday = block.type === "HOLIDAY";
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
+      isHoliday ? "border-red-100 bg-red-50" : "border-amber-100 bg-amber-50"
+    }`}>
+      {isHoliday
+        ? <CalendarX2 className="h-4 w-4 text-red-500 shrink-0" />
+        : <BanIcon className="h-4 w-4 text-amber-500 shrink-0" />}
+      <p className={`text-sm font-medium ${isHoliday ? "text-red-700" : "text-amber-700"}`}>
+        {block.label ?? (isHoliday ? "Public Holiday" : "Busy Day")}
+      </p>
+    </div>
   );
 }
 

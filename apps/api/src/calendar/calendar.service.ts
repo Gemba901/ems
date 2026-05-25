@@ -35,15 +35,17 @@ export class CalendarService {
     }
   }
 
-  /** Returns all visits for a month. Privacy-aware. */
+  /** Returns visits for a month. Privacy-aware; admin may filter by clientOrgId. */
   async getMonthVisits(
     year: number,
     month: number,
     organizationId: string,
     roleLevel: string,
+    filterOrgId?: string,
   ) {
     const start = new Date(year, month - 1, 1);
     const end   = new Date(year, month, 0, 23, 59, 59);
+    const isAdmin = this.isGemba(roleLevel);
 
     const blocks = await (this.prisma as any).calendarBlock.findMany({
       where: { date: { gte: start, lte: end } },
@@ -51,11 +53,14 @@ export class CalendarService {
       orderBy: { date: 'asc' },
     });
 
+    // Non-admin users only see their own org's visits.
+    // Admin may optionally scope to a single client org via filterOrgId.
+    const visitOrgFilter = isAdmin
+      ? (filterOrgId ? { clientOrgId: filterOrgId } : {})
+      : { clientOrgId: organizationId };
+
     const visits = await this.prisma.consultancyVisit.findMany({
-      where: {
-        date: { gte: start, lte: end },
-        // CANCELLED visits are still shown so clients know the slot freed up
-      },
+      where: { date: { gte: start, lte: end }, ...visitOrgFilter },
       select: {
         id: true,
         title: true,
@@ -71,12 +76,13 @@ export class CalendarService {
       orderBy: { date: 'asc' },
     });
 
-    // Also fetch pending requests for this org (so client can see their own)
+    // Requests: admin sees all (optionally filtered); clients see own org only
+    const requestOrgFilter = isAdmin
+      ? (filterOrgId ? { organizationId: filterOrgId } : {})
+      : { organizationId };
+
     const requests = await this.prisma.visitRequest.findMany({
-      where: {
-        organizationId: this.isGemba(roleLevel) ? undefined : organizationId,
-        requestedDate: { gte: start, lte: end },
-      },
+      where: { requestedDate: { gte: start, lte: end }, ...requestOrgFilter },
       select: {
         id: true,
         organizationId: true,
@@ -90,11 +96,7 @@ export class CalendarService {
       orderBy: { requestedDate: 'asc' },
     });
 
-    const isAdmin = this.isGemba(roleLevel);
-
     const mappedVisits = visits.map((v) => {
-      const isOwn = v.clientOrgId === organizationId;
-
       if (isAdmin) {
         return {
           id: v.id, type: 'VISIT' as const,
@@ -107,26 +109,16 @@ export class CalendarService {
         };
       }
 
-      if (isOwn) {
-        return {
-          id: v.id, type: 'VISIT' as const,
-          date: v.date.toISOString().split('T')[0],
-          startTime: v.startTime, endTime: v.endTime,
-          status: v.status, isOwn: true,
-          title: v.title,
-          clientOrgId: v.clientOrgId, clientOrgName: v.clientOrg.name,
-          notes: v.notes,
-          internalNotes: undefined,
-        };
-      }
-
-      // Another org's visit — show only as occupied (no details)
+      // Non-admin: only their own org's visits are returned
       return {
         id: v.id, type: 'VISIT' as const,
         date: v.date.toISOString().split('T')[0],
         startTime: v.startTime, endTime: v.endTime,
-        status: v.status, isOwn: false,
-        // No title, no org info, no notes
+        status: v.status, isOwn: true,
+        title: v.title,
+        clientOrgId: v.clientOrgId, clientOrgName: v.clientOrg.name,
+        notes: v.notes,
+        internalNotes: undefined,
       };
     });
 

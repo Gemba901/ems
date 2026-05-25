@@ -140,8 +140,11 @@ export const CalendarService = {
     year: number,
     month: number,
     token: string,
+    filterOrgId?: string,
   ): Promise<{ visits: CalendarVisit[]; requests: CalendarRequest[]; blocks: CalendarBlock[] }> {
-    const res = await apiClient(`${API_URL}/calendar/visits?year=${year}&month=${month}`, {
+    const params = new URLSearchParams({ year: String(year), month: String(month) });
+    if (filterOrgId) params.set("clientOrgId", filterOrgId);
+    const res = await apiClient(`${API_URL}/calendar/visits?${params}`, {
       headers: authHeaders(token),
     }, token);
     return handleResponse(res);

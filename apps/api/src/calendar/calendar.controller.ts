@@ -17,16 +17,17 @@ import { Role } from 'src/common/enum/role.enum';
 export class CalendarController {
   constructor(private calendar: CalendarService) {}
 
-  /** GET /calendar/visits?year=2026&month=5 — privacy-aware month view */
+  /** GET /calendar/visits?year=2026&month=5[&clientOrgId=x] — privacy-aware month view */
   @Get('visits')
   async getMonthVisits(
     @Query('year') year: string,
     @Query('month') month: string,
+    @Query('clientOrgId') clientOrgId: string | undefined,
     @CurrentUser() user: { organizationId: string; roleLevel: string },
   ) {
     const y = year  ? parseInt(year,  10) : new Date().getFullYear();
     const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
-    return this.calendar.getMonthVisits(y, m, user.organizationId, user.roleLevel);
+    return this.calendar.getMonthVisits(y, m, user.organizationId, user.roleLevel, clientOrgId);
   }
 
   /** POST /calendar/visits — SUPER_ADMIN creates a visit */

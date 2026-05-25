@@ -139,9 +139,11 @@ export class EmsService {
     });
     if (!existing) throw new NotFoundException('Employee not found');
 
+    const DATE_FIELDS = new Set(['dateOfBirth', 'dateJoined']);
     const updateData: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(dto)) {
-      if (value !== undefined) updateData[key] = value;
+      if (value === undefined || value === '') continue;
+      updateData[key] = DATE_FIELDS.has(key) ? new Date(value as string) : value;
     }
 
     const updated = await this.prisma.employee.update({

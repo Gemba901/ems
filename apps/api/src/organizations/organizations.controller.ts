@@ -8,10 +8,15 @@ import {
     Param,
     Query,
     UseGuards,
+    UseInterceptors,
+    UploadedFile,
     HttpCode,
     HttpStatus,
+    BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationsService } from './organizations.service';
+import { EmployeeService } from 'src/employee/employee.service';
 import {
     CreateOrganizationDto,
     UpdateOrganizationDto,
@@ -32,7 +37,10 @@ import { Role } from 'src/common/enum/role.enum';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.SUPER_ADMIN)
 export class OrganizationsController {
-    constructor(private readonly organizationsService: OrganizationsService) {}
+    constructor(
+        private readonly organizationsService: OrganizationsService,
+        private readonly employeeService: EmployeeService,
+    ) {}
 
     // ── Platform stats ───────────────────────────────────────────────────────
     /**
@@ -93,6 +101,26 @@ export class OrganizationsController {
         @Query() dto: OrgEmployeePaginationDto,
     ) {
         return this.organizationsService.getEmployees(id, dto);
+    }
+
+    /**
+     * POST /organizations/:id/employees/import?dryRun=true
+     * Super-admin employee master sync for a selected client organization.
+     */
+    @Post(':id/employees/import')
+    @UseInterceptors(FileInterceptor('file'))
+    importEmployees(
+        @Param('id') id: string,
+        @UploadedFile() file: any,
+        @Query('dryRun') dryRun: string | undefined,
+    ) {
+        if (!file?.buffer) throw new BadRequestException('Excel file is required');
+        return this.employeeService.importEmployeesFromWorkbook(
+            file.buffer,
+            id,
+            undefined,
+            dryRun === 'true',
+        );
     }
 
     /**
@@ -169,7 +197,10 @@ export class OrganizationsController {
      */
     @Delete(':id')
     @HttpCode(HttpStatus.OK)
-    delete(@Param('id') id: string) {
-        return this.organizationsService.delete(id);
+    delete(
+        @Param('id') id: string,
+        @Query('confirmName') confirmName?: string,
+    ) {
+        return this.organizationsService.delete(id, confirmName);
     }
 }

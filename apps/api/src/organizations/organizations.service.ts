@@ -3,6 +3,7 @@ import {
     NotFoundException,
     ConflictException,
     BadRequestException,
+    ForbiddenException,
     Inject,
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -473,8 +474,20 @@ export class OrganizationsService {
     // Hard delete: only allowed when org is INACTIVE to prevent accidental data loss.
     // Deletes all dependent records in safe order inside a transaction.
 
-    async delete(id: string) {
+    async delete(id: string, confirmName?: string) {
         const org = await this.findOrFail(id);
+
+        if (org.isAdminOrg) {
+            throw new ForbiddenException(
+                'The platform admin organization cannot be deleted.',
+            );
+        }
+
+        if (confirmName !== org.name) {
+            throw new BadRequestException(
+                'Organization name confirmation is required before permanent deletion.',
+            );
+        }
 
         if (org.status !== OrgStatus.INACTIVE) {
             throw new BadRequestException(
@@ -483,19 +496,40 @@ export class OrganizationsService {
         }
 
         await this.prisma.$transaction(async (tx) => {
-            // 1. Suggestion audit trail
+            const memberships = await tx.userOrganization.findMany({
+                where: { organizationId: id },
+                select: { userId: true },
+            });
+            const userIds = memberships.map((membership) => membership.userId);
+
+            await tx.consultancyVisit.deleteMany({ where: { clientOrgId: id } });
+            await tx.visitRequest.deleteMany({ where: { organizationId: id } });
+            await tx.steeringCommitteeMember.deleteMany({
+                where: { committee: { organizationId: id } },
+            });
+            await tx.steeringCommittee.deleteMany({ where: { organizationId: id } });
+            await tx.notification.deleteMany({ where: { employee: { organizationId: id } } });
             await tx.suggestionReview.deleteMany({ where: { suggestion: { organizationId: id } } });
-            // 2. Suggestions
+            await tx.suggestionReview.deleteMany({ where: { reviewer: { organizationId: id } } });
             await tx.suggestion.deleteMany({ where: { organizationId: id } });
-            // 3. Employees (must come before users due to userId FK)
             await tx.employee.deleteMany({ where: { organizationId: id } });
-            // 4. Organization memberships
             await tx.userOrganization.deleteMany({ where: { organizationId: id } });
-            // 5. Orphaned users
-            await tx.user.deleteMany({ where: { organizations: { none: {} } } });
-            // 6. Departments
+            if (userIds.length > 0) {
+                const orphanUsers = await tx.user.findMany({
+                    where: { id: { in: userIds }, organizations: { none: {} } },
+                    select: { id: true },
+                });
+                const orphanUserIds = orphanUsers.map((user) => user.id);
+
+                if (orphanUserIds.length > 0) {
+                    await tx.refreshToken.deleteMany({ where: { userId: { in: orphanUserIds } } });
+                    await tx.calendarBlock.deleteMany({ where: { createdById: { in: orphanUserIds } } });
+                    await tx.visitRequest.deleteMany({ where: { createdById: { in: orphanUserIds } } });
+                    await tx.consultancyVisit.deleteMany({ where: { createdById: { in: orphanUserIds } } });
+                    await tx.user.deleteMany({ where: { id: { in: orphanUserIds } } });
+                }
+            }
             await tx.department.deleteMany({ where: { organizationId: id } });
-            // 7. Organization itself (roles are global, not deleted)
             await tx.organization.delete({ where: { id } });
         });
 

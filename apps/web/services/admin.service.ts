@@ -188,4 +188,41 @@ export const AdminService = {
         }, token);
         return handleResponse(res);
     },
+
+    async deleteOrganization(token: string, id: string, confirmName: string): Promise<{ message: string }> {
+        const params = new URLSearchParams({ confirmName });
+        const res = await apiClient(`${API_URL}/organizations/${id}?${params}`, {
+            method: "DELETE",
+            headers: authHeaders(token),
+        }, token);
+        return handleResponse<{ message: string }>(res);
+    },
+
+    async importOrgEmployees(
+        token: string,
+        id: string,
+        file: File,
+        dryRun = false,
+    ): Promise<{
+        organizationId: string;
+        organizationName: string;
+        rowsRead: number;
+        validRows: number;
+        invalidRows: number;
+        created: number;
+        updated: number;
+        deleted: number;
+        preserved: number;
+        dryRun: boolean;
+        issues: { row: number; message: string }[];
+    }> {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await apiClient(`${API_URL}/organizations/${id}/employees/import?dryRun=${dryRun ? "true" : "false"}`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+        }, token);
+        return handleResponse(res);
+    },
 };

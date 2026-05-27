@@ -9,8 +9,11 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { EmployeeService } from './employee.service';
 import { CreateEmployeeDto, UpdateEmployeeDto, UpdateEmployeeRoleDto, ResetPasswordDto, UpdateAvatarDto, PaginationDto } from './dto/employee.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -36,6 +39,27 @@ export class EmployeeController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.employeeService.onboardEmployee(createEmployeeDto, user.organizationId);
+  }
+
+  /**
+   * Bulk sync employees from an EMS Excel workbook.
+   * POST /employee/import?dryRun=true
+   */
+  @Post('import')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  @UseInterceptors(FileInterceptor('file'))
+  async importEmployees(
+    @UploadedFile() file: any,
+    @Query('dryRun') dryRun: string | undefined,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Excel file is required');
+    return this.employeeService.importEmployeesFromWorkbook(
+      file.buffer,
+      user.organizationId,
+      user.userId,
+      dryRun === 'true',
+    );
   }
 
   // GET /employee/me — returns the employee profile for the logged-in user

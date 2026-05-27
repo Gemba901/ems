@@ -12,6 +12,9 @@ import {
   Settings,
   ArrowLeft,
   ClipboardList,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ChevronRight,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
@@ -19,57 +22,69 @@ import { Role } from "@/types/role";
 interface SimsSidebarProps {
   open?: boolean;
   onClose?: () => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }
 
-export function SimsSidebar({ open = false, onClose }: SimsSidebarProps) {
+const SIMS_NAV = [
+  {
+    name: "Overview",
+    href: "/sims",
+    icon: LayoutGrid,
+    exact: true,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE],
+  },
+  {
+    name: "My Suggestions",
+    href: "/sims/my-suggestions",
+    icon: Lightbulb,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE],
+  },
+  {
+    name: "Review Queue",
+    href: "/sims/queue",
+    icon: ClipboardList,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+  },
+  {
+    name: "Reviews",
+    href: "/sims/reviews",
+    icon: MessageSquareText,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+  },
+  {
+    name: "Analytics",
+    href: "/sims/analytics",
+    icon: BarChart2,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+  },
+];
+
+const FOOTER_NAV = [
+  { name: "Closed",    href: "/sims/archived",  icon: Archive,   exact: false },
+  { name: "Settings",  href: "/sims/settings",  icon: Settings,  exact: false },
+];
+
+function isActive(pathname: string, href: string, exact: boolean) {
+  if (exact) return pathname === href;
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle }: SimsSidebarProps) {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
 
-  const simsNav = [
-    {
-      name: "Overview",
-      href: "/sims",
-      icon: LayoutGrid,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]
-    },
-    {
-      name: "My Suggestions",
-      href: "/sims/my-suggestions",
-      icon: Lightbulb,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]
-    },
-    {
-      name: "Review Queue",
-      href: "/sims/queue",
-      icon: ClipboardList,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]
-    },
-    {
-      name: "Reviews",
-      href: "/sims/reviews",
-      icon: MessageSquareText,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]
-    },
-    {
-      name: "Analytics",
-      href: "/sims/analytics",
-      icon: BarChart2,
-      allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]
-    },
-  ];
-
   const userRole = user?.roleLevel;
-  const filteredNav = simsNav.filter(
+  const filteredNav = SIMS_NAV.filter(
     (item) => userRole && item.allowedRoles.includes(userRole)
   );
 
-  const labelClass = `ml-2 text-sm font-medium transition-opacity duration-300 whitespace-nowrap ${
-    open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-  }`;
-
   return (
     <>
-      {/* Mobile backdrop */}
       {open && (
         <div
           className="fixed inset-0 z-40 bg-black/30 md:hidden"
@@ -77,99 +92,128 @@ export function SimsSidebar({ open = false, onClose }: SimsSidebarProps) {
         />
       )}
 
-      <aside className={`
-        fixed z-50 flex flex-col bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-slate-100 transition-all duration-300 ease-in-out overflow-hidden group
-        top-0 left-0 h-dvh w-64 border-r rounded-none
-        ${open ? "translate-x-0" : "-translate-x-full"}
-        md:left-4 md:top-4 md:h-[calc(100dvh-2rem)] md:rounded-2xl md:border md:translate-x-0 md:w-16 md:hover:w-64
-      `}>
+      <aside
+        className={`
+          fixed z-50 top-0 left-0 h-dvh flex flex-col bg-white border-r border-slate-200
+          transition-all duration-300 ease-in-out overflow-hidden w-64
+          ${open ? "translate-x-0" : "-translate-x-full"}
+          md:translate-x-0
+          ${collapsed ? "md:w-16" : "md:w-64"}
+        `}
+      >
+        {/* ── Header: toggle + brand ── */}
+        <div className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${collapsed ? "justify-center" : "px-4 gap-3"}`}>
 
-        {/* Top Logo - SIMS */}
-        <div className="flex items-center h-20 px-3 shrink-0 overflow-hidden">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center bg-blue-600 rounded-xl shadow-sm ml-0.5 transition-transform group-hover:scale-105">
-            <Lightbulb className="h-5 w-5 text-white" />
-          </div>
-          <div className={`ml-4 min-w-0 flex flex-col whitespace-nowrap ${open ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity duration-300`}>
-            <span className="text-sm font-bold tracking-wide text-slate-900">Idea Management</span>
-            <span className="text-[9px] font-semibold tracking-widest text-slate-400 uppercase">Enterprise SIMS</span>
-          </div>
+          {/* Collapse toggle — desktop only */}
+          <button
+            onClick={onToggle}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="hidden md:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+          >
+            {collapsed
+              ? <PanelLeftOpen className="h-4 w-4" />
+              : <PanelLeftClose className="h-4 w-4" />
+            }
+          </button>
+
+          {!collapsed && (
+            <>
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-blue-600 rounded-lg">
+                <Lightbulb className="h-4 w-4 text-white" />
+              </div>
+              <div className="min-w-0 flex flex-col">
+                <span className="text-sm font-bold text-slate-900 truncate leading-tight">
+                  Idea Management
+                </span>
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">
+                  Enterprise SIMS
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Primary Action Button (New Suggestion) */}
-        <div className="px-3 mt-2">
+        {/* ── New Suggestion CTA ── */}
+        <div className={`px-2 pt-3 pb-1 shrink-0 ${collapsed ? "flex justify-center" : ""}`}>
           <Link
             href="/sims/new"
             onClick={onClose}
-            className="flex items-center h-10 w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors overflow-hidden"
+            title={collapsed ? "New Suggestion" : undefined}
+            className={`flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors ${
+              collapsed ? "h-10 w-10 justify-center" : "h-10 w-full px-3 gap-2"
+            }`}
           >
-            <div className="flex shrink-0 w-10 items-center justify-center">
-              <Plus className="h-5 w-5" />
-            </div>
-            <span className={labelClass}>New Suggestion</span>
+            <Plus className="h-4 w-4 shrink-0" />
+            {!collapsed && <span className="text-sm font-medium">New Suggestion</span>}
           </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 flex flex-col gap-2 px-3 mt-4 overflow-y-auto overflow-x-hidden min-h-0">
+        {/* ── Navigation ── */}
+        <nav className="flex-1 px-2 py-2 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
+          {!collapsed && (
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
+              Platform
+            </p>
+          )}
           {filteredNav.map((item) => {
-            const isActive = pathname === item.href;
-
+            const active = isActive(pathname, item.href, item.exact);
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 onClick={onClose}
-                className={`flex items-center h-10 rounded-xl transition-colors ${
-                  isActive
+                title={collapsed ? item.name : undefined}
+                className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
+                  active
                     ? "bg-blue-50 text-blue-600"
-                    : "text-slate-400 hover:bg-slate-50 hover:text-slate-600"
-                }`}
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                } ${collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
               >
-                <div className="flex shrink-0 w-10 items-center justify-center">
-                  <item.icon className={`h-5 w-5 ${isActive ? "text-blue-600" : "text-slate-400"}`} />
-                </div>
-                <span className={labelClass}>{item.name}</span>
+                <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`} />
+                {!collapsed && (
+                  <>
+                    <span className="flex-1">{item.name}</span>
+                    {active && <ChevronRight className="h-3.5 w-3.5 text-blue-400" />}
+                  </>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Footer Navigation */}
-        <div className="mb-4 px-3 flex flex-col gap-2">
-          <div className="border-t border-slate-100 pt-2 mb-2 w-full" />
+        {/* ── Footer nav ── */}
+        <div className="px-2 pb-2 border-t border-slate-100 pt-2 space-y-0.5">
+          {FOOTER_NAV.map((item) => {
+            const active = isActive(pathname, item.href, item.exact);
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={onClose}
+                title={collapsed ? item.name : undefined}
+                className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
+                  active
+                    ? "bg-blue-50 text-blue-600"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                } ${collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
+              >
+                <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`} />
+                {!collapsed && <span className="flex-1">{item.name}</span>}
+              </Link>
+            );
+          })}
 
-          <Link
-            href="/sims/archived"
-            onClick={onClose}
-            className="flex items-center h-10 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors"
-          >
-            <div className="flex shrink-0 w-10 items-center justify-center">
-              <Archive className="h-5 w-5" />
-            </div>
-            <span className={labelClass}>Closed</span>
-          </Link>
-
-          <Link
-            href="/sims/settings"
-            onClick={onClose}
-            className="flex items-center h-10 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors"
-          >
-            <div className="flex shrink-0 w-10 items-center justify-center">
-              <Settings className="h-5 w-5" />
-            </div>
-            <span className={labelClass}>Settings</span>
-          </Link>
-
-          {/* Return to Main Dashboard */}
+          {/* Back to main app */}
           <Link
             href="/"
             onClick={onClose}
-            className="flex items-center h-10 mt-2 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-colors w-full group/return"
+            title={collapsed ? "Main App" : undefined}
+            className={`flex items-center rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-white transition-all duration-150 ${
+              collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
+            }`}
           >
-            <div className="flex shrink-0 w-10 items-center justify-center">
-              <ArrowLeft className="h-5 w-5 text-slate-400 group-hover/return:text-white transition-colors" />
-            </div>
-            <span className={labelClass}>Main App</span>
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            {!collapsed && <span className="flex-1">Main App</span>}
           </Link>
         </div>
       </aside>

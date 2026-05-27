@@ -75,6 +75,20 @@ export interface OrgStatsResponse {
     }[];
 }
 
+export interface EmployeeImportSummary {
+    organizationId: string;
+    organizationName: string;
+    rowsRead: number;
+    validRows: number;
+    invalidRows: number;
+    created: number;
+    updated: number;
+    deleted: number;
+    preserved: number;
+    dryRun: boolean;
+    issues: { row: number; message: string }[];
+}
+
 export const EmployeeService = {
     async getByOrganization(
         orgId: string,
@@ -189,5 +203,16 @@ export const EmployeeService = {
             body: JSON.stringify({ avatarUrl }),
         }, token);
         return handleResponse<EmployeeApiResponse>(res);
+    },
+
+    async importEmployees(file: File, token: string, dryRun = false): Promise<EmployeeImportSummary> {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await apiClient(`${API_URL}/employee/import?dryRun=${dryRun ? "true" : "false"}`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+        }, token);
+        return handleResponse<EmployeeImportSummary>(res);
     },
 };

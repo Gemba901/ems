@@ -8,11 +8,24 @@ import { EmployeeService } from "@/services/employee.service";
 import {
     ArrowLeft, Building2, Users, Lightbulb, BarChart2,
     CircleDot, Mail, Phone, MapPin, ChevronDown,
-    EyeOff, Puzzle, Loader2, Filter, KeyRound, ShieldCheck, X,
+    EyeOff, Puzzle, Loader2, Filter, KeyRound, ShieldCheck, X, Trash2, ShieldAlert,
+    Upload,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type Tab = "overview" | "employees" | "suggestions" | "roles";
+
+type ImportSummary = {
+    rowsRead: number;
+    validRows: number;
+    invalidRows: number;
+    created: number;
+    updated: number;
+    deleted: number;
+    preserved: number;
+    dryRun: boolean;
+    issues: { row: number; message: string }[];
+};
 
 const ROLE_OPTIONS = [
     { value: 2, label: "Admin" },
@@ -95,6 +108,10 @@ export default function OrgDetailPage() {
     const [statusOpen, setStatusOpen] = useState(false);
     const [updatingModules, setUpdatingModules] = useState(false);
     const [moduleError, setModuleError] = useState<string | null>(null);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [importError, setImportError] = useState<string | null>(null);
 
     // Role change modal
     const [roleModal, setRoleModal] = useState<{ emp: any } | null>(null);
@@ -107,6 +124,12 @@ export default function OrgDetailPage() {
     const [newPassword, setNewPassword] = useState("");
     const [savingPw, setSavingPw] = useState(false);
     const [pwError, setPwError] = useState<string | null>(null);
+
+    // Delete org modal
+    const [deleteModal, setDeleteModal] = useState(false);
+    const [deleteConfirmName, setDeleteConfirmName] = useState("");
+    const [deletingOrg, setDeletingOrg] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // Initial load
     useEffect(() => {
@@ -162,6 +185,49 @@ export default function OrgDetailPage() {
         }
     }, [accessToken, org]);
 
+    const refreshEmployeeData = useCallback(async () => {
+        if (!accessToken || !id) return;
+        const [employeeData, statData, deptData] = await Promise.all([
+            AdminService.getOrgEmployees(accessToken, id, 1, 100, deptFilter || undefined),
+            AdminService.getOrgStats(accessToken, id),
+            EmployeeService.getDepartments(id, accessToken),
+        ]);
+        setEmps(employeeData.data);
+        setStats(statData);
+        setDepartments(deptData);
+    }, [accessToken, id, deptFilter]);
+
+    const handleImportDryRun = async (file: File) => {
+        if (!accessToken || !org) return;
+        setImportFile(file);
+        setImportSummary(null);
+        setImportError(null);
+        setImporting(true);
+        try {
+            const summary = await AdminService.importOrgEmployees(accessToken, org.id, file, true);
+            setImportSummary(summary);
+        } catch (e: any) {
+            setImportError(e.message || "Failed to read employee workbook.");
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const handleImportCommit = async () => {
+        if (!accessToken || !org || !importFile) return;
+        setImportError(null);
+        setImporting(true);
+        try {
+            const summary = await AdminService.importOrgEmployees(accessToken, org.id, importFile, false);
+            setImportSummary(summary);
+            await refreshEmployeeData();
+        } catch (e: any) {
+            setImportError(e.message || "Failed to sync employees.");
+        } finally {
+            setImporting(false);
+        }
+    };
+
     const handleStatusChange = (status: OrgStatus) => {
   setStatusOpen(false);
   statusMutation.mutate(status);
@@ -212,6 +278,23 @@ export default function OrgDetailPage() {
             setPwError(e.message || "Failed to reset password");
         } finally {
             setSavingPw(false);
+        }
+    };
+
+    const handleDeleteOrg = async () => {
+        if (!accessToken || !org) return;
+        if (deleteConfirmName.trim() !== org.name) {
+            setDeleteError("Organization name does not match.");
+            return;
+        }
+        setDeletingOrg(true);
+        setDeleteError(null);
+        try {
+            await AdminService.deleteOrganization(accessToken, org.id, deleteConfirmName.trim());
+            router.push("/admin/organizations");
+        } catch (e: any) {
+            setDeleteError(e.message || "Failed to delete organization.");
+            setDeletingOrg(false);
         }
     };
 
@@ -267,11 +350,16 @@ export default function OrgDetailPage() {
                             </div>
                         )}
                         <div>
-                            <div className="flex items-center gap-3 mb-1">
+                            <div className="flex items-center gap-3 mb-1 flex-wrap">
                                 <h1 className="text-xl font-bold text-slate-900">{org.name}</h1>
                                 <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${sc.badge}`}>
                                     <CircleDot className="h-2.5 w-2.5" /> {sc.label}
                                 </span>
+                                {org.isAdminOrg && (
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
+                                        <ShieldAlert className="h-2.5 w-2.5" /> Platform Admin
+                                    </span>
+                                )}
                             </div>
                             {org.industry && <p className="text-sm text-slate-500">{org.industry}</p>}
                             <p className="text-[11px] text-slate-400 mt-1">
@@ -280,34 +368,44 @@ export default function OrgDetailPage() {
                         </div>
                     </div>
 
-                    {/* Status control */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setStatusOpen((o) => !o)}
-                            disabled={statusMutation.isPending}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                        >
-                            {statusMutation.isPending ? "Updating..." : "Change Status"}
-                            <ChevronDown className="h-4 w-4 text-slate-400" />
-                        </button>
-                        {statusOpen && (
-                            <div className="absolute right-0 top-10 z-10 w-44 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                                {(["ACTIVE", "SUSPENDED", "INACTIVE"] as OrgStatus[])
-                                    .filter((s) => s !== org.status)
-                                    .map((s) => {
-                                        const cfg = STATUS_CONFIG[s];
-                                        return (
-                                            <button
-                                                key={s}
-                                                onClick={() => handleStatusChange(s)}
-                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left hover:bg-slate-50 transition-colors"
-                                            >
-                                                <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
-                                                {cfg.label}
-                                            </button>
-                                        );
-                                    })}
-                            </div>
+                    {/* Status control + delete */}
+                    <div className="flex items-center gap-2">
+                        <div className="relative">
+                            <button
+                                onClick={() => setStatusOpen((o) => !o)}
+                                disabled={statusMutation.isPending}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                            >
+                                {statusMutation.isPending ? "Updating..." : "Change Status"}
+                                <ChevronDown className="h-4 w-4 text-slate-400" />
+                            </button>
+                            {statusOpen && (
+                                <div className="absolute right-0 top-10 z-10 w-44 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                                    {(["ACTIVE", "SUSPENDED", "INACTIVE"] as OrgStatus[])
+                                        .filter((s) => s !== org.status)
+                                        .map((s) => {
+                                            const cfg = STATUS_CONFIG[s];
+                                            return (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => handleStatusChange(s)}
+                                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left hover:bg-slate-50 transition-colors"
+                                                >
+                                                    <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
+                                                    {cfg.label}
+                                                </button>
+                                            );
+                                        })}
+                                </div>
+                            )}
+                        </div>
+                        {!org.isAdminOrg && org.status === "INACTIVE" && (
+                            <button
+                                onClick={() => { setDeleteConfirmName(""); setDeleteError(null); setDeleteModal(true); }}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                                <Trash2 className="h-4 w-4" /> Delete
+                            </button>
                         )}
                     </div>
                 </div>
@@ -493,8 +591,69 @@ export default function OrgDetailPage() {
                                     Clear
                                 </button>
                             )}
+                            <label className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer">
+                                {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                                Import Excel
+                                <input
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    className="hidden"
+                                    disabled={importing}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        e.target.value = "";
+                                        if (file) void handleImportDryRun(file);
+                                    }}
+                                />
+                            </label>
                             <span className="ml-auto text-[11px] text-slate-400">{employees.length} shown</span>
                         </div>
+
+                        {(importSummary || importError) && (
+                            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+                                {importError && (
+                                    <p className="text-xs font-medium text-red-600">{importError}</p>
+                                )}
+                                {importSummary && (
+                                    <div className="space-y-3">
+                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                            <span className="font-semibold text-slate-700">{importFile?.name ?? "Workbook"}</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500">{importSummary.validRows} valid rows</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">{importSummary.created} create</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{importSummary.updated} update</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-100">{importSummary.deleted} delete</span>
+                                            {importSummary.preserved > 0 && (
+                                                <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">{importSummary.preserved} current admin preserved</span>
+                                            )}
+                                        </div>
+                                        {importSummary.issues.length > 0 ? (
+                                            <div className="text-xs text-red-600 space-y-1">
+                                                {importSummary.issues.slice(0, 5).map((issue) => (
+                                                    <p key={`${issue.row}-${issue.message}`}>Row {issue.row}: {issue.message}</p>
+                                                ))}
+                                                {importSummary.issues.length > 5 && <p>{importSummary.issues.length - 5} more issue(s)</p>}
+                                            </div>
+                                        ) : importSummary.dryRun ? (
+                                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                                <p className="text-xs text-slate-500">
+                                                    This sync will make the database match the workbook for this organization.
+                                                </p>
+                                                <button
+                                                    onClick={handleImportCommit}
+                                                    disabled={importing}
+                                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                                                >
+                                                    {importing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                                    Confirm Sync
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs font-medium text-emerald-600">Employee data synced successfully.</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <table className="w-full text-sm">
                             <thead className="bg-slate-50 border-b border-slate-100">
@@ -696,6 +855,45 @@ export default function OrgDetailPage() {
                         >
                             {savingPw ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
                             Reset Password
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        )}
+
+        {/* Delete organization modal */}
+        {deleteModal && org && (
+            <Modal title="Delete Organization" onClose={() => setDeleteModal(false)}>
+                <div className="space-y-4">
+                    <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <Trash2 className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-red-700">
+                            This will permanently delete <strong>{org.name}</strong> and all its employees, departments, and suggestions. This action cannot be undone.
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-slate-500 mb-2">
+                            Type <strong className="text-slate-800">{org.name}</strong> to confirm:
+                        </p>
+                        <input
+                            value={deleteConfirmName}
+                            onChange={(e) => { setDeleteConfirmName(e.target.value); setDeleteError(null); }}
+                            placeholder={org.name}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                        />
+                    </div>
+                    {deleteError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{deleteError}</p>}
+                    <div className="flex justify-end gap-2 pt-1">
+                        <button onClick={() => setDeleteModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleDeleteOrg}
+                            disabled={deletingOrg || deleteConfirmName.trim() !== org.name}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            {deletingOrg ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            Permanently Delete
                         </button>
                     </div>
                 </div>

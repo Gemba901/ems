@@ -8,7 +8,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
     Users, Search, Loader2, Check, ShieldCheck, AlertCircle, UserX,
-    ChevronLeft, ChevronRight,
+    ChevronLeft, ChevronRight, Upload,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -194,6 +194,10 @@ function MembersContent() {
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importSummary, setImportSummary] = useState<Awaited<ReturnType<typeof EmployeeService.importEmployees>> | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [importError, setImportError] = useState<string | null>(null);
 
     const orgId = user?.organizationId ?? "";
 
@@ -203,7 +207,7 @@ function MembersContent() {
         return () => clearTimeout(t);
     }, [search]);
 
-    const { data: empData, isLoading: loading } = useQuery({
+    const { data: empData, isLoading: loading, refetch } = useQuery({
         queryKey: ["settings-members", orgId, page, debouncedSearch],
         queryFn: () => EmployeeService.getByOrganization(orgId, accessToken!, page, PAGE_SIZE, debouncedSearch || undefined),
         enabled: !!accessToken && !!orgId,
@@ -216,6 +220,37 @@ function MembersContent() {
     const handleRoleUpdated = (empId: string, roleId: number, roleName: string) => {
         // Role update is handled optimistically via local state in MemberRow
         // The MemberRow's useEffect on emp.id will keep in sync on page changes
+    };
+
+    const handleImportDryRun = async (file: File) => {
+        if (!accessToken) return;
+        setImportFile(file);
+        setImportSummary(null);
+        setImportError(null);
+        setImporting(true);
+        try {
+            const summary = await EmployeeService.importEmployees(file, accessToken, true);
+            setImportSummary(summary);
+        } catch (e: any) {
+            setImportError(e.message || "Failed to read employee workbook.");
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const handleImportCommit = async () => {
+        if (!accessToken || !importFile) return;
+        setImportError(null);
+        setImporting(true);
+        try {
+            const summary = await EmployeeService.importEmployees(importFile, accessToken, false);
+            setImportSummary(summary);
+            await refetch();
+        } catch (e: any) {
+            setImportError(e.message || "Failed to sync employees.");
+        } finally {
+            setImporting(false);
+        }
     };
 
     const startIndex = (page - 1) * PAGE_SIZE + 1;
@@ -251,7 +286,66 @@ function MembersContent() {
                         {total} member{total !== 1 ? "s" : ""}
                     </span>
                 )}
+                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-indigo-200 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer">
+                    {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    Import Excel
+                    <input
+                        type="file"
+                        accept=".xlsx,.xls"
+                        className="hidden"
+                        disabled={importing}
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (file) void handleImportDryRun(file);
+                        }}
+                    />
+                </label>
             </div>
+
+            {(importSummary || importError) && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+                    {importError && <p className="text-sm font-medium text-red-600">{importError}</p>}
+                    {importSummary && (
+                        <>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className="font-semibold text-slate-700">{importFile?.name ?? "Workbook"}</span>
+                                <span className="px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-slate-500">{importSummary.validRows} valid rows</span>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">{importSummary.created} create</span>
+                                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{importSummary.updated} update</span>
+                                <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-100">{importSummary.deleted} delete</span>
+                                {importSummary.preserved > 0 && (
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">{importSummary.preserved} current admin preserved</span>
+                                )}
+                            </div>
+                            {importSummary.issues.length > 0 ? (
+                                <div className="text-xs text-red-600 space-y-1">
+                                    {importSummary.issues.slice(0, 5).map((issue) => (
+                                        <p key={`${issue.row}-${issue.message}`}>Row {issue.row}: {issue.message}</p>
+                                    ))}
+                                    {importSummary.issues.length > 5 && <p>{importSummary.issues.length - 5} more issue(s)</p>}
+                                </div>
+                            ) : importSummary.dryRun ? (
+                                <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <p className="text-xs text-slate-500">
+                                        This sync will make your employee database match the workbook.
+                                    </p>
+                                    <button
+                                        onClick={handleImportCommit}
+                                        disabled={importing}
+                                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        {importing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                        Confirm Sync
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-xs font-medium text-emerald-600">Employee data synced successfully.</p>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
 
             {/* Table card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

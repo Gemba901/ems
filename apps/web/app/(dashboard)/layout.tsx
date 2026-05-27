@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { useAuthStore } from "@/store/auth.store";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 import { EmsCompletionBanner } from "@/components/EmsCompletionBanner";
+import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
 
 export default function DashboardLayout({
   children,
@@ -15,8 +16,12 @@ export default function DashboardLayout({
 }) {
   const { user, isAuthenticated, _hasHydrated } = useAuthStore();
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => {
+    const { _hasHydrated, isAuthenticated, user } = useAuthStore.getState();
+    return _hasHydrated && !!isAuthenticated && !!user;
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { collapsed: sidebarCollapsed, toggle: handleToggleSidebar } = useSidebarCollapsed();
 
   useEffect(() => {
     if (!_hasHydrated) return;
@@ -40,9 +45,14 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#F4F7FA] font-sans">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggle={handleToggleSidebar}
+      />
 
-      <div className="md:pl-24 flex flex-col min-h-screen transition-all duration-300">
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "md:pl-16" : "md:pl-64"}`}>
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <EmsCompletionBanner />
         <main className="flex-1 p-4 md:p-8">

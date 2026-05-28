@@ -10,7 +10,7 @@ import { Role } from "@/types/role";
 import {
     Building2, Search, X, ChevronRight, TrendingUp,
     ChevronLeft, Loader2, BarChart3, UserPlus,
-    CheckCircle2, ArrowRight, AlertCircle,
+    CheckCircle2, ArrowRight, AlertCircle, Plus,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -46,11 +46,37 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
     const [deptId,    setDeptId]          = useState("");
     const [roleId,    setRoleId]          = useState<number>(5);
 
+    const [localDepts, setLocalDepts] = useState<{ id: string; name: string }[]>([]);
+    const [showNewDept, setShowNewDept] = useState(false);
+    const [newDeptName, setNewDeptName] = useState("");
+    const [creatingDept, setCreatingDept] = useState(false);
+    const [deptError, setDeptError] = useState<string | null>(null);
+
+    useEffect(() => { setLocalDepts(departments); }, [departments]);
+
     function resetForm() {
         setStep(1);
         setFirstName(""); setLastName(""); setEmail("");
         setPhone(""); setDeptId(""); setRoleId(5);
         setError(null);
+        setShowNewDept(false); setNewDeptName(""); setDeptError(null);
+    }
+
+    async function handleCreateDept() {
+        if (!newDeptName.trim()) return;
+        setCreatingDept(true);
+        setDeptError(null);
+        try {
+            const created = await EmployeeService.createDepartment(newDeptName.trim(), accessToken);
+            setLocalDepts((prev) => [...prev, { id: created.id, name: created.name }]);
+            setDeptId(created.id);
+            setShowNewDept(false);
+            setNewDeptName("");
+        } catch (e: any) {
+            setDeptError(e.message || "Failed to create department.");
+        } finally {
+            setCreatingDept(false);
+        }
     }
 
     function handleClose() {
@@ -230,16 +256,56 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
 
                             <div>
                                 <label className={labelCls}>Department <span className="text-slate-300 font-normal">(optional)</span></label>
-                                <select
-                                    value={deptId}
-                                    onChange={(e) => setDeptId(e.target.value)}
-                                    className={inputCls}
-                                >
-                                    <option value="">Not assigned yet</option>
-                                    {departments.map((d) => (
-                                        <option key={d.id} value={d.id}>{d.name}</option>
-                                    ))}
-                                </select>
+                                {showNewDept ? (
+                                    <div className="space-y-2">
+                                        <div className="flex gap-2">
+                                            <input
+                                                autoFocus
+                                                value={newDeptName}
+                                                onChange={(e) => { setNewDeptName(e.target.value); setDeptError(null); }}
+                                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleCreateDept(); } }}
+                                                placeholder="e.g. Engineering"
+                                                className={inputCls}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleCreateDept()}
+                                                disabled={creatingDept || !newDeptName.trim()}
+                                                className="shrink-0 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                                            >
+                                                {creatingDept ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add"}
+                                            </button>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowNewDept(false); setNewDeptName(""); setDeptError(null); }}
+                                            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                                        >
+                                            ← Back to list
+                                        </button>
+                                        {deptError && <p className="text-xs text-red-600 mt-1">{deptError}</p>}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <select
+                                            value={deptId}
+                                            onChange={(e) => setDeptId(e.target.value)}
+                                            className={inputCls}
+                                        >
+                                            <option value="">Not assigned yet</option>
+                                            {localDepts.map((d) => (
+                                                <option key={d.id} value={d.id}>{d.name}</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowNewDept(true); setDeptError(null); }}
+                                            className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                                        >
+                                            <Plus className="h-3 w-3" /> New department
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Summary card */}
@@ -249,7 +315,7 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
                                 <div className="flex justify-between"><span className="text-slate-500">Email</span><span className="font-medium text-slate-900 truncate max-w-[200px]">{email}</span></div>
                                 <div className="flex justify-between"><span className="text-slate-500">Phone</span><span className="font-medium text-slate-900">+254 {phone}</span></div>
                                 <div className="flex justify-between"><span className="text-slate-500">Role</span><span className="font-medium text-slate-900">{ASSIGNABLE_ROLES.find(r => r.id === roleId)?.label}</span></div>
-                                <div className="flex justify-between"><span className="text-slate-500">Department</span><span className="font-medium text-slate-900">{departments.find(d => d.id === deptId)?.name ?? "Unassigned"}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Department</span><span className="font-medium text-slate-900">{localDepts.find(d => d.id === deptId)?.name ?? "Unassigned"}</span></div>
                             </div>
                         </>
                     )}

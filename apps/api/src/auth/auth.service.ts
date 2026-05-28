@@ -95,22 +95,38 @@ export class AuthService {
     }
 
     async login(phoneOrEmail: string, password: string) {
+        const isEmail = phoneOrEmail.includes('@');
+        const normalized = isEmail
+            ? phoneOrEmail.trim().toLowerCase()
+            : phoneOrEmail.replace(/\D/g, ''); // strip all non-digits including +
+
         const user = await this.prisma.user.findFirst({
-            where: { OR: [{ email: phoneOrEmail }, { phone: phoneOrEmail }] },
-            include: {
-                organizations: {
-                    include: { organization: true, role: true },
-                },
-            },
-        }) as UserWithOrganizations | null;
+            where: isEmail
+                ? { email: normalized }
+                : { OR: [{ phone: normalized }, { phone: `+${normalized}` }] },
+        });
 
         if (!user) throw new UnauthorizedException('Invalid credentials');
 
         const isMatch = await bcrypt.compare(password, user.password!);
         if (!isMatch) throw new UnauthorizedException('Invalid credentials');
 
-        if (user.organizations.length === 1) {
-            return this.buildJwt(user, user.organizations[0]);
+        // Fetch memberships separately to get only valid (org still exists) rows
+        const memberships = await this.prisma.userOrganization.findMany({
+            where: { userId: user.id },
+            include: { organization: true, role: true },
+        }) as unknown as UserOrganizationRelation[];
+
+        const validMemberships = memberships.filter(
+            (m) => m.organization != null && m.role != null,
+        );
+
+        if (validMemberships.length === 0) {
+            throw new UnauthorizedException('No active organization found for this account.');
+        }
+
+        if (validMemberships.length === 1) {
+            return this.buildJwt(user, validMemberships[0]);
         }
 
         // multiple orgs — return a short-lived selection token and the org list
@@ -122,7 +138,7 @@ export class AuthService {
         return {
             requiresOrgSelection: true,
             selectionToken,
-            organizations: user.organizations.map((m) => ({
+            organizations: validMemberships.map((m) => ({
                 id: m.organizationId,
                 name: m.organization.name,
                 organizationUrl: m.organization.logoUrl,

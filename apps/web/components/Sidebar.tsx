@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import { Role } from "@/types/role";
+import { useOrgModules } from "@/hooks/useOrgModules";
 
 interface SidebarProps {
   open?: boolean;
@@ -86,6 +87,7 @@ const NAV_ITEMS = [
     href: "/calendar",
     icon: CalendarDays,
     exact: false,
+    module: "CALENDAR",
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
   },
   {
@@ -116,6 +118,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
 
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const { hasModule } = useOrgModules();
 
   const handleLogout = async () => {
     await AuthService.logout();
@@ -125,7 +128,10 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
 
   const userRole = user?.roleLevel;
   const filteredNav = NAV_ITEMS.filter(
-    (item) => userRole && item.allowedRoles.includes(userRole as Role)
+    (item) =>
+      userRole &&
+      item.allowedRoles.includes(userRole as Role) &&
+      (!("module" in item) || hasModule(item.module as string)),
   );
 
   const initials = user?.name

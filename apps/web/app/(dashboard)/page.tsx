@@ -76,7 +76,6 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     bg: "bg-indigo-50",
     ring: "ring-indigo-200",
     href: "/ems",
-    systemRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE],
     actions: [
       { label: "EMS Dashboard",   href: "/ems",            icon: BarChart3,   roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
       { label: "View Employees",  href: "/ems/employees",  icon: Users,       roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
@@ -93,7 +92,6 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     bg: "bg-blue-50",
     ring: "ring-blue-200",
     href: "/calendar",
-    systemRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
     actions: [
       { label: "View Calendar", href: "/calendar", icon: CalendarDays },
     ],
@@ -192,19 +190,9 @@ export default function DashboardPage() {
 
   const activeModules: string[] = orgData?.modules ?? [];
 
-  const orgModules = activeModules
+  const enabledModules = activeModules
     .map((key) => MODULE_REGISTRY[key])
     .filter(Boolean);
-
-  const systemModules = Object.values(MODULE_REGISTRY).filter(
-    (mod) =>
-      mod.systemRoles &&
-      user?.roleLevel &&
-      mod.systemRoles.includes(user.roleLevel as Role) &&
-      !activeModules.includes(mod.key),
-  );
-
-  const enabledModules = [...orgModules, ...systemModules];
 
   const upcomingToShow = UPCOMING_MODULES.filter(
     (m) => !activeModules.includes((m as any).key)

@@ -50,6 +50,8 @@ export class OrganizationsService {
             recentEmployees,
             suggestionsByStatus,
             simsCount,
+            emsCount,
+            calendarCount,
         ] = await Promise.all([
             this.prisma.organization.count(),
             this.prisma.employee.count(),
@@ -65,6 +67,8 @@ export class OrganizationsService {
                 _count: { id: true },
             }),
             this.prisma.organization.count({ where: { modules: { has: ModuleType.SIMS } } }),
+            this.prisma.organization.count({ where: { modules: { has: ModuleType.EMS } } }),
+            this.prisma.organization.count({ where: { modules: { has: ModuleType.CALENDAR } } }),
         ]);
 
         const suggestionMap = Object.fromEntries(
@@ -93,6 +97,8 @@ export class OrganizationsService {
             suggestionsByStatus: suggestionMap,
             moduleUsage: {
                 SIMS: simsCount,
+                EMS: emsCount,
+                CALENDAR: calendarCount,
             },
         };
 
@@ -495,13 +501,27 @@ export class OrganizationsService {
             );
         }
 
-        await this.prisma.$transaction(async (tx) => {
-            const memberships = await tx.userOrganization.findMany({
-                where: { organizationId: id },
-                select: { userId: true },
-            });
-            const userIds = memberships.map((membership) => membership.userId);
+        // Collect user IDs before the transaction to avoid a long-running read inside it
+        const memberships = await this.prisma.userOrganization.findMany({
+            where: { organizationId: id },
+            select: { userId: true },
+        });
+        const userIds = memberships.map((m) => m.userId);
 
+        let orphanUserIds: string[] = [];
+        if (userIds.length > 0) {
+            // Users who belong to no other org — their only membership is this one
+            const orphanUsers = await this.prisma.user.findMany({
+                where: {
+                    id: { in: userIds },
+                    organizations: { none: { organizationId: { not: id } } },
+                },
+                select: { id: true },
+            });
+            orphanUserIds = orphanUsers.map((u) => u.id);
+        }
+
+        await this.prisma.$transaction(async (tx) => {
             await tx.consultancyVisit.deleteMany({ where: { clientOrgId: id } });
             await tx.visitRequest.deleteMany({ where: { organizationId: id } });
             await tx.steeringCommitteeMember.deleteMany({
@@ -514,26 +534,76 @@ export class OrganizationsService {
             await tx.suggestion.deleteMany({ where: { organizationId: id } });
             await tx.employee.deleteMany({ where: { organizationId: id } });
             await tx.userOrganization.deleteMany({ where: { organizationId: id } });
-            if (userIds.length > 0) {
-                const orphanUsers = await tx.user.findMany({
-                    where: { id: { in: userIds }, organizations: { none: {} } },
-                    select: { id: true },
-                });
-                const orphanUserIds = orphanUsers.map((user) => user.id);
-
-                if (orphanUserIds.length > 0) {
-                    await tx.refreshToken.deleteMany({ where: { userId: { in: orphanUserIds } } });
-                    await tx.calendarBlock.deleteMany({ where: { createdById: { in: orphanUserIds } } });
-                    await tx.visitRequest.deleteMany({ where: { createdById: { in: orphanUserIds } } });
-                    await tx.consultancyVisit.deleteMany({ where: { createdById: { in: orphanUserIds } } });
-                    await tx.user.deleteMany({ where: { id: { in: orphanUserIds } } });
-                }
+            if (orphanUserIds.length > 0) {
+                await tx.refreshToken.deleteMany({ where: { userId: { in: orphanUserIds } } });
+                await tx.calendarBlock.deleteMany({ where: { createdById: { in: orphanUserIds } } });
+                await tx.visitRequest.deleteMany({ where: { createdById: { in: orphanUserIds } } });
+                await tx.consultancyVisit.deleteMany({ where: { createdById: { in: orphanUserIds } } });
+                await tx.user.deleteMany({ where: { id: { in: orphanUserIds } } });
             }
             await tx.department.deleteMany({ where: { organizationId: id } });
             await tx.organization.delete({ where: { id } });
-        });
+        }, { timeout: 30000 });
 
         return { message: `Organization "${org.name}" permanently deleted` };
+    }
+
+    // ── Orphan user cleanup ───────────────────────────────────────────────────
+    // Removes User records that have no org memberships and no linked employees.
+    // These accumulate when the org delete bug left users behind.
+
+    async deleteOrphanUsers() {
+        // 1. Remove UserOrganization rows whose org no longer exists (stale join rows left
+        //    behind when orgs were deleted without going through the proper delete flow)
+        const staleRows = (await this.prisma.$queryRaw`
+            SELECT "userId", "organizationId"
+            FROM "UserOrganization"
+            WHERE "organizationId" NOT IN (SELECT id FROM "Organization")
+        `) as Array<{ userId: string; organizationId: string }>;
+
+        if (staleRows.length > 0) {
+            const staleOrgIds = [...new Set(staleRows.map((r) => r.organizationId))];
+            await this.prisma.userOrganization.deleteMany({
+                where: { organizationId: { in: staleOrgIds } },
+            });
+        }
+
+        // 2. Remove User rows that now have no memberships and no linked employees
+        const orphans = await this.prisma.user.findMany({
+            where: {
+                organizations: { none: {} },
+                employees:     { none: {} },
+            },
+            select: { id: true },
+        });
+
+        if (orphans.length === 0 && staleRows.length === 0) {
+            return { deleted: 0, staleMembershipsRemoved: 0, message: 'Nothing to clean up.' };
+        }
+
+        const ids = orphans.map((u) => u.id);
+        if (ids.length > 0) {
+            await this.prisma.$transaction(async (tx) => {
+                // Nullify Employee.userId so employee records are not lost
+                await tx.employee.updateMany({
+                    where: { userId: { in: ids } },
+                    data:  { userId: null },
+                });
+                // Delete all tables with a non-cascading FK to User
+                await tx.userOrganization.deleteMany({ where: { userId: { in: ids } } });
+                await tx.refreshToken.deleteMany({ where: { userId: { in: ids } } });
+                await tx.calendarBlock.deleteMany({ where: { createdById: { in: ids } } });
+                await tx.visitRequest.deleteMany({ where: { createdById: { in: ids } } });
+                await tx.consultancyVisit.deleteMany({ where: { createdById: { in: ids } } });
+                await tx.user.deleteMany({ where: { id: { in: ids } } });
+            });
+        }
+
+        return {
+            deleted: ids.length,
+            staleMembershipsRemoved: staleRows.length,
+            message: `Removed ${staleRows.length} stale membership(s) and ${ids.length} orphan user(s).`,
+        };
     }
 
     // ── Set admin org ────────────────────────────────────────────────────────

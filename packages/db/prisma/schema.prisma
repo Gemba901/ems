@@ -31,6 +31,8 @@ enum QuoteCategory {
 
 enum ModuleType {
   SIMS
+  EMS
+  CALENDAR
 }
 
 enum CommitteeType {
@@ -84,6 +86,14 @@ enum SkillLevel {
   LEVEL_4 // Can Train Others
 }
 
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+  CASUAL
+}
+
 //organization
 model Organization {
   id          String    @id @default(uuid())
@@ -113,7 +123,7 @@ model Organization {
 model User {
   id                String @id @default(uuid())
   email             String? @unique
-  phone             String
+  phone             String  @unique
   password          String?
   name              String
 
@@ -192,20 +202,38 @@ model Employee {
 
   // EMS: Identity group
   employeeCode   String?
+  middleName     String?
   gender         Gender?
   dateOfBirth    DateTime?
   nationalId     String?
+  nationality    String?
 
   // EMS: Work Allocation group
   employmentStatus EmploymentStatus @default(ACTIVE)
+  employmentType   EmploymentType?
   jobTitle         String?
   dateJoined       DateTime?
   workStation      String?
+  section          String?
+  subSection       String?
+  shift            String?
+  reportingManagerId String?
+  reportingManager   Employee?  @relation("ReportingManager", fields: [reportingManagerId], references: [id], onDelete: SetNull)
+  directReports      Employee[] @relation("ReportingManager")
 
   // EMS: Role & Responsibility group
-  jobDescription   String?
+  jobDescription     String?
+  level              String?
+  grade              String?
+  jobCategory        String?
+  primaryWorkRole    String?
+  machineProcess     String?
+  canBeAssignedTasks Boolean @default(true)
+  canBeMember        Boolean @default(true)
+  canBeLeader        Boolean @default(false)
 
   // EMS: Contact group (phone + email above; extras below)
+  whatsappNumber               String?
   homeAddress                  String?
   emergencyContactName         String?
   emergencyContactPhone        String?
@@ -215,16 +243,22 @@ model Employee {
   skillLevel     SkillLevel?
   trainingNeeded Boolean?
 
-  department       Department?  @relation(fields: [departmentId], references: [id])
-  organization     Organization @relation(fields: [organizationId], references: [id])
-  user             User?        @relation(fields: [userId], references: [id])
-  suggestions      Suggestion[] @relation("EmployeeSuggestions")
-  hodSuggestions   Suggestion[] @relation("HODSuggestions")
+  // EMS: Record control
+  hrRecordOwnerId    String?
+  hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)
+  hrManagedEmployees Employee[] @relation("HRRecordOwner")
+
+  department        Department?  @relation(fields: [departmentId], references: [id])
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  user              User?        @relation(fields: [userId], references: [id])
+  suggestions       Suggestion[] @relation("EmployeeSuggestions")
+  hodSuggestions    Suggestion[] @relation("HODSuggestions")
   suggestionReviews SuggestionReview[]
   committeeMembers  SteeringCommitteeMember[]
   notifications     Notification[]
 
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
@@ -253,8 +287,9 @@ model SteeringCommittee {
 }
 
 model SteeringCommitteeMember {
-  committeeId  String
-  employeeId   String
+  committeeId     String
+  employeeId      String
+  roleInCommittee String?
 
   committee    SteeringCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
   employee     Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)

@@ -215,4 +215,13 @@ export const EmployeeService = {
         }, token);
         return handleResponse<EmployeeImportSummary>(res);
     },
+
+    async createDepartment(name: string, token: string): Promise<{ id: string; name: string; organizationId: string }> {
+        const res = await apiClient(`${API_URL}/departments`, {
+            method: "POST",
+            headers: authHeaders(token),
+            body: JSON.stringify({ name }),
+        }, token);
+        return handleResponse<{ id: string; name: string; organizationId: string }>(res);
+    },
 };

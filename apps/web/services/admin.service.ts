@@ -15,10 +15,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 
 export type OrgStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
-export type ModuleType = "SIMS";
+export type ModuleType = "SIMS" | "EMS" | "CALENDAR";
 
 export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: string }[] = [
-    { key: "SIMS", label: "SIMS", description: "Suggestions & Idea Management" },
+    { key: "SIMS",     label: "SIMS",     description: "Suggestions & Idea Management" },
+    { key: "EMS",      label: "EMS",      description: "Employee Master Data" },
+    { key: "CALENDAR", label: "Calendar", description: "Visit Scheduling" },
 ];
 
 export interface Organization {
@@ -196,6 +198,14 @@ export const AdminService = {
             headers: authHeaders(token),
         }, token);
         return handleResponse<{ message: string }>(res);
+    },
+
+    async deleteOrphanUsers(token: string): Promise<{ deleted: number; message: string }> {
+        const res = await apiClient(`${API_URL}/organizations/orphan-users`, {
+            method: "DELETE",
+            headers: authHeaders(token),
+        }, token);
+        return handleResponse<{ deleted: number; message: string }>(res);
     },
 
     async importOrgEmployees(

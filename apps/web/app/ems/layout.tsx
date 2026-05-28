@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
+import { ModuleGuard } from "@/components/ModuleGuard";
 
 export default function EmsLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -15,7 +16,7 @@ export default function EmsLayout({ children }: { children: React.ReactNode }) {
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "md:pl-16" : "md:pl-64"}`}>
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 p-4 md:p-8">
-          {children}
+          <ModuleGuard moduleKey="EMS">{children}</ModuleGuard>
         </main>
       </div>
     </div>

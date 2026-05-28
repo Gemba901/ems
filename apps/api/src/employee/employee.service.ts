@@ -459,57 +459,79 @@ export class EmployeeService {
             throw new BadRequestException({ message: 'Import has validation issues. Run a dry run to review them.', summary });
         }
 
-        await this.prisma.$transaction(async (tx) => {
-            const departmentMap = new Map<string, string>();
-            const existingDepartments = await tx.department.findMany({ where: { organizationId } });
-            for (const department of existingDepartments) {
-                departmentMap.set(this.normalizeKey(department.name), department.id);
+        // Pre-fetch users and departments outside the transaction to keep writes fast
+        const rowEmails = normalizedRows.map((r) => r.email).filter(Boolean);
+        const rowPhones = normalizedRows.map((r) => r.phone).filter(Boolean) as string[];
+        const preloadedUsers =
+            rowEmails.length > 0 || rowPhones.length > 0
+                ? await this.prisma.user.findMany({
+                      where: {
+                          OR: [
+                              ...(rowEmails.length ? [{ email: { in: rowEmails } }] : []),
+                              ...(rowPhones.length ? [{ phone: { in: rowPhones } }] : []),
+                          ],
+                      },
+                  })
+                : [];
+
+        const existingDepartments = await this.prisma.department.findMany({ where: { organizationId } });
+        const departmentMap = new Map<string, string>();
+        for (const dept of existingDepartments) {
+            departmentMap.set(this.normalizeKey(dept.name), dept.id);
+        }
+
+        // Process each row directly — no wrapping transaction so large imports never time out.
+        // The import is idempotent: re-running it will reconcile any partially-applied state.
+        const db = this.prisma as any;
+
+        for (const row of normalizedRows) {
+            const departmentId = row.department
+                ? await this.getOrCreateDepartment(db, organizationId, row.department, departmentMap)
+                : null;
+
+            const existing = this.findEmployeeImportMatch(row, existingEmployees, matchedExistingIds, true);
+
+            const preloadedUser =
+                preloadedUsers.find(
+                    (u) =>
+                        (u.email && this.normalizeEmail(u.email) === this.normalizeEmail(row.email)) ||
+                        (u.phone && row.phone && this.normalizePhone(u.phone) === this.normalizePhone(row.phone)),
+                ) ?? null;
+
+            const user = await this.getOrCreateImportUser(db, row, organizationId, employeeRole.id, preloadedUser);
+
+            const employeeData = {
+                firstName: row.firstName,
+                lastName: row.lastName,
+                email: row.email,
+                phone: row.phone ?? null,
+                departmentId,
+                organizationId,
+                userId: user.id,
+                employeeCode: row.employeeCode ?? null,
+                gender: this.toGender(row.gender) as any,
+                dateOfBirth: row.dateOfBirth ?? null,
+                nationalId: row.nationalId ?? null,
+                employmentStatus: this.toEmploymentStatus(row.employmentStatus) as any,
+                jobTitle: row.jobTitle ?? null,
+                dateJoined: row.dateJoined ?? null,
+                workStation: row.workStation ?? row.section ?? null,
+                jobDescription: row.jobDescription ?? null,
+                homeAddress: row.homeAddress ?? null,
+                skillLevel: this.toSkillLevel(row.skillLevel) as any,
+                trainingNeeded: row.trainingNeeded ?? null,
+            };
+
+            if (existing) {
+                await db.employee.update({ where: { id: existing.id }, data: employeeData });
+            } else {
+                await db.employee.create({ data: employeeData });
             }
+        }
 
-            for (const row of normalizedRows) {
-                const departmentId = row.department
-                    ? await this.getOrCreateDepartment(tx, organizationId, row.department, departmentMap)
-                    : null;
-
-                const existing = this.findEmployeeImportMatch(row, existingEmployees, matchedExistingIds, true);
-                const user = await this.getOrCreateImportUser(tx, row, organizationId, employeeRole.id);
-
-                const employeeData = {
-                    firstName: row.firstName,
-                    lastName: row.lastName,
-                    email: row.email,
-                    phone: row.phone ?? null,
-                    departmentId,
-                    organizationId,
-                    userId: user.id,
-                    employeeCode: row.employeeCode ?? null,
-                    gender: this.toGender(row.gender) as any,
-                    dateOfBirth: row.dateOfBirth ?? null,
-                    nationalId: row.nationalId ?? null,
-                    employmentStatus: this.toEmploymentStatus(row.employmentStatus) as any,
-                    jobTitle: row.jobTitle ?? null,
-                    dateJoined: row.dateJoined ?? null,
-                    workStation: row.workStation ?? row.section ?? null,
-                    jobDescription: row.jobDescription ?? null,
-                    homeAddress: row.homeAddress ?? null,
-                    skillLevel: this.toSkillLevel(row.skillLevel) as any,
-                    trainingNeeded: row.trainingNeeded ?? null,
-                };
-
-                if (existing) {
-                    await tx.employee.update({
-                        where: { id: existing.id },
-                        data: employeeData,
-                    });
-                } else {
-                    await tx.employee.create({ data: employeeData });
-                }
-            }
-
-            for (const employee of toDelete) {
-                await this.deleteEmployeeInTransaction(tx, employee.id);
-            }
-        });
+        for (const employee of toDelete) {
+            await this.deleteEmployeeInTransaction(db, employee.id, employee);
+        }
 
         return summary;
     }
@@ -605,10 +627,8 @@ export class EmployeeService {
         return { rows, issues };
     }
 
-    private async getOrCreateImportUser(tx: any, row: EmployeeImportRow, organizationId: string, roleId: number) {
-        const userWhere: any[] = [{ email: row.email }];
-        if (row.phone) userWhere.push({ phone: row.phone });
-        let user = await tx.user.findFirst({ where: { OR: userWhere } });
+    private async getOrCreateImportUser(tx: any, row: EmployeeImportRow, organizationId: string, roleId: number, existingUser: any | null) {
+        let user = existingUser;
 
         if (!user) {
             user = await tx.user.create({
@@ -647,8 +667,12 @@ export class EmployeeService {
         return department.id;
     }
 
-    private async deleteEmployeeInTransaction(tx: any, id: string) {
-        const employee = await tx.employee.findUnique({ where: { id } });
+    private async deleteEmployeeInTransaction(
+        tx: any,
+        id: string,
+        preloaded?: { id: string; userId: string | null; organizationId: string },
+    ) {
+        const employee = preloaded ?? await tx.employee.findUnique({ where: { id } });
         if (!employee) return;
 
         await tx.notification.deleteMany({ where: { employeeId: id } });
@@ -742,7 +766,7 @@ export class EmployeeService {
     private cleanPhone(value: any): string | undefined {
         const text = this.cleanString(value);
         if (!text) return undefined;
-        const normalized = text.replace(/[^\d+]/g, '');
+        const normalized = text.replace(/[^\d]/g, ''); // strip everything except digits (no +)
         return normalized || undefined;
     }
 
@@ -751,7 +775,7 @@ export class EmployeeService {
     }
 
     private normalizePhone(value: any) {
-        return String(value ?? '').replace(/[^\d+]/g, '');
+        return String(value ?? '').replace(/[^\d]/g, '');
     }
 
     private normalizeKey(value: any) {

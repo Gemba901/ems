@@ -177,6 +177,8 @@ export default function OrgDetailPage() {
         try {
             await AdminService.updateOrganization(accessToken, org.id, { modules: updated });
             setOrg((prev) => prev ? { ...prev, modules: updated } : prev);
+            queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+            queryClient.invalidateQueries({ queryKey: ["org-modules"] });
             setModuleError(null);
         } catch (e: any) {
             setModuleError(e.message || "Failed to update modules.");

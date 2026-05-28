@@ -195,6 +195,19 @@ export class OrganizationsController {
      * Permanently deletes the org and all its data in a safe transaction order.
      * Org must be INACTIVE first — prevents accidental deletion of live orgs.
      */
+    /**
+     * One-shot cleanup: removes User rows that have no org memberships and no
+     * linked employees (left behind by the now-fixed org-delete bug).
+     * Must be declared before DELETE :id so the literal path wins.
+     */
+    @Delete('orphan-users')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.SUPER_ADMIN)
+    @HttpCode(HttpStatus.OK)
+    deleteOrphanUsers() {
+        return this.organizationsService.deleteOrphanUsers();
+    }
+
     @Delete(':id')
     @HttpCode(HttpStatus.OK)
     delete(

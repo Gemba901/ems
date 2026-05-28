@@ -8,12 +8,12 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import {
   EmsService, EmployeeProfile, CompletionResult,
-  EMPLOYMENT_STATUS_LABELS, SKILL_LEVEL_LABELS, GROUP_LABELS,
-  UpdateEmployeeEmsPayload, GroupKey, completionBg,
+  EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_TYPE_LABELS, SKILL_LEVEL_LABELS,
+  GROUP_LABELS, UpdateEmployeeEmsPayload, GroupKey, completionBg,
 } from "@/services/ems.service";
 import {
   ArrowLeft, Save, Loader2, CheckCircle2,
-  ClipboardList, User, Briefcase, FileText, Phone, TrendingUp,
+  ClipboardList, User, Briefcase, FileText, Phone, TrendingUp, Users,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -33,6 +33,22 @@ function statusLabel(pct: number) {
   return "Poor";
 }
 
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function yearsMonths(iso: string | null | undefined) {
+  if (!iso) return null;
+  const start = new Date(iso);
+  const now = new Date();
+  const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  if (y === 0) return `${m}mo`;
+  return m > 0 ? `${y}yr ${m}mo` : `${y}yr`;
+}
+
 // ── Components ────────────────────────────────────────────────────────────────
 
 function RingGauge({ pct, size = 100, strokeWidth = 9 }: { pct: number; size?: number; strokeWidth?: number }) {
@@ -45,15 +61,9 @@ function RingGauge({ pct, size = 100, strokeWidth = 9 }: { pct: number; size?: n
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }} className="absolute">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={strokeWidth} />
         <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={ringColor(pct)}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circ}
-          strokeDashoffset={offset}
+          cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={ringColor(pct)} strokeWidth={strokeWidth} strokeLinecap="round"
+          strokeDasharray={circ} strokeDashoffset={offset}
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
@@ -80,10 +90,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function CardHeader({ icon: Icon, title, iconColor = "text-indigo-500", iconBg = "bg-indigo-50" }: {
-  icon: ElementType;
-  title: string;
-  iconColor?: string;
-  iconBg?: string;
+  icon: ElementType; title: string; iconColor?: string; iconBg?: string;
 }) {
   return (
     <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2.5">
@@ -101,6 +108,21 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">{label}</label>
       {children}
     </div>
+  );
+}
+
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
+      <span className="text-sm text-slate-700">{label}</span>
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${checked ? "bg-indigo-600" : "bg-slate-200"}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-4" : "translate-x-0"}`} />
+      </button>
+    </label>
   );
 }
 
@@ -125,25 +147,50 @@ export default function EmployeeEmsEditPage() {
     enabled: !!accessToken && !!id,
   });
 
-  // Initialize form once data loads
   if (data && !formInitialized) {
     const emp = data.employee;
     setForm({
-      employeeCode:                 emp.employeeCode ?? "",
-      gender:                       emp.gender ?? undefined,
-      dateOfBirth:                  emp.dateOfBirth ? emp.dateOfBirth.split("T")[0] : "",
-      nationalId:                   emp.nationalId ?? "",
-      employmentStatus:             emp.employmentStatus,
-      jobTitle:                     emp.jobTitle ?? "",
-      dateJoined:                   emp.dateJoined ? emp.dateJoined.split("T")[0] : "",
-      workStation:                  emp.workStation ?? "",
-      jobDescription:               emp.jobDescription ?? "",
+      // Identity
+      employeeCode:  emp.employeeCode ?? "",
+      middleName:    emp.middleName ?? "",
+      gender:        emp.gender ?? undefined,
+      dateOfBirth:   emp.dateOfBirth ? emp.dateOfBirth.split("T")[0] : "",
+      nationalId:    emp.nationalId ?? "",
+      nationality:   emp.nationality ?? "",
+
+      // Work Allocation
+      employmentStatus: emp.employmentStatus,
+      employmentType:   emp.employmentType ?? undefined,
+      jobTitle:         emp.jobTitle ?? "",
+      dateJoined:       emp.dateJoined ? emp.dateJoined.split("T")[0] : "",
+      workStation:      emp.workStation ?? "",
+      section:          emp.section ?? "",
+      subSection:       emp.subSection ?? "",
+      shift:            emp.shift ?? "",
+      reportingManagerId: emp.reportingManagerId ?? "",
+      hrRecordOwnerId:    emp.hrRecordOwnerId ?? "",
+
+      // Role & Responsibility
+      jobDescription:   emp.jobDescription ?? "",
+      level:            emp.level ?? "",
+      grade:            emp.grade ?? "",
+      jobCategory:      emp.jobCategory ?? "",
+      primaryWorkRole:  emp.primaryWorkRole ?? "",
+      machineProcess:   emp.machineProcess ?? "",
+      canBeAssignedTasks: emp.canBeAssignedTasks,
+      canBeMember:        emp.canBeMember,
+      canBeLeader:        emp.canBeLeader,
+
+      // Contact
+      whatsappNumber:               emp.whatsappNumber ?? "",
       homeAddress:                  emp.homeAddress ?? "",
       emergencyContactName:         emp.emergencyContactName ?? "",
       emergencyContactPhone:        emp.emergencyContactPhone ?? "",
       emergencyContactRelationship: emp.emergencyContactRelationship ?? "",
-      skillLevel:                   emp.skillLevel ?? undefined,
-      trainingNeeded:               emp.trainingNeeded ?? false,
+
+      // Skill
+      skillLevel:    emp.skillLevel ?? undefined,
+      trainingNeeded: emp.trainingNeeded ?? false,
     });
     setFormInitialized(true);
   }
@@ -166,11 +213,6 @@ export default function EmployeeEmsEditPage() {
     setSaved(false);
   };
 
-  const handleSave = () => {
-    if (!accessToken || !id) return;
-    saveMutation.mutate();
-  };
-
   const saving = saveMutation.isPending;
   const saveError = saveMutation.error ? (saveMutation.error as any).message : null;
 
@@ -188,10 +230,11 @@ export default function EmployeeEmsEditPage() {
           </Link>
           <div>
             <h1 className="text-xl font-bold text-slate-900">
-              {employee ? `${employee.firstName} ${employee.lastName}` : "Employee Profile"}
+              {employee ? `${employee.firstName}${employee.middleName ? " " + employee.middleName : ""} ${employee.lastName}` : "Employee Profile"}
             </h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              {employee?.department?.name ? `${employee.department.name} · ` : ""}Edit EMS data
+              {employee?.department?.name ? `${employee.department.name} · ` : ""}
+              {employee?.updatedAt ? `Last updated ${formatDate(employee.updatedAt)}` : "Edit EMS data"}
             </p>
           </div>
           {employee?.employeeCode && (
@@ -216,7 +259,6 @@ export default function EmployeeEmsEditPage() {
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
               <CardHeader icon={ClipboardList} title="Data Completeness" />
               <div className="p-5 flex flex-col sm:flex-row items-center gap-6">
-                {/* Overall ring */}
                 <div className="flex flex-col items-center gap-2 shrink-0">
                   <RingGauge pct={completion.overall} size={100} strokeWidth={9} />
                   <div className="flex flex-col items-center gap-1">
@@ -224,16 +266,13 @@ export default function EmployeeEmsEditPage() {
                     <StatusBadge status={statusLabel(completion.overall)} />
                   </div>
                 </div>
-                {/* Group rings */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full">
                   {(Object.keys(GROUP_LABELS) as GroupKey[]).map((key) => {
                     const pct = completion.groups[key] ?? 0;
                     return (
                       <div key={key} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
                         <RingGauge pct={pct} size={56} strokeWidth={5} />
-                        <p className="text-[10px] font-semibold text-slate-500 text-center leading-tight">
-                          {GROUP_LABELS[key]}
-                        </p>
+                        <p className="text-[10px] font-semibold text-slate-500 text-center leading-tight">{GROUP_LABELS[key]}</p>
                         <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
                           <div className={`h-full rounded-full ${completionBg(pct)}`} style={{ width: `${pct}%` }} />
                         </div>
@@ -247,24 +286,24 @@ export default function EmployeeEmsEditPage() {
             {/* ── Form sections ─────────────────────────────────────────── */}
             <div className="space-y-5">
 
-              {/* Identity */}
+              {/* Section 1 — Identity */}
               <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <CardHeader icon={User} title="Identity" iconColor="text-indigo-500" iconBg="bg-indigo-50" />
+                <CardHeader icon={User} title="Section 1 — Identity" iconColor="text-indigo-500" iconBg="bg-indigo-50" />
                 <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Employee Code">
-                    <input
-                      className={inputCls}
-                      value={form.employeeCode ?? ""}
-                      onChange={(e) => set("employeeCode", e.target.value)}
-                      placeholder="EMP-0001"
-                    />
+                    <input className={inputCls} value={form.employeeCode ?? ""} onChange={(e) => set("employeeCode", e.target.value)} placeholder="EMP-0001" />
+                  </Field>
+                  <Field label="First Name">
+                    <input className={readonlyCls} value={employee.firstName} readOnly />
+                  </Field>
+                  <Field label="Middle Name">
+                    <input className={inputCls} value={form.middleName ?? ""} onChange={(e) => set("middleName", e.target.value)} placeholder="Middle name" />
+                  </Field>
+                  <Field label="Last Name">
+                    <input className={readonlyCls} value={employee.lastName} readOnly />
                   </Field>
                   <Field label="Gender">
-                    <select
-                      className={selectCls}
-                      value={form.gender ?? ""}
-                      onChange={(e) => set("gender", e.target.value || undefined)}
-                    >
+                    <select className={selectCls} value={form.gender ?? ""} onChange={(e) => set("gender", e.target.value || undefined)}>
                       <option value="">— Select —</option>
                       <option value="MALE">Male</option>
                       <option value="FEMALE">Female</option>
@@ -272,137 +311,176 @@ export default function EmployeeEmsEditPage() {
                     </select>
                   </Field>
                   <Field label="Date of Birth">
-                    <input
-                      type="date"
-                      className={inputCls}
-                      value={form.dateOfBirth ?? ""}
-                      onChange={(e) => set("dateOfBirth", e.target.value)}
-                    />
+                    <input type="date" className={inputCls} value={form.dateOfBirth ?? ""} onChange={(e) => set("dateOfBirth", e.target.value)} />
                   </Field>
                   <Field label="National ID">
-                    <input
-                      className={inputCls}
-                      value={form.nationalId ?? ""}
-                      onChange={(e) => set("nationalId", e.target.value)}
-                      placeholder="ID number"
-                    />
+                    <input className={inputCls} value={form.nationalId ?? ""} onChange={(e) => set("nationalId", e.target.value)} placeholder="ID number" />
+                  </Field>
+                  <Field label="Nationality">
+                    <input className={inputCls} value={form.nationality ?? ""} onChange={(e) => set("nationality", e.target.value)} placeholder="e.g. Kenyan" />
                   </Field>
                 </div>
               </div>
 
-              {/* Work Allocation */}
+              {/* Section 2 — Work Allocation */}
               <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <CardHeader icon={Briefcase} title="Work Allocation" iconColor="text-blue-500" iconBg="bg-blue-50" />
+                <CardHeader icon={Briefcase} title="Section 2 — Work Allocation" iconColor="text-blue-500" iconBg="bg-blue-50" />
                 <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Department">
+                    <input className={readonlyCls} value={employee.department?.name ?? "—"} readOnly />
+                  </Field>
                   <Field label="Employment Status">
-                    <select
-                      className={selectCls}
-                      value={form.employmentStatus ?? ""}
-                      onChange={(e) => set("employmentStatus", e.target.value || undefined)}
-                    >
+                    <select className={selectCls} value={form.employmentStatus ?? ""} onChange={(e) => set("employmentStatus", e.target.value || undefined)}>
                       {(Object.entries(EMPLOYMENT_STATUS_LABELS) as [string, string][]).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
                       ))}
                     </select>
                   </Field>
-                  <Field label="Job Title">
-                    <input
-                      className={inputCls}
-                      value={form.jobTitle ?? ""}
-                      onChange={(e) => set("jobTitle", e.target.value)}
-                      placeholder="e.g. Machine Operator"
-                    />
+                  <Field label="Employment Type">
+                    <select className={selectCls} value={form.employmentType ?? ""} onChange={(e) => set("employmentType", e.target.value || undefined)}>
+                      <option value="">— Select —</option>
+                      {(Object.entries(EMPLOYMENT_TYPE_LABELS) as [string, string][]).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Job Title / Designation">
+                    <input className={inputCls} value={form.jobTitle ?? ""} onChange={(e) => set("jobTitle", e.target.value)} placeholder="e.g. Machine Operator" />
                   </Field>
                   <Field label="Date Joined">
-                    <input
-                      type="date"
-                      className={inputCls}
-                      value={form.dateJoined ?? ""}
-                      onChange={(e) => set("dateJoined", e.target.value)}
-                    />
+                    <input type="date" className={inputCls} value={form.dateJoined ?? ""} onChange={(e) => set("dateJoined", e.target.value)} />
+                  </Field>
+                  <Field label="Length of Service">
+                    <input className={readonlyCls} value={yearsMonths(employee.dateJoined) ?? "—"} readOnly />
                   </Field>
                   <Field label="Work Station / Line">
+                    <input className={inputCls} value={form.workStation ?? ""} onChange={(e) => set("workStation", e.target.value)} placeholder="e.g. Line 3" />
+                  </Field>
+                  <Field label="Section / Area">
+                    <input className={inputCls} value={form.section ?? ""} onChange={(e) => set("section", e.target.value)} placeholder="e.g. Assembly" />
+                  </Field>
+                  <Field label="Sub-Section / Line">
+                    <input className={inputCls} value={form.subSection ?? ""} onChange={(e) => set("subSection", e.target.value)} placeholder="e.g. Sub-line A" />
+                  </Field>
+                  <Field label="Shift">
+                    <input className={inputCls} value={form.shift ?? ""} onChange={(e) => set("shift", e.target.value)} placeholder="e.g. Morning, Night" />
+                  </Field>
+                  <Field label="Reporting Manager">
                     <input
                       className={inputCls}
-                      value={form.workStation ?? ""}
-                      onChange={(e) => set("workStation", e.target.value)}
-                      placeholder="e.g. Line 3"
+                      value={form.reportingManagerId ?? ""}
+                      onChange={(e) => set("reportingManagerId", e.target.value)}
+                      placeholder="Manager employee ID"
                     />
+                    {employee.reportingManager && (
+                      <p className="text-xs text-slate-400 mt-1">
+                        Current: {employee.reportingManager.firstName} {employee.reportingManager.lastName}
+                      </p>
+                    )}
+                  </Field>
+                  <Field label="HR Record Owner">
+                    <input
+                      className={inputCls}
+                      value={form.hrRecordOwnerId ?? ""}
+                      onChange={(e) => set("hrRecordOwnerId", e.target.value)}
+                      placeholder="HR employee ID"
+                    />
+                    {employee.hrRecordOwner && (
+                      <p className="text-xs text-slate-400 mt-1">
+                        Current: {employee.hrRecordOwner.firstName} {employee.hrRecordOwner.lastName}
+                      </p>
+                    )}
                   </Field>
                 </div>
               </div>
 
-              {/* Role & Responsibility */}
+              {/* Section 3 — Role & Responsibility */}
               <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <CardHeader icon={FileText} title="Role & Responsibility" iconColor="text-violet-500" iconBg="bg-violet-50" />
-                <div className="p-5">
+                <CardHeader icon={FileText} title="Section 3 — Role & Responsibility" iconColor="text-violet-500" iconBg="bg-violet-50" />
+                <div className="p-5 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Level">
+                      <input className={inputCls} value={form.level ?? ""} onChange={(e) => set("level", e.target.value)} placeholder="e.g. L3, Senior" />
+                    </Field>
+                    <Field label="Grade">
+                      <input className={inputCls} value={form.grade ?? ""} onChange={(e) => set("grade", e.target.value)} placeholder="e.g. G5" />
+                    </Field>
+                    <Field label="Job Category">
+                      <input className={inputCls} value={form.jobCategory ?? ""} onChange={(e) => set("jobCategory", e.target.value)} placeholder="e.g. Technical, Support" />
+                    </Field>
+                    <Field label="Primary Work Role">
+                      <input className={inputCls} value={form.primaryWorkRole ?? ""} onChange={(e) => set("primaryWorkRole", e.target.value)} placeholder="e.g. Operator, Inspector" />
+                    </Field>
+                    <Field label="Machine / Process Assigned">
+                      <input className={inputCls} value={form.machineProcess ?? ""} onChange={(e) => set("machineProcess", e.target.value)} placeholder="e.g. CNC-04, Welding" />
+                    </Field>
+                  </div>
                   <Field label="Job Description">
-                    <textarea
-                      rows={4}
-                      className={`${inputCls} resize-none`}
-                      value={form.jobDescription ?? ""}
-                      onChange={(e) => set("jobDescription", e.target.value)}
-                      placeholder="Describe the key responsibilities…"
-                    />
+                    <textarea rows={3} className={`${inputCls} resize-none`} value={form.jobDescription ?? ""} onChange={(e) => set("jobDescription", e.target.value)} placeholder="Key responsibilities…" />
                   </Field>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Eligibility Flags</p>
+                    <Toggle label="Can be assigned tasks" checked={form.canBeAssignedTasks ?? true} onChange={(v) => set("canBeAssignedTasks", v)} />
+                    <Toggle label="Can be a committee member" checked={form.canBeMember ?? true} onChange={(v) => set("canBeMember", v)} />
+                    <Toggle label="Can be a committee leader" checked={form.canBeLeader ?? false} onChange={(v) => set("canBeLeader", v)} />
+                  </div>
+
+                  {/* Steering Committee — read-only */}
+                  {employee.committeeMembers.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Steering Committee Memberships</p>
+                      <div className="space-y-2">
+                        {employee.committeeMembers.map((m, i) => (
+                          <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-sm">
+                            <span className="font-medium text-slate-700">{m.committee.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-400">{m.committee.type}</span>
+                              {m.roleInCommittee && (
+                                <span className="text-xs font-semibold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">{m.roleInCommittee}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Contact */}
+              {/* Section 4 — Contact */}
               <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <CardHeader icon={Phone} title="Contact" iconColor="text-teal-500" iconBg="bg-teal-50" />
+                <CardHeader icon={Phone} title="Section 4 — Contact" iconColor="text-teal-500" iconBg="bg-teal-50" />
                 <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Phone (system)">
+                  <Field label="Mobile Number (system)">
                     <input className={readonlyCls} value={employee.phone ?? ""} readOnly />
                   </Field>
-                  <Field label="Email (system)">
+                  <Field label="Company Email (system)">
                     <input className={readonlyCls} value={employee.email} readOnly />
                   </Field>
+                  <Field label="WhatsApp Number">
+                    <input className={inputCls} value={form.whatsappNumber ?? ""} onChange={(e) => set("whatsappNumber", e.target.value)} placeholder="e.g. 254712345678" />
+                  </Field>
                   <Field label="Home Address">
-                    <input
-                      className={inputCls}
-                      value={form.homeAddress ?? ""}
-                      onChange={(e) => set("homeAddress", e.target.value)}
-                      placeholder="Full home address"
-                    />
+                    <input className={inputCls} value={form.homeAddress ?? ""} onChange={(e) => set("homeAddress", e.target.value)} placeholder="Full home address" />
                   </Field>
                   <Field label="Emergency Contact Name">
-                    <input
-                      className={inputCls}
-                      value={form.emergencyContactName ?? ""}
-                      onChange={(e) => set("emergencyContactName", e.target.value)}
-                      placeholder="Full name"
-                    />
+                    <input className={inputCls} value={form.emergencyContactName ?? ""} onChange={(e) => set("emergencyContactName", e.target.value)} placeholder="Full name" />
                   </Field>
                   <Field label="Emergency Contact Phone">
-                    <input
-                      className={inputCls}
-                      value={form.emergencyContactPhone ?? ""}
-                      onChange={(e) => set("emergencyContactPhone", e.target.value)}
-                      placeholder="+254…"
-                    />
+                    <input className={inputCls} value={form.emergencyContactPhone ?? ""} onChange={(e) => set("emergencyContactPhone", e.target.value)} placeholder="254…" />
                   </Field>
                   <Field label="Emergency Contact Relationship">
-                    <input
-                      className={inputCls}
-                      value={form.emergencyContactRelationship ?? ""}
-                      onChange={(e) => set("emergencyContactRelationship", e.target.value)}
-                      placeholder="e.g. Spouse, Parent"
-                    />
+                    <input className={inputCls} value={form.emergencyContactRelationship ?? ""} onChange={(e) => set("emergencyContactRelationship", e.target.value)} placeholder="e.g. Spouse, Parent" />
                   </Field>
                 </div>
               </div>
 
-              {/* Skill */}
+              {/* Section 5 — Skill */}
               <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <CardHeader icon={TrendingUp} title="Skill" iconColor="text-emerald-500" iconBg="bg-emerald-50" />
+                <CardHeader icon={TrendingUp} title="Section 5 — Skill" iconColor="text-emerald-500" iconBg="bg-emerald-50" />
                 <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Skill Level">
-                    <select
-                      className={selectCls}
-                      value={form.skillLevel ?? ""}
-                      onChange={(e) => set("skillLevel", e.target.value || undefined)}
-                    >
+                    <select className={selectCls} value={form.skillLevel ?? ""} onChange={(e) => set("skillLevel", e.target.value || undefined)}>
                       <option value="">— Select —</option>
                       {(Object.entries(SKILL_LEVEL_LABELS) as [string, string][]).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
@@ -411,12 +489,7 @@ export default function EmployeeEmsEditPage() {
                   </Field>
                   <Field label="Training Needed">
                     <label className="flex items-center gap-2.5 mt-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form.trainingNeeded ?? false}
-                        onChange={(e) => set("trainingNeeded", e.target.checked)}
-                        className="h-4 w-4 rounded accent-indigo-600"
-                      />
+                      <input type="checkbox" checked={form.trainingNeeded ?? false} onChange={(e) => set("trainingNeeded", e.target.checked)} className="h-4 w-4 rounded accent-indigo-600" />
                       <span className="text-sm text-slate-600">Yes, this employee needs training</span>
                     </label>
                   </Field>
@@ -427,7 +500,7 @@ export default function EmployeeEmsEditPage() {
             {/* ── Save bar ──────────────────────────────────────────────── */}
             <div className="sticky bottom-4 flex items-center gap-3">
               <button
-                onClick={handleSave}
+                onClick={() => { if (accessToken && id) saveMutation.mutate(); }}
                 disabled={saving}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-indigo-200"
               >

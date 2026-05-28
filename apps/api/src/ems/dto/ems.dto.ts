@@ -14,6 +14,14 @@ export enum EmploymentStatusDto {
   CONTRACT_ENDED = 'CONTRACT_ENDED',
 }
 
+export enum EmploymentTypeDto {
+  FULL_TIME = 'FULL_TIME',
+  PART_TIME = 'PART_TIME',
+  CONTRACT  = 'CONTRACT',
+  INTERN    = 'INTERN',
+  CASUAL    = 'CASUAL',
+}
+
 export enum GenderDto {
   MALE   = 'MALE',
   FEMALE = 'FEMALE',
@@ -30,20 +38,37 @@ export enum SkillLevelDto {
 export class UpdateEmployeeEmsDto {
   // Identity
   @IsString() @IsOptional() employeeCode?: string;
+  @IsString() @IsOptional() middleName?: string;
   @IsEnum(GenderDto) @IsOptional() gender?: GenderDto;
   @IsDateString() @IsOptional() dateOfBirth?: string;
   @IsString() @IsOptional() nationalId?: string;
+  @IsString() @IsOptional() nationality?: string;
 
   // Work Allocation
   @IsEnum(EmploymentStatusDto) @IsOptional() employmentStatus?: EmploymentStatusDto;
+  @IsEnum(EmploymentTypeDto) @IsOptional() employmentType?: EmploymentTypeDto;
   @IsString() @IsOptional() jobTitle?: string;
   @IsDateString() @IsOptional() dateJoined?: string;
   @IsString() @IsOptional() workStation?: string;
+  @IsString() @IsOptional() section?: string;
+  @IsString() @IsOptional() subSection?: string;
+  @IsString() @IsOptional() shift?: string;
+  @IsString() @IsOptional() reportingManagerId?: string;
+  @IsString() @IsOptional() hrRecordOwnerId?: string;
 
   // Role & Responsibility
   @IsString() @IsOptional() jobDescription?: string;
+  @IsString() @IsOptional() level?: string;
+  @IsString() @IsOptional() grade?: string;
+  @IsString() @IsOptional() jobCategory?: string;
+  @IsString() @IsOptional() primaryWorkRole?: string;
+  @IsString() @IsOptional() machineProcess?: string;
+  @IsBoolean() @IsOptional() canBeAssignedTasks?: boolean;
+  @IsBoolean() @IsOptional() canBeMember?: boolean;
+  @IsBoolean() @IsOptional() canBeLeader?: boolean;
 
   // Contact
+  @IsString() @IsOptional() whatsappNumber?: string;
   @IsString() @IsOptional() homeAddress?: string;
   @IsString() @IsOptional() emergencyContactName?: string;
   @IsString() @IsOptional() emergencyContactPhone?: string;

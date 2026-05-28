@@ -19,15 +19,25 @@ export type EmploymentStatus =
   | "ACTIVE" | "PROBATION" | "RESIGNED" | "TERMINATED"
   | "RETIRED" | "SUSPENDED" | "ABSCONDED" | "CONTRACT_ENDED";
 
+export type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERN" | "CASUAL";
+
 export type Gender = "MALE" | "FEMALE" | "OTHER";
 
 export type SkillLevel = "LEVEL_1" | "LEVEL_2" | "LEVEL_3" | "LEVEL_4";
+
+export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
+  FULL_TIME: "Full Time",
+  PART_TIME: "Part Time",
+  CONTRACT:  "Contract",
+  INTERN:    "Intern",
+  CASUAL:    "Casual",
+};
 
 export type GroupKey =
   | "IDENTITY" | "WORK_ALLOCATION" | "ROLE_RESPONSIBILITY" | "CONTACT" | "SKILL";
 
 export const GROUP_LABELS: Record<GroupKey, string> = {
-  IDENTITY:           "Identity",
+  IDENTITY:           "Employee Basic Identity",
   WORK_ALLOCATION:    "Work Allocation",
   ROLE_RESPONSIBILITY: "Role & Responsibility",
   CONTACT:            "Contact",
@@ -59,23 +69,59 @@ export interface EmployeeProfile {
   email: string;
   phone: string | null;
   avatarUrl: string | null;
+  departmentId: string | null;
+  department: { id: string; name: string } | null;
+  updatedAt: string | null;
+
+  // Identity
   employeeCode: string | null;
+  middleName: string | null;
   gender: Gender | null;
   dateOfBirth: string | null;
   nationalId: string | null;
+  nationality: string | null;
+
+  // Work Allocation
   employmentStatus: EmploymentStatus;
+  employmentType: EmploymentType | null;
   jobTitle: string | null;
   dateJoined: string | null;
   workStation: string | null;
+  section: string | null;
+  subSection: string | null;
+  shift: string | null;
+  reportingManagerId: string | null;
+  reportingManager: { id: string; firstName: string; lastName: string } | null;
+  hrRecordOwnerId: string | null;
+  hrRecordOwner: { id: string; firstName: string; lastName: string } | null;
+
+  // Role & Responsibility
   jobDescription: string | null;
+  level: string | null;
+  grade: string | null;
+  jobCategory: string | null;
+  primaryWorkRole: string | null;
+  machineProcess: string | null;
+  canBeAssignedTasks: boolean;
+  canBeMember: boolean;
+  canBeLeader: boolean;
+
+  // Contact
+  whatsappNumber: string | null;
   homeAddress: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   emergencyContactRelationship: string | null;
+
+  // Skill
   skillLevel: SkillLevel | null;
   trainingNeeded: boolean | null;
-  departmentId: string | null;
-  department: { id: string; name: string } | null;
+
+  // Steering Committee (read-only)
+  committeeMembers: Array<{
+    roleInCommittee: string | null;
+    committee: { id: string; name: string; type: string };
+  }>;
 }
 
 export interface CompletionResult {
@@ -124,19 +170,45 @@ export interface EmsDashboard {
 }
 
 export interface UpdateEmployeeEmsPayload {
+  // Identity
   employeeCode?: string;
+  middleName?: string;
   gender?: Gender;
   dateOfBirth?: string;
   nationalId?: string;
+  nationality?: string;
+
+  // Work Allocation
   employmentStatus?: EmploymentStatus;
+  employmentType?: EmploymentType;
   jobTitle?: string;
   dateJoined?: string;
   workStation?: string;
+  section?: string;
+  subSection?: string;
+  shift?: string;
+  reportingManagerId?: string;
+  hrRecordOwnerId?: string;
+
+  // Role & Responsibility
   jobDescription?: string;
+  level?: string;
+  grade?: string;
+  jobCategory?: string;
+  primaryWorkRole?: string;
+  machineProcess?: string;
+  canBeAssignedTasks?: boolean;
+  canBeMember?: boolean;
+  canBeLeader?: boolean;
+
+  // Contact
+  whatsappNumber?: string;
   homeAddress?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
+
+  // Skill
   skillLevel?: SkillLevel;
   trainingNeeded?: boolean;
 }

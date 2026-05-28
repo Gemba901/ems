@@ -5,11 +5,11 @@ import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 
 // ── Field groups that define completeness ────────────────────────────────────
 export const EMS_GROUPS = {
-  IDENTITY:          ['firstName', 'lastName', 'employeeCode', 'gender', 'nationalId', 'dateOfBirth'],
-  WORK_ALLOCATION:   ['departmentId', 'jobTitle', 'dateJoined', 'employmentStatus'],
-  ROLE_RESPONSIBILITY: ['jobDescription'],
-  CONTACT:           ['phone', 'email', 'homeAddress', 'emergencyContactName', 'emergencyContactPhone'],
-  SKILL:             ['skillLevel'],
+  IDENTITY:            ['firstName', 'lastName', 'employeeCode', 'middleName', 'gender', 'nationalId', 'dateOfBirth', 'nationality'],
+  WORK_ALLOCATION:     ['departmentId', 'employmentStatus', 'employmentType', 'jobTitle', 'dateJoined', 'workStation', 'section', 'subSection', 'shift', 'reportingManagerId'],
+  ROLE_RESPONSIBILITY: ['jobDescription', 'level', 'grade', 'jobCategory', 'primaryWorkRole', 'machineProcess'],
+  CONTACT:             ['phone', 'email', 'whatsappNumber', 'homeAddress', 'emergencyContactName', 'emergencyContactPhone'],
+  SKILL:               ['skillLevel'],
 } as const;
 
 export type GroupKey = keyof typeof EMS_GROUPS;
@@ -40,11 +40,11 @@ export function calcEmployeeCompletion(emp: Record<string, unknown>) {
 }
 
 const GROUP_LABELS: Record<GroupKey, string> = {
-  IDENTITY:           'Identity',
-  WORK_ALLOCATION:    'Work Allocation',
+  IDENTITY:            'Employee Basic Identity',
+  WORK_ALLOCATION:     'Work Allocation',
   ROLE_RESPONSIBILITY: 'Role & Responsibility',
-  CONTACT:            'Contact',
-  SKILL:              'Skill',
+  CONTACT:             'Contact',
+  SKILL:               'Skill',
 };
 
 function completionStatus(pct: number): { status: string; message: string } {
@@ -55,15 +55,42 @@ function completionStatus(pct: number): { status: string; message: string } {
 }
 
 const EMS_EMPLOYEE_SELECT = {
+  // Core identifiers
   id: true, firstName: true, lastName: true, email: true, phone: true,
-  employeeCode: true, gender: true, dateOfBirth: true, nationalId: true,
-  employmentStatus: true, jobTitle: true, dateJoined: true, workStation: true,
-  jobDescription: true, homeAddress: true, emergencyContactName: true,
-  emergencyContactPhone: true, emergencyContactRelationship: true,
-  skillLevel: true, trainingNeeded: true,
-  departmentId: true,
-  avatarUrl: true,
+  avatarUrl: true, departmentId: true, updatedAt: true,
   department: { select: { id: true, name: true } },
+
+  // Identity
+  employeeCode: true, middleName: true, gender: true, dateOfBirth: true,
+  nationalId: true, nationality: true,
+
+  // Work Allocation
+  employmentStatus: true, employmentType: true, jobTitle: true, dateJoined: true,
+  workStation: true, section: true, subSection: true, shift: true,
+  reportingManagerId: true,
+  reportingManager: { select: { id: true, firstName: true, lastName: true } },
+  hrRecordOwnerId: true,
+  hrRecordOwner: { select: { id: true, firstName: true, lastName: true } },
+
+  // Role & Responsibility
+  jobDescription: true, level: true, grade: true, jobCategory: true,
+  primaryWorkRole: true, machineProcess: true,
+  canBeAssignedTasks: true, canBeMember: true, canBeLeader: true,
+
+  // Contact
+  whatsappNumber: true, homeAddress: true, emergencyContactName: true,
+  emergencyContactPhone: true, emergencyContactRelationship: true,
+
+  // Skill
+  skillLevel: true, trainingNeeded: true,
+
+  // Steering Committee (read-only, derived)
+  committeeMembers: {
+    select: {
+      roleInCommittee: true,
+      committee: { select: { id: true, name: true, type: true } },
+    },
+  },
 };
 
 @Injectable()

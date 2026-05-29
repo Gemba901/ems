@@ -256,6 +256,7 @@ model Employee {
   suggestionReviews SuggestionReview[]
   committeeMembers  SteeringCommitteeMember[]
   notifications     Notification[]
+  visitAttendances  VisitAttendee[]
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -406,6 +407,12 @@ model SuggestionReview {
 
 // ── Calendar: Consultancy Visit Scheduling ────────────────────────────────────
 
+enum RecurrencePattern {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
 enum VisitStatus {
   TENTATIVE
   CONFIRMED
@@ -420,21 +427,29 @@ enum VisitRequestStatus {
 }
 
 model ConsultancyVisit {
-  id             String      @id @default(uuid())
-  title          String
-  clientOrgId    String
-  date           DateTime
-  startTime      String?
-  endTime        String?
-  status         VisitStatus @default(TENTATIVE)
-  notes          String?         // visible to the client org
-  internalNotes  String?         // only visible to Gemba admins (SUPER_ADMIN)
-  createdById    String
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                 String              @id @default(uuid())
+  title              String
+  clientOrgId        String
+  date               DateTime
+  endDate            DateTime?
+  startTime          String?
+  endTime            String?
+  status             VisitStatus         @default(TENTATIVE)
+  notes              String?
+  internalNotes      String?
+  completionNote     String?
+  recurrencePattern  RecurrencePattern?
+  recurrenceEndDate  DateTime?
+  recurrenceGroupId  String?
+  createdById        String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
-  clientOrg      Organization @relation(fields: [clientOrgId], references: [id])
-  createdBy      User         @relation(fields: [createdById], references: [id])
+  clientOrg          Organization        @relation(fields: [clientOrgId], references: [id])
+  createdBy          User                @relation(fields: [createdById], references: [id])
+  attendees          VisitAttendee[]
+
+  @@index([recurrenceGroupId])
 }
 
 model VisitRequest {
@@ -451,6 +466,18 @@ model VisitRequest {
 
   organization    Organization @relation(fields: [organizationId], references: [id])
   createdBy       User         @relation(fields: [createdById], references: [id])
+}
+
+model VisitAttendee {
+  id         String           @id @default(uuid())
+  visitId    String
+  employeeId String
+  role       String?
+
+  visit      ConsultancyVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, employeeId])
 }
 
 enum CalendarBlockType {

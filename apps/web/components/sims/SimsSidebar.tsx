@@ -123,10 +123,10 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
               </div>
               <div className="min-w-0 flex flex-col">
                 <span className="text-sm font-bold text-slate-900 truncate leading-tight">
-                  Idea Management
+                  Suggestions & Ideas
                 </span>
                 <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">
-                  Enterprise SIMS
+                  SIMS
                 </span>
               </div>
             </>

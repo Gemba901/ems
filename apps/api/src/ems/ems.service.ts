@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
@@ -165,6 +165,14 @@ export class EmsService {
       select: { id: true },
     });
     if (!existing) throw new NotFoundException('Employee not found');
+
+    if (dto.reportingManagerId) {
+      const manager = await this.prisma.employee.findFirst({
+        where: { id: dto.reportingManagerId, organizationId },
+        select: { id: true },
+      });
+      if (!manager) throw new BadRequestException('Reporting manager not found in this organization');
+    }
 
     const DATE_FIELDS = new Set(['dateOfBirth', 'dateJoined']);
     const updateData: Record<string, unknown> = {};

@@ -147,6 +147,12 @@ export default function EmployeeEmsEditPage() {
     enabled: !!accessToken && !!id,
   });
 
+  const { data: employeesData } = useQuery({
+    queryKey: ["ems-employees-list"],
+    queryFn: () => EmsService.getEmployees(accessToken!, { limit: 200 }),
+    enabled: !!accessToken,
+  });
+
   if (data && !formInitialized) {
     const emp = data.employee;
     setForm({
@@ -366,30 +372,36 @@ export default function EmployeeEmsEditPage() {
                     <input className={inputCls} value={form.shift ?? ""} onChange={(e) => set("shift", e.target.value)} placeholder="e.g. Morning, Night" />
                   </Field>
                   <Field label="Reporting Manager">
-                    <input
-                      className={inputCls}
+                    <select
+                      className={selectCls}
                       value={form.reportingManagerId ?? ""}
                       onChange={(e) => set("reportingManagerId", e.target.value)}
-                      placeholder="Manager employee ID"
-                    />
-                    {employee.reportingManager && (
-                      <p className="text-xs text-slate-400 mt-1">
-                        Current: {employee.reportingManager.firstName} {employee.reportingManager.lastName}
-                      </p>
-                    )}
+                    >
+                      <option value="">— None —</option>
+                      {employeesData?.data
+                        .filter((e) => e.id !== id)
+                        .map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.firstName} {e.lastName}{e.jobTitle ? ` (${e.jobTitle})` : ""}
+                          </option>
+                        ))}
+                    </select>
                   </Field>
                   <Field label="HR Record Owner">
-                    <input
-                      className={inputCls}
+                    <select
+                      className={selectCls}
                       value={form.hrRecordOwnerId ?? ""}
                       onChange={(e) => set("hrRecordOwnerId", e.target.value)}
-                      placeholder="HR employee ID"
-                    />
-                    {employee.hrRecordOwner && (
-                      <p className="text-xs text-slate-400 mt-1">
-                        Current: {employee.hrRecordOwner.firstName} {employee.hrRecordOwner.lastName}
-                      </p>
-                    )}
+                    >
+                      <option value="">— None —</option>
+                      {employeesData?.data
+                        .filter((e) => e.id !== id)
+                        .map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.firstName} {e.lastName}{e.jobTitle ? ` (${e.jobTitle})` : ""}
+                          </option>
+                        ))}
+                    </select>
                   </Field>
                 </div>
               </div>

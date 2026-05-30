@@ -1,0 +1,246 @@
+flowchart TD
+    %% ─────────────────────────────────────────────
+    %%  ENTRY
+    %% ─────────────────────────────────────────────
+    START([User Opens App]) --> SESSION{Valid session?}
+    SESSION -->|Yes - access token fresh| DASH
+    SESSION -->|Token expired| REFRESH[Auto Refresh via httpOnly cookie]
+    REFRESH -->|OK| DASH
+    REFRESH -->|Failed / no cookie| LOGIN
+    SESSION -->|No session| LOGIN
+
+    %% ─────────────────────────────────────────────
+    %%  AUTH
+    %% ─────────────────────────────────────────────
+    subgraph AUTH ["Authentication"]
+        direction TB
+        LOGIN[Login Page - phone or email + password]
+
+        LOGIN --> FIRST{First-time user?}
+        FIRST -->|Yes| FT_VERIFY[POST /auth/verify-first-time]
+        FT_VERIFY --> FT_PASS[POST /auth/create-password]
+        FT_PASS --> FT_LOGIN[Login with new credentials]
+        FT_LOGIN --> MULTI
+
+        FIRST -->|No| DO_LOGIN[POST /auth/login]
+        DO_LOGIN --> MULTI{Multiple orgs?}
+
+        MULTI -->|Yes| SEL_ORG[POST /auth/select-org - pick organization]
+        SEL_ORG --> ISSUE_TOKEN
+
+        MULTI -->|No| ISSUE_TOKEN[Issue JWT access token + httpOnly refresh cookie 30-day expiry]
+    end
+
+    ISSUE_TOKEN --> DASH
+
+    %% ─────────────────────────────────────────────
+    %%  DASHBOARD
+    %% ─────────────────────────────────────────────
+    subgraph DASHBOARD ["Dashboard - GET /auth/my-org"]
+        direction TB
+        DASH[Dashboard - loads org modules + user role]
+
+        DASH --> MOD_CARDS[Active Module Cards - SIMS EMS Calendar Leave]
+        DASH --> UPCOMING[Upcoming widget - Visits preview + Leave balances]
+
+        DASH --> ROLE{User Role}
+        ROLE -->|SUPER_ADMIN| ACCESS_SA[All Modules + Admin Console + Settings]
+        ROLE -->|ADMIN| ACCESS_A[All Modules + Settings]
+        ROLE -->|MANAGEMENT| ACCESS_M[Operations + Reports + Calendar + Leave + SIMS]
+        ROLE -->|HR| ACCESS_HR[HR + EMS + Calendar + Leave + SIMS]
+        ROLE -->|HOD| ACCESS_HOD[Operations + Calendar + Leave + SIMS]
+        ROLE -->|EMPLOYEE| ACCESS_EMP[Calendar + Leave + SIMS]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  SIMS
+    %% ─────────────────────────────────────────────
+    subgraph SIMS ["SIMS - Suggestions and Ideas Management - module gate: SIMS"]
+        direction TB
+        SIMS_HOME[SIMS Dashboard - org-wide summary + analytics]
+
+        SIMS_HOME --> SIMS_MY[My Submissions - GET /sims/me]
+        SIMS_HOME --> SIMS_NEW[New Suggestion - POST /sims]
+        SIMS_HOME --> SIMS_QUEUE[HOD Review Queue - GET /sims/queue]
+        SIMS_HOME --> SIMS_ALL[All Suggestions - Admin/Management - GET /sims]
+        SIMS_HOME --> SIMS_ANA[Analytics Page - counts by status and category]
+
+        SIMS_NEW --> ANON{Anonymous?}
+        ANON -->|Yes| SUBMIT_A[Submit without name]
+        ANON -->|No| SUBMIT_N[Submit with name]
+        SUBMIT_A & SUBMIT_N --> PENDING_S[Status: UNDER_REVIEW]
+
+        PENDING_S --> SIMS_QUEUE
+        SIMS_QUEUE --> HOD_DEC{HOD Decision - PATCH /sims/:id/review}
+        HOD_DEC -->|Approve| S_APPROVED[APPROVED_FOR_IMPLEMENTATION]
+        HOD_DEC -->|Reject| S_REJECTED[REJECTED]
+        HOD_DEC -->|Hold| S_HOLD[ON_HOLD]
+        HOD_DEC -->|Escalate| S_SGA[SELECTED_FOR_SGA]
+
+        S_APPROVED --> IMPL[Update Implementation - PATCH /sims/:id/implementation]
+        IMPL --> IMPL_STATUS[WIP to Good Progress to Implemented]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  EMS
+    %% ─────────────────────────────────────────────
+    subgraph EMS ["EMS - Employee Master Data - module gate: EMS"]
+        direction TB
+        EMS_DASH[EMS Dashboard - completeness scores overview]
+
+        EMS_DASH --> EMS_LIST[Employee List - GET /ems/employees - search filter pagination]
+        EMS_DASH --> EMS_MY[My Profile - GET /ems/my-profile - non-HR roles]
+
+        EMS_LIST --> EMS_PROF[Employee Profile - GET /ems/employees/:id]
+
+        EMS_PROF --> EMS_ID[Identity - name gender DOB national ID nationality]
+        EMS_PROF --> EMS_WORK[Work Allocation - job title department shift work station reporting manager]
+        EMS_PROF --> EMS_ROLE_SEC[Role and Responsibility - job description level grade category]
+        EMS_PROF --> EMS_CONTACT[Contact Info - phone WhatsApp home address emergency contact]
+        EMS_PROF --> EMS_SKILLS[Skills and Training - skill level L1-L4 training needed flag]
+
+        EMS_ID & EMS_WORK & EMS_ROLE_SEC & EMS_CONTACT & EMS_SKILLS --> EMS_SAVE[PATCH /ems/employees/:id - save section]
+        EMS_SAVE --> EMS_SCORE[Completeness score recalculated]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  CALENDAR
+    %% ─────────────────────────────────────────────
+    subgraph CAL ["Calendar - Consultancy Visits - module gate: CALENDAR"]
+        direction TB
+        CAL_VIEW[Calendar View - month grid with visit dots]
+
+        CAL_VIEW --> CAL_VISITS[Visit List - GET /calendar/visits]
+        CAL_VIEW --> CAL_CREATE[Create Visit - POST /calendar/visits - SUPER_ADMIN only]
+        CAL_VIEW --> CAL_REQUEST[Request a Visit Date - POST /calendar/visit-requests]
+        CAL_VIEW --> CAL_BLOCKS[Calendar Blocks - Holidays / Busy Days]
+
+        CAL_CREATE --> CAL_RECUR{Recurring?}
+        CAL_RECUR -->|Yes| CAL_RECUR_SET[Set Pattern - Weekly Biweekly Monthly + end date]
+        CAL_RECUR -->|No| CAL_ATTENDEES
+        CAL_RECUR_SET --> CAL_ATTENDEES[Add Attendees - employees + roles]
+        CAL_ATTENDEES --> CAL_TENT[Status: TENTATIVE]
+
+        CAL_TENT -->|Confirm| CAL_CONF[CONFIRMED]
+        CAL_CONF -->|Mark done| CAL_COMP[COMPLETED with completion note]
+        CAL_CONF -->|Cancel| CAL_CANC[CANCELLED]
+        CAL_TENT -->|Cancel| CAL_CANC
+
+        CAL_REQUEST --> CAL_REQ_Q[Pending Requests Queue]
+        CAL_REQ_Q --> CAL_REQ_DEC{Admin Response - PATCH /calendar/visit-requests/:id}
+        CAL_REQ_DEC -->|Approve| CAL_CONF
+        CAL_REQ_DEC -->|Reject| CAL_CANC
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  LEAVE
+    %% ─────────────────────────────────────────────
+    subgraph LEAVE ["Leave Management - module gate: LEAVE"]
+        direction TB
+        LEAVE_DASH[Leave Dashboard - my requests + balance bars]
+
+        LEAVE_DASH --> LEAVE_APPLY[Apply for Leave - /leave/apply]
+        LEAVE_DASH --> LEAVE_LIST[My Requests - GET /leave/requests]
+        LEAVE_DASH --> LEAVE_MANAGE[Manage Queue - /leave/manage - HR / HOD / Admin]
+        LEAVE_DASH --> LEAVE_BALANCE[HR: Set Allocations - POST /leave/balance/:employeeId]
+
+        LEAVE_APPLY --> L_FORM[Select Type - Annual Sick Maternity Paternity Compassionate Unpaid Study]
+        L_FORM --> L_DATES[Pick Start and End Date - days auto-calculated]
+        L_DATES --> L_CHECK{Balance check - allocated minus used}
+        L_CHECK -->|Sufficient| L_SUBMIT[POST /leave/requests - Status: PENDING]
+        L_CHECK -->|Insufficient| L_WARN[Warning shown]
+
+        L_SUBMIT --> LEAVE_MANAGE
+        LEAVE_MANAGE --> L_REVIEW{HR/HOD Decision - PATCH /leave/requests/:id/review}
+        L_REVIEW -->|Approve| L_APPROVED[APPROVED - used balance incremented]
+        L_REVIEW -->|Reject| L_REJECTED[REJECTED with note]
+
+        LEAVE_LIST --> L_CANCEL[Cancel Request - only if PENDING]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  HR
+    %% ─────────────────────────────────────────────
+    subgraph HR ["HR Module - roles: SUPER_ADMIN ADMIN HR"]
+        direction TB
+        HR_HOME[HR Overview - headcount dept breakdown]
+        HR_HOME --> HR_EMP[Employee Management - onboard / offboard]
+        HR_HOME --> HR_REPORTS[HR Reports - /hr/reports]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  OPERATIONS
+    %% ─────────────────────────────────────────────
+    subgraph OPS ["Operations - roles: SUPER_ADMIN ADMIN MANAGEMENT HOD"]
+        direction TB
+        OPS_HOME[Operations Overview]
+        OPS_HOME --> OPS_DEPT[Department Roster]
+        OPS_HOME --> OPS_COMM[Steering Committees - /operations/committees]
+        OPS_COMM --> OPS_COMM_TYPE[Types: Quality Cost Delivery Safety Morale Technology]
+        OPS_COMM --> OPS_MEMBERS[Manage Members - add employees + assign roles]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  ADMIN CONSOLE
+    %% ─────────────────────────────────────────────
+    subgraph ADMIN ["Admin Console - role: SUPER_ADMIN only"]
+        direction TB
+        ADM_HOME[Admin Console - /admin]
+        ADM_HOME --> ADM_ORGS[Organizations List - /admin/organizations]
+        ADM_ORGS --> ADM_ORG_D[Org Detail - /admin/organizations/:id]
+        ADM_ORG_D --> ADM_STATUS[Set Status - ACTIVE SUSPENDED INACTIVE]
+        ADM_ORG_D --> ADM_MODS[Toggle Modules - SIMS EMS Calendar Leave]
+        ADM_HOME --> ADM_SETTINGS[Platform Settings - /admin/settings]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  SETTINGS
+    %% ─────────────────────────────────────────────
+    subgraph SETTINGS ["Settings - roles: SUPER_ADMIN ADMIN"]
+        direction TB
+        SET_HOME[Settings - /settings]
+        SET_HOME --> SET_MEMBERS[Members - /settings/members - invite manage roles]
+        SET_HOME --> SET_NOTIF[Notifications - /settings/notifications]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  API GUARD PIPELINE
+    %% ─────────────────────────────────────────────
+    subgraph GUARDS ["API Guard Pipeline - every protected route"]
+        direction LR
+        G1[JwtAuthGuard - verify Bearer token] --> G2[RolesGuard - check roleLevel] --> G3[ModuleGuard - check org has module]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  NOTIFICATIONS
+    %% ─────────────────────────────────────────────
+    subgraph NOTIF ["Notifications - in-app"]
+        direction LR
+        N1[SIMS status change - notify submitter]
+        N2[Leave reviewed - notify employee]
+        N3[Visit confirmed - notify attendees]
+        N4[SIMS reminder - scheduled service]
+    end
+
+    %% ─────────────────────────────────────────────
+    %%  LOGOUT
+    %% ─────────────────────────────────────────────
+    DASH --> LOGOUT[Log Out - POST /auth/logout - clear cookie + revoke token]
+    LOGOUT --> LOGIN
+
+    %% ─────────────────────────────────────────────
+    %%  NAVIGATION CONNECTIONS
+    %% ─────────────────────────────────────────────
+    ACCESS_SA --> SIMS_HOME & EMS_DASH & CAL_VIEW & LEAVE_DASH & HR_HOME & OPS_HOME & ADM_HOME & SET_HOME
+    ACCESS_A  --> SIMS_HOME & EMS_DASH & CAL_VIEW & LEAVE_DASH & HR_HOME & OPS_HOME & SET_HOME
+    ACCESS_M  --> SIMS_HOME & CAL_VIEW & LEAVE_DASH & OPS_HOME
+    ACCESS_HR --> SIMS_HOME & EMS_DASH & CAL_VIEW & LEAVE_DASH & HR_HOME
+    ACCESS_HOD --> SIMS_HOME & CAL_VIEW & LEAVE_DASH & OPS_HOME
+    ACCESS_EMP --> SIMS_HOME & CAL_VIEW & LEAVE_DASH
+
+    %% guard + notification side-effects
+    DASH -.->|every API call| G1
+    HOD_DEC -.->|notify| N1
+    L_REVIEW -.->|notify| N2
+    CAL_CONF -.->|notify| N3
+    PENDING_S -.->|scheduled reminder| N4

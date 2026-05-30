@@ -36,10 +36,20 @@ const EMPTY_VALUES = new Set(['', 'no information available', 'not applicable', 
 export class EmployeeService {
     constructor (private prisma: PrismaService) {}
 
+    private normalizePhoneForStorage(raw: string | undefined): string | undefined {
+        if (!raw) return undefined;
+        const digits = raw.replace(/\D/g, '');
+        if (digits.startsWith('0')) return '254' + digits.slice(1);
+        return digits;
+    }
+
     async onboardEmployee(data: any, organizationId: string) {
+        const email = String(data.email ?? '').trim().toLowerCase();
+        const phone = this.normalizePhoneForStorage(data.phone);
+
         // Reject if this email or phone already belongs to an employee in THIS org
-        const orConditions: any[] = [{ email: data.email, organizationId }];
-        if (data.phone) orConditions.push({ phone: data.phone, organizationId });
+        const orConditions: any[] = [{ email, organizationId }];
+        if (phone) orConditions.push({ phone, organizationId });
 
         const existingInOrg = await this.prisma.employee.findFirst({
             where: { OR: orConditions },
@@ -47,8 +57,8 @@ export class EmployeeService {
         if (existingInOrg) throw new BadRequestException('An employee with this email or phone already exists in this organization');
 
         // Check if a user account already exists (in any org) by email or phone
-        const userConditions: any[] = [{ email: data.email }];
-        if (data.phone) userConditions.push({ phone: data.phone });
+        const userConditions: any[] = [{ email }];
+        if (phone) userConditions.push({ phone });
 
         const existingUser = await this.prisma.user.findFirst({
             where: { OR: userConditions },
@@ -73,8 +83,8 @@ export class EmployeeService {
                 // Brand-new user
                 const newUser = await tx.user.create({
                     data: {
-                        email: data.email,
-                        phone: data.phone ?? `no-phone-${Date.now()}`,
+                        email,
+                        phone: phone ?? `no-phone-${Date.now()}`,
                         name: `${data.firstName} ${data.lastName}`,
                     },
                 });
@@ -89,8 +99,8 @@ export class EmployeeService {
                 data: {
                     firstName: data.firstName,
                     lastName: data.lastName,
-                    email: data.email,
-                    phone: data.phone ?? null,
+                    email,
+                    phone: phone ?? null,
                     departmentId: data.departmentId ?? null,
                     organizationId,
                     userId,

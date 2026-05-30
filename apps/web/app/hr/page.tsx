@@ -102,7 +102,7 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
         setSubmitting(true);
         try {
             await EmployeeService.onboard(
-                { firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: `+254${phone.trim()}`, departmentId: deptId || undefined, roleId },
+                { firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim().toLowerCase(), phone: `254${phone.trim()}`, departmentId: deptId || undefined, roleId },
                 accessToken,
             );
             const fullName = `${firstName.trim()} ${lastName.trim()}`;

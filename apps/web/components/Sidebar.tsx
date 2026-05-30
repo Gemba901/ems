@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronRight,
+  Palmtree,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -88,6 +89,14 @@ const NAV_ITEMS = [
     icon: CalendarDays,
     exact: false,
     module: "CALENDAR",
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+  },
+  {
+    name: "Leave",
+    href: "/leave",
+    icon: Palmtree,
+    exact: false,
+    module: "LEAVE",
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
   },
   {

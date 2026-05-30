@@ -24,6 +24,7 @@ import {
   UserCircle,
   Clock,
   Loader2,
+  Palmtree,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -32,10 +33,11 @@ import DashboardHero from "@/components/DashboardHero";
 import DashboardRoleSection from "@/components/DashboardRoleSection";
 import { Role } from "@/types/role";
 import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
+import { LeaveService, LEAVE_TYPE_LABELS } from "@/services/leave.service";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -99,6 +101,22 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
       { label: "View Calendar", href: "/calendar", icon: CalendarDays },
     ],
   },
+  LEAVE: {
+    key: "LEAVE",
+    label: "Leave",
+    tagline: "Leave Management",
+    description: "Apply for leave, track your requests, and manage approvals — all in one place.",
+    icon: Palmtree,
+    color: "text-green-600",
+    bg: "bg-green-50",
+    ring: "ring-green-200",
+    href: "/leave",
+    actions: [
+      { label: "Apply for leave",    href: "/leave/apply",  icon: FileEdit   },
+      { label: "My requests",        href: "/leave",        icon: ListChecks },
+      { label: "Manage requests",    href: "/leave/manage", icon: Inbox,     roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD] },
+    ],
+  },
 };
 
 // ── Upcoming Visits Widget ────────────────────────────────────────────────────
@@ -149,13 +167,54 @@ function UpcomingVisitsWidget({ token }: { token: string }) {
   );
 }
 
+// ── Leave Balance Widget ──────────────────────────────────────────────────────
+
+function LeaveBalanceWidget({ token }: { token: string }) {
+  const { data: balances, isLoading } = useQuery({
+    queryKey: ["leave-balance-widget"],
+    queryFn: () => LeaveService.getMyBalance(token),
+    enabled: !!token,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-slate-400 py-3">
+        <Loader2 className="h-3 w-3 animate-spin" /> Loading balances…
+      </div>
+    );
+  }
+
+  if (!balances || balances.length === 0) {
+    return <p className="text-xs text-slate-400 py-2">No leave balances set. Contact HR.</p>;
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Leave Balance</p>
+      {balances.slice(0, 3).map((b) => {
+        const remaining = b.allocated - b.used;
+        const pct = b.allocated > 0 ? Math.min((b.used / b.allocated) * 100, 100) : 0;
+        return (
+          <div key={b.id} className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-500 w-20 truncate shrink-0">{LEAVE_TYPE_LABELS[b.type]}</span>
+            <div className="flex-1 h-1.5 rounded-full bg-slate-100">
+              <div className="h-1.5 rounded-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-[10px] font-semibold text-slate-600 shrink-0 w-10 text-right">{remaining}d left</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Upcoming modules list ─────────────────────────────────────────────────────
 
 const UPCOMING_MODULES: Omit<ModuleConfig, "key" | "href" | "actions">[] = [
   {
     label: "Time & Attendance",
-    tagline: "Shifts & Leave",
-    description: "Log working hours, manage shift rosters, request leave, and get visibility into your attendance history.",
+    tagline: "Shifts & Timesheets",
+    description: "Log working hours, manage shift rosters, and get visibility into your attendance history.",
     icon: CalendarClock,
     color: "text-blue-600",
     bg: "bg-blue-50",
@@ -327,6 +386,11 @@ export default function DashboardPage() {
                 {mod.key === "CALENDAR" && accessToken && (
                   <div onClick={(e) => e.stopPropagation()}>
                     <UpcomingVisitsWidget token={accessToken} />
+                  </div>
+                )}
+                {mod.key === "LEAVE" && accessToken && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <LeaveBalanceWidget token={accessToken} />
                   </div>
                 )}
               </div>

@@ -33,6 +33,7 @@ enum ModuleType {
   SIMS
   EMS
   CALENDAR
+  LEAVE
 }
 
 enum CommitteeType {
@@ -117,6 +118,7 @@ model Organization {
   committees  SteeringCommittee[]
   consultancyVisits ConsultancyVisit[]
   visitRequests     VisitRequest[]
+  leaveRequests     LeaveRequest[]
 }
 
 //specific user
@@ -133,6 +135,7 @@ model User {
   visitRequests     VisitRequest[]
   calendarBlocks    CalendarBlock[]
   refreshTokens     RefreshToken[]
+  reviewedLeaves    LeaveRequest[]    @relation("LeaveReviewer")
 
   createdAt         DateTime @default(now())
 }
@@ -257,6 +260,8 @@ model Employee {
   committeeMembers  SteeringCommitteeMember[]
   notifications     Notification[]
   visitAttendances  VisitAttendee[]
+  leaveRequests     LeaveRequest[]
+  leaveBalances     LeaveBalance[]
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -494,5 +499,63 @@ model CalendarBlock {
   createdAt   DateTime          @default(now())
 
   createdBy   User              @relation(fields: [createdById], references: [id])
+}
+
+// ── Leave Management ──────────────────────────────────────────────────────────
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  MATERNITY
+  PATERNITY
+  COMPASSIONATE
+  STUDY
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model LeaveRequest {
+  id             String      @id @default(uuid())
+  employeeId     String
+  organizationId String
+  type           LeaveType
+  status         LeaveStatus @default(PENDING)
+  startDate      DateTime
+  endDate        DateTime
+  days           Int
+  reason         String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id])
+  reviewedBy   User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, status])
+  @@index([organizationId, status])
+  @@index([organizationId, startDate])
+}
+
+model LeaveBalance {
+  id          String    @id @default(uuid())
+  employeeId  String
+  year        Int
+  type        LeaveType
+  allocated   Int       @default(0)
+  used        Int       @default(0)
+
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year, type])
+  @@index([employeeId, year])
 }
    

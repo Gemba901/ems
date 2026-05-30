@@ -17,6 +17,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { ChatModule } from './chat/chat.module';
 import { EmsModule } from './ems/ems.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { LeaveModule } from './leave/leave.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { CalendarModule } from './calendar/calendar.module';
     ChatModule,
     EmsModule,
     CalendarModule,
+    LeaveModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -207,8 +207,14 @@ export class AuthService {
     }
 
     async verifyFirstTimeUser(phoneOrEmail: string) {
+        const isEmail = phoneOrEmail.includes('@');
+        const normalized = isEmail
+            ? phoneOrEmail.trim().toLowerCase()
+            : phoneOrEmail.replace(/\D/g, '');
         const user = await this.prisma.user.findFirst({
-            where: { OR: [{ email: phoneOrEmail }, { phone: phoneOrEmail }] },
+            where: isEmail
+                ? { email: normalized }
+                : { phone: normalized },
             include: {
                 organizations: { include: { organization: true } },
             },

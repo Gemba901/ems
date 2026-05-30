@@ -5,12 +5,16 @@ import { EmsService } from './ems.service';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { ModuleGuard } from 'src/auth/guards/module.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { RequiresModule } from 'src/auth/decorators/module.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
+import { ModuleType } from 'db';
 
 @Controller('ems')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@RequiresModule(ModuleType.EMS)
 export class EmsController {
   constructor(private ems: EmsService) {}
 

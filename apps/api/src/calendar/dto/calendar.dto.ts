@@ -1,6 +1,8 @@
 import {
   IsString, IsNotEmpty, IsOptional, IsEnum, IsDateString,
+  IsInt, Min, Max, IsBoolean,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum CalendarBlockTypeDto {
   HOLIDAY = 'HOLIDAY',
@@ -31,6 +33,12 @@ export enum VisitRequestStatusDto {
   REJECTED = 'REJECTED',
 }
 
+export enum RecurrencePatternDto {
+  WEEKLY   = 'WEEKLY',
+  BIWEEKLY = 'BIWEEKLY',
+  MONTHLY  = 'MONTHLY',
+}
+
 export class CreateVisitDto {
   @IsString() @IsNotEmpty()
   title!: string;
@@ -40,6 +48,9 @@ export class CreateVisitDto {
 
   @IsDateString()
   date!: string;
+
+  @IsDateString() @IsOptional()
+  endDate?: string;
 
   @IsString() @IsOptional()
   startTime?: string;
@@ -55,6 +66,15 @@ export class CreateVisitDto {
 
   @IsString() @IsOptional()
   internalNotes?: string;
+
+  @IsString() @IsOptional()
+  completionNote?: string;
+
+  @IsEnum(RecurrencePatternDto) @IsOptional()
+  recurrencePattern?: RecurrencePatternDto;
+
+  @IsDateString() @IsOptional()
+  recurrenceEndDate?: string;
 }
 
 export class UpdateVisitDto {
@@ -67,6 +87,9 @@ export class UpdateVisitDto {
   @IsDateString() @IsOptional()
   date?: string;
 
+  @IsDateString() @IsOptional()
+  endDate?: string;
+
   @IsString() @IsOptional()
   startTime?: string;
 
@@ -81,6 +104,9 @@ export class UpdateVisitDto {
 
   @IsString() @IsOptional()
   internalNotes?: string;
+
+  @IsString() @IsOptional()
+  completionNote?: string;
 }
 
 export class CreateVisitRequestDto {
@@ -100,4 +126,30 @@ export class RespondToRequestDto {
 
   @IsString() @IsOptional()
   responseNote?: string;
+}
+
+export class AddVisitAttendeeDto {
+  @IsString() @IsNotEmpty()
+  employeeId!: string;
+
+  @IsString() @IsOptional()
+  role?: string;
+}
+
+export class UpcomingVisitsQueryDto {
+  @IsOptional() @IsInt() @Min(1) @Max(20) @Type(() => Number)
+  limit?: number;
+}
+
+export class AnalyticsQueryDto {
+  @IsOptional() @IsInt() @Min(2020) @Max(2100) @Type(() => Number)
+  year?: number;
+}
+
+export class IcalQueryDto {
+  @IsOptional() @IsInt() @Min(2020) @Max(2100) @Type(() => Number)
+  year?: number;
+
+  @IsOptional() @IsInt() @Min(1) @Max(12) @Type(() => Number)
+  month?: number;
 }

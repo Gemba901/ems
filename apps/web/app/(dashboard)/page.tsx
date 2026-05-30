@@ -22,6 +22,8 @@ import {
   ClipboardList,
   CalendarDays,
   UserCircle,
+  Clock,
+  Loader2,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -29,6 +31,7 @@ import { useQuery } from "@tanstack/react-query";
 import DashboardHero from "@/components/DashboardHero";
 import DashboardRoleSection from "@/components/DashboardRoleSection";
 import { Role } from "@/types/role";
+import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
 
 // Module registry
 
@@ -98,7 +101,55 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
   },
 };
 
-// Upcoming
+// ── Upcoming Visits Widget ────────────────────────────────────────────────────
+
+function UpcomingVisitsWidget({ token }: { token: string }) {
+  const { data: visits, isLoading } = useQuery({
+    queryKey: ["calendar-upcoming-widget"],
+    queryFn: () => CalendarService.getUpcomingVisits(token, 5),
+    enabled: !!token,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-slate-400 py-3">
+        <Loader2 className="h-3 w-3 animate-spin" /> Loading upcoming visits…
+      </div>
+    );
+  }
+
+  if (!visits || visits.length === 0) {
+    return (
+      <p className="text-xs text-slate-400 py-2">No upcoming visits scheduled.</p>
+    );
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Upcoming Visits</p>
+      {visits.map((v) => (
+        <Link
+          key={v.id}
+          href="/calendar"
+          className="flex items-center gap-2.5 rounded-lg hover:bg-slate-50 px-2 py-1.5 transition-colors -mx-2"
+        >
+          <span className={`h-2 w-2 rounded-full shrink-0 ${VISIT_DOT_COLOR[v.status]}`} />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-slate-700 truncate">{v.clientOrgName}</p>
+            <p className="text-[10px] text-slate-400">{v.date}</p>
+          </div>
+          {v.startTime && (
+            <span className="flex items-center gap-1 text-[10px] text-slate-400 shrink-0">
+              <Clock className="h-2.5 w-2.5" />{v.startTime}
+            </span>
+          )}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// ── Upcoming modules list ─────────────────────────────────────────────────────
 
 const UPCOMING_MODULES: Omit<ModuleConfig, "key" | "href" | "actions">[] = [
   {
@@ -270,6 +321,12 @@ export default function DashboardPage() {
                           <ChevronRight className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                         </Link>
                       ))}
+                  </div>
+                )}
+
+                {mod.key === "CALENDAR" && accessToken && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <UpcomingVisitsWidget token={accessToken} />
                   </div>
                 )}
               </div>

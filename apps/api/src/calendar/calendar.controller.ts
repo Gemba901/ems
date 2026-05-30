@@ -1,10 +1,13 @@
 import {
-  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query,
+  UseGuards, Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CalendarService } from './calendar.service';
 import {
   CreateVisitDto, UpdateVisitDto, CreateVisitRequestDto, RespondToRequestDto,
-  CreateCalendarBlockDto,
+  CreateCalendarBlockDto, AddVisitAttendeeDto,
+  UpcomingVisitsQueryDto, AnalyticsQueryDto, IcalQueryDto,
 } from './dto/calendar.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -17,7 +20,8 @@ import { Role } from 'src/common/enum/role.enum';
 export class CalendarController {
   constructor(private calendar: CalendarService) {}
 
-  /** GET /calendar/visits?year=2026&month=5[&clientOrgId=x] — privacy-aware month view */
+  // ── Month visits ─────────────────────────────────────────────────────────
+
   @Get('visits')
   async getMonthVisits(
     @Query('year') year: string,
@@ -30,7 +34,8 @@ export class CalendarController {
     return this.calendar.getMonthVisits(y, m, user.organizationId, user.roleLevel, clientOrgId);
   }
 
-  /** POST /calendar/visits — SUPER_ADMIN creates a visit */
+  // ── CRUD visits ──────────────────────────────────────────────────────────
+
   @Post('visits')
   @Roles(Role.SUPER_ADMIN)
   async createVisit(
@@ -40,21 +45,40 @@ export class CalendarController {
     return this.calendar.createVisit(dto, user.userId);
   }
 
-  /** PATCH /calendar/visits/:id — SUPER_ADMIN updates */
   @Patch('visits/:id')
   @Roles(Role.SUPER_ADMIN)
   async updateVisit(@Param('id') id: string, @Body() dto: UpdateVisitDto) {
     return this.calendar.updateVisit(id, dto);
   }
 
-  /** DELETE /calendar/visits/:id — SUPER_ADMIN deletes */
   @Delete('visits/:id')
   @Roles(Role.SUPER_ADMIN)
   async deleteVisit(@Param('id') id: string) {
     return this.calendar.deleteVisit(id);
   }
 
-  /** GET /calendar/requests — all (admin) or own org (client) */
+  // ── Attendees ────────────────────────────────────────────────────────────
+
+  @Post('visits/:id/attendees')
+  @Roles(Role.SUPER_ADMIN)
+  async addAttendee(
+    @Param('id') visitId: string,
+    @Body() dto: AddVisitAttendeeDto,
+  ) {
+    return this.calendar.addAttendee(visitId, dto);
+  }
+
+  @Delete('visits/:id/attendees/:employeeId')
+  @Roles(Role.SUPER_ADMIN)
+  async removeAttendee(
+    @Param('id') visitId: string,
+    @Param('employeeId') employeeId: string,
+  ) {
+    return this.calendar.removeAttendee(visitId, employeeId);
+  }
+
+  // ── Visit requests ───────────────────────────────────────────────────────
+
   @Get('requests')
   async getRequests(
     @CurrentUser() user: { organizationId: string; roleLevel: string },
@@ -62,7 +86,6 @@ export class CalendarController {
     return this.calendar.getRequests(user.organizationId, user.roleLevel);
   }
 
-  /** POST /calendar/requests — any user submits a visit request */
   @Post('requests')
   async createRequest(
     @Body() dto: CreateVisitRequestDto,
@@ -71,7 +94,6 @@ export class CalendarController {
     return this.calendar.createRequest(dto, user.organizationId, user.userId);
   }
 
-  /** PATCH /calendar/requests/:id/respond — SUPER_ADMIN approves/rejects */
   @Patch('requests/:id/respond')
   @Roles(Role.SUPER_ADMIN)
   async respondToRequest(
@@ -81,20 +103,67 @@ export class CalendarController {
     return this.calendar.respondToRequest(id, dto);
   }
 
-  /** GET /calendar/organizations — SUPER_ADMIN: list client orgs for the create form */
+  // ── Upcoming visits widget ───────────────────────────────────────────────
+
+  @Get('upcoming')
+  async getUpcoming(
+    @Query() query: UpcomingVisitsQueryDto,
+    @CurrentUser() user: { organizationId: string; roleLevel: string },
+  ) {
+    return this.calendar.getUpcomingVisits(user.organizationId, user.roleLevel, query.limit ?? 5);
+  }
+
+  // ── iCal export ──────────────────────────────────────────────────────────
+
+  @Get('export/ical')
+  async exportIcal(
+    @Query() query: IcalQueryDto,
+    @CurrentUser() user: { organizationId: string; roleLevel: string },
+    @Res() res: Response,
+  ) {
+    const year  = query.year  ?? new Date().getFullYear();
+    const month = query.month;
+    const ical  = await this.calendar.getIcalExport(year, month, user.organizationId, user.roleLevel);
+    const filename = month
+      ? `visits-${year}-${String(month).padStart(2, '0')}.ics`
+      : `visits-${year}.ics`;
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(ical);
+  }
+
+  // ── Analytics ────────────────────────────────────────────────────────────
+
+  @Get('analytics')
+  async getAnalytics(
+    @Query() query: AnalyticsQueryDto,
+    @CurrentUser() user: { organizationId: string; roleLevel: string },
+  ) {
+    const year = query.year ?? new Date().getFullYear();
+    return this.calendar.getAnalytics(year, user.organizationId, user.roleLevel);
+  }
+
+  // ── Orgs / employees ─────────────────────────────────────────────────────
+
   @Get('organizations')
   @Roles(Role.SUPER_ADMIN)
   async getOrganizations() {
     return this.calendar.getClientOrganizations();
   }
 
-  /** GET /calendar/admin-org — all authenticated users: returns the platform company or null */
+  @Get('organizations/:orgId/employees')
+  @Roles(Role.SUPER_ADMIN)
+  async getOrgEmployees(@Param('orgId') orgId: string) {
+    return this.calendar.getOrgEmployees(orgId);
+  }
+
   @Get('admin-org')
   async getAdminOrg() {
     return this.calendar.getAdminOrg();
   }
 
-  /** POST /calendar/blocks — SUPER_ADMIN marks a day as holiday or busy */
+  // ── Calendar blocks ──────────────────────────────────────────────────────
+
   @Post('blocks')
   @Roles(Role.SUPER_ADMIN)
   async createBlock(
@@ -104,7 +173,6 @@ export class CalendarController {
     return this.calendar.createBlock(dto, user.userId);
   }
 
-  /** DELETE /calendar/blocks/:id — SUPER_ADMIN removes a block */
   @Delete('blocks/:id')
   @Roles(Role.SUPER_ADMIN)
   async deleteBlock(@Param('id') id: string) {

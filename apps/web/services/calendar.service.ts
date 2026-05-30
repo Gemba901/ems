@@ -18,6 +18,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 export type VisitStatus = "TENTATIVE" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
 export type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type CalendarBlockType = "HOLIDAY" | "BUSY_DAY";
+export type RecurrencePattern = "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 
 export interface CalendarBlock {
   id: string;
@@ -26,20 +27,33 @@ export interface CalendarBlock {
   label: string | null;
 }
 
+export interface VisitAttendee {
+  id: string;
+  employeeId: string;
+  name: string;
+  jobTitle: string | null;
+  avatarUrl: string | null;
+  role: string | null;
+}
+
 export interface CalendarVisit {
   id: string;
   type: "VISIT";
   date: string; // YYYY-MM-DD
+  endDate: string | null;
   startTime: string | null;
   endTime: string | null;
   status: VisitStatus;
   isOwn: boolean;
-  // Only present for own visits or SUPER_ADMIN
   title?: string;
   clientOrgId?: string;
   clientOrgName?: string;
   notes?: string;
   internalNotes?: string;
+  completionNote?: string;
+  recurrencePattern?: RecurrencePattern;
+  recurrenceGroupId?: string;
+  attendees?: VisitAttendee[];
 }
 
 export interface CalendarRequest {
@@ -82,26 +96,77 @@ export interface VisitRequest {
   createdBy: { id: string; name: string };
 }
 
+export interface OrgEmployee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  jobTitle: string | null;
+  avatarUrl: string | null;
+}
+
+export interface UpcomingVisit {
+  id: string;
+  title: string;
+  date: string;
+  endDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  status: VisitStatus;
+  clientOrgName: string;
+  clientOrgId: string;
+}
+
+export interface AnalyticsMonth {
+  month: number;
+  total: number;
+  tentative: number;
+  confirmed: number;
+  completed: number;
+  cancelled: number;
+}
+
+export interface AnalyticsOrgRow {
+  orgId: string;
+  orgName: string;
+  total: number;
+  completed: number;
+}
+
+export interface CalendarAnalytics {
+  year: number;
+  totalVisits: number;
+  completedVisits: number;
+  pendingRequests: number;
+  byMonth: AnalyticsMonth[];
+  byOrg?: AnalyticsOrgRow[];
+}
+
 export interface CreateVisitPayload {
   title: string;
   clientOrgId: string;
   date: string;
+  endDate?: string;
   startTime?: string;
   endTime?: string;
   status?: VisitStatus;
   notes?: string;
   internalNotes?: string;
+  completionNote?: string;
+  recurrencePattern?: RecurrencePattern;
+  recurrenceEndDate?: string;
 }
 
 export interface UpdateVisitPayload {
   title?: string;
   clientOrgId?: string;
   date?: string;
+  endDate?: string;
   startTime?: string;
   endTime?: string;
   status?: VisitStatus;
   notes?: string;
   internalNotes?: string;
+  completionNote?: string;
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -131,6 +196,12 @@ export const REQUEST_STATUS_COLOR: Record<RequestStatus, string> = {
   PENDING:  "bg-amber-100 text-amber-700",
   APPROVED: "bg-emerald-100 text-emerald-700",
   REJECTED: "bg-red-100 text-red-700",
+};
+
+export const RECURRENCE_LABELS: Record<RecurrencePattern, string> = {
+  WEEKLY:   "Weekly",
+  BIWEEKLY: "Every 2 weeks",
+  MONTHLY:  "Monthly",
 };
 
 // ── API calls ─────────────────────────────────────────────────────────────────
@@ -176,6 +247,23 @@ export const CalendarService = {
     await handleResponse(res);
   },
 
+  async addAttendee(visitId: string, data: { employeeId: string; role?: string }, token: string): Promise<VisitAttendee> {
+    const res = await apiClient(`${API_URL}/calendar/visits/${visitId}/attendees`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async removeAttendee(visitId: string, employeeId: string, token: string): Promise<void> {
+    const res = await apiClient(`${API_URL}/calendar/visits/${visitId}/attendees/${employeeId}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }, token);
+    await handleResponse(res);
+  },
+
   async getRequests(token: string): Promise<VisitRequest[]> {
     const res = await apiClient(`${API_URL}/calendar/requests`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
@@ -211,6 +299,13 @@ export const CalendarService = {
     return handleResponse(res);
   },
 
+  async getOrgEmployees(orgId: string, token: string): Promise<OrgEmployee[]> {
+    const res = await apiClient(`${API_URL}/calendar/organizations/${orgId}/employees`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
   async getAdminOrg(token: string): Promise<AdminOrg | null> {
     const res = await apiClient(`${API_URL}/calendar/admin-org`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
@@ -234,5 +329,24 @@ export const CalendarService = {
       headers: authHeaders(token),
     }, token);
     await handleResponse(res);
+  },
+
+  async getUpcomingVisits(token: string, limit = 5): Promise<UpcomingVisit[]> {
+    const res = await apiClient(`${API_URL}/calendar/upcoming?limit=${limit}`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async getAnalytics(year: number, token: string): Promise<CalendarAnalytics> {
+    const res = await apiClient(`${API_URL}/calendar/analytics?year=${year}`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  getIcalUrl(year: number, month?: number): string {
+    const base = `${API_URL}/calendar/export/ical?year=${year}`;
+    return month ? `${base}&month=${month}` : base;
   },
 };

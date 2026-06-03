@@ -1,4 +1,5 @@
-import { IsEnum, IsDateString, IsInt, IsIn, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsDateString, IsInt, IsIn, IsOptional, IsString, Min, ValidateNested, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
 import { LeaveType, LeaveStatus } from 'db';
 
 export class CreateLeaveRequestDto {
@@ -41,6 +42,32 @@ export class LeaveBalanceUpsertDto {
     @IsInt()
     @Min(0)
     year?: number;
+}
+
+export class LeavePolicyEntryDto {
+    @IsEnum(LeaveType)
+    type: LeaveType;
+
+    @IsInt()
+    @Min(0)
+    allocated: number;
+}
+
+export class UpsertLeavePolicyDto {
+    @IsInt()
+    @Min(2020)
+    year: number;
+
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => LeavePolicyEntryDto)
+    entries: LeavePolicyEntryDto[];
+}
+
+export class ApplyLeavePolicyDto {
+    @IsInt()
+    @Min(2020)
+    year: number;
 }
 
 export class LeaveQueryDto {

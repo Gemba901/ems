@@ -224,7 +224,7 @@ export default function EmployeeEmsEditPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6">
 
         {/* Page header */}
         <div className="flex items-center gap-3">

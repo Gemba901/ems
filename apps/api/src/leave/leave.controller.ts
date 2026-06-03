@@ -2,7 +2,7 @@ import {
     Controller, Get, Post, Patch, Body, Param, Query, UseGuards,
 } from '@nestjs/common';
 import { LeaveService } from './leave.service';
-import { CreateLeaveRequestDto, ReviewLeaveRequestDto, LeaveBalanceUpsertDto, LeaveQueryDto } from './dto/leave.dto';
+import { CreateLeaveRequestDto, ReviewLeaveRequestDto, LeaveBalanceUpsertDto, LeaveQueryDto, UpsertLeavePolicyDto, ApplyLeavePolicyDto } from './dto/leave.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
@@ -17,6 +17,36 @@ import { ModuleType } from 'db';
 @RequiresModule(ModuleType.LEAVE)
 export class LeaveController {
     constructor(private leave: LeaveService) {}
+
+    /** GET /leave/policy?year=2026 — get company-wide leave policy for a year */
+    @Get('policy')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+    getPolicy(
+        @CurrentUser() user: { organizationId: string },
+        @Query('year') year?: string,
+    ) {
+        return this.leave.getPolicy(user.organizationId, year ? parseInt(year) : new Date().getFullYear());
+    }
+
+    /** POST /leave/policy — save (upsert) company-wide policy entries */
+    @Post('policy')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+    upsertPolicy(
+        @CurrentUser() user: { organizationId: string },
+        @Body() dto: UpsertLeavePolicyDto,
+    ) {
+        return this.leave.upsertPolicy(user.organizationId, dto);
+    }
+
+    /** POST /leave/policy/apply — push policy allocations to every employee */
+    @Post('policy/apply')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+    applyPolicy(
+        @CurrentUser() user: { organizationId: string },
+        @Body() dto: ApplyLeavePolicyDto,
+    ) {
+        return this.leave.applyPolicy(user.organizationId, dto);
+    }
 
     /** GET /leave/summary — pending/approved/rejected counts (HR/ADMIN/HOD) */
     @Get('summary')

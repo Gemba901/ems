@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { LeaveStatus, LeaveType } from 'db';
-import { CreateLeaveRequestDto, ReviewLeaveRequestDto, LeaveBalanceUpsertDto, LeaveQueryDto } from './dto/leave.dto';
+import { CreateLeaveRequestDto, ReviewLeaveRequestDto, LeaveBalanceUpsertDto, LeaveQueryDto, UpsertLeavePolicyDto, ApplyLeavePolicyDto } from './dto/leave.dto';
 
 @Injectable()
 export class LeaveService {
@@ -170,6 +170,53 @@ export class LeaveService {
             create: { employeeId, year, type: dto.type, allocated: dto.allocated, used: 0 },
             update: { allocated: dto.allocated },
         });
+    }
+
+    async getPolicy(organizationId: string, year: number) {
+        return this.prisma.leavePolicy.findMany({
+            where: { organizationId, year },
+            orderBy: { type: 'asc' },
+        });
+    }
+
+    async upsertPolicy(organizationId: string, dto: UpsertLeavePolicyDto) {
+        return Promise.all(
+            dto.entries.map(({ type, allocated }) =>
+                this.prisma.leavePolicy.upsert({
+                    where: { organizationId_year_type: { organizationId, year: dto.year, type } },
+                    create: { organizationId, year: dto.year, type, allocated },
+                    update: { allocated },
+                }),
+            ),
+        );
+    }
+
+    async applyPolicy(organizationId: string, dto: ApplyLeavePolicyDto) {
+        const policies = await this.prisma.leavePolicy.findMany({
+            where: { organizationId, year: dto.year },
+        });
+        if (policies.length === 0) {
+            throw new BadRequestException(`No leave policy set for ${dto.year}`);
+        }
+
+        const employees = await this.prisma.employee.findMany({
+            where: { organizationId },
+            select: { id: true },
+        });
+
+        await Promise.all(
+            employees.flatMap((emp) =>
+                policies.map((policy) =>
+                    this.prisma.leaveBalance.upsert({
+                        where: { employeeId_year_type: { employeeId: emp.id, year: dto.year, type: policy.type } },
+                        create: { employeeId: emp.id, year: dto.year, type: policy.type, allocated: policy.allocated, used: 0 },
+                        update: { allocated: policy.allocated },
+                    }),
+                ),
+            ),
+        );
+
+        return { applied: employees.length, leaveTypes: policies.length, year: dto.year };
     }
 
     async getSummary(organizationId: string) {

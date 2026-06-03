@@ -63,7 +63,7 @@ export default function MyProfilePage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
 
         <div>
           <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>

@@ -44,6 +44,14 @@ export interface LeaveBalance {
     used: number;
 }
 
+export interface LeavePolicy {
+    id: string;
+    organizationId: string;
+    year: number;
+    type: LeaveType;
+    allocated: number;
+}
+
 export interface LeaveSummary {
     pending: number;
     approved: number;
@@ -70,6 +78,29 @@ export const LEAVE_STATUS_COLORS: Record<LeaveStatus, string> = {
 // ── API calls ─────────────────────────────────────────────────────────────────
 
 export const LeaveService = {
+    async getPolicy(token: string, year: number): Promise<LeavePolicy[]> {
+        const res = await fetch(`${API_URL}/leave/policy?year=${year}`, { headers: authHeaders(token) });
+        return handleResponse(res);
+    },
+
+    async upsertPolicy(token: string, body: { year: number; entries: { type: LeaveType; allocated: number }[] }): Promise<LeavePolicy[]> {
+        const res = await fetch(`${API_URL}/leave/policy`, {
+            method: "POST",
+            headers: authHeaders(token),
+            body: JSON.stringify(body),
+        });
+        return handleResponse(res);
+    },
+
+    async applyPolicy(token: string, year: number): Promise<{ applied: number; leaveTypes: number; year: number }> {
+        const res = await fetch(`${API_URL}/leave/policy/apply`, {
+            method: "POST",
+            headers: authHeaders(token),
+            body: JSON.stringify({ year }),
+        });
+        return handleResponse(res);
+    },
+
     async getSummary(token: string): Promise<LeaveSummary> {
         const res = await fetch(`${API_URL}/leave/summary`, { headers: authHeaders(token) });
         return handleResponse(res);

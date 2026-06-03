@@ -13,7 +13,7 @@ function fmt(d: string) {
 function fmtShort(d: string) {
     return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
-import { Check, X, ArrowLeft, Filter } from "lucide-react";
+import { Check, X, ArrowLeft, Filter, Settings2 } from "lucide-react";
 import Link from "next/link";
 
 const STATUS_FILTERS: { label: string; value: LeaveStatus | "ALL" }[] = [
@@ -104,13 +104,20 @@ export default function ManageLeavePage() {
     });
 
     return (
-        <div className="p-6 max-w-5xl mx-auto">
+        <div className="p-6">
             <Link href="/leave" className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-6 transition-colors">
                 <ArrowLeft className="h-4 w-4" /> Back to Leave
             </Link>
 
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-lg font-bold text-slate-900">Manage Leave Requests</h1>
+                <div className="flex items-center gap-3">
+                <Link
+                    href="/leave/policy"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 border border-slate-200 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                    <Settings2 className="h-3.5 w-3.5" /> Leave Policy
+                </Link>
                 <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1">
                     <Filter className="h-3.5 w-3.5 text-slate-400 ml-2" />
                     {STATUS_FILTERS.map((f) => (
@@ -126,6 +133,7 @@ export default function ManageLeavePage() {
                             {f.label}
                         </button>
                     ))}
+                </div>
                 </div>
             </div>
 

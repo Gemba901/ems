@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, type ElementType } from "react";
+import { type ElementType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import {
-  EmsService, EmsDashboard, EMPLOYMENT_STATUS_LABELS, SKILL_LEVEL_LABELS,
+  EmsService, EMPLOYMENT_STATUS_LABELS, SKILL_LEVEL_LABELS,
   completionBg,
 } from "@/services/ems.service";
 import {
@@ -120,7 +120,7 @@ export default function EmsDashboardPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6">
 
         {loading && (
           <div className="flex items-center gap-2 text-slate-400 text-sm py-16 justify-center">

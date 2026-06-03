@@ -56,7 +56,7 @@ export default function EmsEmployeesPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
-      <div className="max-w-7xl mx-auto space-y-5">
+      <div className="space-y-5">
 
         <div className="flex items-center gap-3">
           <Link href="/ems" className="text-slate-400 hover:text-slate-600 transition-colors">

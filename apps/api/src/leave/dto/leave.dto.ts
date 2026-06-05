@@ -19,6 +19,14 @@ export class CreateLeaveRequestDto {
     @IsOptional()
     @IsString()
     reason?: string;
+
+    @IsOptional()
+    @IsString()
+    handoverEmployeeId?: string;
+
+    @IsOptional()
+    @IsString()
+    handoverNotes?: string;
 }
 
 export class ReviewLeaveRequestDto {

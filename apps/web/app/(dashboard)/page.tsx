@@ -17,7 +17,6 @@ import {
   ChevronRight,
   FileEdit,
   ListChecks,
-  Building2,
   Inbox,
   ClipboardList,
   CalendarDays,
@@ -25,6 +24,11 @@ import {
   Clock,
   Loader2,
   Palmtree,
+  Bell,
+  Megaphone,
+  Info,
+  AlertTriangle,
+  Pin,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -208,6 +212,91 @@ function LeaveBalanceWidget({ token }: { token: string }) {
   );
 }
 
+// ── Reminders & Announcements ────────────────────────────────────────────────
+
+type ReminderType = "ANNOUNCEMENT" | "REMINDER" | "INFO" | "ALERT";
+
+interface Reminder {
+  id: string;
+  type: ReminderType;
+  title: string;
+  body: string;
+  date: string;
+  pinned?: boolean;
+}
+
+// TODO: replace with a real API call when the backend is ready
+const DUMMY_REMINDERS: Reminder[] = [
+  {
+    id: "1",
+    type: "ANNOUNCEMENT",
+    title: "Town Hall — Friday 2 PM",
+    body: "Quarterly town hall covering Q2 performance results, upcoming projects and an open Q&A session. All staff are expected to attend.",
+    date: "6 Jun",
+    pinned: true,
+  },
+  {
+    id: "2",
+    type: "ALERT",
+    title: "Fire Safety Drill — Wednesday 10 AM",
+    body: "Mandatory evacuation drill on Wednesday morning. All staff must assemble at the designated muster point by the car park.",
+    date: "11 Jun",
+  },
+  {
+    id: "3",
+    type: "REMINDER",
+    title: "EMS Profile Completion",
+    body: "Ensure your employee profile is at least 90% complete. Visit HR or update your details through the EMS module.",
+    date: "4 Jun",
+  },
+  {
+    id: "4",
+    type: "INFO",
+    title: "2026 Leave Policy Now Active",
+    body: "Annual leave allocations have been updated and applied to all employees. Check your balance in the Leave module.",
+    date: "1 Jun",
+  },
+];
+
+const REMINDER_ICON: Record<ReminderType, React.ElementType> = {
+  ANNOUNCEMENT: Megaphone,
+  REMINDER:     Bell,
+  INFO:         Info,
+  ALERT:        AlertTriangle,
+};
+
+
+function RemindersStrip() {
+  return (
+    <div className="flex items-center gap-3 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+      <span className="text-xs font-medium text-slate-400 shrink-0">Notices</span>
+
+      <div className="flex items-center gap-2">
+        {DUMMY_REMINDERS.map((r) => {
+          const isAlert = r.type === "ALERT";
+          const Icon    = REMINDER_ICON[r.type];
+
+          return (
+            <div
+              key={r.id}
+              className={`shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs ${
+                isAlert
+                  ? "bg-red-50 border-red-200 text-red-700"
+                  : "bg-white border-slate-200 text-slate-600"
+              }`}
+            >
+              <Icon className={`h-3 w-3 shrink-0 ${isAlert ? "text-red-500" : "text-slate-400"}`} />
+              <span className="font-medium whitespace-nowrap">{r.title}</span>
+              {r.pinned && <Pin className="h-2.5 w-2.5 text-slate-300 shrink-0" />}
+              <span className="text-[10px] text-slate-400 whitespace-nowrap">{r.date}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Upcoming modules list ─────────────────────────────────────────────────────
 
 const UPCOMING_MODULES: Omit<ModuleConfig, "key" | "href" | "actions">[] = [
@@ -314,6 +403,8 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto space-y-10 pb-16">
 
       <DashboardHero />
+
+      <RemindersStrip />
 
       <DashboardRoleSection />
 

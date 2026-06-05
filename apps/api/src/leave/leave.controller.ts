@@ -48,6 +48,22 @@ export class LeaveController {
         return this.leave.applyPolicy(user.organizationId, dto);
     }
 
+    /** GET /leave/colleagues — list of org employees for handover selection */
+    @Get('colleagues')
+    getColleagues(@CurrentUser() user: { userId: string; organizationId: string }) {
+        return this.leave.getColleagues(user.userId, user.organizationId);
+    }
+
+    /** GET /leave/overlap?startDate=&endDate= — concurrent leave check */
+    @Get('overlap')
+    checkOverlap(
+        @CurrentUser() user: { userId: string; organizationId: string },
+        @Query('startDate') startDate: string,
+        @Query('endDate') endDate: string,
+    ) {
+        return this.leave.checkOverlap(user.organizationId, startDate, endDate, user.userId);
+    }
+
     /** GET /leave/summary — pending/approved/rejected counts (HR/ADMIN/HOD) */
     @Get('summary')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD)

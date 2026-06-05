@@ -22,7 +22,34 @@ export class LeaveService {
         const end = new Date(dto.endDate);
         if (end < start) throw new BadRequestException('endDate must be after startDate');
 
-        return this.prisma.leaveRequest.create({
+        // Validate leave balance before creating the request
+        const year = start.getFullYear();
+        const balance = await this.prisma.leaveBalance.findUnique({
+            where: { employeeId_year_type: { employeeId: employee.id, year, type: dto.type } },
+        });
+
+        if (!balance) {
+            throw new BadRequestException(
+                `No ${dto.type.toLowerCase().replace(/_/g, ' ')} allocation found for ${year}. Please contact HR to set up your leave balance.`,
+            );
+        }
+
+        const remaining = balance.allocated - balance.used;
+        if (dto.days > remaining) {
+            throw new BadRequestException(
+                `Insufficient balance. You requested ${dto.days} day${dto.days !== 1 ? 's' : ''} but only have ${remaining} remaining.`,
+            );
+        }
+
+        if (dto.handoverEmployeeId) {
+            const handover = await this.prisma.employee.findFirst({
+                where: { id: dto.handoverEmployeeId, organizationId },
+                select: { id: true },
+            });
+            if (!handover) throw new BadRequestException('Handover employee not found in this organisation');
+        }
+
+        const request = await this.prisma.leaveRequest.create({
             data: {
                 employeeId: employee.id,
                 organizationId,
@@ -31,9 +58,87 @@ export class LeaveService {
                 endDate: end,
                 days: dto.days,
                 reason: dto.reason,
+                handoverEmployeeId: dto.handoverEmployeeId ?? null,
+                handoverNotes: dto.handoverNotes ?? null,
             },
-            include: { employee: { select: { firstName: true, lastName: true } } },
+            include: {
+                employee: { select: { id: true, firstName: true, lastName: true } },
+                handoverEmployee: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
+            },
         });
+
+        // Check who else is on leave during the same period (excluding this employee)
+        const overlapping = await this.prisma.leaveRequest.findMany({
+            where: {
+                organizationId,
+                employeeId: { not: employee.id },
+                status: { in: [LeaveStatus.PENDING, LeaveStatus.APPROVED] },
+                startDate: { lte: end },
+                endDate: { gte: start },
+            },
+            select: {
+                employee: { select: { firstName: true, lastName: true } },
+                status: true,
+            },
+            take: 10,
+        });
+
+        return { request, overlapping };
+    }
+
+    async getColleagues(userId: string, organizationId: string) {
+        const me = await this.prisma.employee.findFirst({
+            where: { userId, organizationId },
+            select: { id: true },
+        });
+
+        return this.prisma.employee.findMany({
+            where: {
+                organizationId,
+                ...(me ? { id: { not: me.id } } : {}),
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                jobTitle: true,
+                department: { select: { name: true } },
+            },
+            orderBy: { firstName: 'asc' },
+        });
+    }
+
+    async checkOverlap(organizationId: string, startDate: string, endDate: string, excludeUserId?: string) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        let excludeEmployeeId: string | undefined;
+        if (excludeUserId) {
+            const emp = await this.prisma.employee.findFirst({
+                where: { userId: excludeUserId, organizationId },
+                select: { id: true },
+            });
+            excludeEmployeeId = emp?.id;
+        }
+
+        const overlapping = await this.prisma.leaveRequest.findMany({
+            where: {
+                organizationId,
+                ...(excludeEmployeeId ? { employeeId: { not: excludeEmployeeId } } : {}),
+                status: { in: [LeaveStatus.PENDING, LeaveStatus.APPROVED] },
+                startDate: { lte: end },
+                endDate: { gte: start },
+            },
+            select: {
+                status: true,
+                startDate: true,
+                endDate: true,
+                employee: { select: { firstName: true, lastName: true, jobTitle: true, department: { select: { name: true } } } },
+            },
+            orderBy: { startDate: 'asc' },
+        });
+
+        return { count: overlapping.length, colleagues: overlapping };
     }
 
     async listRequests(organizationId: string, roleLevel: string, userId: string, query: LeaveQueryDto) {
@@ -59,6 +164,7 @@ export class LeaveService {
             orderBy: { createdAt: 'desc' },
             include: {
                 employee: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
+                handoverEmployee: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
             },
         });
     }
@@ -68,6 +174,7 @@ export class LeaveService {
             where: { id, organizationId },
             include: {
                 employee: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
+                handoverEmployee: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
                 reviewedBy: { select: { id: true, name: true } },
             },
         });

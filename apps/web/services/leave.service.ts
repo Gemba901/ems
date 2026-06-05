@@ -17,6 +17,21 @@ async function handleResponse<T>(res: Response): Promise<T> {
 export type LeaveType = "ANNUAL" | "SICK" | "UNPAID" | "MATERNITY" | "PATERNITY" | "COMPASSIONATE" | "STUDY";
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 
+export interface LeaveColleague {
+    id: string;
+    firstName: string;
+    lastName: string;
+    jobTitle: string | null;
+    department: { name: string } | null;
+}
+
+export interface LeaveOverlapEntry {
+    status: LeaveStatus;
+    startDate: string;
+    endDate: string;
+    employee: { firstName: string; lastName: string; jobTitle: string | null; department: { name: string } | null };
+}
+
 export interface LeaveRequest {
     id: string;
     employeeId: string;
@@ -27,6 +42,9 @@ export interface LeaveRequest {
     endDate: string;
     days: number;
     reason: string | null;
+    handoverEmployeeId: string | null;
+    handoverNotes: string | null;
+    handoverEmployee?: { id: string; firstName: string; lastName: string; jobTitle: string | null } | null;
     reviewedById: string | null;
     reviewedAt: string | null;
     reviewNote: string | null;
@@ -133,7 +151,20 @@ export const LeaveService = {
         return handleResponse(res);
     },
 
-    async submitRequest(token: string, body: { type: LeaveType; startDate: string; endDate: string; days: number; reason?: string }): Promise<LeaveRequest> {
+    async getColleagues(token: string): Promise<LeaveColleague[]> {
+        const res = await fetch(`${API_URL}/leave/colleagues`, { headers: authHeaders(token) });
+        return handleResponse(res);
+    },
+
+    async checkOverlap(token: string, startDate: string, endDate: string): Promise<{ count: number; colleagues: LeaveOverlapEntry[] }> {
+        const res = await fetch(`${API_URL}/leave/overlap?startDate=${startDate}&endDate=${endDate}`, { headers: authHeaders(token) });
+        return handleResponse(res);
+    },
+
+    async submitRequest(token: string, body: {
+        type: LeaveType; startDate: string; endDate: string; days: number;
+        reason?: string; handoverEmployeeId?: string; handoverNotes?: string;
+    }): Promise<{ request: LeaveRequest; overlapping: LeaveOverlapEntry[] }> {
         const res = await fetch(`${API_URL}/leave/requests`, {
             method: "POST",
             headers: authHeaders(token),

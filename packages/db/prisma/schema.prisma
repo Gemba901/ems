@@ -263,6 +263,7 @@ model Employee {
   visitAttendances  VisitAttendee[]
   leaveRequests     LeaveRequest[]
   leaveBalances     LeaveBalance[]
+  handoverForLeaves LeaveRequest[] @relation("LeaveHandover")
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -530,16 +531,19 @@ model LeaveRequest {
   startDate      DateTime
   endDate        DateTime
   days           Int
-  reason         String?
-  reviewedById   String?
+  reason             String?
+  handoverEmployeeId String?
+  handoverNotes      String?
+  reviewedById       String?
   reviewedAt     DateTime?
   reviewNote     String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id])
-  reviewedBy   User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  employee         Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  handoverEmployee Employee?    @relation("LeaveHandover", fields: [handoverEmployeeId], references: [id], onDelete: SetNull)
+  reviewedBy       User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, status])
   @@index([organizationId, status])

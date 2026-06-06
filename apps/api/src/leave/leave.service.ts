@@ -1,11 +1,26 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { LeaveStatus, LeaveType } from 'db';
+import { LeaveStatus, NotificationType } from 'db';
 import { CreateLeaveRequestDto, ReviewLeaveRequestDto, LeaveBalanceUpsertDto, LeaveQueryDto, UpsertLeavePolicyDto, ApplyLeavePolicyDto } from './dto/leave.dto';
+import { NotificationsService } from 'src/notifications/notifications.service';
+
+function calcWorkingDays(start: Date, end: Date): number {
+    let days = 0;
+    const cur = new Date(start);
+    while (cur <= end) {
+        const dow = cur.getDay();
+        if (dow !== 0 && dow !== 6) days++;
+        cur.setDate(cur.getDate() + 1);
+    }
+    return Math.max(1, days);
+}
 
 @Injectable()
 export class LeaveService {
-    constructor(private prisma: PrismaService) {}
+    constructor(
+        private prisma: PrismaService,
+        private notifications: NotificationsService,
+    ) {}
 
     async submitRequest(
         userId: string,
@@ -22,6 +37,8 @@ export class LeaveService {
         const end = new Date(dto.endDate);
         if (end < start) throw new BadRequestException('endDate must be after startDate');
 
+        const days = calcWorkingDays(start, end);
+
         // Validate leave balance before creating the request
         const year = start.getFullYear();
         const balance = await this.prisma.leaveBalance.findUnique({
@@ -35,9 +52,9 @@ export class LeaveService {
         }
 
         const remaining = balance.allocated - balance.used;
-        if (dto.days > remaining) {
+        if (days > remaining) {
             throw new BadRequestException(
-                `Insufficient balance. You requested ${dto.days} day${dto.days !== 1 ? 's' : ''} but only have ${remaining} remaining.`,
+                `Insufficient balance. You requested ${days} day${days !== 1 ? 's' : ''} but only have ${remaining} remaining.`,
             );
         }
 
@@ -56,7 +73,7 @@ export class LeaveService {
                 type: dto.type,
                 startDate: start,
                 endDate: end,
-                days: dto.days,
+                days,
                 reason: dto.reason,
                 handoverEmployeeId: dto.handoverEmployeeId ?? null,
                 handoverNotes: dto.handoverNotes ?? null,
@@ -82,6 +99,53 @@ export class LeaveService {
             },
             take: 10,
         });
+
+        // Notify HR/HOD/ADMIN reviewers in the org
+        const requesterName = `${request.employee.firstName} ${request.employee.lastName}`;
+        const leaveLabel = request.type.charAt(0) + request.type.slice(1).toLowerCase().replace(/_/g, ' ');
+        const dateRange = `${start.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+        const reviewerEmployees = await this.prisma.employee.findMany({
+            where: {
+                organizationId,
+                id: { not: employee.id },
+                userId: { not: null },
+                user: {
+                    organizations: {
+                        some: {
+                            organizationId,
+                            role: { name: { in: ['HR', 'HOD', 'ADMIN', 'SUPER_ADMIN'] } },
+                        },
+                    },
+                },
+            },
+            select: { id: true },
+        });
+
+        if (reviewerEmployees.length > 0) {
+            await this.notifications.createMany(
+                reviewerEmployees.map((r) => ({
+                    employeeId: r.id,
+                    type: NotificationType.ACTION_REQUIRED,
+                    module: 'LEAVE',
+                    title: 'Leave request pending review',
+                    message: `${requesterName} has requested ${request.days} day${request.days !== 1 ? 's' : ''} of ${leaveLabel} leave (${dateRange}).`,
+                    actionUrl: '/leave/manage',
+                })),
+            );
+        }
+
+        // Notify the handover person if one was assigned
+        if (request.handoverEmployee) {
+            await this.notifications.create({
+                employeeId: request.handoverEmployee.id,
+                type: NotificationType.INFO,
+                module: 'LEAVE',
+                title: 'You have been assigned as cover',
+                message: `${requesterName} has listed you as their handover person for ${leaveLabel} leave (${dateRange}, ${request.days} day${request.days !== 1 ? 's' : ''}).`,
+                actionUrl: '/leave',
+            });
+        }
 
         return { request, overlapping };
     }
@@ -159,6 +223,11 @@ export class LeaveService {
 
         if (query.status) where.status = query.status;
 
+        if (query.year) {
+            const y = Number(query.year);
+            where.startDate = { gte: new Date(`${y}-01-01`), lte: new Date(`${y}-12-31`) };
+        }
+
         return this.prisma.leaveRequest.findMany({
             where,
             orderBy: { createdAt: 'desc' },
@@ -216,6 +285,23 @@ export class LeaveService {
             });
         }
 
+        // Notify the requesting employee of the outcome
+        const leaveLabel = req.type.charAt(0) + req.type.slice(1).toLowerCase().replace(/_/g, ' ');
+        const start = new Date(req.startDate);
+        const end = new Date(req.endDate);
+        const dateRange = `${start.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+        const isApproved = dto.status === LeaveStatus.APPROVED;
+
+        const noteClause = dto.reviewNote ? ` Note: ${dto.reviewNote}` : '';
+        await this.notifications.create({
+            employeeId: req.employeeId,
+            type: NotificationType.INFO,
+            module: 'LEAVE',
+            title: `Leave request ${isApproved ? 'approved' : 'rejected'}`,
+            message: `Your ${leaveLabel} leave request (${dateRange}, ${req.days} day${req.days !== 1 ? 's' : ''}) has been ${isApproved ? 'approved' : 'rejected'}.${noteClause}`,
+            actionUrl: '/leave',
+        });
+
         return updated;
     }
 
@@ -230,14 +316,31 @@ export class LeaveService {
         });
         if (!req) throw new NotFoundException('Leave request not found');
         if (req.employeeId !== employee?.id) throw new ForbiddenException('Not your request');
-        if (req.status === LeaveStatus.APPROVED) {
-            throw new BadRequestException('Cannot cancel an already approved request');
+        if (req.status === LeaveStatus.CANCELLED) {
+            throw new BadRequestException('Request is already cancelled');
+        }
+        if (req.status === LeaveStatus.REJECTED) {
+            throw new BadRequestException('Rejected requests cannot be cancelled');
+        }
+        if (req.status === LeaveStatus.APPROVED && new Date(req.startDate) <= new Date()) {
+            throw new BadRequestException('Cannot cancel leave that has already started');
         }
 
-        return this.prisma.leaveRequest.update({
+        const cancelled = await this.prisma.leaveRequest.update({
             where: { id },
             data: { status: LeaveStatus.CANCELLED },
         });
+
+        // Restore balance if the leave was already approved
+        if (req.status === LeaveStatus.APPROVED) {
+            const year = new Date(req.startDate).getFullYear();
+            await this.prisma.leaveBalance.updateMany({
+                where: { employeeId: req.employeeId, year, type: req.type },
+                data: { used: { decrement: req.days } },
+            });
+        }
+
+        return cancelled;
     }
 
     async getMyBalance(userId: string, organizationId: string) {
@@ -326,11 +429,14 @@ export class LeaveService {
         return { applied: employees.length, leaveTypes: policies.length, year: dto.year };
     }
 
-    async getSummary(organizationId: string) {
+    async getSummary(organizationId: string, year?: string) {
+        const yearFilter = year
+            ? { startDate: { gte: new Date(`${Number(year)}-01-01`), lte: new Date(`${Number(year)}-12-31`) } }
+            : {};
         const [pending, approved, rejected] = await Promise.all([
-            this.prisma.leaveRequest.count({ where: { organizationId, status: LeaveStatus.PENDING } }),
-            this.prisma.leaveRequest.count({ where: { organizationId, status: LeaveStatus.APPROVED } }),
-            this.prisma.leaveRequest.count({ where: { organizationId, status: LeaveStatus.REJECTED } }),
+            this.prisma.leaveRequest.count({ where: { organizationId, status: LeaveStatus.PENDING, ...yearFilter } }),
+            this.prisma.leaveRequest.count({ where: { organizationId, status: LeaveStatus.APPROVED, ...yearFilter } }),
+            this.prisma.leaveRequest.count({ where: { organizationId, status: LeaveStatus.REJECTED, ...yearFilter } }),
         ]);
         return { pending, approved, rejected };
     }

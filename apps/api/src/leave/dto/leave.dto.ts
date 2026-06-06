@@ -12,9 +12,10 @@ export class CreateLeaveRequestDto {
     @IsDateString()
     endDate: string;
 
+    @IsOptional()
     @IsInt()
     @Min(1)
-    days: number;
+    days?: number;
 
     @IsOptional()
     @IsString()
@@ -86,4 +87,8 @@ export class LeaveQueryDto {
     @IsOptional()
     @IsString()
     employeeId?: string;
+
+    @IsOptional()
+    @IsString()
+    year?: string;
 }

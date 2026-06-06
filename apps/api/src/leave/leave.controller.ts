@@ -64,11 +64,14 @@ export class LeaveController {
         return this.leave.checkOverlap(user.organizationId, startDate, endDate, user.userId);
     }
 
-    /** GET /leave/summary — pending/approved/rejected counts (HR/ADMIN/HOD) */
+    /** GET /leave/summary?year=2026 — pending/approved/rejected counts (HR/ADMIN/HOD) */
     @Get('summary')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD)
-    getSummary(@CurrentUser() user: { organizationId: string }) {
-        return this.leave.getSummary(user.organizationId);
+    getSummary(
+        @CurrentUser() user: { organizationId: string },
+        @Query('year') year?: string,
+    ) {
+        return this.leave.getSummary(user.organizationId, year);
     }
 
     /** GET /leave/balance — my leave balance for the current year */

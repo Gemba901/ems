@@ -7,14 +7,15 @@ import {
     LeaveService, LeaveRequest, LeaveStatus,
     LEAVE_TYPE_LABELS, LEAVE_STATUS_COLORS,
 } from "@/services/leave.service";
+import { Check, X, ArrowLeft, Settings2, UserCheck, AlertTriangle, ChevronDown, ChevronUp, Search } from "lucide-react";
+import Link from "next/link";
+
 function fmt(d: string) {
     return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 function fmtShort(d: string) {
     return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
-import { Check, X, ArrowLeft, Filter, Settings2, UserCheck, AlertTriangle } from "lucide-react";
-import Link from "next/link";
 
 const STATUS_FILTERS: { label: string; value: LeaveStatus | "ALL" }[] = [
     { label: "All", value: "ALL" },
@@ -38,7 +39,6 @@ function ReviewModal({
 }) {
     const [note, setNote] = useState("");
 
-    // Compute concurrent leaves from the already-fetched list (no extra API call)
     const reqStart = new Date(req.startDate);
     const reqEnd   = new Date(req.endDate);
     const concurrent = allRequests.filter((r) =>
@@ -49,39 +49,44 @@ function ReviewModal({
     );
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+            <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 space-y-4">
                 <div>
-                    <h3 className="text-base font-bold text-slate-900">Review Leave Request</h3>
+                    <h3 className="text-base font-semibold text-slate-900">Review request</h3>
                     <p className="text-sm text-slate-500 mt-0.5">
-                        {req.employee?.firstName} {req.employee?.lastName} · {LEAVE_TYPE_LABELS[req.type]} ·{" "}
-                        {fmtShort(req.startDate)} – {fmt(req.endDate)} ({req.days} days)
+                        {req.employee?.firstName} {req.employee?.lastName} &middot; {LEAVE_TYPE_LABELS[req.type]} &middot;{" "}
+                        {fmtShort(req.startDate)} – {fmt(req.endDate)} ({req.days} day{req.days !== 1 ? "s" : ""})
                     </p>
                 </div>
 
-                {/* Handover info */}
+                {req.reason && (
+                    <div className="bg-slate-50 rounded-lg px-3 py-2.5 border border-slate-100">
+                        <p className="text-xs text-slate-400 mb-0.5">Reason</p>
+                        <p className="text-sm text-slate-700">{req.reason}</p>
+                    </div>
+                )}
+
                 {req.handoverEmployee && (
-                    <div className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2.5">
-                        <UserCheck className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+                        <UserCheck className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-xs font-semibold text-indigo-700">Handover assigned</p>
-                            <p className="text-sm text-indigo-800">
+                            <p className="text-xs text-slate-500 mb-0.5">Handover</p>
+                            <p className="text-sm text-slate-800">
                                 {req.handoverEmployee.firstName} {req.handoverEmployee.lastName}
                                 {req.handoverEmployee.jobTitle ? ` — ${req.handoverEmployee.jobTitle}` : ""}
                             </p>
                             {req.handoverNotes && (
-                                <p className="text-xs text-indigo-600 mt-1 italic">"{req.handoverNotes}"</p>
+                                <p className="text-xs text-slate-500 mt-1 italic">&ldquo;{req.handoverNotes}&rdquo;</p>
                             )}
                         </div>
                     </div>
                 )}
 
-                {/* Concurrent leave warning */}
                 {concurrent.length > 0 && (
-                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
                         <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-xs font-semibold text-amber-700">
+                            <p className="text-xs font-medium text-amber-700">
                                 {concurrent.length} other colleague{concurrent.length !== 1 ? "s" : ""} on leave at the same time
                             </p>
                             <p className="text-xs text-amber-600 mt-0.5">
@@ -92,29 +97,35 @@ function ReviewModal({
                 )}
 
                 <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                        Note <span className="text-slate-400">(optional)</span>
+                    <label className="block text-xs text-slate-500 mb-1.5">
+                        Note <span className="text-slate-400">(optional — shown to employee)</span>
                     </label>
                     <textarea
                         rows={3}
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
-                        placeholder="Add a note for the employee…"
+                        placeholder="Add context for the employee…"
                         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                 </div>
 
                 <div className="flex gap-2">
-                    <button onClick={() => onSubmit("REJECTED", note)} disabled={isPending}
-                        className="flex-1 flex items-center justify-center gap-1.5 border border-red-200 text-red-600 text-sm font-medium py-2 rounded-xl hover:bg-red-50 disabled:opacity-50 transition-colors">
+                    <button
+                        onClick={() => onSubmit("REJECTED", note)}
+                        disabled={isPending}
+                        className="flex-1 flex items-center justify-center gap-1.5 border border-slate-200 text-slate-600 text-sm font-medium py-2.5 rounded-lg hover:bg-red-50 hover:border-red-200 hover:text-red-600 disabled:opacity-50 transition-colors"
+                    >
                         <X className="h-4 w-4" /> Reject
                     </button>
-                    <button onClick={() => onSubmit("APPROVED", note)} disabled={isPending}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white text-sm font-medium py-2 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors">
+                    <button
+                        onClick={() => onSubmit("APPROVED", note)}
+                        disabled={isPending}
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    >
                         <Check className="h-4 w-4" /> Approve
                     </button>
                 </div>
-                <button onClick={onClose} className="w-full mt-2 text-sm text-slate-400 hover:text-slate-600 py-1.5 transition-colors">
+                <button onClick={onClose} className="w-full text-sm text-slate-400 hover:text-slate-600 py-1 transition-colors">
                     Cancel
                 </button>
             </div>
@@ -122,17 +133,75 @@ function ReviewModal({
     );
 }
 
+function ExpandedDetail({ req }: { req: LeaveRequest }) {
+    return (
+        <tr className="bg-slate-50 border-b border-slate-100">
+            <td colSpan={7} className="px-4 py-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                    {req.reason ? (
+                        <div>
+                            <p className="text-xs text-slate-400 mb-0.5">Reason</p>
+                            <p className="text-slate-700">{req.reason}</p>
+                        </div>
+                    ) : null}
+                    {req.handoverEmployee ? (
+                        <div>
+                            <p className="text-xs text-slate-400 mb-0.5">Handover</p>
+                            <p className="text-slate-700">
+                                {req.handoverEmployee.firstName} {req.handoverEmployee.lastName}
+                                {req.handoverEmployee.jobTitle ? ` — ${req.handoverEmployee.jobTitle}` : ""}
+                            </p>
+                            {req.handoverNotes && (
+                                <p className="text-xs text-slate-500 mt-0.5 italic">&ldquo;{req.handoverNotes}&rdquo;</p>
+                            )}
+                        </div>
+                    ) : null}
+                    {req.reviewNote ? (
+                        <div>
+                            <p className="text-xs text-slate-400 mb-0.5">Review note</p>
+                            <p className="text-slate-700 italic">&ldquo;{req.reviewNote}&rdquo;</p>
+                        </div>
+                    ) : null}
+                    {req.reviewedBy ? (
+                        <div>
+                            <p className="text-xs text-slate-400 mb-0.5">Reviewed by</p>
+                            <p className="text-slate-700">{req.reviewedBy.name}</p>
+                            {req.reviewedAt && <p className="text-xs text-slate-400 mt-0.5">{fmt(req.reviewedAt)}</p>}
+                        </div>
+                    ) : null}
+                    {!req.reason && !req.handoverEmployee && !req.reviewNote && !req.reviewedBy && (
+                        <p className="text-xs text-slate-400 col-span-3">No additional details.</p>
+                    )}
+                </div>
+            </td>
+        </tr>
+    );
+}
+
 export default function ManageLeavePage() {
     const accessToken = useAuthStore((s) => s.accessToken)!;
     const queryClient = useQueryClient();
 
+    const currentYear = new Date().getFullYear();
     const [statusFilter, setStatusFilter] = useState<LeaveStatus | "ALL">("PENDING");
-    const [reviewing, setReviewing] = useState<LeaveRequest | null>(null);
+    const [yearFilter, setYearFilter]     = useState<number>(currentYear);
+    const [reviewing, setReviewing]       = useState<LeaveRequest | null>(null);
+    const [expandedId, setExpandedId]     = useState<string | null>(null);
+    const [search, setSearch]             = useState("");
+
+    const { data: summary } = useQuery({
+        queryKey: ["leave-summary", yearFilter],
+        queryFn: () => LeaveService.getSummary(accessToken, yearFilter),
+        enabled: !!accessToken,
+    });
 
     const { data: requests = [], isLoading } = useQuery({
-        queryKey: ["leave-requests", "manage", statusFilter],
+        queryKey: ["leave-requests", "manage", statusFilter, yearFilter],
         queryFn: () =>
-            LeaveService.listRequests(accessToken, statusFilter !== "ALL" ? { status: statusFilter } : undefined),
+            LeaveService.listRequests(accessToken, {
+                ...(statusFilter !== "ALL" ? { status: statusFilter } : {}),
+                year: yearFilter,
+            }),
         enabled: !!accessToken,
     });
 
@@ -141,68 +210,129 @@ export default function ManageLeavePage() {
             LeaveService.reviewRequest(accessToken, id, { status, reviewNote: reviewNote || undefined }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
+            queryClient.invalidateQueries({ queryKey: ["leave-summary"] });
             setReviewing(null);
         },
     });
 
+    const filtered = search.trim()
+        ? requests.filter((r) => {
+            const q = search.toLowerCase();
+            return `${r.employee?.firstName ?? ""} ${r.employee?.lastName ?? ""}`.toLowerCase().includes(q);
+        })
+        : requests;
+
+    const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
+
     return (
         <div className="p-6">
             <Link href="/leave" className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-6 transition-colors">
-                <ArrowLeft className="h-4 w-4" /> Back to Leave
+                <ArrowLeft className="h-4 w-4" /> Leave
             </Link>
 
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="text-lg font-bold text-slate-900">Manage Leave Requests</h1>
-                <div className="flex items-center gap-3">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+                <h1 className="text-xl font-semibold text-slate-900">Manage Requests</h1>
                 <Link
                     href="/leave/policy"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 border border-slate-200 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
                 >
                     <Settings2 className="h-3.5 w-3.5" /> Leave Policy
                 </Link>
-                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1">
-                    <Filter className="h-3.5 w-3.5 text-slate-400 ml-2" />
+            </div>
+
+            {/* Summary strip */}
+            {summary && (
+                <div className="flex items-center gap-6 mb-6 pb-5 border-b border-slate-200">
+                    <div>
+                        <p className="text-2xl font-semibold text-slate-900 tabular-nums">{summary.pending}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Pending</p>
+                    </div>
+                    <div className="h-8 w-px bg-slate-200" />
+                    <div>
+                        <p className="text-2xl font-semibold text-emerald-600 tabular-nums">{summary.approved}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Approved</p>
+                    </div>
+                    <div className="h-8 w-px bg-slate-200" />
+                    <div>
+                        <p className="text-2xl font-semibold text-red-500 tabular-nums">{summary.rejected}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Rejected</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Filters + search */}
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1">
                     {STATUS_FILTERS.map((f) => (
                         <button
                             key={f.value}
                             onClick={() => setStatusFilter(f.value)}
-                            className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                            className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
                                 statusFilter === f.value
                                     ? "bg-indigo-600 text-white"
                                     : "text-slate-500 hover:text-slate-800"
                             }`}
                         >
                             {f.label}
+                            {f.value === "PENDING" && summary?.pending ? (
+                                <span className="ml-1.5 text-[10px] font-semibold bg-white/20 rounded-full px-1.5 py-0.5 tabular-nums">
+                                    {summary.pending}
+                                </span>
+                            ) : null}
                         </button>
                     ))}
                 </div>
+
+                <select
+                    value={yearFilter}
+                    onChange={(e) => setYearFilter(Number(e.target.value))}
+                    className="text-xs border border-slate-200 rounded-lg bg-white px-2.5 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                    {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                    ))}
+                </select>
+
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                    <input
+                        type="text"
+                        placeholder="Search employee…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48"
+                    />
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            {/* Table */}
+            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
                 {isLoading ? (
-                    <div className="p-8 flex justify-center">
+                    <div className="p-10 flex justify-center">
                         <div className="h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                     </div>
-                ) : requests.length === 0 ? (
+                ) : filtered.length === 0 ? (
                     <div className="p-8 text-center">
-                        <p className="text-sm text-slate-400">No {statusFilter !== "ALL" ? statusFilter.toLowerCase() : ""} leave requests</p>
+                        <p className="text-sm text-slate-400">
+                            {search ? `No results for "${search}"` : `No ${statusFilter !== "ALL" ? statusFilter.toLowerCase() : ""} requests`}
+                        </p>
                     </div>
                 ) : (
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="border-b border-slate-100 text-xs font-medium text-slate-500">
-                                <th className="text-left px-4 py-3">Employee</th>
-                                <th className="text-left px-4 py-3">Type</th>
-                                <th className="text-left px-4 py-3">Dates</th>
-                                <th className="text-left px-4 py-3">Days</th>
-                                <th className="text-left px-4 py-3">Status</th>
-                                <th className="text-left px-4 py-3">Applied</th>
+                            <tr className="border-b border-slate-100 text-xs text-slate-400">
+                                <th className="text-left px-4 py-3 font-medium">Employee</th>
+                                <th className="text-left px-4 py-3 font-medium">Type</th>
+                                <th className="text-left px-4 py-3 font-medium">Dates</th>
+                                <th className="text-left px-4 py-3 font-medium">Days</th>
+                                <th className="text-left px-4 py-3 font-medium">Status</th>
+                                <th className="text-left px-4 py-3 font-medium">Applied</th>
                                 <th className="px-4 py-3" />
                             </tr>
                         </thead>
                         <tbody>
-                            {requests.map((r) => {
+                            {filtered.map((r) => {
                                 const rStart = new Date(r.startDate);
                                 const rEnd   = new Date(r.endDate);
                                 const concurrentCount = requests.filter((other) =>
@@ -211,54 +341,76 @@ export default function ManageLeavePage() {
                                     new Date(other.startDate) <= rEnd &&
                                     new Date(other.endDate)   >= rStart,
                                 ).length;
+                                const isExpanded = expandedId === r.id;
+                                const hasDetail = r.reason || r.handoverEmployee || r.reviewNote || r.reviewedBy;
 
-                                return (
-                                <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                                    <td className="px-4 py-3 font-medium text-slate-800">
-                                        {r.employee?.firstName} {r.employee?.lastName}
-                                        {r.employee?.jobTitle && (
-                                            <span className="block text-xs text-slate-400 font-normal">{r.employee.jobTitle}</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-600">{LEAVE_TYPE_LABELS[r.type]}</td>
-                                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                                        {fmtShort(r.startDate)} – {fmtShort(r.endDate)}
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-600">{r.days}</td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${LEAVE_STATUS_COLORS[r.status]}`}>
-                                                {r.status}
-                                            </span>
-                                            {concurrentCount > 0 && (
-                                                <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                                                    <AlertTriangle className="h-2.5 w-2.5" />
-                                                    {concurrentCount} overlap
-                                                </span>
+                                return [
+                                    <tr
+                                        key={r.id}
+                                        className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <td className="px-4 py-3">
+                                            <p className="font-medium text-slate-800">
+                                                {r.employee?.firstName} {r.employee?.lastName}
+                                            </p>
+                                            {r.employee?.jobTitle && (
+                                                <p className="text-xs text-slate-400 font-normal mt-0.5">{r.employee.jobTitle}</p>
                                             )}
-                                            {r.handoverEmployee && (
-                                                <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                                                    <UserCheck className="h-2.5 w-2.5" />
-                                                    cover
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-600">{LEAVE_TYPE_LABELS[r.type]}</td>
+                                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                                            {fmtShort(r.startDate)} – {fmtShort(r.endDate)}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-600 tabular-nums">{r.days}</td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${LEAVE_STATUS_COLORS[r.status]}`}>
+                                                    {r.status.charAt(0) + r.status.slice(1).toLowerCase()}
                                                 </span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
-                                        {fmt(r.createdAt)}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {r.status === "PENDING" && (
-                                            <button
-                                                onClick={() => setReviewing(r)}
-                                                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
-                                            >
-                                                Review
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                                );
+                                                {concurrentCount > 0 && (
+                                                    <span className="inline-flex items-center gap-0.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+                                                        <AlertTriangle className="h-2.5 w-2.5" />
+                                                        {concurrentCount} overlap
+                                                    </span>
+                                                )}
+                                                {r.handoverEmployee && (
+                                                    <span className="inline-flex items-center gap-0.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                                        <UserCheck className="h-2.5 w-2.5" />
+                                                        cover set
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
+                                            {fmt(r.createdAt)}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-2 justify-end">
+                                                {r.status === "PENDING" && (
+                                                    <button
+                                                        onClick={() => setReviewing(r)}
+                                                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+                                                    >
+                                                        Review
+                                                    </button>
+                                                )}
+                                                {hasDetail && (
+                                                    <button
+                                                        onClick={() => toggleExpand(r.id)}
+                                                        className="text-slate-400 hover:text-slate-600 transition-colors"
+                                                        title={isExpanded ? "Collapse" : "Expand"}
+                                                    >
+                                                        {isExpanded
+                                                            ? <ChevronUp className="h-3.5 w-3.5" />
+                                                            : <ChevronDown className="h-3.5 w-3.5" />
+                                                        }
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>,
+                                    isExpanded && <ExpandedDetail key={`${r.id}-detail`} req={r} />,
+                                ];
                             })}
                         </tbody>
                     </table>

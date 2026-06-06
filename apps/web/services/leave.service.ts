@@ -119,8 +119,9 @@ export const LeaveService = {
         return handleResponse(res);
     },
 
-    async getSummary(token: string): Promise<LeaveSummary> {
-        const res = await fetch(`${API_URL}/leave/summary`, { headers: authHeaders(token) });
+    async getSummary(token: string, year?: number): Promise<LeaveSummary> {
+        const qs = year ? `?year=${year}` : "";
+        const res = await fetch(`${API_URL}/leave/summary${qs}`, { headers: authHeaders(token) });
         return handleResponse(res);
     },
 
@@ -143,10 +144,11 @@ export const LeaveService = {
         return handleResponse(res);
     },
 
-    async listRequests(token: string, params?: { status?: LeaveStatus; employeeId?: string }): Promise<LeaveRequest[]> {
+    async listRequests(token: string, params?: { status?: LeaveStatus; employeeId?: string; year?: number }): Promise<LeaveRequest[]> {
         const qs = new URLSearchParams();
         if (params?.status) qs.set("status", params.status);
         if (params?.employeeId) qs.set("employeeId", params.employeeId);
+        if (params?.year) qs.set("year", String(params.year));
         const res = await fetch(`${API_URL}/leave/requests?${qs}`, { headers: authHeaders(token) });
         return handleResponse(res);
     },

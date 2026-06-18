@@ -198,24 +198,12 @@ export interface HolisticCalendarEvent {
   participants: { id: string; name: string; avatarUrl: string | null }[];
 }
 
-export interface BirthdayEvent {
-  id: string;
-  type: "BIRTHDAY";
-  title: string;
-  startAt: string;
-  endAt: string;
-  allDay: true;
-  isVirtual: true;
-  employee: { id: string; name: string; avatarUrl: string | null };
-}
-
 export interface CalendarEventsResponse {
   employeeId: string;
   pendingInvitationsCount: number;
   personal: HolisticCalendarEvent[];
   company: HolisticCalendarEvent[];
   training: HolisticCalendarEvent[];
-  birthdays: BirthdayEvent[];
 }
 
 export interface OrgEmployeeForInvite {

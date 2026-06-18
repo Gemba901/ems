@@ -681,15 +681,27 @@ export class CalendarService {
     const dateOverlap = { startAt: { lte: end }, endAt: { gte: start } };
 
     const [personalEvents, companyEvents, trainingEvents, pendingCount] = await Promise.all([
-      // Personal: own events + meetings I'm invited to + training I participate in
+      // Personal: own events of any personal type + meetings I'm an invitee of
       this.prisma.calendarEvent.findMany({
         where: {
           organizationId,
           ...dateOverlap,
-          type: { in: ['PERSONAL_EVENT', 'PERSONAL_REMINDER', 'PERSONAL_TRAINING', 'MEETING'] as any },
           OR: [
-            { createdById: employee.id },
-            { invitations: { some: { inviteeId: employee.id } } },
+            // Events I created (any personal type including MEETING and manually added birthdays)
+            {
+              type: { in: ['PERSONAL_EVENT', 'PERSONAL_REMINDER', 'PERSONAL_TRAINING', 'BIRTHDAY', 'MEETING'] as any },
+              createdById: employee.id,
+            },
+            // Meetings I was directly invited to
+            {
+              type: 'MEETING' as any,
+              invitations: { some: { inviteeId: employee.id } },
+            },
+            // Recurring meeting children whose parent event I was invited to
+            {
+              type: 'MEETING' as any,
+              parentEvent: { invitations: { some: { inviteeId: employee.id } } },
+            },
           ],
         },
         include: eventInclude,
@@ -724,39 +736,12 @@ export class CalendarService {
       this.prisma.eventInvitation.count({ where: { inviteeId: employee.id, status: 'PENDING' } }),
     ]);
 
-    // Birthday virtual events from colleagues (derived from dateOfBirth, not stored as events)
-    const colleagues = await this.prisma.employee.findMany({
-      where: { organizationId, dateOfBirth: { not: null } },
-      select: { id: true, firstName: true, lastName: true, dateOfBirth: true, avatarUrl: true },
-    });
-
-    const birthdays = colleagues
-      .map((e) => {
-        const dob = e.dateOfBirth!;
-        const bday = new Date(year, dob.getMonth(), dob.getDate());
-        if (bday < start || bday > end) return null;
-        return {
-          id: `birthday-${e.id}-${year}`,
-          type: 'BIRTHDAY',
-          title: `${e.firstName} ${e.lastName}'s Birthday`,
-          startAt: bday.toISOString(),
-          endAt: bday.toISOString(),
-          allDay: true,
-          isVirtual: true,
-          isOwner: false,
-          myInvitationStatus: null,
-          employee: { id: e.id, name: `${e.firstName} ${e.lastName}`, avatarUrl: e.avatarUrl ?? null },
-        };
-      })
-      .filter(Boolean);
-
     return {
       employeeId: employee.id,
       pendingInvitationsCount: pendingCount,
       personal: personalEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
       company: companyEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
       training: trainingEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
-      birthdays,
     };
   }
 

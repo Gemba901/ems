@@ -6,13 +6,13 @@ import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import {
   CalendarService,
-  HolisticCalendarEvent, BirthdayEvent, OrgEmployeeForInvite,
+  HolisticCalendarEvent, OrgEmployeeForInvite,
   CalendarEventType, EventRecurrencePattern, EVENT_TYPE_CONFIG,
   CreateCalendarEventPayload,
 } from "@/services/calendar.service";
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, Check, CheckCircle2,
-  RefreshCw, Users, AlertTriangle, Cake, Calendar, LayoutGrid, CalendarDays, List,
+  RefreshCw, Users, AlertTriangle, Calendar, LayoutGrid, CalendarDays, List,
 } from "lucide-react";
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
@@ -54,16 +54,13 @@ function dateToYMD(date: Date): string {
 export type CalendarTabType = "personal" | "company" | "training";
 type ViewMode = "month" | "week" | "agenda";
 
-type AnyEvent = HolisticCalendarEvent | BirthdayEvent;
-
-function isBirthday(e: AnyEvent): e is BirthdayEvent { return (e as BirthdayEvent).isVirtual === true; }
-
 // ── Tab-aware type options ─────────────────────────────────────────────────────
 
 function getTypeOptions(tab: CalendarTabType, isOrgManager: boolean, isAuditor: boolean) {
   const personal: { value: CalendarEventType; label: string }[] = [
     { value: "PERSONAL_EVENT",    label: "Personal Event" },
     { value: "PERSONAL_REMINDER", label: "Reminder" },
+    { value: "BIRTHDAY",          label: "Birthday Reminder" },
     { value: "PERSONAL_TRAINING", label: "Personal Training" },
     { value: "MEETING",           label: "Meeting (invite others)" },
   ];
@@ -105,15 +102,15 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
 
   const todayStr = todayYMD();
 
-  const tabEvents: AnyEvent[] = useMemo(() => {
+  const tabEvents: HolisticCalendarEvent[] = useMemo(() => {
     if (!data) return [];
-    if (tab === "personal") return [...data.personal, ...data.birthdays];
+    if (tab === "personal") return data.personal;
     if (tab === "company")  return data.company;
     return data.training;
   }, [data, tab]);
 
   const byDate = useMemo(() => {
-    const map: Record<string, AnyEvent[]> = {};
+    const map: Record<string, HolisticCalendarEvent[]> = {};
     for (const e of tabEvents) {
       const key = e.startAt.split("T")[0];
       if (!map[key]) map[key] = [];
@@ -274,13 +271,13 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
                   const isSel    = dateStr === selectedDay;
                   const colIdx   = (firstDayOfWeek + day - 1) % 7;
                   const isLast   = colIdx === 6;
-                  const hasPending = dayEvts.some(e => !isBirthday(e) && (e as HolisticCalendarEvent).myInvitationStatus === "PENDING");
+                  const hasPending = dayEvts.some(e => e.myInvitationStatus === "PENDING");
 
                   return (
                     <div
                       key={day}
                       onClick={() => setSelectedDay(isSel ? null : dateStr)}
-                      className={`min-h-[80px] p-2 border-b border-r border-slate-50 cursor-pointer transition-all ${isLast ? "border-r-0" : ""} ${isSel ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                      className={`min-h-20 p-2 border-b border-r border-slate-50 cursor-pointer transition-all ${isLast ? "border-r-0" : ""} ${isSel ? "bg-blue-50" : "hover:bg-slate-50"}`}
                     >
                       <div className={`h-6 w-6 flex items-center justify-center rounded-full text-xs font-semibold mb-1 relative ${
                         isToday ? "bg-blue-600 text-white"
@@ -294,7 +291,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
                       </div>
                       <div className="flex flex-wrap gap-0.5 mt-1">
                         {dayEvts.slice(0, 4).map(e => {
-                          const cfg = EVENT_TYPE_CONFIG[e.type as CalendarEventType];
+                          const cfg = EVENT_TYPE_CONFIG[e.type];
                           return <span key={e.id} className={`h-2 w-2 rounded-full ${cfg?.dot ?? "bg-slate-400"}`} title={e.title} />;
                         })}
                         {dayEvts.length > 4 && <span className="text-[8px] text-slate-400">+{dayEvts.length-4}</span>}
@@ -302,9 +299,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
                       {dayEvts.length > 0 && (
                         <div className="mt-0.5 space-y-0.5">
                           {dayEvts.slice(0,2).map(e => (
-                            <p key={e.id} className="text-[8px] text-slate-500 truncate leading-tight">
-                              {isBirthday(e) ? "🎂 " : ""}{e.title}
-                            </p>
+                            <p key={e.id} className="text-[8px] text-slate-500 truncate leading-tight">{e.title}</p>
                           ))}
                           {dayEvts.length > 2 && <p className="text-[8px] text-slate-400">+{dayEvts.length-2} more</p>}
                         </div>
@@ -382,7 +377,7 @@ function EventsWeekView({
   weekStart, byDate, todayStr, selectedDay, onSelectDay, prevWeek, nextWeek, isLoading,
 }: {
   weekStart: Date;
-  byDate: Record<string, AnyEvent[]>;
+  byDate: Record<string, HolisticCalendarEvent[]>;
   todayStr: string;
   selectedDay: string | null;
   onSelectDay: (d: string | null) => void;
@@ -419,13 +414,13 @@ function EventsWeekView({
             const isToday    = key === todayStr;
             const isSel      = key === selectedDay;
             const dayEvts    = byDate[key] ?? [];
-            const hasPending = dayEvts.some(e => !isBirthday(e) && (e as HolisticCalendarEvent).myInvitationStatus === "PENDING");
+            const hasPending = dayEvts.some(e => e.myInvitationStatus === "PENDING");
 
             return (
               <div
                 key={key}
                 onClick={() => onSelectDay(isSel ? null : key)}
-                className={`min-h-[140px] p-2 border-r border-slate-100 last:border-r-0 cursor-pointer transition-all ${
+                className={`min-h-35 p-2 border-r border-slate-100 last:border-r-0 cursor-pointer transition-all ${
                   isSel ? "bg-blue-50" : "hover:bg-slate-50"
                 }`}
               >
@@ -444,13 +439,13 @@ function EventsWeekView({
                 </div>
                 <div className="space-y-0.5">
                   {dayEvts.slice(0, 4).map(e => {
-                    const cfg = EVENT_TYPE_CONFIG[e.type as CalendarEventType];
+                    const cfg = EVENT_TYPE_CONFIG[e.type];
                     return (
                       <div
                         key={e.id}
                         className={`text-[8px] font-semibold px-1 py-0.5 rounded truncate ${cfg?.badge ?? "bg-slate-100 text-slate-600"}`}
                       >
-                        {isBirthday(e) ? "🎂 " : ""}{e.title}
+                        {e.title}
                       </div>
                     );
                   })}
@@ -477,7 +472,7 @@ function EventsAgendaView({
 }: {
   year: number;
   month: number;
-  byDate: Record<string, AnyEvent[]>;
+  byDate: Record<string, HolisticCalendarEvent[]>;
   todayStr: string;
   selectedDay: string | null;
   onSelectDay: (d: string | null) => void;
@@ -540,20 +535,18 @@ function EventsAgendaView({
                 {/* Event chips */}
                 <div className="flex-1 min-w-0 space-y-1.5 pt-0.5">
                   {dayEvts.map(e => {
-                    const cfg = EVENT_TYPE_CONFIG[e.type as CalendarEventType];
-                    const isPending = !isBirthday(e) && (e as HolisticCalendarEvent).myInvitationStatus === "PENDING";
+                    const cfg = EVENT_TYPE_CONFIG[e.type];
+                    const isPending = e.myInvitationStatus === "PENDING";
                     return (
                       <div key={e.id} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${cfg?.border ?? "border-slate-100"} bg-white`}>
                         <span className={`h-2 w-2 rounded-full shrink-0 ${cfg?.dot ?? "bg-slate-400"}`} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 truncate">
-                            {isBirthday(e) ? "🎂 " : ""}{e.title}
-                          </p>
-                          {!e.allDay && !isBirthday(e) && (
+                          <p className="text-xs font-semibold text-slate-800 truncate">{e.title}</p>
+                          {!e.allDay && (
                             <p className="text-[10px] text-slate-400 leading-none mt-0.5">
                               {new Date(e.startAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                               {" – "}
-                              {new Date((e as HolisticCalendarEvent).endAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                              {new Date(e.endAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                             </p>
                           )}
                         </div>
@@ -583,7 +576,7 @@ function EventsAgendaView({
 function DayPanel({
   dateStr, events, todayStr, token, onClose, onRefresh, canCreate, onCreateClick,
 }: {
-  dateStr: string; events: AnyEvent[]; todayStr: string; token: string;
+  dateStr: string; events: HolisticCalendarEvent[]; todayStr: string; token: string;
   onClose: () => void; onRefresh: () => void;
   canCreate: boolean; onCreateClick: () => void;
 }) {
@@ -613,9 +606,7 @@ function DayPanel({
           </div>
         ) : (
           events.map(e => (
-            isBirthday(e)
-              ? <BirthdayCard key={e.id} event={e} />
-              : <EventCard key={e.id} event={e} token={token} onRespond={onRefresh} />
+            <EventCard key={e.id} event={e} token={token} onRespond={onRefresh} />
           ))
         )}
 
@@ -742,18 +733,6 @@ function EventCard({ event, token, onRespond }: { event: HolisticCalendarEvent; 
           <X className="h-3 w-3" /> You declined this meeting
         </p>
       )}
-    </div>
-  );
-}
-
-function BirthdayCard({ event }: { event: BirthdayEvent }) {
-  return (
-    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 flex items-center gap-3">
-      <Cake className="h-5 w-5 text-rose-400 shrink-0" />
-      <div>
-        <p className="text-sm font-semibold text-rose-800">{event.title}</p>
-        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wide">Birthday</span>
-      </div>
     </div>
   );
 }

@@ -189,6 +189,7 @@ export interface HolisticCalendarEvent {
   allDay: boolean;
   isRecurring: boolean;
   recurrencePattern: EventRecurrencePattern | null;
+  recurrenceInterval: number;
   recurrenceEndAt: string | null;
   parentEventId: string | null;
   isOwner: boolean;
@@ -224,6 +225,7 @@ export interface CreateCalendarEventPayload {
   allDay?: boolean;
   isRecurring?: boolean;
   recurrencePattern?: EventRecurrencePattern;
+  recurrenceInterval?: number;
   recurrenceEndAt?: string;
   inviteeIds?: string[];
   participantIds?: string[];

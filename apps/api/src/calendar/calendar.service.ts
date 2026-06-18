@@ -620,11 +620,11 @@ export class CalendarService {
     return emp;
   }
 
-  private nextEventDate(current: Date, pattern: string): Date {
+  private nextEventDate(current: Date, pattern: string, interval = 1): Date {
     const d = new Date(current);
-    if (pattern === 'DAILY')   d.setDate(d.getDate() + 1);
-    if (pattern === 'WEEKLY')  d.setDate(d.getDate() + 7);
-    if (pattern === 'MONTHLY') d.setMonth(d.getMonth() + 1);
+    if (pattern === 'DAILY')   d.setDate(d.getDate() + interval);
+    if (pattern === 'WEEKLY')  d.setDate(d.getDate() + 7 * interval);
+    if (pattern === 'MONTHLY') d.setMonth(d.getMonth() + interval);
     return d;
   }
 
@@ -640,6 +640,7 @@ export class CalendarService {
       allDay: e.allDay,
       isRecurring: e.isRecurring,
       recurrencePattern: e.recurrencePattern ?? null,
+      recurrenceInterval: e.recurrenceInterval ?? 1,
       recurrenceEndAt: e.recurrenceEndAt ? (e.recurrenceEndAt instanceof Date ? e.recurrenceEndAt.toISOString() : e.recurrenceEndAt) : null,
       parentEventId: e.parentEventId ?? null,
       isOwner: e.createdById === currentEmployeeId,
@@ -782,18 +783,21 @@ export class CalendarService {
       );
     }
 
-    const event = await this.prisma.calendarEvent.create({
+    const interval = dto.recurrenceInterval ?? 1;
+
+    const event = await (this.prisma.calendarEvent as any).create({
       data: {
         title: dto.title,
         description: dto.description,
-        type: dto.type as any,
+        type: dto.type,
         startAt,
         endAt,
         allDay: dto.allDay ?? false,
         organizationId,
         createdById: employee.id,
         isRecurring: dto.isRecurring ?? false,
-        recurrencePattern: (dto.recurrencePattern as any) ?? null,
+        recurrencePattern: dto.recurrencePattern ?? null,
+        recurrenceInterval: interval,
         recurrenceEndAt: dto.recurrenceEndAt ? new Date(dto.recurrenceEndAt) : null,
       },
     });
@@ -806,7 +810,7 @@ export class CalendarService {
       const children: any[] = [];
 
       while (children.length < 365) {
-        current = this.nextEventDate(current, dto.recurrencePattern);
+        current = this.nextEventDate(current, dto.recurrencePattern, interval);
         if (current > recEnd) break;
         children.push({
           title: dto.title, description: dto.description,
@@ -814,6 +818,7 @@ export class CalendarService {
           startAt: new Date(current), endAt: new Date(current.getTime() + duration),
           allDay: dto.allDay ?? false,
           isRecurring: true, recurrencePattern: dto.recurrencePattern,
+          recurrenceInterval: interval,
           recurrenceEndAt: new Date(dto.recurrenceEndAt),
           parentEventId: event.id,
         });

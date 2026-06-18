@@ -210,6 +210,10 @@ export class CreateCalendarEventDto {
   @IsEnum(EventRecurrencePatternDto) @IsOptional()
   recurrencePattern?: EventRecurrencePatternDto;
 
+  @IsInt() @Min(1) @Max(99) @IsOptional()
+  @Type(() => Number)
+  recurrenceInterval?: number;
+
   @IsDateString() @IsOptional()
   recurrenceEndAt?: string;
 

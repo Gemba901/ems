@@ -661,10 +661,18 @@ function EventCard({ event, token, onRespond }: { event: HolisticCalendarEvent; 
         </p>
       )}
 
-      {event.isRecurring && (
+      {event.isRecurring && event.recurrencePattern && (
         <p className="text-[10px] text-violet-500 font-medium flex items-center gap-1 pl-4">
           <RefreshCw className="h-2.5 w-2.5" />
-          Repeats {event.recurrencePattern?.toLowerCase()}
+          {(() => {
+            const n = event.recurrenceInterval ?? 1;
+            const unit = event.recurrencePattern === "DAILY"
+              ? (n === 1 ? "day" : "days")
+              : event.recurrencePattern === "WEEKLY"
+              ? (n === 1 ? "week" : "weeks")
+              : (n === 1 ? "month" : "months");
+            return n === 1 ? `Repeats every ${unit}` : `Repeats every ${n} ${unit}`;
+          })()}
         </p>
       )}
 
@@ -765,6 +773,7 @@ function CreateEventModal({
   const [allDay,        setAllDay]       = useState(false);
   const [isRecurring,   setIsRecurring]  = useState(false);
   const [recPattern,    setRecPattern]   = useState<EventRecurrencePattern>("WEEKLY");
+  const [recInterval,   setRecInterval]  = useState(1);
   const [recEndAt,      setRecEndAt]     = useState("");
   const [inviteeIds,    setInviteeIds]   = useState<string[]>([]);
   const [participantIds,setParticipantIds] = useState<string[]>([]);
@@ -824,6 +833,7 @@ function CreateEventModal({
         allDay,
         isRecurring,
         recurrencePattern:  isRecurring ? recPattern : undefined,
+        recurrenceInterval: isRecurring ? recInterval : undefined,
         recurrenceEndAt:    isRecurring && recEndAt ? new Date(recEndAt + "T23:59").toISOString() : undefined,
         inviteeIds:         isMeeting ? inviteeIds : undefined,
         participantIds:     needsParticipants ? participantIds : undefined,
@@ -909,14 +919,31 @@ function CreateEventModal({
                 <span className="text-xs font-semibold text-slate-500 flex items-center gap-1"><RefreshCw className="h-3 w-3 text-violet-400" /> Repeat</span>
               </label>
               {isRecurring && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-semibold text-slate-500 block mb-1">Pattern</label>
-                    <select className={`${inputCls} bg-white`} value={recPattern} onChange={e => setRecPattern(e.target.value as EventRecurrencePattern)}>
-                      <option value="DAILY">Daily</option>
-                      <option value="WEEKLY">Weekly</option>
-                      <option value="MONTHLY">Monthly</option>
-                    </select>
+                    <label className="text-xs font-semibold text-slate-500 block mb-1">Repeat every</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        className="w-16 border border-slate-200 rounded-xl px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                        value={recInterval}
+                        onChange={e => setRecInterval(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                      />
+                      <select
+                        className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                        value={recPattern}
+                        onChange={e => setRecPattern(e.target.value as EventRecurrencePattern)}
+                      >
+                        <option value="DAILY">{recInterval === 1 ? "day" : "days"}</option>
+                        <option value="WEEKLY">{recInterval === 1 ? "week" : "weeks"}</option>
+                        <option value="MONTHLY">{recInterval === 1 ? "month" : "months"}</option>
+                      </select>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Repeats every {recInterval} {recPattern === "DAILY" ? (recInterval === 1 ? "day" : "days") : recPattern === "WEEKLY" ? (recInterval === 1 ? "week" : "weeks") : (recInterval === 1 ? "month" : "months")}
+                    </p>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-slate-500 block mb-1">Repeat until</label>

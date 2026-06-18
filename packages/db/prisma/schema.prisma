@@ -481,8 +481,9 @@ model CalendarEvent {
   createdById    String
 
   // Recurrence
-  isRecurring         Boolean               @default(false)
+  isRecurring         Boolean                @default(false)
   recurrencePattern   EventRecurrencePattern?
+  recurrenceInterval  Int                    @default(1)
   recurrenceEndAt     DateTime?
   parentEventId       String?
 

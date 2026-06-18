@@ -1,4 +1,4 @@
-import { IsEnum, IsDateString, IsInt, IsIn, IsOptional, IsString, Min, ValidateNested, IsArray } from 'class-validator';
+import { IsEnum, IsDateString, IsInt, IsIn, IsOptional, IsString, Min, Max, ValidateNested, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 import { LeaveType, LeaveStatus } from 'db';
 
@@ -28,6 +28,14 @@ export class CreateLeaveRequestDto {
     @IsOptional()
     @IsString()
     handoverNotes?: string;
+
+    @IsOptional()
+    @IsString()
+    handoverEmployee2Id?: string;
+
+    @IsOptional()
+    @IsString()
+    handoverNotes2?: string;
 }
 
 export class ReviewLeaveRequestDto {
@@ -91,4 +99,24 @@ export class LeaveQueryDto {
     @IsOptional()
     @IsString()
     year?: string;
+}
+
+export class UpdateLeaveSettingsDto {
+    @IsOptional()
+    @IsArray()
+    @IsInt({ each: true })
+    @Min(0, { each: true })
+    @Max(6, { each: true })
+    workingDays?: number[];
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    enabledTypes?: string[];
+}
+
+export class UpdateDeptMinHeadcountDto {
+    @IsInt()
+    @Min(0)
+    minLeaveHeadcount: number;
 }

@@ -4,24 +4,24 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
-import { LeaveService, LeaveType, LEAVE_TYPE_LABELS, LeaveOverlapEntry } from "@/services/leave.service";
+import {
+    LeaveService, LeaveType, LEAVE_TYPE_LABELS, LeaveOverlapEntry,
+    ALL_LEAVE_TYPES,
+} from "@/services/leave.service";
 import { ArrowLeft, CalendarDays, Info, AlertTriangle, UserCheck, Search, Loader2 } from "lucide-react";
 import Link from "next/link";
 
-const LEAVE_TYPES = Object.entries(LEAVE_TYPE_LABELS) as [LeaveType, string][];
-
-function calcDays(start: string, end: string): number {
+function calcDays(start: string, end: string, workingDays: number[]): number {
     if (!start || !end) return 0;
     const s = new Date(start);
     const e = new Date(end);
     if (e < s) return 0;
-    const msPerDay = 86400000;
+    const daysSet = new Set(workingDays.length > 0 ? workingDays : [1, 2, 3, 4, 5]);
     let days = 0;
     const cur = new Date(s);
     while (cur <= e) {
-        const dow = cur.getDay();
-        if (dow !== 0 && dow !== 6) days++;
-        cur.setTime(cur.getTime() + msPerDay);
+        if (daysSet.has(cur.getDay())) days++;
+        cur.setTime(cur.getTime() + 86400000);
     }
     return Math.max(1, days);
 }
@@ -61,25 +61,157 @@ function OverlapWarning({ entries }: { entries: LeaveOverlapEntry[] }) {
     );
 }
 
+function HandoverPicker({
+    label,
+    required,
+    colleagues,
+    loading,
+    selectedId,
+    excludeId,
+    onSelect,
+}: {
+    label: string;
+    required: boolean;
+    colleagues: { id: string; firstName: string; lastName: string; jobTitle?: string | null; department?: { name: string } | null }[];
+    loading: boolean;
+    selectedId: string;
+    excludeId?: string;
+    onSelect: (id: string) => void;
+}) {
+    const [search, setSearch] = useState("");
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handle(e: MouseEvent) {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        }
+        document.addEventListener("mousedown", handle);
+        return () => document.removeEventListener("mousedown", handle);
+    }, []);
+
+    const filtered = colleagues
+        .filter((c) => c.id !== excludeId)
+        .filter((c) => {
+            if (!search) return true;
+            const q = search.toLowerCase();
+            return `${c.firstName} ${c.lastName} ${c.jobTitle ?? ""} ${c.department?.name ?? ""}`.toLowerCase().includes(q);
+        });
+
+    const selected = colleagues.find((c) => c.id === selectedId);
+
+    return (
+        <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">
+                {label}{" "}
+                <span className="text-slate-400 normal-case font-normal">
+                    {required ? "(required)" : "(optional)"}
+                </span>
+            </label>
+            <div ref={ref} className="relative">
+                {selected ? (
+                    <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50">
+                        <div className="flex items-center gap-2">
+                            <UserCheck className="h-4 w-4 text-indigo-500 shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium text-indigo-800">
+                                    {selected.firstName} {selected.lastName}
+                                </p>
+                                {selected.jobTitle && (
+                                    <p className="text-xs text-indigo-500">{selected.jobTitle}</p>
+                                )}
+                            </div>
+                        </div>
+                        <button type="button" onClick={() => { onSelect(""); setSearch(""); }}
+                            className="text-xs text-indigo-400 hover:text-indigo-700 transition-colors">
+                            Change
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="Search by name or role…"
+                                value={search}
+                                onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+                                onFocus={() => setOpen(true)}
+                                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        {open && (
+                            <div className="absolute top-full left-0 z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {loading ? (
+                                    <div className="px-4 py-3 flex items-center gap-2 text-sm text-slate-400">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+                                    </div>
+                                ) : filtered.length === 0 ? (
+                                    <p className="px-4 py-3 text-sm text-slate-400">
+                                        {search ? "No match found" : "No colleagues available"}
+                                    </p>
+                                ) : filtered.slice(0, 8).map((c) => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => { onSelect(c.id); setSearch(""); setOpen(false); }}
+                                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <p className="text-sm font-medium text-slate-800">{c.firstName} {c.lastName}</p>
+                                        <p className="text-xs text-slate-400">{[c.jobTitle, c.department?.name].filter(Boolean).join(" · ")}</p>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function ApplyLeavePage() {
     const router = useRouter();
     const accessToken = useAuthStore((s) => s.accessToken)!;
     const queryClient = useQueryClient();
 
-    const [type, setType]             = useState<LeaveType>("ANNUAL");
-    const [startDate, setStartDate]   = useState("");
-    const [endDate, setEndDate]       = useState("");
-    const [reason, setReason]         = useState("");
-    const [handoverId, setHandoverId] = useState("");
-    const [handoverNotes, setHandoverNotes] = useState("");
-    const [handoverSearch, setHandoverSearch] = useState("");
-    const [showHandoverList, setShowHandoverList] = useState(false);
-    const [error, setError]           = useState("");
-    const [submitted, setSubmitted]   = useState<{ overlapping: LeaveOverlapEntry[] } | null>(null);
+    const [type, setType]               = useState<LeaveType>("ANNUAL");
+    const [startDate, setStartDate]     = useState("");
+    const [endDate, setEndDate]         = useState("");
+    const [reason, setReason]           = useState("");
+    const [handoverId, setHandoverId]   = useState("");
+    const [handoverNotes, setHandoverNotes]   = useState("");
+    const [handover2Id, setHandover2Id] = useState("");
+    const [handoverNotes2, setHandoverNotes2] = useState("");
+    const [error, setError]             = useState("");
+    const [submitted, setSubmitted]     = useState<{ overlapping: LeaveOverlapEntry[] } | null>(null);
 
-    const handoverRef = useRef<HTMLDivElement>(null);
-    const days = calcDays(startDate, endDate);
     const today = new Date().toISOString().split("T")[0];
+
+    // Leave settings (enabled types + working days)
+    const { data: settings } = useQuery({
+        queryKey: ["leave-settings"],
+        queryFn: () => LeaveService.getSettings(accessToken),
+        enabled: !!accessToken,
+        staleTime: 5 * 60_000,
+    });
+
+    const workingDays = settings?.workingDays ?? [1, 2, 3, 4, 5];
+    const enabledTypes = settings?.enabledTypes ?? [];
+
+    // Filter shown types to enabled ones (if empty array = all enabled)
+    const visibleTypes = ALL_LEAVE_TYPES.filter(
+        (t) => enabledTypes.length === 0 || enabledTypes.includes(t),
+    );
+
+    // Reset type if current selection is no longer visible
+    useEffect(() => {
+        if (visibleTypes.length > 0 && !visibleTypes.includes(type)) {
+            setType(visibleTypes[0]);
+        }
+    }, [visibleTypes.join(",")]);
+
+    const days = calcDays(startDate, endDate, workingDays);
 
     // Colleagues for handover
     const { data: colleagues = [], isLoading: colleaguesLoading } = useQuery({
@@ -89,14 +221,14 @@ export default function ApplyLeavePage() {
         staleTime: 5 * 60_000,
     });
 
-    // Leave balance for sidebar
+    // Leave balance
     const { data: balances = [] } = useQuery({
         queryKey: ["leave-balance"],
         queryFn: () => LeaveService.getMyBalance(accessToken),
         enabled: !!accessToken,
     });
 
-    // Live overlap check — debounced, fires when both dates are set
+    // Live overlap check
     const { data: overlapData } = useQuery({
         queryKey: ["leave-overlap", startDate, endDate],
         queryFn: () => LeaveService.checkOverlap(accessToken, startDate, endDate),
@@ -106,33 +238,17 @@ export default function ApplyLeavePage() {
 
     const selectedBalance = balances.find((b) => b.type === type);
     const remaining = selectedBalance ? selectedBalance.allocated - selectedBalance.used : null;
-
-    const filteredColleagues = colleagues.filter((c) => {
-        if (!handoverSearch) return true;
-        const q = handoverSearch.toLowerCase();
-        return `${c.firstName} ${c.lastName} ${c.jobTitle ?? ""} ${c.department?.name ?? ""}`.toLowerCase().includes(q);
-    });
-
-    const selectedHandover = colleagues.find((c) => c.id === handoverId);
-
-    // Close handover dropdown on outside click
-    useEffect(() => {
-        function handle(e: MouseEvent) {
-            if (handoverRef.current && !handoverRef.current.contains(e.target as Node)) {
-                setShowHandoverList(false);
-            }
-        }
-        document.addEventListener("mousedown", handle);
-        return () => document.removeEventListener("mousedown", handle);
-    }, []);
+    const daysOverBudget = remaining !== null && days > remaining;
 
     const mutation = useMutation({
         mutationFn: () =>
             LeaveService.submitRequest(accessToken, {
                 type, startDate, endDate, days,
                 reason: reason || undefined,
-                handoverEmployeeId: handoverId || undefined,
-                handoverNotes: handoverNotes || undefined,
+                handoverEmployeeId:  handoverId  || undefined,
+                handoverNotes:       handoverNotes || undefined,
+                handoverEmployee2Id: handover2Id || undefined,
+                handoverNotes2:      handoverNotes2 || undefined,
             }),
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
@@ -140,6 +256,15 @@ export default function ApplyLeavePage() {
         },
         onError: (e: Error) => setError(e.message),
     });
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        setError("");
+        if (!startDate || !endDate) return setError("Please select both dates");
+        if (days < 1) return setError("End date must be on or after start date");
+        if (!handoverId) return setError("Please select at least one cover person");
+        mutation.mutate();
+    }
 
     if (submitted) {
         return (
@@ -168,7 +293,9 @@ export default function ApplyLeavePage() {
                             onClick={() => {
                                 setSubmitted(null);
                                 setStartDate(""); setEndDate(""); setReason("");
-                                setHandoverId(""); setHandoverNotes(""); setError("");
+                                setHandoverId(""); setHandoverNotes("");
+                                setHandover2Id(""); setHandoverNotes2("");
+                                setError("");
                             }}
                             className="text-sm text-slate-500 hover:text-slate-800 transition-colors"
                         >
@@ -194,10 +321,8 @@ export default function ApplyLeavePage() {
 
                 {/* ── Form ── */}
                 <div className="lg:col-span-2">
-                    <form
-                        onSubmit={(e) => { e.preventDefault(); setError(""); if (!startDate || !endDate) return setError("Please select both dates"); if (days < 1) return setError("End date must be on or after start date"); mutation.mutate(); }}
-                        className="bg-white rounded-xl border border-slate-200 p-6 space-y-5"
-                    >
+                    <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+
                         {/* Leave type */}
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Leave Type</label>
@@ -206,7 +331,9 @@ export default function ApplyLeavePage() {
                                 onChange={(e) => setType(e.target.value as LeaveType)}
                                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
-                                {LEAVE_TYPES.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                                {visibleTypes.map((val) => (
+                                    <option key={val} value={val}>{LEAVE_TYPE_LABELS[val]}</option>
+                                ))}
                             </select>
                             {remaining !== null && (
                                 <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1">
@@ -235,9 +362,20 @@ export default function ApplyLeavePage() {
                         </div>
 
                         {days > 0 && (
-                            <div className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg">
-                                <CalendarDays className="h-4 w-4 text-indigo-500 shrink-0" />
-                                <p className="text-sm font-medium text-indigo-700">{days} working day{days !== 1 ? "s" : ""}</p>
+                            <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                                daysOverBudget
+                                    ? "bg-red-50 border-red-200"
+                                    : "bg-emerald-50 border-emerald-100"
+                            }`}>
+                                <CalendarDays className={`h-4 w-4 shrink-0 ${daysOverBudget ? "text-red-500" : "text-emerald-500"}`} />
+                                <p className={`text-sm font-semibold ${daysOverBudget ? "text-red-700" : "text-emerald-700"}`}>
+                                    {days} working day{days !== 1 ? "s" : ""}
+                                </p>
+                                {daysOverBudget && remaining !== null && (
+                                    <span className="text-xs text-red-500 ml-1">
+                                        ({days - remaining} over your balance)
+                                    </span>
+                                )}
                             </div>
                         )}
 
@@ -257,81 +395,52 @@ export default function ApplyLeavePage() {
                             />
                         </div>
 
-                        {/* Handover */}
-                        <div className="border-t border-slate-100 pt-5 space-y-3">
+                        {/* Cover persons */}
+                        <div className="border-t border-slate-100 pt-5 space-y-4">
                             <div>
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">
-                                    Handover Person <span className="text-slate-400 normal-case font-normal">(recommended)</span>
-                                </label>
-                                <p className="text-xs text-slate-400 mb-2">Who will cover your responsibilities while you're away?</p>
-
-                                <div ref={handoverRef} className="relative">
-                                    {selectedHandover ? (
-                                        <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50">
-                                            <div className="flex items-center gap-2">
-                                                <UserCheck className="h-4 w-4 text-indigo-500 shrink-0" />
-                                                <div>
-                                                    <p className="text-sm font-medium text-indigo-800">
-                                                        {selectedHandover.firstName} {selectedHandover.lastName}
-                                                    </p>
-                                                    {selectedHandover.jobTitle && (
-                                                        <p className="text-xs text-indigo-500">{selectedHandover.jobTitle}</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <button type="button" onClick={() => { setHandoverId(""); setHandoverSearch(""); }}
-                                                className="text-xs text-indigo-400 hover:text-indigo-700 transition-colors">
-                                                Change
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            <div className="relative">
-                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search by name or role…"
-                                                    value={handoverSearch}
-                                                    onChange={(e) => { setHandoverSearch(e.target.value); setShowHandoverList(true); }}
-                                                    onFocus={() => setShowHandoverList(true)}
-                                                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                />
-                                            </div>
-                                            {showHandoverList && (
-                                                <div className="absolute top-full left-0 z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                    {colleaguesLoading ? (
-                                                        <div className="px-4 py-3 flex items-center gap-2 text-sm text-slate-400">
-                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
-                                                        </div>
-                                                    ) : filteredColleagues.length === 0 ? (
-                                                        <p className="px-4 py-3 text-sm text-slate-400">
-                                                            {handoverSearch ? "No match found" : "No colleagues available"}
-                                                        </p>
-                                                    ) : filteredColleagues.slice(0, 8).map((c) => (
-                                                        <button
-                                                            key={c.id}
-                                                            type="button"
-                                                            onClick={() => { setHandoverId(c.id); setHandoverSearch(""); setShowHandoverList(false); }}
-                                                            className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors"
-                                                        >
-                                                            <p className="text-sm font-medium text-slate-800">{c.firstName} {c.lastName}</p>
-                                                            <p className="text-xs text-slate-400">{[c.jobTitle, c.department?.name].filter(Boolean).join(" · ")}</p>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Cover Persons</p>
+                                <p className="text-xs text-slate-400 mb-3">Who will cover your responsibilities while you&apos;re away? At least one is required.</p>
                             </div>
 
+                            {/* First cover */}
+                            <HandoverPicker
+                                label="First Cover Person"
+                                required={true}
+                                colleagues={colleagues}
+                                loading={colleaguesLoading}
+                                selectedId={handoverId}
+                                excludeId={handover2Id || undefined}
+                                onSelect={setHandoverId}
+                            />
                             {handoverId && (
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                                         Handover Notes <span className="text-slate-400 normal-case font-normal">(optional)</span>
                                     </label>
                                     <textarea rows={2} value={handoverNotes} onChange={(e) => setHandoverNotes(e.target.value)}
-                                        placeholder="Key tasks, contacts, or instructions for your cover…"
+                                        placeholder="Key tasks, contacts, or instructions…"
+                                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Second cover */}
+                            <HandoverPicker
+                                label="Second Cover Person"
+                                required={false}
+                                colleagues={colleagues}
+                                loading={colleaguesLoading}
+                                selectedId={handover2Id}
+                                excludeId={handoverId || undefined}
+                                onSelect={setHandover2Id}
+                            />
+                            {handover2Id && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                                        Second Cover Notes <span className="text-slate-400 normal-case font-normal">(optional)</span>
+                                    </label>
+                                    <textarea rows={2} value={handoverNotes2} onChange={(e) => setHandoverNotes2(e.target.value)}
+                                        placeholder="Additional instructions for second cover…"
                                         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     />
                                 </div>
@@ -365,20 +474,50 @@ export default function ApplyLeavePage() {
                         const rem = b.allocated - b.used;
                         const pct = b.allocated > 0 ? Math.round((b.used / b.allocated) * 100) : 0;
                         const isSelected = b.type === type;
+                        const isOverBudget = isSelected && days > 0 && days > rem;
                         return (
                             <button key={b.id} type="button" onClick={() => setType(b.type as LeaveType)}
-                                className={`w-full text-left bg-white rounded-xl border p-4 transition-all ${isSelected ? "border-indigo-300 ring-1 ring-indigo-200 shadow-sm" : "border-slate-200 hover:border-slate-300"}`}
+                                className={`w-full text-left bg-white rounded-xl border p-4 transition-all ${
+                                    isSelected
+                                        ? isOverBudget
+                                            ? "border-red-300 ring-1 ring-red-200 shadow-sm"
+                                            : "border-indigo-300 ring-1 ring-indigo-200 shadow-sm"
+                                        : "border-slate-200 hover:border-slate-300"
+                                }`}
                             >
                                 <p className="text-xs font-medium text-slate-500 mb-1">{LEAVE_TYPE_LABELS[b.type as LeaveType]}</p>
                                 <div className="flex items-end justify-between mb-2">
-                                    <span className="text-2xl font-bold text-slate-900">{rem}</span>
+                                    <span className={`text-2xl font-bold tabular-nums ${
+                                        isSelected && isOverBudget ? "text-red-600" : "text-slate-900"
+                                    }`}>
+                                        {isSelected && days > 0 ? (
+                                            <span className={days > rem ? "text-red-600" : "text-emerald-600"}>
+                                                {days}
+                                            </span>
+                                        ) : rem}
+                                    </span>
                                     <span className="text-xs text-slate-400">/ {b.allocated} days</span>
                                 </div>
                                 <div className="h-1.5 rounded-full bg-slate-100">
-                                    <div className={`h-1.5 rounded-full transition-all ${isSelected ? "bg-indigo-500" : "bg-slate-300"}`}
-                                        style={{ width: `${Math.min(pct, 100)}%` }} />
+                                    <div
+                                        className={`h-1.5 rounded-full transition-all ${
+                                            isSelected && isOverBudget
+                                                ? "bg-red-400"
+                                                : isSelected
+                                                    ? "bg-indigo-500"
+                                                    : "bg-slate-300"
+                                        }`}
+                                        style={{ width: `${Math.min(pct, 100)}%` }}
+                                    />
                                 </div>
-                                <p className="text-xs text-slate-400 mt-1">{b.used} used</p>
+                                <div className="flex items-center justify-between mt-1">
+                                    <p className="text-xs text-slate-400">{b.used} used</p>
+                                    {b.accumulated !== undefined && (
+                                        <p className="text-xs text-slate-400">
+                                            {b.accumulated} accrued
+                                        </p>
+                                    )}
+                                </div>
                             </button>
                         );
                     })}

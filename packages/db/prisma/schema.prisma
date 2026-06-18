@@ -120,6 +120,7 @@ model Organization {
   visitRequests     VisitRequest[]
   leaveRequests     LeaveRequest[]
   leavePolicies     LeavePolicy[]
+  leaveSettings     LeaveSettings?
   calendarEvents    CalendarEvent[]
 }
 
@@ -265,6 +266,7 @@ model Employee {
   leaveRequests         LeaveRequest[]
   leaveBalances         LeaveBalance[]
   handoverForLeaves     LeaveRequest[]     @relation("LeaveHandover")
+  handoverForLeaves2    LeaveRequest[]     @relation("LeaveHandover2")
   createdCalendarEvents CalendarEvent[]    @relation("CalendarEventCreator")
   receivedInvitations   EventInvitation[]  @relation("ReceivedInvitations")
   eventParticipations   EventParticipant[] @relation("EventParticipations")
@@ -278,9 +280,10 @@ model Employee {
 
 
 model Department {
-  id             String   @id @default(uuid())
-  name           String
-  organizationId String
+  id                String   @id @default(uuid())
+  name              String
+  organizationId    String
+  minLeaveHeadcount Int      @default(1)
 
   employees      Employee[]
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -607,6 +610,8 @@ model CalendarBlock {
 enum LeaveType {
   ANNUAL
   SICK
+  SICK_EMERGENCY
+  PRE_ADOPTIVE
   UNPAID
   MATERNITY
   PATERNITY
@@ -630,19 +635,22 @@ model LeaveRequest {
   startDate      DateTime
   endDate        DateTime
   days           Int
-  reason             String?
-  handoverEmployeeId String?
-  handoverNotes      String?
-  reviewedById       String?
-  reviewedAt     DateTime?
-  reviewNote     String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  reason              String?
+  handoverEmployeeId  String?
+  handoverNotes       String?
+  handoverEmployee2Id String?
+  handoverNotes2      String?
+  reviewedById        String?
+  reviewedAt      DateTime?
+  reviewNote      String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  employee         Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  organization     Organization @relation(fields: [organizationId], references: [id])
-  handoverEmployee Employee?    @relation("LeaveHandover", fields: [handoverEmployeeId], references: [id], onDelete: SetNull)
-  reviewedBy       User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  employee          Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  handoverEmployee  Employee?    @relation("LeaveHandover",  fields: [handoverEmployeeId],  references: [id], onDelete: SetNull)
+  handoverEmployee2 Employee?    @relation("LeaveHandover2", fields: [handoverEmployee2Id], references: [id], onDelete: SetNull)
+  reviewedBy        User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, status])
   @@index([organizationId, status])
@@ -676,5 +684,15 @@ model LeavePolicy {
 
   @@unique([organizationId, year, type])
   @@index([organizationId, year])
+}
+
+model LeaveSettings {
+  id             String   @id @default(uuid())
+  organizationId String   @unique
+  workingDays    Int[]    @default([1,2,3,4,5])
+  enabledTypes   String[] @default([])
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
 }
    

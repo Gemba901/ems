@@ -14,7 +14,17 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type LeaveType = "ANNUAL" | "SICK" | "UNPAID" | "MATERNITY" | "PATERNITY" | "COMPASSIONATE" | "STUDY";
+export type LeaveType =
+    | "ANNUAL"
+    | "SICK"
+    | "SICK_EMERGENCY"
+    | "PRE_ADOPTIVE"
+    | "UNPAID"
+    | "MATERNITY"
+    | "PATERNITY"
+    | "COMPASSIONATE"
+    | "STUDY";
+
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 
 export interface LeaveColleague {
@@ -44,7 +54,10 @@ export interface LeaveRequest {
     reason: string | null;
     handoverEmployeeId: string | null;
     handoverNotes: string | null;
+    handoverEmployee2Id: string | null;
+    handoverNotes2: string | null;
     handoverEmployee?: { id: string; firstName: string; lastName: string; jobTitle: string | null } | null;
+    handoverEmployee2?: { id: string; firstName: string; lastName: string; jobTitle: string | null } | null;
     reviewedById: string | null;
     reviewedAt: string | null;
     reviewNote: string | null;
@@ -60,6 +73,7 @@ export interface LeaveBalance {
     type: LeaveType;
     allocated: number;
     used: number;
+    accumulated?: number;
 }
 
 export interface LeavePolicy {
@@ -76,20 +90,52 @@ export interface LeaveSummary {
     rejected: number;
 }
 
+export interface YearlyAnalytics {
+    year: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    totalDays: number;
+}
+
+export interface LeaveSettings {
+    id?: string;
+    organizationId: string;
+    workingDays: number[];
+    enabledTypes: string[];
+}
+
+export interface LeaveDepartment {
+    id: string;
+    name: string;
+    minLeaveHeadcount: number;
+}
+
+export const ALL_LEAVE_TYPES: LeaveType[] = [
+    "ANNUAL", "SICK_EMERGENCY", "PRE_ADOPTIVE", "UNPAID",
+    "MATERNITY", "PATERNITY", "COMPASSIONATE", "STUDY",
+];
+
 export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
-    ANNUAL: "Annual Leave",
-    SICK: "Sick Leave",
-    UNPAID: "Unpaid Leave",
-    MATERNITY: "Maternity Leave",
-    PATERNITY: "Paternity Leave",
+    ANNUAL:        "Annual Leave",
+    SICK:          "Sick Leave",
+    SICK_EMERGENCY:"Sick / Emergency Leave",
+    PRE_ADOPTIVE:  "Pre-Adoptive Leave",
+    UNPAID:        "Unpaid Leave",
+    MATERNITY:     "Maternity Leave",
+    PATERNITY:     "Paternity Leave",
     COMPASSIONATE: "Compassionate Leave",
-    STUDY: "Study Leave",
+    STUDY:         "Study Leave",
+};
+
+export const WORKING_DAY_LABELS: Record<number, string> = {
+    0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat",
 };
 
 export const LEAVE_STATUS_COLORS: Record<LeaveStatus, string> = {
-    PENDING: "bg-amber-100 text-amber-700",
-    APPROVED: "bg-green-100 text-green-700",
-    REJECTED: "bg-red-100 text-red-700",
+    PENDING:   "bg-amber-100 text-amber-700",
+    APPROVED:  "bg-green-100 text-green-700",
+    REJECTED:  "bg-red-100 text-red-700",
     CANCELLED: "bg-slate-100 text-slate-500",
 };
 
@@ -119,9 +165,42 @@ export const LeaveService = {
         return handleResponse(res);
     },
 
+    async getSettings(token: string): Promise<LeaveSettings> {
+        const res = await fetch(`${API_URL}/leave/settings`, { headers: authHeaders(token) });
+        return handleResponse(res);
+    },
+
+    async updateSettings(token: string, body: Partial<LeaveSettings>): Promise<LeaveSettings> {
+        const res = await fetch(`${API_URL}/leave/settings`, {
+            method: "PATCH",
+            headers: authHeaders(token),
+            body: JSON.stringify(body),
+        });
+        return handleResponse(res);
+    },
+
+    async getDepartments(token: string): Promise<LeaveDepartment[]> {
+        const res = await fetch(`${API_URL}/leave/departments`, { headers: authHeaders(token) });
+        return handleResponse(res);
+    },
+
+    async updateDeptMin(token: string, deptId: string, minLeaveHeadcount: number): Promise<LeaveDepartment> {
+        const res = await fetch(`${API_URL}/leave/departments/${deptId}/min-headcount`, {
+            method: "PATCH",
+            headers: authHeaders(token),
+            body: JSON.stringify({ minLeaveHeadcount }),
+        });
+        return handleResponse(res);
+    },
+
     async getSummary(token: string, year?: number): Promise<LeaveSummary> {
         const qs = year ? `?year=${year}` : "";
         const res = await fetch(`${API_URL}/leave/summary${qs}`, { headers: authHeaders(token) });
+        return handleResponse(res);
+    },
+
+    async getYearlyAnalytics(token: string): Promise<YearlyAnalytics[]> {
+        const res = await fetch(`${API_URL}/leave/analytics/years`, { headers: authHeaders(token) });
         return handleResponse(res);
     },
 
@@ -165,7 +244,9 @@ export const LeaveService = {
 
     async submitRequest(token: string, body: {
         type: LeaveType; startDate: string; endDate: string; days: number;
-        reason?: string; handoverEmployeeId?: string; handoverNotes?: string;
+        reason?: string;
+        handoverEmployeeId?: string; handoverNotes?: string;
+        handoverEmployee2Id?: string; handoverNotes2?: string;
     }): Promise<{ request: LeaveRequest; overlapping: LeaveOverlapEntry[] }> {
         const res = await fetch(`${API_URL}/leave/requests`, {
             method: "POST",

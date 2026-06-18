@@ -28,7 +28,7 @@ function BalanceCard({ balance }: { balance: LeaveBalance }) {
     const barColor = balanceBarColor(pct);
     return (
         <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <p className="text-xs text-slate-500 mb-2">{LEAVE_TYPE_LABELS[balance.type]}</p>
+            <p className="text-xs text-slate-500 mb-2">{LEAVE_TYPE_LABELS[balance.type as keyof typeof LEAVE_TYPE_LABELS] ?? balance.type}</p>
             <div className="flex items-baseline gap-1.5 mb-3">
                 <span className="text-2xl font-semibold text-slate-900 tabular-nums">{remaining}</span>
                 <span className="text-sm text-slate-400">/ {balance.allocated} days</span>
@@ -39,7 +39,14 @@ function BalanceCard({ balance }: { balance: LeaveBalance }) {
                     style={{ width: `${Math.min(pct, 100)}%` }}
                 />
             </div>
-            <p className="text-xs text-slate-400 mt-1.5">{balance.used} used</p>
+            <div className="flex items-center justify-between mt-1.5">
+                <p className="text-xs text-slate-400">{balance.used} used</p>
+                {balance.accumulated !== undefined && (
+                    <p className="text-xs text-slate-400" title="Pro-rata days accrued so far this year">
+                        {balance.accumulated} accrued
+                    </p>
+                )}
+            </div>
         </div>
     );
 }
@@ -52,7 +59,7 @@ function RequestRow({ req, onCancel }: { req: LeaveRequest; onCancel: (id: strin
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium text-slate-800">{LEAVE_TYPE_LABELS[req.type]}</p>
+                        <p className="text-sm font-medium text-slate-800">{LEAVE_TYPE_LABELS[req.type as keyof typeof LEAVE_TYPE_LABELS] ?? req.type}</p>
                         <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${LEAVE_STATUS_COLORS[req.status]}`}>
                             {req.status.charAt(0) + req.status.slice(1).toLowerCase()}
                         </span>

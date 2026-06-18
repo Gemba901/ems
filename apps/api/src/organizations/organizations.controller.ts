@@ -13,6 +13,7 @@ import {
     HttpCode,
     HttpStatus,
     BadRequestException,
+    ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationsService } from './organizations.service';
@@ -28,6 +29,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from 'src/common/enum/role.enum';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 
 /**
  * All routes in this controller are restricted to SUPER_ADMIN only.
@@ -157,12 +159,18 @@ export class OrganizationsController {
     /**
      * PATCH /organizations/:id
      * Update organization profile fields (name, logo, industry, contact info).
+     * SUPER_ADMIN can update any org; ADMIN can only update their own.
      */
     @Patch(':id')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN)
     update(
         @Param('id') id: string,
         @Body() dto: UpdateOrganizationDto,
+        @CurrentUser() user: { organizationId: string; roleLevel: Role },
     ) {
+        if (user.roleLevel !== Role.SUPER_ADMIN && user.organizationId !== id) {
+            throw new ForbiddenException('You can only update your own organization');
+        }
         return this.organizationsService.update(id, dto);
     }
 

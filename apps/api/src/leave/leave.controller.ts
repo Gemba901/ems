@@ -2,7 +2,11 @@ import {
     Controller, Get, Post, Patch, Body, Param, Query, UseGuards,
 } from '@nestjs/common';
 import { LeaveService } from './leave.service';
-import { CreateLeaveRequestDto, ReviewLeaveRequestDto, LeaveBalanceUpsertDto, LeaveQueryDto, UpsertLeavePolicyDto, ApplyLeavePolicyDto } from './dto/leave.dto';
+import {
+    CreateLeaveRequestDto, ReviewLeaveRequestDto, LeaveBalanceUpsertDto,
+    LeaveQueryDto, UpsertLeavePolicyDto, ApplyLeavePolicyDto,
+    UpdateLeaveSettingsDto, UpdateDeptMinHeadcountDto,
+} from './dto/leave.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
@@ -18,7 +22,8 @@ import { ModuleType } from 'db';
 export class LeaveController {
     constructor(private leave: LeaveService) {}
 
-    /** GET /leave/policy?year=2026 — get company-wide leave policy for a year */
+    // ── Policy ────────────────────────────────────────────────────────────────
+
     @Get('policy')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
     getPolicy(
@@ -28,7 +33,6 @@ export class LeaveController {
         return this.leave.getPolicy(user.organizationId, year ? parseInt(year) : new Date().getFullYear());
     }
 
-    /** POST /leave/policy — save (upsert) company-wide policy entries */
     @Post('policy')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
     upsertPolicy(
@@ -38,7 +42,6 @@ export class LeaveController {
         return this.leave.upsertPolicy(user.organizationId, dto);
     }
 
-    /** POST /leave/policy/apply — push policy allocations to every employee */
     @Post('policy/apply')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
     applyPolicy(
@@ -48,13 +51,48 @@ export class LeaveController {
         return this.leave.applyPolicy(user.organizationId, dto);
     }
 
-    /** GET /leave/colleagues — list of org employees for handover selection */
+    // ── Settings ──────────────────────────────────────────────────────────────
+
+    @Get('settings')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+    getSettings(@CurrentUser() user: { organizationId: string }) {
+        return this.leave.getLeaveSettings(user.organizationId);
+    }
+
+    @Patch('settings')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+    updateSettings(
+        @CurrentUser() user: { organizationId: string },
+        @Body() dto: UpdateLeaveSettingsDto,
+    ) {
+        return this.leave.updateLeaveSettings(user.organizationId, dto);
+    }
+
+    // ── Departments ───────────────────────────────────────────────────────────
+
+    @Get('departments')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+    getDepartments(@CurrentUser() user: { organizationId: string }) {
+        return this.leave.getDepartments(user.organizationId);
+    }
+
+    @Patch('departments/:deptId/min-headcount')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+    updateDeptMin(
+        @Param('deptId') deptId: string,
+        @Body() dto: UpdateDeptMinHeadcountDto,
+        @CurrentUser() user: { organizationId: string },
+    ) {
+        return this.leave.updateDeptMinHeadcount(deptId, user.organizationId, dto);
+    }
+
+    // ── Colleagues / Overlap ──────────────────────────────────────────────────
+
     @Get('colleagues')
     getColleagues(@CurrentUser() user: { userId: string; organizationId: string }) {
         return this.leave.getColleagues(user.userId, user.organizationId);
     }
 
-    /** GET /leave/overlap?startDate=&endDate= — concurrent leave check */
     @Get('overlap')
     checkOverlap(
         @CurrentUser() user: { userId: string; organizationId: string },
@@ -64,7 +102,8 @@ export class LeaveController {
         return this.leave.checkOverlap(user.organizationId, startDate, endDate, user.userId);
     }
 
-    /** GET /leave/summary?year=2026 — pending/approved/rejected counts (HR/ADMIN/HOD) */
+    // ── Summary / Analytics ───────────────────────────────────────────────────
+
     @Get('summary')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD)
     getSummary(
@@ -74,13 +113,19 @@ export class LeaveController {
         return this.leave.getSummary(user.organizationId, year);
     }
 
-    /** GET /leave/balance — my leave balance for the current year */
+    @Get('analytics/years')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD)
+    getYearlyAnalytics(@CurrentUser() user: { organizationId: string }) {
+        return this.leave.getYearlyAnalytics(user.organizationId);
+    }
+
+    // ── Balance ───────────────────────────────────────────────────────────────
+
     @Get('balance')
     getMyBalance(@CurrentUser() user: { userId: string; organizationId: string }) {
         return this.leave.getMyBalance(user.userId, user.organizationId);
     }
 
-    /** GET /leave/balance/:employeeId — HR views a specific employee's balance */
     @Get('balance/:employeeId')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD)
     getEmployeeBalance(
@@ -90,7 +135,6 @@ export class LeaveController {
         return this.leave.getEmployeeBalance(employeeId, user.organizationId);
     }
 
-    /** POST /leave/balance/:employeeId — HR sets leave allocation for an employee */
     @Post('balance/:employeeId')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
     upsertBalance(
@@ -101,7 +145,8 @@ export class LeaveController {
         return this.leave.upsertBalance(employeeId, user.organizationId, dto);
     }
 
-    /** GET /leave/requests — list (employees see own; HR/HOD see all) */
+    // ── Requests ──────────────────────────────────────────────────────────────
+
     @Get('requests')
     listRequests(
         @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string },
@@ -110,7 +155,6 @@ export class LeaveController {
         return this.leave.listRequests(user.organizationId, user.roleLevel, user.userId, query);
     }
 
-    /** POST /leave/requests — employee submits a leave request */
     @Post('requests')
     submitRequest(
         @CurrentUser() user: { userId: string; organizationId: string },
@@ -119,7 +163,6 @@ export class LeaveController {
         return this.leave.submitRequest(user.userId, user.organizationId, dto);
     }
 
-    /** GET /leave/requests/:id */
     @Get('requests/:id')
     getRequest(
         @Param('id') id: string,
@@ -128,7 +171,6 @@ export class LeaveController {
         return this.leave.getRequest(id, user.organizationId);
     }
 
-    /** PATCH /leave/requests/:id/review — HR/HOD approves or rejects */
     @Patch('requests/:id/review')
     @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD)
     reviewRequest(
@@ -139,7 +181,6 @@ export class LeaveController {
         return this.leave.reviewRequest(id, user.organizationId, user.userId, dto);
     }
 
-    /** PATCH /leave/requests/:id/cancel — employee cancels their own request */
     @Patch('requests/:id/cancel')
     cancelRequest(
         @Param('id') id: string,

@@ -1,5 +1,5 @@
 import {
-  Injectable, NotFoundException, BadRequestException,
+  Injectable, NotFoundException, BadRequestException, ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
@@ -7,6 +7,8 @@ import { Role } from 'src/common/enum/role.enum';
 import {
   CreateVisitDto, UpdateVisitDto, CreateVisitRequestDto, RespondToRequestDto,
   CreateCalendarBlockDto, AddVisitAttendeeDto,
+  CreateCalendarEventDto, UpdateCalendarEventDto,
+  InvitationStatusDto, DeleteModeDto,
 } from './dto/calendar.dto';
 import { randomUUID } from 'crypto';
 
@@ -603,6 +605,431 @@ export class CalendarService {
     return this.prisma.employee.findMany({
       where: { organizationId: clientOrgId },
       select: { id: true, firstName: true, lastName: true, jobTitle: true, avatarUrl: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+  }
+
+  // ── Holistic Calendar ─────────────────────────────────────────────────────
+
+  private async resolveEmployee(userId: string, organizationId: string) {
+    const emp = await this.prisma.employee.findFirst({
+      where: { userId, organizationId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (!emp) throw new NotFoundException('Employee record not found');
+    return emp;
+  }
+
+  private nextEventDate(current: Date, pattern: string): Date {
+    const d = new Date(current);
+    if (pattern === 'DAILY')   d.setDate(d.getDate() + 1);
+    if (pattern === 'WEEKLY')  d.setDate(d.getDate() + 7);
+    if (pattern === 'MONTHLY') d.setMonth(d.getMonth() + 1);
+    return d;
+  }
+
+  private mapCalendarEvent(e: any, currentEmployeeId: string) {
+    const myInvitation = (e.invitations ?? []).find((i: any) => i.inviteeId === currentEmployeeId);
+    return {
+      id: e.id,
+      title: e.title,
+      description: e.description ?? null,
+      type: e.type,
+      startAt: e.startAt instanceof Date ? e.startAt.toISOString() : e.startAt,
+      endAt: e.endAt instanceof Date ? e.endAt.toISOString() : e.endAt,
+      allDay: e.allDay,
+      isRecurring: e.isRecurring,
+      recurrencePattern: e.recurrencePattern ?? null,
+      recurrenceEndAt: e.recurrenceEndAt ? (e.recurrenceEndAt instanceof Date ? e.recurrenceEndAt.toISOString() : e.recurrenceEndAt) : null,
+      parentEventId: e.parentEventId ?? null,
+      isOwner: e.createdById === currentEmployeeId,
+      myInvitationStatus: myInvitation?.status ?? null,
+      createdBy: e.createdBy ? {
+        id: e.createdBy.id,
+        name: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
+        avatarUrl: e.createdBy.avatarUrl ?? null,
+      } : null,
+      invitations: (e.invitations ?? []).map((i: any) => ({
+        id: i.id,
+        status: i.status,
+        invitee: {
+          id: i.invitee.id,
+          name: `${i.invitee.firstName} ${i.invitee.lastName}`,
+          avatarUrl: i.invitee.avatarUrl ?? null,
+        },
+      })),
+      participants: (e.participants ?? []).map((p: any) => ({
+        id: p.employeeId,
+        name: `${p.employee.firstName} ${p.employee.lastName}`,
+        avatarUrl: p.employee.avatarUrl ?? null,
+      })),
+    };
+  }
+
+  async getEvents(year: number, month: number, userId: string, organizationId: string) {
+    const start = new Date(year, month - 1, 1);
+    const end   = new Date(year, month, 0, 23, 59, 59);
+
+    const employee = await this.resolveEmployee(userId, organizationId);
+
+    const eventInclude = {
+      createdBy:    { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      invitations:  { select: { id: true, status: true, inviteeId: true, invitee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } } },
+      participants: { select: { employeeId: true, employee: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } } },
+    };
+
+    const dateOverlap = { startAt: { lte: end }, endAt: { gte: start } };
+
+    const [personalEvents, companyEvents, trainingEvents, pendingCount] = await Promise.all([
+      // Personal: own events + meetings I'm invited to + training I participate in
+      this.prisma.calendarEvent.findMany({
+        where: {
+          organizationId,
+          ...dateOverlap,
+          type: { in: ['PERSONAL_EVENT', 'PERSONAL_REMINDER', 'PERSONAL_TRAINING', 'MEETING'] as any },
+          OR: [
+            { createdById: employee.id },
+            { invitations: { some: { inviteeId: employee.id } } },
+          ],
+        },
+        include: eventInclude,
+        orderBy: { startAt: 'asc' },
+      }),
+
+      // Company: company-wide events visible to all in org
+      this.prisma.calendarEvent.findMany({
+        where: {
+          organizationId,
+          ...dateOverlap,
+          type: { in: ['COMPANY_TRAINING', 'COMPANY_EVENT', 'COMPANY_HOLIDAY', 'AUDIT'] as any },
+        },
+        include: eventInclude,
+        orderBy: { startAt: 'asc' },
+      }),
+
+      // Training planner: all training types in org (+ personal training by current user)
+      this.prisma.calendarEvent.findMany({
+        where: {
+          organizationId,
+          ...dateOverlap,
+          OR: [
+            { type: { in: ['COMPANY_TRAINING', 'TRAINING_SESSION'] as any } },
+            { type: 'PERSONAL_TRAINING' as any, createdById: employee.id },
+          ],
+        },
+        include: eventInclude,
+        orderBy: { startAt: 'asc' },
+      }),
+
+      this.prisma.eventInvitation.count({ where: { inviteeId: employee.id, status: 'PENDING' } }),
+    ]);
+
+    // Birthday virtual events from colleagues (derived from dateOfBirth, not stored as events)
+    const colleagues = await this.prisma.employee.findMany({
+      where: { organizationId, dateOfBirth: { not: null } },
+      select: { id: true, firstName: true, lastName: true, dateOfBirth: true, avatarUrl: true },
+    });
+
+    const birthdays = colleagues
+      .map((e) => {
+        const dob = e.dateOfBirth!;
+        const bday = new Date(year, dob.getMonth(), dob.getDate());
+        if (bday < start || bday > end) return null;
+        return {
+          id: `birthday-${e.id}-${year}`,
+          type: 'BIRTHDAY',
+          title: `${e.firstName} ${e.lastName}'s Birthday`,
+          startAt: bday.toISOString(),
+          endAt: bday.toISOString(),
+          allDay: true,
+          isVirtual: true,
+          isOwner: false,
+          myInvitationStatus: null,
+          employee: { id: e.id, name: `${e.firstName} ${e.lastName}`, avatarUrl: e.avatarUrl ?? null },
+        };
+      })
+      .filter(Boolean);
+
+    return {
+      employeeId: employee.id,
+      pendingInvitationsCount: pendingCount,
+      personal: personalEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
+      company: companyEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
+      training: trainingEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
+      birthdays,
+    };
+  }
+
+  async createEvent(dto: CreateCalendarEventDto, userId: string, organizationId: string, roleLevel: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+
+    // Role guard by event type
+    const companyOnlyTypes = ['COMPANY_TRAINING', 'COMPANY_EVENT', 'COMPANY_HOLIDAY', 'TRAINING_SESSION'];
+    const auditOnlyTypes   = ['AUDIT'];
+    const allowedCompany   = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR] as string[];
+    const allowedAudit     = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT] as string[];
+
+    if (companyOnlyTypes.includes(dto.type) && !allowedCompany.includes(roleLevel)) {
+      throw new ForbiddenException('Only MANAGEMENT, ADMIN, or HR can create company-wide events');
+    }
+    if (auditOnlyTypes.includes(dto.type) && !allowedAudit.includes(roleLevel)) {
+      throw new ForbiddenException('Only ADMIN or MANAGEMENT can create audit events');
+    }
+
+    const startAt = new Date(dto.startAt);
+    const endAt   = new Date(dto.endAt);
+
+    // For meetings: check each invitee for approved leave overlap
+    const onLeaveWarnings: { employeeId: string; name: string }[] = [];
+    if (dto.type === 'MEETING' && dto.inviteeIds?.length) {
+      const invitees = await this.prisma.employee.findMany({
+        where: { id: { in: dto.inviteeIds }, organizationId },
+        select: { id: true, firstName: true, lastName: true },
+      });
+      await Promise.all(
+        invitees.map(async (inv) => {
+          const leave = await this.prisma.leaveRequest.findFirst({
+            where: { employeeId: inv.id, status: 'APPROVED', startDate: { lte: endAt }, endDate: { gte: startAt } },
+            select: { id: true },
+          });
+          if (leave) onLeaveWarnings.push({ employeeId: inv.id, name: `${inv.firstName} ${inv.lastName}` });
+        }),
+      );
+    }
+
+    const event = await this.prisma.calendarEvent.create({
+      data: {
+        title: dto.title,
+        description: dto.description,
+        type: dto.type as any,
+        startAt,
+        endAt,
+        allDay: dto.allDay ?? false,
+        organizationId,
+        createdById: employee.id,
+        isRecurring: dto.isRecurring ?? false,
+        recurrencePattern: (dto.recurrencePattern as any) ?? null,
+        recurrenceEndAt: dto.recurrenceEndAt ? new Date(dto.recurrenceEndAt) : null,
+      },
+    });
+
+    // Recurrence children
+    if (dto.isRecurring && dto.recurrencePattern && dto.recurrenceEndAt) {
+      const recEnd   = new Date(dto.recurrenceEndAt);
+      const duration = endAt.getTime() - startAt.getTime();
+      let current    = new Date(startAt);
+      const children: any[] = [];
+
+      while (children.length < 365) {
+        current = this.nextEventDate(current, dto.recurrencePattern);
+        if (current > recEnd) break;
+        children.push({
+          title: dto.title, description: dto.description,
+          type: dto.type, organizationId, createdById: employee.id,
+          startAt: new Date(current), endAt: new Date(current.getTime() + duration),
+          allDay: dto.allDay ?? false,
+          isRecurring: true, recurrencePattern: dto.recurrencePattern,
+          recurrenceEndAt: new Date(dto.recurrenceEndAt),
+          parentEventId: event.id,
+        });
+      }
+      if (children.length) await this.prisma.calendarEvent.createMany({ data: children });
+    }
+
+    // Invitations for MEETING
+    if (dto.type === 'MEETING' && dto.inviteeIds?.length) {
+      const targets = dto.inviteeIds.filter((id) => id !== employee.id);
+      if (targets.length) {
+        await this.prisma.eventInvitation.createMany({
+          data: targets.map((inviteeId) => ({ eventId: event.id, inviteeId })),
+          skipDuplicates: true,
+        });
+        await this.notifications.createMany(
+          targets.map((inviteeId) => ({
+            employeeId: inviteeId,
+            type: 'ACTION_REQUIRED' as any,
+            module: 'CALENDAR',
+            title: 'Meeting invitation',
+            message: `${employee.firstName} ${employee.lastName} invited you to "${dto.title}" on ${startAt.toDateString()}`,
+            actionUrl: '/calendar',
+            metadata: { eventId: event.id },
+          })),
+        );
+      }
+    }
+
+    // Participants for training/audit
+    const participantTypes = ['TRAINING_SESSION', 'COMPANY_TRAINING', 'AUDIT'];
+    if (participantTypes.includes(dto.type) && dto.participantIds?.length) {
+      await this.prisma.eventParticipant.createMany({
+        data: dto.participantIds.map((empId) => ({ eventId: event.id, employeeId: empId })),
+        skipDuplicates: true,
+      });
+      await this.notifications.createMany(
+        dto.participantIds.map((empId) => ({
+          employeeId: empId,
+          type: 'INFO' as any,
+          module: 'CALENDAR',
+          title: `You've been added to "${dto.title}"`,
+          message: `${dto.type === 'AUDIT' ? 'Audit' : 'Training'} scheduled for ${startAt.toDateString()}`,
+          actionUrl: '/calendar',
+          metadata: { eventId: event.id },
+        })),
+      );
+    }
+
+    return { event, onLeaveWarnings };
+  }
+
+  async updateEvent(id: string, dto: UpdateCalendarEventDto, userId: string, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const event = await this.prisma.calendarEvent.findUnique({
+      where: { id },
+      select: { id: true, createdById: true, parentEventId: true },
+    });
+    if (!event) throw new NotFoundException('Event not found');
+    if (event.createdById !== employee.id) throw new ForbiddenException('Only the event creator can update this event');
+
+    const data: any = {};
+    if (dto.title       !== undefined) data.title       = dto.title;
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.startAt     !== undefined) data.startAt     = new Date(dto.startAt);
+    if (dto.endAt       !== undefined) data.endAt       = new Date(dto.endAt);
+    if (dto.allDay      !== undefined) data.allDay      = dto.allDay;
+
+    if (dto.updateMode === DeleteModeDto.ALL_IN_SERIES) {
+      const root = event.parentEventId ?? id;
+      await this.prisma.calendarEvent.updateMany({
+        where: { OR: [{ id: root }, { parentEventId: root }] },
+        data,
+      });
+      return { updated: 'series' };
+    }
+
+    return this.prisma.calendarEvent.update({ where: { id }, data });
+  }
+
+  async deleteEvent(id: string, deleteMode: DeleteModeDto | undefined, userId: string, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const event = await this.prisma.calendarEvent.findUnique({
+      where: { id },
+      select: { id: true, createdById: true, parentEventId: true },
+    });
+    if (!event) throw new NotFoundException('Event not found');
+    if (event.createdById !== employee.id) throw new ForbiddenException('Only the event creator can delete this event');
+
+    if (deleteMode === DeleteModeDto.ALL_IN_SERIES) {
+      const root = event.parentEventId ?? id;
+      await this.prisma.calendarEvent.deleteMany({
+        where: { OR: [{ id: root }, { parentEventId: root }] },
+      });
+      return { message: 'Series deleted' };
+    }
+
+    await this.prisma.calendarEvent.delete({ where: { id } });
+    return { message: 'Event deleted' };
+  }
+
+  async respondToInvitation(eventId: string, status: InvitationStatusDto, userId: string, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const invitation = await this.prisma.eventInvitation.findUnique({
+      where: { eventId_inviteeId: { eventId, inviteeId: employee.id } },
+      include: {
+        event: { select: { title: true, startAt: true, createdById: true } },
+      },
+    });
+    if (!invitation) throw new NotFoundException('Invitation not found');
+    if (invitation.status !== 'PENDING') throw new BadRequestException('Invitation already responded to');
+
+    const updated = await this.prisma.eventInvitation.update({
+      where: { eventId_inviteeId: { eventId, inviteeId: employee.id } },
+      data: { status, respondedAt: new Date() },
+    });
+
+    await this.notifications.create({
+      employeeId: invitation.event.createdById,
+      type: 'INFO' as any,
+      module: 'CALENDAR',
+      title: `Meeting ${status === 'ACCEPTED' ? 'accepted' : 'declined'}`,
+      message: `${employee.firstName} ${employee.lastName} ${status === 'ACCEPTED' ? 'accepted' : 'declined'} your invitation to "${invitation.event.title}"`,
+      actionUrl: '/calendar',
+      metadata: { eventId },
+    });
+
+    return updated;
+  }
+
+  async getMyInvitations(userId: string, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    return this.prisma.eventInvitation.findMany({
+      where: { inviteeId: employee.id, status: 'PENDING' },
+      include: {
+        event: {
+          select: {
+            id: true, title: true, description: true, type: true,
+            startAt: true, endAt: true, allDay: true,
+            createdBy: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+          },
+        },
+      },
+      orderBy: { event: { startAt: 'asc' } },
+    });
+  }
+
+  async checkAvailability(employeeId: string, startAt: string, endAt: string) {
+    const start = new Date(startAt);
+    const end   = new Date(endAt);
+    const leave = await this.prisma.leaveRequest.findFirst({
+      where: {
+        employeeId,
+        status: 'APPROVED',
+        startDate: { lte: end },
+        endDate:   { gte: start },
+      },
+      select: { id: true, type: true, startDate: true, endDate: true },
+    });
+    return { available: !leave, leave: leave ?? null };
+  }
+
+  async getEmployeeEventStats(employeeId: string) {
+    const [accepted, declined, pending, total] = await Promise.all([
+      this.prisma.eventInvitation.count({ where: { inviteeId: employeeId, status: 'ACCEPTED' } }),
+      this.prisma.eventInvitation.count({ where: { inviteeId: employeeId, status: 'DECLINED' } }),
+      this.prisma.eventInvitation.count({ where: { inviteeId: employeeId, status: 'PENDING' } }),
+      this.prisma.eventInvitation.count({ where: { inviteeId: employeeId } }),
+    ]);
+    return { accepted, declined, pending, total };
+  }
+
+  async getEmployeeInvitationLog(employeeId: string, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const [invitations, total] = await Promise.all([
+      this.prisma.eventInvitation.findMany({
+        where: { inviteeId: employeeId },
+        include: {
+          event: {
+            select: {
+              id: true, title: true, type: true, startAt: true, endAt: true,
+              createdBy: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.eventInvitation.count({ where: { inviteeId: employeeId } }),
+    ]);
+    return { invitations, total, page, limit };
+  }
+
+  async getOrgEmployeesForInvite(organizationId: string) {
+    return this.prisma.employee.findMany({
+      where: { organizationId },
+      select: {
+        id: true, firstName: true, lastName: true, jobTitle: true, avatarUrl: true,
+        department: { select: { name: true } },
+      },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
   }

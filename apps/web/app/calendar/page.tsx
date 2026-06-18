@@ -17,8 +17,10 @@ import {
   Clock, Building2, FileText, Lock, Send, Trash2, Edit2,
   ShieldAlert, Settings, BanIcon, CalendarX2, Download,
   BarChart3, Calendar, Users, RefreshCw, UserPlus, ChevronDown,
+  User, Briefcase, BookOpen,
 } from "lucide-react";
 import Link from "next/link";
+import { EventsCalendarTab, type CalendarTabType } from "@/components/calendar/EventsCalendarTab";
 
 // ── Month grid helpers ────────────────────────────────────────────────────────
 
@@ -171,10 +173,21 @@ function VisitCard({
 
 type ViewMode = "month" | "week" | "analytics";
 
+type MainTab = CalendarTabType | "consultancy";
+
+const MAIN_TABS: { key: MainTab; label: string; icon: React.ReactNode }[] = [
+  { key: "personal",    label: "Personal",    icon: <User className="h-3.5 w-3.5" /> },
+  { key: "company",     label: "Company",     icon: <Briefcase className="h-3.5 w-3.5" /> },
+  { key: "training",    label: "Training",    icon: <BookOpen className="h-3.5 w-3.5" /> },
+  { key: "consultancy", label: "Consultancy Visits", icon: <Calendar className="h-3.5 w-3.5" /> },
+];
+
 export default function CalendarPage() {
   const { accessToken, user } = useAuthStore();
   const isAdmin = user?.roleLevel === Role.SUPER_ADMIN;
   const queryClient = useQueryClient();
+
+  const [mainTab, setMainTab] = useState<MainTab>("personal");
 
   const now = new Date();
   const [year,  setYear]  = useState(now.getFullYear());
@@ -201,9 +214,10 @@ export default function CalendarPage() {
   const { data: adminOrg, isLoading: adminOrgLoading } = useQuery({
     queryKey: ["calendar-admin-org"],
     queryFn: () => CalendarService.getAdminOrg(accessToken!).catch(() => null),
-    enabled: !!accessToken,
+    enabled: !!accessToken && mainTab === "consultancy",
   });
-  const adminOrgResolved: AdminOrg | null | undefined = adminOrgLoading ? undefined : (adminOrg ?? null);
+  const adminOrgResolved: AdminOrg | null | undefined =
+    mainTab !== "consultancy" ? null : (adminOrgLoading ? undefined : (adminOrg ?? null));
 
   const { data: monthData, isLoading: loading, error: monthError } = useQuery({
     queryKey: ["calendar-month", year, month, activeFilter],
@@ -316,59 +330,84 @@ export default function CalendarPage() {
       });
   };
 
-  if (adminOrgResolved === undefined) {
-    return (
-      <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
-        <div className="flex items-center justify-center min-h-[60vh] text-slate-400 gap-2 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-        </div>
-      </ProtectedRoute>
-    );
-  }
-
-  if (adminOrgResolved === null) {
-    return (
-      <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
-        <div className="max-w-lg mx-auto mt-24 text-center space-y-5 px-4">
-          <div className="flex items-center justify-center">
-            <div className="h-16 w-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center">
-              <ShieldAlert className="h-8 w-8 text-amber-400" />
-            </div>
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-800">Calendar not configured</h2>
-            <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-              The Calendar module requires a platform company to be designated before it can be used.
-              {isAdmin
-                ? " Head to Platform Settings to configure this."
-                : " Please contact your administrator to enable the Calendar module."}
-            </p>
-          </div>
-          {isAdmin && (
-            <Link
-              href="/admin/settings"
-              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-            >
-              <Settings className="h-4 w-4" />
-              Go to Platform Settings
-            </Link>
-          )}
-        </div>
-      </ProtectedRoute>
-    );
-  }
+  const allRoles = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE];
 
   return (
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
+    <ProtectedRoute allowedRoles={allRoles}>
       <div className="max-w-7xl mx-auto space-y-4">
 
-        {/* Header */}
+        {/* Page header */}
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Calendar</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Manage your schedule, meetings, company events, and training
+          </p>
+        </div>
+
+        {/* Main tab switcher */}
+        <div className="flex items-center gap-1 border-b border-slate-200 pb-0">
+          {MAIN_TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setMainTab(tab.key)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all -mb-px ${
+                mainTab === tab.key
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Personal / Company / Training tabs */}
+        {mainTab !== "consultancy" && (
+          <EventsCalendarTab tab={mainTab} />
+        )}
+
+        {/* Consultancy Visits tab */}
+        {mainTab === "consultancy" && adminOrgResolved === undefined && (
+          <div className="flex items-center justify-center min-h-[60vh] text-slate-400 gap-2 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
+        )}
+
+        {mainTab === "consultancy" && adminOrgResolved === null && (
+          <div className="max-w-lg mx-auto mt-24 text-center space-y-5 px-4">
+            <div className="flex items-center justify-center">
+              <div className="h-16 w-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+                <ShieldAlert className="h-8 w-8 text-amber-400" />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">Consultancy visits not configured</h2>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                The Consultancy Visits tab requires a platform company to be designated.
+                {isAdmin
+                  ? " Head to Platform Settings to configure this."
+                  : " Please contact your administrator."}
+              </p>
+            </div>
+            {isAdmin && (
+              <Link
+                href="/admin/settings"
+                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                Go to Platform Settings
+              </Link>
+            )}
+          </div>
+        )}
+
+        {mainTab === "consultancy" && adminOrgResolved !== undefined && adminOrgResolved !== null && (<>
+
+        {/* Consultancy header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Calendar</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {isAdmin ? "Manage consultancy visits across all clients" : "Your upcoming visits and availability"}
-            </p>
+            <p className="text-sm text-slate-500">{isAdmin ? "Manage consultancy visits across all clients" : "Your upcoming visits and availability"}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {/* View toggle */}
@@ -739,7 +778,6 @@ export default function CalendarPage() {
             onRequestDone={() => queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] })}
           />
         )}
-      </div>
 
       {/* Create / Edit Visit modal */}
       {(showCreate || editingVisit) && isAdmin && (
@@ -778,6 +816,9 @@ export default function CalendarPage() {
           }}
         />
       )}
+
+        </>)}
+      </div>
     </ProtectedRoute>
   );
 }

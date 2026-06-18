@@ -14,7 +14,9 @@ import {
 import {
   ArrowLeft, Save, Loader2, CheckCircle2,
   ClipboardList, User, Briefcase, FileText, Phone, TrendingUp, Users,
+  CalendarCheck, CalendarX, Clock, ChevronLeft, ChevronRight,
 } from "lucide-react";
+import { CalendarService, EVENT_TYPE_CONFIG } from "@/services/calendar.service";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -221,6 +223,20 @@ export default function EmployeeEmsEditPage() {
 
   const saving = saveMutation.isPending;
   const saveError = saveMutation.error ? (saveMutation.error as any).message : null;
+
+  const [inviteLogPage, setInviteLogPage] = useState(1);
+
+  const { data: calStats } = useQuery({
+    queryKey: ["calendar-employee-stats", id],
+    queryFn: () => CalendarService.getEmployeeEventStats(id!, accessToken!),
+    enabled: !!accessToken && !!id,
+  });
+
+  const { data: inviteLog } = useQuery({
+    queryKey: ["calendar-employee-log", id, inviteLogPage],
+    queryFn: () => CalendarService.getEmployeeInvitationLog(id!, accessToken!, inviteLogPage, 10),
+    enabled: !!accessToken && !!id,
+  });
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
@@ -508,6 +524,94 @@ export default function EmployeeEmsEditPage() {
                 </div>
               </div>
             </div>
+
+            {/* ── Calendar Activity ─────────────────────────────────────── */}
+            {calStats && (
+              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                <CardHeader icon={CalendarCheck} title="Calendar Activity" iconColor="text-violet-500" iconBg="bg-violet-50" />
+                <div className="p-5 space-y-5">
+
+                  {/* KPI counters */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="flex flex-col items-center gap-1 bg-emerald-50 border border-emerald-100 rounded-xl py-4">
+                      <CalendarCheck className="h-5 w-5 text-emerald-500" />
+                      <p className="text-2xl font-bold text-emerald-700">{calStats.accepted}</p>
+                      <p className="text-[11px] text-emerald-600 font-semibold">Accepted</p>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 bg-red-50 border border-red-100 rounded-xl py-4">
+                      <CalendarX className="h-5 w-5 text-red-400" />
+                      <p className="text-2xl font-bold text-red-600">{calStats.declined}</p>
+                      <p className="text-[11px] text-red-500 font-semibold">Declined</p>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 bg-amber-50 border border-amber-100 rounded-xl py-4">
+                      <Clock className="h-5 w-5 text-amber-400" />
+                      <p className="text-2xl font-bold text-amber-600">{calStats.pending}</p>
+                      <p className="text-[11px] text-amber-500 font-semibold">Pending</p>
+                    </div>
+                  </div>
+
+                  {/* Invitation log */}
+                  {inviteLog && inviteLog.invitations.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Invitation History</p>
+                      <div className="space-y-1.5">
+                        {inviteLog.invitations.map(inv => {
+                          const cfg = EVENT_TYPE_CONFIG[inv.event.type];
+                          const statusCls =
+                            inv.status === "ACCEPTED" ? "bg-emerald-100 text-emerald-700"
+                            : inv.status === "DECLINED" ? "bg-red-100 text-red-600"
+                            : "bg-amber-100 text-amber-700";
+                          return (
+                            <div key={inv.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                              <span className={`h-2 w-2 rounded-full shrink-0 ${cfg?.dot ?? "bg-slate-400"}`} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{inv.event.title}</p>
+                                <p className="text-xs text-slate-400">
+                                  {new Date(inv.event.startAt).toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" })}
+                                  {" · "}{inv.event.createdBy.firstName} {inv.event.createdBy.lastName}
+                                </p>
+                              </div>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusCls}`}>
+                                {inv.status}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Pagination */}
+                      {inviteLog.total > 10 && (
+                        <div className="flex items-center justify-between pt-1">
+                          <p className="text-xs text-slate-400">
+                            {((inviteLogPage-1)*10)+1}–{Math.min(inviteLogPage*10, inviteLog.total)} of {inviteLog.total}
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <button
+                              disabled={inviteLogPage === 1}
+                              onClick={() => setInviteLogPage(p => p-1)}
+                              className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-40 transition-colors"
+                            >
+                              <ChevronLeft className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              disabled={inviteLogPage * 10 >= inviteLog.total}
+                              onClick={() => setInviteLogPage(p => p+1)}
+                              className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-40 transition-colors"
+                            >
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {inviteLog && inviteLog.invitations.length === 0 && (
+                    <p className="text-sm text-slate-400 text-center py-4">No meeting invitations recorded yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ── Save bar ──────────────────────────────────────────────── */}
             <div className="sticky bottom-4 flex items-center gap-3">

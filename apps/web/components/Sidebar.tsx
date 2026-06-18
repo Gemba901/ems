@@ -124,6 +124,7 @@ function isNavActive(pathname: string, href: string, exact: boolean): boolean {
 export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const isCollapsed = collapsed && !open
 
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -170,7 +171,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
         `}
       >
         {/* ── Header: toggle + brand ── */}
-        <div className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${collapsed ? "justify-center" : "px-4 gap-3"}`}>
+        <div className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${isCollapsed ? "justify-center" : "px-4 gap-3"}`}>
 
           {/* Collapse toggle — desktop only */}
           <button
@@ -184,7 +185,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
             }
           </button>
 
-          {!collapsed && (
+          {!isCollapsed && (
             <>
               <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-indigo-500/20">
                 {user?.organizationUrl ? (
@@ -213,7 +214,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
 
         {/* ── Navigation ── */}
         <nav className="flex-1 px-2 py-3 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
-          {!collapsed && (
+          {!isCollapsed && (
             <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
               Platform
             </p>
@@ -225,15 +226,15 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
                 key={item.name}
                 href={item.href}
                 onClick={onClose}
-                title={collapsed ? item.name : undefined}
+                title={isCollapsed ? item.name : undefined}
                 className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
                   active
                     ? "bg-indigo-600 text-white shadow-sm shadow-indigo-200"
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                } ${collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
+                } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
               >
                 <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-slate-400"}`} />
-                {!collapsed && (
+                {!isCollapsed && (
                   <>
                     <span className="flex-1">{item.name}</span>
                     {active && <ChevronRight className="h-3.5 w-3.5 text-white/60" />}
@@ -245,7 +246,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
         </nav>
 
         {/* ── User card ── */}
-        {collapsed ? (
+        {isCollapsed ? (
           <div className="mx-2 mb-2 flex justify-center py-2">
             <div
               className="flex h-8 w-8 items-center justify-center bg-slate-800 rounded-lg text-white text-xs font-bold"
@@ -276,13 +277,13 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
         <div className="pb-3 px-2">
           <button
             onClick={handleLogout}
-            title={collapsed ? "Log out" : undefined}
+            title={isCollapsed ? "Log out" : undefined}
             className={`w-full flex items-center rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors ${
-              collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
+              isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
             }`}
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            {!collapsed && <span>Log out</span>}
+            {!isCollapsed && <span>Log out</span>}
           </button>
         </div>
       </aside>

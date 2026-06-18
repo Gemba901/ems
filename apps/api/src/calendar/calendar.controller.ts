@@ -8,6 +8,8 @@ import {
   CreateVisitDto, UpdateVisitDto, CreateVisitRequestDto, RespondToRequestDto,
   CreateCalendarBlockDto, AddVisitAttendeeDto,
   UpcomingVisitsQueryDto, AnalyticsQueryDto, IcalQueryDto,
+  CreateCalendarEventDto, UpdateCalendarEventDto, RespondToInvitationDto,
+  GetEventsQueryDto, CheckAvailabilityQueryDto, DeleteEventQueryDto, InvitationLogQueryDto,
 } from './dto/calendar.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -181,5 +183,84 @@ export class CalendarController {
   @Roles(Role.SUPER_ADMIN)
   async deleteBlock(@Param('id') id: string) {
     return this.calendar.deleteBlock(id);
+  }
+
+  // ── Holistic Calendar ──────────────────────────────────────────────────────
+
+  @Get('events')
+  async getEvents(
+    @Query() query: GetEventsQueryDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.calendar.getEvents(query.year, query.month, user.userId, user.organizationId);
+  }
+
+  @Post('events')
+  async createEvent(
+    @Body() dto: CreateCalendarEventDto,
+    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string },
+  ) {
+    return this.calendar.createEvent(dto, user.userId, user.organizationId, user.roleLevel);
+  }
+
+  @Patch('events/:id')
+  async updateEvent(
+    @Param('id') id: string,
+    @Body() dto: UpdateCalendarEventDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.calendar.updateEvent(id, dto, user.userId, user.organizationId);
+  }
+
+  @Delete('events/:id')
+  async deleteEvent(
+    @Param('id') id: string,
+    @Query() query: DeleteEventQueryDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.calendar.deleteEvent(id, query.deleteMode, user.userId, user.organizationId);
+  }
+
+  @Get('events/invitations')
+  async getMyInvitations(
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.calendar.getMyInvitations(user.userId, user.organizationId);
+  }
+
+  @Post('events/:id/respond')
+  async respondToInvitation(
+    @Param('id') eventId: string,
+    @Body() dto: RespondToInvitationDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.calendar.respondToInvitation(eventId, dto.status, user.userId, user.organizationId);
+  }
+
+  @Get('availability')
+  async checkAvailability(@Query() query: CheckAvailabilityQueryDto) {
+    return this.calendar.checkAvailability(query.employeeId, query.startAt, query.endAt);
+  }
+
+  @Get('org-employees')
+  async getOrgEmployeesForInvite(
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.calendar.getOrgEmployeesForInvite(user.organizationId);
+  }
+
+  @Get('employees/:id/stats')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR)
+  async getEmployeeEventStats(@Param('id') employeeId: string) {
+    return this.calendar.getEmployeeEventStats(employeeId);
+  }
+
+  @Get('employees/:id/invitation-log')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR)
+  async getEmployeeInvitationLog(
+    @Param('id') employeeId: string,
+    @Query() query: InvitationLogQueryDto,
+  ) {
+    return this.calendar.getEmployeeInvitationLog(employeeId, query.page ?? 1, query.limit ?? 20);
   }
 }

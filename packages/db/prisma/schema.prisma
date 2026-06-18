@@ -120,6 +120,7 @@ model Organization {
   visitRequests     VisitRequest[]
   leaveRequests     LeaveRequest[]
   leavePolicies     LeavePolicy[]
+  calendarEvents    CalendarEvent[]
 }
 
 //specific user
@@ -258,12 +259,15 @@ model Employee {
   suggestions       Suggestion[] @relation("EmployeeSuggestions")
   hodSuggestions    Suggestion[] @relation("HODSuggestions")
   suggestionReviews SuggestionReview[]
-  committeeMembers  SteeringCommitteeMember[]
-  notifications     Notification[]
-  visitAttendances  VisitAttendee[]
-  leaveRequests     LeaveRequest[]
-  leaveBalances     LeaveBalance[]
-  handoverForLeaves LeaveRequest[] @relation("LeaveHandover")
+  committeeMembers      SteeringCommitteeMember[]
+  notifications         Notification[]
+  visitAttendances      VisitAttendee[]
+  leaveRequests         LeaveRequest[]
+  leaveBalances         LeaveBalance[]
+  handoverForLeaves     LeaveRequest[]     @relation("LeaveHandover")
+  createdCalendarEvents CalendarEvent[]    @relation("CalendarEventCreator")
+  receivedInvitations   EventInvitation[]  @relation("ReceivedInvitations")
+  eventParticipations   EventParticipant[] @relation("EventParticipations")
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -420,6 +424,38 @@ enum RecurrencePattern {
   MONTHLY
 }
 
+// ── Holistic Calendar ─────────────────────────────────────────────────────────
+
+enum CalendarEventType {
+  // Personal tab
+  PERSONAL_EVENT
+  PERSONAL_REMINDER
+  BIRTHDAY
+  PERSONAL_TRAINING
+  // Company tab
+  COMPANY_TRAINING
+  COMPANY_EVENT
+  COMPANY_HOLIDAY
+  // Meeting (appears on personal + invitee calendars)
+  MEETING
+  // Audit tab (company-wide)
+  AUDIT
+  // Training planner tab
+  TRAINING_SESSION
+}
+
+enum EventRecurrencePattern {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 enum VisitStatus {
   TENTATIVE
   CONFIRMED
@@ -431,6 +467,68 @@ enum VisitRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+model CalendarEvent {
+  id             String               @id @default(uuid())
+  title          String
+  description    String?
+  type           CalendarEventType
+  startAt        DateTime
+  endAt          DateTime
+  allDay         Boolean              @default(false)
+  organizationId String
+  createdById    String
+
+  // Recurrence
+  isRecurring         Boolean               @default(false)
+  recurrencePattern   EventRecurrencePattern?
+  recurrenceEndAt     DateTime?
+  parentEventId       String?
+
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  createdBy      Employee             @relation("CalendarEventCreator", fields: [createdById], references: [id])
+  invitations    EventInvitation[]
+  participants   EventParticipant[]
+  parentEvent    CalendarEvent?       @relation("EventSeries", fields: [parentEventId], references: [id])
+  childEvents    CalendarEvent[]      @relation("EventSeries")
+
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([organizationId, startAt])
+  @@index([createdById, startAt])
+}
+
+// Tracks meeting invites + accept/decline responses (also serves as the accept/reject log)
+model EventInvitation {
+  id          String           @id @default(uuid())
+  eventId     String
+  inviteeId   String
+  status      InvitationStatus @default(PENDING)
+  respondedAt DateTime?
+
+  event       CalendarEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitee     Employee         @relation("ReceivedInvitations", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime         @default(now())
+
+  @@unique([eventId, inviteeId])
+  @@index([inviteeId, status])
+}
+
+// Assigned participants for training sessions and audits (no accept/decline flow)
+model EventParticipant {
+  id         String        @id @default(uuid())
+  eventId    String
+  employeeId String
+
+  event      CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  employee   Employee      @relation("EventParticipations", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime      @default(now())
+
+  @@unique([eventId, employeeId])
 }
 
 model ConsultancyVisit {

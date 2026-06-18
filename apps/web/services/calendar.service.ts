@@ -169,6 +169,91 @@ export interface UpdateVisitPayload {
   completionNote?: string;
 }
 
+// ── Holistic Calendar Types ───────────────────────────────────────────────────
+
+export type CalendarEventType =
+  | "PERSONAL_EVENT" | "PERSONAL_REMINDER" | "BIRTHDAY" | "PERSONAL_TRAINING"
+  | "COMPANY_TRAINING" | "COMPANY_EVENT" | "COMPANY_HOLIDAY"
+  | "MEETING" | "AUDIT" | "TRAINING_SESSION";
+
+export type InvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED";
+export type EventRecurrencePattern = "DAILY" | "WEEKLY" | "MONTHLY";
+
+export interface HolisticCalendarEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  type: CalendarEventType;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  isRecurring: boolean;
+  recurrencePattern: EventRecurrencePattern | null;
+  recurrenceEndAt: string | null;
+  parentEventId: string | null;
+  isOwner: boolean;
+  myInvitationStatus: InvitationStatus | null;
+  createdBy: { id: string; name: string; avatarUrl: string | null } | null;
+  invitations: { id: string; status: InvitationStatus; invitee: { id: string; name: string; avatarUrl: string | null } }[];
+  participants: { id: string; name: string; avatarUrl: string | null }[];
+}
+
+export interface BirthdayEvent {
+  id: string;
+  type: "BIRTHDAY";
+  title: string;
+  startAt: string;
+  endAt: string;
+  allDay: true;
+  isVirtual: true;
+  employee: { id: string; name: string; avatarUrl: string | null };
+}
+
+export interface CalendarEventsResponse {
+  employeeId: string;
+  pendingInvitationsCount: number;
+  personal: HolisticCalendarEvent[];
+  company: HolisticCalendarEvent[];
+  training: HolisticCalendarEvent[];
+  birthdays: BirthdayEvent[];
+}
+
+export interface OrgEmployeeForInvite {
+  id: string;
+  firstName: string;
+  lastName: string;
+  jobTitle: string | null;
+  avatarUrl: string | null;
+  department: { name: string } | null;
+}
+
+export interface CreateCalendarEventPayload {
+  title: string;
+  description?: string;
+  type: CalendarEventType;
+  startAt: string;
+  endAt: string;
+  allDay?: boolean;
+  isRecurring?: boolean;
+  recurrencePattern?: EventRecurrencePattern;
+  recurrenceEndAt?: string;
+  inviteeIds?: string[];
+  participantIds?: string[];
+}
+
+export const EVENT_TYPE_CONFIG: Record<CalendarEventType, { label: string; dot: string; badge: string; border: string }> = {
+  PERSONAL_EVENT:    { label: "Personal Event",    dot: "bg-indigo-500",  badge: "bg-indigo-100 text-indigo-700",   border: "border-indigo-200" },
+  PERSONAL_REMINDER: { label: "Reminder",          dot: "bg-amber-400",   badge: "bg-amber-100 text-amber-700",     border: "border-amber-200" },
+  BIRTHDAY:          { label: "Birthday",          dot: "bg-rose-400",    badge: "bg-rose-100 text-rose-700",       border: "border-rose-200" },
+  PERSONAL_TRAINING: { label: "Personal Training", dot: "bg-cyan-500",    badge: "bg-cyan-100 text-cyan-700",       border: "border-cyan-200" },
+  COMPANY_TRAINING:  { label: "Company Training",  dot: "bg-orange-500",  badge: "bg-orange-100 text-orange-700",   border: "border-orange-200" },
+  COMPANY_EVENT:     { label: "Company Event",     dot: "bg-blue-500",    badge: "bg-blue-100 text-blue-700",       border: "border-blue-200" },
+  COMPANY_HOLIDAY:   { label: "Holiday",           dot: "bg-red-500",     badge: "bg-red-100 text-red-700",         border: "border-red-200" },
+  MEETING:           { label: "Meeting",           dot: "bg-violet-500",  badge: "bg-violet-100 text-violet-700",   border: "border-violet-200" },
+  AUDIT:             { label: "Audit",             dot: "bg-slate-600",   badge: "bg-slate-200 text-slate-700",     border: "border-slate-300" },
+  TRAINING_SESSION:  { label: "Training Session",  dot: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700", border: "border-emerald-200" },
+};
+
 // ── Status helpers ────────────────────────────────────────────────────────────
 
 export const VISIT_STATUS_LABELS: Record<VisitStatus, string> = {
@@ -348,5 +433,101 @@ export const CalendarService = {
   getIcalUrl(year: number, month?: number): string {
     const base = `${API_URL}/calendar/export/ical?year=${year}`;
     return month ? `${base}&month=${month}` : base;
+  },
+
+  // ── Holistic Calendar ────────────────────────────────────────────────────────
+
+  async getEvents(year: number, month: number, token: string): Promise<CalendarEventsResponse> {
+    const params = new URLSearchParams({ year: String(year), month: String(month) });
+    const res = await apiClient(`${API_URL}/calendar/events?${params}`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async createEvent(
+    data: CreateCalendarEventPayload,
+    token: string,
+  ): Promise<{ event: HolisticCalendarEvent; onLeaveWarnings: { employeeId: string; name: string }[] }> {
+    const res = await apiClient(`${API_URL}/calendar/events`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async deleteEvent(id: string, token: string, deleteMode?: "THIS_ONLY" | "ALL_IN_SERIES"): Promise<void> {
+    const params = deleteMode ? `?deleteMode=${deleteMode}` : "";
+    const res = await apiClient(`${API_URL}/calendar/events/${id}${params}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }, token);
+    await handleResponse(res);
+  },
+
+  async respondToInvitation(eventId: string, status: "ACCEPTED" | "DECLINED", token: string): Promise<void> {
+    const res = await apiClient(`${API_URL}/calendar/events/${eventId}/respond`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ status }),
+    }, token);
+    await handleResponse(res);
+  },
+
+  async checkAvailability(
+    employeeId: string,
+    startAt: string,
+    endAt: string,
+    token: string,
+  ): Promise<{ available: boolean; leave: { type: string; startDate: string; endDate: string } | null }> {
+    const params = new URLSearchParams({ employeeId, startAt, endAt });
+    const res = await apiClient(`${API_URL}/calendar/availability?${params}`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async getOrgEmployeesForInvite(token: string): Promise<OrgEmployeeForInvite[]> {
+    const res = await apiClient(`${API_URL}/calendar/org-employees`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async getEmployeeEventStats(employeeId: string, token: string): Promise<{
+    accepted: number; declined: number; pending: number; total: number;
+  }> {
+    const res = await apiClient(`${API_URL}/calendar/employees/${employeeId}/stats`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async getEmployeeInvitationLog(
+    employeeId: string,
+    token: string,
+    page = 1,
+    limit = 10,
+  ): Promise<{
+    invitations: {
+      id: string;
+      status: InvitationStatus;
+      respondedAt: string | null;
+      createdAt: string;
+      event: {
+        id: string;
+        title: string;
+        type: CalendarEventType;
+        startAt: string;
+        endAt: string;
+        createdBy: { id: string; firstName: string; lastName: string };
+      };
+    }[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    const res = await apiClient(
+      `${API_URL}/calendar/employees/${employeeId}/invitation-log?${params}`,
+      { headers: authHeaders(token) },
+      token,
+    );
+    return handleResponse(res);
   },
 };

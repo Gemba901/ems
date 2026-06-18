@@ -1,6 +1,6 @@
 import {
   IsString, IsNotEmpty, IsOptional, IsEnum, IsDateString,
-  IsInt, Min, Max, IsBoolean,
+  IsInt, Min, Max, IsBoolean, IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -152,4 +152,127 @@ export class IcalQueryDto {
 
   @IsOptional() @IsInt() @Min(1) @Max(12) @Type(() => Number)
   month?: number;
+}
+
+// ── Holistic Calendar DTOs ────────────────────────────────────────────────────
+
+export enum CalendarEventTypeDto {
+  PERSONAL_EVENT    = 'PERSONAL_EVENT',
+  PERSONAL_REMINDER = 'PERSONAL_REMINDER',
+  BIRTHDAY          = 'BIRTHDAY',
+  PERSONAL_TRAINING = 'PERSONAL_TRAINING',
+  COMPANY_TRAINING  = 'COMPANY_TRAINING',
+  COMPANY_EVENT     = 'COMPANY_EVENT',
+  COMPANY_HOLIDAY   = 'COMPANY_HOLIDAY',
+  MEETING           = 'MEETING',
+  AUDIT             = 'AUDIT',
+  TRAINING_SESSION  = 'TRAINING_SESSION',
+}
+
+export enum EventRecurrencePatternDto {
+  DAILY   = 'DAILY',
+  WEEKLY  = 'WEEKLY',
+  MONTHLY = 'MONTHLY',
+}
+
+export enum InvitationStatusDto {
+  ACCEPTED = 'ACCEPTED',
+  DECLINED = 'DECLINED',
+}
+
+export enum DeleteModeDto {
+  THIS_ONLY     = 'THIS_ONLY',
+  ALL_IN_SERIES = 'ALL_IN_SERIES',
+}
+
+export class CreateCalendarEventDto {
+  @IsString() @IsNotEmpty()
+  title!: string;
+
+  @IsString() @IsOptional()
+  description?: string;
+
+  @IsEnum(CalendarEventTypeDto)
+  type!: CalendarEventTypeDto;
+
+  @IsDateString()
+  startAt!: string;
+
+  @IsDateString()
+  endAt!: string;
+
+  @IsBoolean() @IsOptional()
+  allDay?: boolean;
+
+  @IsBoolean() @IsOptional()
+  isRecurring?: boolean;
+
+  @IsEnum(EventRecurrencePatternDto) @IsOptional()
+  recurrencePattern?: EventRecurrencePatternDto;
+
+  @IsDateString() @IsOptional()
+  recurrenceEndAt?: string;
+
+  @IsArray() @IsString({ each: true }) @IsOptional()
+  inviteeIds?: string[];
+
+  @IsArray() @IsString({ each: true }) @IsOptional()
+  participantIds?: string[];
+}
+
+export class UpdateCalendarEventDto {
+  @IsString() @IsOptional()
+  title?: string;
+
+  @IsString() @IsOptional()
+  description?: string;
+
+  @IsDateString() @IsOptional()
+  startAt?: string;
+
+  @IsDateString() @IsOptional()
+  endAt?: string;
+
+  @IsBoolean() @IsOptional()
+  allDay?: boolean;
+
+  @IsEnum(DeleteModeDto) @IsOptional()
+  updateMode?: DeleteModeDto;
+}
+
+export class RespondToInvitationDto {
+  @IsEnum(InvitationStatusDto)
+  status!: InvitationStatusDto;
+}
+
+export class GetEventsQueryDto {
+  @IsInt() @Min(2020) @Max(2100) @Type(() => Number)
+  year!: number;
+
+  @IsInt() @Min(1) @Max(12) @Type(() => Number)
+  month!: number;
+}
+
+export class CheckAvailabilityQueryDto {
+  @IsString() @IsNotEmpty()
+  employeeId!: string;
+
+  @IsDateString()
+  startAt!: string;
+
+  @IsDateString()
+  endAt!: string;
+}
+
+export class DeleteEventQueryDto {
+  @IsEnum(DeleteModeDto) @IsOptional() @Type(() => String)
+  deleteMode?: DeleteModeDto;
+}
+
+export class InvitationLogQueryDto {
+  @IsOptional() @IsInt() @Min(1) @Type(() => Number)
+  page?: number;
+
+  @IsOptional() @IsInt() @Min(1) @Max(100) @Type(() => Number)
+  limit?: number;
 }

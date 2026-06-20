@@ -182,7 +182,7 @@ const MAIN_TABS: { key: MainTab; label: string; icon: React.ReactNode }[] = [
 
 export default function CalendarPage() {
   const { accessToken, user } = useAuthStore();
-  const isAdmin = user?.roleLevel === Role.SUPER_ADMIN;
+  const isAdmin = user?.isAdminOrg === true;
   const queryClient = useQueryClient();
 
   const [mainTab, setMainTab] = useState<MainTab>("personal");

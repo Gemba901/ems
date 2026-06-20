@@ -14,6 +14,7 @@ interface User {
     organizationUrl: string | null;
     roleId: string;
     roleLevel: Role;
+    isAdminOrg: boolean;
 }
 
 interface AuthState {

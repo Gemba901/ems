@@ -213,7 +213,7 @@ function LeaveBalanceWidget({ token }: { token: string }) {
   );
 }
 
-// ── Reminders & Announcements ────────────────────────────────────────────────
+// reminders
 
 const NOTICE_ICON: Record<NoticeType, React.ElementType> = {
   ANNOUNCEMENT: Megaphone,
@@ -274,7 +274,7 @@ function RemindersStrip({ token }: { token: string }) {
   );
 }
 
-// ── Upcoming modules list ─────────────────────────────────────────────────────
+// upcoming modules
 
 const UPCOMING_MODULES: Omit<ModuleConfig, "key" | "href" | "actions">[] = [
   {
@@ -453,12 +453,12 @@ export default function DashboardPage() {
 
                 {mod.key === "CALENDAR" && accessToken && (
                   <div onClick={(e) => e.stopPropagation()}>
-                    <UpcomingVisitsWidget token={accessToken} />
+                    {/* <UpcomingVisitsWidget token={accessToken} /> */}
                   </div>
                 )}
                 {mod.key === "LEAVE" && accessToken && (
                   <div onClick={(e) => e.stopPropagation()}>
-                    <LeaveBalanceWidget token={accessToken} />
+                    {/* <LeaveBalanceWidget token={accessToken} /> */}
                   </div>
                 )}
               </div>

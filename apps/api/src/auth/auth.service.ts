@@ -14,12 +14,13 @@ export interface JwtPayload {
     organizationName: string;
     organizationUrl: string | null;
     roleLevel: Role;
+    isAdminOrg: boolean;
 }
 
 type UserOrganizationRelation = {
     organizationId: string;
     roleId: number;
-    organization: { name: string; logoUrl: string | null };
+    organization: { name: string; logoUrl: string | null; isAdminOrg: boolean };
     role: { name: string };
 };
 
@@ -64,7 +65,7 @@ export class AuthService {
 
     private async buildJwt(
         user: { id: string; email: string | null; phone: string; name: string },
-        membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null } },
+        membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null; isAdminOrg: boolean } },
     ) {
         const payload: JwtPayload = {
             userId: user.id,
@@ -75,6 +76,7 @@ export class AuthService {
             phone: user.phone,
             organizationName: membership.organization.name,
             organizationUrl: membership.organization.logoUrl,
+            isAdminOrg: membership.organization.isAdminOrg,
         };
 
         const accessToken = this.jwtService.sign(payload);

@@ -192,7 +192,26 @@ export class CalendarService {
       label: b.label,
     }));
 
-    return { visits: mappedVisits, requests: mappedRequests, blocks: mappedBlocks };
+    // For client org users: return dates that are occupied by OTHER companies' visits.
+    // We return only dates (no titles, no client names) so their data stays private.
+    let busyDates: string[] = [];
+    if (!isAdmin) {
+      const otherVisits = await (this.prisma as any).consultancyVisit.findMany({
+        where: {
+          AND: [
+            { date: { lte: end } },
+            { OR: [{ endDate: { gte: start } }, { endDate: null, date: { gte: start } }] },
+            { clientOrgId: { not: organizationId } },
+          ],
+        },
+        select: { date: true },
+      });
+      busyDates = [...new Set<string>(
+        otherVisits.map((v: any) => v.date.toISOString().split('T')[0]),
+      )];
+    }
+
+    return { visits: mappedVisits, requests: mappedRequests, blocks: mappedBlocks, busyDates };
   }
 
   // ── Create visit ──────────────────────────────────────────────────────────
@@ -1021,6 +1040,97 @@ export class CalendarService {
         department: { select: { name: true } },
       },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+  }
+
+  // ── Visit Month Plans ──────────────────────────────────────────────────────
+
+  async getVisitMonthPlan(clientOrgId: string, year: number, month: number) {
+    return this.prisma.visitMonthPlan.findUnique({
+      where: { clientOrgId_year_month: { clientOrgId, year, month } },
+      include: { slots: { orderBy: { slotIndex: 'asc' } } },
+    });
+  }
+
+  async getAllVisitMonthPlans(year: number, month: number) {
+    return this.prisma.visitMonthPlan.findMany({
+      where: { year, month },
+      include: {
+        slots: { orderBy: { slotIndex: 'asc' } },
+        clientOrg: { select: { id: true, name: true, logoUrl: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async upsertVisitMonthPlan(
+    clientOrgId: string,
+    year: number,
+    month: number,
+    plannedDays: number,
+    userId: string,
+  ) {
+    const existing = await this.prisma.visitMonthPlan.findUnique({
+      where: { clientOrgId_year_month: { clientOrgId, year, month } },
+      include: { slots: { orderBy: { slotIndex: 'asc' } } },
+    });
+
+    if (existing) {
+      const currentCount = existing.slots.length;
+      await this.prisma.visitMonthPlan.update({
+        where: { id: existing.id },
+        data: { plannedDays },
+      });
+
+      if (plannedDays > currentCount) {
+        await this.prisma.visitPlanSlot.createMany({
+          data: Array.from({ length: plannedDays - currentCount }, (_, i) => ({
+            planId: existing.id,
+            slotIndex: currentCount + i,
+            updatedAt: new Date(),
+          })),
+        });
+      } else if (plannedDays < currentCount) {
+        await this.prisma.visitPlanSlot.deleteMany({
+          where: { planId: existing.id, slotIndex: { gte: plannedDays } },
+        });
+      }
+
+      return this.prisma.visitMonthPlan.findUnique({
+        where: { id: existing.id },
+        include: { slots: { orderBy: { slotIndex: 'asc' } } },
+      });
+    }
+
+    return this.prisma.visitMonthPlan.create({
+      data: {
+        clientOrgId,
+        year,
+        month,
+        plannedDays,
+        createdById: userId,
+        slots: {
+          create: Array.from({ length: plannedDays }, (_, i) => ({
+            slotIndex: i,
+            updatedAt: new Date(),
+          })),
+        },
+      },
+      include: { slots: { orderBy: { slotIndex: 'asc' } } },
+    });
+  }
+
+  async updateVisitPlanSlot(
+    planId: string,
+    slotIndex: number,
+    data: { date?: string; agenda?: string },
+  ) {
+    const updateData: Record<string, unknown> = {};
+    if (data.date !== undefined) updateData.date = data.date ? new Date(data.date) : null;
+    if (data.agenda !== undefined) updateData.agenda = data.agenda || null;
+    return this.prisma.visitPlanSlot.update({
+      where: { planId_slotIndex: { planId, slotIndex } },
+      data: updateData,
     });
   }
 }

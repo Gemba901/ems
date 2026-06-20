@@ -8,6 +8,7 @@ import {
     LeaveService, LeaveType, LEAVE_TYPE_LABELS, LeaveOverlapEntry,
     ALL_LEAVE_TYPES,
 } from "@/services/leave.service";
+import type { CustomLeaveType } from "@/services/leave.service";
 import { ArrowLeft, CalendarDays, Info, AlertTriangle, UserCheck, Search, Loader2 } from "lucide-react";
 import Link from "next/link";
 
@@ -196,13 +197,21 @@ export default function ApplyLeavePage() {
         staleTime: 5 * 60_000,
     });
 
-    const workingDays = settings?.workingDays ?? [1, 2, 3, 4, 5];
-    const enabledTypes = settings?.enabledTypes ?? [];
+    const workingDays  = settings?.workingDays      ?? [1, 2, 3, 4, 5];
+    const enabledTypes = settings?.enabledTypes      ?? [];
+    const customTypes: CustomLeaveType[] = settings?.customLeaveTypes ?? [];
 
-    // Filter shown types to enabled ones (if empty array = all enabled)
-    const visibleTypes = ALL_LEAVE_TYPES.filter(
+    // Merge built-in + custom, then filter to enabled ones
+    const allTypeCodes = [...ALL_LEAVE_TYPES, ...customTypes.map((c) => c.code)];
+    const visibleTypes = allTypeCodes.filter(
         (t) => enabledTypes.length === 0 || enabledTypes.includes(t),
     );
+
+    // Combined labels map (built-in + custom names)
+    const allTypeLabels: Record<string, string> = {
+        ...LEAVE_TYPE_LABELS,
+        ...Object.fromEntries(customTypes.map((c) => [c.code, c.name])),
+    };
 
     // Reset type if current selection is no longer visible
     useEffect(() => {
@@ -332,7 +341,7 @@ export default function ApplyLeavePage() {
                                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                                 {visibleTypes.map((val) => (
-                                    <option key={val} value={val}>{LEAVE_TYPE_LABELS[val]}</option>
+                                    <option key={val} value={val}>{allTypeLabels[val] ?? val.replace(/_/g, " ")}</option>
                                 ))}
                             </select>
                             {remaining !== null && (
@@ -485,7 +494,7 @@ export default function ApplyLeavePage() {
                                         : "border-slate-200 hover:border-slate-300"
                                 }`}
                             >
-                                <p className="text-xs font-medium text-slate-500 mb-1">{LEAVE_TYPE_LABELS[b.type as LeaveType]}</p>
+                                <p className="text-xs font-medium text-slate-500 mb-1">{allTypeLabels[b.type] ?? b.type.replace(/_/g, " ")}</p>
                                 <div className="flex items-end justify-between mb-2">
                                     <span className={`text-2xl font-bold tabular-nums ${
                                         isSelected && isOverBudget ? "text-red-600" : "text-slate-900"

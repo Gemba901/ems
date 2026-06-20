@@ -1,10 +1,14 @@
-import { IsEnum, IsDateString, IsInt, IsIn, IsOptional, IsString, Min, Max, ValidateNested, IsArray } from 'class-validator';
+import {
+    IsDateString, IsInt, IsIn, IsOptional, IsString, IsNotEmpty,
+    Min, Max, ValidateNested, IsArray, IsBoolean,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { LeaveType, LeaveStatus } from 'db';
+import { LeaveStatus } from 'db';
 
 export class CreateLeaveRequestDto {
-    @IsEnum(LeaveType)
-    type: LeaveType;
+    @IsString()
+    @IsNotEmpty()
+    type: string;
 
     @IsDateString()
     startDate: string;
@@ -48,8 +52,9 @@ export class ReviewLeaveRequestDto {
 }
 
 export class LeaveBalanceUpsertDto {
-    @IsEnum(LeaveType)
-    type: LeaveType;
+    @IsString()
+    @IsNotEmpty()
+    type: string;
 
     @IsInt()
     @Min(0)
@@ -62,8 +67,9 @@ export class LeaveBalanceUpsertDto {
 }
 
 export class LeavePolicyEntryDto {
-    @IsEnum(LeaveType)
-    type: LeaveType;
+    @IsString()
+    @IsNotEmpty()
+    type: string;
 
     @IsInt()
     @Min(0)
@@ -89,8 +95,8 @@ export class ApplyLeavePolicyDto {
 
 export class LeaveQueryDto {
     @IsOptional()
-    @IsEnum(LeaveStatus)
-    status?: LeaveStatus;
+    @IsIn(["PENDING", "APPROVED", "REJECTED", "CANCELLED"])
+    status?: string;
 
     @IsOptional()
     @IsString()
@@ -99,6 +105,16 @@ export class LeaveQueryDto {
     @IsOptional()
     @IsString()
     year?: string;
+}
+
+export class CustomLeaveTypeDto {
+    @IsString()
+    @IsNotEmpty()
+    code: string;
+
+    @IsString()
+    @IsNotEmpty()
+    name: string;
 }
 
 export class UpdateLeaveSettingsDto {
@@ -113,6 +129,12 @@ export class UpdateLeaveSettingsDto {
     @IsArray()
     @IsString({ each: true })
     enabledTypes?: string[];
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => CustomLeaveTypeDto)
+    customLeaveTypes?: CustomLeaveTypeDto[];
 }
 
 export class UpdateDeptMinHeadcountDto {

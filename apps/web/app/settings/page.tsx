@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import Link from "next/link";
-import { Palette, Check, Loader2, Bell, ChevronRight, ShieldCheck, ImageIcon } from "lucide-react";
+import { Palette, Check, Loader2, Bell, ChevronRight, ShieldCheck, ImageIcon, Megaphone } from "lucide-react";
 
 const PRESET_COLORS = [
     { label: "Indigo",   value: "#4F46E5" },
@@ -281,6 +281,21 @@ export default function SettingsPage() {
                             </div>
                         </div>
                         <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                    </Link>
+                    <Link
+                        href="/settings/notices"
+                        className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                <Megaphone className="h-4 w-4 text-indigo-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-slate-900">Notices</p>
+                                <p className="text-xs text-slate-400">Manage announcements and reminders shown on the employee dashboard</p>
+                            </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-500 transition-colors" />
                     </Link>
                 </div>
             </div>

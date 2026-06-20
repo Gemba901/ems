@@ -10,10 +10,10 @@ import {
   CalendarVisit, CalendarRequest, CalendarBlock, CalendarBlockType,
   AdminOrg, ClientOrg, VisitStatus, RecurrencePattern,
   VISIT_STATUS_LABELS, VISIT_STATUS_COLOR, VISIT_DOT_COLOR, REQUEST_STATUS_COLOR,
-  RECURRENCE_LABELS, CreateVisitPayload,
+  RECURRENCE_LABELS,
 } from "@/services/calendar.service";
 import {
-  ChevronLeft, ChevronRight, Plus, X, Loader2, CheckCircle2,
+  ChevronLeft, ChevronRight, Plus, Minus, X, Loader2, CheckCircle2,
   Clock, Building2, FileText, Lock, Send, Trash2, Edit2,
   ShieldAlert, Settings, BanIcon, CalendarX2, Download,
   BarChart3, Calendar, Users, RefreshCw, UserPlus, ChevronDown,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { EventsCalendarTab, type CalendarTabType } from "@/components/calendar/EventsCalendarTab";
+import { VisitMonthPlanPanel } from "@/components/calendar/VisitMonthPlanPanel";
 
 // ── Month grid helpers ────────────────────────────────────────────────────────
 
@@ -136,18 +137,15 @@ function VisitCard({
         )}
       </div>
       {visit.notes && (
-        <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-100 pt-2">{visit.notes}</p>
+        <div className="border-t border-slate-100 pt-2">
+          <p className="text-[10px] font-bold text-slate-400 mb-0.5">AGENDA</p>
+          <p className="text-xs text-slate-500 leading-relaxed">{visit.notes}</p>
+        </div>
       )}
       {visit.status === "COMPLETED" && visit.completionNote && (
         <div className="border border-blue-100 bg-blue-50 rounded-lg px-2.5 py-1.5">
           <p className="text-[10px] font-bold text-blue-500 mb-0.5">COMPLETION SUMMARY</p>
           <p className="text-xs text-blue-800">{visit.completionNote}</p>
-        </div>
-      )}
-      {isAdmin && visit.internalNotes && (
-        <div className="border border-amber-100 bg-amber-50 rounded-lg px-2.5 py-1.5">
-          <p className="text-[10px] font-bold text-amber-500 mb-0.5">INTERNAL</p>
-          <p className="text-xs text-amber-800">{visit.internalNotes}</p>
         </div>
       )}
       {visit.attendees && visit.attendees.length > 0 && (
@@ -241,9 +239,10 @@ export default function CalendarPage() {
     enabled: !!accessToken && viewMode === "analytics",
   });
 
-  const visits: CalendarVisit[]     = monthData?.visits   ?? [];
-  const requests: CalendarRequest[] = monthData?.requests ?? [];
-  const blocks: CalendarBlock[]     = monthData?.blocks   ?? [];
+  const visits: CalendarVisit[]     = monthData?.visits    ?? [];
+  const requests: CalendarRequest[] = monthData?.requests  ?? [];
+  const blocks: CalendarBlock[]     = monthData?.blocks    ?? [];
+  const busyDates: Set<string>      = new Set(monthData?.busyDates ?? []);
   const error = monthError ? (monthError as any).message : deleteError;
 
   const blockByDate: Record<string, CalendarBlock> = {};
@@ -357,7 +356,7 @@ export default function CalendarPage() {
               }`}
             >
               {tab.icon}
-              {tab.label}
+              {tab.key === "consultancy" && isAdmin ? "Client Visit Plan" : tab.label}
             </button>
           ))}
         </div>
@@ -382,9 +381,9 @@ export default function CalendarPage() {
               </div>
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-800">Consultancy visits not configured</h2>
+              <h2 className="text-xl font-bold text-slate-800">{isAdmin ? "Client Visit Plan" : "Consultancy Visits"} not configured</h2>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                The Consultancy Visits tab requires a platform company to be designated.
+                The {isAdmin ? "Client Visit Plan" : "Consultancy Visits"} tab requires a platform company to be designated.
                 {isAdmin
                   ? " Head to Platform Settings to configure this."
                   : " Please contact your administrator."}
@@ -407,7 +406,7 @@ export default function CalendarPage() {
         {/* Consultancy header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-sm text-slate-500">{isAdmin ? "Manage consultancy visits across all clients" : "Your upcoming visits and availability"}</p>
+            <p className="text-sm text-slate-500">{isAdmin ? "Manage client visit plans across all clients" : "Your upcoming visits and availability"}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {/* View toggle */}
@@ -422,8 +421,9 @@ export default function CalendarPage() {
                       : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
-                  {v === "month" ? <Calendar className="h-3.5 w-3.5 inline mr-1" /> : v === "week" ? <ChevronRight className="h-3.5 w-3.5 inline mr-1" /> : <BarChart3 className="h-3.5 w-3.5 inline mr-1" />}
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                  {v === "month" ? <><Calendar className="h-3.5 w-3.5 inline mr-1" />Month</>
+                    : v === "week" ? <><ChevronRight className="h-3.5 w-3.5 inline mr-1" />Week</>
+                    : <><BarChart3 className="h-3.5 w-3.5 inline mr-1" />Analytics</>}
                 </button>
               ))}
             </div>
@@ -555,21 +555,24 @@ export default function CalendarPage() {
                       <div key={`empty-${i}`} className="min-h-[80px] border-b border-r border-slate-50" />
                     ))}
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-                      const dateStr    = toYMD(year, month, day);
-                      const dayData    = byDate[dateStr];
-                      const dayVisits  = dayData?.visits   ?? [];
+                      const dateStr     = toYMD(year, month, day);
+                      const dayData     = byDate[dateStr];
+                      const dayVisits   = dayData?.visits   ?? [];
                       const dayRequests = dayData?.requests ?? [];
-                      const isToday    = dateStr === todayStr;
-                      const isSelected = dateStr === selectedDay;
-                      const block      = blockByDate[dateStr];
-                      const colIndex   = (firstDayOfWeek + day - 1) % 7;
-                      const isLastCol  = colIndex === 6;
+                      const isToday     = dateStr === todayStr;
+                      const isSelected  = dateStr === selectedDay;
+                      const block       = blockByDate[dateStr];
+                      const isOtherBusy = !isAdmin && busyDates.has(dateStr) && dayVisits.length === 0;
+                      const colIndex    = (firstDayOfWeek + day - 1) % 7;
+                      const isLastCol   = colIndex === 6;
 
                       const blockBg = block
                         ? block.type === "HOLIDAY"
                           ? isSelected ? "bg-red-100" : "bg-red-50 hover:bg-red-100"
                           : isSelected ? "bg-amber-100" : "bg-amber-50 hover:bg-amber-100"
-                        : isSelected ? "bg-blue-50" : "hover:bg-slate-50";
+                        : isOtherBusy
+                          ? isSelected ? "bg-slate-100" : "bg-slate-50 hover:bg-slate-100"
+                          : isSelected ? "bg-blue-50" : "hover:bg-slate-50";
 
                       return (
                         <div
@@ -580,12 +583,12 @@ export default function CalendarPage() {
                           <div className={`h-6 w-6 flex items-center justify-center rounded-full text-xs font-semibold mb-1 ${
                             isToday
                               ? "bg-blue-600 text-white"
-                              : isSelected && !block
+                              : isSelected && !block && !isOtherBusy
                                 ? "bg-blue-100 text-blue-700"
                                 : block?.type === "HOLIDAY"
                                   ? "text-red-600"
-                                  : block?.type === "BUSY_DAY"
-                                    ? "text-amber-700"
+                                  : block?.type === "BUSY_DAY" || isOtherBusy
+                                    ? "text-slate-400"
                                     : "text-slate-600"
                           }`}>
                             {day}
@@ -596,7 +599,10 @@ export default function CalendarPage() {
                               {block.label ?? (block.type === "HOLIDAY" ? "Holiday" : "Busy")}
                             </div>
                           )}
-                          {!block && (
+                          {!block && isOtherBusy && (
+                            <div className="text-[9px] font-bold text-slate-400 mt-0.5">Unavailable</div>
+                          )}
+                          {!block && !isOtherBusy && (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {isAdmin
                                 ? dayVisits.map((v) => (
@@ -627,12 +633,13 @@ export default function CalendarPage() {
               {/* Right panel */}
               <div className="xl:col-span-1">
                 {selectedDay ? (() => {
-                  const selectedBlock = blockByDate[selectedDay];
+                  const selectedBlock     = blockByDate[selectedDay];
+                  const isDayOtherBusy    = !isAdmin && busyDates.has(selectedDay);
                   return (
                     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-6">
                       <div className={`px-5 py-4 border-b flex items-center justify-between ${
                         selectedBlock?.type === "HOLIDAY" ? "border-red-100 bg-red-50"
-                        : selectedBlock?.type === "BUSY_DAY" ? "border-amber-100 bg-amber-50"
+                        : selectedBlock?.type === "BUSY_DAY" || isDayOtherBusy ? "border-slate-200 bg-slate-50"
                         : "border-slate-100 bg-slate-50"
                       }`}>
                         <div>
@@ -678,7 +685,20 @@ export default function CalendarPage() {
                           </div>
                         )}
 
-                        {selectedDayVisits.length === 0 && selectedDayRequests.length === 0 && !selectedBlock ? (
+                        {/* Busy notice for client users when another company occupies the day */}
+                        {isDayOtherBusy && !selectedBlock && selectedDayVisits.length === 0 && (
+                          <div className="rounded-xl p-3 flex items-start gap-3 bg-slate-50 border border-slate-200">
+                            <div className="mt-0.5 p-1.5 rounded-lg bg-slate-200 shrink-0">
+                              <Lock className="h-3.5 w-3.5 text-slate-500" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-600">Date unavailable</p>
+                              <p className="text-xs text-slate-500 mt-0.5">This date is already booked. Please choose another date to request a visit.</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedDayVisits.length === 0 && selectedDayRequests.length === 0 && !selectedBlock && !isDayOtherBusy ? (
                           <div className="text-center py-8">
                             <p className="text-sm text-slate-400">No visits scheduled</p>
                             {!isAdmin && (
@@ -690,7 +710,7 @@ export default function CalendarPage() {
                               </button>
                             )}
                           </div>
-                        ) : (
+                        ) : !isDayOtherBusy || selectedDayVisits.length > 0 || selectedDayRequests.length > 0 ? (
                           <>
                             {selectedDayVisits.map((v) => (
                               <VisitCard key={v.id} visit={v} isAdmin={isAdmin} onEdit={setEditingVisit} onDelete={handleDeleteVisit} />
@@ -720,7 +740,7 @@ export default function CalendarPage() {
                                 )}
                               </div>
                             ))}
-                            {!isAdmin && !selectedBlock && selectedDayVisits.every((v) => !v.isOwn) && (
+                            {!isAdmin && !selectedBlock && !isDayOtherBusy && selectedDayVisits.every((v) => !v.isOwn) && (
                               <button
                                 onClick={() => setShowRequest(true)}
                                 className="w-full mt-1 flex items-center justify-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 transition-colors py-2"
@@ -729,7 +749,7 @@ export default function CalendarPage() {
                               </button>
                             )}
                           </>
-                        )}
+                        ) : null}
 
                         {isAdmin && !selectedBlock && (
                           <div className="border-t border-slate-100 pt-3">
@@ -744,7 +764,14 @@ export default function CalendarPage() {
                       </div>
                     </div>
                   );
-                })() : (
+                })() : isAdmin && orgs.length > 0 ? (
+                  <VisitMonthPlanPanel
+                    orgs={orgs}
+                    token={accessToken!}
+                    year={year}
+                    month={month}
+                  />
+                ) : (
                   <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 text-center text-slate-400 text-sm">
                     <p className="text-slate-300 text-4xl mb-3">📅</p>
                     <p className="font-medium text-slate-500">Select a day</p>
@@ -786,6 +813,8 @@ export default function CalendarPage() {
           token={accessToken!}
           editing={editingVisit}
           defaultDate={selectedDay ?? undefined}
+          year={year}
+          month={month}
           onClose={() => { setShowCreate(false); setEditingVisit(null); }}
           onSaved={() => {
             setShowCreate(false); setEditingVisit(null);
@@ -799,6 +828,7 @@ export default function CalendarPage() {
         <RequestModal
           token={accessToken!}
           defaultDate={selectedDay ?? undefined}
+          busyDates={busyDates}
           onClose={() => setShowRequest(false)}
           onSaved={() => { setShowRequest(false); queryClient.invalidateQueries({ queryKey: ["calendar-month", year, month] }); }}
         />
@@ -1124,9 +1154,6 @@ function AgendaVisitRow({ visit, isAdmin, onEdit, onDelete }: { visit: CalendarV
         {visit.status === "COMPLETED" && visit.completionNote && (
           <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded px-2 py-1 mt-1">{visit.completionNote}</p>
         )}
-        {isAdmin && visit.internalNotes && (
-          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mt-1">{visit.internalNotes}</p>
-        )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <StatusBadge status={visit.status} />
@@ -1172,38 +1199,53 @@ function AgendaBlockRow({ block }: { block: CalendarBlock }) {
 // ── Visit Form Modal ──────────────────────────────────────────────────────────
 
 function VisitFormModal({
-  orgs, token, editing, defaultDate, onClose, onSaved,
+  orgs, token, editing, defaultDate, year, month, onClose, onSaved,
 }: {
   orgs: ClientOrg[];
   token: string;
   editing: CalendarVisit | null;
   defaultDate?: string;
+  year: number;
+  month: number;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [title,          setTitle]          = useState(editing?.title          ?? "");
-  const [clientOrgId,    setClientOrgId]    = useState(editing?.clientOrgId   ?? "");
-  const [date,           setDate]           = useState(editing?.date ?? defaultDate ?? "");
-  const [endDate,        setEndDate]        = useState(editing?.endDate ?? "");
-  const [startTime,      setStartTime]      = useState(editing?.startTime      ?? "");
-  const [endTime,        setEndTime]        = useState(editing?.endTime        ?? "");
+  // ── Edit mode: single visit ────────────────────────────────────────────────
+  const [clientOrgId,    setClientOrgId]    = useState(editing?.clientOrgId ?? "");
+  const [editDate,       setEditDate]       = useState(editing?.date ?? defaultDate ?? "");
+  const [editAgenda,     setEditAgenda]     = useState(editing?.notes ?? "");
   const [status,         setStatus]         = useState<VisitStatus>(editing?.status ?? "TENTATIVE");
-  const [notes,          setNotes]          = useState(editing?.notes          ?? "");
-  const [internalNotes,  setInternalNotes]  = useState(editing?.internalNotes  ?? "");
   const [completionNote, setCompletionNote] = useState(editing?.completionNote ?? "");
-  const [recurrence,     setRecurrence]     = useState<RecurrencePattern | "">(editing?.recurrencePattern ?? "");
-  const [recurrenceEnd,  setRecurrenceEnd]  = useState("");
-  const [showAttendees,  setShowAttendees]  = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState<string | null>(null);
+
+  // ── Create mode: multi-visit ───────────────────────────────────────────────
+  const [visitCount, setVisitCount] = useState<number>(1);
+  const [slots, setSlots] = useState<{ date: string; agenda: string }[]>([{ date: defaultDate ?? "", agenda: "" }]);
+
+  // Keep slots in sync when visitCount changes
+  const handleCountChange = (n: number) => {
+    const count = Math.max(1, Math.min(31, n));
+    setVisitCount(count);
+    setSlots((prev) => {
+      if (count > prev.length) {
+        return [...prev, ...Array.from({ length: count - prev.length }, () => ({ date: "", agenda: "" }))];
+      }
+      return prev.slice(0, count);
+    });
+  };
+
+  const updateSlot = (i: number, field: "date" | "agenda", value: string) => {
+    setSlots((prev) => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s));
+  };
+
+  // ── Attendees (edit only) ──────────────────────────────────────────────────
+  const [showAttendees, setShowAttendees] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: orgEmployees = [] } = useQuery({
     queryKey: ["calendar-org-employees", clientOrgId],
     queryFn: () => CalendarService.getOrgEmployees(clientOrgId, token),
-    enabled: !!clientOrgId && showAttendees,
+    enabled: !!clientOrgId && showAttendees && !!editing,
   });
-
-  const queryClient = useQueryClient();
 
   const addAttendeeMutation = useMutation({
     mutationFn: ({ employeeId }: { employeeId: string }) =>
@@ -1219,27 +1261,41 @@ function VisitFormModal({
 
   const currentAttendeeIds = new Set((editing?.attendees ?? []).map((a) => a.employeeId));
 
+  // ── Submit ─────────────────────────────────────────────────────────────────
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
+
+  const selectedOrg = orgs.find((o) => o.id === clientOrgId);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !clientOrgId || !date) { setError("Title, client, and date are required."); return; }
+    if (!clientOrgId) { setError("Please select a client."); return; }
     setSaving(true); setError(null);
     try {
-      const payload: CreateVisitPayload = {
-        title, clientOrgId, date,
-        endDate:   endDate   || undefined,
-        startTime: startTime || undefined,
-        endTime:   endTime   || undefined,
-        status,
-        notes:         notes         || undefined,
-        internalNotes: internalNotes || undefined,
-        completionNote: completionNote || undefined,
-        recurrencePattern:  (recurrence || undefined) as RecurrencePattern | undefined,
-        recurrenceEndDate: recurrenceEnd || undefined,
-      };
       if (editing) {
-        await CalendarService.updateVisit(editing.id, payload, token);
+        await CalendarService.updateVisit(editing.id, {
+          clientOrgId,
+          date: editDate || undefined,
+          status,
+          notes:          editAgenda     || undefined,
+          completionNote: completionNote || undefined,
+        }, token);
       } else {
-        await CalendarService.createVisit(payload, token);
+        const datedSlots = slots.filter((s) => s.date);
+        if (datedSlots.length === 0) { setError("Set a date for at least one visit."); setSaving(false); return; }
+        const orgName = selectedOrg?.name ?? "Client";
+        for (let i = 0; i < slots.length; i++) {
+          const s = slots[i];
+          if (!s.date) continue;
+          await CalendarService.createVisit({
+            title: `${orgName} — Visit ${i + 1} · ${MONTHS[month - 1]} ${year}`,
+            clientOrgId,
+            date: s.date,
+            status,
+            notes: s.agenda || undefined,
+            completionNote: completionNote || undefined,
+          }, token);
+        }
       }
       onSaved();
     } catch (err: unknown) {
@@ -1250,6 +1306,7 @@ function VisitFormModal({
   };
 
   const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all";
+  const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -1259,52 +1316,114 @@ function VisitFormModal({
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
-          <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">Title (internal)</label>
-            <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Monthly quality audit" />
-          </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
+
+          {/* Client */}
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Client Organization</label>
-            <select className={`${inputCls} bg-white`} value={clientOrgId} onChange={(e) => setClientOrgId(e.target.value)}>
+            <select
+              className={`${inputCls} bg-white`}
+              value={clientOrgId}
+              onChange={(e) => setClientOrgId(e.target.value)}
+            >
               <option value="">— Select client —</option>
               {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-500 block mb-1">Start Date</label>
-              <input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500 block mb-1">End Date <span className="font-normal text-slate-400">(multi-day)</span></label>
-              <input type="date" className={inputCls} value={endDate} min={date} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-500 block mb-1">Start Time</label>
-              <input type="time" className={inputCls} value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500 block mb-1">End Time</label>
-              <input type="time" className={inputCls} value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
-          </div>
+          {/* ── CREATE MODE ── */}
+          {!editing && clientOrgId && (
+            <>
+              {/* Number of visits */}
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">
+                  Number of visits — <span className="font-normal text-slate-400">{MONTHS[month - 1]} {year}</span>
+                </label>
+                <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden w-fit bg-white">
+                  <button
+                    type="button"
+                    onClick={() => handleCountChange(visitCount - 1)}
+                    className="h-9 w-9 flex items-center justify-center hover:bg-slate-50 transition-colors border-r border-slate-100"
+                  >
+                    <Minus className="h-3.5 w-3.5 text-slate-500" />
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={visitCount}
+                    onChange={(e) => handleCountChange(parseInt(e.target.value) || 1)}
+                    className="w-12 text-center text-sm font-bold text-slate-800 outline-none py-2"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCountChange(visitCount + 1)}
+                    className="h-9 w-9 flex items-center justify-center hover:bg-slate-50 transition-colors border-l border-slate-100"
+                  >
+                    <Plus className="h-3.5 w-3.5 text-slate-500" />
+                  </button>
+                </div>
+              </div>
 
-          <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">Status</label>
-            <select className={`${inputCls} bg-white`} value={status} onChange={(e) => setStatus(e.target.value as VisitStatus)}>
-              <option value="TENTATIVE">Tentative</option>
-              <option value="CONFIRMED">Confirmed</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-          </div>
+              {/* Visit slots */}
+              <div className="space-y-3">
+                {slots.map((slot, i) => (
+                  <div key={i} className="border border-slate-100 rounded-xl p-3.5 space-y-2.5 bg-slate-50/50">
+                    <div className="flex items-center gap-2">
+                      <span className="h-5 w-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                        {i + 1}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-600">Visit {i + 1}</span>
+                    </div>
+                    <input
+                      type="date"
+                      value={slot.date}
+                      min={`${monthPrefix}-01`}
+                      max={`${monthPrefix}-31`}
+                      onChange={(e) => updateSlot(i, "date", e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                    />
+                    <textarea
+                      rows={2}
+                      placeholder="Agenda for this visit…"
+                      value={slot.agenda}
+                      onChange={(e) => updateSlot(i, "agenda", e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder:text-slate-300"
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
-          {/* Completion note — only when COMPLETED */}
+          {/* ── EDIT MODE ── */}
+          {editing && (
+            <>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">Date</label>
+                <input type="date" className={inputCls} value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">Agenda</label>
+                <textarea rows={3} className={`${inputCls} resize-none`} value={editAgenda} onChange={(e) => setEditAgenda(e.target.value)} placeholder="What will be covered during this visit?" />
+              </div>
+            </>
+          )}
+
+          {/* Status */}
+          {(!!editing || !!clientOrgId) && (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 block mb-1">Status</label>
+              <select className={`${inputCls} bg-white`} value={status} onChange={(e) => setStatus(e.target.value as VisitStatus)}>
+                <option value="TENTATIVE">Tentative</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+          )}
+
+          {/* Completion summary — only when COMPLETED */}
           {status === "COMPLETED" && (
             <div>
               <label className="text-xs font-semibold text-blue-500 block mb-1">Completion Summary</label>
@@ -1312,42 +1431,7 @@ function VisitFormModal({
             </div>
           )}
 
-          <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">Notes (visible to client)</label>
-            <textarea rows={2} className={`${inputCls} resize-none`} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What should the client know?" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-amber-500 block mb-1">Internal Notes (Gemba only)</label>
-            <textarea rows={2} className={`${inputCls} resize-none border-amber-200 focus:border-amber-400 focus:ring-amber-500/20`} value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} placeholder="Internal context, checklist, preparation notes…" />
-          </div>
-
-          {/* Recurrence — only when creating */}
-          {!editing && (
-            <div className="border border-slate-100 rounded-xl p-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <RefreshCw className="h-3.5 w-3.5 text-violet-500" />
-                <label className="text-xs font-semibold text-slate-500">Recurring Visit</label>
-              </div>
-              <select
-                className={`${inputCls} bg-white`}
-                value={recurrence}
-                onChange={(e) => setRecurrence(e.target.value as RecurrencePattern | "")}
-              >
-                <option value="">No recurrence</option>
-                <option value="WEEKLY">Weekly</option>
-                <option value="BIWEEKLY">Every 2 weeks</option>
-                <option value="MONTHLY">Monthly</option>
-              </select>
-              {recurrence && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">Repeat Until</label>
-                  <input type="date" className={inputCls} value={recurrenceEnd} min={date} onChange={(e) => setRecurrenceEnd(e.target.value)} />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Attendees — only when editing an existing visit */}
+          {/* Attendees — only when editing */}
           {editing && clientOrgId && (
             <div className="border border-slate-100 rounded-xl p-3 space-y-3">
               <button
@@ -1362,41 +1446,27 @@ function VisitFormModal({
               </button>
               {showAttendees && (
                 <div className="space-y-2">
-                  {/* Current attendees */}
                   {(editing.attendees ?? []).map((a) => (
                     <div key={a.id} className="flex items-center gap-2 text-xs">
-                      <div className="h-6 w-6 rounded-full bg-indigo-100 flex items-center justify-center text-[9px] font-bold text-indigo-600 shrink-0">
-                        {a.name.charAt(0)}
-                      </div>
+                      <div className="h-6 w-6 rounded-full bg-indigo-100 flex items-center justify-center text-[9px] font-bold text-indigo-600 shrink-0">{a.name.charAt(0)}</div>
                       <span className="flex-1 text-slate-700">{a.name}</span>
                       {a.jobTitle && <span className="text-slate-400">{a.jobTitle}</span>}
-                      <button
-                        type="button"
-                        onClick={() => removeAttendeeMutation.mutate({ employeeId: a.employeeId })}
-                        className="text-slate-300 hover:text-red-500 transition-colors"
-                      >
+                      <button type="button" onClick={() => removeAttendeeMutation.mutate({ employeeId: a.employeeId })} className="text-slate-300 hover:text-red-500 transition-colors">
                         <X className="h-3 w-3" />
                       </button>
                     </div>
                   ))}
-                  {/* Add from org */}
                   <div className="border-t border-slate-100 pt-2">
                     <p className="text-[10px] text-slate-400 font-semibold mb-1.5">ADD FROM CLIENT ORG</p>
                     <div className="space-y-1 max-h-32 overflow-y-auto">
-                      {orgEmployees
-                        .filter((e) => !currentAttendeeIds.has(e.id))
-                        .map((e) => (
-                          <button
-                            key={e.id}
-                            type="button"
-                            onClick={() => addAttendeeMutation.mutate({ employeeId: e.id })}
-                            className="flex items-center gap-2 w-full text-xs text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 transition-colors"
-                          >
-                            <UserPlus className="h-3 w-3 shrink-0" />
-                            {e.firstName} {e.lastName}
-                            {e.jobTitle && <span className="text-slate-400 ml-auto">{e.jobTitle}</span>}
-                          </button>
-                        ))}
+                      {orgEmployees.filter((e) => !currentAttendeeIds.has(e.id)).map((e) => (
+                        <button key={e.id} type="button" onClick={() => addAttendeeMutation.mutate({ employeeId: e.id })}
+                          className="flex items-center gap-2 w-full text-xs text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 transition-colors">
+                          <UserPlus className="h-3 w-3 shrink-0" />
+                          {e.firstName} {e.lastName}
+                          {e.jobTitle && <span className="text-slate-400 ml-auto">{e.jobTitle}</span>}
+                        </button>
+                      ))}
                       {orgEmployees.filter((e) => !currentAttendeeIds.has(e.id)).length === 0 && (
                         <p className="text-xs text-slate-400 px-2 py-1">All employees added</p>
                       )}
@@ -1410,9 +1480,9 @@ function VisitFormModal({
           {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
 
           <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
+            <button type="submit" disabled={saving || !clientOrgId} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              {saving ? "Saving…" : editing ? "Save Changes" : "Schedule Visit"}
+              {saving ? "Saving…" : editing ? "Save Changes" : `Schedule ${visitCount > 1 ? `${visitCount} Visits` : "Visit"}`}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
               Cancel
@@ -1426,16 +1496,19 @@ function VisitFormModal({
 
 // ── Visit Request modal ───────────────────────────────────────────────────────
 
-function RequestModal({ token, defaultDate, onClose, onSaved }: { token: string; defaultDate?: string; onClose: () => void; onSaved: () => void }) {
+function RequestModal({ token, defaultDate, busyDates, onClose, onSaved }: { token: string; defaultDate?: string; busyDates: Set<string>; onClose: () => void; onSaved: () => void }) {
   const [date,          setDate]          = useState(defaultDate ?? "");
   const [preferredTime, setPreferredTime] = useState("");
   const [message,       setMessage]       = useState("");
   const [saving,        setSaving]        = useState(false);
   const [error,         setError]         = useState<string | null>(null);
 
+  const dateIsBusy = !!date && busyDates.has(date);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date) { setError("Please select a date."); return; }
+    if (dateIsBusy) { setError("This date is unavailable. Please choose another date."); return; }
     setSaving(true); setError(null);
     try {
       await CalendarService.createRequest({ requestedDate: date, preferredTime: preferredTime || undefined, message: message || undefined }, token);
@@ -1457,8 +1530,14 @@ function RequestModal({ token, defaultDate, onClose, onSaved }: { token: string;
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Requested Date</label>
-            <input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
+            <input type="date" className={inputCls} value={date} onChange={(e) => { setDate(e.target.value); setError(null); }} />
           </div>
+          {dateIsBusy && (
+            <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <Lock className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-slate-600">This date is already booked. Please select a different date.</p>
+            </div>
+          )}
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Preferred Time (optional)</label>
             <input type="time" className={inputCls} value={preferredTime} onChange={(e) => setPreferredTime(e.target.value)} />
@@ -1469,7 +1548,7 @@ function RequestModal({ token, defaultDate, onClose, onSaved }: { token: string;
           </div>
           {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
           <div className="flex gap-3">
-            <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
+            <button type="submit" disabled={saving || dateIsBusy} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {saving ? "Sending…" : "Send Request"}
             </button>

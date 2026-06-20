@@ -38,6 +38,7 @@ import DashboardRoleSection from "@/components/DashboardRoleSection";
 import { Role } from "@/types/role";
 import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
 import { LeaveService, LEAVE_TYPE_LABELS } from "@/services/leave.service";
+import { NoticeService, Notice, NoticeType } from "@/services/notice.service";
 
 // Module registry
 
@@ -214,81 +215,57 @@ function LeaveBalanceWidget({ token }: { token: string }) {
 
 // ── Reminders & Announcements ────────────────────────────────────────────────
 
-type ReminderType = "ANNOUNCEMENT" | "REMINDER" | "INFO" | "ALERT";
-
-interface Reminder {
-  id: string;
-  type: ReminderType;
-  title: string;
-  body: string;
-  date: string;
-  pinned?: boolean;
-}
-
-// TODO: replace with a real API call when the backend is ready
-const DUMMY_REMINDERS: Reminder[] = [
-  {
-    id: "1",
-    type: "ANNOUNCEMENT",
-    title: "Town Hall — Friday 2 PM",
-    body: "Quarterly town hall covering Q2 performance results, upcoming projects and an open Q&A session. All staff are expected to attend.",
-    date: "6 Jun",
-    pinned: true,
-  },
-  {
-    id: "2",
-    type: "ALERT",
-    title: "Fire Safety Drill — Wednesday 10 AM",
-    body: "Mandatory evacuation drill on Wednesday morning. All staff must assemble at the designated muster point by the car park.",
-    date: "11 Jun",
-  },
-  {
-    id: "3",
-    type: "REMINDER",
-    title: "EMS Profile Completion",
-    body: "Ensure your employee profile is at least 90% complete. Visit HR or update your details through the EMS module.",
-    date: "4 Jun",
-  },
-  {
-    id: "4",
-    type: "INFO",
-    title: "2026 Leave Policy Now Active",
-    body: "Annual leave allocations have been updated and applied to all employees. Check your balance in the Leave module.",
-    date: "1 Jun",
-  },
-];
-
-const REMINDER_ICON: Record<ReminderType, React.ElementType> = {
+const NOTICE_ICON: Record<NoticeType, React.ElementType> = {
   ANNOUNCEMENT: Megaphone,
   REMINDER:     Bell,
   INFO:         Info,
   ALERT:        AlertTriangle,
 };
 
+const NOTICE_CHIP_STYLE: Record<NoticeType, string> = {
+  ANNOUNCEMENT: "bg-indigo-50 border-indigo-200 text-indigo-700",
+  REMINDER:     "bg-amber-50  border-amber-200  text-amber-700",
+  INFO:         "bg-white     border-slate-200   text-slate-600",
+  ALERT:        "bg-red-50   border-red-200    text-red-700",
+};
 
-function RemindersStrip() {
+const NOTICE_ICON_COLOR: Record<NoticeType, string> = {
+  ANNOUNCEMENT: "text-indigo-500",
+  REMINDER:     "text-amber-500",
+  INFO:         "text-slate-400",
+  ALERT:        "text-red-500",
+};
+
+function fmtNoticeDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+}
+
+function RemindersStrip({ token }: { token: string }) {
+  const { data: notices = [], isLoading } = useQuery({
+    queryKey: ["notices"],
+    queryFn: () => NoticeService.getNotices(token),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+
+  if (isLoading) return null;
+  if (notices.length === 0) return null;
+
   return (
     <div className="flex items-center gap-3 overflow-x-auto [&::-webkit-scrollbar]:hidden">
       <span className="text-xs font-medium text-slate-400 shrink-0">Notices</span>
-
       <div className="flex items-center gap-2">
-        {DUMMY_REMINDERS.map((r) => {
-          const isAlert = r.type === "ALERT";
-          const Icon    = REMINDER_ICON[r.type];
-
+        {notices.map((n: Notice) => {
+          const Icon = NOTICE_ICON[n.type];
           return (
             <div
-              key={r.id}
-              className={`shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs ${
-                isAlert
-                  ? "bg-red-50 border-red-200 text-red-700"
-                  : "bg-white border-slate-200 text-slate-600"
-              }`}
+              key={n.id}
+              className={`shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs ${NOTICE_CHIP_STYLE[n.type]}`}
             >
-              <Icon className={`h-3 w-3 shrink-0 ${isAlert ? "text-red-500" : "text-slate-400"}`} />
-              <span className="font-medium whitespace-nowrap">{r.title}</span>
-              {r.pinned && <Pin className="h-2.5 w-2.5 text-slate-300 shrink-0" />}
-              <span className="text-[10px] text-slate-400 whitespace-nowrap">{r.date}</span>
+              <Icon className={`h-3 w-3 shrink-0 ${NOTICE_ICON_COLOR[n.type]}`} />
+              <span className="font-medium whitespace-nowrap">{n.title}</span>
+              {n.pinned && <Pin className="h-2.5 w-2.5 shrink-0 opacity-40" />}
+              <span className="text-[10px] opacity-60 whitespace-nowrap">{fmtNoticeDate(n.createdAt)}</span>
             </div>
           );
         })}
@@ -404,7 +381,7 @@ export default function DashboardPage() {
 
       <DashboardHero />
 
-      <RemindersStrip />
+      {accessToken && <RemindersStrip token={accessToken} />}
 
       <DashboardRoleSection />
 

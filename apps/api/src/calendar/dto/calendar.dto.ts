@@ -280,3 +280,36 @@ export class InvitationLogQueryDto {
   @IsOptional() @IsInt() @Min(1) @Max(100) @Type(() => Number)
   limit?: number;
 }
+
+export class UpsertVisitMonthPlanDto {
+  @IsString() @IsNotEmpty()
+  clientOrgId!: string;
+
+  @IsInt() @Min(2020) @Type(() => Number)
+  year!: number;
+
+  @IsInt() @Min(1) @Max(12) @Type(() => Number)
+  month!: number;
+
+  @IsInt() @Min(1) @Max(31) @Type(() => Number)
+  plannedDays!: number;
+}
+
+export class UpdateVisitPlanSlotDto {
+  @IsDateString() @IsOptional()
+  date?: string;
+
+  @IsString() @IsOptional()
+  agenda?: string;
+}
+
+export class VisitMonthPlanQueryDto {
+  @IsString() @IsNotEmpty()
+  clientOrgId!: string;
+
+  @IsInt() @Min(2020) @Type(() => Number)
+  year!: number;
+
+  @IsInt() @Min(1) @Max(12) @Type(() => Number)
+  month!: number;
+}

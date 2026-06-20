@@ -52,11 +52,19 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
       className="w-full sm:w-105 mx-auto p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
     >
       <div className="flex flex-col items-center mb-8">
-        <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center mb-6 shadow-sm border border-slate-800">
-           <span className="text-amber-500 font-bold text-xl">
-             {data.orgName ? data.orgName[0].toUpperCase() : "G"}
-           </span>
-        </div>
+        {data.logoUrl ? (
+          <img
+            src={data.logoUrl}
+            alt={data.orgName || "Organization"}
+            className="h-16 w-auto max-w-[160px] object-contain mb-6"
+          />
+        ) : (
+          <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center mb-6 shadow-sm border border-slate-800">
+            <span className="text-amber-500 font-bold text-xl">
+              {data.orgName ? data.orgName[0].toUpperCase() : "G"}
+            </span>
+          </div>
+        )}
         <div className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mb-2 text-center px-4 truncate w-full">
           {data.orgName || "Enterprise Tenant"}
         </div>

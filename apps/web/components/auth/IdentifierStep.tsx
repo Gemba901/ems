@@ -12,6 +12,7 @@ interface IdentifierStepProps {
     hasPassword: boolean;
     name?: string;
     orgName?: string;
+    logoUrl?: string | null;
     organizations?: { id: string; name: string; organizationUrl: string | null }[];
     setupToken?: string;
   }) => void;
@@ -89,6 +90,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
         hasPassword: response.hasPassword,
         name: response.name,
         orgName: orgs.length === 1 ? orgs[0].name : orgs.length > 1 ? "Multiple Organizations" : undefined,
+        logoUrl: orgs.length === 1 ? orgs[0].organizationUrl : null,
         organizations: orgs,
         setupToken: response.setupToken,
       });

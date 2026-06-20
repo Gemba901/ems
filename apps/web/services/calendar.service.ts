@@ -281,13 +281,37 @@ export const RECURRENCE_LABELS: Record<RecurrencePattern, string> = {
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
+// ── Visit Month Plan Types ────────────────────────────────────────────────────
+
+export interface VisitPlanSlot {
+  id: string;
+  planId: string;
+  slotIndex: number;
+  date: string | null;  // ISO string from API
+  agenda: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VisitMonthPlan {
+  id: string;
+  clientOrgId: string;
+  year: number;
+  month: number;
+  plannedDays: number;
+  createdAt: string;
+  updatedAt: string;
+  slots: VisitPlanSlot[];
+  clientOrg?: { id: string; name: string; logoUrl: string | null };
+}
+
 export const CalendarService = {
   async getMonthVisits(
     year: number,
     month: number,
     token: string,
     filterOrgId?: string,
-  ): Promise<{ visits: CalendarVisit[]; requests: CalendarRequest[]; blocks: CalendarBlock[] }> {
+  ): Promise<{ visits: CalendarVisit[]; requests: CalendarRequest[]; blocks: CalendarBlock[]; busyDates: string[] }> {
     const params = new URLSearchParams({ year: String(year), month: String(month) });
     if (filterOrgId) params.set("clientOrgId", filterOrgId);
     const res = await apiClient(`${API_URL}/calendar/visits?${params}`, {
@@ -416,6 +440,46 @@ export const CalendarService = {
   async getAnalytics(year: number, token: string): Promise<CalendarAnalytics> {
     const res = await apiClient(`${API_URL}/calendar/analytics?year=${year}`, {
       headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  // ── Visit Month Plans ──────────────────────────────────────────────────────
+
+  async getVisitMonthPlan(clientOrgId: string, year: number, month: number, token: string): Promise<VisitMonthPlan | null> {
+    const params = new URLSearchParams({ clientOrgId, year: String(year), month: String(month) });
+    const res = await apiClient(`${API_URL}/calendar/visit-plans?${params}`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async getAllVisitMonthPlans(year: number, month: number, token: string): Promise<VisitMonthPlan[]> {
+    const params = new URLSearchParams({ year: String(year), month: String(month) });
+    const res = await apiClient(`${API_URL}/calendar/visit-plans/all?${params}`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async upsertVisitMonthPlan(
+    data: { clientOrgId: string; year: number; month: number; plannedDays: number },
+    token: string,
+  ): Promise<VisitMonthPlan> {
+    const res = await apiClient(`${API_URL}/calendar/visit-plans`, {
+      method: "PUT",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async updateVisitPlanSlot(
+    planId: string,
+    slotIndex: number,
+    data: { date?: string; agenda?: string },
+    token: string,
+  ): Promise<VisitPlanSlot> {
+    const res = await apiClient(`${API_URL}/calendar/visit-plans/${planId}/slots/${slotIndex}`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
     }, token);
     return handleResponse(res);
   },

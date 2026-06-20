@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Delete, Body, Param, Query,
+  Controller, Get, Post, Patch, Put, Delete, Body, Param, Query,
   UseGuards, Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -10,6 +10,7 @@ import {
   UpcomingVisitsQueryDto, AnalyticsQueryDto, IcalQueryDto,
   CreateCalendarEventDto, UpdateCalendarEventDto, RespondToInvitationDto,
   GetEventsQueryDto, CheckAvailabilityQueryDto, DeleteEventQueryDto, InvitationLogQueryDto,
+  UpsertVisitMonthPlanDto, UpdateVisitPlanSlotDto, VisitMonthPlanQueryDto,
 } from './dto/calendar.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -262,5 +263,43 @@ export class CalendarController {
     @Query() query: InvitationLogQueryDto,
   ) {
     return this.calendar.getEmployeeInvitationLog(employeeId, query.page ?? 1, query.limit ?? 20);
+  }
+
+  // ── Visit Month Plans ─────────────────────────────────────────────────────
+
+  @Get('visit-plans')
+  @Roles(Role.SUPER_ADMIN)
+  async getVisitMonthPlan(@Query() query: VisitMonthPlanQueryDto) {
+    return this.calendar.getVisitMonthPlan(query.clientOrgId, query.year, query.month);
+  }
+
+  @Get('visit-plans/all')
+  @Roles(Role.SUPER_ADMIN)
+  async getAllVisitMonthPlans(
+    @Query('year') year: string,
+    @Query('month') month: string,
+  ) {
+    const y = year  ? parseInt(year,  10) : new Date().getFullYear();
+    const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
+    return this.calendar.getAllVisitMonthPlans(y, m);
+  }
+
+  @Put('visit-plans')
+  @Roles(Role.SUPER_ADMIN)
+  async upsertVisitMonthPlan(
+    @Body() dto: UpsertVisitMonthPlanDto,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.calendar.upsertVisitMonthPlan(dto.clientOrgId, dto.year, dto.month, dto.plannedDays, user.userId);
+  }
+
+  @Patch('visit-plans/:planId/slots/:slotIndex')
+  @Roles(Role.SUPER_ADMIN)
+  async updateVisitPlanSlot(
+    @Param('planId') planId: string,
+    @Param('slotIndex') slotIndex: string,
+    @Body() dto: UpdateVisitPlanSlotDto,
+  ) {
+    return this.calendar.updateVisitPlanSlot(planId, parseInt(slotIndex, 10), dto);
   }
 }

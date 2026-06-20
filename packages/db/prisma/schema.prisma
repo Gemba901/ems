@@ -118,10 +118,12 @@ model Organization {
   committees  SteeringCommittee[]
   consultancyVisits ConsultancyVisit[]
   visitRequests     VisitRequest[]
+  visitMonthPlans   VisitMonthPlan[]
   leaveRequests     LeaveRequest[]
   leavePolicies     LeavePolicy[]
   leaveSettings     LeaveSettings?
   calendarEvents    CalendarEvent[]
+  notices           Notice[]
 }
 
 //specific user
@@ -136,6 +138,7 @@ model User {
   employees         Employee[]
   createdVisits     ConsultancyVisit[]
   visitRequests     VisitRequest[]
+  visitMonthPlans   VisitMonthPlan[]
   calendarBlocks    CalendarBlock[]
   refreshTokens     RefreshToken[]
   reviewedLeaves    LeaveRequest[]    @relation("LeaveReviewer")
@@ -561,6 +564,37 @@ model ConsultancyVisit {
   @@index([recurrenceGroupId])
 }
 
+model VisitMonthPlan {
+  id          String         @id @default(uuid())
+  clientOrgId String
+  year        Int
+  month       Int
+  plannedDays Int            @default(1)
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  clientOrg   Organization   @relation(fields: [clientOrgId], references: [id])
+  createdBy   User           @relation(fields: [createdById], references: [id])
+  slots       VisitPlanSlot[]
+
+  @@unique([clientOrgId, year, month])
+}
+
+model VisitPlanSlot {
+  id         String         @id @default(uuid())
+  planId     String
+  slotIndex  Int
+  date       DateTime?
+  agenda     String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  plan       VisitMonthPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, slotIndex])
+}
+
 model VisitRequest {
   id              String             @id @default(uuid())
   organizationId  String
@@ -607,18 +641,6 @@ model CalendarBlock {
 
 // ── Leave Management ──────────────────────────────────────────────────────────
 
-enum LeaveType {
-  ANNUAL
-  SICK
-  SICK_EMERGENCY
-  PRE_ADOPTIVE
-  UNPAID
-  MATERNITY
-  PATERNITY
-  COMPASSIONATE
-  STUDY
-}
-
 enum LeaveStatus {
   PENDING
   APPROVED
@@ -630,7 +652,7 @@ model LeaveRequest {
   id             String      @id @default(uuid())
   employeeId     String
   organizationId String
-  type           LeaveType
+  type           String
   status         LeaveStatus @default(PENDING)
   startDate      DateTime
   endDate        DateTime
@@ -661,7 +683,7 @@ model LeaveBalance {
   id          String    @id @default(uuid())
   employeeId  String
   year        Int
-  type        LeaveType
+  type        String
   allocated   Int       @default(0)
   used        Int       @default(0)
 
@@ -675,7 +697,7 @@ model LeavePolicy {
   id             String       @id @default(uuid())
   organizationId String
   year           Int
-  type           LeaveType
+  type           String
   allocated      Int          @default(0)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -687,12 +709,29 @@ model LeavePolicy {
 }
 
 model LeaveSettings {
-  id             String   @id @default(uuid())
-  organizationId String   @unique
-  workingDays    Int[]    @default([1,2,3,4,5])
-  enabledTypes   String[] @default([])
-  updatedAt      DateTime @updatedAt
+  id                String   @id @default(uuid())
+  organizationId    String   @unique
+  workingDays       Int[]    @default([1,2,3,4,5])
+  enabledTypes      String[] @default([])
+  customLeaveTypes  Json     @default("[]")
+  updatedAt         DateTime @updatedAt
 
   organization   Organization @relation(fields: [organizationId], references: [id])
+}
+
+model Notice {
+  id             String    @id @default(cuid())
+  organizationId String
+  type           String    @default("INFO")
+  title          String
+  body           String
+  pinned         Boolean   @default(false)
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
 }
    

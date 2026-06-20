@@ -18,6 +18,7 @@ import { ChatModule } from './chat/chat.module';
 import { EmsModule } from './ems/ems.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { LeaveModule } from './leave/leave.module';
+import { NoticesModule } from './notices/notices.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { LeaveModule } from './leave/leave.module';
     EmsModule,
     CalendarModule,
     LeaveModule,
+    NoticesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

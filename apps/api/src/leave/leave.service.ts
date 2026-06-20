@@ -42,9 +42,13 @@ export class LeaveService {
                 organizationId,
                 workingDays: [1, 2, 3, 4, 5],
                 enabledTypes: [] as string[],
+                customLeaveTypes: [] as { code: string; name: string }[],
             };
         }
-        return settings;
+        return {
+            ...settings,
+            customLeaveTypes: Array.isArray(settings.customLeaveTypes) ? settings.customLeaveTypes : [],
+        };
     }
 
     async updateLeaveSettings(organizationId: string, dto: UpdateLeaveSettingsDto) {
@@ -52,12 +56,14 @@ export class LeaveService {
             where: { organizationId },
             create: {
                 organizationId,
-                workingDays: dto.workingDays ?? [1, 2, 3, 4, 5],
-                enabledTypes: dto.enabledTypes ?? [],
+                workingDays:      dto.workingDays      ?? [1, 2, 3, 4, 5],
+                enabledTypes:     dto.enabledTypes     ?? [],
+                customLeaveTypes: dto.customLeaveTypes ?? [],
             },
             update: {
-                ...(dto.workingDays !== undefined ? { workingDays: dto.workingDays } : {}),
-                ...(dto.enabledTypes !== undefined ? { enabledTypes: dto.enabledTypes } : {}),
+                ...(dto.workingDays      !== undefined ? { workingDays:      dto.workingDays }      : {}),
+                ...(dto.enabledTypes     !== undefined ? { enabledTypes:     dto.enabledTypes }     : {}),
+                ...(dto.customLeaveTypes !== undefined ? { customLeaveTypes: dto.customLeaveTypes } : {}),
             },
         });
     }
@@ -564,9 +570,16 @@ export class LeaveService {
             where: { employeeId: employee.id, year },
         });
 
+        // Filter to only active (enabled) leave types
+        const settings = await this.getLeaveSettings(organizationId);
+        const enabledSet = new Set(settings.enabledTypes);
+        const activeBalances = settings.enabledTypes.length === 0
+            ? balances
+            : balances.filter((b) => enabledSet.has(b.type));
+
         // Pro-rata: months elapsed in the year so far (1–12)
         const monthsElapsed = new Date().getMonth() + 1;
-        return balances.map((b) => ({
+        return activeBalances.map((b) => ({
             ...b,
             accumulated: Math.round((monthsElapsed / 12) * b.allocated),
         }));

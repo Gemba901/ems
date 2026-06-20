@@ -11,6 +11,7 @@ export type AuthState = {
   identifier: string;
   name?: string;
   orgName?: string;
+  logoUrl?: string | null;
   setupToken?: string;
   organizations?: { id: string; name: string; organizationUrl: string | null }[];
   selectionToken?: string;

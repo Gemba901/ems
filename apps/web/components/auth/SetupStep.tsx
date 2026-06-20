@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Box, Eye, EyeOff, Check, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Check, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import type { AuthState } from "../../app/(auth)/login/page";
 import { AuthService } from "@/services/auth.service";
 
@@ -66,13 +66,18 @@ export function SetupStep({ data, onComplete }: SetupStepProps) {
       {/* Left Pane: Context */}
       <div className="w-full md:w-5/12 bg-[#F1F0EC] p-6 md:p-10 flex flex-col justify-between relative overflow-hidden">
         <div className="z-10">
-          <div className="flex items-center space-x-3 mb-12">
-            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
-              <Box className="text-white h-4 w-4" />
-            </div>
-            <span className="text-xs font-bold tracking-widest text-slate-800 uppercase font-mono">
-              Gemba PMS
-            </span>
+          <div className="mb-12">
+            {data.logoUrl ? (
+              <img
+                src={data.logoUrl}
+                alt={data.orgName || "Organization"}
+                className="h-12 w-auto max-w-[160px] object-contain"
+              />
+            ) : (
+              <span className="text-xs font-bold tracking-widest text-slate-800 uppercase font-mono">
+                Gemba PMS
+              </span>
+            )}
           </div>
 
           <h2 className="text-3xl font-semibold tracking-tight text-slate-900 leading-tight mb-4">

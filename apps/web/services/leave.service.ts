@@ -14,7 +14,9 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type LeaveType =
+export type LeaveType = string;
+
+export type BuiltInLeaveType =
     | "ANNUAL"
     | "SICK"
     | "SICK_EMERGENCY"
@@ -98,11 +100,17 @@ export interface YearlyAnalytics {
     totalDays: number;
 }
 
+export interface CustomLeaveType {
+    code: string;
+    name: string;
+}
+
 export interface LeaveSettings {
     id?: string;
     organizationId: string;
     workingDays: number[];
     enabledTypes: string[];
+    customLeaveTypes: CustomLeaveType[];
 }
 
 export interface LeaveDepartment {
@@ -111,12 +119,12 @@ export interface LeaveDepartment {
     minLeaveHeadcount: number;
 }
 
-export const ALL_LEAVE_TYPES: LeaveType[] = [
+export const ALL_LEAVE_TYPES: BuiltInLeaveType[] = [
     "ANNUAL", "SICK_EMERGENCY", "PRE_ADOPTIVE", "UNPAID",
     "MATERNITY", "PATERNITY", "COMPASSIONATE", "STUDY",
 ];
 
-export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
+export const LEAVE_TYPE_LABELS: Record<string, string> = {
     ANNUAL:        "Annual Leave",
     SICK:          "Sick Leave",
     SICK_EMERGENCY:"Sick / Emergency Leave",

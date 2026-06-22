@@ -524,6 +524,7 @@ export class OrganizationsService {
         }
 
         await this.prisma.$transaction(async (tx) => {
+            await (tx as any).visitMonthPlan.deleteMany({ where: { clientOrgId: id } });
             await tx.consultancyVisit.deleteMany({ where: { clientOrgId: id } });
             await tx.visitRequest.deleteMany({ where: { organizationId: id } });
             await tx.steeringCommitteeMember.deleteMany({

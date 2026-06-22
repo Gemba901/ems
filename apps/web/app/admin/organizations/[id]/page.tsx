@@ -401,7 +401,7 @@ export default function OrgDetailPage() {
                                 </div>
                             )}
                         </div>
-                        {!org.isAdminOrg && org.status === "INACTIVE" && (
+                        {!org.isAdminOrg && (
                             <button
                                 onClick={() => { setDeleteConfirmName(""); setDeleteError(null); setDeleteModal(true); }}
                                 className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"

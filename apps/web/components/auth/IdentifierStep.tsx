@@ -26,16 +26,21 @@ const COUNTRY_CODES = [
   { code: "256", flag: "🇺🇬", name: "Uganda" },
   { code: "250", flag: "🇷🇼", name: "Rwanda" },
   { code: "251", flag: "🇪🇹", name: "Ethiopia" },
+  { code: "91",  flag: "🇮🇳", name: "India" },
 ];
 
+function sanitizePhoneInput(raw: string): string {
+  return raw.replace(/^\+/, "").replace(/[\s\-()]/g, "");
+}
+
 function buildPhoneIdentifier(raw: string, countryCode: string): string {
-  const digits = raw.replace(/[\s\-()]/g, "").replace(/^0/, "");
+  const digits = sanitizePhoneInput(raw).replace(/^0/, "");
   if (digits.startsWith(countryCode)) return digits;
   return `${countryCode}${digits}`;
 }
 
 function validatePhone(value: string): string | null {
-  const digits = value.trim().replace(/[\s\-()]/g, "").replace(/^0/, "");
+  const digits = sanitizePhoneInput(value.trim()).replace(/^0/, "");
   if (!digits) return "Enter your phone number.";
   if (!/^\d+$/.test(digits)) return "Phone number should contain digits only.";
   if (digits.length < 9) return "Enter a complete phone number (at least 9 digits).";
@@ -191,7 +196,14 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
               autoComplete={mode === "email" ? "email" : "tel"}
               value={identifier}
               onChange={e => {
-                setIdentifier(e.target.value);
+                let val = mode === "phone"
+                  ? e.target.value.replace(/^\+/, "")
+                  : e.target.value;
+                // Strip auto-pasted country code (e.g. browser fills +254712345678)
+                if (mode === "phone" && val.startsWith(countryCode) && val.length - countryCode.length >= 6) {
+                  val = val.slice(countryCode.length);
+                }
+                setIdentifier(val);
                 if (error) setError(null);
                 if (showCodes) setShowCodes(false);
               }}
@@ -204,7 +216,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
             <p className="text-[11px] text-slate-400 pl-1">
               Will sign in as{" "}
               <span className="font-medium text-slate-600">
-                +{selected.code} {identifier.replace(/^0/, "").replace(/[\s\-()]/g, "")}
+                {buildPhoneIdentifier(identifier, countryCode)}
               </span>
             </p>
           )}

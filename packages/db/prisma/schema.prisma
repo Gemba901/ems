@@ -99,6 +99,7 @@ enum EmploymentType {
 model Organization {
   id          String    @id @default(uuid())
   name        String
+  shortName   String?
   logoUrl     String?
   industry    String?
   email       String?
@@ -553,6 +554,7 @@ model ConsultancyVisit {
   recurrencePattern  RecurrencePattern?
   recurrenceEndDate  DateTime?
   recurrenceGroupId  String?
+  rescheduleCount    Int                 @default(0)
   createdById        String
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt

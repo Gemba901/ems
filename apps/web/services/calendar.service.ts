@@ -137,6 +137,7 @@ export interface CalendarAnalytics {
   totalVisits: number;
   completedVisits: number;
   pendingRequests: number;
+  totalReschedules: number;
   byMonth: AnalyticsMonth[];
   byOrg?: AnalyticsOrgRow[];
 }

@@ -193,6 +193,11 @@ export const SimsService = {
     return handleResponse<PaginatedSuggestions>(res);
   },
 
+  async getLeaderboard(token: string): Promise<{ id: string; userId: string | null; name: string; dept: string; points: number; count: number; implemented: number }[]> {
+    const res = await apiClient(`${API_URL}/sims/leaderboard`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
   async getById(id: string, token: string): Promise<Suggestion> {
     const res = await apiClient(`${API_URL}/sims/${id}`, { headers: authHeaders(token) }, token);
     return handleResponse<Suggestion>(res);

@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarService,
   CalendarVisit, CalendarRequest, CalendarBlock, CalendarBlockType,
@@ -17,7 +17,7 @@ import {
   Clock, Building2, FileText, Lock, Send, Trash2, Edit2,
   ShieldAlert, Settings, BanIcon, CalendarX2, Download,
   BarChart3, Calendar, Users, RefreshCw, UserPlus, ChevronDown,
-  User, Briefcase, BookOpen,
+  User, Briefcase, BookOpen, LayoutGrid,
 } from "lucide-react";
 import Link from "next/link";
 import { EventsCalendarTab, type CalendarTabType } from "@/components/calendar/EventsCalendarTab";
@@ -169,7 +169,7 @@ function VisitCard({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type ViewMode = "month" | "week" | "analytics";
+type ViewMode = "month" | "week" | "analytics" | "year";
 
 type MainTab = CalendarTabType | "consultancy";
 
@@ -201,6 +201,7 @@ export default function CalendarPage() {
   const [showBlockForm, setShowBlockForm] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>("");
   const [analyticsYear, setAnalyticsYear] = useState(now.getFullYear());
+  const [visitViewYear, setVisitViewYear] = useState(now.getFullYear());
 
   const isFiltered = activeFilter !== "";
   const filterOrgId = activeFilter !== "HOLIDAY" && activeFilter !== "BUSY_DAY"
@@ -238,6 +239,54 @@ export default function CalendarPage() {
     queryFn: () => CalendarService.getAnalytics(analyticsYear, accessToken!),
     enabled: !!accessToken && viewMode === "analytics",
   });
+
+  const yearVisitResults = useQueries({
+    queries: viewMode === "year"
+      ? Array.from({ length: 12 }, (_, i) => ({
+          queryKey: ["calendar-month", visitViewYear, i + 1, ""] as const,
+          queryFn: () => CalendarService.getMonthVisits(visitViewYear, i + 1, accessToken!),
+          enabled: !!accessToken,
+        }))
+      : [],
+  });
+  const yearVisitLoading = yearVisitResults.some(q => q.isLoading);
+
+  const byDateVisitYear = useMemo(() => {
+    if (viewMode !== "year") return {} as Record<string, { visits: CalendarVisit[]; requests: CalendarRequest[] }>;
+    const map: Record<string, { visits: CalendarVisit[]; requests: CalendarRequest[] }> = {};
+    for (const q of yearVisitResults) {
+      if (!q.data) continue;
+      for (const v of q.data.visits) {
+        const start = v.date;
+        const end   = v.endDate ?? v.date;
+        let cur = new Date(start + "T00:00:00");
+        const endD = new Date(end + "T00:00:00");
+        while (cur <= endD) {
+          const key = dateToYMD(cur);
+          if (!map[key]) map[key] = { visits: [], requests: [] };
+          if (!map[key].visits.find(x => x.id === v.id)) map[key].visits.push(v);
+          cur = addDays(cur, 1);
+        }
+      }
+      for (const r of q.data.requests) {
+        if (!map[r.date]) map[r.date] = { visits: [], requests: [] };
+        map[r.date].requests.push(r);
+      }
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, visitViewYear, yearVisitLoading]);
+
+  const yearBlockByDate = useMemo(() => {
+    if (viewMode !== "year") return {} as Record<string, CalendarBlock>;
+    const map: Record<string, CalendarBlock> = {};
+    for (const q of yearVisitResults) {
+      if (!q.data) continue;
+      for (const b of q.data.blocks) map[b.date] = b;
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, visitViewYear, yearVisitLoading]);
 
   const visits: CalendarVisit[]     = monthData?.visits    ?? [];
   const requests: CalendarRequest[] = monthData?.requests  ?? [];
@@ -411,24 +460,29 @@ export default function CalendarPage() {
           <div className="flex items-center gap-2 flex-wrap">
             {/* View toggle */}
             <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1">
-              {(["month", "week", "analytics"] as ViewMode[]).map((v) => (
+              {(["month", "week", "analytics", "year"] as ViewMode[]).map((v) => (
                 <button
                   key={v}
-                  onClick={() => setViewMode(v)}
+                  onClick={() => {
+                    if (v === "year") setVisitViewYear(year);
+                    setViewMode(v);
+                    setSelectedDay(null);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     viewMode === v
                       ? "bg-white text-slate-800 shadow-sm"
                       : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
-                  {v === "month" ? <><Calendar className="h-3.5 w-3.5 inline mr-1" />Month</>
-                    : v === "week" ? <><ChevronRight className="h-3.5 w-3.5 inline mr-1" />Week</>
+                  {v === "month"     ? <><Calendar className="h-3.5 w-3.5 inline mr-1" />Month</>
+                    : v === "week"   ? <><ChevronRight className="h-3.5 w-3.5 inline mr-1" />Week</>
+                    : v === "year"   ? <><LayoutGrid className="h-3.5 w-3.5 inline mr-1" />Year</>
                     : <><BarChart3 className="h-3.5 w-3.5 inline mr-1" />Analytics</>}
                 </button>
               ))}
             </div>
 
-            {isAdmin && viewMode !== "analytics" && (
+            {isAdmin && viewMode !== "analytics" && viewMode !== "year" && (
               <select
                 value={activeFilter}
                 onChange={(e) => { setActiveFilter(e.target.value); setSelectedDay(null); }}
@@ -449,7 +503,7 @@ export default function CalendarPage() {
               </select>
             )}
 
-            {viewMode !== "analytics" && (
+            {viewMode !== "analytics" && viewMode !== "year" && (
               <button
                 onClick={handleIcalDownload}
                 title="Export to iCal"
@@ -459,7 +513,7 @@ export default function CalendarPage() {
               </button>
             )}
 
-            {isAdmin && viewMode !== "analytics" && (
+            {isAdmin && viewMode !== "analytics" && viewMode !== "year" && (
               <button
                 onClick={() => { setShowCreate(true); setEditingVisit(null); }}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
@@ -482,6 +536,25 @@ export default function CalendarPage() {
             year={analyticsYear}
             onYearChange={setAnalyticsYear}
             isAdmin={isAdmin}
+          />
+        )}
+
+        {/* Year view */}
+        {viewMode === "year" && (
+          <YearViewVisits
+            year={visitViewYear}
+            byDate={byDateVisitYear}
+            blockByDate={yearBlockByDate}
+            todayStr={todayStr}
+            isLoading={yearVisitLoading}
+            onSelectDay={(dateStr, m, y) => {
+              setYear(y);
+              setMonth(m);
+              setViewMode("month");
+              setSelectedDay(dateStr);
+            }}
+            prevYear={() => setVisitViewYear(y => y - 1)}
+            nextYear={() => setVisitViewYear(y => y + 1)}
           />
         )}
 
@@ -853,6 +926,132 @@ export default function CalendarPage() {
   );
 }
 
+// ── Year View (Consultancy) ───────────────────────────────────────────────────
+
+function MiniVisitMonth({
+  year, month, byDate, blockByDate, todayStr, onSelectDay,
+}: {
+  year: number;
+  month: number;
+  byDate: Record<string, { visits: CalendarVisit[]; requests: CalendarRequest[] }>;
+  blockByDate: Record<string, CalendarBlock>;
+  todayStr: string;
+  onSelectDay: (dateStr: string, month: number, year: number) => void;
+}) {
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay    = getFirstDayOfWeek(year, month);
+
+  return (
+    <div className="bg-white p-4">
+      <h3 className="text-xs font-bold text-slate-700 mb-3">{MONTHS[month - 1]}</h3>
+      <div className="grid grid-cols-7 mb-1">
+        {["S","M","T","W","T","F","S"].map((d, i) => (
+          <div key={i} className="text-center text-[8px] font-bold text-slate-300">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+          const dateStr     = toYMD(year, month, day);
+          const dayData     = byDate[dateStr];
+          const dayVisits   = dayData?.visits   ?? [];
+          const dayRequests = dayData?.requests ?? [];
+          const block       = blockByDate[dateStr];
+          const isToday     = dateStr === todayStr;
+          const hasActivity = dayVisits.length > 0 || dayRequests.length > 0 || !!block;
+
+          let dotColor = "bg-slate-300";
+          if (block?.type === "HOLIDAY")    dotColor = "bg-red-400";
+          else if (block?.type === "BUSY_DAY") dotColor = "bg-amber-400";
+          else if (dayRequests.length > 0 && dayVisits.length === 0) dotColor = "bg-purple-400";
+          else if (dayVisits.length > 0) {
+            const s = dayVisits[0].status;
+            dotColor = s === "CONFIRMED" ? "bg-emerald-500"
+                     : s === "COMPLETED" ? "bg-blue-400"
+                     : s === "CANCELLED" ? "bg-slate-300"
+                     : "bg-amber-400";
+          }
+
+          return (
+            <button
+              key={day}
+              onClick={() => onSelectDay(dateStr, month, year)}
+              className={`relative flex items-center justify-center rounded text-[9px] font-medium py-0.5 transition-colors ${
+                isToday                         ? "bg-blue-600 text-white"
+                : block?.type === "HOLIDAY"     ? "text-red-600 hover:bg-red-50"
+                : block?.type === "BUSY_DAY"    ? "text-amber-600 hover:bg-amber-50"
+                : hasActivity                   ? "text-slate-700 font-semibold hover:bg-blue-50"
+                : "text-slate-400 hover:bg-slate-50"
+              }`}
+            >
+              {day}
+              {hasActivity && !isToday && (
+                <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full ${dotColor}`} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function YearViewVisits({
+  year, byDate, blockByDate, todayStr, isLoading, onSelectDay, prevYear, nextYear,
+}: {
+  year: number;
+  byDate: Record<string, { visits: CalendarVisit[]; requests: CalendarRequest[] }>;
+  blockByDate: Record<string, CalendarBlock>;
+  todayStr: string;
+  isLoading: boolean;
+  onSelectDay: (dateStr: string, month: number, year: number) => void;
+  prevYear: () => void;
+  nextYear: () => void;
+}) {
+  return (
+    <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <button onClick={prevYear} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
+          <ChevronLeft className="h-4 w-4 text-slate-500" />
+        </button>
+        <h2 className="text-base font-bold text-slate-800">{year}</h2>
+        <button onClick={nextYear} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
+          <ChevronRight className="h-4 w-4 text-slate-500" />
+        </button>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20 text-slate-400 gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap px-5 py-3 border-b border-slate-50">
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />Confirmed</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" />Tentative</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-400" />Completed</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-purple-400" />Request</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-400" />Holiday</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" />Busy Day</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-px bg-slate-100">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+              <MiniVisitMonth
+                key={m}
+                year={year}
+                month={m}
+                byDate={byDate}
+                blockByDate={blockByDate}
+                todayStr={todayStr}
+                onSelectDay={onSelectDay}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Week View ─────────────────────────────────────────────────────────────────
 
 function WeekView({
@@ -985,7 +1184,7 @@ function AnalyticsPanel({
       ) : (
         <>
           {/* KPI cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {[
               { label: "Total Visits", value: analytics.totalVisits, color: "text-blue-600", bg: "bg-blue-50" },
               { label: "Completed", value: analytics.completedVisits, color: "text-emerald-600", bg: "bg-emerald-50" },
@@ -996,6 +1195,11 @@ function AnalyticsPanel({
                   ? `${Math.round((analytics.completedVisits / analytics.totalVisits) * 100)}%`
                   : "—",
                 color: "text-indigo-600", bg: "bg-indigo-50",
+              },
+              {
+                label: "Date Changes",
+                value: analytics.totalReschedules ?? 0,
+                color: "text-rose-600", bg: "bg-rose-50",
               },
             ].map((kpi) => (
               <div key={kpi.label} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">

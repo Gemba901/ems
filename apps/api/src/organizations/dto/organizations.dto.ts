@@ -18,6 +18,10 @@ export class CreateOrganizationDto {
 
     @IsOptional()
     @IsString()
+    shortName?: string;
+
+    @IsOptional()
+    @IsString()
     logoUrl?: string;
 
     @IsOptional()
@@ -63,6 +67,10 @@ export class UpdateOrganizationDto {
     @IsString()
     @IsNotEmpty()
     name?: string;
+
+    @IsOptional()
+    @IsString()
+    shortName?: string;
 
     @IsOptional()
     @IsString()

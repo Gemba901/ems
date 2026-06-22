@@ -285,7 +285,7 @@ export class CalendarService {
   async updateVisit(id: string, dto: UpdateVisitDto) {
     const visit = await (this.prisma as any).consultancyVisit.findUnique({
       where: { id },
-      select: { id: true, clientOrgId: true },
+      select: { id: true, clientOrgId: true, date: true },
     });
     if (!visit) throw new NotFoundException('Visit not found');
 
@@ -305,6 +305,12 @@ export class CalendarService {
     if (dto.notes         !== undefined) data.notes         = dto.notes;
     if (dto.internalNotes !== undefined) data.internalNotes = dto.internalNotes;
     if (dto.completionNote !== undefined) data.completionNote = dto.completionNote;
+
+    // Increment reschedule counter when the date is explicitly changed
+    if (dto.date !== undefined) {
+      const currentDate = visit.date.toISOString().split('T')[0];
+      if (dto.date !== currentDate) data.rescheduleCount = { increment: 1 };
+    }
 
     return (this.prisma as any).consultancyVisit.update({
       where: { id },
@@ -528,7 +534,7 @@ export class CalendarService {
     const isAdmin = this.isGemba(roleLevel);
     const orgFilter = isAdmin ? {} : { clientOrgId: organizationId };
 
-    const [visits, requests, completedVisits] = await Promise.all([
+    const [visits, requests, completedVisits, rescheduleAgg] = await Promise.all([
       (this.prisma as any).consultancyVisit.findMany({
         where: { date: { gte: new Date(year, 0, 1), lte: new Date(year, 11, 31, 23, 59, 59) }, ...orgFilter },
         select: { date: true, status: true, clientOrgId: true, clientOrg: { select: ORG_SELECT } },
@@ -538,6 +544,10 @@ export class CalendarService {
       }),
       (this.prisma as any).consultancyVisit.count({
         where: { status: 'COMPLETED', date: { gte: new Date(year, 0, 1) }, ...orgFilter },
+      }),
+      (this.prisma as any).consultancyVisit.aggregate({
+        where: { date: { gte: new Date(year, 0, 1), lte: new Date(year, 11, 31, 23, 59, 59) }, ...orgFilter },
+        _sum: { rescheduleCount: true },
       }),
     ]);
 
@@ -573,6 +583,7 @@ export class CalendarService {
       totalVisits: visits.length,
       completedVisits,
       pendingRequests: requests,
+      totalReschedules: rescheduleAgg._sum.rescheduleCount ?? 0,
       byMonth,
       byOrg,
     };

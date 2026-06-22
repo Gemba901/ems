@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import {
@@ -52,7 +52,7 @@ function dateToYMD(date: Date): string {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type CalendarTabType = "personal" | "company" | "training";
-type ViewMode = "month" | "week" | "agenda";
+type ViewMode = "month" | "week" | "agenda" | "year";
 
 // ── Tab-aware type options ─────────────────────────────────────────────────────
 
@@ -93,12 +93,58 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
   const [showCreate, setShowCreate] = useState(false);
   const [viewMode,   setViewMode]   = useState<ViewMode>("month");
   const [weekStart,  setWeekStart]  = useState<Date>(() => getWeekStart(now));
+  const [viewYear,   setViewYear]   = useState(now.getFullYear());
 
   const { data, isLoading } = useQuery({
     queryKey: ["calendar-events", year, month],
     queryFn: () => CalendarService.getEvents(year, month, accessToken!),
-    enabled: !!accessToken,
+    enabled: !!accessToken && viewMode !== "year",
   });
+
+  // For the schedule/agenda view, load the next 2 months in parallel
+  const scheduleNextMonths = useMemo(() => {
+    if (viewMode !== "agenda") return [];
+    return [1, 2].map(offset => {
+      const d = new Date(year, month - 1 + offset, 1);
+      return { year: d.getFullYear(), month: d.getMonth() + 1 };
+    });
+  }, [viewMode, year, month]);
+  const scheduleResults = useQueries({
+    queries: scheduleNextMonths.map(({ year: y, month: m }) => ({
+      queryKey: ["calendar-events", y, m] as const,
+      queryFn: () => CalendarService.getEvents(y, m, accessToken!),
+      enabled: !!accessToken,
+    })),
+  });
+
+  const yearMonthResults = useQueries({
+    queries: viewMode === "year"
+      ? Array.from({ length: 12 }, (_, i) => ({
+          queryKey: ["calendar-events", viewYear, i + 1] as const,
+          queryFn: () => CalendarService.getEvents(viewYear, i + 1, accessToken!),
+          enabled: !!accessToken,
+        }))
+      : [],
+  });
+  const yearQueriesLoading = yearMonthResults.some(q => q.isLoading);
+
+  const byDateYear = useMemo(() => {
+    if (viewMode !== "year") return {} as Record<string, HolisticCalendarEvent[]>;
+    const map: Record<string, HolisticCalendarEvent[]> = {};
+    for (const q of yearMonthResults) {
+      if (!q.data) continue;
+      const events = tab === "personal" ? q.data.personal
+                   : tab === "company"  ? q.data.company
+                   : q.data.training;
+      for (const e of events) {
+        const key = e.startAt.split("T")[0];
+        if (!map[key]) map[key] = [];
+        map[key].push(e);
+      }
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, tab, viewYear, yearQueriesLoading]);
 
   const todayStr = todayYMD();
 
@@ -118,6 +164,22 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
     }
     return map;
   }, [tabEvents]);
+
+  const scheduleLoading = scheduleResults.some(q => q.isLoading);
+  const byDateSchedule = useMemo(() => {
+    const map: Record<string, HolisticCalendarEvent[]> = { ...byDate };
+    for (const q of scheduleResults) {
+      if (!q.data) continue;
+      const evts = tab === "personal" ? q.data.personal : tab === "company" ? q.data.company : q.data.training;
+      for (const e of evts) {
+        const key = e.startAt.split("T")[0];
+        if (!map[key]) map[key] = [];
+        map[key].push(e);
+      }
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byDate, tab, scheduleLoading]);
 
   const selectedEvents = selectedDay ? (byDate[selectedDay] ?? []) : [];
 
@@ -154,11 +216,15 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
     if (nm !== month || ny !== year) { setMonth(nm); setYear(ny); }
   };
 
+  const prevYear = () => setViewYear(y => y - 1);
+  const nextYear = () => setViewYear(y => y + 1);
+
   // When switching to week view, snap weekStart into the current month if it's out of range
   const handleViewMode = (vm: ViewMode) => {
     if (vm === "week" && (weekStart.getMonth() + 1 !== month || weekStart.getFullYear() !== year)) {
       setWeekStart(getWeekStart(new Date(year, month - 1, 1)));
     }
+    if (vm === "year") setViewYear(year);
     setViewMode(vm);
     setSelectedDay(null);
   };
@@ -179,6 +245,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
           onRefresh={() => queryClient.invalidateQueries({ queryKey: ["calendar-events", year, month] })}
           canCreate={canCreate}
           onCreateClick={() => setShowCreate(true)}
+          typeOptions={typeOptions}
         />
       ) : (
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 text-center text-slate-400 text-sm">
@@ -209,8 +276,8 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
       {/* View toggle + New event */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
-          {(["month","week","agenda"] as const).map(vm => {
-            const Icon = vm === "month" ? LayoutGrid : vm === "week" ? CalendarDays : List;
+          {(["month","week","agenda","year"] as const).map(vm => {
+            const Icon = vm === "month" ? LayoutGrid : vm === "week" ? CalendarDays : vm === "agenda" ? List : Calendar;
             return (
               <button
                 key={vm}
@@ -333,24 +400,42 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
         </div>
       )}
 
-      {/* ── Agenda view ── */}
+      {/* ── Agenda / Schedule view ── */}
       {viewMode === "agenda" && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
           <div className="xl:col-span-2">
             <EventsAgendaView
               year={year}
               month={month}
-              byDate={byDate}
+              byDate={byDateSchedule}
               todayStr={todayStr}
               selectedDay={selectedDay}
               onSelectDay={setSelectedDay}
-              isLoading={isLoading}
+              isLoading={isLoading || scheduleLoading}
               prevMonth={prevMonth}
               nextMonth={nextMonth}
             />
           </div>
           {rightPanel}
         </div>
+      )}
+
+      {/* ── Year view ── */}
+      {viewMode === "year" && (
+        <EventsYearView
+          year={viewYear}
+          byDate={byDateYear}
+          todayStr={todayStr}
+          isLoading={yearQueriesLoading}
+          onSelectDay={(dateStr, m, y) => {
+            setYear(y);
+            setMonth(m);
+            setViewMode("month");
+            setSelectedDay(dateStr);
+          }}
+          prevYear={prevYear}
+          nextYear={nextYear}
+        />
       )}
 
       {/* Create event modal */}
@@ -480,16 +565,31 @@ function EventsAgendaView({
   prevMonth: () => void;
   nextMonth: () => void;
 }) {
-  const daysWithEvents = Object.keys(byDate).sort();
+  // Sort all days with events; only show from the start of the current month
+  const monthStart = toYMD(year, month, 1);
+  const daysWithEvents = Object.keys(byDate).filter(d => d >= monthStart).sort();
+
+  // Group by "YYYY-MM" for month headers
+  const grouped: { monthKey: string; days: string[] }[] = [];
+  for (const dateStr of daysWithEvents) {
+    const mk = dateStr.slice(0, 7);
+    if (!grouped.length || grouped[grouped.length - 1].monthKey !== mk) {
+      grouped.push({ monthKey: mk, days: [] });
+    }
+    grouped[grouped.length - 1].days.push(dateStr);
+  }
 
   return (
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-      {/* Month navigation header */}
+      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
         <button onClick={prevMonth} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
           <ChevronLeft className="h-4 w-4 text-slate-500" />
         </button>
-        <h2 className="text-base font-bold text-slate-800">{MONTHS[month-1]} {year}</h2>
+        <div className="text-center">
+          <h2 className="text-base font-bold text-slate-800">{MONTHS[month-1]} {year}</h2>
+          <p className="text-[10px] text-slate-400">Showing upcoming 3 months</p>
+        </div>
         <button onClick={nextMonth} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
           <ChevronRight className="h-4 w-4 text-slate-500" />
         </button>
@@ -502,66 +602,81 @@ function EventsAgendaView({
       ) : daysWithEvents.length === 0 ? (
         <div className="py-16 text-center text-slate-400">
           <Calendar className="h-10 w-10 mx-auto text-slate-200 mb-3" />
-          <p className="font-medium text-slate-500">No events this month</p>
-          <p className="text-xs mt-1">Switch months or create a new event</p>
+          <p className="font-medium text-slate-500">No events in the next 3 months</p>
+          <p className="text-xs mt-1">Create a new event to get started</p>
         </div>
       ) : (
-        <div className="divide-y divide-slate-50 max-h-[calc(100vh-18rem)] overflow-y-auto">
-          {daysWithEvents.map(dateStr => {
-            const dayEvts = byDate[dateStr] ?? [];
-            const date    = new Date(dateStr + "T00:00:00");
-            const isToday = dateStr === todayStr;
-            const isSel   = dateStr === selectedDay;
-
+        <div className="max-h-[calc(100vh-18rem)] overflow-y-auto">
+          {grouped.map(({ monthKey, days }) => {
+            const [gy, gm] = monthKey.split("-").map(Number);
             return (
-              <div
-                key={dateStr}
-                onClick={() => onSelectDay(isSel ? null : dateStr)}
-                className={`flex items-start gap-4 px-5 py-4 cursor-pointer transition-colors ${
-                  isSel ? "bg-blue-50" : "hover:bg-slate-50"
-                }`}
-              >
-                {/* Date stamp */}
-                <div className={`text-center shrink-0 w-10 pt-0.5 ${isToday ? "text-blue-600" : "text-slate-500"}`}>
-                  <p className="text-[9px] font-bold uppercase tracking-wide leading-none mb-0.5">
-                    {date.toLocaleDateString("en-GB", { weekday: "short" })}
+              <div key={monthKey}>
+                {/* Month section header */}
+                <div className="sticky top-0 z-10 bg-slate-50 border-b border-slate-100 px-5 py-2">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                    {MONTHS[gm - 1]} {gy}
                   </p>
-                  <p className={`text-xl font-bold leading-none ${isToday ? "text-blue-600" : "text-slate-800"}`}>
-                    {date.getDate()}
-                  </p>
-                  {isToday && <p className="text-[8px] font-bold text-blue-500 mt-0.5">Today</p>}
                 </div>
+                <div className="divide-y divide-slate-50">
+                  {days.map(dateStr => {
+                    const dayEvts = byDate[dateStr] ?? [];
+                    const date    = new Date(dateStr + "T00:00:00");
+                    const isToday = dateStr === todayStr;
+                    const isSel   = dateStr === selectedDay;
 
-                {/* Event chips */}
-                <div className="flex-1 min-w-0 space-y-1.5 pt-0.5">
-                  {dayEvts.map(e => {
-                    const cfg = EVENT_TYPE_CONFIG[e.type];
-                    const isPending = e.myInvitationStatus === "PENDING";
                     return (
-                      <div key={e.id} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${cfg?.border ?? "border-slate-100"} bg-white`}>
-                        <span className={`h-2 w-2 rounded-full shrink-0 ${cfg?.dot ?? "bg-slate-400"}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 truncate">{e.title}</p>
-                          {!e.allDay && (
-                            <p className="text-[10px] text-slate-400 leading-none mt-0.5">
-                              {new Date(e.startAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                              {" – "}
-                              {new Date(e.endAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                          )}
+                      <div
+                        key={dateStr}
+                        onClick={() => onSelectDay(isSel ? null : dateStr)}
+                        className={`flex items-start gap-4 px-5 py-4 cursor-pointer transition-colors ${
+                          isSel ? "bg-blue-50" : "hover:bg-slate-50"
+                        }`}
+                      >
+                        {/* Date stamp */}
+                        <div className={`text-center shrink-0 w-10 pt-0.5 ${isToday ? "text-blue-600" : "text-slate-500"}`}>
+                          <p className="text-[9px] font-bold uppercase tracking-wide leading-none mb-0.5">
+                            {date.toLocaleDateString("en-GB", { weekday: "short" })}
+                          </p>
+                          <p className={`text-xl font-bold leading-none ${isToday ? "text-blue-600" : "text-slate-800"}`}>
+                            {date.getDate()}
+                          </p>
+                          {isToday && <p className="text-[8px] font-bold text-blue-500 mt-0.5">Today</p>}
                         </div>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${cfg?.badge ?? "bg-slate-100 text-slate-500"}`}>
-                          {cfg?.label ?? e.type}
-                        </span>
-                        {isPending && (
-                          <span className="h-2 w-2 rounded-full bg-violet-500 shrink-0" title="Pending invitation" />
-                        )}
+
+                        {/* Event chips */}
+                        <div className="flex-1 min-w-0 space-y-1.5 pt-0.5">
+                          {dayEvts.map(e => {
+                            const cfg = EVENT_TYPE_CONFIG[e.type];
+                            const isPending = e.myInvitationStatus === "PENDING";
+                            return (
+                              <div key={e.id} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${cfg?.border ?? "border-slate-100"} bg-white`}>
+                                <span className={`h-2 w-2 rounded-full shrink-0 ${cfg?.dot ?? "bg-slate-400"}`} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-slate-800 truncate">{e.title}</p>
+                                  {!e.allDay && (
+                                    <p className="text-[10px] text-slate-400 leading-none mt-0.5">
+                                      {new Date(e.startAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                                      {" – "}
+                                      {new Date(e.endAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${cfg?.badge ?? "bg-slate-100 text-slate-500"}`}>
+                                  {cfg?.label ?? e.type}
+                                </span>
+                                {isPending && (
+                                  <span className="h-2 w-2 rounded-full bg-violet-500 shrink-0" title="Pending invitation" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <ChevronRight className={`h-3.5 w-3.5 shrink-0 mt-2 transition-transform ${isSel ? "rotate-90 text-blue-500" : "text-slate-300"}`} />
                       </div>
                     );
                   })}
                 </div>
-
-                <ChevronRight className={`h-3.5 w-3.5 shrink-0 mt-2 transition-transform ${isSel ? "rotate-90 text-blue-500" : "text-slate-300"}`} />
               </div>
             );
           })}
@@ -571,18 +686,191 @@ function EventsAgendaView({
   );
 }
 
+// ── Year view components ──────────────────────────────────────────────────────
+
+function MiniMonthCalendar({
+  year, month, byDate, todayStr, onSelectDay,
+}: {
+  year: number;
+  month: number;
+  byDate: Record<string, HolisticCalendarEvent[]>;
+  todayStr: string;
+  onSelectDay: (dateStr: string, month: number, year: number) => void;
+}) {
+  const daysInMonth  = getDaysInMonth(year, month);
+  const firstDay     = getFirstDayOfWeek(year, month);
+  const DAY_LABELS   = ["S", "M", "T", "W", "T", "F", "S"];
+
+  return (
+    <div className="bg-white p-4">
+      <h3 className="text-xs font-bold text-slate-700 mb-3">{MONTHS[month - 1]}</h3>
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_LABELS.map((d, i) => (
+          <div key={i} className="text-center text-[8px] font-bold text-slate-300">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+          const dateStr  = toYMD(year, month, day);
+          const evts     = byDate[dateStr] ?? [];
+          const isToday  = dateStr === todayStr;
+          const hasEvts  = evts.length > 0;
+          const dotColor = hasEvts ? (EVENT_TYPE_CONFIG[evts[0].type]?.dot ?? "bg-blue-500") : "";
+
+          return (
+            <button
+              key={day}
+              onClick={() => onSelectDay(dateStr, month, year)}
+              title={hasEvts ? `${evts.length} event${evts.length > 1 ? "s" : ""}` : undefined}
+              className={`relative flex items-center justify-center rounded text-[9px] font-medium py-0.5 transition-colors ${
+                isToday  ? "bg-blue-600 text-white"
+                : hasEvts ? "text-slate-700 font-semibold hover:bg-blue-50"
+                : "text-slate-400 hover:bg-slate-50"
+              }`}
+            >
+              {day}
+              {hasEvts && !isToday && (
+                <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full ${dotColor}`} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EventsYearView({
+  year, byDate, todayStr, isLoading, onSelectDay, prevYear, nextYear,
+}: {
+  year: number;
+  byDate: Record<string, HolisticCalendarEvent[]>;
+  todayStr: string;
+  isLoading: boolean;
+  onSelectDay: (dateStr: string, month: number, year: number) => void;
+  prevYear: () => void;
+  nextYear: () => void;
+}) {
+  return (
+    <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <button onClick={prevYear} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
+          <ChevronLeft className="h-4 w-4 text-slate-500" />
+        </button>
+        <h2 className="text-base font-bold text-slate-800">{year}</h2>
+        <button onClick={nextYear} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
+          <ChevronRight className="h-4 w-4 text-slate-500" />
+        </button>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20 text-slate-400 gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-px bg-slate-100">
+          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+            <MiniMonthCalendar
+              key={m}
+              year={year}
+              month={m}
+              byDate={byDate}
+              todayStr={todayStr}
+              onSelectDay={onSelectDay}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Day panel ─────────────────────────────────────────────────────────────────
 
+function QuickCreateForm({
+  dateStr, token, typeOptions, onSaved, onExpand,
+}: {
+  dateStr: string;
+  token: string;
+  typeOptions: { value: CalendarEventType; label: string }[];
+  onSaved: () => void;
+  onExpand: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [type,  setType]  = useState<CalendarEventType>(typeOptions[0]?.value ?? "PERSONAL_EVENT");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const handleQuickSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) { setErr("Enter a title."); return; }
+    setSaving(true); setErr(null);
+    try {
+      await CalendarService.createEvent({
+        title: title.trim(),
+        type,
+        startAt: new Date(`${dateStr}T09:00`).toISOString(),
+        endAt:   new Date(`${dateStr}T10:00`).toISOString(),
+        allDay: false,
+      }, token);
+      onSaved();
+    } catch (ex: unknown) {
+      setErr(ex instanceof Error ? ex.message : "Failed");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <form onSubmit={handleQuickSave} className="space-y-3">
+      {typeOptions.length > 1 && (
+        <select
+          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+          value={type}
+          onChange={e => setType(e.target.value as CalendarEventType)}
+        >
+          {typeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      )}
+      <input
+        autoFocus
+        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+        placeholder="Event title…"
+        value={title}
+        onChange={e => { setTitle(e.target.value); setErr(null); }}
+      />
+      {err && <p className="text-xs text-red-500">{err}</p>}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2 rounded-xl text-xs font-semibold transition-colors"
+        >
+          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onExpand}
+          className="px-3 py-2 rounded-xl text-xs text-slate-500 hover:bg-slate-100 border border-slate-200 transition-colors"
+        >
+          More options
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function DayPanel({
-  dateStr, events, todayStr, token, onClose, onRefresh, canCreate, onCreateClick,
+  dateStr, events, todayStr, token, onClose, onRefresh, canCreate, onCreateClick, typeOptions,
 }: {
   dateStr: string; events: HolisticCalendarEvent[]; todayStr: string; token: string;
   onClose: () => void; onRefresh: () => void;
   canCreate: boolean; onCreateClick: () => void;
+  typeOptions: { value: CalendarEventType; label: string }[];
 }) {
   const displayDate = new Date(dateStr + "T00:00:00").toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long",
   });
+  const showQuickCreate = canCreate && events.length === 0;
 
   return (
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-6">
@@ -591,32 +879,32 @@ function DayPanel({
           <p className="text-sm font-bold text-slate-800">{displayDate}</p>
           {dateStr === todayStr && <span className="text-[10px] font-bold text-blue-600">Today</span>}
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+        <div className="flex items-center gap-2">
+          {canCreate && events.length > 0 && (
+            <button onClick={onCreateClick} className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-slate-200 transition-colors" title="Add event">
+              <Plus className="h-4 w-4 text-slate-500" />
+            </button>
+          )}
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+        </div>
       </div>
 
       <div className="p-4 space-y-3 max-h-[calc(100vh-14rem)] overflow-y-auto">
-        {events.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-sm text-slate-400">No events on this day</p>
-            {canCreate && (
-              <button onClick={onCreateClick} className="mt-3 flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 mx-auto">
-                <Plus className="h-3.5 w-3.5" /> Add event
-              </button>
-            )}
+        {showQuickCreate ? (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">New event</p>
+            <QuickCreateForm
+              dateStr={dateStr}
+              token={token}
+              typeOptions={typeOptions}
+              onSaved={onRefresh}
+              onExpand={onCreateClick}
+            />
           </div>
         ) : (
           events.map(e => (
             <EventCard key={e.id} event={e} token={token} onRespond={onRefresh} />
           ))
-        )}
-
-        {canCreate && events.length > 0 && (
-          <button
-            onClick={onCreateClick}
-            className="w-full mt-1 flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-blue-600 transition-colors py-2 border border-dashed border-slate-200 rounded-xl"
-          >
-            <Plus className="h-3 w-3" /> Add event on this day
-          </button>
         )}
       </div>
     </div>
@@ -771,10 +1059,12 @@ function CreateEventModal({
   const [startAt,       setStartAt]      = useState(defaultStart);
   const [endAt,         setEndAt]        = useState(defaultEnd);
   const [allDay,        setAllDay]       = useState(false);
-  const [isRecurring,   setIsRecurring]  = useState(false);
+  const [recPreset,     setRecPreset]    = useState<"none"|"daily"|"weekly"|"monthly"|"custom">("none");
   const [recPattern,    setRecPattern]   = useState<EventRecurrencePattern>("WEEKLY");
   const [recInterval,   setRecInterval]  = useState(1);
+  const [recEnds,       setRecEnds]      = useState<"never"|"on">("never");
   const [recEndAt,      setRecEndAt]     = useState("");
+  const isRecurring = recPreset !== "none";
   const [inviteeIds,    setInviteeIds]   = useState<string[]>([]);
   const [participantIds,setParticipantIds] = useState<string[]>([]);
   const [onLeaveNames,  setOnLeaveNames] = useState<string[]>([]);
@@ -820,7 +1110,7 @@ function CreateEventModal({
     if (!title.trim()) { setError("Title is required."); return; }
     if (!startAt || !endAt) { setError("Start and end time are required."); return; }
     if (new Date(endAt) <= new Date(startAt)) { setError("End must be after start."); return; }
-    if (isRecurring && !recEndAt) { setError("Repeat end date is required for recurring events."); return; }
+    if (isRecurring && recEnds === "on" && !recEndAt) { setError("End date is required when 'On date' is selected."); return; }
 
     setSaving(true); setError(null);
     try {
@@ -832,9 +1122,9 @@ function CreateEventModal({
         endAt:   new Date(endAt).toISOString(),
         allDay,
         isRecurring,
-        recurrencePattern:  isRecurring ? recPattern : undefined,
-        recurrenceInterval: isRecurring ? recInterval : undefined,
-        recurrenceEndAt:    isRecurring && recEndAt ? new Date(recEndAt + "T23:59").toISOString() : undefined,
+        recurrencePattern:  isRecurring ? (recPreset === "daily" ? "DAILY" : recPreset === "weekly" ? "WEEKLY" : recPreset === "monthly" ? "MONTHLY" : recPattern) : undefined,
+        recurrenceInterval: isRecurring ? (recPreset === "custom" ? recInterval : 1) : undefined,
+        recurrenceEndAt:    isRecurring && recEnds === "on" && recEndAt ? new Date(recEndAt + "T23:59").toISOString() : undefined,
         inviteeIds:         isMeeting ? inviteeIds : undefined,
         participantIds:     needsParticipants ? participantIds : undefined,
       };
@@ -909,24 +1199,41 @@ function CreateEventModal({
 
           {!["COMPANY_HOLIDAY","BIRTHDAY"].includes(type) && (
             <div className="border border-slate-100 rounded-xl p-3 space-y-3">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <div
-                  onClick={() => setIsRecurring(r => !r)}
-                  className={`w-9 h-5 rounded-full transition-colors relative ${isRecurring ? "bg-violet-600" : "bg-slate-200"}`}
-                >
-                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${isRecurring ? "translate-x-4" : "translate-x-0.5"}`} />
-                </div>
-                <span className="text-xs font-semibold text-slate-500 flex items-center gap-1"><RefreshCw className="h-3 w-3 text-violet-400" /> Repeat</span>
-              </label>
-              {isRecurring && (
-                <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+                <label className="text-xs font-semibold text-slate-500">Recurrence</label>
+              </div>
+              <select
+                className={`${inputCls} bg-white`}
+                value={recPreset}
+                onChange={e => {
+                  const v = e.target.value as typeof recPreset;
+                  setRecPreset(v);
+                  if (v === "daily")   { setRecPattern("DAILY");   setRecInterval(1); }
+                  if (v === "weekly")  { setRecPattern("WEEKLY");  setRecInterval(1); }
+                  if (v === "monthly") { setRecPattern("MONTHLY"); setRecInterval(1); }
+                  if (v === "none")    { setRecEnds("never"); setRecEndAt(""); }
+                }}
+              >
+                <option value="none">Does not repeat</option>
+                <option value="daily">Every day</option>
+                <option value="weekly">
+                  Every week on {startAt ? new Date(startAt).toLocaleDateString("en-GB", { weekday: "long" }) : "..."}
+                </option>
+                <option value="monthly">
+                  Every month on the {startAt ? new Date(startAt).getDate() : "..."}
+                  {startAt ? (["th","st","nd","rd"][[11,12,13].includes(new Date(startAt).getDate()) ? 0 : Math.min(new Date(startAt).getDate() % 10, 3)] ?? "th") : ""}
+                </option>
+                <option value="custom">Custom…</option>
+              </select>
+
+              {recPreset === "custom" && (
+                <div className="space-y-3 pl-1">
                   <div>
                     <label className="text-xs font-semibold text-slate-500 block mb-1">Repeat every</label>
                     <div className="flex items-center gap-2">
                       <input
-                        type="number"
-                        min={1}
-                        max={99}
+                        type="number" min={1} max={99}
                         className="w-16 border border-slate-200 rounded-xl px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                         value={recInterval}
                         onChange={e => setRecInterval(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
@@ -941,13 +1248,25 @@ function CreateEventModal({
                         <option value="MONTHLY">{recInterval === 1 ? "month" : "months"}</option>
                       </select>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Repeats every {recInterval} {recPattern === "DAILY" ? (recInterval === 1 ? "day" : "days") : recPattern === "WEEKLY" ? (recInterval === 1 ? "week" : "weeks") : (recInterval === 1 ? "month" : "months")}
-                    </p>
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 block mb-1">Repeat until</label>
-                    <input type="date" className={inputCls} value={recEndAt} min={startAt.split("T")[0]} onChange={e => setRecEndAt(e.target.value)} />
+                </div>
+              )}
+
+              {isRecurring && (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-500 block">Ends</label>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600">
+                      <input type="radio" name="recEnds" value="never" checked={recEnds === "never"} onChange={() => { setRecEnds("never"); setRecEndAt(""); }} className="accent-violet-600" />
+                      Never
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600">
+                      <input type="radio" name="recEnds" value="on" checked={recEnds === "on"} onChange={() => setRecEnds("on")} className="accent-violet-600" />
+                      On date
+                      {recEnds === "on" && (
+                        <input type="date" className="ml-2 border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 transition-all" value={recEndAt} min={startAt.split("T")[0]} onChange={e => setRecEndAt(e.target.value)} />
+                      )}
+                    </label>
                   </div>
                 </div>
               )}

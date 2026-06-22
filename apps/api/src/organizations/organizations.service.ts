@@ -364,15 +364,16 @@ export class OrganizationsService {
         if (existingUser) throw new ConflictException('A user with this email already exists');
 
         return this.prisma.$transaction(async (tx) => {
-            const org = await tx.organization.create({
+            const org = await (tx.organization as any).create({
                 data: {
-                    name:     dto.name,
-                    logoUrl:  dto.logoUrl,
-                    industry: dto.industry,
-                    email:    dto.email,
-                    phone:    dto.phone,
-                    address:  dto.address,
-                    modules:  dto.modules ?? [],
+                    name:      dto.name,
+                    shortName: dto.shortName,
+                    logoUrl:   dto.logoUrl,
+                    industry:  dto.industry,
+                    email:     dto.email,
+                    phone:     dto.phone,
+                    address:   dto.address,
+                    modules:   dto.modules ?? [],
                 },
             });
 
@@ -442,6 +443,7 @@ export class OrganizationsService {
             where: { id },
             data: {
                 ...(dto.name         !== undefined && { name:         dto.name }),
+                ...(dto.shortName    !== undefined && { shortName:    dto.shortName }),
                 ...(dto.logoUrl      !== undefined && { logoUrl:      dto.logoUrl }),
                 ...(dto.industry     !== undefined && { industry:     dto.industry }),
                 ...(dto.email        !== undefined && { email:        dto.email }),

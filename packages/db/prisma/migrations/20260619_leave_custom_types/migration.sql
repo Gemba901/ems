@@ -11,8 +11,14 @@ CREATE INDEX IF NOT EXISTS "LeaveRequest_organizationId_status_idx" ON "LeaveReq
 CREATE INDEX IF NOT EXISTS "LeaveRequest_organizationId_startDate_idx" ON "LeaveRequest"("organizationId", "startDate");
 
 -- Convert LeaveBalance.type from LeaveType enum to TEXT
--- Prisma creates @@unique as an index (not a named constraint), so use DROP INDEX
-DROP INDEX IF EXISTS "LeaveBalance_employeeId_year_type_key";
+-- Drop as constraint (fresh DB) or as index (existing DB), whichever applies
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'LeaveBalance_employeeId_year_type_key') THEN
+    ALTER TABLE "LeaveBalance" DROP CONSTRAINT "LeaveBalance_employeeId_year_type_key";
+  ELSE
+    DROP INDEX IF EXISTS "LeaveBalance_employeeId_year_type_key";
+  END IF;
+END $$;
 ALTER TABLE "LeaveBalance" ADD COLUMN "type_text" TEXT;
 UPDATE "LeaveBalance" SET "type_text" = "type"::TEXT;
 ALTER TABLE "LeaveBalance" DROP COLUMN "type";
@@ -22,7 +28,13 @@ CREATE UNIQUE INDEX "LeaveBalance_employeeId_year_type_key" ON "LeaveBalance"("e
 CREATE INDEX IF NOT EXISTS "LeaveBalance_employeeId_year_idx" ON "LeaveBalance"("employeeId", "year");
 
 -- Convert LeavePolicy.type from LeaveType enum to TEXT
-DROP INDEX IF EXISTS "LeavePolicy_organizationId_year_type_key";
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'LeavePolicy_organizationId_year_type_key') THEN
+    ALTER TABLE "LeavePolicy" DROP CONSTRAINT "LeavePolicy_organizationId_year_type_key";
+  ELSE
+    DROP INDEX IF EXISTS "LeavePolicy_organizationId_year_type_key";
+  END IF;
+END $$;
 ALTER TABLE "LeavePolicy" ADD COLUMN "type_text" TEXT;
 UPDATE "LeavePolicy" SET "type_text" = "type"::TEXT;
 ALTER TABLE "LeavePolicy" DROP COLUMN "type";

@@ -323,6 +323,57 @@ export class SimsService {
     };
   }
 
+  async getLeaderboard(organizationId: string) {
+    const POINTS: Record<SuggestionStatus, number> = {
+      REJECTED: 0,
+      UNDER_REVIEW: 1,
+      ON_HOLD: 2,
+      SELECTED_FOR_SGA: 3,
+      APPROVED_FOR_IMPLEMENTATION: 5,
+    };
+
+    const suggestions = await this.prisma.suggestion.findMany({
+      where: { organizationId, isAnonymous: false },
+      select: {
+        status: true,
+        employee: {
+          select: {
+            id: true,
+            userId: true,
+            firstName: true,
+            lastName: true,
+            department: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const map = new Map<string, { id: string; userId: string | null; name: string; dept: string; points: number; count: number; implemented: number }>();
+
+    for (const s of suggestions) {
+      if (!s.employee) continue;
+      const pts = POINTS[s.status] ?? 0;
+      const prev = map.get(s.employee.id);
+      if (prev) {
+        prev.points += pts;
+        prev.count += 1;
+        if (s.status === 'APPROVED_FOR_IMPLEMENTATION') prev.implemented += 1;
+      } else {
+        map.set(s.employee.id, {
+          id: s.employee.id,
+          userId: s.employee.userId,
+          name: `${s.employee.firstName} ${s.employee.lastName}`,
+          dept: s.employee.department?.name ?? '—',
+          points: pts,
+          count: 1,
+          implemented: s.status === 'APPROVED_FOR_IMPLEMENTATION' ? 1 : 0,
+        });
+      }
+    }
+
+    return [...map.values()].sort((a, b) => b.points - a.points);
+  }
+
   // Review (HODs and Admins)
 
   async reviewSuggestion(

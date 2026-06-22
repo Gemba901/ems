@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -212,7 +212,7 @@ const POINTS_LEGEND = [
 ] as const;
 
 type RankedEntry = {
-  id: string; name: string; dept: string;
+  id: string; userId: string | null; name: string; dept: string;
   points: number; count: number; implemented: number;
 };
 
@@ -298,50 +298,22 @@ function LeaderboardRow({
 }
 
 function TopContributors({
-  suggestions,
+  ranked,
   loading,
   currentUserId,
-  currentUserName,
 }: {
-  suggestions: Suggestion[];
+  ranked: RankedEntry[];
   loading: boolean;
   currentUserId: string | undefined;
-  currentUserName: string | undefined;
 }) {
-  const allRanked = useMemo((): RankedEntry[] => {
-    const map = new Map<string, RankedEntry>();
-    for (const s of suggestions) {
-      if (!s.employee) continue;
-      const pts  = calcSuggestionPoints(s.status);
-      const prev = map.get(s.employee.id);
-      if (prev) {
-        prev.points += pts;
-        prev.count  += 1;
-        if (s.status === "APPROVED_FOR_IMPLEMENTATION") prev.implemented += 1;
-      } else {
-        map.set(s.employee.id, {
-          id:          s.employee.id,
-          name:        `${s.employee.firstName} ${s.employee.lastName}`,
-          dept:        s.employee.department?.name ?? "—",
-          points:      pts,
-          count:       1,
-          implemented: s.status === "APPROVED_FOR_IMPLEMENTATION" ? 1 : 0,
-        });
-      }
-    }
-    return [...map.values()].sort((a, b) => b.points - a.points);
-  }, [suggestions]);
+  if (!loading && ranked.length === 0) return null;
 
-  if (!loading && allRanked.length === 0) return null;
+  const top3      = ranked.slice(0, 3);
+  const maxPoints = ranked[0]?.points ?? 1;
 
-  const top3      = allRanked.slice(0, 3);
-  const maxPoints = allRanked[0]?.points ?? 1;
-
-  const userIdx   = allRanked.findIndex(
-    (r) => (currentUserId && r.id === currentUserId) || (currentUserName && r.name === currentUserName),
-  );
-  const userEntry = userIdx >= 0 ? allRanked[userIdx] : null;
-  const userRank  = userIdx + 1;
+  const userIdx    = ranked.findIndex((r) => currentUserId && r.userId === currentUserId);
+  const userEntry  = userIdx >= 0 ? ranked[userIdx] : null;
+  const userRank   = userIdx + 1;
   const userInTop3 = userIdx >= 0 && userIdx < 3;
 
   return (
@@ -378,7 +350,7 @@ function TopContributors({
               entry={r}
               rank={i + 1}
               maxPoints={maxPoints}
-              isYou={r.id === currentUserId}
+              isYou={r.userId === currentUserId}
             />
           ))}
 
@@ -513,6 +485,10 @@ export default function SimsOverviewPage() {
     role === Role.MANAGEMENT ||
     role === Role.HOD;
 
+  useEffect(() => {
+    if (role === Role.EMPLOYEE) router.replace("/sims/my-suggestions");
+  }, [role, router]);
+
   const { data: allSuggestions = [], isLoading: loading, error: queryError } = useQuery({
     queryKey: ["sims", role],
     queryFn: () =>
@@ -527,6 +503,12 @@ export default function SimsOverviewPage() {
   const { data: myCommittees = [] } = useQuery({
     queryKey: ["my-committees"],
     queryFn: () => CommitteeService.getMyCommittees(accessToken!),
+    enabled: !!accessToken,
+  });
+
+  const { data: leaderboard = [], isLoading: leaderboardLoading } = useQuery({
+    queryKey: ["sims-leaderboard"],
+    queryFn: () => SimsService.getLeaderboard(accessToken!),
     enabled: !!accessToken,
   });
 
@@ -578,11 +560,11 @@ export default function SimsOverviewPage() {
 
   return (
     <ProtectedRoute
-      allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}
+      allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}
     >
       <div className="max-w-[1400px] mx-2 sm:mx-5 space-y-5">
 
-        {/* ── Page header ───────────────────────────────────────────────────── */}
+        {/* Page header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <span className="text-[11px] font-semibold uppercase tracking-widest text-indigo-500">
@@ -625,17 +607,15 @@ export default function SimsOverviewPage() {
           </div>
         </div>
 
-        {/* ── Leaderboard (reviewers only) ──────────────────────────────────── */}
-        {isReviewer && (
-          <TopContributors
-            suggestions={allSuggestions}
-            loading={loading}
-            currentUserId={user?.userId}
-            currentUserName={user?.name}
-          />
-        )}
+        {/*  Leaderboard */}
+        <TopContributors
+          ranked={leaderboard}
+          loading={leaderboardLoading}
+          currentUserId={user?.userId}
+        />
+        
 
-        {/* ── Reviewer metric cards ──────────────────────────────────────────── */}
+        {/* Reviewer metric cards */}
         {isReviewer && !loading && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[

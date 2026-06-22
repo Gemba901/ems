@@ -38,6 +38,25 @@ interface NewOrgDrawerProps {
   token: string;
 }
 
+const COUNTRY_CODES = [
+  { code: "254", flag: "🇰🇪", name: "Kenya" },
+  { code: "255", flag: "🇹🇿", name: "Tanzania" },
+  { code: "256", flag: "🇺🇬", name: "Uganda" },
+  { code: "250", flag: "🇷🇼", name: "Rwanda" },
+  { code: "251", flag: "🇪🇹", name: "Ethiopia" },
+  { code: "91",  flag: "🇮🇳", name: "India" },
+];
+
+function sanitizePhone(raw: string): string {
+  return raw.replace(/^\+/, "").replace(/[\s\-()]/g, "");
+}
+
+function buildPhone(countryCode: string, local: string): string {
+  const digits = sanitizePhone(local).replace(/^0/, "");
+  if (digits.startsWith(countryCode)) return digits;
+  return `${countryCode}${digits}`;
+}
+
 const INDUSTRY_OPTIONS = [
   "Agriculture & Food",
   "Automotive",
@@ -87,6 +106,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
+    shortName: "",
     industry: "",
     email: "",
     phone: "",
@@ -99,9 +119,12 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
     email: "",
     phone: "",
   });
+  const [adminPhoneCountry, setAdminPhoneCountry] = useState("254");
+  const [showPhonePicker, setShowPhonePicker] = useState(false);
   const [selectedModules, setSelectedModules] = useState<ModuleType[]>([]);
   const [logoUploading, setLogoUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedCountry = COUNTRY_CODES.find(c => c.code === adminPhoneCountry) ?? COUNTRY_CODES[0];
 
   function set(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -174,11 +197,12 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
         adminFirstName: adminForm.firstName.trim(),
         adminLastName: adminForm.lastName.trim(),
         adminEmail: adminForm.email.trim(),
-        adminPhone: adminForm.phone.trim(),
+        adminPhone: buildPhone(adminPhoneCountry, adminForm.phone),
       };
+      if (form.shortName) payload.shortName = form.shortName.trim().toUpperCase();
       if (form.industry) payload.industry = form.industry;
       if (form.email) payload.email = form.email.trim();
-      if (form.phone) payload.phone = form.phone.trim();
+      if (form.phone) payload.phone = sanitizePhone(form.phone.trim());
       if (form.address) payload.address = form.address.trim();
       if (form.logoUrl) payload.logoUrl = form.logoUrl.trim();
       payload.modules = selectedModules;
@@ -196,6 +220,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
   function handleClose() {
     setForm({
       name: "",
+      shortName: "",
       industry: "",
       email: "",
       phone: "",
@@ -203,6 +228,8 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
       logoUrl: "",
     });
     setAdminForm({ firstName: "", lastName: "", email: "", phone: "" });
+    setAdminPhoneCountry("254");
+    setShowPhonePicker(false);
     setSelectedModules([]);
     setLogoUploading(false);
     setError(null);
@@ -257,6 +284,17 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
             />
           </Field>
 
+          <Field label="Short Name / Abbreviation">
+            <input
+              value={form.shortName}
+              onChange={(e) => set("shortName", e.target.value.toUpperCase())}
+              className={inputCls}
+              placeholder="e.g. SFL (optional)"
+              maxLength={10}
+            />
+            <p className="mt-1 text-[11px] text-slate-400">Used as a compact identifier. Leave blank to auto-skip.</p>
+          </Field>
+
           <Field label="Industry">
             <div className="relative">
               <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
@@ -295,9 +333,9 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
                 <input
                   type="tel"
                   value={form.phone}
-                  onChange={(e) => set("phone", e.target.value)}
+                  onChange={(e) => set("phone", sanitizePhone(e.target.value))}
                   className={`${inputCls} pl-9`}
-                  placeholder="+254 700 000 000"
+                  placeholder="254700000000"
                 />
               </div>
             </Field>
@@ -438,19 +476,47 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
           </Field>
 
           <Field label="Admin Phone" required>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <div className="flex rounded-lg border border-slate-200 overflow-visible focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all">
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowPhonePicker(v => !v)}
+                  className="flex items-center gap-1 px-2.5 py-2.5 bg-slate-50 border-r border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors h-full whitespace-nowrap rounded-l-lg"
+                >
+                  <span className="text-base leading-none">{selectedCountry.flag}</span>
+                  <span className="text-slate-500 text-xs">+{selectedCountry.code}</span>
+                  <ChevronRight className={`h-3 w-3 text-slate-400 transition-transform shrink-0 ${showPhonePicker ? "rotate-90" : ""}`} />
+                </button>
+                {showPhonePicker && (
+                  <div className="absolute top-full left-0 z-20 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                    {COUNTRY_CODES.map(c => (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onClick={() => { setAdminPhoneCountry(c.code); setShowPhonePicker(false); }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 transition-colors ${c.code === adminPhoneCountry ? "bg-blue-50 text-blue-700 font-semibold" : "text-slate-700"}`}
+                      >
+                        <span>{c.flag}</span>
+                        <span>+{c.code}</span>
+                        <span className="text-slate-400 ml-auto">{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <input
                 type="tel"
                 value={adminForm.phone}
-                onChange={(e) => setAdmin("phone", e.target.value)}
-                className={`${inputCls} pl-9`}
-                placeholder="254700000000"
+                onChange={(e) => { setAdmin("phone", sanitizePhone(e.target.value)); setShowPhonePicker(false); }}
+                className="flex-1 min-w-0 px-3 py-2.5 bg-white text-sm outline-none placeholder:text-slate-400"
+                placeholder="712 345 678"
               />
             </div>
-            <p className="text-[11px] text-slate-400 pl-1">
-              Include country code, e.g. 254712345678
-            </p>
+            {adminForm.phone.trim().length > 0 && (
+              <p className="text-[11px] text-slate-400 pl-1 mt-1">
+                Will be stored as <span className="font-medium text-slate-600">{buildPhone(adminPhoneCountry, adminForm.phone)}</span>
+              </p>
+            )}
           </Field>
 
           {error && (

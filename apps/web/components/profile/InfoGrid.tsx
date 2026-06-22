@@ -44,7 +44,12 @@ export const InfoGrid = ({ employee, canEdit, onSave }: InfoGridProps) => {
       <input
         type={type}
         value={form[key]}
-        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+        onChange={(e) => {
+          const val = key === "phone"
+            ? e.target.value.replace(/^\+/, "")
+            : e.target.value;
+          setForm((f) => ({ ...f, [key]: val }));
+        }}
         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>

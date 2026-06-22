@@ -97,6 +97,15 @@ export class SimsController {
   }
 
   /**
+   * GET /sims/leaderboard
+   * Org-wide ranked leaderboard of contributors. Available to all roles.
+   */
+  @Get('leaderboard')
+  async getLeaderboard(@CurrentUser() user: { organizationId: string }) {
+    return this.simsService.getLeaderboard(user.organizationId);
+  }
+
+  /**
    * GET /sims/:id
    * Full detail for one suggestion — access enforced per role in the service.
    */

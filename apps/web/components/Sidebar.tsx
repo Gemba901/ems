@@ -16,6 +16,8 @@ import {
   PanelLeftOpen,
   ChevronRight,
   Palmtree,
+  UserCircle,
+  Lightbulb,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -76,6 +78,7 @@ const NAV_ITEMS = [
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
   },
+  
   {
     name: "Settings",
     href: "/settings",
@@ -90,6 +93,13 @@ const NAV_ITEMS = [
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN],
   },
+];
+
+const EMPLOYEE_MODULE_ITEMS = [
+  { name: "My Leave",      href: "/leave",              icon: Palmtree,    exact: false, module: "LEAVE"    },
+  { name: "Calendar",      href: "/calendar",           icon: CalendarDays,exact: false, module: "CALENDAR" },
+  { name: "My Profile",    href: "/ems/my-profile",     icon: UserCircle,  exact: false, module: "EMS"      },
+  { name: "Suggestions",   href: "/sims/my-suggestions",icon: Lightbulb,   exact: false, module: "SIMS"     },
 ];
 
 function isNavActive(pathname: string, href: string, exact: boolean): boolean {
@@ -114,12 +124,18 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
   };
 
   const userRole = user?.roleLevel;
+  const isEmployee = userRole === Role.EMPLOYEE;
+
   const filteredNav = NAV_ITEMS.filter(
     (item) =>
       userRole &&
       item.allowedRoles.includes(userRole as Role) &&
       (!("module" in item) || hasModule(item.module as string)),
   );
+
+  const employeeModules = isEmployee
+    ? EMPLOYEE_MODULE_ITEMS.filter((item) => hasModule(item.module))
+    : [];
 
   const initials = user?.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -220,6 +236,41 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
               </Link>
             );
           })}
+
+          {employeeModules.length > 0 && (
+            <div className="pt-3">
+              {!isCollapsed && (
+                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
+                  My Modules
+                </p>
+              )}
+              {isCollapsed && <div className="border-t border-slate-100 mb-2 mx-1" />}
+              {employeeModules.map((item) => {
+                const active = isNavActive(pathname, item.href, item.exact);
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={onClose}
+                    title={isCollapsed ? item.name : undefined}
+                    className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
+                      active
+                        ? "bg-indigo-600 text-white shadow-sm shadow-indigo-200"
+                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
+                  >
+                    <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-slate-400"}`} />
+                    {!isCollapsed && (
+                      <>
+                        <span className="flex-1">{item.name}</span>
+                        {active && <ChevronRight className="h-3.5 w-3.5 text-white/60" />}
+                      </>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
         {/* ── User card ── */}

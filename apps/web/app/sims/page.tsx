@@ -565,47 +565,29 @@ export default function SimsOverviewPage() {
       <div className="max-w-[1400px] mx-2 sm:mx-5 space-y-5">
 
         {/* Page header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-indigo-500">
-              SIMS
-            </span>
-            <h1 className="text-2xl font-bold text-slate-900 mt-0.5">{pageTitle}</h1>
-            {myCommittees.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                {myCommittees.map((c) => (
-                  <span
-                    key={c.id}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100"
-                  >
-                    <ShieldCheck className="h-3 w-3" />
-                    {c.name}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+        <div className="flex items-center justify-between gap-3 flex-nowrap">
+  <h1 className="text-base sm:text-lg font-semibold text-slate-900 truncate">
+    Suggestions & Ideas
+  </h1>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {isReviewer && (
-              <button
-                onClick={() => exportToCSV(filtered)}
-                title="Export CSV"
-                className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm"
-              >
-                <Download className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-            )}
-            <Link
-              href="/sims/new"
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm"
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              <span>New Suggestion</span>
-            </Link>
-          </div>
-        </div>
+  <div className="flex items-center gap-2 shrink-0">
+    {isReviewer && (
+      <button
+        onClick={() => exportToCSV(filtered)}
+        className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
+      >
+        <Download className="h-3.5 w-3.5" />
+      </button>
+    )}
+
+    <Link
+      href="/sims/new"
+      className="rounded-md bg-slate-900 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-slate-800 whitespace-nowrap"
+    >
+      New
+    </Link>
+  </div>
+</div>
 
         {/*  Leaderboard */}
         <TopContributors

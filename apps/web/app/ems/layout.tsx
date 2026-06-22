@@ -13,7 +13,7 @@ export default function EmsLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#F4F7FA] font-sans">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggle={toggle} />
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "md:pl-16" : "md:pl-64"}`}>
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "lg:pl-16" : "lg:pl-64"}`}>
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 p-4 md:p-8">
           <ModuleGuard moduleKey="EMS">{children}</ModuleGuard>

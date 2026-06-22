@@ -11,6 +11,12 @@ function greeting(): string {
   return "Good evening";
 }
 
+function currentWeek(): number {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  return Math.ceil(((now.getTime() - start.getTime()) / 86_400_000 + start.getDay() + 1) / 7);
+}
+
 interface DailyQuote {
   quote: string;
   author: string;
@@ -29,6 +35,7 @@ export default function DashboardHero() {
 
   const firstName = user?.name?.split(" ")[0] ?? "there";
   const role      = user?.roleLevel?.replace(/_/g, " ") ?? "";
+  const week      = currentWeek();
 
   useEffect(() => {
     if (!accessToken) return;
@@ -49,8 +56,8 @@ export default function DashboardHero() {
       <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="text-slate-400 text-xs mb-2">
-            <span className="sm:hidden">{todayShort}</span>
-            <span className="hidden sm:inline">{todayFull}</span>
+            <span className="sm:hidden">{todayShort} · Week {week}</span>
+            <span className="hidden sm:inline">{todayFull} · Week {week}</span>
           </p>
           <h1 className="text-xl sm:text-3xl font-bold text-white tracking-tight">
             {greeting()}, {firstName}.
@@ -60,6 +67,11 @@ export default function DashboardHero() {
               <span className="h-1.5 w-1.5 rounded-full bg-indigo-300 inline-block" />
               {role.toLowerCase()}
             </span>
+            {user?.jobTitle && (
+              <span className="text-xs font-medium bg-white/10 text-slate-300 px-2.5 py-1 rounded-full">
+                {user.jobTitle}
+              </span>
+            )}
           </div>
         </div>
 

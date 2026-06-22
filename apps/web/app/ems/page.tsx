@@ -13,6 +13,7 @@ import {
 import {
   Users, AlertCircle, UserCheck, ChevronRight, Loader2,
   BarChart3, Activity, TrendingUp, ClipboardList,
+  User, Briefcase, FileText, Phone, type LucideIcon,
 } from "lucide-react"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -144,30 +145,37 @@ export default function EmsDashboardPage() {
                       <ClipboardList className="h-4 w-4 text-indigo-500" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-800">EMS Dashboard</p>
-                      <p className="text-[11px] text-slate-400">Employee Master Data Health — Level 1</p>
+                      <p className="text-sm font-bold text-slate-800">Employee Master Data</p>
+                      <p className="text-[11px] text-slate-400">Employee record completeness across your organization</p>
                     </div>
                   </div>
-                  <Link
-                    href="/ems/employees"
-                    className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
-                  >
-                    All Employees <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
                 </div>
 
-                <div className="px-6 py-6 flex flex-col sm:flex-row items-center gap-8">
-                  {/* Overall ring */}
-                  <div className="flex flex-col items-center gap-2 shrink-0">
-                    <RingGauge pct={overall} size={120} strokeWidth={10} />
-                    <div className="flex flex-col items-center gap-1">
-                      <p className="text-[11px] text-slate-400">Overall Completion</p>
-                      <StatusBadge status={statusLabel(overall)} />
+                <div className="px-5 py-5 space-y-4">
+                  {/* Overall score row */}
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Overall Completion</p>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-black text-slate-900 leading-none tabular-nums">
+                          {overall}<span className="text-xl font-semibold text-slate-300">%</span>
+                        </span>
+                        <StatusBadge status={statusLabel(overall)} />
+                      </div>
                     </div>
+                    <RingGauge pct={overall} size={64} strokeWidth={6} />
                   </div>
 
-                  {/* Quick stats 2×2 */}
-                  <div className="grid grid-cols-2 gap-3 w-full">
+                  {/* Progress bar */}
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${overall}%`, backgroundColor: ringColor(overall) }}
+                    />
+                  </div>
+
+                  {/* Stats 2×2 */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
                     {[
                       { label: "Total Employees",    value: dashboard.summary.total },
                       { label: "Active / Probation", value: dashboard.summary.activeOrProbation },
@@ -187,34 +195,56 @@ export default function EmsDashboardPage() {
               </div>
 
               {/* ── Group Completeness ────────────────────────────────────── */}
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <CardHeader icon={BarChart3} title="Data Completeness by Group" />
-                <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {dashboard.groupSummary.map((g) => (
-                    <div
-                      key={g.key}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl bg-slate-50 border border-slate-100"
-                    >
-                      <RingGauge pct={g.avgCompletion} size={68} strokeWidth={6} />
-                      <p className="text-xs font-semibold text-slate-700 text-center leading-tight">{g.label}</p>
-                      <StatusBadge status={g.status} />
+              {(() => {
+                const GROUP_ICONS: Record<string, LucideIcon> = {
+                  IDENTITY: User, WORK_ALLOCATION: Briefcase, ROLE_RESPONSIBILITY: FileText, CONTACT: Phone, SKILL: TrendingUp,
+                };
+                return (
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                    <CardHeader icon={BarChart3} title="Data Completeness by Group" />
+                    <div className="p-5 space-y-3.5">
+                      {dashboard.groupSummary.map((g) => {
+                        const Icon = GROUP_ICONS[g.key] ?? ClipboardList;
+                        const color = ringColor(g.avgCompletion);
+                        return (
+                          <div key={g.key} className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                              <Icon className="h-4 w-4 text-slate-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs font-medium text-slate-700 truncate">{g.label}</span>
+                                <div className="flex items-center gap-2 ml-2 shrink-0">
+                                  <StatusBadge status={g.status} />
+                                  <span className="text-xs font-bold tabular-nums" style={{ color }}>{g.avgCompletion}%</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${g.avgCompletion}%`, backgroundColor: color }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
-                {/* Overall bar */}
-                <div className="mx-5 mb-5 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-slate-500">Overall Average</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-800">{overall}%</span>
-                      <StatusBadge status={statusLabel(overall)} />
+                    {/* Overall */}
+                    <div className="mx-5 mb-5 flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs font-semibold text-slate-600">Overall Average</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-slate-900 tabular-nums">{overall}%</span>
+                            <StatusBadge status={statusLabel(overall)} />
+                          </div>
+                        </div>
+                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${overall}%`, backgroundColor: ringColor(overall) }} />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${completionBg(overall)}`} style={{ width: `${overall}%` }} />
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* ── Employment Status + Department ────────────────────────── */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -359,7 +389,7 @@ export default function EmsDashboardPage() {
               {/* ── Steering Committee ────────────────────────────────────── */}
               {dashboard.committeeSummary.length > 0 && (
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                  <CardHeader icon={Users} title="Steering Committee Participation" iconColor="text-purple-500" iconBg="bg-purple-50" />
+                  <CardHeader icon={Users} title="Committee Participation" iconColor="text-purple-500" iconBg="bg-purple-50" />
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>

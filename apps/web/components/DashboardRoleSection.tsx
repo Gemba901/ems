@@ -384,8 +384,8 @@ function AdminSection() {
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <ActionCard
-            label="Human Resources"
-            description="Employees, onboarding & org structure"
+            label="People"
+            description="Employee directory & onboarding"
             href="/hr"
             icon={Stethoscope}
             color="text-rose-600"
@@ -414,7 +414,7 @@ function AdminSection() {
       {/* <div>
         <SectionHeader title="Additional Access" subtitle="Other areas you can manage" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <ActionCard label="Committees" description="Manage review committees" href="/operations/committees" icon={ShieldCheck} color="text-violet-600" bg="bg-violet-50" />
+          <ActionCard label="Committees" description="Manage committees and members" href="/operations/committees" icon={ShieldCheck} color="text-violet-600" bg="bg-violet-50" />
           <ActionCard label="Settings" description="Configure your organization" href="/settings" icon={Settings} color="text-slate-600" bg="bg-slate-100" />
         </div>
       </div> */}
@@ -513,7 +513,7 @@ function HrSection() {
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ActionCard
-            label="Employee Directory"
+            label="People"
             description="View, search and manage all employees across departments"
             href="/hr"
             icon={Stethoscope}

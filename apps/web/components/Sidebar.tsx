@@ -9,7 +9,7 @@ import {
   LogOut,
   ShieldCheck,
   Building2,
-  Stethoscope,
+  Users,
   SlidersHorizontal,
   CalendarDays,
   PanelLeftClose,
@@ -58,9 +58,9 @@ const NAV_ITEMS = [
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
   },
   {
-    name: "HR",
+    name: "People",
     href: "/hr",
-    icon: Stethoscope,
+    icon: Users,
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR],
   },
@@ -149,7 +149,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
     <>
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/30 md:hidden"
+          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
           onClick={onClose}
         />
       )}
@@ -159,8 +159,8 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
           fixed z-50 top-0 left-0 h-dvh flex flex-col bg-white border-r border-slate-200
           transition-all duration-300 ease-in-out overflow-hidden w-64
           ${open ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0
-          ${collapsed ? "md:w-16" : "md:w-64"}
+          lg:translate-x-0
+          ${collapsed ? "lg:w-16" : "lg:w-64"}
         `}
       >
         {/* ── Header: toggle + brand ── */}
@@ -170,7 +170,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
           <button
             onClick={onToggle}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden md:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            className="hidden lg:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
           >
             {collapsed
               ? <PanelLeftOpen className="h-4 w-4" />

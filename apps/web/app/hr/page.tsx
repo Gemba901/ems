@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
-    Building2, Search, X, ChevronRight, TrendingUp,
+    Search, X, ChevronRight, TrendingUp,
     ChevronLeft, Loader2, BarChart3, UserPlus,
     CheckCircle2, ArrowRight, AlertCircle, Plus,
 } from "lucide-react";
@@ -437,11 +437,11 @@ function HRContent() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className="mx-auto space-y-8">
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Employee Directory</h1>
+                    <h1 className="text-2xl font-bold text-slate-900">People</h1>
                     <p className="text-sm text-slate-500 mt-1">
                         {total !== null
                             ? `${total.toLocaleString()} employee${total !== 1 ? "s" : ""} · ${departments.length} department${departments.length !== 1 ? "s" : ""}`
@@ -451,17 +451,17 @@ function HRContent() {
                 <div className="flex items-center gap-2 shrink-0">
                     <Link
                         href="/hr/reports"
-                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
                     >
                         <BarChart3 className="h-3.5 w-3.5" />
-                        Analytics
+                        <span className="hidden sm:inline">Analytics</span>
                     </Link>
                     <button
                         onClick={() => setPanelOpen(true)}
-                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
                     >
                         <UserPlus className="h-3.5 w-3.5" />
-                        Onboard Employee
+                        <span className="hidden sm:inline">Onboard Employee</span>
                     </button>
                 </div>
             </div>
@@ -470,8 +470,8 @@ function HRContent() {
                 {/* Employee table */}
                 <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     {/* Toolbar */}
-                    <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100">
-                        <div className="relative flex-1 max-w-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-3 border-b border-slate-100">
+                        <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                             <input
                                 value={search}
@@ -485,31 +485,33 @@ function HRContent() {
                                 </button>
                             )}
                         </div>
-                        <select
-                            value={deptFilter}
-                            onChange={(e) => setDeptFilter(e.target.value)}
-                            className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
-                        >
-                            <option value="">All departments</option>
-                            {departments.map((d) => (
-                                <option key={d.id} value={d.id}>{d.name}</option>
-                            ))}
-                        </select>
-                        {total !== null && (
-                            <span className="ml-auto text-[11px] text-slate-400 whitespace-nowrap">
-                                {total} employee{total !== 1 ? "s" : ""}
-                            </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={deptFilter}
+                                onChange={(e) => setDeptFilter(e.target.value)}
+                                className="flex-1 sm:flex-none text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
+                            >
+                                <option value="">All departments</option>
+                                {departments.map((d) => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                            </select>
+                            {total !== null && (
+                                <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                                    {total} employee{total !== 1 ? "s" : ""}
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-slate-50 border-b border-slate-100">
                                 <tr>
-                                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Employee</th>
-                                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Department</th>
-                                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Role</th>
-                                    <th className="px-5 py-3" />
+                                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Employee</th>
+                                    <th className="hidden sm:table-cell px-4 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Department</th>
+                                    <th className="hidden md:table-cell px-4 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Role</th>
+                                    <th className="px-4 py-3" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
@@ -549,32 +551,35 @@ function HRContent() {
                                         <tr
                                             key={emp.id}
                                             className="hover:bg-slate-50/60 transition-colors cursor-pointer group"
-                                            onClick={() => router.push(`/operations/employees/${emp.id}`)}
+                                            onClick={() => router.push(`/ems/employees/${emp.id}`)}
                                         >
-                                            <td className="px-5 py-3.5">
+                                            <td className="px-4 py-3.5">
                                                 <div className="flex items-center gap-3">
                                                     {emp.avatarUrl ? (
-                                                        <img src={emp.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover border border-slate-200 shrink-0" />
+                                                        <img src={emp.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover border border-slate-200 shrink-0" />
                                                     ) : (
-                                                        <div className="h-7 w-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                                        <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
                                                             {emp.firstName[0]}{emp.lastName[0]}
                                                         </div>
                                                     )}
-                                                    <div>
-                                                        <p className="font-medium text-slate-900">{emp.firstName} {emp.lastName}</p>
-                                                        <p className="text-[11px] text-slate-400">{emp.email}</p>
+                                                    <div className="min-w-0">
+                                                        <p className="font-medium text-slate-900 truncate">{emp.firstName} {emp.lastName}</p>
+                                                        <p className="text-[11px] text-slate-400 truncate">
+                                                            <span className="sm:hidden">{emp.department?.name ?? roleName.replace(/_/g, " ").toLowerCase()}</span>
+                                                            <span className="hidden sm:inline">{emp.email}</span>
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-5 py-3.5">
+                                            <td className="hidden sm:table-cell px-4 py-3.5">
                                                 {emp.department ? (
                                                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">{emp.department.name}</span>
                                                 ) : <span className="text-slate-300 text-xs">Unassigned</span>}
                                             </td>
-                                            <td className="px-5 py-3.5 text-xs text-slate-500 capitalize">
+                                            <td className="hidden md:table-cell px-4 py-3.5 text-xs text-slate-500 capitalize">
                                                 {roleName.replace(/_/g, " ").toLowerCase()}
                                             </td>
-                                            <td className="px-5 py-3.5 text-right">
+                                            <td className="px-4 py-3.5 text-right">
                                                 <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-400 transition-colors ml-auto" />
                                             </td>
                                         </tr>
@@ -586,9 +591,12 @@ function HRContent() {
 
                     {/* Pagination */}
                     {!loading && totalPages > 1 && (
-                        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
-                            <p className="text-xs text-slate-400">
+                        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/50">
+                            <p className="text-xs text-slate-400 hidden sm:block">
                                 Page {page} of {totalPages} · {total} employees
+                            </p>
+                            <p className="text-xs text-slate-400 sm:hidden">
+                                {page}/{totalPages}
                             </p>
                             <div className="flex items-center gap-1">
                                 <button

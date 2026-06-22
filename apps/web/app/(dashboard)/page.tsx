@@ -78,18 +78,17 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
   },
   EMS: {
     key: "EMS",
-    label: "EMS",
-    tagline: "Employee Master Data",
-    description: "Manage employee records, track data completeness, and ensure all staff profiles are up to date across the organization.",
+    label: "Employee Master Data",
+    tagline: "Record Completeness",
+    description: "Track how complete your employee records are, identify gaps, and ensure all staff data is accurate and up to date.",
     icon: ClipboardList,
     color: "text-indigo-600",
     bg: "bg-indigo-50",
     ring: "ring-indigo-200",
     href: "/ems",
     actions: [
-      { label: "EMS Dashboard",   href: "/ems",            icon: BarChart3,   roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
-      { label: "View Employees",  href: "/ems/employees",  icon: Users,       roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
-      { label: "My Profile",      href: "/ems/my-profile", icon: UserCircle,  roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
+      { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
+      { label: "My Profile",             href: "/ems/my-profile", icon: UserCircle, roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
     ],
   },
   CALENDAR: {

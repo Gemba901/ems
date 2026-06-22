@@ -17,7 +17,7 @@ export function CommitteesCard({ committees }: { committees: Committee[] }) {
       <div className="flex items-center gap-2 mb-6">
         <Users className="h-4 w-4 text-slate-400" />
         <h3 className="text-xs font-bold tracking-widest text-slate-800 uppercase">
-          Steering Committees
+          Committees
         </h3>
         <span className="ml-auto text-xs font-semibold text-slate-400">{committees.length}</span>
       </div>

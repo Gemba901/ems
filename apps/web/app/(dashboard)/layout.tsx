@@ -52,7 +52,7 @@ export default function DashboardLayout({
         onToggle={handleToggleSidebar}
       />
 
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "md:pl-16" : "md:pl-64"}`}>
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:pl-16" : "lg:pl-64"}`}>
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <EmsCompletionBanner />
         <main className="flex-1 p-4 md:p-8">

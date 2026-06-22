@@ -168,14 +168,14 @@ export default function CommitteesPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-5">
+      <div className="px-4 py-4 md:px-8 md:py-6 mx-auto space-y-5">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Steering Committees</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Committees</h1>
             <p className="text-sm text-slate-500 mt-1">
-              Only committee members can review suggestions.
+              Manage committees and their members across the organization.
             </p>
           </div>
           {isAdmin && (
@@ -247,7 +247,7 @@ export default function CommitteesPage() {
               </div>
               <p className="text-sm font-medium">No committees yet</p>
               {isAdmin && (
-                <p className="text-xs">Create a committee and assign members who can review suggestions.</p>
+                <p className="text-xs">Create a committee and assign members from your organization.</p>
               )}
             </div>
           </div>
@@ -365,7 +365,7 @@ export default function CommitteesPage() {
                     <div className="px-5 py-6 text-center">
                       <div className="flex flex-col items-center gap-2 text-slate-400">
                         <Users className="h-6 w-6 text-slate-200" />
-                        <p className="text-xs">No members yet. Add employees who can review suggestions.</p>
+                        <p className="text-xs">No members yet. Add employees to this committee.</p>
                       </div>
                     </div>
                   ) : (

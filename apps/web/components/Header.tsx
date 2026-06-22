@@ -13,16 +13,16 @@ interface HeaderProps {
 
 const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
-  "/hr": "Human Resources",
-  "/hr/reports": "HR Reports",
+  "/hr": "People",
+  "/hr/reports": "People Reports",
   "/operations": "Operations",
   "/operations/committees": "Committees",
   "/reports": "Reports",
   "/settings": "Settings",
   "/settings/members": "Members",
   "/settings/notifications": "Notifications",
-  "/ems": "Employee Master System",
-  "/ems/employees": "Employees",
+  "/ems": "Employee Master Data",
+  "/ems/employees": "Employee Master Data",
   "/ems/my-profile": "My Profile",
   "/sims": "Suggestions",
   "/sims/new": "New Suggestion",
@@ -57,12 +57,12 @@ export function Header({ onMenuClick }: HeaderProps) {
   const pageTitle = resolveTitle(pathname);
 
   return (
-    <header className="flex h-16 items-center justify-between px-4 md:px-8 bg-transparent">
+    <header className="flex h-16 items-center justify-between px-4 lg:px-8 bg-transparent">
 
       {/* Left: brand + page context */}
       <div className="flex items-center gap-3">
         <button
-          className="md:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100"
+          className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100"
           onClick={onMenuClick}
           aria-label="Open menu"
         >
@@ -76,16 +76,16 @@ export function Header({ onMenuClick }: HeaderProps) {
             </span>
           </div>
           {pageTitle && (
-            <>
+            <div className="hidden sm:flex items-center gap-2 min-w-0">
               <span className="text-slate-300 text-sm select-none">/</span>
-              <span className="text-sm font-semibold text-slate-700">{pageTitle}</span>
-            </>
+              <span className="text-sm font-semibold text-slate-700 truncate max-w-[200px]">{pageTitle}</span>
+            </div>
           )}
         </div>
       </div>
 
       {/* Right: calendar + notifications + user */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         <Link
           href="/calendar"
           title="My Calendar"

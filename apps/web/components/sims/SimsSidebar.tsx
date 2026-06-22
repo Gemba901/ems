@@ -78,6 +78,9 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
 
+  // On mobile (open=true) always show full sidebar regardless of collapsed state
+  const isCollapsed = collapsed && !open;
+
   const userRole = user?.roleLevel;
   const filteredNav = SIMS_NAV.filter(
     (item) => userRole && item.allowedRoles.includes(userRole)
@@ -87,7 +90,7 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
     <>
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/30 md:hidden"
+          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
           onClick={onClose}
         />
       )}
@@ -97,18 +100,18 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
           fixed z-50 top-0 left-0 h-dvh flex flex-col bg-white border-r border-slate-200
           transition-all duration-300 ease-in-out overflow-hidden w-64
           ${open ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0
-          ${collapsed ? "md:w-16" : "md:w-64"}
+          lg:translate-x-0
+          ${collapsed ? "lg:w-16" : "lg:w-64"}
         `}
       >
         {/* ── Header: toggle + brand ── */}
-        <div className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${collapsed ? "justify-center" : "px-4 gap-3"}`}>
+        <div className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${isCollapsed ? "justify-center" : "px-4 gap-3"}`}>
 
           {/* Collapse toggle — desktop only */}
           <button
             onClick={onToggle}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden md:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            className="hidden lg:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
           >
             {collapsed
               ? <PanelLeftOpen className="h-4 w-4" />
@@ -116,7 +119,7 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
             }
           </button>
 
-          {!collapsed && (
+          {!isCollapsed && (
             <>
               <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-blue-600 rounded-lg">
                 <Lightbulb className="h-4 w-4 text-white" />
@@ -134,23 +137,23 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
         </div>
 
         {/* ── New Suggestion CTA ── */}
-        <div className={`px-2 pt-3 pb-1 shrink-0 ${collapsed ? "flex justify-center" : ""}`}>
+        <div className={`px-2 pt-3 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
           <Link
             href="/sims/new"
             onClick={onClose}
-            title={collapsed ? "New Suggestion" : undefined}
+            title={isCollapsed ? "New Suggestion" : undefined}
             className={`flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors ${
-              collapsed ? "h-10 w-10 justify-center" : "h-10 w-full px-3 gap-2"
+              isCollapsed ? "h-10 w-10 justify-center" : "h-10 w-full px-3 gap-2"
             }`}
           >
             <Plus className="h-4 w-4 shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">New Suggestion</span>}
+            {!isCollapsed && <span className="text-sm font-medium">New Suggestion</span>}
           </Link>
         </div>
 
         {/* ── Navigation ── */}
         <nav className="flex-1 px-2 py-2 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
-          {!collapsed && (
+          {!isCollapsed && (
             <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
               Platform
             </p>
@@ -162,15 +165,15 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
                 key={item.name}
                 href={item.href}
                 onClick={onClose}
-                title={collapsed ? item.name : undefined}
+                title={isCollapsed ? item.name : undefined}
                 className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
                   active
                     ? "bg-blue-50 text-blue-600"
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                } ${collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
+                } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
               >
                 <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`} />
-                {!collapsed && (
+                {!isCollapsed && (
                   <>
                     <span className="flex-1">{item.name}</span>
                     {active && <ChevronRight className="h-3.5 w-3.5 text-blue-400" />}
@@ -190,15 +193,15 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
                 key={item.name}
                 href={item.href}
                 onClick={onClose}
-                title={collapsed ? item.name : undefined}
+                title={isCollapsed ? item.name : undefined}
                 className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
                   active
                     ? "bg-blue-50 text-blue-600"
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                } ${collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
+                } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
               >
                 <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`} />
-                {!collapsed && <span className="flex-1">{item.name}</span>}
+                {!isCollapsed && <span className="flex-1">{item.name}</span>}
               </Link>
             );
           })}
@@ -207,13 +210,13 @@ export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle
           <Link
             href="/"
             onClick={onClose}
-            title={collapsed ? "Main App" : undefined}
+            title={isCollapsed ? "Main App" : undefined}
             className={`flex items-center rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-white transition-all duration-150 ${
-              collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
+              isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
             }`}
           >
             <ArrowLeft className="h-4 w-4 shrink-0" />
-            {!collapsed && <span className="flex-1">Main App</span>}
+            {!isCollapsed && <span className="flex-1">Main App</span>}
           </Link>
         </div>
       </aside>

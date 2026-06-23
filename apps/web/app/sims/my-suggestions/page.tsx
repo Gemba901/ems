@@ -6,10 +6,10 @@ import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
-import { SimsService, Suggestion, SuggestionStatus, SuggestionCategory } from "@/services/sims.service";
+import { SimsService, SuggestionStatus, SuggestionCategory } from "@/services/sims.service";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Plus, Lightbulb, ChevronRight, Clock, CheckCircle2,
+  Lightbulb, ChevronRight, Clock, CheckCircle2,
   XCircle, AlertCircle,
 } from "lucide-react";
 
@@ -57,28 +57,28 @@ export default function MySuggestionsPage() {
     {
       label: "Total Submitted",
       value: counts.total,
-      icon: <Lightbulb className="h-5 w-5 text-blue-600" />,
+      icon: <Lightbulb className="h-4 w-4 text-blue-600" />,
       iconBg: "bg-blue-50",
       sub: null,
     },
     {
       label: "In Progress",
       value: counts.active,
-      icon: <Clock className="h-5 w-5 text-amber-500" />,
+      icon: <Clock className="h-4 w-4 text-amber-500" />,
       iconBg: "bg-amber-50",
       sub: counts.active > 0 ? <span className="text-amber-600">Awaiting review</span> : null,
     },
     {
-      label: "Approved for Impl.",
+      label: "Approved",
       value: counts.approved,
-      icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,
+      icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
       iconBg: "bg-emerald-50",
-      sub: counts.total > 0 ? <span className="text-emerald-600">Approval rate: {successRate}%</span> : null,
+      sub: counts.total > 0 ? <span className="text-emerald-600">{successRate}% approval rate</span> : null,
     },
     {
       label: "Rejected",
       value: counts.closed,
-      icon: <XCircle className="h-5 w-5 text-slate-400" />,
+      icon: <XCircle className="h-4 w-4 text-slate-400" />,
       iconBg: "bg-slate-50",
       sub: null,
     },
@@ -86,35 +86,32 @@ export default function MySuggestionsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-5">
+      <div className="mx-5 space-y-5">
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">My Suggestions</h1>
-            <p className="text-sm text-slate-500 mt-1">All ideas you've submitted and their current status.</p>
-          </div>
+        {/* Page header */}
+        <div className="flex items-center justify-between gap-3 flex-nowrap">
+          <h1 className="text-base sm:text-lg font-semibold text-slate-900 truncate">
+            My Suggestions
+          </h1>
           <Link
             href="/sims/new"
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm shrink-0"
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-slate-800 whitespace-nowrap"
           >
-            <Plus className="h-4 w-4" /> New Suggestion
+            New
           </Link>
         </div>
 
         {/* Metric cards */}
         {!loading && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {metrics.map((m) => (
-              <div key={m.label} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-                <p className="text-xs font-medium text-slate-500">{m.label}</p>
-                <div className="flex items-end justify-between mt-2">
-                  <p className="text-3xl font-bold text-slate-900">{m.value}</p>
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${m.iconBg}`}>
-                    {m.icon}
-                  </div>
+              <div key={m.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-2.5">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{m.label}</p>
+                  <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${m.iconBg}`}>{m.icon}</div>
                 </div>
-                {m.sub && <p className="text-xs font-medium mt-2">{m.sub}</p>}
+                <p className="text-2xl font-bold leading-none text-slate-900">{m.value}</p>
+                {m.sub && <p className="text-[11px] mt-1.5">{m.sub}</p>}
               </div>
             ))}
           </div>
@@ -148,7 +145,7 @@ export default function MySuggestionsPage() {
               <Lightbulb className="h-7 w-7 text-blue-300" />
             </div>
             <p className="text-sm font-semibold text-slate-600">No suggestions here yet</p>
-            <p className="text-xs text-slate-400">Your ideas help improve the workplace — share your first one.</p>
+            
             <Link
               href="/sims/new"
               className="mt-1 text-xs font-medium text-blue-600 hover:underline"

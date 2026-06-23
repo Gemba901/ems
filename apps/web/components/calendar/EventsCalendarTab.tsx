@@ -274,7 +274,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
       )}
 
       {/* View toggle + New event */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
           {(["month","week","agenda","year"] as const).map(vm => {
             const Icon = vm === "month" ? LayoutGrid : vm === "week" ? CalendarDays : vm === "agenda" ? List : Calendar;
@@ -282,12 +282,12 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
               <button
                 key={vm}
                 onClick={() => handleViewMode(vm)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
                   viewMode === vm ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
-                {vm.charAt(0).toUpperCase() + vm.slice(1)}
+                <span className="hidden sm:inline">{vm.charAt(0).toUpperCase() + vm.slice(1)}</span>
               </button>
             );
           })}
@@ -295,9 +295,10 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
         {canCreate && (
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-xl transition-colors"
+            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-xl transition-colors shrink-0"
           >
-            <Plus className="h-3.5 w-3.5" /> New Event
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">New Event</span>
           </button>
         )}
       </div>

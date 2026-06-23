@@ -287,7 +287,7 @@ export default function DashboardPage() {
   const canSeeExploreMore = ["SUPER_ADMIN", "ADMIN", "MANAGEMENT"].includes(user?.roleLevel ?? "");
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10 pb-16">
+    <div className="mx-auto space-y-10 pb-16">
 
       <DashboardHero />
 

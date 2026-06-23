@@ -562,7 +562,7 @@ export default function SimsOverviewPage() {
     <ProtectedRoute
       allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}
     >
-      <div className="max-w-[1400px] mx-2 sm:mx-5 space-y-5">
+      <div className="mx-5 space-y-5">
 
         {/* Page header */}
         <div className="flex items-center justify-between gap-3 flex-nowrap">

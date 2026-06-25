@@ -64,6 +64,25 @@ export class AuthService {
         return crypto.randomBytes(64).toString('hex');
     }
 
+    private async getUserIdByEmployeeCode(employeeCode: string): Promise<string> {
+        const employees = await this.prisma.employee.findMany({
+            where: { employeeCode: employeeCode.trim(), userId: { not: null } },
+            select: { userId: true },
+        });
+
+        const userIds = [...new Set(employees.map((e) => e.userId as string))];
+
+        if (userIds.length === 0) {
+            throw new UnauthorizedException('Account not found! Please contact your administrator.');
+        }
+
+        if (userIds.length > 1) {
+            throw new UnauthorizedException('Account not found! Please contact your administrator.');
+        }
+
+        return userIds[0];
+    }
+
     private async buildJwt(
         user: { id: string; email: string | null; phone: string; name: string },
         membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null; isAdminOrg: boolean } },
@@ -103,17 +122,24 @@ export class AuthService {
         };
     }
 
-    async login(phoneOrEmail: string, password: string) {
-        const isEmail = phoneOrEmail.includes('@');
-        const normalized = isEmail
-            ? phoneOrEmail.trim().toLowerCase()
-            : phoneOrEmail.replace(/\D/g, ''); // strip all non-digits including +
+    async login(phoneOrEmail: string | undefined, password: string, employeeCode?: string) {
+        let user: { id: string; email: string | null; phone: string; password: string | null; name: string } | null;
 
-        const user = await this.prisma.user.findFirst({
-            where: isEmail
-                ? { email: normalized }
-                : { OR: [{ phone: normalized }, { phone: `+${normalized}` }] },
-        });
+        if (employeeCode) {
+            const userId = await this.getUserIdByEmployeeCode(employeeCode);
+            user = await this.prisma.user.findUnique({ where: { id: userId } });
+        } else {
+            const isEmail = phoneOrEmail!.includes('@');
+            const normalized = isEmail
+                ? phoneOrEmail!.trim().toLowerCase()
+                : phoneOrEmail!.replace(/\D/g, '');
+
+            user = await this.prisma.user.findFirst({
+                where: isEmail
+                    ? { email: normalized }
+                    : { OR: [{ phone: normalized }, { phone: `+${normalized}` }] },
+            });
+        }
 
         if (!user) throw new UnauthorizedException('Invalid credentials');
 
@@ -215,19 +241,27 @@ export class AuthService {
         await this.prisma.refreshToken.deleteMany({ where: { tokenHash } });
     }
 
-    async verifyFirstTimeUser(phoneOrEmail: string) {
-        const isEmail = phoneOrEmail.includes('@');
-        const normalized = isEmail
-            ? phoneOrEmail.trim().toLowerCase()
-            : phoneOrEmail.replace(/\D/g, '');
-        const user = await this.prisma.user.findFirst({
-            where: isEmail
-                ? { email: normalized }
-                : { phone: normalized },
-            include: {
-                organizations: { include: { organization: true } },
-            },
-        }) as UserWithOrganizationOnly | null;
+    async verifyFirstTimeUser(phoneOrEmail?: string, employeeCode?: string) {
+        let user: UserWithOrganizationOnly | null;
+
+        if (employeeCode) {
+            const userId = await this.getUserIdByEmployeeCode(employeeCode);
+            user = await this.prisma.user.findUnique({
+                where: { id: userId },
+                include: { organizations: { include: { organization: true } } },
+            }) as UserWithOrganizationOnly | null;
+        } else {
+            const isEmail = phoneOrEmail!.includes('@');
+            const normalized = isEmail
+                ? phoneOrEmail!.trim().toLowerCase()
+                : phoneOrEmail!.replace(/\D/g, '');
+            user = await this.prisma.user.findFirst({
+                where: isEmail
+                    ? { email: normalized }
+                    : { phone: normalized },
+                include: { organizations: { include: { organization: true } } },
+            }) as UserWithOrganizationOnly | null;
+        }
 
         if (!user) {
             throw new UnauthorizedException('Account not found! Please contact your administrator.');
@@ -236,7 +270,7 @@ export class AuthService {
         const hasPassword = !!user.password;
 
         const responseData = {
-            identifier: phoneOrEmail,
+            identifier: employeeCode ?? phoneOrEmail,
             hasPassword,
             name: user.name,
             organizations: user.organizations.map((m) => ({

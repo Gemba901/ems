@@ -9,6 +9,7 @@ import { OrgPickerStep } from "../../../components/auth/OrgPickerStep";
 
 export type AuthState = {
   identifier: string;
+  identifierType?: "phoneOrEmail" | "employeeCode";
   name?: string;
   orgName?: string;
   logoUrl?: string | null;

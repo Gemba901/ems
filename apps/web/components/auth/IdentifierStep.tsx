@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, ChevronDown, Loader2, Mail, Phone } from "lucide-react";
+import { AlertCircle, ChevronDown, Hash, Loader2, Mail, Phone } from "lucide-react";
 import { AuthService } from "@/services/auth.service";
 import Image from "next/image";
 
 interface IdentifierStepProps {
   onSuccess: (data: {
     identifier: string;
+    identifierType: "phoneOrEmail" | "employeeCode";
     hasPassword: boolean;
     name?: string;
     orgName?: string;
@@ -18,7 +19,7 @@ interface IdentifierStepProps {
   }) => void;
 }
 
-type Mode = "phone" | "email";
+type Mode = "phone" | "email" | "code";
 
 const COUNTRY_CODES = [
   { code: "254", flag: "🇰🇪", name: "Kenya" },
@@ -54,8 +55,13 @@ function validateEmail(value: string): string | null {
   return null;
 }
 
+function validateEmployeeCode(value: string): string | null {
+  if (!value.trim()) return "Enter your employee code.";
+  return null;
+}
+
 export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
-  const [mode, setMode]           = useState<Mode>("phone");
+  const [mode, setMode]           = useState<Mode>("code");
   const [identifier, setIdentifier] = useState("");
   const [countryCode, setCountryCode] = useState("254");
   const [showCodes, setShowCodes] = useState(false);
@@ -74,7 +80,10 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validationError = mode === "phone" ? validatePhone(identifier) : validateEmail(identifier);
+    const validationError =
+      mode === "phone" ? validatePhone(identifier) :
+      mode === "email" ? validateEmail(identifier) :
+      validateEmployeeCode(identifier);
     if (validationError) {
       setError(validationError);
       return;
@@ -83,15 +92,18 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
     setLoading(true);
     setError(null);
 
+    const isCode = mode === "code";
     const resolved = mode === "phone"
       ? buildPhoneIdentifier(identifier, countryCode)
       : identifier.trim();
+    const identifierType = isCode ? "employeeCode" : "phoneOrEmail";
 
     try {
-      const response = await AuthService.verifyIdentifier(resolved);
+      const response = await AuthService.verifyIdentifier(resolved, identifierType);
       const orgs: { id: string; name: string; organizationUrl: string | null }[] = response.organizations ?? [];
       onSuccess({
         identifier: resolved,
+        identifierType,
         hasPassword: response.hasPassword,
         name: response.name,
         orgName: orgs.length === 1 ? orgs[0].name : orgs.length > 1 ? "Multiple Organizations" : undefined,
@@ -122,6 +134,18 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
 
         {/* Mode toggle */}
         <div className="flex rounded-lg border border-slate-200 p-1 gap-1 bg-slate-50">
+          <button
+            type="button"
+            onClick={() => switchMode("code")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
+              mode === "code"
+                ? "bg-white text-blue-600 shadow-sm border border-slate-200"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Hash className="h-3.5 w-3.5" />
+            Emp Code
+          </button>
           <button
             type="button"
             onClick={() => switchMode("phone")}
@@ -192,8 +216,8 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
             <input
               key={mode}
               autoFocus
-              type={mode === "email" ? "email" : "tel"}
-              autoComplete={mode === "email" ? "email" : "tel"}
+              type={mode === "email" ? "email" : mode === "code" ? "text" : "tel"}
+              autoComplete={mode === "email" ? "email" : mode === "code" ? "off" : "tel"}
               value={identifier}
               onChange={e => {
                 let val = mode === "phone"
@@ -207,8 +231,12 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
                 if (error) setError(null);
                 if (showCodes) setShowCodes(false);
               }}
-              placeholder={mode === "phone" ? "e.g. 712 345 678" : "e.g. jane@company.com"}
-              className="flex-1 min-w-0 px-3 py-3 bg-white text-sm outline-none placeholder:text-slate-400"
+              placeholder={
+                mode === "phone" ? "e.g. 712 345 678" :
+                mode === "email" ? "e.g. jane@company.com" :
+                "e.g. EMP-0042"
+              }
+              className="flex-1 min-w-0 px-3 py-3 bg-white text-sm outline-none placeholder:text-slate-400 font-mono"
             />
           </div>
 

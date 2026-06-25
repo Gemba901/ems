@@ -28,7 +28,7 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
     
     setError(null);
     try {
-        const response = await AuthService.login(data.identifier, password);
+        const response = await AuthService.login(data.identifier, password, data.identifierType);
 
         if (response.requiresOrgSelection) {
             onOrgRequired(response.organizations, response.selectionToken);

@@ -569,8 +569,8 @@ export class EmployeeService {
 
         const matrix = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: null, raw: true });
         const headerIndex = matrix.findIndex((row) =>
-            row.some((cell) => this.normalizeKey(cell) === 'first name') &&
-            row.some((cell) => ['employee code', 'email address', 'company email'].includes(this.normalizeKey(cell))),
+            row.some((cell) => ['first name', 'employee full name'].includes(this.normalizeKey(cell))) &&
+            row.some((cell) => ['employee code', 'email address', 'company email', 'email id'].includes(this.normalizeKey(cell))),
         );
         if (headerIndex === -1) {
             throw new BadRequestException('Could not find the employee header row in the workbook');
@@ -595,7 +595,7 @@ export class EmployeeService {
             const middleName = this.cleanString(this.valueAt(source, headerMap, ['middle name']));
             const lastName = this.cleanString(this.valueAt(source, headerMap, ['last name surname', 'last name']));
             const fullName = this.cleanString(this.valueAt(source, headerMap, ['employee full name', 'name']));
-            const companyEmail = this.cleanEmail(this.valueAt(source, headerMap, ['company email', 'email address', 'email']));
+            const companyEmail = this.cleanEmail(this.valueAt(source, headerMap, ['company email', 'email address', 'email', 'email id']));
             const personalEmail = this.cleanEmail(this.valueAt(source, headerMap, ['personal email']));
             const phone = this.cleanPhone(this.valueAt(source, headerMap, ['mobile number', 'phone number', 'phone']));
             const rowNumber = i + 1;
@@ -618,10 +618,10 @@ export class EmployeeService {
                 email,
                 personalEmail,
                 phone,
-                department: this.cleanString(this.valueAt(source, headerMap, ['department'])),
+                department: this.cleanString(this.valueAt(source, headerMap, ['department', 'employees department location', 'employees department'])),
                 section: this.cleanString(this.valueAt(source, headerMap, ['section area', 'sub section line'])),
                 workStation: this.cleanString(this.valueAt(source, headerMap, ['work location'])),
-                jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title'])),
+                jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation'])),
                 gender: this.cleanString(this.valueAt(source, headerMap, ['gender'])),
                 dateOfBirth: this.toDate(this.valueAt(source, headerMap, ['date of birth'])),
                 nationalId: this.cleanString(this.valueAt(source, headerMap, ['national id passport no', 'national id'])),

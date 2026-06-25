@@ -1,11 +1,14 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export const AuthService = {
-    async verifyIdentifier(identifier: string) {
+    async verifyIdentifier(identifier: string, type: "phoneOrEmail" | "employeeCode" = "phoneOrEmail") {
+        const body = type === "employeeCode"
+            ? { employeeCode: identifier }
+            : { phoneOrEmail: identifier };
         const res = await fetch(`${API_URL}/auth/verify-first-time`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phoneOrEmail: identifier }),
+            body: JSON.stringify(body),
         });
 
         if (!res.ok) {
@@ -29,12 +32,15 @@ export const AuthService = {
         return res.json();
     },
 
-    async login(identifier: string, password: string) {
+    async login(identifier: string, password: string, type: "phoneOrEmail" | "employeeCode" = "phoneOrEmail") {
+        const body = type === "employeeCode"
+            ? { employeeCode: identifier, password }
+            : { phoneOrEmail: identifier, password };
         const res = await fetch(`${API_URL}/auth/login`, {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phoneOrEmail: identifier, password }),
+            body: JSON.stringify(body),
         });
 
         if (!res.ok) {

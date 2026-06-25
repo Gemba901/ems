@@ -27,7 +27,7 @@ export class AuthController {
 
     @Post('login')
     async login(@Body() loginDto: LoginDto, @Response({ passthrough: true }) res: any) {
-        const result = await this.authService.login(loginDto.phoneOrEmail, loginDto.password);
+        const result = await this.authService.login(loginDto.phoneOrEmail, loginDto.password, loginDto.employeeCode);
 
         if ('refreshToken' in result) {
             setRefreshCookie(res, result.refreshToken);
@@ -72,7 +72,7 @@ export class AuthController {
 
     @Post('verify-first-time')
     verifyFirstTime(@Body() verifyDto: VerifyFirstTimeDto){
-        return this.authService.verifyFirstTimeUser(verifyDto.phoneOrEmail);
+        return this.authService.verifyFirstTimeUser(verifyDto.phoneOrEmail, verifyDto.employeeCode);
     }
 
     @Post('create-password')

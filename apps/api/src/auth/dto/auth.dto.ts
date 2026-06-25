@@ -1,12 +1,18 @@
-import { IsString, IsNotEmpty, MinLength } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, IsOptional } from 'class-validator';
 import { Expose } from 'class-transformer';
 
 // define expected payload and its validation rules
 export class VerifyFirstTimeDto{
     @Expose()
+    @IsOptional()
     @IsString()
-    @IsNotEmpty({ message: 'Phone or Email is required' })
-    phoneOrEmail!: string;
+    phoneOrEmail?: string;
+
+    @Expose()
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty({ message: 'Employee code cannot be blank' })
+    employeeCode?: string;
 }
 
 export class CreatePasswordDto {
@@ -24,9 +30,15 @@ export class CreatePasswordDto {
 
 export class LoginDto {
     @Expose()
+    @IsOptional()
     @IsString()
-    @IsNotEmpty({ message: 'Phone or email is required' })
-    phoneOrEmail!: string;
+    phoneOrEmail?: string;
+
+    @Expose()
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty({ message: 'Employee code cannot be blank' })
+    employeeCode?: string;
 
     @Expose()
     @IsString()

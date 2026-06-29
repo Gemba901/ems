@@ -13,7 +13,7 @@ interface CreateNotificationInput {
     metadata?: Prisma.InputJsonValue;
 }
 
-interface NotificationPreferences {
+export interface NotificationPreferences {
     email: boolean;
     sms: boolean;
     whatsapp: boolean;

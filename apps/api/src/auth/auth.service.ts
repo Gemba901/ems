@@ -25,15 +25,6 @@ type UserOrganizationRelation = {
     role: { name: string };
 };
 
-type UserWithOrganizations = {
-    id: string;
-    email: string | null;
-    phone: string;
-    password: string | null;
-    name: string;
-    organizations: UserOrganizationRelation[];
-};
-
 type UserWithOrganizationOnly = {
     id: string;
     email: string | null;
@@ -58,6 +49,19 @@ export class AuthService {
 
     private hashToken(raw: string): string {
         return crypto.createHash('sha256').update(raw).digest('hex');
+    }
+
+    private phoneVariants(raw: string): string[] {
+        const digits = raw.replace(/\D/g, '');
+        const variants = new Set([digits, `+${digits}`]);
+        if (digits.startsWith('0')) {
+            const intl = '254' + digits.slice(1);
+            variants.add(intl);
+            variants.add(`+${intl}`);
+        } else if (digits.startsWith('254')) {
+            variants.add('0' + digits.slice(3));
+        }
+        return [...variants];
     }
 
     private generateRawRefreshToken(): string {
@@ -130,15 +134,14 @@ export class AuthService {
             user = await this.prisma.user.findUnique({ where: { id: userId } });
         } else {
             const isEmail = phoneOrEmail!.includes('@');
-            const normalized = isEmail
-                ? phoneOrEmail!.trim().toLowerCase()
-                : phoneOrEmail!.replace(/\D/g, '');
-
-            user = await this.prisma.user.findFirst({
-                where: isEmail
-                    ? { email: normalized }
-                    : { OR: [{ phone: normalized }, { phone: `+${normalized}` }] },
-            });
+            if (isEmail) {
+                const normalized = phoneOrEmail!.trim().toLowerCase();
+                user = await this.prisma.user.findFirst({ where: { email: normalized } });
+            } else {
+                const variants = this.phoneVariants(phoneOrEmail!);
+                const candidates = await this.prisma.user.findMany({ where: { phone: { in: variants } } });
+                user = candidates.find(u => u.password) ?? candidates[0] ?? null;
+            }
         }
 
         if (!user) throw new UnauthorizedException('Invalid credentials');
@@ -254,15 +257,20 @@ export class AuthService {
             }) as UserWithOrganizationOnly | null;
         } else {
             const isEmail = phoneOrEmail!.includes('@');
-            const normalized = isEmail
-                ? phoneOrEmail!.trim().toLowerCase()
-                : phoneOrEmail!.replace(/\D/g, '');
-            user = await this.prisma.user.findFirst({
-                where: isEmail
-                    ? { email: normalized }
-                    : { phone: normalized },
-                include: { organizations: { include: { organization: true } } },
-            }) as UserWithOrganizationOnly | null;
+            if (isEmail) {
+                const normalized = phoneOrEmail!.trim().toLowerCase();
+                user = await this.prisma.user.findFirst({
+                    where: { email: normalized },
+                    include: { organizations: { include: { organization: true } } },
+                }) as UserWithOrganizationOnly | null;
+            } else {
+                const variants = this.phoneVariants(phoneOrEmail!);
+                const candidates = await this.prisma.user.findMany({
+                    where: { phone: { in: variants } },
+                    include: { organizations: { include: { organization: true } } },
+                }) as UserWithOrganizationOnly[];
+                user = candidates.find(u => u.password) ?? candidates[0] ?? null;
+            }
         }
 
         if (!user) {

@@ -253,6 +253,9 @@ model Employee {
   skillLevel     SkillLevel?
   trainingNeeded Boolean?
 
+  // Notification preferences: { email: true, sms: false, whatsapp: false }
+  notificationPreferences Json?
+
   // EMS: Record control
   hrRecordOwnerId    String?
   hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)

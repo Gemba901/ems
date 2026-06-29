@@ -72,6 +72,31 @@ export async function markAllNotificationsRead(token: string): Promise<void> {
   return handleResponse<void>(res);
 }
 
+export interface NotificationPreferences {
+  email: boolean;
+  sms: boolean;
+  whatsapp: boolean;
+}
+
+export async function getNotificationPreferences(token: string): Promise<NotificationPreferences> {
+  const res = await fetch(`${API_URL}/notifications/preferences`, {
+    headers: authHeaders(token),
+  });
+  return handleResponse<NotificationPreferences>(res);
+}
+
+export async function updateNotificationPreferences(
+  token: string,
+  prefs: Partial<NotificationPreferences>,
+): Promise<NotificationPreferences> {
+  const res = await apiClient(`${API_URL}/notifications/preferences`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(prefs),
+  }, token);
+  return handleResponse<NotificationPreferences>(res);
+}
+
 export async function broadcastNotification(
   token: string,
   dto: BroadcastNotificationDto,

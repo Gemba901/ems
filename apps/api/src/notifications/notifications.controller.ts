@@ -1,5 +1,5 @@
 import { Controller, ForbiddenException, Get, Patch, Param, Query, UseGuards, Body, Post } from '@nestjs/common';
-import { IsString, IsEnum, IsOptional } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsBoolean } from 'class-validator';
 import { NotificationType } from 'db';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -30,6 +30,19 @@ class SendNotificationDto {
     actionUrl?: string;
 }
 
+class UpdatePreferencesDto {
+    @IsBoolean()
+    @IsOptional()
+    email?: boolean;
+
+    @IsBoolean()
+    @IsOptional()
+    sms?: boolean;
+
+    @IsBoolean()
+    @IsOptional()
+    whatsapp?: boolean;
+}
 
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
@@ -37,7 +50,7 @@ export class NotificationsController {
     constructor(
         private notificationsService: NotificationsService,
         private prisma: PrismaService,
-    ) { }
+    ) {}
 
     private async resolveEmployee(userId: string) {
         const employee = await this.prisma.employee.findFirst({ where: { userId } });
@@ -53,6 +66,18 @@ export class NotificationsController {
     ) {
         const employee = await this.resolveEmployee(user.userId);
         return this.notificationsService.getNotificationsForEmployee(employee.id, Number(page), Number(limit));
+    }
+
+    @Get('preferences')
+    async getPreferences(@CurrentUser() user: any) {
+        const employee = await this.resolveEmployee(user.userId);
+        return this.notificationsService.getPreferences(employee.id);
+    }
+
+    @Patch('preferences')
+    async updatePreferences(@CurrentUser() user: any, @Body() dto: UpdatePreferencesDto) {
+        const employee = await this.resolveEmployee(user.userId);
+        return this.notificationsService.updatePreferences(employee.id, dto);
     }
 
     @Patch(':id/read')
@@ -78,12 +103,12 @@ export class NotificationsController {
     }
 
     @Post('broadcast')
-@Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
-@UseGuards(JwtAuthGuard, RolesGuard)
-async broadcast(@Body() dto: Omit<SendNotificationDto, 'employeeId'>, @CurrentUser() user: any) {
-  return this.notificationsService.broadcast(user.organizationId, {
-    ...dto,
-    module: dto.module.toUpperCase(),
-  });
-}
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    async broadcast(@Body() dto: Omit<SendNotificationDto, 'employeeId'>, @CurrentUser() user: any) {
+        return this.notificationsService.broadcast(user.organizationId, {
+            ...dto,
+            module: dto.module.toUpperCase(),
+        });
+    }
 }

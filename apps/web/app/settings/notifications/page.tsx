@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Send, Bell } from "lucide-react";
+import { Send, Bell, Mail, MessageSquare } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
-import { broadcastNotification, NotificationType } from "@/services/notifications.service";
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { Role } from "@/types/role";
-import { useMutation } from "@tanstack/react-query";
+import {
+  broadcastNotification,
+  getNotificationPreferences,
+  updateNotificationPreferences,
+  NotificationType,
+  NotificationPreferences,
+} from "@/services/notifications.service";
+import { Role } from "@/store/auth.store";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const TYPES: { value: NotificationType; label: string; description: string }[] = [
   { value: "INFO", label: "Info", description: "General update or announcement" },
@@ -14,6 +19,129 @@ const TYPES: { value: NotificationType; label: string; description: string }[] =
   { value: "REMINDER", label: "Reminder", description: "Time-sensitive nudge" },
   { value: "ALERT", label: "Alert", description: "Urgent or critical message" },
 ];
+
+const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
+
+function ChannelToggle({
+  label,
+  description,
+  icon,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between py-4 border-b border-slate-100 last:border-0">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-slate-50 text-slate-500">{icon}</div>
+        <div>
+          <p className="text-sm font-medium text-slate-800">{label}</p>
+          <p className="text-xs text-slate-500">{description}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+          checked ? "bg-blue-600" : "bg-slate-200"
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+            checked ? "translate-x-6" : "translate-x-1"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function NotificationPreferencesCard() {
+  const { accessToken } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  const { data: prefs, isLoading } = useQuery({
+    queryKey: ["notification-preferences"],
+    queryFn: () => getNotificationPreferences(accessToken!),
+    enabled: !!accessToken,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (updated: Partial<NotificationPreferences>) =>
+      updateNotificationPreferences(accessToken!, updated),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["notification-preferences"], data);
+    },
+  });
+
+  if (isLoading || !prefs) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="h-4 w-40 bg-slate-100 rounded animate-pulse mb-6" />
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-12 bg-slate-50 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-2 rounded-lg bg-slate-50">
+          <Bell className="h-5 w-5 text-slate-600" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Notification Channels</h2>
+          <p className="text-xs text-slate-500">Choose how you want to receive notifications</p>
+        </div>
+      </div>
+
+      <ChannelToggle
+        label="Email"
+        description="Receive notifications at your registered email address"
+        icon={<Mail className="h-4 w-4" />}
+        checked={prefs.email}
+        disabled={mutation.isPending}
+        onChange={(v) => mutation.mutate({ email: v })}
+      />
+      <ChannelToggle
+        label="SMS"
+        description="Text messages to your phone number (coming soon)"
+        icon={<MessageSquare className="h-4 w-4" />}
+        checked={prefs.sms}
+        disabled
+        onChange={(v) => mutation.mutate({ sms: v })}
+      />
+      <ChannelToggle
+        label="WhatsApp"
+        description="WhatsApp messages to your registered number (coming soon)"
+        icon={<MessageSquare className="h-4 w-4" />}
+        checked={prefs.whatsapp}
+        disabled
+        onChange={(v) => mutation.mutate({ whatsapp: v })}
+      />
+
+      {mutation.isError && (
+        <p className="mt-3 text-xs text-red-600">
+          Failed to save preferences. Please try again.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function BroadcastForm() {
   const { accessToken } = useAuthStore();
@@ -24,12 +152,13 @@ function BroadcastForm() {
   const [sent, setSent] = useState(false);
 
   const sendMutation = useMutation({
-    mutationFn: () => broadcastNotification(accessToken!, {
-      type,
-      title,
-      message,
-      ...(actionUrl && { actionUrl }),
-    }),
+    mutationFn: () =>
+      broadcastNotification(accessToken!, {
+        type,
+        title,
+        message,
+        ...(actionUrl && { actionUrl }),
+      }),
     onSuccess: () => {
       setSent(true);
       setTitle("");
@@ -49,18 +178,18 @@ function BroadcastForm() {
   }
 
   return (
-    <div className="max-w-2xl">
-      <div className="flex items-center gap-3 mb-8">
+    <div className="bg-white rounded-xl border border-slate-200 p-6">
+      <div className="flex items-center gap-3 mb-6">
         <div className="p-2 rounded-lg bg-blue-50">
-          <Bell className="h-5 w-5 text-blue-600" />
+          <Send className="h-5 w-5 text-blue-600" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Broadcast Notification</h1>
-          <p className="text-sm text-slate-500">Send a notification to all employees in your organization</p>
+          <h2 className="text-base font-semibold text-slate-900">Broadcast Notification</h2>
+          <p className="text-xs text-slate-500">Send a notification to all employees in your organization</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Type</label>
           <div className="grid grid-cols-2 gap-2">
@@ -120,7 +249,6 @@ function BroadcastForm() {
             placeholder="e.g. /sims or /reports"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p className="text-xs text-slate-400 mt-1">If set, clicking the notification will navigate here</p>
         </div>
 
         {error && (
@@ -137,7 +265,9 @@ function BroadcastForm() {
           ) : sent ? (
             <>Sent to all employees!</>
           ) : (
-            <><Send className="h-4 w-4" /> Send to all employees</>
+            <>
+              <Send className="h-4 w-4" /> Send to all employees
+            </>
           )}
         </button>
       </form>
@@ -146,11 +276,19 @@ function BroadcastForm() {
 }
 
 export default function NotificationsSettingsPage() {
+  const { user } = useAuthStore();
+  const isAdmin = user && ADMIN_ROLES.includes(user.roleLevel);
+
   return (
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT]}>
-      <div className="max-w-7xl mx-auto py-10 px-4">
-        <BroadcastForm />
+    <div className="max-w-2xl mx-auto py-10 px-4 space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">Notifications</h1>
+        <p className="text-sm text-slate-500 mt-1">Manage how you receive notifications</p>
       </div>
-    </ProtectedRoute>
+
+      <NotificationPreferencesCard />
+
+      {isAdmin && <BroadcastForm />}
+    </div>
   );
 }

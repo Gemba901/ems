@@ -143,7 +143,9 @@ export class AuthService {
 
         if (!user) throw new UnauthorizedException('Invalid credentials');
 
-        const isMatch = await bcrypt.compare(password, user.password!);
+        if (!user.password) throw new UnauthorizedException('Password not set. Please complete your account setup first.');
+
+        const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) throw new UnauthorizedException('Invalid credentials');
 
         // Fetch memberships separately to get only valid (org still exists) rows

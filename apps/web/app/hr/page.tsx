@@ -10,7 +10,7 @@ import { Role } from "@/types/role";
 import {
     Search, X, ChevronRight, TrendingUp,
     ChevronLeft, Loader2, BarChart3, UserPlus,
-    CheckCircle2, ArrowRight, AlertCircle, Plus,
+    CheckCircle2, ArrowRight, AlertCircle, Plus, Building2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -312,7 +312,7 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
                             <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2 text-xs">
                                 <p className="font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Summary</p>
                                 <div className="flex justify-between"><span className="text-slate-500">Name</span><span className="font-medium text-slate-900">{firstName} {lastName}</span></div>
-                                <div className="flex justify-between"><span className="text-slate-500">Email</span><span className="font-medium text-slate-900 truncate max-w-[200px]">{email}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Email</span><span className="font-medium text-slate-900 truncate max-w-50">{email}</span></div>
                                 <div className="flex justify-between"><span className="text-slate-500">Phone</span><span className="font-medium text-slate-900">+254 {phone}</span></div>
                                 <div className="flex justify-between"><span className="text-slate-500">Role</span><span className="font-medium text-slate-900">{ASSIGNABLE_ROLES.find(r => r.id === roleId)?.label}</span></div>
                                 <div className="flex justify-between"><span className="text-slate-500">Department</span><span className="font-medium text-slate-900">{localDepts.find(d => d.id === deptId)?.name ?? "Unassigned"}</span></div>
@@ -350,6 +350,106 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
                             {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Onboarding…</> : "Confirm & Onboard"}
                         </button>
                     )}
+                </div>
+            </div>
+        </>
+    );
+}
+
+// ─── Create department panel ─────────────────────────────────────────────────
+
+interface CreateDepartmentPanelProps {
+    open: boolean;
+    onClose: () => void;
+    accessToken: string;
+    onSuccess: (name: string) => void;
+}
+
+function CreateDepartmentPanel({ open, onClose, accessToken, onSuccess }: CreateDepartmentPanelProps) {
+    const [name, setName] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!open) {
+            setName("");
+            setError(null);
+            setSubmitting(false);
+        }
+    }, [open]);
+
+    async function handleSubmit() {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+
+        setSubmitting(true);
+        setError(null);
+        try {
+            const created = await EmployeeService.createDepartment(trimmed, accessToken);
+            onSuccess(created.name);
+            onClose();
+        } catch (e: any) {
+            setError(e.message || "Failed to create department.");
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    return (
+        <>
+            <div
+                className={`fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                onClick={onClose}
+            />
+            <div
+                className={`fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
+            >
+                <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                            <Building2 className="h-4 w-4 text-indigo-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-slate-900">Create Department</p>
+                            <p className="text-[11px] text-slate-400">Add a new department for your organization</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+
+                <div className="flex-1 px-6 py-6 space-y-5">
+                    {error && (
+                        <div className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                            <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                            <p className="text-sm text-red-600">{error}</p>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Department name</label>
+                        <input
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="e.g. Engineering"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-400 transition-all"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+
+                <div className="border-t border-slate-100 px-6 py-4 flex items-center justify-between gap-3">
+                    <button onClick={onClose} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
+                        Cancel
+                    </button>
+                    <button
+                        onClick={() => void handleSubmit()}
+                        disabled={submitting || !name.trim()}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</> : "Create Department"}
+                    </button>
                 </div>
             </div>
         </>
@@ -399,7 +499,9 @@ function HRContent() {
 
     // onboarding state
     const [panelOpen, setPanelOpen] = useState(false);
+    const [deptPanelOpen, setDeptPanelOpen] = useState(false);
     const [successName, setSuccessName] = useState<string | null>(null);
+    const [deptSuccessName, setDeptSuccessName] = useState<string | null>(null);
 
     const orgId = user?.organizationId ?? "";
 
@@ -409,6 +511,12 @@ function HRContent() {
     }, [search]);
 
     useEffect(() => { setPage(1); }, [deptFilter]);
+
+    useEffect(() => {
+        if (!deptSuccessName) return;
+        const t = window.setTimeout(() => setDeptSuccessName(null), 4000);
+        return () => window.clearTimeout(t);
+    }, [deptSuccessName]);
 
     const { data: departments = [] } = useQuery({
         queryKey: ["departments", orgId],
@@ -436,6 +544,12 @@ function HRContent() {
         setPage(1);
     }
 
+    function handleDepartmentCreateSuccess(name: string) {
+        setDeptPanelOpen(false);
+        setDeptSuccessName(name);
+        queryClient.invalidateQueries({ queryKey: ["departments", orgId] });
+    }
+
     return (
         <div className="mx-auto space-y-8">
             {/* Header */}
@@ -457,6 +571,13 @@ function HRContent() {
                         <span className="hidden sm:inline">Analytics</span>
                     </Link>
                     <button
+                        onClick={() => setDeptPanelOpen(true)}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                    >
+                        <Building2 className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Create Department</span>
+                    </button>
+                    <button
                         onClick={() => setPanelOpen(true)}
                         className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
                     >
@@ -465,6 +586,12 @@ function HRContent() {
                     </button>
                 </div>
             </div>
+
+            {deptSuccessName && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    Department <span className="font-semibold">{deptSuccessName}</span> created successfully.
+                </div>
+            )}
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
                 {/* Employee table */}
@@ -620,7 +747,7 @@ function HRContent() {
                                             <button
                                                 key={p}
                                                 onClick={() => setPage(p as number)}
-                                                className={`min-w-[28px] h-7 rounded-lg text-xs font-medium transition-colors ${
+                                                className={`min-w-7 h-7 rounded-lg text-xs font-medium transition-colors ${
                                                     page === p ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100"
                                                 }`}
                                             >
@@ -659,7 +786,7 @@ function HRContent() {
                             return (
                                 <div key={dept.id}>
                                     <div className="flex items-center justify-between text-xs mb-1">
-                                        <span className="font-medium text-slate-700 truncate max-w-[140px]">{dept.name}</span>
+                                        <span className="font-medium text-slate-700 truncate max-w-35">{dept.name}</span>
                                         <span className="text-slate-400 tabular-nums shrink-0 ml-2">{count} ({pct}%)</span>
                                     </div>
                                     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -671,6 +798,14 @@ function HRContent() {
                     </div>
                 </div>
             </div>
+
+            {/* Department creation slide-over */}
+            <CreateDepartmentPanel
+                open={deptPanelOpen}
+                onClose={() => setDeptPanelOpen(false)}
+                accessToken={accessToken ?? ""}
+                onSuccess={handleDepartmentCreateSuccess}
+            />
 
             {/* Onboarding slide-over */}
             <OnboardingPanel

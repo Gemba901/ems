@@ -71,13 +71,13 @@ const NAV_ITEMS = [
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT],
   },
-  {
-    name: "Reports",
-    href: "/reports",
-    icon: BarChart2,
-    exact: false,
-    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
-  },
+  // {
+  //   name: "Reports",
+  //   href: "/reports",
+  //   icon: BarChart2,
+  //   exact: false,
+  //   allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+  // },
   
   {
     name: "Settings",

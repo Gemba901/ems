@@ -245,7 +245,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-slate-500 mt-1">Customize your workspace and manage organization preferences.</p>
                 </div>
                 <LogoSection />
-                <ThemeSection />
+                {/* <ThemeSection /> */}
                 <div className="space-y-3">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">People</p>
                     <Link

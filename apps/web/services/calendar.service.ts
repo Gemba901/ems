@@ -203,9 +203,7 @@ export interface HolisticCalendarEvent {
 export interface CalendarEventsResponse {
   employeeId: string;
   pendingInvitationsCount: number;
-  personal: HolisticCalendarEvent[];
-  company: HolisticCalendarEvent[];
-  training: HolisticCalendarEvent[];
+  events: HolisticCalendarEvent[];
 }
 
 export interface OrgEmployeeForInvite {

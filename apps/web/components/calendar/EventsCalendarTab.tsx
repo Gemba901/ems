@@ -51,12 +51,11 @@ function dateToYMD(date: Date): string {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type CalendarTabType = "personal" | "company" | "training";
 type ViewMode = "month" | "week" | "agenda" | "year";
 
-// ── Tab-aware type options ─────────────────────────────────────────────────────
+// ── Type options ──────────────────────────────────────────────────────────────
 
-function getTypeOptions(tab: CalendarTabType, isOrgManager: boolean, isAuditor: boolean) {
+function getTypeOptions(isOrgManager: boolean, isAuditor: boolean) {
   const personal: { value: CalendarEventType; label: string }[] = [
     { value: "PERSONAL_EVENT",    label: "Personal Event" },
     { value: "PERSONAL_REMINDER", label: "Reminder" },
@@ -64,23 +63,19 @@ function getTypeOptions(tab: CalendarTabType, isOrgManager: boolean, isAuditor: 
     { value: "PERSONAL_TRAINING", label: "Personal Training" },
     { value: "MEETING",           label: "Meeting (invite others)" },
   ];
-  if (tab === "personal") return personal;
-  if (tab === "company" && isOrgManager) return [
-    { value: "COMPANY_EVENT"    as CalendarEventType, label: "Company Event" },
-    { value: "COMPANY_HOLIDAY"  as CalendarEventType, label: "Public Holiday" },
-    { value: "COMPANY_TRAINING" as CalendarEventType, label: "Company Training" },
+  const managerOnly: { value: CalendarEventType; label: string }[] = isOrgManager ? [
+    { value: "COMPANY_EVENT",    label: "Company Event" },
+    { value: "COMPANY_HOLIDAY",  label: "Public Holiday" },
+    { value: "COMPANY_TRAINING", label: "Company Training" },
+    { value: "TRAINING_SESSION", label: "Training Session" },
     ...(isAuditor ? [{ value: "AUDIT" as CalendarEventType, label: "Audit" }] : []),
-  ];
-  if (tab === "training" && isOrgManager) return [
-    { value: "TRAINING_SESSION" as CalendarEventType, label: "Training Session" },
-    { value: "COMPANY_TRAINING" as CalendarEventType, label: "Company Training" },
-  ];
-  return [];
+  ] : [];
+  return [...personal, ...managerOnly];
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
+export function EventsCalendarTab() {
   const { accessToken, user } = useAuthStore();
   const isOrgManager = ["MANAGEMENT","ADMIN","HR","SUPER_ADMIN"].includes(user?.roleLevel ?? "");
   const isAuditor    = ["ADMIN","MANAGEMENT","SUPER_ADMIN"].includes(user?.roleLevel ?? "");
@@ -133,10 +128,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
     const map: Record<string, HolisticCalendarEvent[]> = {};
     for (const q of yearMonthResults) {
       if (!q.data) continue;
-      const events = tab === "personal" ? q.data.personal
-                   : tab === "company"  ? q.data.company
-                   : q.data.training;
-      for (const e of events) {
+      for (const e of q.data.events) {
         const key = e.startAt.split("T")[0];
         if (!map[key]) map[key] = [];
         map[key].push(e);
@@ -144,16 +136,11 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
     }
     return map;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, tab, viewYear, yearQueriesLoading]);
+  }, [viewMode, viewYear, yearQueriesLoading]);
 
   const todayStr = todayYMD();
 
-  const tabEvents: HolisticCalendarEvent[] = useMemo(() => {
-    if (!data) return [];
-    if (tab === "personal") return data.personal;
-    if (tab === "company")  return data.company;
-    return data.training;
-  }, [data, tab]);
+  const tabEvents: HolisticCalendarEvent[] = useMemo(() => data?.events ?? [], [data]);
 
   const byDate = useMemo(() => {
     const map: Record<string, HolisticCalendarEvent[]> = {};
@@ -170,8 +157,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
     const map: Record<string, HolisticCalendarEvent[]> = { ...byDate };
     for (const q of scheduleResults) {
       if (!q.data) continue;
-      const evts = tab === "personal" ? q.data.personal : tab === "company" ? q.data.company : q.data.training;
-      for (const e of evts) {
+      for (const e of q.data.events) {
         const key = e.startAt.split("T")[0];
         if (!map[key]) map[key] = [];
         map[key].push(e);
@@ -179,7 +165,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
     }
     return map;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [byDate, tab, scheduleLoading]);
+  }, [byDate, scheduleLoading]);
 
   const selectedEvents = selectedDay ? (byDate[selectedDay] ?? []) : [];
 
@@ -229,7 +215,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
     setSelectedDay(null);
   };
 
-  const typeOptions = getTypeOptions(tab, isOrgManager, isAuditor);
+  const typeOptions = getTypeOptions(isOrgManager, isAuditor);
   const canCreate   = typeOptions.length > 0;
   const pendingCount = data?.pendingInvitationsCount ?? 0;
 
@@ -249,9 +235,7 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
         />
       ) : (
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 text-center text-slate-400 text-sm">
-          <p className="text-slate-300 text-4xl mb-3">
-            {tab === "personal" ? "📅" : tab === "company" ? "🏢" : "📚"}
-          </p>
+          <p className="text-slate-300 text-4xl mb-3">📅</p>
           <p className="font-medium text-slate-500">Select a day</p>
           <p className="text-xs mt-1">Click any date to view events</p>
         </div>
@@ -262,8 +246,8 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
   return (
     <div className="space-y-4">
 
-      {/* Pending invitations banner (personal tab only) */}
-      {tab === "personal" && pendingCount > 0 && (
+      {/* Pending invitations banner */}
+      {pendingCount > 0 && (
         <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3">
           <AlertTriangle className="h-4 w-4 text-violet-500 shrink-0" />
           <p className="text-sm text-violet-700 font-medium flex-1">
@@ -442,7 +426,6 @@ export function EventsCalendarTab({ tab }: { tab: CalendarTabType }) {
       {/* Create event modal */}
       {showCreate && (
         <CreateEventModal
-          tab={tab}
           typeOptions={typeOptions}
           defaultDate={selectedDay ?? undefined}
           token={accessToken!}
@@ -1037,9 +1020,8 @@ function EventCard({ event, token, onRespond }: { event: HolisticCalendarEvent; 
 // ── Create Event Modal ────────────────────────────────────────────────────────
 
 function CreateEventModal({
-  tab, typeOptions, defaultDate, token, onClose, onSaved,
+  typeOptions, defaultDate, token, onClose, onSaved,
 }: {
-  tab: CalendarTabType;
   typeOptions: { value: CalendarEventType; label: string }[];
   defaultDate?: string;
   token: string;

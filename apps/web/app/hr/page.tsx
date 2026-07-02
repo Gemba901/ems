@@ -11,6 +11,7 @@ import {
     Search, X, ChevronRight, TrendingUp,
     ChevronLeft, Loader2, BarChart3, UserPlus,
     CheckCircle2, ArrowRight, AlertCircle, Plus, Building2,
+    Pencil, Trash2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -356,27 +357,29 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
     );
 }
 
-// ─── Create department panel ─────────────────────────────────────────────────
+// ─── Create / edit department panel ──────────────────────────────────────────
 
-interface CreateDepartmentPanelProps {
+interface DepartmentPanelProps {
     open: boolean;
+    mode: "create" | "edit";
+    department?: { id: string; name: string } | null;
     onClose: () => void;
     accessToken: string;
     onSuccess: (name: string) => void;
 }
 
-function CreateDepartmentPanel({ open, onClose, accessToken, onSuccess }: CreateDepartmentPanelProps) {
+function DepartmentPanel({ open, mode, department, onClose, accessToken, onSuccess }: DepartmentPanelProps) {
     const [name, setName] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!open) {
-            setName("");
+        if (open) {
+            setName(mode === "edit" ? (department?.name ?? "") : "");
             setError(null);
             setSubmitting(false);
         }
-    }, [open]);
+    }, [open, mode, department]);
 
     async function handleSubmit() {
         const trimmed = name.trim();
@@ -385,15 +388,19 @@ function CreateDepartmentPanel({ open, onClose, accessToken, onSuccess }: Create
         setSubmitting(true);
         setError(null);
         try {
-            const created = await EmployeeService.createDepartment(trimmed, accessToken);
-            onSuccess(created.name);
+            const result = mode === "edit" && department
+                ? await EmployeeService.updateDepartment(department.id, trimmed, accessToken)
+                : await EmployeeService.createDepartment(trimmed, accessToken);
+            onSuccess(result.name);
             onClose();
         } catch (e: any) {
-            setError(e.message || "Failed to create department.");
+            setError(e.message || `Failed to ${mode === "edit" ? "rename" : "create"} department.`);
         } finally {
             setSubmitting(false);
         }
     }
+
+    const isEdit = mode === "edit";
 
     return (
         <>
@@ -410,8 +417,10 @@ function CreateDepartmentPanel({ open, onClose, accessToken, onSuccess }: Create
                             <Building2 className="h-4 w-4 text-indigo-600" />
                         </div>
                         <div>
-                            <p className="text-sm font-bold text-slate-900">Create Department</p>
-                            <p className="text-[11px] text-slate-400">Add a new department for your organization</p>
+                            <p className="text-sm font-bold text-slate-900">{isEdit ? "Rename Department" : "Create Department"}</p>
+                            <p className="text-[11px] text-slate-400">
+                                {isEdit ? "Update this department's name" : "Add a new department for your organization"}
+                            </p>
                         </div>
                     </div>
                     <button onClick={onClose} className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
@@ -448,7 +457,9 @@ function CreateDepartmentPanel({ open, onClose, accessToken, onSuccess }: Create
                         disabled={submitting || !name.trim()}
                         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                     >
-                        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</> : "Create Department"}
+                        {submitting
+                            ? <><Loader2 className="h-4 w-4 animate-spin" /> {isEdit ? "Saving…" : "Creating…"}</>
+                            : isEdit ? "Save Changes" : "Create Department"}
                     </button>
                 </div>
             </div>
@@ -500,8 +511,12 @@ function HRContent() {
     // onboarding state
     const [panelOpen, setPanelOpen] = useState(false);
     const [deptPanelOpen, setDeptPanelOpen] = useState(false);
+    const [editingDept, setEditingDept] = useState<{ id: string; name: string } | null>(null);
+    const [deptActionError, setDeptActionError] = useState<string | null>(null);
+    const [deletingDeptId, setDeletingDeptId] = useState<string | null>(null);
     const [successName, setSuccessName] = useState<string | null>(null);
     const [deptSuccessName, setDeptSuccessName] = useState<string | null>(null);
+    const [deptSuccessVerb, setDeptSuccessVerb] = useState<"created" | "renamed">("created");
 
     const orgId = user?.organizationId ?? "";
 
@@ -546,8 +561,26 @@ function HRContent() {
 
     function handleDepartmentCreateSuccess(name: string) {
         setDeptPanelOpen(false);
+        setDeptSuccessVerb(editingDept ? "renamed" : "created");
+        setEditingDept(null);
         setDeptSuccessName(name);
         queryClient.invalidateQueries({ queryKey: ["departments", orgId] });
+    }
+
+    async function handleDeleteDepartment(dept: { id: string; name: string; _count: { employees: number } }) {
+        if (dept._count.employees > 0) return;
+        if (!window.confirm(`Delete the "${dept.name}" department? This cannot be undone.`)) return;
+
+        setDeptActionError(null);
+        setDeletingDeptId(dept.id);
+        try {
+            await EmployeeService.deleteDepartment(dept.id, accessToken!);
+            queryClient.invalidateQueries({ queryKey: ["departments", orgId] });
+        } catch (e: any) {
+            setDeptActionError(e.message || "Failed to delete department.");
+        } finally {
+            setDeletingDeptId(null);
+        }
     }
 
     return (
@@ -571,7 +604,7 @@ function HRContent() {
                         <span className="hidden sm:inline">Analytics</span>
                     </Link>
                     <button
-                        onClick={() => setDeptPanelOpen(true)}
+                        onClick={() => { setEditingDept(null); setDeptPanelOpen(true); }}
                         className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors"
                     >
                         <Building2 className="h-3.5 w-3.5" />
@@ -589,7 +622,7 @@ function HRContent() {
 
             {deptSuccessName && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                    Department <span className="font-semibold">{deptSuccessName}</span> created successfully.
+                    Department <span className="font-semibold">{deptSuccessName}</span> {deptSuccessVerb} successfully.
                 </div>
             )}
 
@@ -780,14 +813,37 @@ function HRContent() {
                                 Loading…
                             </div>
                         )}
+                        {deptActionError && (
+                            <div className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                                <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                                <p className="text-xs text-red-600">{deptActionError}</p>
+                            </div>
+                        )}
                         {departments.map((dept) => {
                             const count = dept._count.employees;
                             const pct = totalDeptEmployees > 0 ? Math.round((count / totalDeptEmployees) * 100) : 0;
                             return (
-                                <div key={dept.id}>
+                                <div key={dept.id} className="group">
                                     <div className="flex items-center justify-between text-xs mb-1">
-                                        <span className="font-medium text-slate-700 truncate max-w-35">{dept.name}</span>
-                                        <span className="text-slate-400 tabular-nums shrink-0 ml-2">{count} ({pct}%)</span>
+                                        <span className="font-medium text-slate-700 truncate max-w-24">{dept.name}</span>
+                                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                            <span className="text-slate-400 tabular-nums">{count} ({pct}%)</span>
+                                            <button
+                                                onClick={() => { setEditingDept({ id: dept.id, name: dept.name }); setDeptPanelOpen(true); }}
+                                                title="Rename department"
+                                                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all"
+                                            >
+                                                <Pencil className="h-3 w-3" />
+                                            </button>
+                                            <button
+                                                onClick={() => void handleDeleteDepartment(dept)}
+                                                disabled={count > 0 || deletingDeptId === dept.id}
+                                                title={count > 0 ? "Cannot delete: department has employees" : "Delete department"}
+                                                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 disabled:opacity-30 disabled:hover:text-slate-400 transition-all"
+                                            >
+                                                {deletingDeptId === dept.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                         <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
@@ -799,10 +855,12 @@ function HRContent() {
                 </div>
             </div>
 
-            {/* Department creation slide-over */}
-            <CreateDepartmentPanel
+            {/* Department create/edit slide-over */}
+            <DepartmentPanel
                 open={deptPanelOpen}
-                onClose={() => setDeptPanelOpen(false)}
+                mode={editingDept ? "edit" : "create"}
+                department={editingDept}
+                onClose={() => { setDeptPanelOpen(false); setEditingDept(null); }}
                 accessToken={accessToken ?? ""}
                 onSuccess={handleDepartmentCreateSuccess}
             />

@@ -4,17 +4,15 @@ import { useState } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
-import { type CalendarTabType, EventsCalendarTab } from "@/components/calendar/EventsCalendarTab";
+import { EventsCalendarTab } from "@/components/calendar/EventsCalendarTab";
 import { ConsultancyCalendarTab } from "@/components/calendar/ConsultancyCalendarTab";
-import { Calendar, User, Briefcase, BookOpen } from "lucide-react";
+import { Calendar, Briefcase } from "lucide-react";
 
-type MainTab = CalendarTabType | "consultancy";
+type MainTab = "events" | "consultancy";
 
 const MAIN_TABS: { key: MainTab; label: string; icon: React.ReactNode }[] = [
-  { key: "personal",    label: "Personal",           icon: <User      className="h-3.5 w-3.5" /> },
-  { key: "company",     label: "Company",            icon: <Briefcase className="h-3.5 w-3.5" /> },
-  { key: "training",    label: "Training",           icon: <BookOpen  className="h-3.5 w-3.5" /> },
-  { key: "consultancy", label: "Consultancy Visits", icon: <Calendar  className="h-3.5 w-3.5" /> },
+  { key: "events",      label: "Events",             icon: <Calendar  className="h-3.5 w-3.5" /> },
+  { key: "consultancy", label: "Consultancy Visits",  icon: <Briefcase className="h-3.5 w-3.5" /> },
 ];
 
 const ALL_ROLES = [
@@ -26,7 +24,7 @@ export default function CalendarPage() {
   const { accessToken, user } = useAuthStore();
   const isAdmin = user?.isAdminOrg === true;
 
-  const [mainTab, setMainTab] = useState<MainTab>("personal");
+  const [mainTab, setMainTab] = useState<MainTab>("events");
 
   return (
     <ProtectedRoute allowedRoles={ALL_ROLES}>
@@ -59,8 +57,8 @@ export default function CalendarPage() {
         </div>
 
         {/* Tab content */}
-        {mainTab !== "consultancy" && (
-          <EventsCalendarTab tab={mainTab} />
+        {mainTab === "events" && (
+          <EventsCalendarTab />
         )}
 
         {mainTab === "consultancy" && accessToken && (

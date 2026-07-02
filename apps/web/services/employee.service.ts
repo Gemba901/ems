@@ -224,4 +224,21 @@ export const EmployeeService = {
         }, token);
         return handleResponse<{ id: string; name: string; organizationId: string }>(res);
     },
+
+    async updateDepartment(id: string, name: string, token: string): Promise<{ id: string; name: string; organizationId: string }> {
+        const res = await apiClient(`${API_URL}/departments/${id}`, {
+            method: "PATCH",
+            headers: authHeaders(token),
+            body: JSON.stringify({ name }),
+        }, token);
+        return handleResponse<{ id: string; name: string; organizationId: string }>(res);
+    },
+
+    async deleteDepartment(id: string, token: string): Promise<void> {
+        const res = await apiClient(`${API_URL}/departments/${id}`, {
+            method: "DELETE",
+            headers: authHeaders(token),
+        }, token);
+        return handleResponse<void>(res);
+    },
 };

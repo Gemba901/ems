@@ -12,7 +12,9 @@ import {
 } from './dto/calendar.dto';
 import { randomUUID } from 'crypto';
 
-const ORG_SELECT = { id: true, name: true, logoUrl: true };
+const ORG_SELECT = { id: true, name: true, logoUrl: true, shortName: true };
+
+const displayOrgName = (org: { name: string; shortName?: string | null }) => org.shortName || org.name;
 
 const VISIT_SELECT: any = {
   id: true, title: true, date: true, endDate: true,
@@ -158,7 +160,7 @@ export class CalendarService {
       startTime: v.startTime, endTime: v.endTime,
       status: v.status, isOwn: true,
       title: v.title,
-      clientOrgId: v.clientOrgId, clientOrgName: v.clientOrg.name,
+      clientOrgId: v.clientOrgId, clientOrgName: displayOrgName(v.clientOrg),
       notes: v.notes,
       internalNotes: isAdmin ? v.internalNotes : undefined,
       completionNote: v.completionNote,
@@ -179,7 +181,7 @@ export class CalendarService {
       preferredTime: r.preferredTime,
       status: r.status,
       organizationId: r.organizationId,
-      organizationName: isAdmin ? r.organization.name : undefined,
+      organizationName: isAdmin ? displayOrgName(r.organization) : undefined,
       message: r.message,
       responseNote: r.responseNote,
       isOwn: r.organizationId === organizationId,
@@ -711,14 +713,15 @@ export class CalendarService {
 
     const dateOverlap = { startAt: { lte: end }, endAt: { gte: start } };
 
-    const [personalEvents, companyEvents, trainingEvents, pendingCount] = await Promise.all([
-      // Personal: own events of any personal type + meetings I'm an invitee of
+    const [events, pendingCount] = await Promise.all([
       this.prisma.calendarEvent.findMany({
         where: {
           organizationId,
           ...dateOverlap,
           OR: [
-            // Events I created (any personal type including MEETING and manually added birthdays)
+            // Org-wide visible types — no owner/participant gating
+            { type: { in: ['COMPANY_TRAINING', 'COMPANY_EVENT', 'COMPANY_HOLIDAY', 'AUDIT', 'TRAINING_SESSION'] as any } },
+            // Personal types I created (incl. birthdays, personal training, my meetings)
             {
               type: { in: ['PERSONAL_EVENT', 'PERSONAL_REMINDER', 'PERSONAL_TRAINING', 'BIRTHDAY', 'MEETING'] as any },
               createdById: employee.id,
@@ -739,40 +742,13 @@ export class CalendarService {
         orderBy: { startAt: 'asc' },
       }),
 
-      // Company: company-wide events visible to all in org
-      this.prisma.calendarEvent.findMany({
-        where: {
-          organizationId,
-          ...dateOverlap,
-          type: { in: ['COMPANY_TRAINING', 'COMPANY_EVENT', 'COMPANY_HOLIDAY', 'AUDIT'] as any },
-        },
-        include: eventInclude,
-        orderBy: { startAt: 'asc' },
-      }),
-
-      // Training planner: all training types in org (+ personal training by current user)
-      this.prisma.calendarEvent.findMany({
-        where: {
-          organizationId,
-          ...dateOverlap,
-          OR: [
-            { type: { in: ['COMPANY_TRAINING', 'TRAINING_SESSION'] as any } },
-            { type: 'PERSONAL_TRAINING' as any, createdById: employee.id },
-          ],
-        },
-        include: eventInclude,
-        orderBy: { startAt: 'asc' },
-      }),
-
       this.prisma.eventInvitation.count({ where: { inviteeId: employee.id, status: 'PENDING' } }),
     ]);
 
     return {
       employeeId: employee.id,
       pendingInvitationsCount: pendingCount,
-      personal: personalEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
-      company: companyEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
-      training: trainingEvents.map((e) => this.mapCalendarEvent(e, employee.id)),
+      events: events.map((e) => this.mapCalendarEvent(e, employee.id)),
     };
   }
 

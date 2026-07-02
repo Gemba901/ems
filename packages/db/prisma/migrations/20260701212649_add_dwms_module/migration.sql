@@ -1,0 +1,338 @@
+/*
+  Warnings:
+
+  - You are about to drop the column `committeeId` on the `Suggestion` table. All the data in the column will be lost.
+  - You are about to drop the column `reviewerCommitteeId` on the `SuggestionReview` table. All the data in the column will be lost.
+  - Made the column `name` on table `Role` required. This step will fail if there are existing NULL values in that column.
+  - Made the column `roleId` on table `RolePermission` required. This step will fail if there are existing NULL values in that column.
+
+*/
+-- CreateEnum
+CREATE TYPE "NotificationType" AS ENUM ('ACTION_REQUIRED', 'INFO', 'REMINDER', 'ALERT');
+
+-- CreateEnum
+CREATE TYPE "ImplementationStatus" AS ENUM ('WORK_IN_PROGRESS', 'VERY_SLOW_WORK_IN_PROGRESS', 'GOOD_WORK_IN_PROGRESS', 'SLOW_PROGRESS', 'IMPLEMENTED', 'SHIFTED_TO_SGA', 'PREVIOUSLY_IMPLEMENTED', 'UNDER_CONSULTATION', 'IMPRACTICAL', 'SAVED_FOR_LATER');
+
+-- CreateEnum
+CREATE TYPE "AlertType" AS ENUM ('BREAKDOWN', 'DELAY', 'QUALITY_ISSUE', 'WRONG_ENTRY', 'WRONG_DELIVERY', 'SAFETY_CONCERN', 'PROCESS_DEVIATION', 'MISSED_ACTIVITY', 'REPEATED_PROBLEM', 'DISCIPLINE_ISSUE', 'ABNORMAL_SITUATION');
+
+-- CreateEnum
+CREATE TYPE "Severity" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "AlertStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'CLOSED', 'ESCALATED');
+
+-- CreateEnum
+CREATE TYPE "TaskFrequency" AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY', 'PLANNED');
+
+-- CreateEnum
+CREATE TYPE "TaskStatus" AS ENUM ('PENDING', 'IN_PROGRESS', 'DONE', 'APPROVAL_PENDING', 'PARTLY_DONE', 'LESS_THAN_50', 'NOT_APPLICABLE', 'OVERDUE');
+
+-- CreateEnum
+CREATE TYPE "Priority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "OverdueAlertTo" AS ENUM ('ASSIGNER', 'MANAGER');
+
+-- CreateEnum
+CREATE TYPE "ViewLevel" AS ENUM ('OWN', 'DEPARTMENT', 'ORGANIZATION');
+
+-- CreateEnum
+CREATE TYPE "EscalationContactRule" AS ENUM ('ASSIGNER', 'MANAGER', 'HOD', 'HIGHER_LEVEL_MANAGERS', 'CUSTOM');
+
+-- CreateEnum
+CREATE TYPE "TaskPermissionRole" AS ENUM ('ADMIN', 'MANAGEMENT', 'HOD', 'DIRECT_MANAGER', 'HIGHER_LEVEL_MANAGERS', 'OWNER', 'ANYONE', 'CUSTOM');
+
+-- DropForeignKey
+ALTER TABLE "LeaveRequest" DROP CONSTRAINT "LeaveRequest_handoverEmployee2Id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "LeaveSettings" DROP CONSTRAINT "LeaveSettings_orgId_fkey";
+
+-- DropForeignKey
+ALTER TABLE "Suggestion" DROP CONSTRAINT "Suggestion_committeeId_fkey";
+
+-- DropForeignKey
+ALTER TABLE "SuggestionReview" DROP CONSTRAINT "SuggestionReview_reviewerCommitteeId_fkey";
+
+-- DropIndex
+DROP INDEX "ConsultancyVisit_clientOrgId_date_idx";
+
+-- DropIndex
+DROP INDEX "ConsultancyVisit_date_idx";
+
+-- DropIndex
+DROP INDEX "LeaveRequest_handoverEmployeeId_idx";
+
+-- DropIndex
+DROP INDEX "VisitRequest_organizationId_idx";
+
+-- DropIndex
+DROP INDEX "quotes_active_idx";
+
+-- DropIndex
+DROP INDEX "quotes_timeOfDay_idx";
+
+-- AlterTable
+ALTER TABLE "CalendarEvent" ALTER COLUMN "id" DROP DEFAULT,
+ALTER COLUMN "updatedAt" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "ConsultancyVisit" ADD COLUMN     "rescheduleCount" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "Employee" ALTER COLUMN "updatedAt" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "EventInvitation" ALTER COLUMN "id" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "EventParticipant" ALTER COLUMN "id" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "LeaveBalance" ALTER COLUMN "id" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "LeaveRequest" ALTER COLUMN "id" DROP DEFAULT,
+ALTER COLUMN "updatedAt" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "LeaveSettings" ALTER COLUMN "id" DROP DEFAULT,
+ALTER COLUMN "updatedAt" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "Notice" ALTER COLUMN "updatedAt" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "Organization" ADD COLUMN     "shortName" TEXT;
+
+-- AlterTable
+ALTER TABLE "Role" ALTER COLUMN "name" SET NOT NULL;
+
+-- AlterTable
+ALTER TABLE "RolePermission" ALTER COLUMN "roleId" SET NOT NULL,
+ADD CONSTRAINT "RolePermission_pkey" PRIMARY KEY ("roleId", "permissionId");
+
+-- AlterTable
+ALTER TABLE "Suggestion" DROP COLUMN "committeeId",
+ADD COLUMN     "hodId" TEXT,
+ADD COLUMN     "implementationNote" TEXT,
+ADD COLUMN     "implementationStatus" "ImplementationStatus";
+
+-- AlterTable
+ALTER TABLE "SuggestionReview" DROP COLUMN "reviewerCommitteeId";
+
+-- AlterTable
+ALTER TABLE "quotes" ALTER COLUMN "id" DROP DEFAULT;
+
+-- CreateTable
+CREATE TABLE "Notification" (
+    "id" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "type" "NotificationType" NOT NULL,
+    "module" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "isRead" BOOLEAN NOT NULL DEFAULT false,
+    "actionUrl" TEXT,
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Task" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "frequency" "TaskFrequency" NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "assignedById" TEXT,
+    "completionPercent" INTEGER NOT NULL DEFAULT 0,
+    "description" TEXT,
+    "ownerId" TEXT NOT NULL,
+    "status" "TaskStatus" NOT NULL DEFAULT 'PENDING',
+    "acknowledgedAt" TIMESTAMP(3),
+    "completionNote" TEXT,
+    "completionAttachmentUrl" TEXT,
+    "completionAttachmentName" TEXT,
+    "dueDate" TIMESTAMP(3),
+    "isAdhoc" BOOLEAN NOT NULL DEFAULT false,
+    "priority" "Priority" DEFAULT 'MEDIUM',
+    "departmentId" TEXT,
+    "ownerName" TEXT,
+    "assignedByName" TEXT,
+    "approvedById" TEXT,
+    "overdueAlertTo" "OverdueAlertTo" NOT NULL DEFAULT 'ASSIGNER',
+    "backupOwnerId" TEXT,
+
+    CONSTRAINT "Task_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TaskInstance" (
+    "id" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "ownerId" TEXT NOT NULL,
+    "frequency" "TaskFrequency" NOT NULL,
+    "scheduledFor" TIMESTAMP(3) NOT NULL,
+    "dueAt" TIMESTAMP(3) NOT NULL,
+    "status" "TaskStatus" NOT NULL DEFAULT 'PENDING',
+    "completionPercent" INTEGER NOT NULL DEFAULT 0,
+    "completedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "TaskInstance_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Alert" (
+    "id" TEXT NOT NULL,
+    "type" "AlertType" NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "raisedById" TEXT NOT NULL,
+    "organizationId" TEXT,
+    "severity" "Severity" NOT NULL,
+    "status" "AlertStatus" NOT NULL DEFAULT 'OPEN',
+    "correctiveAction" TEXT,
+    "closureNote" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+    "taskInstanceId" TEXT,
+    "departmentId" TEXT,
+    "againstUserId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Alert_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DwmsPermissionConfig" (
+    "id" TEXT NOT NULL,
+    "organizationId" TEXT NOT NULL,
+    "approverRoles" "TaskPermissionRole"[] DEFAULT ARRAY[]::"TaskPermissionRole"[],
+    "approverCustomEmployeeIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "alertViewLevel" "ViewLevel" NOT NULL DEFAULT 'OWN',
+    "analyticsViewLevel" "ViewLevel" NOT NULL DEFAULT 'DEPARTMENT',
+    "escalateUnacknowledgedMediumMins" INTEGER NOT NULL DEFAULT 1440,
+    "escalateUnacknowledgedHighMins" INTEGER NOT NULL DEFAULT 480,
+    "escalateUnacknowledgedCriticalMins" INTEGER NOT NULL DEFAULT 120,
+    "escalateUnacknowledgedMins" INTEGER NOT NULL DEFAULT 60,
+    "escalationContactRules" "EscalationContactRule"[] DEFAULT ARRAY[]::"EscalationContactRule"[],
+    "customEscalationContactIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "DwmsPermissionConfig_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "Notification_employeeId_isRead_idx" ON "Notification"("employeeId", "isRead");
+
+-- CreateIndex
+CREATE INDEX "Notification_employeeId_createdAt_idx" ON "Notification"("employeeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Notification_employeeId_module_idx" ON "Notification"("employeeId", "module");
+
+-- CreateIndex
+CREATE INDEX "Task_ownerId_idx" ON "Task"("ownerId");
+
+-- CreateIndex
+CREATE INDEX "Task_assignedById_idx" ON "Task"("assignedById");
+
+-- CreateIndex
+CREATE INDEX "Task_departmentId_idx" ON "Task"("departmentId");
+
+-- CreateIndex
+CREATE INDEX "Task_approvedById_idx" ON "Task"("approvedById");
+
+-- CreateIndex
+CREATE INDEX "Task_backupOwnerId_idx" ON "Task"("backupOwnerId");
+
+-- CreateIndex
+CREATE INDEX "TaskInstance_ownerId_frequency_idx" ON "TaskInstance"("ownerId", "frequency");
+
+-- CreateIndex
+CREATE INDEX "TaskInstance_ownerId_scheduledFor_idx" ON "TaskInstance"("ownerId", "scheduledFor");
+
+-- CreateIndex
+CREATE INDEX "TaskInstance_taskId_idx" ON "TaskInstance"("taskId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TaskInstance_taskId_scheduledFor_key" ON "TaskInstance"("taskId", "scheduledFor");
+
+-- CreateIndex
+CREATE INDEX "Alert_raisedById_idx" ON "Alert"("raisedById");
+
+-- CreateIndex
+CREATE INDEX "Alert_organizationId_idx" ON "Alert"("organizationId");
+
+-- CreateIndex
+CREATE INDEX "Alert_taskInstanceId_idx" ON "Alert"("taskInstanceId");
+
+-- CreateIndex
+CREATE INDEX "Alert_departmentId_idx" ON "Alert"("departmentId");
+
+-- CreateIndex
+CREATE INDEX "Alert_againstUserId_idx" ON "Alert"("againstUserId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DwmsPermissionConfig_organizationId_key" ON "DwmsPermissionConfig"("organizationId");
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Suggestion" ADD CONSTRAINT "Suggestion_hodId_fkey" FOREIGN KEY ("hodId") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LeaveRequest" ADD CONSTRAINT "LeaveRequest_handoverEmployee2Id_fkey" FOREIGN KEY ("handoverEmployee2Id") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LeaveSettings" ADD CONSTRAINT "LeaveSettings_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_assignedById_fkey" FOREIGN KEY ("assignedById") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_approvedById_fkey" FOREIGN KEY ("approvedById") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_backupOwnerId_fkey" FOREIGN KEY ("backupOwnerId") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TaskInstance" ADD CONSTRAINT "TaskInstance_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TaskInstance" ADD CONSTRAINT "TaskInstance_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Alert" ADD CONSTRAINT "Alert_raisedById_fkey" FOREIGN KEY ("raisedById") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Alert" ADD CONSTRAINT "Alert_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Alert" ADD CONSTRAINT "Alert_taskInstanceId_fkey" FOREIGN KEY ("taskInstanceId") REFERENCES "TaskInstance"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Alert" ADD CONSTRAINT "Alert_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Alert" ADD CONSTRAINT "Alert_againstUserId_fkey" FOREIGN KEY ("againstUserId") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DwmsPermissionConfig" ADD CONSTRAINT "DwmsPermissionConfig_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- RenameIndex
+ALTER INDEX "LeaveSettings_orgId_key" RENAME TO "LeaveSettings_organizationId_key";

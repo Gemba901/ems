@@ -124,6 +124,7 @@ git checkout -b feature/auth-system
 
 - **Deployment:** Vercel (frontend)
 - **Cloud Services:** AWS (backend, database, etc.)
+- See [docs/deployment.md](docs/deployment.md) for the full CI/CD pipeline, env-file setup, and migration workflow.
 
 ---
 

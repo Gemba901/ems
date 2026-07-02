@@ -12,35 +12,35 @@ export class DepartmentsController {
 
     // only admins can create departments
     @Post()
-    @Roles(Role.ADMIN)
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN)
     createDepartment(@Body() body: { name: string }, @Request() req) {
         return this.departmentsService.createDepartment(body.name, req.user.organizationId);
     }
 
     // both admins and managers can view departments in their organization
     @Get()
-    @Roles(Role.ADMIN, Role.MANAGEMENT, Role.HOD)
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD)
     getDepartments(@Request() req) {
         return this.departmentsService.getDepartments(req.user.organizationId);
     }
 
     // both admins and managers can view a single department by id
     @Get(':id')
-    @Roles(Role.ADMIN, Role.MANAGEMENT, Role.HOD)
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD)
     getDepartmentById(@Request() req) {
         return this.departmentsService.getDepartmentById(req.params.id);
     }
 
     // only admins can rename a department
     @Patch(':id')
-    @Roles(Role.ADMIN)
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN)
     updateDepartment(@Param('id') id: string, @Body() body: { name: string }, @Request() req) {
         return this.departmentsService.updateDepartment(id, body.name, req.user.organizationId);
     }
 
     // only admins can delete a department, and only if it has no employees
     @Delete(':id')
-    @Roles(Role.ADMIN)
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN)
     deleteDepartment(@Param('id') id: string, @Request() req) {
         return this.departmentsService.deleteDepartment(id, req.user.organizationId);
     }

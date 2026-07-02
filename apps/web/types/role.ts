@@ -5,4 +5,4 @@ export enum Role {
     HR = "HR",
     HOD = "HOD",
     EMPLOYEE = "EMPLOYEE",
-}
+} 

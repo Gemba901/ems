@@ -106,8 +106,9 @@ export class CalendarController {
   async respondToRequest(
     @Param('id') id: string,
     @Body() dto: RespondToRequestDto,
+    @CurrentUser() user: { userId: string },
   ) {
-    return this.calendar.respondToRequest(id, dto);
+    return this.calendar.respondToRequest(id, dto, user.userId);
   }
 
   // ── Upcoming visits widget ───────────────────────────────────────────────
@@ -186,6 +187,16 @@ export class CalendarController {
     return this.calendar.deleteBlock(id);
   }
 
+  // ── Unified agenda (events + visits + requests + blocks, one grid) ─────────
+
+  @Get('agenda')
+  async getAgenda(
+    @Query() query: GetEventsQueryDto,
+    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string },
+  ) {
+    return this.calendar.getAgenda(query.year, query.month, user.userId, user.organizationId, user.roleLevel);
+  }
+
   // ── Holistic Calendar ──────────────────────────────────────────────────────
 
   @Get('events')
@@ -208,9 +219,9 @@ export class CalendarController {
   async updateEvent(
     @Param('id') id: string,
     @Body() dto: UpdateCalendarEventDto,
-    @CurrentUser() user: { userId: string; organizationId: string },
+    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string },
   ) {
-    return this.calendar.updateEvent(id, dto, user.userId, user.organizationId);
+    return this.calendar.updateEvent(id, dto, user.userId, user.organizationId, user.roleLevel);
   }
 
   @Delete('events/:id')

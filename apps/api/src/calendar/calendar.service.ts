@@ -149,6 +149,7 @@ export class CalendarService {
         message: true,
         status: true,
         responseNote: true,
+        visitId: true,
       },
       orderBy: { requestedDate: 'asc' },
     });
@@ -185,6 +186,7 @@ export class CalendarService {
       message: r.message,
       responseNote: r.responseNote,
       isOwn: r.organizationId === organizationId,
+      visitId: r.visitId,
     }));
 
     const mappedBlocks = blocks.map((b: any) => ({
@@ -401,16 +403,40 @@ export class CalendarService {
     });
   }
 
-  async respondToRequest(id: string, dto: RespondToRequestDto) {
+  async respondToRequest(id: string, dto: RespondToRequestDto, userId: string) {
     const req = await this.prisma.visitRequest.findUnique({
       where: { id },
-      select: { id: true, organizationId: true, requestedDate: true },
+      select: {
+        id: true, organizationId: true, requestedDate: true,
+        preferredTime: true, message: true, visitId: true,
+        organization: { select: ORG_SELECT },
+      },
     });
     if (!req) throw new NotFoundException('Request not found');
 
+    // Approving a request converts it into a real, editable visit (agenda,
+    // status, attendees) — the same object an admin gets when scheduling a
+    // visit directly. Skip if it's already been converted (idempotent).
+    let visitId = req.visitId;
+    if (dto.status === 'APPROVED' && !visitId) {
+      const visit = await (this.prisma as any).consultancyVisit.create({
+        data: {
+          title: `${displayOrgName(req.organization)} — Requested Visit`,
+          clientOrgId: req.organizationId,
+          date: req.requestedDate,
+          startTime: req.preferredTime || undefined,
+          status: 'CONFIRMED',
+          notes: req.message || undefined,
+          createdById: userId,
+        },
+        select: { id: true },
+      });
+      visitId = visit.id;
+    }
+
     const updated = await this.prisma.visitRequest.update({
       where: { id },
-      data: { status: dto.status, responseNote: dto.responseNote },
+      data: { status: dto.status, responseNote: dto.responseNote, ...(visitId ? { visitId } : {}) },
       select: { id: true, status: true, responseNote: true, organization: { select: ORG_SELECT } },
     });
 
@@ -666,7 +692,9 @@ export class CalendarService {
       id: e.id,
       title: e.title,
       description: e.description ?? null,
-      type: e.type,
+      label: e.label ?? null,
+      color: e.color,
+      visibility: e.visibility,
       startAt: e.startAt instanceof Date ? e.startAt.toISOString() : e.startAt,
       endAt: e.endAt instanceof Date ? e.endAt.toISOString() : e.endAt,
       allDay: e.allDay,
@@ -719,23 +747,14 @@ export class CalendarService {
           organizationId,
           ...dateOverlap,
           OR: [
-            // Org-wide visible types — no owner/participant gating
-            { type: { in: ['COMPANY_TRAINING', 'COMPANY_EVENT', 'COMPANY_HOLIDAY', 'AUDIT', 'TRAINING_SESSION'] as any } },
-            // Personal types I created (incl. birthdays, personal training, my meetings)
-            {
-              type: { in: ['PERSONAL_EVENT', 'PERSONAL_REMINDER', 'PERSONAL_TRAINING', 'BIRTHDAY', 'MEETING'] as any },
-              createdById: employee.id,
-            },
-            // Meetings I was directly invited to
-            {
-              type: 'MEETING' as any,
-              invitations: { some: { inviteeId: employee.id } },
-            },
-            // Recurring meeting children whose parent event I was invited to
-            {
-              type: 'MEETING' as any,
-              parentEvent: { invitations: { some: { inviteeId: employee.id } } },
-            },
+            // Org-wide events — visible to everyone in the org
+            { visibility: 'ORG_WIDE' as any },
+            // Events I created
+            { createdById: employee.id },
+            // Events I was directly invited to
+            { invitations: { some: { inviteeId: employee.id } } },
+            // Recurring children whose parent event I was invited to
+            { parentEvent: { invitations: { some: { inviteeId: employee.id } } } },
           ],
         },
         include: eventInclude,
@@ -752,28 +771,88 @@ export class CalendarService {
     };
   }
 
+  // ── Unified agenda (CalendarEvent + ConsultancyVisit + VisitRequest + CalendarBlock) ──
+
+  private static readonly VISIT_STATUS_COLOR: Record<string, string> = {
+    TENTATIVE: 'BANANA', CONFIRMED: 'SAGE', COMPLETED: 'PEACOCK', CANCELLED: 'GRAPHITE',
+  };
+
+  async getAgenda(year: number, month: number, userId: string, organizationId: string, roleLevel: string) {
+    const [eventsResult, visitsResult] = await Promise.all([
+      this.getEvents(year, month, userId, organizationId),
+      this.getMonthVisits(year, month, organizationId, roleLevel),
+    ]);
+
+    const items: any[] = [];
+
+    for (const e of eventsResult.events) {
+      items.push({
+        id: e.id, kind: 'EVENT', title: e.title,
+        startAt: e.startAt, endAt: e.endAt, allDay: e.allDay,
+        color: e.color, detail: e,
+      });
+    }
+
+    for (const v of visitsResult.visits) {
+      const endDateStr = v.endDate ?? v.date;
+      items.push({
+        id: v.id, kind: 'VISIT',
+        title: `${v.title}${v.clientOrgName ? ' — ' + v.clientOrgName : ''}`,
+        startAt: new Date(`${v.date}T${v.startTime || '00:00'}:00`).toISOString(),
+        endAt: new Date(`${endDateStr}T${v.endTime || '23:59'}:00`).toISOString(),
+        allDay: !v.startTime,
+        color: CalendarService.VISIT_STATUS_COLOR[v.status] ?? 'PEACOCK',
+        detail: v,
+      });
+    }
+
+    for (const r of visitsResult.requests) {
+      // An approved request that's been converted into a visit is represented
+      // by its VISIT item above — don't show it twice.
+      if (r.status === 'APPROVED' && r.visitId) continue;
+      items.push({
+        id: r.id, kind: 'REQUEST',
+        title: `Visit request${r.organizationName ? ' — ' + r.organizationName : ''}`,
+        startAt: new Date(`${r.date}T00:00:00`).toISOString(),
+        endAt: new Date(`${r.date}T23:59:59`).toISOString(),
+        allDay: true, color: 'GRAPE', detail: r,
+      });
+    }
+
+    for (const b of visitsResult.blocks) {
+      items.push({
+        id: b.id, kind: 'BLOCK',
+        title: b.label || (b.type === 'HOLIDAY' ? 'Holiday' : 'Busy day'),
+        startAt: new Date(`${b.date}T00:00:00`).toISOString(),
+        endAt: new Date(`${b.date}T23:59:59`).toISOString(),
+        allDay: true, color: 'TOMATO', detail: b,
+      });
+    }
+
+    items.sort((a, b) => a.startAt.localeCompare(b.startAt));
+
+    return {
+      employeeId: eventsResult.employeeId,
+      pendingInvitationsCount: eventsResult.pendingInvitationsCount,
+      busyDates: visitsResult.busyDates,
+      items,
+    };
+  }
+
   async createEvent(dto: CreateCalendarEventDto, userId: string, organizationId: string, roleLevel: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
-    // Role guard by event type
-    const companyOnlyTypes = ['COMPANY_TRAINING', 'COMPANY_EVENT', 'COMPANY_HOLIDAY', 'TRAINING_SESSION'];
-    const auditOnlyTypes   = ['AUDIT'];
-    const allowedCompany   = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR] as string[];
-    const allowedAudit     = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT] as string[];
-
-    if (companyOnlyTypes.includes(dto.type) && !allowedCompany.includes(roleLevel)) {
-      throw new ForbiddenException('Only MANAGEMENT, ADMIN, or HR can create company-wide events');
-    }
-    if (auditOnlyTypes.includes(dto.type) && !allowedAudit.includes(roleLevel)) {
-      throw new ForbiddenException('Only ADMIN or MANAGEMENT can create audit events');
+    const orgManagerRoles = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR] as string[];
+    if (dto.visibility === 'ORG_WIDE' && !orgManagerRoles.includes(roleLevel)) {
+      throw new ForbiddenException('Only Management, Admin, or HR can create organization-wide events');
     }
 
     const startAt = new Date(dto.startAt);
     const endAt   = new Date(dto.endAt);
 
-    // For meetings: check each invitee for approved leave overlap
+    // Check each invitee for approved leave overlap
     const onLeaveWarnings: { employeeId: string; name: string }[] = [];
-    if (dto.type === 'MEETING' && dto.inviteeIds?.length) {
+    if (dto.inviteeIds?.length) {
       const invitees = await this.prisma.employee.findMany({
         where: { id: { in: dto.inviteeIds }, organizationId },
         select: { id: true, firstName: true, lastName: true },
@@ -795,7 +874,9 @@ export class CalendarService {
       data: {
         title: dto.title,
         description: dto.description,
-        type: dto.type,
+        label: dto.label,
+        color: dto.color ?? 'PEACOCK',
+        visibility: dto.visibility ?? 'PRIVATE',
         startAt,
         endAt,
         allDay: dto.allDay ?? false,
@@ -820,7 +901,8 @@ export class CalendarService {
         if (current > recEnd) break;
         children.push({
           title: dto.title, description: dto.description,
-          type: dto.type, organizationId, createdById: employee.id,
+          label: dto.label, color: dto.color ?? 'PEACOCK', visibility: dto.visibility ?? 'PRIVATE',
+          organizationId, createdById: employee.id,
           startAt: new Date(current), endAt: new Date(current.getTime() + duration),
           allDay: dto.allDay ?? false,
           isRecurring: true, recurrencePattern: dto.recurrencePattern,
@@ -832,8 +914,8 @@ export class CalendarService {
       if (children.length) await this.prisma.calendarEvent.createMany({ data: children });
     }
 
-    // Invitations for MEETING
-    if (dto.type === 'MEETING' && dto.inviteeIds?.length) {
+    // Guests — any event can invite anyone, everyone can accept/decline
+    if (dto.inviteeIds?.length) {
       const targets = dto.inviteeIds.filter((id) => id !== employee.id);
       if (targets.length) {
         await this.prisma.eventInvitation.createMany({
@@ -845,7 +927,7 @@ export class CalendarService {
             employeeId: inviteeId,
             type: 'ACTION_REQUIRED' as any,
             module: 'CALENDAR',
-            title: 'Meeting invitation',
+            title: 'Event invitation',
             message: `${employee.firstName} ${employee.lastName} invited you to "${dto.title}" on ${startAt.toDateString()}`,
             actionUrl: '/calendar',
             metadata: { eventId: event.id },
@@ -854,30 +936,10 @@ export class CalendarService {
       }
     }
 
-    // Participants for training/audit
-    const participantTypes = ['TRAINING_SESSION', 'COMPANY_TRAINING', 'AUDIT'];
-    if (participantTypes.includes(dto.type) && dto.participantIds?.length) {
-      await this.prisma.eventParticipant.createMany({
-        data: dto.participantIds.map((empId) => ({ eventId: event.id, employeeId: empId })),
-        skipDuplicates: true,
-      });
-      await this.notifications.createMany(
-        dto.participantIds.map((empId) => ({
-          employeeId: empId,
-          type: 'INFO' as any,
-          module: 'CALENDAR',
-          title: `You've been added to "${dto.title}"`,
-          message: `${dto.type === 'AUDIT' ? 'Audit' : 'Training'} scheduled for ${startAt.toDateString()}`,
-          actionUrl: '/calendar',
-          metadata: { eventId: event.id },
-        })),
-      );
-    }
-
     return { event, onLeaveWarnings };
   }
 
-  async updateEvent(id: string, dto: UpdateCalendarEventDto, userId: string, organizationId: string) {
+  async updateEvent(id: string, dto: UpdateCalendarEventDto, userId: string, organizationId: string, roleLevel?: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const event = await this.prisma.calendarEvent.findUnique({
       where: { id },
@@ -886,12 +948,46 @@ export class CalendarService {
     if (!event) throw new NotFoundException('Event not found');
     if (event.createdById !== employee.id) throw new ForbiddenException('Only the event creator can update this event');
 
+    const orgManagerRoles = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR] as string[];
+    if (dto.visibility === 'ORG_WIDE' && roleLevel && !orgManagerRoles.includes(roleLevel)) {
+      throw new ForbiddenException('Only Management, Admin, or HR can make an event organization-wide');
+    }
+
     const data: any = {};
     if (dto.title       !== undefined) data.title       = dto.title;
     if (dto.description !== undefined) data.description = dto.description;
+    if (dto.label       !== undefined) data.label       = dto.label;
+    if (dto.color       !== undefined) data.color       = dto.color;
+    if (dto.visibility  !== undefined) data.visibility  = dto.visibility;
     if (dto.startAt     !== undefined) data.startAt     = new Date(dto.startAt);
     if (dto.endAt       !== undefined) data.endAt       = new Date(dto.endAt);
     if (dto.allDay      !== undefined) data.allDay      = dto.allDay;
+
+    if (dto.addInviteeIds?.length) {
+      const targets = dto.addInviteeIds.filter((inviteeId) => inviteeId !== employee.id);
+      if (targets.length) {
+        await this.prisma.eventInvitation.createMany({
+          data: targets.map((inviteeId) => ({ eventId: id, inviteeId })),
+          skipDuplicates: true,
+        });
+        await this.notifications.createMany(
+          targets.map((inviteeId) => ({
+            employeeId: inviteeId,
+            type: 'ACTION_REQUIRED' as any,
+            module: 'CALENDAR',
+            title: 'Event invitation',
+            message: `${employee.firstName} ${employee.lastName} invited you to "${dto.title ?? 'an event'}"`,
+            actionUrl: '/calendar',
+            metadata: { eventId: id },
+          })),
+        );
+      }
+    }
+    if (dto.removeInviteeIds?.length) {
+      await this.prisma.eventInvitation.deleteMany({
+        where: { eventId: id, inviteeId: { in: dto.removeInviteeIds } },
+      });
+    }
 
     if (dto.updateMode === DeleteModeDto.ALL_IN_SERIES) {
       const root = event.parentEventId ?? id;
@@ -962,7 +1058,7 @@ export class CalendarService {
       include: {
         event: {
           select: {
-            id: true, title: true, description: true, type: true,
+            id: true, title: true, description: true, label: true, color: true, visibility: true,
             startAt: true, endAt: true, allDay: true,
             createdBy: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
           },
@@ -1005,7 +1101,7 @@ export class CalendarService {
         include: {
           event: {
             select: {
-              id: true, title: true, type: true, startAt: true, endAt: true,
+              id: true, title: true, label: true, color: true, startAt: true, endAt: true,
               createdBy: { select: { id: true, firstName: true, lastName: true } },
             },
           },

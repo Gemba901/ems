@@ -1,6 +1,6 @@
 import {
   IsString, IsNotEmpty, IsOptional, IsEnum, IsDateString,
-  IsInt, Min, Max, IsBoolean, IsArray,
+  IsInt, Min, Max, MaxLength, IsBoolean, IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -156,17 +156,23 @@ export class IcalQueryDto {
 
 // ── Holistic Calendar DTOs ────────────────────────────────────────────────────
 
-export enum CalendarEventTypeDto {
-  PERSONAL_EVENT    = 'PERSONAL_EVENT',
-  PERSONAL_REMINDER = 'PERSONAL_REMINDER',
-  BIRTHDAY          = 'BIRTHDAY',
-  PERSONAL_TRAINING = 'PERSONAL_TRAINING',
-  COMPANY_TRAINING  = 'COMPANY_TRAINING',
-  COMPANY_EVENT     = 'COMPANY_EVENT',
-  COMPANY_HOLIDAY   = 'COMPANY_HOLIDAY',
-  MEETING           = 'MEETING',
-  AUDIT             = 'AUDIT',
-  TRAINING_SESSION  = 'TRAINING_SESSION',
+export enum EventColorDto {
+  TOMATO    = 'TOMATO',
+  FLAMINGO  = 'FLAMINGO',
+  TANGERINE = 'TANGERINE',
+  BANANA    = 'BANANA',
+  SAGE      = 'SAGE',
+  BASIL     = 'BASIL',
+  PEACOCK   = 'PEACOCK',
+  BLUEBERRY = 'BLUEBERRY',
+  LAVENDER  = 'LAVENDER',
+  GRAPE     = 'GRAPE',
+  GRAPHITE  = 'GRAPHITE',
+}
+
+export enum EventVisibilityDto {
+  PRIVATE  = 'PRIVATE',
+  ORG_WIDE = 'ORG_WIDE',
 }
 
 export enum EventRecurrencePatternDto {
@@ -192,8 +198,14 @@ export class CreateCalendarEventDto {
   @IsString() @IsOptional()
   description?: string;
 
-  @IsEnum(CalendarEventTypeDto)
-  type!: CalendarEventTypeDto;
+  @IsString() @IsOptional() @MaxLength(40)
+  label?: string;
+
+  @IsEnum(EventColorDto) @IsOptional()
+  color?: EventColorDto;
+
+  @IsEnum(EventVisibilityDto) @IsOptional()
+  visibility?: EventVisibilityDto;
 
   @IsDateString()
   startAt!: string;
@@ -219,9 +231,6 @@ export class CreateCalendarEventDto {
 
   @IsArray() @IsString({ each: true }) @IsOptional()
   inviteeIds?: string[];
-
-  @IsArray() @IsString({ each: true }) @IsOptional()
-  participantIds?: string[];
 }
 
 export class UpdateCalendarEventDto {
@@ -231,6 +240,15 @@ export class UpdateCalendarEventDto {
   @IsString() @IsOptional()
   description?: string;
 
+  @IsString() @IsOptional() @MaxLength(40)
+  label?: string;
+
+  @IsEnum(EventColorDto) @IsOptional()
+  color?: EventColorDto;
+
+  @IsEnum(EventVisibilityDto) @IsOptional()
+  visibility?: EventVisibilityDto;
+
   @IsDateString() @IsOptional()
   startAt?: string;
 
@@ -239,6 +257,12 @@ export class UpdateCalendarEventDto {
 
   @IsBoolean() @IsOptional()
   allDay?: boolean;
+
+  @IsArray() @IsString({ each: true }) @IsOptional()
+  addInviteeIds?: string[];
+
+  @IsArray() @IsString({ each: true }) @IsOptional()
+  removeInviteeIds?: string[];
 
   @IsEnum(DeleteModeDto) @IsOptional()
   updateMode?: DeleteModeDto;

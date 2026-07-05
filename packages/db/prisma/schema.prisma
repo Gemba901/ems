@@ -436,22 +436,24 @@ enum RecurrencePattern {
 
 // ── Holistic Calendar ─────────────────────────────────────────────────────────
 
-enum CalendarEventType {
-  // Personal tab
-  PERSONAL_EVENT
-  PERSONAL_REMINDER
-  BIRTHDAY
-  PERSONAL_TRAINING
-  // Company tab
-  COMPANY_TRAINING
-  COMPANY_EVENT
-  COMPANY_HOLIDAY
-  // Meeting (appears on personal + invitee calendars)
-  MEETING
-  // Audit tab (company-wide)
-  AUDIT
-  // Training planner tab
-  TRAINING_SESSION
+// Google Calendar-style color swatches, freely chosen, no restriction on meaning
+enum EventColor {
+  TOMATO
+  FLAMINGO
+  TANGERINE
+  BANANA
+  SAGE
+  BASIL
+  PEACOCK
+  BLUEBERRY
+  LAVENDER
+  GRAPE
+  GRAPHITE
+}
+
+enum EventVisibility {
+  PRIVATE   // visible only to creator + invited guests
+  ORG_WIDE  // visible to every employee in the organization
 }
 
 enum EventRecurrencePattern {
@@ -483,7 +485,9 @@ model CalendarEvent {
   id             String               @id @default(uuid())
   title          String
   description    String?
-  type           CalendarEventType
+  label          String?
+  color          EventColor           @default(PEACOCK)
+  visibility     EventVisibility      @default(PRIVATE)
   startAt        DateTime
   endAt          DateTime
   allDay         Boolean              @default(false)
@@ -565,6 +569,7 @@ model ConsultancyVisit {
   clientOrg          Organization        @relation(fields: [clientOrgId], references: [id])
   createdBy          User                @relation(fields: [createdById], references: [id])
   attendees          VisitAttendee[]
+  sourceRequest      VisitRequest?
 
   @@index([recurrenceGroupId])
 }
@@ -608,12 +613,14 @@ model VisitRequest {
   message         String?
   status          VisitRequestStatus @default(PENDING)
   responseNote    String?
+  visitId         String?            @unique
   createdById     String
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  createdBy       User         @relation(fields: [createdById], references: [id])
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  createdBy       User              @relation(fields: [createdById], references: [id])
+  visit           ConsultancyVisit? @relation(fields: [visitId], references: [id])
 }
 
 model VisitAttendee {

@@ -18,7 +18,7 @@ import {
   CalendarCheck, CalendarX, Clock, ChevronLeft, ChevronRight,
   Camera, Pencil, Lock, Building2, Users, Shield,
 } from "lucide-react";
-import { CalendarService, EVENT_TYPE_CONFIG } from "@/services/calendar.service";
+import { CalendarService, EVENT_COLOR_CONFIG } from "@/services/calendar.service";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -925,7 +925,7 @@ export default function EmployeeDetailPage() {
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Invitation History</p>
                       <div className="space-y-1.5">
                         {inviteLog.invitations.map((inv) => {
-                          const cfg = EVENT_TYPE_CONFIG[inv.event.type];
+                          const cfg = EVENT_COLOR_CONFIG[inv.event.color];
                           const statusCls =
                             inv.status === "ACCEPTED" ? "bg-emerald-100 text-emerald-700"
                             : inv.status === "DECLINED" ? "bg-red-100 text-red-600"

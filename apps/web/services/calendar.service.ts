@@ -67,6 +67,7 @@ export interface CalendarRequest {
   message?: string;
   responseNote?: string;
   isOwn: boolean;
+  visitId?: string | null;
 }
 
 export type CalendarEntry = CalendarVisit | CalendarRequest;
@@ -172,10 +173,11 @@ export interface UpdateVisitPayload {
 
 // ── Holistic Calendar Types ───────────────────────────────────────────────────
 
-export type CalendarEventType =
-  | "PERSONAL_EVENT" | "PERSONAL_REMINDER" | "BIRTHDAY" | "PERSONAL_TRAINING"
-  | "COMPANY_TRAINING" | "COMPANY_EVENT" | "COMPANY_HOLIDAY"
-  | "MEETING" | "AUDIT" | "TRAINING_SESSION";
+export type EventColor =
+  | "TOMATO" | "FLAMINGO" | "TANGERINE" | "BANANA" | "SAGE" | "BASIL"
+  | "PEACOCK" | "BLUEBERRY" | "LAVENDER" | "GRAPE" | "GRAPHITE";
+
+export type EventVisibility = "PRIVATE" | "ORG_WIDE";
 
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED";
 export type EventRecurrencePattern = "DAILY" | "WEEKLY" | "MONTHLY";
@@ -184,7 +186,9 @@ export interface HolisticCalendarEvent {
   id: string;
   title: string;
   description: string | null;
-  type: CalendarEventType;
+  label: string | null;
+  color: EventColor;
+  visibility: EventVisibility;
   startAt: string;
   endAt: string;
   allDay: boolean;
@@ -218,7 +222,9 @@ export interface OrgEmployeeForInvite {
 export interface CreateCalendarEventPayload {
   title: string;
   description?: string;
-  type: CalendarEventType;
+  label?: string;
+  color?: EventColor;
+  visibility?: EventVisibility;
   startAt: string;
   endAt: string;
   allDay?: boolean;
@@ -227,20 +233,39 @@ export interface CreateCalendarEventPayload {
   recurrenceInterval?: number;
   recurrenceEndAt?: string;
   inviteeIds?: string[];
-  participantIds?: string[];
 }
 
-export const EVENT_TYPE_CONFIG: Record<CalendarEventType, { label: string; dot: string; badge: string; border: string }> = {
-  PERSONAL_EVENT:    { label: "Personal Event",    dot: "bg-indigo-500",  badge: "bg-indigo-100 text-indigo-700",   border: "border-indigo-200" },
-  PERSONAL_REMINDER: { label: "Reminder",          dot: "bg-amber-400",   badge: "bg-amber-100 text-amber-700",     border: "border-amber-200" },
-  BIRTHDAY:          { label: "Birthday",          dot: "bg-rose-400",    badge: "bg-rose-100 text-rose-700",       border: "border-rose-200" },
-  PERSONAL_TRAINING: { label: "Personal Training", dot: "bg-cyan-500",    badge: "bg-cyan-100 text-cyan-700",       border: "border-cyan-200" },
-  COMPANY_TRAINING:  { label: "Company Training",  dot: "bg-orange-500",  badge: "bg-orange-100 text-orange-700",   border: "border-orange-200" },
-  COMPANY_EVENT:     { label: "Company Event",     dot: "bg-blue-500",    badge: "bg-blue-100 text-blue-700",       border: "border-blue-200" },
-  COMPANY_HOLIDAY:   { label: "Holiday",           dot: "bg-red-500",     badge: "bg-red-100 text-red-700",         border: "border-red-200" },
-  MEETING:           { label: "Meeting",           dot: "bg-violet-500",  badge: "bg-violet-100 text-violet-700",   border: "border-violet-200" },
-  AUDIT:             { label: "Audit",             dot: "bg-slate-600",   badge: "bg-slate-200 text-slate-700",     border: "border-slate-300" },
-  TRAINING_SESSION:  { label: "Training Session",  dot: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700", border: "border-emerald-200" },
+export interface UpdateCalendarEventPayload {
+  title?: string;
+  description?: string;
+  label?: string;
+  color?: EventColor;
+  visibility?: EventVisibility;
+  startAt?: string;
+  endAt?: string;
+  allDay?: boolean;
+  addInviteeIds?: string[];
+  removeInviteeIds?: string[];
+  updateMode?: "THIS_ONLY" | "ALL_IN_SERIES";
+}
+
+export const EVENT_COLORS: EventColor[] = [
+  "TOMATO", "FLAMINGO", "TANGERINE", "BANANA", "SAGE", "BASIL",
+  "PEACOCK", "BLUEBERRY", "LAVENDER", "GRAPE", "GRAPHITE",
+];
+
+export const EVENT_COLOR_CONFIG: Record<EventColor, { label: string; dot: string; badge: string; border: string; solid: string }> = {
+  TOMATO:    { label: "Tomato",    dot: "bg-red-500",     badge: "bg-red-100 text-red-700",         border: "border-red-200",     solid: "bg-red-500 text-white" },
+  FLAMINGO:  { label: "Flamingo",  dot: "bg-pink-400",    badge: "bg-pink-100 text-pink-700",       border: "border-pink-200",    solid: "bg-pink-400 text-white" },
+  TANGERINE: { label: "Tangerine", dot: "bg-orange-500",  badge: "bg-orange-100 text-orange-700",   border: "border-orange-200",  solid: "bg-orange-500 text-white" },
+  BANANA:    { label: "Banana",    dot: "bg-yellow-400",  badge: "bg-yellow-100 text-yellow-700",   border: "border-yellow-200",  solid: "bg-yellow-400 text-slate-900" },
+  SAGE:      { label: "Sage",      dot: "bg-green-300",   badge: "bg-green-50 text-green-700",      border: "border-green-200",   solid: "bg-green-300 text-green-900" },
+  BASIL:     { label: "Basil",     dot: "bg-emerald-700", badge: "bg-emerald-100 text-emerald-800", border: "border-emerald-300", solid: "bg-emerald-700 text-white" },
+  PEACOCK:   { label: "Peacock",   dot: "bg-cyan-600",    badge: "bg-cyan-100 text-cyan-700",       border: "border-cyan-200",    solid: "bg-cyan-600 text-white" },
+  BLUEBERRY: { label: "Blueberry", dot: "bg-blue-600",    badge: "bg-blue-100 text-blue-700",       border: "border-blue-200",    solid: "bg-blue-600 text-white" },
+  LAVENDER:  { label: "Lavender",  dot: "bg-violet-300",  badge: "bg-violet-50 text-violet-700",    border: "border-violet-200",  solid: "bg-violet-300 text-violet-900" },
+  GRAPE:     { label: "Grape",     dot: "bg-purple-600",  badge: "bg-purple-100 text-purple-700",   border: "border-purple-200",  solid: "bg-purple-600 text-white" },
+  GRAPHITE:  { label: "Graphite",  dot: "bg-slate-500",   badge: "bg-slate-200 text-slate-700",     border: "border-slate-300",   solid: "bg-slate-500 text-white" },
 };
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -302,6 +327,28 @@ export interface VisitMonthPlan {
   updatedAt: string;
   slots: VisitPlanSlot[];
   clientOrg?: { id: string; name: string; logoUrl: string | null };
+}
+
+// ── Unified agenda ────────────────────────────────────────────────────────────
+
+export type AgendaItemKind = "EVENT" | "VISIT" | "REQUEST" | "BLOCK";
+
+export interface AgendaItem {
+  id: string;
+  kind: AgendaItemKind;
+  title: string;
+  startAt: string; // ISO
+  endAt: string;   // ISO
+  allDay: boolean;
+  color: EventColor | string;
+  detail: HolisticCalendarEvent | CalendarVisit | CalendarRequest | CalendarBlock;
+}
+
+export interface AgendaResponse {
+  employeeId: string;
+  pendingInvitationsCount: number;
+  busyDates: string[];
+  items: AgendaItem[];
 }
 
 export const CalendarService = {
@@ -488,6 +535,14 @@ export const CalendarService = {
     return month ? `${base}&month=${month}` : base;
   },
 
+  // ── Unified agenda ───────────────────────────────────────────────────────────
+
+  async getAgenda(year: number, month: number, token: string): Promise<AgendaResponse> {
+    const params = new URLSearchParams({ year: String(year), month: String(month) });
+    const res = await apiClient(`${API_URL}/calendar/agenda?${params}`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
   // ── Holistic Calendar ────────────────────────────────────────────────────────
 
   async getEvents(year: number, month: number, token: string): Promise<CalendarEventsResponse> {
@@ -502,6 +557,19 @@ export const CalendarService = {
   ): Promise<{ event: HolisticCalendarEvent; onLeaveWarnings: { employeeId: string; name: string }[] }> {
     const res = await apiClient(`${API_URL}/calendar/events`, {
       method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async updateEvent(
+    id: string,
+    data: UpdateCalendarEventPayload,
+    token: string,
+  ): Promise<HolisticCalendarEvent | { updated: "series" }> {
+    const res = await apiClient(`${API_URL}/calendar/events/${id}`, {
+      method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
     }, token);
@@ -565,7 +633,8 @@ export const CalendarService = {
       event: {
         id: string;
         title: string;
-        type: CalendarEventType;
+        label: string | null;
+        color: EventColor;
         startAt: string;
         endAt: string;
         createdBy: { id: string; firstName: string; lastName: string };

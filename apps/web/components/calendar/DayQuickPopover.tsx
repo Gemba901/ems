@@ -29,7 +29,7 @@ export function DayQuickPopover({
 
   const createOptions: { label: string; onClick: () => void }[] = [
     { label: "Event", onClick: onCreateEvent },
-    ...(isAdmin && adminOrgConfigured ? [{ label: "Consultancy Visit", onClick: onCreateVisit }] : []),
+    ...(isAdmin && adminOrgConfigured ? [{ label: "Scheduled Partner Visit", onClick: onCreateVisit }] : []),
     ...(!isAdmin && adminOrgConfigured ? [{ label: "Request a visit", onClick: onCreateRequest }] : []),
     ...(isAdmin && adminOrgConfigured ? [{ label: "Block a day", onClick: onCreateBlock }] : []),
   ];

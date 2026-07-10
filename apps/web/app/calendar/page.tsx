@@ -9,7 +9,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import {
-  CalendarService, AgendaItem, AgendaItemKind, HolisticCalendarEvent, CalendarVisit,
+  CalendarService, AgendaItem, AgendaItemKind, HolisticCalendarEvent, CalendarVisit, CalendarFilterDto,
 } from "@/services/calendar.service";
 import { MONTHS, getWeekStart, addDays, dateToYMD, toYMD, today as todayYMD } from "@/components/calendar/calendarUtils";
 import { AGENDA_KIND_FILTERS, CalendarViewMode, groupAgendaByDate } from "@/components/calendar/types";
@@ -27,6 +27,7 @@ import { RequestModal } from "@/components/calendar/RequestModal";
 import { BlockDayModal } from "@/components/calendar/BlockDayModal";
 import { AnalyticsPanel } from "@/components/calendar/AnalyticsPanel";
 import { VisitMonthPlanPanel } from "@/components/calendar/VisitMonthPlanPanel";
+import { CustomFilterForm } from "@/components/calendar/CustomFilterForm";
 
 const ALL_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE];
 const ORG_MANAGER_ROLES: string[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR];
@@ -68,7 +69,9 @@ export default function CalendarPage() {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
   const [search, setSearch] = useState("");
-  const [kindFilters, setKindFilters] = useState<Set<AgendaItemKind>>(new Set(["EVENT", "VISIT", "REQUEST", "BLOCK"]));
+  const [kindFilters, setKindFilters] = useState<Set<AgendaItemKind>>(new Set(["EVENT", "VISIT", "REQUEST", "BLOCK", "CLIENT_VISIT", "BIRTHDAY"]));
+  const [activeCustomFilterIds, setActiveCustomFilterIds] = useState<Set<string>>(new Set());
+  const [quickCreateProspect, setQuickCreateProspect] = useState(false);
 
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -93,9 +96,15 @@ export default function CalendarPage() {
   const adminOrgConfigured = !!adminOrg;
 
   const { data: orgs = [] } = useQuery({
-    queryKey: ["calendar-client-orgs"],
-    queryFn: () => CalendarService.getClientOrganizations(token),
+    queryKey: ["calendar-partner-orgs"],
+    queryFn: () => CalendarService.getPartnerOrganizations(token),
     enabled: !!token && isAdmin,
+  });
+
+  const { data: customFilters = [] } = useQuery({
+    queryKey: ["calendar-filters"],
+    queryFn: () => CalendarService.getFilters(token),
+    enabled: !!token,
   });
 
   const { data: primaryData, isLoading: primaryLoading } = useQuery({
@@ -151,13 +160,46 @@ export default function CalendarPage() {
     onSuccess: invalidateAgenda,
   });
 
+  const invalidateFilters = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["calendar-filters"] });
+  }, [queryClient]);
+
+  const createFilterMutation = useMutation({
+    mutationFn: (data: { name: string; kinds?: string[]; orgIds?: string[]; colors?: string[] }) =>
+      CalendarService.createFilter(data, token),
+    onSuccess: invalidateFilters,
+  });
+  const deleteFilterMutation = useMutation({
+    mutationFn: (id: string) => CalendarService.deleteFilter(id, token),
+    onSuccess: (_data, id) => {
+      invalidateFilters();
+      setActiveCustomFilterIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+  });
+
   // ── Filtering ─────────────────────────────────────────────────────────────
 
+  const customFilterMatches = useCallback((filter: CalendarFilterDto, item: AgendaItem) => {
+    if (filter.kinds.length && !filter.kinds.includes(item.kind)) return false;
+    if (filter.orgIds.length) {
+      const orgId = (item.detail as { clientOrgId?: string }).clientOrgId;
+      if (!orgId || !filter.orgIds.includes(orgId)) return false;
+    }
+    if (filter.colors.length && !filter.colors.includes(item.color)) return false;
+    return true;
+  }, []);
+
   const matchesFilters = useCallback((item: AgendaItem) => {
-    if (!kindFilters.has(item.kind)) return false;
+    const kindMatch = kindFilters.has(item.kind);
+    const customMatch = customFilters.some(f => activeCustomFilterIds.has(f.id) && customFilterMatches(f, item));
+    if (!kindMatch && !customMatch) return false;
     if (search.trim() && !item.title.toLowerCase().includes(search.trim().toLowerCase())) return false;
     return true;
-  }, [kindFilters, search]);
+  }, [kindFilters, search, customFilters, activeCustomFilterIds, customFilterMatches]);
 
   const byDatePrimary = useMemo(
     () => groupAgendaByDate((primaryData?.items ?? []).filter(matchesFilters)),
@@ -188,6 +230,14 @@ export default function CalendarPage() {
     setKindFilters(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleCustomFilter = (id: string) => {
+    setActiveCustomFilterIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -296,7 +346,7 @@ export default function CalendarPage() {
   };
 
   const handleOpenItem = (item: AgendaItem) => setPopoverItem(item);
-  const handleEditEvent = (event: HolisticCalendarEvent) => { setEditingEvent(event); setShowEventForm(true); };
+  const handleEditEvent = (event: HolisticCalendarEvent) => { setPopoverItem(null); setEditingEvent(event); setShowEventForm(true); };
   const handleEditVisit = (visit: CalendarVisit) => { setEditingVisit(visit); setShowVisitForm(true); };
   const handleDeleteVisit = (id: string) => { if (confirm("Delete this visit?")) deleteVisitMutation.mutate(id); };
   const handleUnblock = (id: string) => { if (confirm("Remove this block?")) unblockMutation.mutate(id); };
@@ -361,17 +411,25 @@ export default function CalendarPage() {
               {showCreateMenu && (
                 <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-lg">
                   <button
-                    onClick={() => { setEditingEvent(null); setShowEventForm(true); setShowCreateMenu(false); }}
+                    onClick={() => { setEditingEvent(null); setQuickCreateProspect(false); setShowEventForm(true); setShowCreateMenu(false); }}
                     className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                   >
                     Event
                   </button>
                   {isAdmin && adminOrgConfigured && (
                     <button
+                      onClick={() => { setEditingEvent(null); setQuickCreateProspect(true); setShowEventForm(true); setShowCreateMenu(false); }}
+                      className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                    >
+                      New Client Visit
+                    </button>
+                  )}
+                  {isAdmin && adminOrgConfigured && (
+                    <button
                       onClick={() => { setEditingVisit(null); setShowVisitForm(true); setShowCreateMenu(false); }}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                     >
-                      Consultancy Visit
+                      Scheduled Partner Visit
                     </button>
                   )}
                   {!isAdmin && adminOrgConfigured && (
@@ -414,6 +472,16 @@ export default function CalendarPage() {
                 </label>
               ))}
             </div>
+
+            <CustomFilterForm
+              filters={customFilters}
+              activeFilterIds={activeCustomFilterIds}
+              orgs={orgs}
+              onToggle={toggleCustomFilter}
+              onCreate={data => createFilterMutation.mutate(data)}
+              onDelete={id => deleteFilterMutation.mutate(id)}
+              creating={createFilterMutation.isPending}
+            />
           </div>
 
           <div className="min-w-0 flex-1 space-y-3">
@@ -506,8 +574,9 @@ export default function CalendarPage() {
             defaultDate={createMenuDate}
             editing={editingEvent}
             isOrgManager={isOrgManager}
-            onClose={() => { setShowEventForm(false); setEditingEvent(null); }}
-            onSaved={() => { setShowEventForm(false); setEditingEvent(null); invalidateAgenda(); }}
+            quickCreateProspect={quickCreateProspect}
+            onClose={() => { setShowEventForm(false); setEditingEvent(null); setQuickCreateProspect(false); }}
+            onSaved={() => { setShowEventForm(false); setEditingEvent(null); setQuickCreateProspect(false); invalidateAgenda(); }}
           />
         )}
 
@@ -538,6 +607,7 @@ export default function CalendarPage() {
           <BlockDayModal
             token={token}
             date={createMenuDate}
+            currentEmployeeId={primaryData?.employeeId}
             onClose={() => setShowBlockModal(false)}
             onSaved={() => { setShowBlockModal(false); invalidateAgenda(); }}
           />

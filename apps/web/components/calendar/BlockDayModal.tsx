@@ -1,21 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { X, Loader2, BanIcon } from "lucide-react";
 import { CalendarService, CalendarBlockType } from "@/services/calendar.service";
 
 export function BlockDayModal({
-  token, date, onClose, onSaved,
+  token, date, currentEmployeeId, onClose, onSaved,
 }: {
   token: string;
   date: string;
+  currentEmployeeId?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [type,   setType]   = useState<CalendarBlockType>("BUSY_DAY");
-  const [label,  setLabel]  = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState<string | null>(null);
+  const [type,       setType]       = useState<CalendarBlockType>("BUSY_DAY");
+  const [label,      setLabel]      = useState("");
+  const [employeeId, setEmployeeId] = useState(currentEmployeeId ?? "");
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+
+  const { data: orgEmployees = [], isLoading: loadingEmployees } = useQuery({
+    queryKey: ["calendar-org-employees-invite"],
+    queryFn: () => CalendarService.getOrgEmployeesForInvite(token),
+    enabled: type === "BUSY_DAY",
+  });
 
   const displayDate = new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
@@ -23,9 +32,13 @@ export function BlockDayModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (type === "BUSY_DAY" && !employeeId) { setError("Select who is Out of Office."); return; }
     setSaving(true); setError(null);
     try {
-      await CalendarService.createBlock({ date, type, label: label.trim() || undefined }, token);
+      await CalendarService.createBlock({
+        date, type, label: label.trim() || undefined,
+        employeeId: type === "BUSY_DAY" ? employeeId : undefined,
+      }, token);
       onSaved();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to block day");
@@ -53,11 +66,26 @@ export function BlockDayModal({
                       ? t === "HOLIDAY" ? "bg-red-50 border-red-300 text-red-700" : "bg-amber-50 border-amber-300 text-amber-700"
                       : "border-slate-200 text-slate-500 hover:bg-slate-50"
                   }`}>
-                  {t === "HOLIDAY" ? "🏖 Public Holiday" : "🚫 Busy Day"}
+                  {t === "HOLIDAY" ? "🏖 Public Holiday" : "🚫 Out of Office"}
                 </button>
               ))}
             </div>
           </div>
+          {type === "BUSY_DAY" && (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 block mb-1">Who is Out of Office</label>
+              {loadingEmployees ? (
+                <div className="flex items-center justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></div>
+              ) : (
+                <select className={`${inputCls} bg-white`} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                  <option value="">— Select employee —</option>
+                  {orgEmployees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">
               Label <span className="font-normal text-slate-400">(optional)</span>
@@ -66,7 +94,7 @@ export function BlockDayModal({
               className={inputCls}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder={type === "HOLIDAY" ? "e.g. Eid al-Fitr" : "e.g. Team offsite"}
+              placeholder={type === "HOLIDAY" ? "e.g. Eid al-Fitr" : "e.g. Annual leave"}
             />
           </div>
           {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}

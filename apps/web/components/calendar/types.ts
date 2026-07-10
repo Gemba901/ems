@@ -5,9 +5,11 @@ export type CalendarViewMode = "day" | "week" | "month" | "year" | "schedule";
 
 export const AGENDA_KIND_FILTERS = [
   { key: "EVENT", label: "Events" },
-  { key: "VISIT", label: "Consultancy Visits" },
+  { key: "VISIT", label: "Scheduled Partner Visits" },
   { key: "REQUEST", label: "Visit Requests" },
   { key: "BLOCK", label: "Blocked Days" },
+  { key: "CLIENT_VISIT", label: "New Client Visits" },
+  { key: "BIRTHDAY", label: "Birthdays" },
 ] as const;
 
 /**

@@ -277,6 +277,8 @@ model Employee {
   createdCalendarEvents CalendarEvent[]    @relation("CalendarEventCreator")
   receivedInvitations   EventInvitation[]  @relation("ReceivedInvitations")
   eventParticipations   EventParticipant[] @relation("EventParticipations")
+  oooBlocks             CalendarBlock[]
+  calendarFilters       CalendarFilter[]
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -482,17 +484,20 @@ enum VisitRequestStatus {
 }
 
 model CalendarEvent {
-  id             String               @id @default(uuid())
-  title          String
-  description    String?
-  label          String?
-  color          EventColor           @default(PEACOCK)
-  visibility     EventVisibility      @default(PRIVATE)
-  startAt        DateTime
-  endAt          DateTime
-  allDay         Boolean              @default(false)
-  organizationId String
-  createdById    String
+  id              String               @id @default(uuid())
+  title           String
+  description     String?
+  label           String?
+  color           EventColor           @default(PEACOCK)
+  visibility      EventVisibility      @default(PRIVATE)
+  startAt         DateTime
+  endAt           DateTime
+  allDay          Boolean              @default(false)
+  organizationId  String
+  createdById     String
+  // Free-text prospect/company name — set only for "New Client Visit" quick-created
+  // events (initial meetings with a company not yet onboarded as a Partner Organization)
+  prospectOrgName String?
 
   // Recurrence
   isRecurring         Boolean                @default(false)
@@ -646,9 +651,25 @@ model CalendarBlock {
   type        CalendarBlockType
   label       String?
   createdById String
+  employeeId  String?
   createdAt   DateTime          @default(now())
 
   createdBy   User              @relation(fields: [createdById], references: [id])
+  employee    Employee?         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+// Google Calendar-style user-defined filters for the holistic calendar agenda
+model CalendarFilter {
+  id         String   @id @default(uuid())
+  employeeId String
+  name       String
+  kinds      String[] @default([])
+  orgIds     String[] @default([])
+  colors     String[] @default([])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 }
 
 // ── Leave Management ──────────────────────────────────────────────────────────

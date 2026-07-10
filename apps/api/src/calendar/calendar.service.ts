@@ -8,11 +8,11 @@ import {
   CreateVisitDto, UpdateVisitDto, CreateVisitRequestDto, RespondToRequestDto,
   CreateCalendarBlockDto, AddVisitAttendeeDto,
   CreateCalendarEventDto, UpdateCalendarEventDto,
-  InvitationStatusDto, DeleteModeDto,
+  InvitationStatusDto, DeleteModeDto, CreateCalendarFilterDto,
 } from './dto/calendar.dto';
 import { randomUUID } from 'crypto';
 
-const ORG_SELECT = { id: true, name: true, logoUrl: true, shortName: true };
+const ORG_SELECT = { id: true, name: true, logoUrl: true, shortName: true, primaryColor: true };
 
 const displayOrgName = (org: { name: string; shortName?: string | null }) => org.shortName || org.name;
 
@@ -44,18 +44,38 @@ export class CalendarService {
   // ── Blocked-day guard ─────────────────────────────────────────────────────
 
   private async assertDateNotBlocked(dateStr: string) {
+    // Only org-wide HOLIDAY blocks stop visit/request scheduling — BUSY_DAY is
+    // now a personal "Out of Office" block scoped to one employee and has no
+    // bearing on scheduling visits with a different organization.
     const date = new Date(dateStr);
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const dayEnd   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
     const block = await (this.prisma as any).calendarBlock.findFirst({
-      where: { date: { gte: dayStart, lte: dayEnd } },
+      where: { date: { gte: dayStart, lte: dayEnd }, type: 'HOLIDAY' },
     });
     if (block) {
-      const reason = block.type === 'HOLIDAY'
-        ? `public holiday${block.label ? ` (${block.label})` : ''}`
-        : `busy day${block.label ? ` (${block.label})` : ''}`;
-      throw new BadRequestException(`Cannot schedule on a ${reason}`);
+      throw new BadRequestException(`Cannot schedule on a public holiday${block.label ? ` (${block.label})` : ''}`);
     }
+  }
+
+  // ── Out of Office guard ───────────────────────────────────────────────────
+
+  private async assertInviteesNotOOO(inviteeIds: string[], startAt: Date, endAt: Date) {
+    if (!inviteeIds.length) return;
+    const dayStart = new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate());
+    const dayEnd   = new Date(endAt.getFullYear(), endAt.getMonth(), endAt.getDate(), 23, 59, 59);
+    const blocks = await (this.prisma as any).calendarBlock.findMany({
+      where: { type: 'BUSY_DAY', employeeId: { in: inviteeIds }, date: { gte: dayStart, lte: dayEnd } },
+      select: { employeeId: true },
+    });
+    if (!blocks.length) return;
+    const blockedIds: string[] = Array.from(new Set(blocks.map((b: any) => b.employeeId as string)));
+    const blockedEmployees = await this.prisma.employee.findMany({
+      where: { id: { in: blockedIds } },
+      select: { firstName: true, lastName: true },
+    });
+    const names = blockedEmployees.map((e) => `${e.firstName} ${e.lastName}`).join(', ');
+    throw new BadRequestException(`Cannot schedule with ${names} — marked Out of Office on the selected date(s)`);
   }
 
   // ── Conflict guard ────────────────────────────────────────────────────────
@@ -105,7 +125,10 @@ export class CalendarService {
 
     const blocks = await (this.prisma as any).calendarBlock.findMany({
       where: { date: { gte: start, lte: end } },
-      select: { id: true, date: true, type: true, label: true },
+      select: {
+        id: true, date: true, type: true, label: true, employeeId: true,
+        employee: { select: { firstName: true, lastName: true } },
+      },
       orderBy: { date: 'asc' },
     });
 
@@ -162,6 +185,7 @@ export class CalendarService {
       status: v.status, isOwn: true,
       title: v.title,
       clientOrgId: v.clientOrgId, clientOrgName: displayOrgName(v.clientOrg),
+      clientOrgColor: v.clientOrg?.primaryColor ?? null,
       notes: v.notes,
       internalNotes: isAdmin ? v.internalNotes : undefined,
       completionNote: v.completionNote,
@@ -194,6 +218,8 @@ export class CalendarService {
       date: b.date.toISOString().split('T')[0],
       type: b.type,
       label: b.label,
+      employeeId: b.employeeId ?? null,
+      employeeName: b.employee ? `${b.employee.firstName} ${b.employee.lastName}` : null,
     }));
 
     // For client org users: return dates that are occupied by OTHER companies' visits.
@@ -225,7 +251,7 @@ export class CalendarService {
     await this.assertNoSameDayConflict(dto.clientOrgId, dto.date);
 
     const org = await this.prisma.organization.findUnique({ where: { id: dto.clientOrgId }, select: { id: true } });
-    if (!org) throw new NotFoundException('Client organization not found');
+    if (!org) throw new NotFoundException('Partner organization not found');
 
     const baseData = {
       title:         dto.title,
@@ -620,17 +646,25 @@ export class CalendarService {
   // ── Calendar Blocks ───────────────────────────────────────────────────────
 
   async createBlock(dto: CreateCalendarBlockDto, userId: string) {
+    if (dto.type === 'BUSY_DAY' && !dto.employeeId) {
+      throw new BadRequestException('employeeId is required for a personal Out of Office block');
+    }
+
     const date = new Date(dto.date);
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const dayEnd   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-    const existing = await (this.prisma as any).calendarBlock.findFirst({
-      where: { date: { gte: dayStart, lte: dayEnd } },
-    });
+
+    // HOLIDAY stays org-wide (one per day, for anyone); BUSY_DAY (Out of Office)
+    // is scoped per employee, so different employees may each take OOO the same day.
+    const conflictWhere = dto.type === 'BUSY_DAY'
+      ? { date: { gte: dayStart, lte: dayEnd }, type: 'BUSY_DAY', employeeId: dto.employeeId }
+      : { date: { gte: dayStart, lte: dayEnd }, type: 'HOLIDAY' };
+    const existing = await (this.prisma as any).calendarBlock.findFirst({ where: conflictWhere });
     if (existing) throw new BadRequestException('This day is already blocked');
 
     return (this.prisma as any).calendarBlock.create({
-      data: { date: dayStart, type: dto.type, label: dto.label, createdById: userId },
-      select: { id: true, date: true, type: true, label: true },
+      data: { date: dayStart, type: dto.type, label: dto.label, employeeId: dto.employeeId, createdById: userId },
+      select: { id: true, date: true, type: true, label: true, employeeId: true },
     });
   }
 
@@ -643,7 +677,7 @@ export class CalendarService {
 
   // ── Org helpers ───────────────────────────────────────────────────────────
 
-  async getClientOrganizations() {
+  async getPartnerOrganizations() {
     return (this.prisma.organization as any).findMany({
       where:   { isAdminOrg: false },
       select:  ORG_SELECT,
@@ -703,6 +737,7 @@ export class CalendarService {
       recurrenceInterval: e.recurrenceInterval ?? 1,
       recurrenceEndAt: e.recurrenceEndAt ? (e.recurrenceEndAt instanceof Date ? e.recurrenceEndAt.toISOString() : e.recurrenceEndAt) : null,
       parentEventId: e.parentEventId ?? null,
+      prospectOrgName: e.prospectOrgName ?? null,
       isOwner: e.createdById === currentEmployeeId,
       myInvitationStatus: myInvitation?.status ?? null,
       createdBy: e.createdBy ? {
@@ -777,17 +812,53 @@ export class CalendarService {
     TENTATIVE: 'BANANA', CONFIRMED: 'SAGE', COMPLETED: 'PEACOCK', CANCELLED: 'GRAPHITE',
   };
 
-  async getAgenda(year: number, month: number, userId: string, organizationId: string, roleLevel: string) {
-    const [eventsResult, visitsResult] = await Promise.all([
-      this.getEvents(year, month, userId, organizationId),
-      this.getMonthVisits(year, month, organizationId, roleLevel),
-    ]);
+  /** Synthetic (non-persisted) birthday items sourced from Employee.dateOfBirth. */
+  private async getBirthdays(year: number, month: number, organizationId: string) {
+    const employees = await this.prisma.employee.findMany({
+      where: { organizationId, dateOfBirth: { not: null } },
+      select: { id: true, firstName: true, lastName: true, avatarUrl: true, dateOfBirth: true },
+    });
 
     const items: any[] = [];
+    for (const emp of employees) {
+      const dob = emp.dateOfBirth!;
+      const dobMonth = dob.getMonth() + 1;
+      if (dobMonth !== month) continue;
+
+      let day = dob.getDate();
+      // Clamp Feb 29 to Feb 28 in non-leap years
+      if (dobMonth === 2 && day === 29) {
+        const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+        if (!isLeap) day = 28;
+      }
+
+      const date = new Date(year, month - 1, day);
+      items.push({
+        id: `birthday-${emp.id}-${year}`,
+        kind: 'BIRTHDAY',
+        title: `${emp.firstName} ${emp.lastName}'s Birthday`,
+        startAt: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0).toISOString(),
+        endAt: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59).toISOString(),
+        allDay: true,
+        color: 'FLAMINGO',
+        detail: { employeeId: emp.id, name: `${emp.firstName} ${emp.lastName}`, avatarUrl: emp.avatarUrl ?? null },
+      });
+    }
+    return items;
+  }
+
+  async getAgenda(year: number, month: number, userId: string, organizationId: string, roleLevel: string) {
+    const [eventsResult, visitsResult, birthdays] = await Promise.all([
+      this.getEvents(year, month, userId, organizationId),
+      this.getMonthVisits(year, month, organizationId, roleLevel),
+      this.getBirthdays(year, month, organizationId),
+    ]);
+
+    const items: any[] = [...birthdays];
 
     for (const e of eventsResult.events) {
       items.push({
-        id: e.id, kind: 'EVENT', title: e.title,
+        id: e.id, kind: e.prospectOrgName ? 'CLIENT_VISIT' : 'EVENT', title: e.title,
         startAt: e.startAt, endAt: e.endAt, allDay: e.allDay,
         color: e.color, detail: e,
       });
@@ -802,6 +873,7 @@ export class CalendarService {
         endAt: new Date(`${endDateStr}T${v.endTime || '23:59'}:00`).toISOString(),
         allDay: !v.startTime,
         color: CalendarService.VISIT_STATUS_COLOR[v.status] ?? 'PEACOCK',
+        orgColor: v.clientOrgColor ?? null,
         detail: v,
       });
     }
@@ -820,9 +892,12 @@ export class CalendarService {
     }
 
     for (const b of visitsResult.blocks) {
+      const defaultTitle = b.type === 'HOLIDAY'
+        ? 'Holiday'
+        : (b.employeeName ? `${b.employeeName} — Out of Office` : 'Out of Office');
       items.push({
         id: b.id, kind: 'BLOCK',
-        title: b.label || (b.type === 'HOLIDAY' ? 'Holiday' : 'Busy day'),
+        title: b.label || defaultTitle,
         startAt: new Date(`${b.date}T00:00:00`).toISOString(),
         endAt: new Date(`${b.date}T23:59:59`).toISOString(),
         allDay: true, color: 'TOMATO', detail: b,
@@ -849,6 +924,10 @@ export class CalendarService {
 
     const startAt = new Date(dto.startAt);
     const endAt   = new Date(dto.endAt);
+
+    if (dto.inviteeIds?.length) {
+      await this.assertInviteesNotOOO(dto.inviteeIds, startAt, endAt);
+    }
 
     // Check each invitee for approved leave overlap
     const onLeaveWarnings: { employeeId: string; name: string }[] = [];
@@ -886,6 +965,7 @@ export class CalendarService {
         recurrencePattern: dto.recurrencePattern ?? null,
         recurrenceInterval: interval,
         recurrenceEndAt: dto.recurrenceEndAt ? new Date(dto.recurrenceEndAt) : null,
+        prospectOrgName: dto.prospectOrgName ?? null,
       },
     });
 
@@ -943,7 +1023,7 @@ export class CalendarService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const event = await this.prisma.calendarEvent.findUnique({
       where: { id },
-      select: { id: true, createdById: true, parentEventId: true },
+      select: { id: true, createdById: true, parentEventId: true, startAt: true, endAt: true },
     });
     if (!event) throw new NotFoundException('Event not found');
     if (event.createdById !== employee.id) throw new ForbiddenException('Only the event creator can update this event');
@@ -962,8 +1042,13 @@ export class CalendarService {
     if (dto.startAt     !== undefined) data.startAt     = new Date(dto.startAt);
     if (dto.endAt       !== undefined) data.endAt       = new Date(dto.endAt);
     if (dto.allDay      !== undefined) data.allDay      = dto.allDay;
+    if (dto.prospectOrgName !== undefined) data.prospectOrgName = dto.prospectOrgName;
 
     if (dto.addInviteeIds?.length) {
+      const effectiveStart = dto.startAt ? new Date(dto.startAt) : event.startAt;
+      const effectiveEnd   = dto.endAt   ? new Date(dto.endAt)   : event.endAt;
+      await this.assertInviteesNotOOO(dto.addInviteeIds, effectiveStart, effectiveEnd);
+
       const targets = dto.addInviteeIds.filter((inviteeId) => inviteeId !== employee.id);
       if (targets.length) {
         await this.prisma.eventInvitation.createMany({
@@ -1215,5 +1300,36 @@ export class CalendarService {
       where: { planId_slotIndex: { planId, slotIndex } },
       data: updateData,
     });
+  }
+
+  // ── Custom user filters (Google Calendar-style) ──────────────────────────
+
+  async getFilters(userId: string, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    return (this.prisma as any).calendarFilter.findMany({
+      where: { employeeId: employee.id },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createFilter(dto: CreateCalendarFilterDto, userId: string, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    return (this.prisma as any).calendarFilter.create({
+      data: {
+        employeeId: employee.id,
+        name: dto.name,
+        kinds: dto.kinds ?? [],
+        orgIds: dto.orgIds ?? [],
+        colors: dto.colors ?? [],
+      },
+    });
+  }
+
+  async deleteFilter(id: string, userId: string, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const filter = await (this.prisma as any).calendarFilter.findUnique({ where: { id }, select: { id: true, employeeId: true } });
+    if (!filter || filter.employeeId !== employee.id) throw new NotFoundException('Filter not found');
+    await (this.prisma as any).calendarFilter.delete({ where: { id } });
+    return { message: 'Filter removed' };
   }
 }

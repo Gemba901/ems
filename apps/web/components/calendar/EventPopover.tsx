@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
   AgendaItem, CalendarService, EVENT_COLOR_CONFIG, EventColor,
-  HolisticCalendarEvent, CalendarVisit, CalendarRequest, CalendarBlock,
+  HolisticCalendarEvent, CalendarVisit, CalendarRequest, CalendarBlock, BirthdayDetail,
 } from "@/services/calendar.service";
 import { VisitCard } from "./VisitCard";
 import { RequestActions } from "./AgendaView";
@@ -35,6 +35,7 @@ export function EventPopover({
   onUnblock: (id: string) => void;
 }) {
   const c = cfg(item.color);
+  const orgColor = item.orgColor || undefined;
   const [responding, setResponding] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteScope, setDeleteScope] = useState(false);
@@ -67,7 +68,7 @@ export function EventPopover({
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
-          <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${c.dot}`} />
+          <span style={orgColor ? { backgroundColor: orgColor } : undefined} className={`mt-1 h-3 w-3 shrink-0 rounded-full ${orgColor ? "" : c.dot}`} />
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-bold leading-snug text-slate-900">{item.title}</h2>
             {!item.allDay ? (
@@ -82,10 +83,13 @@ export function EventPopover({
         </div>
 
         <div className="space-y-4 overflow-y-auto p-5">
-          {item.kind === "EVENT" && (() => {
+          {(item.kind === "EVENT" || item.kind === "CLIENT_VISIT") && (() => {
             const e = item.detail as HolisticCalendarEvent;
             return (
               <>
+                {e.prospectOrgName && (
+                  <p className="text-sm font-semibold text-cyan-700">Prospect: {e.prospectOrgName}</p>
+                )}
                 {e.label && (
                   <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${c.badge}`}>{e.label}</span>
                 )}
@@ -229,9 +233,14 @@ export function EventPopover({
 
           {item.kind === "BLOCK" && (() => {
             const b = item.detail as CalendarBlock;
+            const defaultText = b.type === "HOLIDAY"
+              ? "Public holiday"
+              : b.employeeName
+              ? `${b.employeeName} is Out of Office`
+              : "Out of Office";
             return (
               <div className="space-y-3">
-                <p className="text-sm text-slate-600">{b.label ?? (b.type === "HOLIDAY" ? "Public holiday" : "Marked unavailable")}</p>
+                <p className="text-sm text-slate-600">{b.label ?? defaultText}</p>
                 {isAdmin && (
                   <button
                     onClick={() => { onUnblock(b.id); onClose(); }}
@@ -240,6 +249,16 @@ export function EventPopover({
                     Remove block
                   </button>
                 )}
+              </div>
+            );
+          })()}
+
+          {item.kind === "BIRTHDAY" && (() => {
+            const b = item.detail as BirthdayDetail;
+            return (
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🎂</span>
+                <p className="text-sm text-slate-600">It&apos;s {b.name}&apos;s birthday!</p>
               </div>
             );
           })()}

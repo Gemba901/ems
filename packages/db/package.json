@@ -10,7 +10,8 @@
   "scripts": {
     "build": "prisma generate && node scripts/patch-before-compile.mjs && tsc && node scripts/patch-prisma-client.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "backfill:approved-visits": "tsx scripts/backfill-approved-visit-requests.ts"
   },
   "prisma": {
     "seed": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx prisma/seed.ts"

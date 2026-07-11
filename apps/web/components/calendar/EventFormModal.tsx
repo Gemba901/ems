@@ -261,18 +261,29 @@ export function EventFormModal({
           )}
 
           {isOrgManager && (
-            <label className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2.5">
-              <span className="flex items-center gap-2 text-sm text-slate-600">
-                {visibility === "ORG_WIDE" ? <Globe2 className="h-4 w-4 text-blue-500" /> : <Lock className="h-4 w-4 text-slate-400" />}
+            <div className="space-y-2 rounded-xl border border-slate-100 p-3">
+              <p className="text-xs font-semibold text-slate-500">Who can see</p>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={visibility === "ORG_WIDE"}
+                  onChange={() => setVisibility("ORG_WIDE")}
+                  className="rounded accent-blue-600"
+                />
+                <Globe2 className="h-4 w-4 text-blue-500" />
                 Whole organization
-              </span>
-              <div
-                onClick={() => setVisibility(v => (v === "ORG_WIDE" ? "PRIVATE" : "ORG_WIDE"))}
-                className={`relative h-5 w-9 cursor-pointer rounded-full transition-colors ${visibility === "ORG_WIDE" ? "bg-blue-600" : "bg-slate-200"}`}
-              >
-                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${visibility === "ORG_WIDE" ? "translate-x-4" : "translate-x-0.5"}`} />
-              </div>
-            </label>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={visibility === "PRIVATE"}
+                  onChange={() => setVisibility("PRIVATE")}
+                  className="rounded accent-blue-600"
+                />
+                <Lock className="h-4 w-4 text-slate-400" />
+                Just you
+              </label>
+            </div>
           )}
 
           {!editing && (

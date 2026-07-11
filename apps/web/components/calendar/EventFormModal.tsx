@@ -10,6 +10,7 @@ import {
 import {
   X, Loader2, CheckCircle2, RefreshCw, Users, AlertTriangle, Check, Globe2, Lock,
 } from "lucide-react";
+import { CreateTypeTabs, CreateFlowType } from "./CreateTypeTabs";
 
 function toYMD(y: number, m: number, d: number) {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -21,13 +22,16 @@ function toLocalDatetimeInput(iso: string) {
 }
 
 export function EventFormModal({
-  token, defaultDate, editing, isOrgManager, quickCreateProspect, onClose, onSaved,
+  token, defaultDate, editing, isOrgManager, quickCreateProspect, isAdmin, adminOrgConfigured, onSwitchType, onClose, onSaved,
 }: {
   token: string;
   defaultDate?: string;
   editing: HolisticCalendarEvent | null;
   isOrgManager: boolean;
   quickCreateProspect?: boolean;
+  isAdmin: boolean;
+  adminOrgConfigured: boolean;
+  onSwitchType: (type: CreateFlowType) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -170,6 +174,15 @@ export function EventFormModal({
             <label className="mb-1 block text-xs font-semibold text-slate-500">Title</label>
             <input autoFocus className={inputCls} value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title…" />
           </div>
+
+          {!editing && (
+            <CreateTypeTabs
+              active={quickCreateProspect ? "CLIENT_VISIT" : "EVENT"}
+              isAdmin={isAdmin}
+              adminOrgConfigured={adminOrgConfigured}
+              onSelect={onSwitchType}
+            />
+          )}
 
           {showProspectField && (
             <div>

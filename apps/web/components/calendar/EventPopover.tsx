@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
   AgendaItem, CalendarService, EVENT_COLOR_CONFIG, EventColor,
-  HolisticCalendarEvent, CalendarVisit, CalendarRequest, CalendarBlock, BirthdayDetail,
+  HolisticCalendarEvent, CalendarVisit, CalendarRequest, CalendarBlock, BirthdayDetail, HolidayDetail,
 } from "@/services/calendar.service";
 import { VisitCard } from "./VisitCard";
 import { RequestActions } from "./AgendaView";
@@ -233,11 +233,7 @@ export function EventPopover({
 
           {item.kind === "BLOCK" && (() => {
             const b = item.detail as CalendarBlock;
-            const defaultText = b.type === "HOLIDAY"
-              ? "Public holiday"
-              : b.employeeName
-              ? `${b.employeeName} is Out of Office`
-              : "Out of Office";
+            const defaultText = b.employeeName ? `${b.employeeName} is Out of Office` : "Out of Office";
             return (
               <div className="space-y-3">
                 <p className="text-sm text-slate-600">{b.label ?? defaultText}</p>
@@ -259,6 +255,16 @@ export function EventPopover({
               <div className="flex items-center gap-3">
                 <span className="text-2xl">🎂</span>
                 <p className="text-sm text-slate-600">It&apos;s {b.name}&apos;s birthday!</p>
+              </div>
+            );
+          })()}
+
+          {item.kind === "HOLIDAY" && (() => {
+            const h = item.detail as HolidayDetail;
+            return (
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🎉</span>
+                <p className="text-sm text-slate-600">{h.name} — public holiday in Kenya.</p>
               </div>
             );
           })()}

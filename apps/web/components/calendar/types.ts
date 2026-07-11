@@ -7,9 +7,10 @@ export const AGENDA_KIND_FILTERS = [
   { key: "EVENT", label: "Events" },
   { key: "VISIT", label: "Scheduled Partner Visits" },
   { key: "REQUEST", label: "Visit Requests" },
-  { key: "BLOCK", label: "Blocked Days" },
+  { key: "BLOCK", label: "Out of Office" },
   { key: "CLIENT_VISIT", label: "New Client Visits" },
   { key: "BIRTHDAY", label: "Birthdays" },
+  { key: "HOLIDAY", label: "Public Holidays" },
 ] as const;
 
 /**

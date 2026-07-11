@@ -5,9 +5,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Loader2, CheckCircle2, Minus, Plus, ChevronDown, Users, UserPlus } from "lucide-react";
 import { CalendarService, CalendarVisit, PartnerOrg, VisitStatus } from "@/services/calendar.service";
 import { MONTHS } from "./calendarUtils";
+import { CreateTypeTabs, CreateFlowType } from "./CreateTypeTabs";
 
 export function VisitFormModal({
-  orgs, token, editing, defaultDate, year, month, onClose, onSaved,
+  orgs, token, editing, defaultDate, year, month, isAdmin, adminOrgConfigured, onSwitchType, onClose, onSaved,
 }: {
   orgs: PartnerOrg[];
   token: string;
@@ -15,6 +16,9 @@ export function VisitFormModal({
   defaultDate?: string;
   year: number;
   month: number;
+  isAdmin: boolean;
+  adminOrgConfigured: boolean;
+  onSwitchType: (type: CreateFlowType) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -117,6 +121,10 @@ export function VisitFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
+          {!editing && (
+            <CreateTypeTabs active="VISIT" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} onSelect={onSwitchType} />
+          )}
+
           {/* Partner */}
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Partner Organization</label>

@@ -28,6 +28,7 @@ import { BlockDayModal } from "@/components/calendar/BlockDayModal";
 import { AnalyticsPanel } from "@/components/calendar/AnalyticsPanel";
 import { VisitMonthPlanPanel } from "@/components/calendar/VisitMonthPlanPanel";
 import { CustomFilterForm } from "@/components/calendar/CustomFilterForm";
+import { CreateFlowType } from "@/components/calendar/CreateTypeTabs";
 
 const ALL_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE];
 const ORG_MANAGER_ROLES: string[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR];
@@ -69,7 +70,7 @@ export default function CalendarPage() {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
   const [search, setSearch] = useState("");
-  const [kindFilters, setKindFilters] = useState<Set<AgendaItemKind>>(new Set(["EVENT", "VISIT", "REQUEST", "BLOCK", "CLIENT_VISIT", "BIRTHDAY"]));
+  const [kindFilters, setKindFilters] = useState<Set<AgendaItemKind>>(new Set(["EVENT", "VISIT", "REQUEST", "BLOCK", "CLIENT_VISIT", "BIRTHDAY", "HOLIDAY"]));
   const [activeCustomFilterIds, setActiveCustomFilterIds] = useState<Set<string>>(new Set());
   const [quickCreateProspect, setQuickCreateProspect] = useState(false);
 
@@ -234,6 +235,12 @@ export default function CalendarPage() {
     });
   };
 
+  const allKindsSelected = AGENDA_KIND_FILTERS.every(f => kindFilters.has(f.key));
+
+  const toggleAllKindFilters = () => {
+    setKindFilters(prev => (prev.size === AGENDA_KIND_FILTERS.length ? new Set() : new Set(AGENDA_KIND_FILTERS.map(f => f.key))));
+  };
+
   const toggleCustomFilter = (id: string) => {
     setActiveCustomFilterIds(prev => {
       const next = new Set(prev);
@@ -248,9 +255,28 @@ export default function CalendarPage() {
     setSelectedDate(dateStr);
   };
 
+  const openCreateFlow = (type: CreateFlowType) => {
+    setShowCreateMenu(false);
+    setDayPopoverDate(null);
+    setShowEventForm(false); setShowVisitForm(false); setShowRequestModal(false); setShowBlockModal(false);
+    setEditingEvent(null); setEditingVisit(null);
+    switch (type) {
+      case "EVENT": setQuickCreateProspect(false); setShowEventForm(true); break;
+      case "CLIENT_VISIT": setQuickCreateProspect(true); setShowEventForm(true); break;
+      case "VISIT": setShowVisitForm(true); break;
+      case "REQUEST": setShowRequestModal(true); break;
+      case "BLOCK": setShowBlockModal(true); break;
+    }
+  };
+
   const handleDayClick = (dateStr: string) => {
     handleSelectDate(dateStr);
-    setDayPopoverDate(dateStr);
+    const hasItems = (byDatePrimary[dateStr]?.length ?? 0) > 0;
+    if (hasItems) {
+      setDayPopoverDate(dateStr);
+    } else {
+      openCreateFlow("EVENT");
+    }
   };
 
   const prevMonth = () => {
@@ -411,14 +437,14 @@ export default function CalendarPage() {
               {showCreateMenu && (
                 <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-lg">
                   <button
-                    onClick={() => { setEditingEvent(null); setQuickCreateProspect(false); setShowEventForm(true); setShowCreateMenu(false); }}
+                    onClick={() => openCreateFlow("EVENT")}
                     className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                   >
                     Event
                   </button>
                   {isAdmin && adminOrgConfigured && (
                     <button
-                      onClick={() => { setEditingEvent(null); setQuickCreateProspect(true); setShowEventForm(true); setShowCreateMenu(false); }}
+                      onClick={() => openCreateFlow("CLIENT_VISIT")}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                     >
                       New Client Visit
@@ -426,7 +452,7 @@ export default function CalendarPage() {
                   )}
                   {isAdmin && adminOrgConfigured && (
                     <button
-                      onClick={() => { setEditingVisit(null); setShowVisitForm(true); setShowCreateMenu(false); }}
+                      onClick={() => openCreateFlow("VISIT")}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                     >
                       Scheduled Partner Visit
@@ -434,7 +460,7 @@ export default function CalendarPage() {
                   )}
                   {!isAdmin && adminOrgConfigured && (
                     <button
-                      onClick={() => { setShowRequestModal(true); setShowCreateMenu(false); }}
+                      onClick={() => openCreateFlow("REQUEST")}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                     >
                       Request a visit
@@ -442,10 +468,10 @@ export default function CalendarPage() {
                   )}
                   {isAdmin && adminOrgConfigured && (
                     <button
-                      onClick={() => { setShowBlockModal(true); setShowCreateMenu(false); }}
+                      onClick={() => openCreateFlow("BLOCK")}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                     >
-                      Block a day
+                      Out of Office
                     </button>
                   )}
                 </div>
@@ -465,6 +491,17 @@ export default function CalendarPage() {
 
             <div className="space-y-2 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
               <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Show</p>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={allKindsSelected}
+                  ref={el => { if (el) el.indeterminate = !allKindsSelected && kindFilters.size > 0; }}
+                  onChange={toggleAllKindFilters}
+                  className="rounded accent-blue-600"
+                />
+                Select all
+              </label>
+              <div className="my-1 border-t border-slate-100" />
               {AGENDA_KIND_FILTERS.map(f => (
                 <label key={f.key} className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" checked={kindFilters.has(f.key)} onChange={() => toggleKindFilter(f.key)} className="rounded accent-blue-600" />
@@ -575,6 +612,9 @@ export default function CalendarPage() {
             editing={editingEvent}
             isOrgManager={isOrgManager}
             quickCreateProspect={quickCreateProspect}
+            isAdmin={isAdmin}
+            adminOrgConfigured={adminOrgConfigured}
+            onSwitchType={openCreateFlow}
             onClose={() => { setShowEventForm(false); setEditingEvent(null); setQuickCreateProspect(false); }}
             onSaved={() => { setShowEventForm(false); setEditingEvent(null); setQuickCreateProspect(false); invalidateAgenda(); }}
           />
@@ -588,6 +628,9 @@ export default function CalendarPage() {
             defaultDate={createMenuDate}
             year={year}
             month={month}
+            isAdmin={isAdmin}
+            adminOrgConfigured={adminOrgConfigured}
+            onSwitchType={openCreateFlow}
             onClose={() => { setShowVisitForm(false); setEditingVisit(null); }}
             onSaved={() => { setShowVisitForm(false); setEditingVisit(null); invalidateAgenda(); }}
           />
@@ -598,6 +641,9 @@ export default function CalendarPage() {
             token={token}
             defaultDate={createMenuDate}
             busyDates={busyDates}
+            isAdmin={isAdmin}
+            adminOrgConfigured={adminOrgConfigured}
+            onSwitchType={openCreateFlow}
             onClose={() => setShowRequestModal(false)}
             onSaved={() => { setShowRequestModal(false); invalidateAgenda(); }}
           />
@@ -608,6 +654,9 @@ export default function CalendarPage() {
             token={token}
             date={createMenuDate}
             currentEmployeeId={primaryData?.employeeId}
+            isAdmin={isAdmin}
+            adminOrgConfigured={adminOrgConfigured}
+            onSwitchType={openCreateFlow}
             onClose={() => setShowBlockModal(false)}
             onSaved={() => { setShowBlockModal(false); invalidateAgenda(); }}
           />
@@ -618,14 +667,9 @@ export default function CalendarPage() {
             dateStr={dayPopoverDate}
             items={byDatePrimary[dayPopoverDate] ?? []}
             isLoading={primaryLoading}
-            isAdmin={isAdmin}
-            adminOrgConfigured={adminOrgConfigured}
             onClose={() => setDayPopoverDate(null)}
             onOpenItem={handleOpenItem}
-            onCreateEvent={() => { setEditingEvent(null); setShowEventForm(true); }}
-            onCreateVisit={() => { setEditingVisit(null); setShowVisitForm(true); }}
-            onCreateRequest={() => setShowRequestModal(true)}
-            onCreateBlock={() => setShowBlockModal(true)}
+            onCreate={() => openCreateFlow("EVENT")}
           />
         )}
 

@@ -6,9 +6,10 @@ const KIND_LABEL: Record<string, string> = {
   EVENT: "Event",
   VISIT: "Visit",
   REQUEST: "Request",
-  BLOCK: "Blocked",
+  BLOCK: "Out of Office",
   BIRTHDAY: "Birthday",
   CLIENT_VISIT: "New Client Visit",
+  HOLIDAY: "Public Holiday",
 };
 
 function cfg(color: string) {

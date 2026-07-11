@@ -3,13 +3,17 @@
 import { useState } from "react";
 import { Lock, Loader2, Send, X } from "lucide-react";
 import { CalendarService } from "@/services/calendar.service";
+import { CreateTypeTabs, CreateFlowType } from "./CreateTypeTabs";
 
 export function RequestModal({
-  token, defaultDate, busyDates, onClose, onSaved,
+  token, defaultDate, busyDates, isAdmin, adminOrgConfigured, onSwitchType, onClose, onSaved,
 }: {
   token: string;
   defaultDate?: string;
   busyDates: Set<string>;
+  isAdmin: boolean;
+  adminOrgConfigured: boolean;
+  onSwitchType: (type: CreateFlowType) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -44,6 +48,8 @@ export function RequestModal({
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <CreateTypeTabs active="REQUEST" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} onSelect={onSwitchType} />
+
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Requested Date</label>
             <input type="date" className={inputCls} value={date} onChange={(e) => { setDate(e.target.value); setError(null); }} />

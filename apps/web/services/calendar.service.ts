@@ -339,12 +339,17 @@ export interface VisitMonthPlan {
 
 // ── Unified agenda ────────────────────────────────────────────────────────────
 
-export type AgendaItemKind = "EVENT" | "VISIT" | "REQUEST" | "BLOCK" | "BIRTHDAY" | "CLIENT_VISIT";
+export type AgendaItemKind = "EVENT" | "VISIT" | "REQUEST" | "BLOCK" | "BIRTHDAY" | "CLIENT_VISIT" | "HOLIDAY";
 
 export interface BirthdayDetail {
   employeeId: string;
   name: string;
   avatarUrl: string | null;
+}
+
+export interface HolidayDetail {
+  date: string;
+  name: string;
 }
 
 export interface AgendaItem {
@@ -356,7 +361,7 @@ export interface AgendaItem {
   allDay: boolean;
   color: EventColor | string;
   orgColor?: string | null;
-  detail: HolisticCalendarEvent | CalendarVisit | CalendarRequest | CalendarBlock | BirthdayDetail;
+  detail: HolisticCalendarEvent | CalendarVisit | CalendarRequest | CalendarBlock | BirthdayDetail | HolidayDetail;
 }
 
 export interface AgendaResponse {

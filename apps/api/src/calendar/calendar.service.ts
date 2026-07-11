@@ -11,6 +11,7 @@ import {
   InvitationStatusDto, DeleteModeDto, CreateCalendarFilterDto,
 } from './dto/calendar.dto';
 import { randomUUID } from 'crypto';
+import { getKenyaPublicHolidays } from './kenya-holidays';
 
 const ORG_SELECT = { id: true, name: true, logoUrl: true, shortName: true, primaryColor: true };
 
@@ -43,18 +44,15 @@ export class CalendarService {
 
   // ── Blocked-day guard ─────────────────────────────────────────────────────
 
-  private async assertDateNotBlocked(dateStr: string) {
-    // Only org-wide HOLIDAY blocks stop visit/request scheduling — BUSY_DAY is
-    // now a personal "Out of Office" block scoped to one employee and has no
-    // bearing on scheduling visits with a different organization.
-    const date = new Date(dateStr);
-    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const dayEnd   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-    const block = await (this.prisma as any).calendarBlock.findFirst({
-      where: { date: { gte: dayStart, lte: dayEnd }, type: 'HOLIDAY' },
-    });
-    if (block) {
-      throw new BadRequestException(`Cannot schedule on a public holiday${block.label ? ` (${block.label})` : ''}`);
+  private assertDateNotBlocked(dateStr: string) {
+    // Public holidays are auto-loaded (Kenya) rather than stored as blocks —
+    // BUSY_DAY is a personal "Out of Office" block scoped to one employee and
+    // has no bearing on scheduling visits with a different organization.
+    const dateOnly = dateStr.slice(0, 10);
+    const year = parseInt(dateOnly.slice(0, 4), 10);
+    const holiday = getKenyaPublicHolidays(year).find((h) => h.date === dateOnly);
+    if (holiday) {
+      throw new BadRequestException(`Cannot schedule on a public holiday (${holiday.name})`);
     }
   }
 
@@ -123,8 +121,10 @@ export class CalendarService {
     const end   = new Date(year, month, 0, 23, 59, 59);
     const isAdmin = this.isGemba(roleLevel);
 
+    // Only personal Out of Office blocks are stored — public holidays are
+    // auto-loaded (see getHolidays) rather than kept as HOLIDAY-type blocks.
     const blocks = await (this.prisma as any).calendarBlock.findMany({
-      where: { date: { gte: start, lte: end } },
+      where: { date: { gte: start, lte: end }, type: 'BUSY_DAY' },
       select: {
         id: true, date: true, type: true, label: true, employeeId: true,
         employee: { select: { firstName: true, lastName: true } },
@@ -646,24 +646,27 @@ export class CalendarService {
   // ── Calendar Blocks ───────────────────────────────────────────────────────
 
   async createBlock(dto: CreateCalendarBlockDto, userId: string) {
-    if (dto.type === 'BUSY_DAY' && !dto.employeeId) {
-      throw new BadRequestException('employeeId is required for a personal Out of Office block');
+    // Public holidays are auto-loaded (Kenya) — this endpoint now only
+    // creates personal "Out of Office" blocks, always scoped to one employee.
+    if (dto.type === 'HOLIDAY') {
+      throw new BadRequestException('Public holidays are auto-loaded and cannot be added manually');
+    }
+    if (!dto.employeeId) {
+      throw new BadRequestException('employeeId is required for an Out of Office block');
     }
 
     const date = new Date(dto.date);
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const dayEnd   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
-    // HOLIDAY stays org-wide (one per day, for anyone); BUSY_DAY (Out of Office)
-    // is scoped per employee, so different employees may each take OOO the same day.
-    const conflictWhere = dto.type === 'BUSY_DAY'
-      ? { date: { gte: dayStart, lte: dayEnd }, type: 'BUSY_DAY', employeeId: dto.employeeId }
-      : { date: { gte: dayStart, lte: dayEnd }, type: 'HOLIDAY' };
-    const existing = await (this.prisma as any).calendarBlock.findFirst({ where: conflictWhere });
-    if (existing) throw new BadRequestException('This day is already blocked');
+    // Scoped per employee, so different employees may each take OOO the same day.
+    const existing = await (this.prisma as any).calendarBlock.findFirst({
+      where: { date: { gte: dayStart, lte: dayEnd }, type: 'BUSY_DAY', employeeId: dto.employeeId },
+    });
+    if (existing) throw new BadRequestException('This employee is already marked Out of Office on this day');
 
     return (this.prisma as any).calendarBlock.create({
-      data: { date: dayStart, type: dto.type, label: dto.label, employeeId: dto.employeeId, createdById: userId },
+      data: { date: dayStart, type: 'BUSY_DAY', label: dto.label, employeeId: dto.employeeId, createdById: userId },
       select: { id: true, date: true, type: true, label: true, employeeId: true },
     });
   }
@@ -812,10 +815,13 @@ export class CalendarService {
     TENTATIVE: 'BANANA', CONFIRMED: 'SAGE', COMPLETED: 'PEACOCK', CANCELLED: 'GRAPHITE',
   };
 
-  /** Synthetic (non-persisted) birthday items sourced from Employee.dateOfBirth. */
-  private async getBirthdays(year: number, month: number, organizationId: string) {
+  /**
+   * Synthetic (non-persisted) birthday items sourced from Employee.dateOfBirth.
+   * Scoped to the requesting employee only — birthdays are personal, not visible to co-workers.
+   */
+  private async getBirthdays(year: number, month: number, organizationId: string, employeeId: string) {
     const employees = await this.prisma.employee.findMany({
-      where: { organizationId, dateOfBirth: { not: null } },
+      where: { organizationId, id: employeeId, dateOfBirth: { not: null } },
       select: { id: true, firstName: true, lastName: true, avatarUrl: true, dateOfBirth: true },
     });
 
@@ -847,14 +853,35 @@ export class CalendarService {
     return items;
   }
 
+  /**
+   * Synthetic (non-persisted) Kenya public holiday items, computed at read
+   * time rather than stored — see kenya-holidays.ts for the source data.
+   */
+  private getHolidays(year: number, month: number) {
+    const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+    return getKenyaPublicHolidays(year)
+      .filter((h) => h.date.startsWith(monthPrefix))
+      .map((h) => ({
+        id: `holiday-${h.date}`,
+        kind: 'HOLIDAY',
+        title: h.name,
+        startAt: new Date(`${h.date}T00:00:00`).toISOString(),
+        endAt: new Date(`${h.date}T23:59:59`).toISOString(),
+        allDay: true,
+        color: 'BASIL',
+        detail: { date: h.date, name: h.name },
+      }));
+  }
+
   async getAgenda(year: number, month: number, userId: string, organizationId: string, roleLevel: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
     const [eventsResult, visitsResult, birthdays] = await Promise.all([
       this.getEvents(year, month, userId, organizationId),
       this.getMonthVisits(year, month, organizationId, roleLevel),
-      this.getBirthdays(year, month, organizationId),
+      this.getBirthdays(year, month, organizationId, employee.id),
     ]);
 
-    const items: any[] = [...birthdays];
+    const items: any[] = [...birthdays, ...this.getHolidays(year, month)];
 
     for (const e of eventsResult.events) {
       items.push({
@@ -892,9 +919,7 @@ export class CalendarService {
     }
 
     for (const b of visitsResult.blocks) {
-      const defaultTitle = b.type === 'HOLIDAY'
-        ? 'Holiday'
-        : (b.employeeName ? `${b.employeeName} — Out of Office` : 'Out of Office');
+      const defaultTitle = b.employeeName ? `${b.employeeName} — Out of Office` : 'Out of Office';
       items.push({
         id: b.id, kind: 'BLOCK',
         title: b.label || defaultTitle,

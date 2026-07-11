@@ -123,14 +123,18 @@ export class CalendarService {
 
     // Only personal Out of Office blocks are stored — public holidays are
     // auto-loaded (see getHolidays) rather than kept as HOLIDAY-type blocks.
-    const blocks = await (this.prisma as any).calendarBlock.findMany({
-      where: { date: { gte: start, lte: end }, type: 'BUSY_DAY' },
-      select: {
-        id: true, date: true, type: true, label: true, employeeId: true,
-        employee: { select: { firstName: true, lastName: true } },
-      },
-      orderBy: { date: 'asc' },
-    });
+    // Out of Office is internal staff scheduling info — partner org users
+    // must not see who on the admin org's staff is off and why.
+    const blocks = isAdmin
+      ? await (this.prisma as any).calendarBlock.findMany({
+          where: { date: { gte: start, lte: end }, type: 'BUSY_DAY' },
+          select: {
+            id: true, date: true, type: true, label: true, employeeId: true,
+            employee: { select: { firstName: true, lastName: true } },
+          },
+          orderBy: { date: 'asc' },
+        })
+      : [];
 
     const visitOrgFilter = isAdmin
       ? (filterOrgId ? { clientOrgId: filterOrgId } : {})

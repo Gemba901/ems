@@ -235,10 +235,15 @@ export default function CalendarPage() {
     });
   };
 
-  const allKindsSelected = AGENDA_KIND_FILTERS.every(f => kindFilters.has(f.key));
+  const visibleKindFilters = useMemo(
+    () => AGENDA_KIND_FILTERS.filter(f => !("adminOnly" in f && f.adminOnly) || isAdmin),
+    [isAdmin],
+  );
+
+  const allKindsSelected = visibleKindFilters.every(f => kindFilters.has(f.key));
 
   const toggleAllKindFilters = () => {
-    setKindFilters(prev => (prev.size === AGENDA_KIND_FILTERS.length ? new Set() : new Set(AGENDA_KIND_FILTERS.map(f => f.key))));
+    setKindFilters(prev => (prev.size === visibleKindFilters.length ? new Set() : new Set(visibleKindFilters.map(f => f.key))));
   };
 
   const toggleCustomFilter = (id: string) => {
@@ -502,10 +507,10 @@ export default function CalendarPage() {
                 Select all
               </label>
               <div className="my-1 border-t border-slate-100" />
-              {AGENDA_KIND_FILTERS.map(f => (
+              {visibleKindFilters.map(f => (
                 <label key={f.key} className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" checked={kindFilters.has(f.key)} onChange={() => toggleKindFilter(f.key)} className="rounded accent-blue-600" />
-                  {f.label}
+                  {!isAdmin && "clientLabel" in f ? f.clientLabel : f.label}
                 </label>
               ))}
             </div>
@@ -514,6 +519,7 @@ export default function CalendarPage() {
               filters={customFilters}
               activeFilterIds={activeCustomFilterIds}
               orgs={orgs}
+              isAdmin={isAdmin}
               onToggle={toggleCustomFilter}
               onCreate={data => createFilterMutation.mutate(data)}
               onDelete={id => deleteFilterMutation.mutate(id)}

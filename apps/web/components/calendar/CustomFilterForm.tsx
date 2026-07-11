@@ -6,11 +6,12 @@ import { CalendarFilterDto, EVENT_COLORS, EVENT_COLOR_CONFIG, PartnerOrg } from 
 import { AGENDA_KIND_FILTERS } from "./types";
 
 export function CustomFilterForm({
-  filters, activeFilterIds, orgs, onToggle, onCreate, onDelete, creating,
+  filters, activeFilterIds, orgs, isAdmin, onToggle, onCreate, onDelete, creating,
 }: {
   filters: CalendarFilterDto[];
   activeFilterIds: Set<string>;
   orgs: PartnerOrg[];
+  isAdmin: boolean;
   onToggle: (id: string) => void;
   onCreate: (data: { name: string; kinds?: string[]; orgIds?: string[]; colors?: string[] }) => void;
   onDelete: (id: string) => void;
@@ -21,6 +22,8 @@ export function CustomFilterForm({
   const [kinds, setKinds] = useState<Set<string>>(new Set());
   const [orgIds, setOrgIds] = useState<Set<string>>(new Set());
   const [colors, setColors] = useState<Set<string>>(new Set());
+
+  const kindOptions = AGENDA_KIND_FILTERS.filter(k => !("adminOnly" in k && k.adminOnly) || isAdmin);
 
   const toggleSet = (set: Set<string>, setter: (s: Set<string>) => void, value: string) => {
     const next = new Set(set);
@@ -92,7 +95,7 @@ export function CustomFilterForm({
           <div className="space-y-1">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Kinds</p>
             <div className="flex flex-wrap gap-1.5">
-              {AGENDA_KIND_FILTERS.map(k => (
+              {kindOptions.map(k => (
                 <button
                   key={k.key}
                   type="button"
@@ -101,7 +104,7 @@ export function CustomFilterForm({
                     kinds.has(k.key) ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
                   }`}
                 >
-                  {k.label}
+                  {!isAdmin && "clientLabel" in k ? k.clientLabel : k.label}
                 </button>
               ))}
             </div>

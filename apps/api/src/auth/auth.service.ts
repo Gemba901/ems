@@ -16,6 +16,7 @@ export interface JwtPayload {
     roleLevel: Role;
     isAdminOrg: boolean;
     jobTitle: string | null;
+    departmentId: string | null;
 }
 
 type UserOrganizationRelation = {
@@ -93,7 +94,7 @@ export class AuthService {
     ) {
         const employee = await this.prisma.employee.findFirst({
             where: { userId: user.id, organizationId: membership.organizationId },
-            select: { jobTitle: true },
+            select: { jobTitle: true, departmentId: true },
         });
 
         const payload: JwtPayload = {
@@ -107,6 +108,7 @@ export class AuthService {
             organizationUrl: membership.organization.logoUrl,
             isAdminOrg: membership.organization.isAdminOrg,
             jobTitle: employee?.jobTitle ?? null,
+            departmentId: employee?.departmentId ?? null,
         };
 
         const accessToken = this.jwtService.sign(payload);

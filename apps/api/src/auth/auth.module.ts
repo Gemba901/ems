@@ -22,7 +22,8 @@ import { PassportModule } from '@nestjs/passport';
     }),
   ],
   providers: [AuthService, JwtStrategy],
-  controllers: [AuthController]
+  controllers: [AuthController],
+  exports: [AuthService]
 })
 
 export class AuthModule { }

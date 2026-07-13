@@ -29,6 +29,7 @@ import {
   Info,
   AlertTriangle,
   Pin,
+  ClipboardCheck,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -42,7 +43,7 @@ import { NoticeService, Notice, NoticeType } from "@/services/notice.service";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -72,25 +73,25 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     href: "/sims",
     actions: [
       { label: "Submit an idea",    href: "/sims/new",            icon: FileEdit   },
-      { label: "My submissions",    href: "/sims/my-suggestions", icon: ListChecks },
-      { label: "Review Queue",      href: "/sims/queue",          icon: Inbox, roles: [Role.HOD, Role.ADMIN, Role.SUPER_ADMIN, Role.MANAGEMENT] },
+      // { label: "My submissions",    href: "/sims/my-suggestions", icon: ListChecks },
+      // { label: "Review Queue",      href: "/sims/queue",          icon: Inbox, roles: [Role.HOD, Role.ADMIN, Role.SUPER_ADMIN, Role.MANAGEMENT] },
     ],
   },
-  // EMS: {
-  //   key: "EMS",
-  //   label: "Employee Master Data",
-  //   tagline: "Record Completeness",
-  //   description: "Track how complete your employee records are, identify gaps, and ensure all staff data is accurate and up to date.",
-  //   icon: ClipboardList,
-  //   color: "text-indigo-600",
-  //   bg: "bg-indigo-50",
-  //   ring: "ring-indigo-200",
-  //   href: "/ems",
-  //   actions: [
-  //     { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
-  //     { label: "My Profile",             href: "/ems/my-profile", icon: UserCircle, roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
-  //   ],
-  // },
+  EMS: {
+    key: "EMS",
+    label: "Employee Master Data",
+    tagline: "Record Completeness",
+    description: "Track how complete your employee records are, identify gaps, and ensure all staff data is accurate and up to date.",
+    icon: ClipboardList,
+    color: "text-indigo-600",
+    bg: "bg-indigo-50",
+    ring: "ring-indigo-200",
+    href: "/ems",
+    actions: [
+      // { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
+      { label: "My Profile",             href: "/ems/my-profile", icon: UserCircle, roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
+    ],
+  },
   CALENDAR: {
     key: "CALENDAR",
     label: "Calendar",
@@ -117,8 +118,24 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     href: "/leave",
     actions: [
       { label: "Apply for leave",    href: "/leave/apply",  icon: FileEdit   },
-      { label: "My requests",        href: "/leave",        icon: ListChecks },
-      { label: "Manage requests",    href: "/leave/manage", icon: Inbox,     roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD] },
+      // { label: "My requests",        href: "/leave",        icon: ListChecks },
+      // { label: "Manage requests",    href: "/leave/manage", icon: Inbox,     roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD] },
+    ],
+  },
+  DWMS: {
+    key: "DWMS",
+    label: "DWMS",
+    tagline: "Daily Work Management",
+    description: "Assign and track daily tasks, raise alerts, and stay on top of what's due across your department.",
+    icon: ClipboardCheck,
+    color: "text-rose-600",
+    bg: "bg-rose-50",
+    ring: "ring-rose-200",
+    href: "/dwms",
+    actions: [
+      { label: "My tasks",       href: "/dwms/assignedTasks", icon: ListChecks },
+      // { label: "Raise an alert", href: "/dwms/alerts",        icon: AlertTriangle },
+      // { label: "Approvals",      href: "/dwms/approvalTasks", icon: Inbox, roles: [Role.HOD, Role.ADMIN, Role.SUPER_ADMIN, Role.MANAGEMENT] },
     ],
   },
 };

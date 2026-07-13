@@ -1,0 +1,22 @@
+
+@theme {
+  --color-bg-app: var(--bg-dwms);
+  --color-panel-app: var(--panel-dwms);
+  --color-text-app: var(--text-dwms);
+  --color-muted-app: var(--muted-dwms);
+  --color-accent-app: var(--accent-dwms);
+  --color-border-app: var(--border-dwms);
+}
+
+:root {
+  --bg-dwms: #F4F7FA;
+  --panel-dwms: #ffffff;
+  --text-dwms: #0f172a;
+  --muted-dwms: #64748b;
+  --accent-dwms: #2563eb;
+  --border-dwms: #e2e8f0;
+}
+
+* {
+  box-sizing: border-box;
+}

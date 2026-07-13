@@ -8,10 +8,24 @@
 
 */
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('ACTION_REQUIRED', 'INFO', 'REMINDER', 'ALERT');
+-- NotificationType may already exist (see 20260702_add_notification_table),
+-- which was merged after this migration was first generated.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'NotificationType') THEN
+    CREATE TYPE "NotificationType" AS ENUM ('ACTION_REQUIRED', 'INFO', 'REMINDER', 'ALERT');
+  END IF;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "ImplementationStatus" AS ENUM ('WORK_IN_PROGRESS', 'VERY_SLOW_WORK_IN_PROGRESS', 'GOOD_WORK_IN_PROGRESS', 'SLOW_PROGRESS', 'IMPLEMENTED', 'SHIFTED_TO_SGA', 'PREVIOUSLY_IMPLEMENTED', 'UNDER_CONSULTATION', 'IMPRACTICAL', 'SAVED_FOR_LATER');
+-- ImplementationStatus may already exist (see
+-- 20260702_reconcile_suggestion_hod_review_and_employee_notifications).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ImplementationStatus') THEN
+    CREATE TYPE "ImplementationStatus" AS ENUM ('WORK_IN_PROGRESS', 'VERY_SLOW_WORK_IN_PROGRESS', 'GOOD_WORK_IN_PROGRESS', 'SLOW_PROGRESS', 'IMPLEMENTED', 'SHIFTED_TO_SGA', 'PREVIOUSLY_IMPLEMENTED', 'UNDER_CONSULTATION', 'IMPRACTICAL', 'SAVED_FOR_LATER');
+  END IF;
+END $$;
 
 -- CreateEnum
 CREATE TYPE "AlertType" AS ENUM ('BREAKDOWN', 'DELAY', 'QUALITY_ISSUE', 'WRONG_ENTRY', 'WRONG_DELIVERY', 'SAFETY_CONCERN', 'PROCESS_DEVIATION', 'MISSED_ACTIVITY', 'REPEATED_PROBLEM', 'DISCIPLINE_ISSUE', 'ABNORMAL_SITUATION');
@@ -50,7 +64,7 @@ ALTER TABLE "LeaveRequest" DROP CONSTRAINT "LeaveRequest_handoverEmployee2Id_fke
 ALTER TABLE "LeaveSettings" DROP CONSTRAINT "LeaveSettings_orgId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "Suggestion" DROP CONSTRAINT "Suggestion_committeeId_fkey";
+ALTER TABLE "Suggestion" DROP CONSTRAINT IF EXISTS "Suggestion_committeeId_fkey";
 
 -- DropForeignKey
 ALTER TABLE "SuggestionReview" DROP CONSTRAINT "SuggestionReview_reviewerCommitteeId_fkey";
@@ -78,7 +92,8 @@ ALTER TABLE "CalendarEvent" ALTER COLUMN "id" DROP DEFAULT,
 ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "ConsultancyVisit" ADD COLUMN     "rescheduleCount" INTEGER NOT NULL DEFAULT 0;
+-- may already exist (see 20260702_add_org_shortname_visit_reschedule_count).
+ALTER TABLE "ConsultancyVisit" ADD COLUMN IF NOT EXISTS "rescheduleCount" INTEGER NOT NULL DEFAULT 0;
 
 -- AlterTable
 ALTER TABLE "Employee" ALTER COLUMN "updatedAt" DROP DEFAULT;
@@ -104,7 +119,8 @@ ALTER COLUMN "updatedAt" DROP DEFAULT;
 ALTER TABLE "Notice" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
-ALTER TABLE "Organization" ADD COLUMN     "shortName" TEXT;
+-- may already exist (see 20260702_add_org_shortname_visit_reschedule_count).
+ALTER TABLE "Organization" ADD COLUMN IF NOT EXISTS "shortName" TEXT;
 
 -- AlterTable
 ALTER TABLE "Role" ALTER COLUMN "name" SET NOT NULL;
@@ -114,10 +130,12 @@ ALTER TABLE "RolePermission" ALTER COLUMN "roleId" SET NOT NULL,
 ADD CONSTRAINT "RolePermission_pkey" PRIMARY KEY ("roleId", "permissionId");
 
 -- AlterTable
-ALTER TABLE "Suggestion" DROP COLUMN "committeeId",
-ADD COLUMN     "hodId" TEXT,
-ADD COLUMN     "implementationNote" TEXT,
-ADD COLUMN     "implementationStatus" "ImplementationStatus";
+-- committeeId drop and hodId/implementationNote/implementationStatus adds
+-- may already be applied (see 20260702_reconcile_suggestion_hod_review_and_employee_notifications).
+ALTER TABLE "Suggestion" DROP COLUMN IF EXISTS "committeeId";
+ALTER TABLE "Suggestion" ADD COLUMN IF NOT EXISTS "hodId" TEXT;
+ALTER TABLE "Suggestion" ADD COLUMN IF NOT EXISTS "implementationNote" TEXT;
+ALTER TABLE "Suggestion" ADD COLUMN IF NOT EXISTS "implementationStatus" "ImplementationStatus";
 
 -- AlterTable
 ALTER TABLE "SuggestionReview" DROP COLUMN "reviewerCommitteeId";
@@ -126,7 +144,8 @@ ALTER TABLE "SuggestionReview" DROP COLUMN "reviewerCommitteeId";
 ALTER TABLE "quotes" ALTER COLUMN "id" DROP DEFAULT;
 
 -- CreateTable
-CREATE TABLE "Notification" (
+-- Notification may already exist (see 20260702_add_notification_table).
+CREATE TABLE IF NOT EXISTS "Notification" (
     "id" TEXT NOT NULL,
     "employeeId" TEXT NOT NULL,
     "type" "NotificationType" NOT NULL,
@@ -230,13 +249,13 @@ CREATE TABLE "DwmsPermissionConfig" (
 );
 
 -- CreateIndex
-CREATE INDEX "Notification_employeeId_isRead_idx" ON "Notification"("employeeId", "isRead");
+CREATE INDEX IF NOT EXISTS "Notification_employeeId_isRead_idx" ON "Notification"("employeeId", "isRead");
 
 -- CreateIndex
-CREATE INDEX "Notification_employeeId_createdAt_idx" ON "Notification"("employeeId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Notification_employeeId_createdAt_idx" ON "Notification"("employeeId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Notification_employeeId_module_idx" ON "Notification"("employeeId", "module");
+CREATE INDEX IF NOT EXISTS "Notification_employeeId_module_idx" ON "Notification"("employeeId", "module");
 
 -- CreateIndex
 CREATE INDEX "Task_ownerId_idx" ON "Task"("ownerId");
@@ -284,10 +303,36 @@ CREATE INDEX "Alert_againstUserId_idx" ON "Alert"("againstUserId");
 CREATE UNIQUE INDEX "DwmsPermissionConfig_organizationId_key" ON "DwmsPermissionConfig"("organizationId");
 
 -- AddForeignKey
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- Notification_employeeId_fkey and Suggestion_hodId_fkey may already exist
+-- (see 20260702_add_notification_table and
+-- 20260702_reconcile_suggestion_hod_review_and_employee_notifications).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class cl ON c.conrelid = cl.oid
+    WHERE c.conname = 'Notification_employeeId_fkey' AND cl.relname = 'Notification'
+  ) THEN
+    ALTER TABLE "Notification"
+      ADD CONSTRAINT "Notification_employeeId_fkey"
+      FOREIGN KEY ("employeeId") REFERENCES "Employee"("id")
+      ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "Suggestion" ADD CONSTRAINT "Suggestion_hodId_fkey" FOREIGN KEY ("hodId") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class cl ON c.conrelid = cl.oid
+    WHERE c.conname = 'Suggestion_hodId_fkey' AND cl.relname = 'Suggestion'
+  ) THEN
+    ALTER TABLE "Suggestion"
+      ADD CONSTRAINT "Suggestion_hodId_fkey"
+      FOREIGN KEY ("hodId") REFERENCES "Employee"("id")
+      ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
 ALTER TABLE "LeaveRequest" ADD CONSTRAINT "LeaveRequest_handoverEmployee2Id_fkey" FOREIGN KEY ("handoverEmployee2Id") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;

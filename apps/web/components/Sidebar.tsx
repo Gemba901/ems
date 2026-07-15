@@ -18,6 +18,7 @@ import {
   Palmtree,
   UserCircle,
   Lightbulb,
+  Factory
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -70,6 +71,14 @@ const NAV_ITEMS = [
     icon: ShieldCheck,
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT],
+  },
+  {
+    name: "Steel Manufacturing",
+    href: "/steel",
+    icon: Factory,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+    module: "STEEL",
   },
   // {
   //   name: "Reports",

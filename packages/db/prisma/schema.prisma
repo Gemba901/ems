@@ -34,6 +34,7 @@ enum ModuleType {
   EMS
   CALENDAR
   LEAVE
+  STEEL
 }
 
 enum CommitteeType {
@@ -125,6 +126,7 @@ model Organization {
   leaveSettings     LeaveSettings?
   calendarEvents    CalendarEvent[]
   notices           Notice[]
+  steelProductionPlans SteelProductionPlan[]
 }
 
 //specific user
@@ -277,6 +279,11 @@ model Employee {
   createdCalendarEvents CalendarEvent[]    @relation("CalendarEventCreator")
   receivedInvitations   EventInvitation[]  @relation("ReceivedInvitations")
   eventParticipations   EventParticipant[] @relation("EventParticipations")
+
+  steelPlansCreated     SteelProductionPlan[]  @relation("SteelPlanCreatedBy")
+  steelPlansApproved    SteelProductionPlan[]  @relation("SteelPlanApprovedBy")
+  steelActivityLogs     SteelPlanActivityLog[]
+  steelDepartmentAcks   SteelPlanDepartmentAck[]
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -747,3 +754,237 @@ model Notice {
   @@index([organizationId, createdAt])
 }
    
+// ── Steel ──────────────────────────────────────────────────────────
+// ── Steel Manufacturing: Process 1 — Planning (P01-A01..A12) ─────────────────
+
+enum DemandSource {
+  CUSTOMER_ORDER
+  DEALER_REQUIREMENT
+  PROJECT_REQUIREMENT
+  FORECAST
+  INTERNAL_STOCK_PLAN
+}
+
+enum OrderPriority {
+  NORMAL
+  URGENT
+  EXPORT
+  PROJECT
+  STOCK_REPLENISHMENT
+}
+
+enum CreditStatus {
+  APPROVED
+  ON_HOLD
+  PENDING
+}
+
+enum ProductType {
+  TMT_BAR
+  BILLET
+  WIRE_ROD
+  SECTION
+  OTHER
+}
+
+enum StockDecision {
+  DISPATCH_FROM_STOCK
+  PRODUCTION_REQUIRED
+}
+
+enum PlantRoute {
+  INTEGRATED_PLANT
+  SCRAP_BASED_FURNACE_PLANT
+  RE_ROLLER_PLANT
+  OWN_CCM_BILLET_ROUTE
+  LOCAL_PURCHASED_BILLET_ROUTE
+  IMPORTED_BILLET_ROUTE
+  HOT_CHARGE_ROUTE
+  COLD_CHARGE_ROUTE
+  MULTIPLE_ROUTES
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  PARTIAL
+  NOT_AVAILABLE
+}
+
+// Tracks how far the plan has progressed through P01-A01..A12
+enum SteelPlanStage {
+  A01_DEMAND_CAPTURED
+  A02_PRIORITY_CONFIRMED
+  A03_PRODUCT_CONFIRMED
+  A04_SPEC_CONFIRMED
+  A05_STOCK_CHECKED
+  A06_STOCK_DECISION_MADE
+  A07_ROUTE_SELECTED
+  A08_MATERIAL_CHECKED
+  A09_CAPACITY_CHECKED
+  A10_PLAN_DRAFTED
+  A11_PLAN_COMMUNICATED
+  A12_PLAN_RELEASED
+}
+
+enum SteelPlanOverallStatus {
+  DRAFT
+  IN_PROGRESS
+  ON_HOLD
+  RELEASED
+  CANCELLED
+}
+
+// Identifies each of the 12 planning activities for the audit trail
+enum SteelPlanActivity {
+  A01
+  A02
+  A03
+  A04
+  A05
+  A06
+  A07
+  A08
+  A09
+  A10
+  A11
+  A12
+}
+
+// Departments that must acknowledge the released plan (P01-A11)
+enum SteelDepartment {
+  PROCUREMENT
+  YARD
+  FURNACE
+  CCM
+  ROLLING
+  QUALITY
+  MAINTENANCE
+  STORES
+  DISPATCH
+}
+
+// One record per customer demand / production plan, carried through P01-A01 -> P01-A12.
+model SteelProductionPlan {
+  id             String                  @id @default(uuid())
+  planNumber     String                  @unique
+  organizationId String
+  createdById    String
+  stage          SteelPlanStage          @default(A01_DEMAND_CAPTURED)
+  status         SteelPlanOverallStatus  @default(DRAFT)
+
+  // P01-A01 — Capture customer enquiry, sales order, forecast, or stock requirement
+  demandSource               DemandSource
+  customerName               String?
+  dealerName                 String?
+  projectReference           String?
+  salesOrderNumber           String?
+  forecastReference          String?
+  stockRequirementReference  String?
+  expectedDeliveryDate       DateTime?
+  requestedQuantityTonnes    Float
+  demandNotes                String?
+
+  // P01-A02 — Confirm customer and order priority
+  priority               OrderPriority?
+  deliveryPromiseDate    DateTime?
+  creditStatus           CreditStatus?
+
+  // P01-A03 — Confirm product type and standard required
+  productType            ProductType?
+  productStandard        String?
+  customerSpecification  String?
+
+  // P01-A04 — Confirm grade, size, length, bundle, and quantity
+  grade           String?
+  size            String?
+  length          String?
+  bundleType      String?
+  totalQuantity   Float?
+  toleranceNotes  String?
+
+  // P01-A05 — Check certified finished goods stock
+  certifiedStockAvailableQty  Float?
+  stockBundleIds              String[]  @default([])
+  stockHeatNumbers            String[]  @default([])
+  stockCertificateRefs        String[]  @default([])
+
+  // P01-A06 — Decide dispatch from stock or production required
+  stockDecision       StockDecision?
+  stockDecisionNotes  String?
+
+  // P01-A07 — Select applicable plant route
+  plantRoute  PlantRoute?
+  routeNotes  String?
+
+  // P01-A08 — Check raw material or billet availability
+  materialAvailability      AvailabilityStatus?
+  materialShortageNotes     String?
+  purchaseRequirementNotes  String?
+
+  // P01-A09 — Check equipment, maintenance, and manpower availability
+  equipmentAvailability      AvailabilityStatus?
+  manpowerAvailability       AvailabilityStatus?
+  maintenanceShutdownNotes   String?
+  shiftPlanNotes             String?
+
+  // P01-A10 — Prepare production plan and sequence
+  productionSequence  Json?
+  plannedStartDate    DateTime?
+  plannedEndDate      DateTime?
+  planNotes           String?
+
+  // P01-A11 — Communicate plan to all concerned departments
+  planCommunicatedAt  DateTime?
+
+  // P01-A12 — Release approved production plan
+  approvedById   String?
+  approvedAt     DateTime?
+  releaseNotes   String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  organization    Organization              @relation(fields: [organizationId], references: [id])
+  createdBy       Employee                  @relation("SteelPlanCreatedBy", fields: [createdById], references: [id])
+  approvedBy      Employee?                 @relation("SteelPlanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  activityLogs    SteelPlanActivityLog[]
+  departmentAcks  SteelPlanDepartmentAck[]
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([organizationId, status])
+}
+
+// Audit trail: every activity performed against a plan is recorded here
+model SteelPlanActivityLog {
+  id            String             @id @default(uuid())
+  planId        String
+  activity      SteelPlanActivity
+  performedById String
+  notes         String?
+  data          Json?
+  createdAt     DateTime           @default(now())
+
+  plan        SteelProductionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  performedBy Employee             @relation(fields: [performedById], references: [id])
+
+  @@index([planId])
+}
+
+// P01-A11: department acknowledgement of the communicated plan
+model SteelPlanDepartmentAck {
+  id               String           @id @default(uuid())
+  planId           String
+  department       SteelDepartment
+  acknowledged     Boolean          @default(false)
+  acknowledgedById String?
+  acknowledgedAt   DateTime?
+  notes            String?
+  createdAt        DateTime         @default(now())
+
+  plan            SteelProductionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  acknowledgedBy  Employee?            @relation(fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  @@unique([planId, department])
+  @@index([planId])
+}

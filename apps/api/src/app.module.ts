@@ -19,6 +19,7 @@ import { EmsModule } from './ems/ems.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { LeaveModule } from './leave/leave.module';
 import { NoticesModule } from './notices/notices.module';
+import { SteelModule } from './steel/steel.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { NoticesModule } from './notices/notices.module';
     CalendarModule,
     LeaveModule,
     NoticesModule,
+    SteelModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -472,6 +472,7 @@ enum EventRecurrencePattern {
   DAILY
   WEEKLY
   MONTHLY
+  YEARLY
 }
 
 enum InvitationStatus {

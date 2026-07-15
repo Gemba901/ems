@@ -724,6 +724,7 @@ export class CalendarService {
     if (pattern === 'DAILY')   d.setDate(d.getDate() + interval);
     if (pattern === 'WEEKLY')  d.setDate(d.getDate() + 7 * interval);
     if (pattern === 'MONTHLY') d.setMonth(d.getMonth() + interval);
+    if (pattern === 'YEARLY')  d.setFullYear(d.getFullYear() + interval);
     return d;
   }
 

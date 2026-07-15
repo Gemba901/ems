@@ -95,8 +95,12 @@ export function EventPopover({
                 )}
                 {e.description && <p className="text-sm leading-relaxed text-slate-600">{e.description}</p>}
                 <div className="flex items-center gap-2 text-xs text-slate-500">
-                  {e.visibility === "ORG_WIDE" ? <Globe2 className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                  {e.visibility === "ORG_WIDE" ? "Whole organization" : "Private"}
+                  {e.visibility === "ORG_WIDE" ? <Globe2 className="h-3.5 w-3.5" />
+                    : e.invitations.length > 0 ? <Users className="h-3.5 w-3.5" />
+                    : <Lock className="h-3.5 w-3.5" />}
+                  {e.visibility === "ORG_WIDE" ? "Whole organization"
+                    : e.invitations.length > 0 ? `Select people (${e.invitations.length})`
+                    : "Just you"}
                 </div>
                 {e.isRecurring && e.recurrencePattern && (
                   <p className="flex items-center gap-1 text-xs font-medium text-violet-500">
@@ -105,7 +109,8 @@ export function EventPopover({
                       const n = e.recurrenceInterval ?? 1;
                       const unit = e.recurrencePattern === "DAILY" ? (n === 1 ? "day" : "days")
                         : e.recurrencePattern === "WEEKLY" ? (n === 1 ? "week" : "weeks")
-                        : n === 1 ? "month" : "months";
+                        : e.recurrencePattern === "MONTHLY" ? (n === 1 ? "month" : "months")
+                        : n === 1 ? "year" : "years";
                       return n === 1 ? `Repeats every ${unit}` : `Repeats every ${n} ${unit}`;
                     })()}
                   </p>

@@ -184,6 +184,7 @@ export enum EventRecurrencePatternDto {
   DAILY   = 'DAILY',
   WEEKLY  = 'WEEKLY',
   MONTHLY = 'MONTHLY',
+  YEARLY  = 'YEARLY',
 }
 
 export enum InvitationStatusDto {

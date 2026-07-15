@@ -23,14 +23,14 @@ import { useQuery } from "@tanstack/react-query";
 const BOARD_PAGE_SIZE = 4;
 const LIST_PAGE_SIZE = 10;
 
-const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; badge: string }> = {
-  QUALITY:    { label: "Quality",    badge: "bg-blue-100 text-blue-700"       },
-  COST:       { label: "Cost",       badge: "bg-emerald-100 text-emerald-700" },
-  DELIVERY:   { label: "Delivery",   badge: "bg-purple-100 text-purple-700"   },
-  SAFETY:     { label: "Safety",     badge: "bg-red-100 text-red-700"         },
-  MORALE:     { label: "Morale",     badge: "bg-amber-100 text-amber-700"     },
-  TECHNOLOGY: { label: "Technology", badge: "bg-indigo-100 text-indigo-700"   },
-  UNKNOWN:    { label: "Unknown",    badge: "bg-slate-100 text-slate-500"     },
+const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; dot: string; text: string }> = {
+  QUALITY:    { label: "Quality",    dot: "bg-blue-500",    text: "text-blue-600"    },
+  COST:       { label: "Cost",       dot: "bg-amber-500",   text: "text-amber-600"   },
+  DELIVERY:   { label: "Delivery",   dot: "bg-emerald-500", text: "text-emerald-600" },
+  SAFETY:     { label: "Safety",     dot: "bg-red-500",     text: "text-red-600"     },
+  MORALE:     { label: "Morale",     dot: "bg-rose-500",    text: "text-rose-600"    },
+  TECHNOLOGY: { label: "Technology", dot: "bg-indigo-500",  text: "text-indigo-600"  },
+  UNKNOWN:    { label: "Unknown",    dot: "bg-slate-400",   text: "text-slate-500"   },
 };
 
 const STATUS_CONFIG: Record<SuggestionStatus, { label: string; dot: string; badge: string }> = {
@@ -116,11 +116,12 @@ function CategoryBadges({ categories, max = 99 }: { categories: SuggestionCatego
   const visible = categories.slice(0, max);
   const rest = categories.length - visible.length;
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
       {visible.map((c) => {
         const cfg = CATEGORY_CONFIG[c];
         return (
-          <span key={c} className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md ${cfg.badge}`}>
+          <span key={c} className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${cfg.text}`}>
+            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot}`} />
             {cfg.label}
           </span>
         );
@@ -565,76 +566,86 @@ export default function SimsOverviewPage() {
       <div className="mx-5 space-y-5">
 
         {/* Page header */}
-        <div className="flex items-center justify-between gap-3 flex-nowrap">
-  <h1 className="text-base sm:text-lg font-semibold text-slate-900 truncate">
-    Suggestions & Ideas
-  </h1>
-
-  <div className="flex items-center gap-2 shrink-0">
-    {isReviewer && (
-      <button
-        onClick={() => exportToCSV(filtered)}
-        className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
-      >
-        <Download className="h-3.5 w-3.5" />
-      </button>
-    )}
-
-    <Link
-      href="/sims/new"
-      className="rounded-md bg-slate-900 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-slate-800 whitespace-nowrap"
-    >
-      New
-    </Link>
-  </div>
-</div>
-
-        {/*  Leaderboard */}
-        <TopContributors
-          ranked={leaderboard}
-          loading={leaderboardLoading}
-          currentUserId={user?.userId}
-        />
-        
-
-        {/* Reviewer metric cards */}
-        {isReviewer && !loading && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              {
-                label: "Total", value: metrics.total, sub: "suggestions",
-                icon: <Lightbulb className="h-4 w-4 text-blue-500" />, iconBg: "bg-blue-50", val: "text-slate-900",
-              },
-              {
-                label: "Pending", value: metrics.pending,
-                sub: metrics.pending > 0 ? "need attention" : "all clear",
-                icon: <Clock className="h-4 w-4 text-amber-500" />, iconBg: "bg-amber-50",
-                val: metrics.pending > 0 ? "text-amber-600" : "text-slate-900",
-              },
-              {
-                label: "Approved", value: metrics.implemented,
-                sub: `${metrics.successRate}% approval rate`,
-                icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />, iconBg: "bg-emerald-50",
-                val: "text-emerald-600",
-              },
-              {
-                label: "On Hold", value: metrics.needsClarification,
-                sub: metrics.needsClarification > 0 ? "paused" : "none",
-                icon: <AlertCircle className="h-4 w-4 text-orange-500" />, iconBg: "bg-orange-50",
-                val: metrics.needsClarification > 0 ? "text-orange-600" : "text-slate-900",
-              },
-            ].map((m) => (
-              <div key={m.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-2.5">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{m.label}</p>
-                  <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${m.iconBg}`}>{m.icon}</div>
-                </div>
-                <p className={`text-2xl font-bold leading-none ${m.val}`}>{m.value}</p>
-                <p className="text-[11px] text-slate-400 mt-1.5">{m.sub}</p>
-              </div>
-            ))}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600">SIMS</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">
+              Suggestions & Ideas
+            </h1>
+            <p className="text-sm text-slate-500 mt-1 max-w-xl">
+              {user?.organizationName ? `${user.organizationName}'s kaizen suggestion scheme.` : "Your kaizen suggestion scheme."} Submit ideas, track their progress, and see what&apos;s shipped.
+            </p>
           </div>
-        )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            {isReviewer && (
+              <button
+                onClick={() => exportToCSV(filtered)}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </button>
+            )}
+
+            <Link
+              href="/sims/new"
+              className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-slate-800 whitespace-nowrap"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Suggestion
+            </Link>
+          </div>
+        </div>
+
+        {/* Summary + leaderboard, side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+          {isReviewer && !loading && (
+            <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                {
+                  label: "Total", value: metrics.total, sub: "suggestions",
+                  icon: <Lightbulb className="h-4 w-4 text-blue-500" />, iconBg: "bg-blue-50", val: "text-slate-900",
+                },
+                {
+                  label: "Pending", value: metrics.pending,
+                  sub: metrics.pending > 0 ? "need attention" : "all clear",
+                  icon: <Clock className="h-4 w-4 text-amber-500" />, iconBg: "bg-amber-50",
+                  val: metrics.pending > 0 ? "text-amber-600" : "text-slate-900",
+                },
+                {
+                  label: "Approved", value: metrics.implemented,
+                  sub: `${metrics.successRate}% approval rate`,
+                  icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />, iconBg: "bg-emerald-50",
+                  val: "text-emerald-600",
+                },
+                {
+                  label: "On Hold", value: metrics.needsClarification,
+                  sub: metrics.needsClarification > 0 ? "paused" : "none",
+                  icon: <AlertCircle className="h-4 w-4 text-orange-500" />, iconBg: "bg-orange-50",
+                  val: metrics.needsClarification > 0 ? "text-orange-600" : "text-slate-900",
+                },
+              ].map((m) => (
+                <div key={m.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{m.label}</p>
+                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${m.iconBg}`}>{m.icon}</div>
+                  </div>
+                  <p className={`text-2xl font-bold leading-none ${m.val}`}>{m.value}</p>
+                  <p className="text-[11px] text-slate-400 mt-1.5">{m.sub}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className={isReviewer && !loading ? "lg:col-span-1" : "lg:col-span-3"}>
+            <TopContributors
+              ranked={leaderboard}
+              loading={leaderboardLoading}
+              currentUserId={user?.userId}
+            />
+          </div>
+        </div>
 
         {/* ── Toolbar: view toggle + search + filters ────────────────────────── */}
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
@@ -792,8 +803,8 @@ export default function SimsOverviewPage() {
 
         {/* ── Desktop: board view ────────────────────────────────────────────── */}
         {view === "board" && (
-          <div className="hidden sm:block overflow-x-auto pb-4">
-            <div className="flex items-start gap-3 min-w-max">
+          <div className="hidden sm:block pb-4">
+            <div className="flex flex-wrap items-start gap-3">
               {BOARD_COLUMNS.map(({ status, emptyText }) => (
                 <BoardColumn
                   key={status}

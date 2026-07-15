@@ -185,7 +185,7 @@ export type EventColor =
 export type EventVisibility = "PRIVATE" | "ORG_WIDE";
 
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED";
-export type EventRecurrencePattern = "DAILY" | "WEEKLY" | "MONTHLY";
+export type EventRecurrencePattern = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
 
 export interface HolisticCalendarEvent {
   id: string;

@@ -480,7 +480,7 @@ export class SimsService {
 
     const updater = await this.resolveEmployee(userId, organizationId);
 
-    // Check authorization: Must be an HOD in the same department (or Super Admin)
+    // Check authorization: Must be an HOD in the same department (or Super Admin/Admin/Management)
     const userOrgs = await this.prisma.userOrganization.findMany({
       where: { userId, organizationId },
       include: { role: true }
@@ -489,8 +489,9 @@ export class SimsService {
 
     const isDepartmentHOD = roles.includes(Role.HOD) && updater.departmentId === suggestion.employee?.departmentId;
     const isSuperAdmin = roles.includes(Role.SUPER_ADMIN);
+    const isAdminOrMgmt = roles.some(r => [Role.ADMIN, Role.MANAGEMENT].includes(r as Role));
 
-    if (!isDepartmentHOD && !isSuperAdmin) {
+    if (!isDepartmentHOD && !isSuperAdmin && !isAdminOrMgmt) {
         throw new ForbiddenException('Only a department HOD or admin can update implementation status');
     }
 

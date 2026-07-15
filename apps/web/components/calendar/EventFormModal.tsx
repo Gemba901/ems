@@ -44,12 +44,11 @@ export function EventFormModal({
   const [description, setDescription] = useState(editing?.description ?? "");
   const [label, setLabel] = useState(editing?.label ?? "");
   const [color, setColor] = useState<EventColor>(editing?.color ?? "PEACOCK");
-  const [visibility, setVisibility] = useState<EventVisibility>(editing?.visibility ?? "PRIVATE");
   const [allDay, setAllDay] = useState(editing?.allDay ?? false);
   const [startAt, setStartAt] = useState(editing ? toLocalDatetimeInput(editing.startAt) : `${baseDate}T09:00`);
   const [endAt, setEndAt] = useState(editing ? toLocalDatetimeInput(editing.endAt) : `${baseDate}T10:00`);
 
-  const [recPreset, setRecPreset] = useState<"none" | "daily" | "weekly" | "monthly" | "custom">("none");
+  const [recPreset, setRecPreset] = useState<"none" | "daily" | "weekly" | "monthly" | "yearly" | "custom">("none");
   const [recPattern, setRecPattern] = useState<EventRecurrencePattern>("WEEKLY");
   const [recInterval, setRecInterval] = useState(1);
   const [recEnds, setRecEnds] = useState<"never" | "on">("never");
@@ -58,6 +57,13 @@ export function EventFormModal({
 
   const initialInviteeIds = (editing?.invitations ?? []).map(i => i.invitee.id);
   const [inviteeIds, setInviteeIds] = useState<string[]>(initialInviteeIds);
+  const [whoCanSee, setWhoCanSee] = useState<"ORG_WIDE" | "JUST_YOU" | "SELECTED">(
+    editing?.visibility === "ORG_WIDE" ? "ORG_WIDE" : initialInviteeIds.length > 0 ? "SELECTED" : "JUST_YOU"
+  );
+  const selectWhoCanSee = (mode: "ORG_WIDE" | "JUST_YOU" | "SELECTED") => {
+    setWhoCanSee(mode);
+    if (mode === "JUST_YOU") setInviteeIds([]);
+  };
   const [onLeaveNames, setOnLeaveNames] = useState<string[]>([]);
   const [updateScope, setUpdateScope] = useState<"THIS_ONLY" | "ALL_IN_SERIES">("THIS_ONLY");
 
@@ -99,6 +105,9 @@ export function EventFormModal({
     if (!startAt || !endAt) { setError("Start and end time are required."); return; }
     if (new Date(endAt) <= new Date(startAt)) { setError("End must be after start."); return; }
     if (!editing && isNewRecurring && recEnds === "on" && !recEndAt) { setError("End date is required when 'On date' is selected."); return; }
+    if (whoCanSee === "SELECTED" && inviteeIds.length === 0) { setError("Select at least one person who can see this event."); return; }
+
+    const visibility: EventVisibility = whoCanSee === "ORG_WIDE" ? "ORG_WIDE" : "PRIVATE";
 
     setSaving(true);
     setError(null);
@@ -133,7 +142,7 @@ export function EventFormModal({
           allDay,
           isRecurring: isNewRecurring,
           recurrencePattern: isNewRecurring
-            ? recPreset === "daily" ? "DAILY" : recPreset === "weekly" ? "WEEKLY" : recPreset === "monthly" ? "MONTHLY" : recPattern
+            ? recPreset === "daily" ? "DAILY" : recPreset === "weekly" ? "WEEKLY" : recPreset === "monthly" ? "MONTHLY" : recPreset === "yearly" ? "YEARLY" : recPattern
             : undefined,
           recurrenceInterval: isNewRecurring ? (recPreset === "custom" ? recInterval : 1) : undefined,
           recurrenceEndAt: isNewRecurring && recEnds === "on" && recEndAt ? new Date(`${recEndAt}T23:59`).toISOString() : undefined,
@@ -260,31 +269,44 @@ export function EventFormModal({
             </div>
           )}
 
-          {isOrgManager && (
-            <div className="space-y-2 rounded-xl border border-slate-100 p-3">
-              <p className="text-xs font-semibold text-slate-500">Who can see</p>
+          <div className="space-y-2 rounded-xl border border-slate-100 p-3">
+            <p className="text-xs font-semibold text-slate-500">Who can see</p>
+            {isOrgManager && (
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
                 <input
-                  type="checkbox"
-                  checked={visibility === "ORG_WIDE"}
-                  onChange={() => setVisibility("ORG_WIDE")}
-                  className="rounded accent-blue-600"
+                  type="radio"
+                  name="whoCanSee"
+                  checked={whoCanSee === "ORG_WIDE"}
+                  onChange={() => selectWhoCanSee("ORG_WIDE")}
+                  className="accent-blue-600"
                 />
                 <Globe2 className="h-4 w-4 text-blue-500" />
                 Whole organization
               </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={visibility === "PRIVATE"}
-                  onChange={() => setVisibility("PRIVATE")}
-                  className="rounded accent-blue-600"
-                />
-                <Lock className="h-4 w-4 text-slate-400" />
-                Just you
-              </label>
-            </div>
-          )}
+            )}
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+              <input
+                type="radio"
+                name="whoCanSee"
+                checked={whoCanSee === "JUST_YOU"}
+                onChange={() => selectWhoCanSee("JUST_YOU")}
+                className="accent-blue-600"
+              />
+              <Lock className="h-4 w-4 text-slate-400" />
+              Just you
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+              <input
+                type="radio"
+                name="whoCanSee"
+                checked={whoCanSee === "SELECTED"}
+                onChange={() => selectWhoCanSee("SELECTED")}
+                className="accent-blue-600"
+              />
+              <Users className="h-4 w-4 text-indigo-400" />
+              Select who can see
+            </label>
+          </div>
 
           {!editing && (
             <div className="space-y-3 rounded-xl border border-slate-100 p-3">
@@ -301,6 +323,7 @@ export function EventFormModal({
                   if (v === "daily") { setRecPattern("DAILY"); setRecInterval(1); }
                   if (v === "weekly") { setRecPattern("WEEKLY"); setRecInterval(1); }
                   if (v === "monthly") { setRecPattern("MONTHLY"); setRecInterval(1); }
+                  if (v === "yearly") { setRecPattern("YEARLY"); setRecInterval(1); }
                   if (v === "none") { setRecEnds("never"); setRecEndAt(""); }
                 }}
               >
@@ -312,6 +335,9 @@ export function EventFormModal({
                   {startAt
                     ? (["th", "st", "nd", "rd"][[11, 12, 13].includes(new Date(startAt).getDate()) ? 0 : Math.min(new Date(startAt).getDate() % 10, 3)] ?? "th")
                     : ""}
+                </option>
+                <option value="yearly">
+                  Every year on {startAt ? new Date(startAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" }) : "…"}
                 </option>
                 <option value="custom">Custom…</option>
               </select>
@@ -335,6 +361,7 @@ export function EventFormModal({
                     <option value="DAILY">{recInterval === 1 ? "day" : "days"}</option>
                     <option value="WEEKLY">{recInterval === 1 ? "week" : "weeks"}</option>
                     <option value="MONTHLY">{recInterval === 1 ? "month" : "months"}</option>
+                    <option value="YEARLY">{recInterval === 1 ? "year" : "years"}</option>
                   </select>
                 </div>
               )}
@@ -382,14 +409,16 @@ export function EventFormModal({
             </div>
           )}
 
-          <PeoplePicker
-            label="Guests"
-            employees={orgEmployees}
-            loading={loadingEmployees}
-            selected={inviteeIds}
-            onToggle={toggleInvitee}
-            onLeaveNames={onLeaveNames}
-          />
+          {whoCanSee !== "JUST_YOU" && (
+            <PeoplePicker
+              label={whoCanSee === "SELECTED" ? "Select who can see" : "Guests"}
+              employees={orgEmployees}
+              loading={loadingEmployees}
+              selected={inviteeIds}
+              onToggle={toggleInvitee}
+              onLeaveNames={onLeaveNames}
+            />
+          )}
 
           {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 

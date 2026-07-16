@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { SteelSidebar } from "../../components/steel/SteelSidebar";
+import { SteelSidebar } from "@/components/steel/SteelSidebar";
 import { Header } from "@/components/Header";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
-import { ModuleGuard } from "@/components/ModuleGuard";
+// import { ModuleGuard } from "@/components/ModuleGuard";
 
 export default function SteelLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -16,7 +16,7 @@ export default function SteelLayout({ children }: { children: React.ReactNode })
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "lg:pl-16" : "lg:pl-64"}`}>
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1">
-          <ModuleGuard moduleKey="STEEL">{children}</ModuleGuard>
+          {children}
         </main>
       </div>
     </div>

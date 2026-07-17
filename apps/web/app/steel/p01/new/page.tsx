@@ -41,7 +41,7 @@ export default function NewSteelPlanPage() {
     mutationFn: (payload: CreateSteelDemandPayload) => SteelService.create(payload, accessToken!),
     onSuccess: (plan) => {
       toast("Production plan created — proceed to confirm priority.", "success");
-      router.push(`/steel/${plan.id}`);
+      router.push(`/steel/p01/${plan.id}`);
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -78,7 +78,7 @@ export default function NewSteelPlanPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4">
-      <Link href="/steel" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+      <Link href="/steel/p01" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
         <ArrowLeft className="h-4 w-4" />
         Back to plans
       </Link>

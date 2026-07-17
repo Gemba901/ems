@@ -6,6 +6,7 @@ import {
   Factory,
   Plus,
   LayoutGrid,
+  Grid3x3,
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,7 +25,7 @@ interface SteelSidebarProps {
 const STEEL_NAV = [
   {
     name: "Production Plans",
-    href: "/steel",
+    href: "/steel/p01",
     icon: LayoutGrid,
     exact: true,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
@@ -97,10 +98,27 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
           )}
         </div>
 
-        {/* ── New Plan CTA ── */}
-        <div className={`px-2 pt-3 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
+        {/* ── All processes link ── */}
+        <div className={`px-2 pt-3 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
           <Link
-            href="/steel/new"
+            href="/steel"
+            onClick={onClose}
+            title={isCollapsed ? "All processes" : undefined}
+            className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
+              pathname === "/steel"
+                ? "bg-slate-100 text-slate-900"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            } ${isCollapsed ? "h-10 w-10 justify-center" : "h-9 w-full px-3 gap-2"}`}
+          >
+            <Grid3x3 className="h-4 w-4 shrink-0" />
+            {!isCollapsed && <span>All processes</span>}
+          </Link>
+        </div>
+
+        {/* ── New Plan CTA ── */}
+        <div className={`px-2 pt-2 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
+          <Link
+            href="/steel/p01/new"
             onClick={onClose}
             title={isCollapsed ? "New Production Plan" : undefined}
             className={`flex items-center bg-slate-800 hover:bg-slate-900 text-white rounded-xl transition-colors ${
@@ -116,7 +134,7 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
         <nav className="flex-1 px-2 py-2 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
           {!isCollapsed && (
             <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
-              Planning
+              P01 — Planning
             </p>
           )}
           {filteredNav.map((item) => {

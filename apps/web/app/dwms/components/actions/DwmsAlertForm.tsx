@@ -136,6 +136,31 @@ export default function DwmsAlertForm({ onCreated, onCancel }: DwmsAlertFormProp
         {message && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">{message}</div>
         )}
+        <div>
+          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">Title <span className="text-red-500">*</span></label>
+          <input
+            required
+            value={raiseTitle}
+            onFocus={() => setFocusedField('title')}
+            onChange={(e) => setRaiseTitle(e.target.value)}
+            placeholder="Alert title (e.g. Compressor pressure drop)"
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">Description <span className="text-red-500">*</span></label>
+          <textarea
+            required
+            rows={4}
+            value={raiseDescription}
+            onFocus={() => setFocusedField('description')}
+            onChange={(e) => setRaiseDescription(e.target.value)}
+            placeholder="Describe what happened, where, impact, and any immediate action taken..."
+            className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+          />
+        </div>
+
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">Severity</label>
@@ -149,34 +174,9 @@ export default function DwmsAlertForm({ onCreated, onCancel }: DwmsAlertFormProp
               onChange={setRaiseSeverity}
               onFocus={() => setFocusedField('severity')}
               placeholder="Select severity"
-              triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+              triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
             />
           </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">Title <span className="text-red-500">*</span></label>
-          <input
-            required
-            value={raiseTitle}
-            onFocus={() => setFocusedField('title')}
-            onChange={(e) => setRaiseTitle(e.target.value)}
-            placeholder="Alert title (e.g. Compressor pressure drop)"
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">Description <span className="text-red-500">*</span></label>
-          <textarea
-            required
-            rows={4}
-            value={raiseDescription}
-            onFocus={() => setFocusedField('description')}
-            onChange={(e) => setRaiseDescription(e.target.value)}
-            placeholder="Describe what happened, where, impact, and any immediate action taken..."
-            className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-          />
         </div>
 
         <div>
@@ -223,7 +223,7 @@ export default function DwmsAlertForm({ onCreated, onCancel }: DwmsAlertFormProp
               searchEnabled
               searchPlaceholder="Search task or operator"
               emptyMessage="No matching tasks found."
-              triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+              triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
             />
           </div>
         )}
@@ -263,7 +263,7 @@ export default function DwmsAlertForm({ onCreated, onCancel }: DwmsAlertFormProp
               onChange={setRaiseDepartmentId}
               onFocus={() => setFocusedField('department')}
               placeholder="Choose a department..."
-              triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+              triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
             />
           </div>
         )}

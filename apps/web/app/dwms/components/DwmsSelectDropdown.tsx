@@ -170,7 +170,15 @@ export default function DwmsSelectDropdown(props: Props) {
   };
 
   return (
-    <div ref={containerRef} className={cn('relative w-full min-w-[0]', open ? 'z-[100020]' : 'z-auto', className)}>
+    <div
+      ref={containerRef}
+      className={cn(
+        'relative w-full min-w-[0]',
+        isEmployeeSelector ? 'min-w-[22rem]' : 'min-w-[14rem]',
+        open ? 'z-[100020]' : 'z-auto',
+        className
+      )}
+    >
       <button
         type="button"
         onClick={() => {
@@ -185,8 +193,8 @@ export default function DwmsSelectDropdown(props: Props) {
         className={cn(
           'flex w-full items-center justify-between gap-3 border bg-white text-left text-sm text-slate-800 shadow-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-70',
           isEmployeeSelector
-            ? 'min-h-11 rounded-xl border-zinc-200 px-4 py-3 font-medium hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-900/60'
-            : 'h-10 rounded-full border-slate-200 px-3 py-2 hover:border-blue-200 hover:bg-slate-50 focus:ring-4 focus:ring-blue-100',
+            ? 'min-h-11 min-w-[22rem] rounded-xl border-slate-200 bg-white px-4 py-3 font-medium hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20'
+            : 'h-10 min-w-[14rem] rounded-full border-slate-200 px-3 py-2 hover:border-blue-200 hover:bg-slate-50 focus:ring-4 focus:ring-blue-100',
           triggerClassName
         )}
       >
@@ -210,8 +218,8 @@ export default function DwmsSelectDropdown(props: Props) {
           className={cn(
             'absolute left-0 right-0 z-[100030] mt-1.5 overflow-hidden border bg-white shadow-2xl animate-in fade-in slide-in-from-top-2 duration-100',
             isEmployeeSelector
-              ? 'rounded-xl border-border-app p-1.5'
-              : 'rounded-2xl border-slate-200 p-1.5',
+              ? 'min-w-[22rem] rounded-xl border-border-app p-1.5'
+              : 'min-w-[14rem] rounded-2xl border-slate-200 p-1.5',
             contentClassName
           )}
         >
@@ -259,12 +267,17 @@ export default function DwmsSelectDropdown(props: Props) {
                       </AvatarFallback>
                     </Avatar>
                   )}
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 pr-2">
                     <span className={cn('block truncate', optionIsEmployee ? 'font-semibold' : 'font-medium')}>
                       {option.label}
                     </span>
                     {(option.secondaryLabel || option.description) && (
-                      <span className={cn('mt-0.5 block truncate', optionIsEmployee ? 'text-[10px] font-medium opacity-60' : 'text-xs text-slate-400')}>
+                      <span
+                        className={cn(
+                          'mt-0.5 block whitespace-normal break-words leading-4',
+                          optionIsEmployee ? 'text-[10px] font-medium opacity-60' : 'text-xs text-slate-400'
+                        )}
+                      >
                         {option.secondaryLabel}
                         {option.secondaryLabel && option.description ? ' - ' : ''}
                         {option.description}

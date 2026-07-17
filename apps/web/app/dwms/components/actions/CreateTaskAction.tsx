@@ -423,7 +423,7 @@ export default function CreateTaskAction() {
                   onFocus={() => setFocusedField('title')}
                   onBlur={() => setFocusedField('general')}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-900/60"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                 />
               </div>
 
@@ -438,7 +438,7 @@ export default function CreateTaskAction() {
                   onBlur={() => setFocusedField('general')}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
-                  className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-900/60"
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                 />
               </div>
 
@@ -468,7 +468,7 @@ export default function CreateTaskAction() {
                     onChange={(value) => setFrequency(value as DwmsFrequency)}
                     onFocus={() => setFocusedField('frequency')}
                     placeholder="Select frequency"
-                    triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-900/60"
+                    triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                   />
                 </div>
               </div>
@@ -486,7 +486,7 @@ export default function CreateTaskAction() {
                       onFocus={() => setFocusedField('dueDate')}
                       onBlur={() => setFocusedField('general')}
                       onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full cursor-pointer rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-900/60"
+                      className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                     />
                   </div>
                 ) : (
@@ -498,7 +498,7 @@ export default function CreateTaskAction() {
                       type="text"
                       disabled
                       value="Runs on automated schedule"
-                      className="w-full cursor-not-allowed rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-semibold italic text-muted-app/60 shadow-sm outline-none dark:border-zinc-800 dark:bg-zinc-900/30"
+                      className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold italic text-muted-app/60 shadow-sm outline-none"
                     />
                   </div>
                 )}
@@ -513,7 +513,7 @@ export default function CreateTaskAction() {
                     onChange={(value) => setPriority(value as DwmsPriority)}
                     onFocus={() => setFocusedField('priority')}
                     placeholder="Select priority"
-                    triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-900/60"
+                    triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                   />
                 </div>
               </div>
@@ -558,7 +558,7 @@ export default function CreateTaskAction() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white py-4 text-sm font-semibold text-text-app shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-900"
+                className="mt-2 flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-4 text-sm font-semibold text-text-app shadow-sm transition hover:bg-slate-50"
               >
                 <Send className="h-4 w-4 shrink-0 text-muted-app" strokeWidth={1.5} />
                 <span>{loading ? 'Assigning...' : 'Assign task'}</span>

@@ -21,6 +21,7 @@ type EmployeeImportRow = {
     dateOfBirth?: Date;
     nationalId?: string;
     employmentStatus?: string;
+    employmentType?: string;
     dateJoined?: Date;
     skillLevel?: string;
     trainingNeeded?: boolean;
@@ -523,6 +524,7 @@ export class EmployeeService {
                 dateOfBirth: row.dateOfBirth ?? null,
                 nationalId: row.nationalId ?? null,
                 employmentStatus: this.toEmploymentStatus(row.employmentStatus) as any,
+                employmentType: this.toEmploymentType(row.employmentType) as any,
                 jobTitle: row.jobTitle ?? null,
                 dateJoined: row.dateJoined ?? null,
                 workStation: row.workStation ?? row.section ?? null,
@@ -598,7 +600,14 @@ export class EmployeeService {
             const companyEmail = this.cleanEmail(this.valueAt(source, headerMap, ['company email', 'email address', 'email', 'email id']));
             const personalEmail = this.cleanEmail(this.valueAt(source, headerMap, ['personal email']));
             const phone = this.cleanPhone(this.valueAt(source, headerMap, ['mobile number', 'phone number', 'phone']));
+            const employeeCode = this.cleanString(this.valueAt(source, headerMap, ['employee code', 'employee numbers']));
             const rowNumber = i + 1;
+
+            // Template rows with no identifying data (e.g. a leftover formula fill-down in an
+            // unused row) aren't real employees — skip them silently instead of reporting an issue.
+            if (!firstName && !middleName && !lastName && !fullName && !companyEmail && !personalEmail && !phone && !employeeCode) {
+                continue;
+            }
 
             const names = this.resolveNames(firstName, middleName, lastName, fullName);
             const email = companyEmail || personalEmail || this.generatedImportEmail(source, headerMap, names, rowNumber);
@@ -610,7 +619,7 @@ export class EmployeeService {
 
             rows.push({
                 rowNumber,
-                employeeCode: this.cleanString(this.valueAt(source, headerMap, ['employee code'])),
+                employeeCode,
                 firstName: names.firstName,
                 middleName,
                 lastName: names.lastName,
@@ -618,7 +627,7 @@ export class EmployeeService {
                 email,
                 personalEmail,
                 phone,
-                department: this.cleanString(this.valueAt(source, headerMap, ['department', 'employees department location', 'employees department'])),
+                department: this.cleanString(this.valueAt(source, headerMap, ['department', 'employees department location', 'employees department', 'employee s current department', 'current department'])),
                 section: this.cleanString(this.valueAt(source, headerMap, ['section area', 'sub section line'])),
                 workStation: this.cleanString(this.valueAt(source, headerMap, ['work location'])),
                 jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation'])),
@@ -626,6 +635,7 @@ export class EmployeeService {
                 dateOfBirth: this.toDate(this.valueAt(source, headerMap, ['date of birth'])),
                 nationalId: this.cleanString(this.valueAt(source, headerMap, ['national id passport no', 'national id'])),
                 employmentStatus: this.cleanString(this.valueAt(source, headerMap, ['employment status', 'employee status'])),
+                employmentType: this.cleanString(this.valueAt(source, headerMap, ['employment type'])),
                 dateJoined: this.toDate(this.valueAt(source, headerMap, ['date of joining', 'date joined'])),
                 skillLevel: this.cleanString(this.valueAt(source, headerMap, ['skill level'])),
                 trainingNeeded: this.toBoolean(this.valueAt(source, headerMap, ['training needed'])),
@@ -840,6 +850,19 @@ export class EmployeeService {
             'contract ended': 'CONTRACT_ENDED',
         };
         return map[key] ?? 'ACTIVE';
+    }
+
+    private toEmploymentType(value?: string) {
+        const key = this.normalizeKey(value);
+        const map: Record<string, string> = {
+            'full time': 'FULL_TIME',
+            'part time': 'PART_TIME',
+            contract: 'CONTRACT',
+            intern: 'INTERN',
+            internship: 'INTERN',
+            casual: 'CASUAL',
+        };
+        return map[key] ?? null;
     }
 
     private toSkillLevel(value?: string) {

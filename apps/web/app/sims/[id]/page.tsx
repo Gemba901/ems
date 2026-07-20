@@ -13,8 +13,11 @@ import {
   SuggestionStatus,
   ImplementationStatus,
   SuggestionCategory,
+  DecisionType,
   calcWeight,
+  uploadSuggestionImage,
 } from "@/services/sims.service";
+import { CommitteeService } from "@/services/committee.service";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -30,20 +33,103 @@ import {
 } from "lucide-react";
 
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
+  WAITING_FOR_REVIEW:          "Waiting for Review",
   UNDER_REVIEW:                "Under Review",
   ON_HOLD:                     "On Hold",
   SELECTED_FOR_SGA:            "Selected for SGA",
   APPROVED_FOR_IMPLEMENTATION: "Approved for Implementation",
+  IMPLEMENTED:                 "Implemented",
   REJECTED:                    "Rejected",
 };
 
 const STATUS_BADGE: Record<SuggestionStatus, string> = {
+  WAITING_FOR_REVIEW:          "bg-slate-100 text-slate-600",
   UNDER_REVIEW:                "bg-amber-100 text-amber-700",
   ON_HOLD:                     "bg-orange-100 text-orange-700",
   SELECTED_FOR_SGA:            "bg-indigo-100 text-indigo-700",
-  APPROVED_FOR_IMPLEMENTATION: "bg-emerald-100 text-emerald-700",
+  APPROVED_FOR_IMPLEMENTATION: "bg-teal-100 text-teal-700",
+  IMPLEMENTED:                 "bg-emerald-100 text-emerald-700",
   REJECTED:                    "bg-red-100 text-red-700",
 };
+
+const DECISION_TYPE_LABELS: Record<DecisionType, string> = {
+  WORKPLACE_CORRECTION: "Workplace Suggestion & Correction",
+  DAILY_KAIZEN:         "Daily Gemba Kaizen",
+};
+
+type DecisionField = { key: string; label: string; required: boolean; type: "text" | "textarea" | "date" };
+
+const WORKPLACE_CORRECTION_FIELDS: DecisionField[] = [
+  { key: "action",          label: "Action",              required: true,  type: "text" },
+  { key: "responsible",     label: "Responsible Person",  required: true,  type: "text" },
+  { key: "supportRequired", label: "Support Required",    required: false, type: "text" },
+  { key: "targetDate",      label: "Target Date",         required: true,  type: "date" },
+];
+
+const DAILY_KAIZEN_FIELDS: DecisionField[] = [
+  { key: "owner",          label: "Improvement Owner", required: true,  type: "text" },
+  { key: "supportTeam",    label: "Support Team",      required: false, type: "text" },
+  { key: "targetDate",     label: "Target Date",       required: true,  type: "date" },
+  { key: "expectedResult", label: "Expected Result",   required: true,  type: "textarea" },
+];
+
+const SGA_FIELDS: DecisionField[] = [
+  { key: "problemStatement", label: "Problem Statement", required: true,  type: "textarea" },
+  { key: "teamLeader",       label: "Team Leader",       required: true,  type: "text" },
+  { key: "teamMembers",      label: "Team Members",      required: false, type: "text" },
+  { key: "target",           label: "Target",            required: true,  type: "text" },
+  { key: "timeline",         label: "Timeline",          required: true,  type: "text" },
+  { key: "reviewDate",       label: "Review Date",       required: false, type: "date" },
+];
+
+const ON_HOLD_FIELDS: DecisionField[] = [
+  { key: "reason",           label: "Reason",             required: true,  type: "textarea" },
+  { key: "responsible",      label: "Responsible Person", required: false, type: "text" },
+  { key: "supportRequired",  label: "Support Required",   required: false, type: "text" },
+  { key: "reviewDate",       label: "Review Date",        required: true,  type: "date" },
+  { key: "nextAction",       label: "Next Action",        required: false, type: "text" },
+];
+
+function humanizeKey(key: string) {
+  return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+}
+
+function DecisionFieldsForm({
+  fields, values, onChange,
+}: {
+  fields: DecisionField[];
+  values: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {fields.map((f) => (
+        <div key={f.key}>
+          <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+            {f.label}{f.required && <span className="text-red-500"> *</span>}
+          </label>
+          {f.type === "textarea" ? (
+            <textarea
+              rows={2}
+              required={f.required}
+              value={values[f.key] ?? ""}
+              onChange={(e) => onChange(f.key, e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+            />
+          ) : (
+            <input
+              type={f.type}
+              required={f.required}
+              value={values[f.key] ?? ""}
+              onChange={(e) => onChange(f.key, e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const IMPLEMENTATION_STATUS_LABELS: Record<ImplementationStatus, string> = {
   WORK_IN_PROGRESS: "Work in Progress",
@@ -89,17 +175,20 @@ function formatDateTime(iso: string) {
 }
 
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
-  UNDER_REVIEW:               ["ON_HOLD", "SELECTED_FOR_SGA", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
-  ON_HOLD:                    ["UNDER_REVIEW", "SELECTED_FOR_SGA", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
-  SELECTED_FOR_SGA:           ["UNDER_REVIEW", "ON_HOLD", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
-  APPROVED_FOR_IMPLEMENTATION: ["REJECTED", "SELECTED_FOR_SGA"],
-  REJECTED:                   [],
+  WAITING_FOR_REVIEW:          ["UNDER_REVIEW"],
+  UNDER_REVIEW:                ["ON_HOLD", "SELECTED_FOR_SGA", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
+  ON_HOLD:                     ["UNDER_REVIEW", "SELECTED_FOR_SGA", "APPROVED_FOR_IMPLEMENTATION", "REJECTED"],
+  SELECTED_FOR_SGA:            ["IMPLEMENTED", "REJECTED"],
+  APPROVED_FOR_IMPLEMENTATION: ["IMPLEMENTED", "REJECTED"],
+  IMPLEMENTED:                 [],
+  REJECTED:                    [],
 };
 
 
 function TimelineIcon({ status }: { status: SuggestionStatus }) {
   const cls = "h-3.5 w-3.5";
-  if (status === "APPROVED_FOR_IMPLEMENTATION") return <CheckCircle2 className={`${cls} text-emerald-500`} />;
+  if (status === "IMPLEMENTED")                 return <CheckCircle2 className={`${cls} text-emerald-500`} />;
+  if (status === "APPROVED_FOR_IMPLEMENTATION") return <CheckCircle2 className={`${cls} text-teal-500`} />;
   if (status === "REJECTED")                    return <XCircle      className={`${cls} text-red-500`} />;
   if (status === "ON_HOLD")                     return <AlertCircle  className={`${cls} text-orange-500`} />;
   if (status === "SELECTED_FOR_SGA")            return <AlertCircle  className={`${cls} text-indigo-500`} />;
@@ -123,7 +212,7 @@ function ReviewTimeline({ suggestion, reviews }: { suggestion: Suggestion; revie
           </div>
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Under Review</span>
+              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">Submitted</span>
               <span className="text-xs text-slate-400">{formatDateTime(suggestion.createdAt)}</span>
             </div>
             <p className="text-xs text-slate-500 mt-1">Originator: <span className="font-medium text-slate-600">{submitter}</span></p>
@@ -165,11 +254,16 @@ export default function SuggestionDetailPage() {
   const role = authUser?.roleLevel;
 
   // Review form state
-  const [newStatus, setNewStatus]     = useState<SuggestionStatus | "">("");
-  const [note, setNote]               = useState("");
+  const [newStatus, setNewStatus]         = useState<SuggestionStatus | "">("");
+  const [note, setNote]                   = useState("");
+  const [decisionType, setDecisionType]   = useState<DecisionType | "">("");
+  const [decisionFields, setDecisionFields] = useState<Record<string, string>>({});
+  const [evidenceFile, setEvidenceFile]   = useState<File | null>(null);
+  const [reviewError, setReviewError]     = useState<string | null>(null);
+
+  // Implementation Progress panel (WORK_IN_PROGRESS etc — separate from the decision fields above)
   const [implStatus, setImplStatus]   = useState<ImplementationStatus | "">("");
   const [implNote, setImplNote]       = useState("");
-  const [reviewError, setReviewError] = useState<string | null>(null);
 
   // Implementation status update
   const [showImplUpdate, setShowImplUpdate] = useState(false);
@@ -187,6 +281,12 @@ export default function SuggestionDetailPage() {
     enabled: !!accessToken,
   });
 
+  const { data: myCommittees } = useQuery({
+    queryKey: ["my-committees"],
+    queryFn: () => CommitteeService.getMyCommittees(accessToken!),
+    enabled: !!accessToken,
+  });
+
   const loading = suggestionLoading;
   const error = suggestionErr ? (suggestionErr as any).message : null;
 
@@ -194,19 +294,22 @@ export default function SuggestionDetailPage() {
   const isReviewerRole = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
   const isHODOfDept = role === Role.HOD && suggestion?.employee?.department?.id === currentUser?.departmentId;
   const isAssignedHOD = suggestion?.hodId === currentUser?.id;
+  const isCommitteeMemberForSuggestion =
+    !!suggestion?.committeeId && (myCommittees ?? []).some((c) => c.id === suggestion.committeeId);
 
-  const canReview = isReviewerRole || isHODOfDept;
-  const canUpdateImplementation = isReviewerRole || isHODOfDept;
+  const canReview = isReviewerRole || isHODOfDept || isCommitteeMemberForSuggestion;
+  const canUpdateImplementation = isReviewerRole || isHODOfDept || isCommitteeMemberForSuggestion;
 
   const reviewMutation = useMutation({
-    mutationFn: (payload: { statusChanged: SuggestionStatus; note?: string; implementationStatus?: ImplementationStatus; implementationNote?: string }) =>
+    mutationFn: (payload: { statusChanged: SuggestionStatus; note?: string; decisionType?: DecisionType; decisionDetails?: Record<string, any> }) =>
       SimsService.review(suggestion!.id, payload, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sims-detail", id] });
       setNewStatus("");
       setNote("");
-      setImplStatus("");
-      setImplNote("");
+      setDecisionType("");
+      setDecisionFields({});
+      setEvidenceFile(null);
     },
     onError: (err: any) => setReviewError(err.message),
   });
@@ -226,15 +329,32 @@ export default function SuggestionDetailPage() {
   const reviewing = reviewMutation.isPending;
   const updatingImpl = implMutation.isPending;
 
-  const handleReview = (e: React.FormEvent) => {
+  const updateDecisionField = (key: string, value: string) =>
+    setDecisionFields((f) => ({ ...f, [key]: value }));
+
+  const handleReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStatus || !suggestion) return;
     setReviewError(null);
+
+    let decisionDetails: Record<string, any> | undefined;
+    if (newStatus === "APPROVED_FOR_IMPLEMENTATION" || newStatus === "SELECTED_FOR_SGA" || newStatus === "ON_HOLD") {
+      decisionDetails = { ...decisionFields };
+      if (newStatus === "APPROVED_FOR_IMPLEMENTATION" && decisionType === "DAILY_KAIZEN" && evidenceFile) {
+        try {
+          decisionDetails.evidence = await uploadSuggestionImage(evidenceFile, accessToken!);
+        } catch (err: any) {
+          setReviewError(err.message || "Failed to upload evidence image");
+          return;
+        }
+      }
+    }
+
     reviewMutation.mutate({
       statusChanged: newStatus,
       note: note || undefined,
-      implementationStatus: implStatus || undefined,
-      implementationNote: implNote || undefined,
+      decisionType: newStatus === "APPROVED_FOR_IMPLEMENTATION" ? (decisionType || undefined) : undefined,
+      decisionDetails,
     });
   };
 
@@ -358,6 +478,33 @@ export default function SuggestionDetailPage() {
                   </div>
                 )}
 
+                {suggestion.status === "IMPLEMENTED" && suggestion.decisionDetails && (
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <h3 className="text-sm font-bold text-emerald-900 uppercase tracking-widest">
+                        Implementation Evidence
+                        {suggestion.decisionType && ` — ${DECISION_TYPE_LABELS[suggestion.decisionType]}`}
+                      </h3>
+                    </div>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {Object.entries(suggestion.decisionDetails).map(([key, value]) => (
+                        <div key={key}>
+                          <dt className="text-[10px] font-semibold text-emerald-700/70 uppercase tracking-wider">{humanizeKey(key)}</dt>
+                          <dd className="text-sm text-emerald-900 mt-0.5 break-words">
+                            {key === "evidence" && typeof value === "string" ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={value} alt="Evidence" className="mt-1 max-h-48 rounded-lg border border-emerald-200" />
+                            ) : (
+                              String(value)
+                            )}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
+
                 <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
                   <ReviewTimeline suggestion={suggestion} reviews={suggestion.reviews} />
                 </div>
@@ -445,6 +592,25 @@ export default function SuggestionDetailPage() {
                         <Info className="h-4 w-4 mt-0.5 shrink-0" />
                         Final status reached.
                       </div>
+                    ) : suggestion.status === "WAITING_FOR_REVIEW" ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-slate-500">
+                          This suggestion is waiting for review. Start reviewing to move it into the pipeline.
+                        </p>
+                        <button
+                          onClick={() => {
+                            setReviewError(null);
+                            reviewMutation.mutate({ statusChanged: "UNDER_REVIEW" });
+                          }}
+                          disabled={reviewing}
+                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                        >
+                          {reviewing ? "Starting..." : "Start Review"}
+                        </button>
+                        {reviewError && (
+                          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{reviewError}</p>
+                        )}
+                      </div>
                     ) : (
                       <form onSubmit={handleReview} className="space-y-4">
                         <div>
@@ -454,7 +620,12 @@ export default function SuggestionDetailPage() {
                           <select
                             required
                             value={newStatus}
-                            onChange={(e) => setNewStatus(e.target.value as SuggestionStatus)}
+                            onChange={(e) => {
+                              setNewStatus(e.target.value as SuggestionStatus);
+                              setDecisionType("");
+                              setDecisionFields({});
+                              setEvidenceFile(null);
+                            }}
                             className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                           >
                             <option value="">Select status...</option>
@@ -464,60 +635,69 @@ export default function SuggestionDetailPage() {
                           </select>
                         </div>
 
-                        {newStatus !== "" && (
+                        {newStatus === "APPROVED_FOR_IMPLEMENTATION" && (
                           <div className="space-y-4 pt-2 border-t border-slate-100">
-                             <div>
+                            <div>
                               <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                {newStatus === "REJECTED" ? "Reason for Rejection" : 
-                                 newStatus === "ON_HOLD" ? "Reason for Holding" : 
-                                 "Implementation Status / Reason"}
+                                Decision Type<span className="text-red-500"> *</span>
                               </label>
                               <select
-                                value={implStatus}
-                                onChange={(e) => setImplStatus(e.target.value as ImplementationStatus)}
-                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                                required
+                                value={decisionType}
+                                onChange={(e) => { setDecisionType(e.target.value as DecisionType); setDecisionFields({}); }}
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                               >
-                                <option value="">Select (optional)...</option>
-                                {Object.entries(IMPLEMENTATION_STATUS_LABELS)
-                                  .filter(([val]) => {
-                                    if (newStatus === "REJECTED" && val === "IMPLEMENTED") return false;
-                                    return true;
-                                  })
-                                  .map(([val, label]) => (
+                                <option value="">Select decision type...</option>
+                                {Object.entries(DECISION_TYPE_LABELS).map(([val, label]) => (
                                   <option key={val} value={val}>{label}</option>
                                 ))}
                               </select>
                             </div>
-                            <div>
-                              <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                {newStatus === "REJECTED" ? "Rejection Details" : 
-                                 newStatus === "ON_HOLD" ? "Hold Details" : 
-                                 "Implementation Direction / Note"}
-                              </label>
-                              <textarea
-                                rows={3}
-                                value={implNote}
-                                onChange={(e) => setImplNote(e.target.value)}
-                                placeholder={
-                                  newStatus === "REJECTED" ? "Why is this being rejected?" :
-                                  newStatus === "ON_HOLD" ? "What is needed to proceed?" :
-                                  "Give direction or notes for implementation..."
-                                }
-                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
-                              />
-                            </div>
+                            {decisionType === "WORKPLACE_CORRECTION" && (
+                              <DecisionFieldsForm fields={WORKPLACE_CORRECTION_FIELDS} values={decisionFields} onChange={updateDecisionField} />
+                            )}
+                            {decisionType === "DAILY_KAIZEN" && (
+                              <>
+                                <DecisionFieldsForm fields={DAILY_KAIZEN_FIELDS} values={decisionFields} onChange={updateDecisionField} />
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                    Before/After Evidence (optional)
+                                  </label>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => setEvidenceFile(e.target.files?.[0] ?? null)}
+                                    className="text-xs w-full text-slate-500"
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {newStatus === "SELECTED_FOR_SGA" && (
+                          <div className="pt-2 border-t border-slate-100">
+                            <DecisionFieldsForm fields={SGA_FIELDS} values={decisionFields} onChange={updateDecisionField} />
+                          </div>
+                        )}
+
+                        {newStatus === "ON_HOLD" && (
+                          <div className="pt-2 border-t border-slate-100">
+                            <DecisionFieldsForm fields={ON_HOLD_FIELDS} values={decisionFields} onChange={updateDecisionField} />
                           </div>
                         )}
 
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Review Notes
+                            {newStatus === "REJECTED" ? "Reason for Rejection" : "Review Notes"}
+                            {newStatus === "REJECTED" && <span className="text-red-500"> *</span>}
                           </label>
                           <textarea
                             rows={4}
+                            required={newStatus === "REJECTED"}
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
-                            placeholder="Enter evaluation notes..."
+                            placeholder={newStatus === "REJECTED" ? "Why is this being rejected?" : "Enter evaluation notes..."}
                             className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
                           />
                         </div>

@@ -96,6 +96,18 @@ enum EmploymentType {
   CASUAL
 }
 
+enum TicketType {
+  SYSTEM_TICKET
+  COMPANY_TICKET  
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  ARCHIVED
+}
+
 //organization
 model Organization {
   id           String       @id @default(uuid())
@@ -128,6 +140,11 @@ model Organization {
   calendarEvents       CalendarEvent[]
   notices              Notice[]
   alerts               Alert[]
+  tickets              Tickets[]
+
+  // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
+  sgaCommitteeId String?
+  sgaCommittee   SteeringCommittee? @relation("OrgSgaCommittee", fields: [sgaCommitteeId], references: [id], onDelete: SetNull)
 }
 
 //specific user
@@ -205,7 +222,7 @@ model Employee {
   id             String  @id @default(uuid())
   firstName      String
   lastName       String
-  email          String
+  email          String?
   phone          String?
   departmentId   String?
   organizationId String
@@ -262,6 +279,7 @@ model Employee {
   hrRecordOwnerId    String?
   hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)
   hrManagedEmployees Employee[] @relation("HRRecordOwner")
+  
 
   department            Department?               @relation(fields: [departmentId], references: [id])
   organization          Organization              @relation(fields: [organizationId], references: [id])
@@ -288,6 +306,9 @@ model Employee {
   taskInstances         TaskInstance[]
   alertsRaised          Alert[]            @relation("AlertsRaised")
   alertsAgainst         Alert[]            @relation("AlertsAgainst")
+  ticketsRaised         Tickets[]          @relation("ticketsRaisedBy")
+  ticketUpdates         TicketUpdate[]     
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -318,6 +339,8 @@ model SteeringCommittee {
 
   organization Organization              @relation(fields: [organizationId], references: [id])
   members      SteeringCommitteeMember[]
+  suggestions  Suggestion[]
+  designatedForOrgs Organization[]       @relation("OrgSgaCommittee")
 }
 
 model SteeringCommitteeMember {
@@ -368,14 +391,57 @@ model Notification {
   @@index([employeeId, module])
 }
 
+// TICKETING SYSTEM
+
+model Tickets {
+  id          String           @id @default(uuid())
+  organizationId String
+  raisedById  String
+  type        TicketType
+  module      String    // "SIMS", "LEAVE", "ATTENDANCE", "HR"
+  subject     String
+  message     String
+  department  String?
+  status      TicketStatus     @default(OPEN)
+  updates     TicketUpdate[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  raisedBy     Employee      @relation("ticketsRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([raisedById, createdAt])
+}
+
+model TicketUpdate {
+  id                String        @id @default(uuid())
+  ticketId          String
+  updatedById       String
+  statusChanged     TicketStatus?
+  typeChanged       TicketType?
+  note              String?
+  createdAt         DateTime      @default(now())
+
+  ticket            Tickets   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  updatedBy         Employee @relation(fields: [updatedById], references: [id])
+}
+
 // SIMS: Suggestions and Idea Management System
 
 enum SuggestionStatus {
+  WAITING_FOR_REVIEW
   UNDER_REVIEW
   APPROVED_FOR_IMPLEMENTATION
   REJECTED
   ON_HOLD
   SELECTED_FOR_SGA
+  IMPLEMENTED
+}
+
+enum DecisionType {
+  WORKPLACE_CORRECTION
+  DAILY_KAIZEN
 }
 
 enum ImplementationStatus {
@@ -402,26 +468,31 @@ enum SuggestionCategory {
 }
 
 model Suggestion {
-  id                   String                @id @default(uuid())
-  title                String
-  description          String
-  imageUrl             String?
-  status               SuggestionStatus      @default(UNDER_REVIEW)
-  implementationStatus ImplementationStatus?
-  implementationNote   String?
-  categories           SuggestionCategory[]  @default([])
-  isAnonymous          Boolean               @default(false)
-  employeeId           String
-  organizationId       String
-  departmentId         String?
-  hodId                String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  id                     String                @id @default(uuid())
+  title                  String
+  description            String
+  imageUrl               String?
+  status                 SuggestionStatus      @default(WAITING_FOR_REVIEW)
+  implementationStatus   ImplementationStatus?
+  implementationNote     String?
+  decisionType           DecisionType?
+  decisionDetails        Json?
+  categories             SuggestionCategory[]  @default([])
+  isAnonymous            Boolean               @default(false)
+  employeeId             String
+  organizationId         String
+  departmentId           String?
+  hodId                  String?
+  committeeId            String?
+  forwardedToCommitteeAt DateTime?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
 
   employee     Employee           @relation("EmployeeSuggestions", fields: [employeeId], references: [id])
   organization Organization       @relation(fields: [organizationId], references: [id])
   department   Department?        @relation(fields: [departmentId], references: [id])
   hod          Employee?          @relation("HODSuggestions", fields: [hodId], references: [id], onDelete: SetNull)
+  committee    SteeringCommittee? @relation(fields: [committeeId], references: [id], onDelete: SetNull)
   reviews      SuggestionReview[]
 }
 

@@ -17,7 +17,7 @@ export interface EmployeeProfileData {
   departmentId: string | null;
   organizationId: string;
   status: 'Active' | 'Onboarding' | 'Suspended';
-  email: string;
+  email: string | null;
   phone: string;
   avatarUrl: string | null;
   employmentType: string;

@@ -10,7 +10,7 @@ interface NotificationPayload {
 }
 
 interface EmployeeContact {
-    email: string;
+    email?: string | null;
     phone?: string | null;
     whatsappNumber?: string | null;
     notificationPreferences?: unknown;
@@ -46,7 +46,7 @@ export class ChannelDispatcherService {
         const prefs = parsePrefs(employee.notificationPreferences);
         const dispatches: Promise<void>[] = [];
 
-        if (prefs.email) {
+        if (prefs.email && employee.email) {
             dispatches.push(
                 this.email.send({
                     to: employee.email,

@@ -36,7 +36,7 @@ export class NotificationsService {
         ]);
 
         if (employee) {
-            // fire-and-forget — channel failures must not break the main flow
+            // fire-and-forget, channel failures must not break the main flow
             void this.dispatcher.dispatch(employee, {
                 title: input.title,
                 message: input.message,

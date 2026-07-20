@@ -66,7 +66,7 @@ export interface EmployeeProfile {
   id: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   avatarUrl: string | null;
   departmentId: string | null;

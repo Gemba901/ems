@@ -205,7 +205,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
 
     const allowed = new Map<
       string,
-      { id: string; name: string; email: string; designation: string }
+      { id: string; name: string; email: string | null; designation: string }
     >();
     const addEmployee = (
       e:
@@ -213,7 +213,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
             id: string;
             firstName: string;
             lastName: string;
-            email: string;
+            email: string | null;
             jobTitle?: string | null;
           }
         | null
@@ -234,7 +234,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
         id: string;
         firstName: string;
         lastName: string;
-        email: string;
+        email: string | null;
         jobTitle?: string | null;
       }>,
     ) => {
@@ -403,7 +403,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
 
     const allowed = new Map<
       string,
-      { id: string; name: string; email: string; designation: string }
+      { id: string; name: string; email: string | null; designation: string }
     >();
     const addEmployee = (
       e:
@@ -411,7 +411,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
             id: string;
             firstName: string;
             lastName: string;
-            email: string;
+            email: string | null;
             jobTitle?: string | null;
           }
         | null
@@ -432,7 +432,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
         id: string;
         firstName: string;
         lastName: string;
-        email: string;
+        email: string | null;
         jobTitle?: string | null;
       }>,
     ) => {

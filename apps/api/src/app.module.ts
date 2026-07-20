@@ -20,6 +20,7 @@ import { CalendarModule } from './calendar/calendar.module';
 import { LeaveModule } from './leave/leave.module';
 import { NoticesModule } from './notices/notices.module';
 import { DwmsModule } from './dwms/dwms.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { DwmsModule } from './dwms/dwms.module';
     LeaveModule,
     NoticesModule,
     DwmsModule,
+    TicketsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

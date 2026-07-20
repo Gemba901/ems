@@ -21,6 +21,9 @@ const PAGE_TITLES: Record<string, string> = {
   "/settings": "Settings",
   "/settings/members": "Members",
   "/settings/notifications": "Notifications",
+  "/settings/tickets": "Tickets",
+  "/tickets": "My Tickets",
+  "/tickets/new": "Raise a Ticket",
   "/ems": "Employee Master Data",
   "/ems/employees": "Employee Master Data",
   "/ems/my-profile": "My Profile",
@@ -30,6 +33,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/sims/queue": "Review Queue",
   "/sims/reviews": "Reviews",
   "/sims/analytics": "Analytics",
+  "/sims/committees": "Committee Report",
   "/sims/archived": "Archived",
   "/sims/settings": "SIMS Settings",
   "/calendar": "Calendar",
@@ -42,6 +46,7 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/operations/employees/")) return "Employee Profile";
   if (pathname.startsWith("/ems/employees/")) return "Employee Details";
   if (pathname.startsWith("/sims/")) return "Suggestions";
+  if (pathname.startsWith("/tickets/")) return "Ticket Details";
   if (pathname.startsWith("/admin/organizations/")) return "Organization";
   if (pathname.startsWith("/admin")) return "Admin Console";
   return "";
@@ -97,7 +102,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         >
           <CalendarDays className="h-5 w-5" />
         </Link>
-        <NotificationsBell />
+        <span data-tour="tour-notifications"><NotificationsBell /></span>
 
         <Link
           href="/operations/employees/me"

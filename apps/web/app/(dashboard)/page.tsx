@@ -36,6 +36,7 @@ import { AuthService } from "@/services/auth.service";
 import { useQuery } from "@tanstack/react-query";
 import DashboardHero from "@/components/DashboardHero";
 import DashboardRoleSection from "@/components/DashboardRoleSection";
+import { DashboardTour } from "@/components/onboarding/DashboardTour";
 import { Role } from "@/types/role";
 import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
 import { LeaveService, LEAVE_TYPE_LABELS } from "@/services/leave.service";
@@ -306,6 +307,8 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto space-y-10 pb-16">
 
+      <DashboardTour />
+
       <DashboardHero />
 
       {accessToken && <RemindersStrip token={accessToken} />}
@@ -313,7 +316,7 @@ export default function DashboardPage() {
       {/* <DashboardRoleSection /> */}
 
       {/* Active modules */}
-      <section>
+      <section data-tour="tour-modules">
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Your Modules</h2>

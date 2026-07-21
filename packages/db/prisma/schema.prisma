@@ -127,6 +127,8 @@ model Organization {
   calendarEvents    CalendarEvent[]
   notices           Notice[]
   steelProductionPlans SteelProductionPlan[]
+  steelSourcingOrders  SteelSourcingOrder[]
+  suppliers            Supplier[]
 }
 
 //specific user
@@ -284,6 +286,8 @@ model Employee {
   steelPlansApproved    SteelProductionPlan[]  @relation("SteelPlanApprovedBy")
   steelActivityLogs     SteelPlanActivityLog[]
   steelDepartmentAcks   SteelPlanDepartmentAck[]
+  steelSourcingOrdersCreated  SteelSourcingOrder[]        @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs   SteelSourcingActivityLog[]  @relation("SteelSourcingPerformedBy")
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -864,6 +868,221 @@ enum SteelDepartment {
 }
 
 // One record per customer demand / production plan, carried through P01-A01 -> P01-A12.
+enum SteelMaterialType {
+  SCRAP
+  DRI
+  BILLET
+  ALLOY
+  ADDITIVE
+  FUEL
+  REFRACTORY
+  PACKING_MATERIAL
+  OTHER
+}
+
+enum SupplierApprovalStatus {
+  APPROVED
+  PENDING
+  SUSPENDED
+  BLACKLISTED
+}
+
+enum SupplierRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SteelSourcingStage {
+  A01_REQUIREMENT_REVIEWED
+  A02_MATERIAL_TYPE_IDENTIFIED
+  A03_SUPPLIER_CHECKED
+  A04_SUPPLIER_RISK_REVIEWED
+  A05_QUOTATIONS_COLLECTED
+  A06_SUPPLIER_SELECTED
+  A07_SPEC_CONFIRMED
+  A08_PO_CREATED
+  A09_DELIVERY_CONFIRMED
+  A10_LOGISTICS_PREPARED
+  A11_INTAKE_INFORMED
+  A12_HANDOVER_CLOSED
+}
+
+enum SteelSourcingStatus {
+  DRAFT
+  IN_PROGRESS
+  ON_HOLD
+  PO_ISSUED
+  CLOSED
+  CANCELLED
+}
+
+// Identifies each of the 12 sourcing activities for the audit trail
+enum SteelSourcingActivity {
+  A01
+  A02
+  A03
+  A04
+  A05
+  A06
+  A07
+  A08
+  A09
+  A10
+  A11
+  A12
+}
+
+// Approved supplier master — checked at P02-A03/A04, referenced by every sourcing order.
+model Supplier {
+  id              String                   @id @default(uuid())
+  organizationId  String
+  name            String
+  code            String?
+  materialTypes   SteelMaterialType[]      @default([])
+  approvalStatus  SupplierApprovalStatus   @default(PENDING)
+  rejectionCount  Int                      @default(0)
+  qualityScore    Float?
+  deliveryScore   Float?
+  contactPerson   String?
+  phone           String?
+  email           String?
+  country         String?
+  isImportSource  Boolean                  @default(false)
+  notes           String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  organization    Organization              @relation(fields: [organizationId], references: [id])
+  sourcingOrders  SteelSourcingOrder[]
+  quotations      SteelSourcingQuotation[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([organizationId, approvalStatus])
+}
+
+// One record per material requirement sourced against a released production plan,
+// carried through P02-A01 -> P02-A12.
+model SteelSourcingOrder {
+  id              String               @id @default(uuid())
+  sourcingNumber  String               @unique
+  organizationId  String
+  planId          String
+  createdById     String
+  stage           SteelSourcingStage   @default(A01_REQUIREMENT_REVIEWED)
+  status          SteelSourcingStatus  @default(DRAFT)
+
+  // P02-A01 — Review material requirement from production plan
+  materialRequirementNotes  String?
+  requiredByDate            DateTime?
+
+  // P02-A02 — Identify material type needed
+  materialType       SteelMaterialType?
+  materialTypeNotes  String?
+
+  // P02-A03 — Check approved supplier list
+  supplierId                 String?
+  supplierApprovalConfirmed  Boolean?
+  supplierCheckNotes         String?
+
+  // P02-A04 — Check supplier quality and rejection history
+  supplierRiskLevel     SupplierRiskLevel?
+  rejectionRateNotes    String?
+  complaintHistoryNotes String?
+
+  // P02-A05 — Collect price and availability confirmation (see SteelSourcingQuotation)
+  quotationsCollectedAt  DateTime?
+
+  // P02-A06 — Compare supplier options using QCD logic
+  selectedSupplierId  String?
+  qcdComparisonNotes  String?
+
+  // P02-A07 — Confirm technical specification and documents required
+  specificationRequirementNotes  String?
+  certificateRequired             Boolean?
+  documentsRequired               String[]  @default([])
+
+  // P02-A08 — Create purchase order
+  poNumber         String?
+  poItem           String?
+  poQuantity       Float?
+  poPrice          Float?
+  poCurrency       String?
+  poDeliveryTerms  String?
+  poCreatedAt      DateTime?
+
+  // P02-A09 — Confirm delivery schedule with supplier
+  confirmedDispatchDate  DateTime?
+  confirmedArrivalDate   DateTime?
+  vehicleContainerInfo   String?
+
+  // P02-A10 — Prepare import/local logistics if applicable (Imported Billet Route)
+  billOfLading          String?
+  countryOfOrigin       String?
+  portClearanceStatus   String?
+  importLogisticsNotes  String?
+
+  // P02-A11 — Inform raw material intake team
+  intakeInformedAt   DateTime?
+  intakeNotifyNotes  String?
+
+  // P02-A12 — Close sourcing handover to intake
+  handoverClosedAt  DateTime?
+  handoverNotes     String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  organization  Organization              @relation(fields: [organizationId], references: [id])
+  plan          SteelProductionPlan       @relation(fields: [planId], references: [id])
+  createdBy     Employee                  @relation("SteelSourcingCreatedBy", fields: [createdById], references: [id])
+  supplier      Supplier?                 @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  quotations    SteelSourcingQuotation[]
+  activityLogs  SteelSourcingActivityLog[]
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([organizationId, status])
+  @@index([planId])
+}
+
+// P02-A05: one quotation per supplier considered, used for the P02-A06 QCD comparison.
+model SteelSourcingQuotation {
+  id                 String     @id @default(uuid())
+  sourcingId         String
+  supplierId         String
+  price              Float
+  currency           String     @default("USD")
+  quantityAvailable  Float?
+  deliveryDate       DateTime?
+  paymentTerms       String?
+  qualityRiskNotes   String?
+  createdAt          DateTime   @default(now())
+
+  order     SteelSourcingOrder  @relation(fields: [sourcingId], references: [id], onDelete: Cascade)
+  supplier  Supplier            @relation(fields: [supplierId], references: [id])
+
+  @@index([sourcingId])
+}
+
+// Audit trail: every activity performed against a sourcing order is recorded here
+model SteelSourcingActivityLog {
+  id             String                  @id @default(uuid())
+  sourcingId     String
+  activity       SteelSourcingActivity
+  performedById  String
+  notes          String?
+  data           Json?
+  createdAt      DateTime                @default(now())
+
+  order        SteelSourcingOrder  @relation(fields: [sourcingId], references: [id], onDelete: Cascade)
+  performedBy  Employee            @relation("SteelSourcingPerformedBy", fields: [performedById], references: [id])
+
+  @@index([sourcingId])
+}
+
 model SteelProductionPlan {
   id             String                  @id @default(uuid())
   planNumber     String                  @unique
@@ -949,6 +1168,7 @@ model SteelProductionPlan {
   approvedBy      Employee?                 @relation("SteelPlanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
   activityLogs    SteelPlanActivityLog[]
   departmentAcks  SteelPlanDepartmentAck[]
+  sourcingOrders  SteelSourcingOrder[]
 
   @@index([organizationId])
   @@index([organizationId, stage])

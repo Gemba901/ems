@@ -42,7 +42,7 @@ const STEEL_PROCESSES: SteelProcess[] = [
     description: "Arrange raw materials, billets, alloys, additives, or consumables from controlled suppliers.",
     icon: Truck,
     href: "/steel/p02",
-    available: false,
+    available: true,
   },
   {
     code: "P03",

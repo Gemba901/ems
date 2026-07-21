@@ -1,11 +1,8 @@
-"use client"
-
-import Link from "next/link"
-import { usePathname } from "next/navigation"
 import {
   Factory,
   Plus,
   LayoutGrid,
+  Truck,
   Grid3x3,
   ArrowLeft,
   PanelLeftClose,
@@ -24,9 +21,18 @@ interface SteelSidebarProps {
 
 const STEEL_NAV = [
   {
-    name: "Production Plans",
+    name: "P01 — Production Plans",
     href: "/steel/p01",
+    newHref: "/steel/p01/new",
     icon: LayoutGrid,
+    exact: true,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+  },
+  {
+    name: "P02 — Raw Material Sourcing",
+    href: "/steel/p02",
+    newHref: "/steel/p02/new",
+    icon: Truck,
     exact: true,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
   },
@@ -115,18 +121,22 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
           </Link>
         </div>
 
-        {/* ── New Plan CTA ── */}
+{/* ── New record CTA (context-aware: P01 vs P02) ── */}
         <div className={`px-2 pt-2 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
           <Link
-            href="/steel/p01/new"
+            href={pathname.startsWith("/steel/p02") ? "/steel/p02/new" : "/steel/p01/new"}
             onClick={onClose}
-            title={isCollapsed ? "New Production Plan" : undefined}
+            title={isCollapsed ? "New" : undefined}
             className={`flex items-center bg-slate-800 hover:bg-slate-900 text-white rounded-xl transition-colors ${
               isCollapsed ? "h-10 w-10 justify-center" : "h-10 w-full px-3 gap-2"
             }`}
           >
             <Plus className="h-4 w-4 shrink-0" />
-            {!isCollapsed && <span className="text-sm font-medium">New Plan</span>}
+            {!isCollapsed && (
+              <span className="text-sm font-medium">
+                {pathname.startsWith("/steel/p02") ? "New Sourcing Order" : "New Production Plan"}
+              </span>
+            )}
           </Link>
         </div>
 
@@ -134,7 +144,7 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
         <nav className="flex-1 px-2 py-2 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
           {!isCollapsed && (
             <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
-              P01 — Planning
+              Steel Processes
             </p>
           )}
           {filteredNav.map((item) => {

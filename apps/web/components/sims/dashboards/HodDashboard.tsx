@@ -9,7 +9,7 @@ import { KpiCard, ChartCard } from "@/components/sims/sims-ui";
 import { Users, Clock, PauseCircle, CheckCircle2, ClipboardList, ArrowRight } from "lucide-react";
 import {
   computeStatusChartData, computeCategoryChartData, StatusDonutChart, CategoryBarChart,
-  RecentActivityTable, TopContributors, DepartmentLeaderboard,
+  RecentActivityTable, TopContributors, DepartmentLeaderboard, StatusCountStrip,
 } from "./shared";
 
 export default function HodDashboard() {
@@ -58,6 +58,9 @@ export default function HodDashboard() {
         <KpiCard label="On Hold" value={loading ? "—" : kpis.onHold} sub="Paused for clarification" icon={<PauseCircle className="h-5 w-5 text-orange-500" />} accent="bg-orange-50" />
         <KpiCard label="Approved / Implemented" value={loading ? "—" : kpis.approved} sub="Moving forward" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
       </div>
+
+      {/* Per-status breakdown — department suggestions, every status incl. Selected for SGA */}
+      <StatusCountStrip suggestions={suggestions} />
 
       {/* Review CTA banner */}
       {!loading && kpis.awaitingReview > 0 && (

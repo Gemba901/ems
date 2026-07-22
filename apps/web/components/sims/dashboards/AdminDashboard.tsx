@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
   computeStatusChartData, computeCategoryChartData, StatusDonutChart, CategoryBarChart,
-  RecentActivityTable, TopContributors, DepartmentLeaderboard,
+  RecentActivityTable, TopContributors, DepartmentLeaderboard, StatusCountStrip,
 } from "./shared";
 
 const QUICK_LINKS = [
@@ -68,6 +68,9 @@ export default function AdminDashboard() {
         <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="Approved / implemented" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
         <KpiCard label="On Hold" value={loading ? "—" : kpis.onHold} sub={kpis.onHold > 0 ? "paused" : "none"} icon={<AlertCircle className="h-5 w-5 text-orange-500" />} accent="bg-orange-50" />
       </div>
+
+      {/* Per-status breakdown — org-wide suggestions, every status incl. Selected for SGA */}
+      <StatusCountStrip suggestions={suggestions} />
 
       {/* Quick links */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">

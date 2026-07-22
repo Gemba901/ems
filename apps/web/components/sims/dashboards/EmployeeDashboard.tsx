@@ -8,7 +8,7 @@ import { KpiCard, ChartCard } from "@/components/sims/sims-ui";
 import { Lightbulb, Clock, CheckCircle2, Sparkles, Building2 } from "lucide-react";
 import {
   computeStatusChartData, computeCategoryChartData, StatusDonutChart, CategoryBarChart,
-  RecentActivityTable, TopContributors, DepartmentLeaderboard,
+  RecentActivityTable, TopContributors, DepartmentLeaderboard, StatusCountStrip,
 } from "./shared";
 
 export default function EmployeeDashboard() {
@@ -68,6 +68,9 @@ export default function EmployeeDashboard() {
         <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="For implementation" icon={<CheckCircle2 className="h-5 w-5 text-teal-600" />} accent="bg-teal-50" />
         <KpiCard label="Implemented" value={loading ? "—" : kpis.implemented} sub="Shipped ideas" icon={<Sparkles className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
       </div>
+
+      {/* Per-status breakdown — your own suggestions, every status incl. Selected for SGA */}
+      <StatusCountStrip suggestions={mine} />
 
       {/* Org pulse strip — org-wide context, kept visually distinct from personal KPIs */}
       <div className="bg-slate-900 rounded-2xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-2">

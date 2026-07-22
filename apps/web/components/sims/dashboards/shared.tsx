@@ -9,11 +9,31 @@ import {
 import { Star, Trophy, ShieldCheck, ChevronRight, Lightbulb, EyeOff } from "lucide-react";
 import { Suggestion, SuggestionStatus, SuggestionCategory } from "@/services/sims.service";
 import {
-  CATEGORY_LABELS, STATUS_LABELS, CATEGORY_COLORS, STATUS_COLORS,
-  CHART_TOOLTIP_STYLE, StatusPill, CategoryPill,
+  CATEGORY_LABELS, STATUS_LABELS, STATUS_DOTS, CATEGORY_COLORS, STATUS_COLORS,
+  CHART_TOOLTIP_STYLE, StatusPill, CategoryPill, neutralPillClass,
 } from "@/components/sims/sims-ui";
 
 // ─── Status / category chart data + charts ─────────────────────────────────
+
+// Every SuggestionStatus, always shown even at zero — so statuses like
+// SELECTED_FOR_SGA never silently disappear just because no KPI tile buckets them.
+export function StatusCountStrip({ suggestions }: { suggestions: Suggestion[] }) {
+  const statuses = Object.keys(STATUS_LABELS) as SuggestionStatus[];
+  return (
+    <div className="flex flex-wrap gap-2">
+      {statuses.map((st) => {
+        const count = suggestions.filter((s) => s.status === st).length;
+        return (
+          <span key={st} className={neutralPillClass}>
+            <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOTS[st]}`} />
+            {STATUS_LABELS[st]}
+            <span className="text-slate-900 font-bold">{count}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 export function computeStatusChartData(suggestions: Suggestion[]) {
   const statuses = Object.keys(STATUS_COLORS) as SuggestionStatus[];

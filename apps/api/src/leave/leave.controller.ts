@@ -119,11 +119,26 @@ export class LeaveController {
         return this.leave.getYearlyAnalytics(user.organizationId);
     }
 
+    @Get('coverage')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD)
+    getCoverageAlerts(@CurrentUser() user: { userId: string; organizationId: string; roleLevel: string }) {
+        return this.leave.getCoverageAlerts(user.organizationId, user.roleLevel, user.userId);
+    }
+
     // ── Balance ───────────────────────────────────────────────────────────────
 
     @Get('balance')
     getMyBalance(@CurrentUser() user: { userId: string; organizationId: string }) {
         return this.leave.getMyBalance(user.userId, user.organizationId);
+    }
+
+    @Get('balance/summary')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.HOD)
+    getBalanceSummary(
+        @CurrentUser() user: { organizationId: string },
+        @Query('year') year?: string,
+    ) {
+        return this.leave.getBalanceSummary(user.organizationId, year ? parseInt(year) : new Date().getFullYear());
     }
 
     @Get('balance/:employeeId')

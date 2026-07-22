@@ -38,6 +38,12 @@ const PAGE_TITLES: Record<string, string> = {
   "/sims/settings": "SIMS Settings",
   "/calendar": "Calendar",
   "/department": "My Department",
+  "/leave": "Leave Management",
+  "/leave/apply": "Apply for Leave",
+  "/leave/calendar": "Company Leave Calendar",
+  "/leave/manage": "Leave Approval Workspace",
+  "/leave/employees": "Employees",
+  "/leave/policy": "Leave Policy",
 };
 
 function resolveTitle(pathname: string): string {
@@ -45,6 +51,7 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/operations/employees/me")) return "My Profile";
   if (pathname.startsWith("/operations/employees/")) return "Employee Profile";
   if (pathname.startsWith("/ems/employees/")) return "Employee Details";
+  if (pathname.startsWith("/leave/employees/")) return "Employee Leave Profile";
   if (pathname.startsWith("/sims/")) return "Suggestions";
   if (pathname.startsWith("/tickets/")) return "Ticket Details";
   if (pathname.startsWith("/admin/organizations/")) return "Organization";

@@ -594,10 +594,7 @@ export class SimsService {
     userId: string,
     organizationId: string,
   ) {
-    const suggestion = await this.prisma.suggestion.findUnique({
-      where: { id },
-      include: { employee: { select: { departmentId: true } } }
-    });
+    const suggestion = await this.prisma.suggestion.findUnique({ where: { id } });
 
     if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
 
@@ -618,7 +615,7 @@ export class SimsService {
     });
     const roles = userOrgs.map(uo => uo.role.name);
 
-    const isDepartmentHOD = roles.includes(Role.HOD) && updater.departmentId === suggestion.employee?.departmentId;
+    const isDepartmentHOD = roles.includes(Role.HOD) && updater.departmentId === suggestion.departmentId;
     const isSuperAdmin = roles.includes(Role.SUPER_ADMIN);
     const isAdminOrMgmt = roles.some(r => [Role.ADMIN, Role.MANAGEMENT].includes(r as Role));
 

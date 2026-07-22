@@ -292,7 +292,7 @@ export default function SuggestionDetailPage() {
 
   const isSuperAdmin = role === Role.SUPER_ADMIN;
   const isReviewerRole = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
-  const isHODOfDept = role === Role.HOD && suggestion?.employee?.department?.id === currentUser?.departmentId;
+  const isHODOfDept = role === Role.HOD && suggestion?.departmentId === currentUser?.departmentId;
   const isAssignedHOD = suggestion?.hodId === currentUser?.id;
   const isCommitteeMemberForSuggestion =
     !!suggestion?.committeeId && (myCommittees ?? []).some((c) => c.id === suggestion.committeeId);

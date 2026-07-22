@@ -82,6 +82,7 @@ export interface Suggestion {
   isAnonymous: boolean;
   employeeId: string;
   organizationId: string;
+  departmentId: string | null;
   hodId: string | null;
   hod: { id: string; firstName: string; lastName: string } | null;
   decisionType: DecisionType | null;

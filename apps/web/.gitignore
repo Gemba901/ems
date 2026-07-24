@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# next-pwa generated service worker
+/public/sw/
+
 # production
 /build
 

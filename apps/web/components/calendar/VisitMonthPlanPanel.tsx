@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  CalendarService, ClientOrg, VisitPlanSlot,
+  CalendarService, PartnerOrg, VisitPlanSlot,
 } from "@/services/calendar.service";
 import {
   Loader2, Save, Plus, Minus, CalendarDays, CheckCircle2, Building2,
@@ -15,7 +15,7 @@ const MONTHS = [
 ];
 
 interface VisitMonthPlanPanelProps {
-  orgs: ClientOrg[];
+  orgs: PartnerOrg[];
   token: string;
   year: number;
   month: number;

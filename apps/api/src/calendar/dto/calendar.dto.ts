@@ -18,6 +18,11 @@ export class CreateCalendarBlockDto {
 
   @IsString() @IsOptional()
   label?: string;
+
+  // Required when type is BUSY_DAY (personal "Out of Office") — scopes the
+  // block to a single employee instead of the whole org (HOLIDAY stays org-wide).
+  @IsString() @IsOptional()
+  employeeId?: string;
 }
 
 export enum VisitStatusDto {
@@ -179,6 +184,7 @@ export enum EventRecurrencePatternDto {
   DAILY   = 'DAILY',
   WEEKLY  = 'WEEKLY',
   MONTHLY = 'MONTHLY',
+  YEARLY  = 'YEARLY',
 }
 
 export enum InvitationStatusDto {
@@ -231,6 +237,11 @@ export class CreateCalendarEventDto {
 
   @IsArray() @IsString({ each: true }) @IsOptional()
   inviteeIds?: string[];
+
+  // Set for "New Client Visit" quick-created events — free-text name of a
+  // prospect company not yet onboarded as a Partner Organization.
+  @IsString() @IsOptional() @MaxLength(120)
+  prospectOrgName?: string;
 }
 
 export class UpdateCalendarEventDto {
@@ -266,6 +277,9 @@ export class UpdateCalendarEventDto {
 
   @IsEnum(DeleteModeDto) @IsOptional()
   updateMode?: DeleteModeDto;
+
+  @IsString() @IsOptional() @MaxLength(120)
+  prospectOrgName?: string;
 }
 
 export class RespondToInvitationDto {
@@ -336,4 +350,20 @@ export class VisitMonthPlanQueryDto {
 
   @IsInt() @Min(1) @Max(12) @Type(() => Number)
   month!: number;
+}
+
+// ── Custom user filters (Google Calendar-style) ──────────────────────────────
+
+export class CreateCalendarFilterDto {
+  @IsString() @IsNotEmpty() @MaxLength(60)
+  name!: string;
+
+  @IsArray() @IsString({ each: true }) @IsOptional()
+  kinds?: string[];
+
+  @IsArray() @IsString({ each: true }) @IsOptional()
+  orgIds?: string[];
+
+  @IsArray() @IsString({ each: true }) @IsOptional()
+  colors?: string[];
 }

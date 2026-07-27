@@ -3,11 +3,21 @@ import { addDays, dateToYMD } from "./calendarUtils";
 
 export type CalendarViewMode = "day" | "week" | "month" | "year" | "schedule";
 
+// `adminOnly` entries are internal to the admin (consultancy) org — partner
+// org users never have matching agenda items for them, so the filter is
+// hidden rather than shown as a permanent no-op (or, for Out of Office, a
+// leak of internal staff scheduling info).
+// `clientLabel` overrides `label` for non-admin (partner org) viewers — e.g.
+// "Scheduled Partner Visits" only makes sense from the consultancy's side;
+// a partner org just wants to know when the consultancy is visiting them.
 export const AGENDA_KIND_FILTERS = [
   { key: "EVENT", label: "Events" },
-  { key: "VISIT", label: "Consultancy Visits" },
+  { key: "VISIT", label: "Scheduled Partner Visits", clientLabel: "Upcoming Consultancy Visits" },
   { key: "REQUEST", label: "Visit Requests" },
-  { key: "BLOCK", label: "Blocked Days" },
+  { key: "BLOCK", label: "Out of Office", adminOnly: true },
+  { key: "CLIENT_VISIT", label: "New Client Visits", adminOnly: true },
+  { key: "BIRTHDAY", label: "Birthdays" },
+  { key: "HOLIDAY", label: "Public Holidays" },
 ] as const;
 
 /**

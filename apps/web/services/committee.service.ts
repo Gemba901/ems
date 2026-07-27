@@ -111,4 +111,20 @@ export const CommitteeService = {
     }, token);
     return handleResponse<{ message: string }>(res);
   },
+
+  // The single committee SELECTED_FOR_SGA suggestions are forwarded to for this org
+  async getDesignated(token: string): Promise<MyCommittee | null> {
+    const res = await apiClient(`${API_URL}/committees/designated`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<MyCommittee | null>(res);
+  },
+
+  async setDesignated(committeeId: string, token: string): Promise<SteeringCommittee> {
+    const res = await apiClient(`${API_URL}/committees/designated/${committeeId}`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<SteeringCommittee>(res);
+  },
 };

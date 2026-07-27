@@ -36,6 +36,14 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
                 total: data.total,
                 page: data.page,
             });
+        } catch {
+            // Keep the bell quiet if notifications fail to load.
+            set({
+                notifications: [],
+                unreadCount: 0,
+                total: 0,
+                page,
+            });
         } finally {
             set({ isLoading: false });
         }

@@ -11,6 +11,7 @@ import {
   CreateCalendarEventDto, UpdateCalendarEventDto, RespondToInvitationDto,
   GetEventsQueryDto, CheckAvailabilityQueryDto, DeleteEventQueryDto, InvitationLogQueryDto,
   UpsertVisitMonthPlanDto, UpdateVisitPlanSlotDto, VisitMonthPlanQueryDto,
+  CreateCalendarFilterDto,
 } from './dto/calendar.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -156,7 +157,7 @@ export class CalendarController {
   @Get('organizations')
   @Roles(Role.SUPER_ADMIN)
   async getOrganizations() {
-    return this.calendar.getClientOrganizations();
+    return this.calendar.getPartnerOrganizations();
   }
 
   @Get('organizations/:orgId/employees')
@@ -312,5 +313,30 @@ export class CalendarController {
     @Body() dto: UpdateVisitPlanSlotDto,
   ) {
     return this.calendar.updateVisitPlanSlot(planId, parseInt(slotIndex, 10), dto);
+  }
+
+  // ── Custom user filters (Google Calendar-style) ─────────────────────────────
+
+  @Get('filters')
+  async getFilters(
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.calendar.getFilters(user.userId, user.organizationId);
+  }
+
+  @Post('filters')
+  async createFilter(
+    @Body() dto: CreateCalendarFilterDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.calendar.createFilter(dto, user.userId, user.organizationId);
+  }
+
+  @Delete('filters/:id')
+  async deleteFilter(
+    @Param('id') id: string,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.calendar.deleteFilter(id, user.userId, user.organizationId);
   }
 }

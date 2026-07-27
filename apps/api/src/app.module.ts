@@ -19,6 +19,8 @@ import { EmsModule } from './ems/ems.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { LeaveModule } from './leave/leave.module';
 import { NoticesModule } from './notices/notices.module';
+import { DwmsModule } from './dwms/dwms.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
   imports: [
@@ -47,6 +49,8 @@ import { NoticesModule } from './notices/notices.module';
     CalendarModule,
     LeaveModule,
     NoticesModule,
+    DwmsModule,
+    TicketsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

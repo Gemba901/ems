@@ -34,6 +34,7 @@ enum ModuleType {
   EMS
   CALENDAR
   LEAVE
+  DWMS
 }
 
 enum CommitteeType {
@@ -57,9 +58,9 @@ enum RoleName {
 
 enum NotificationType {
   ACTION_REQUIRED // user must do something
-  INFO            // information update
-  REMINDER        // time based nudge
-  ALERT           // urgent/system-lever
+  INFO // information update
+  REMINDER // time based nudge
+  ALERT // urgent/system-lever
 }
 
 // EMS: Employee Master Data
@@ -95,56 +96,75 @@ enum EmploymentType {
   CASUAL
 }
 
+enum TicketType {
+  SYSTEM_TICKET
+  COMPANY_TICKET  
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  ARCHIVED
+}
+
 //organization
 model Organization {
-  id          String    @id @default(uuid())
-  name        String
-  shortName   String?
-  logoUrl     String?
-  industry    String?
-  email       String?
-  phone       String?
-  address     String?
-  status      OrgStatus  @default(ACTIVE)
-  modules     ModuleType[] @default([])
-  primaryColor String?    @default("#4F46E5")
-  isAdminOrg  Boolean    @default(false)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id           String       @id @default(uuid())
+  name         String
+  shortName    String?
+  logoUrl      String?
+  industry     String?
+  email        String?
+  phone        String?
+  address      String?
+  status       OrgStatus    @default(ACTIVE)
+  modules      ModuleType[] @default([])
+  primaryColor String?      @default("#4F46E5")
+  isAdminOrg   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  userOrganizations UserOrganization[]
-  employees   Employee[]
-  departments Department[]
-  suggestions Suggestion[]
-  committees  SteeringCommittee[]
-  consultancyVisits ConsultancyVisit[]
-  visitRequests     VisitRequest[]
-  visitMonthPlans   VisitMonthPlan[]
-  leaveRequests     LeaveRequest[]
-  leavePolicies     LeavePolicy[]
-  leaveSettings     LeaveSettings?
-  calendarEvents    CalendarEvent[]
-  notices           Notice[]
+  userOrganizations    UserOrganization[]
+  employees            Employee[]
+  departments          Department[]
+  suggestions          Suggestion[]
+  committees           SteeringCommittee[]
+  consultancyVisits    ConsultancyVisit[]
+  visitRequests        VisitRequest[]
+  visitMonthPlans      VisitMonthPlan[]
+  leaveRequests        LeaveRequest[]
+  leavePolicies        LeavePolicy[]
+  leaveSettings        LeaveSettings?
+  dwmsPermissionConfig DwmsPermissionConfig?
+  calendarEvents       CalendarEvent[]
+  notices              Notice[]
+  alerts               Alert[]
+  tickets              Tickets[]
+
+  // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
+  sgaCommitteeId String?
+  sgaCommittee   SteeringCommittee? @relation("OrgSgaCommittee", fields: [sgaCommitteeId], references: [id], onDelete: SetNull)
 }
 
 //specific user
 model User {
-  id                String @id @default(uuid())
-  email             String? @unique
-  phone             String  @unique
-  password          String?
-  name              String
+  id       String  @id @default(uuid())
+  email    String? @unique
+  phone    String  @unique
+  password String?
+  name     String
 
-  organizations     UserOrganization[]
-  employees         Employee[]
-  createdVisits     ConsultancyVisit[]
-  visitRequests     VisitRequest[]
-  visitMonthPlans   VisitMonthPlan[]
-  calendarBlocks    CalendarBlock[]
-  refreshTokens     RefreshToken[]
-  reviewedLeaves    LeaveRequest[]    @relation("LeaveReviewer")
+  organizations   UserOrganization[]
+  employees       Employee[]
+  createdVisits   ConsultancyVisit[]
+  visitRequests   VisitRequest[]
+  visitMonthPlans VisitMonthPlan[]
+  calendarBlocks  CalendarBlock[]
+  refreshTokens   RefreshToken[]
+  reviewedLeaves  LeaveRequest[]     @relation("LeaveReviewer")
 
-  createdAt         DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model RefreshToken {
@@ -155,7 +175,7 @@ model RefreshToken {
   expiresAt      DateTime
   createdAt      DateTime @default(now())
 
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -165,45 +185,44 @@ model UserOrganization {
   organizationId String
   roleId         Int
 
-  user           User         @relation(fields: [userId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  role           Role         @relation(fields: [roleId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  role         Role         @relation(fields: [roleId], references: [id])
 
   @@id([userId, organizationId])
 }
 
 model Role {
-  id                Int @id
-  name              RoleName @unique
+  id   Int      @id
+  name RoleName @unique
 
   userOrganizations UserOrganization[]
   permissions       RolePermission[]
 }
 
 model Permission {
-  id                String @id @default(uuid())
-  name              String @unique
-  description       String?
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
 
-  roles             RolePermission[]
+  roles RolePermission[]
 }
-
 
 model RolePermission {
   roleId       Int
   permissionId String
 
-  role         Role       @relation(fields: [roleId], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id])
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
   @@id([roleId, permissionId])
 }
 
 model Employee {
-  id             String   @id @default(uuid())
+  id             String  @id @default(uuid())
   firstName      String
   lastName       String
-  email          String
+  email          String?
   phone          String?
   departmentId   String?
   organizationId String
@@ -211,25 +230,25 @@ model Employee {
   avatarUrl      String?
 
   // EMS: Identity group
-  employeeCode   String?
-  middleName     String?
-  gender         Gender?
-  dateOfBirth    DateTime?
-  nationalId     String?
-  nationality    String?
+  employeeCode String?
+  middleName   String?
+  gender       Gender?
+  dateOfBirth  DateTime?
+  nationalId   String?
+  nationality  String?
 
   // EMS: Work Allocation group
-  employmentStatus EmploymentStatus @default(ACTIVE)
-  employmentType   EmploymentType?
-  jobTitle         String?
-  dateJoined       DateTime?
-  workStation      String?
-  section          String?
-  subSection       String?
-  shift            String?
+  employmentStatus   EmploymentStatus @default(ACTIVE)
+  employmentType     EmploymentType?
+  jobTitle           String?
+  dateJoined         DateTime?
+  workStation        String?
+  section            String?
+  subSection         String?
+  shift              String?
   reportingManagerId String?
-  reportingManager   Employee?  @relation("ReportingManager", fields: [reportingManagerId], references: [id], onDelete: SetNull)
-  directReports      Employee[] @relation("ReportingManager")
+  reportingManager   Employee?        @relation("ReportingManager", fields: [reportingManagerId], references: [id], onDelete: SetNull)
+  directReports      Employee[]       @relation("ReportingManager")
 
   // EMS: Role & Responsibility group
   jobDescription     String?
@@ -260,13 +279,14 @@ model Employee {
   hrRecordOwnerId    String?
   hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)
   hrManagedEmployees Employee[] @relation("HRRecordOwner")
+  
 
-  department        Department?  @relation(fields: [departmentId], references: [id])
-  organization      Organization @relation(fields: [organizationId], references: [id])
-  user              User?        @relation(fields: [userId], references: [id])
-  suggestions       Suggestion[] @relation("EmployeeSuggestions")
-  hodSuggestions    Suggestion[] @relation("HODSuggestions")
-  suggestionReviews SuggestionReview[]
+  department            Department?               @relation(fields: [departmentId], references: [id])
+  organization          Organization              @relation(fields: [organizationId], references: [id])
+  user                  User?                     @relation(fields: [userId], references: [id])
+  suggestions           Suggestion[]              @relation("EmployeeSuggestions")
+  hodSuggestions        Suggestion[]              @relation("HODSuggestions")
+  suggestionReviews     SuggestionReview[]
   committeeMembers      SteeringCommitteeMember[]
   notifications         Notification[]
   visitAttendances      VisitAttendee[]
@@ -277,24 +297,37 @@ model Employee {
   createdCalendarEvents CalendarEvent[]    @relation("CalendarEventCreator")
   receivedInvitations   EventInvitation[]  @relation("ReceivedInvitations")
   eventParticipations   EventParticipant[] @relation("EventParticipations")
+  oooBlocks             CalendarBlock[]
+  calendarFilters       CalendarFilter[]
+  assignedTasks         Task[]             @relation("TaskAssignedBy")
+  tasks                 Task[]             @relation("TaskOwner")
+  tasksToApprove        Task[]             @relation("TaskApprovedBy")
+  backupTasks           Task[]             @relation("TaskBackupOwner")
+  taskInstances         TaskInstance[]
+  alertsRaised          Alert[]            @relation("AlertsRaised")
+  alertsAgainst         Alert[]            @relation("AlertsAgainst")
+  ticketsRaised         Tickets[]          @relation("ticketsRaisedBy")
+  ticketUpdates         TicketUpdate[]     
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
 }
 
-
 model Department {
-  id                String   @id @default(uuid())
+  id                String @id @default(uuid())
   name              String
   organizationId    String
-  minLeaveHeadcount Int      @default(1)
+  minLeaveHeadcount Int    @default(1)
 
-  employees      Employee[]
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  suggestions    Suggestion[]
+  employees    Employee[]
+  organization Organization @relation(fields: [organizationId], references: [id])
+  suggestions  Suggestion[]
+  tasks        Task[]
+  alerts       Alert[]
 }
 
 model SteeringCommittee {
@@ -304,8 +337,10 @@ model SteeringCommittee {
   organizationId String
   createdAt      DateTime      @default(now())
 
-  organization   Organization              @relation(fields: [organizationId], references: [id])
-  members        SteeringCommitteeMember[]
+  organization Organization              @relation(fields: [organizationId], references: [id])
+  members      SteeringCommitteeMember[]
+  suggestions  Suggestion[]
+  designatedForOrgs Organization[]       @relation("OrgSgaCommittee")
 }
 
 model SteeringCommitteeMember {
@@ -313,57 +348,100 @@ model SteeringCommitteeMember {
   employeeId      String
   roleInCommittee String?
 
-  committee    SteeringCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
-  employee     Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  committee SteeringCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  employee  Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@id([committeeId, employeeId])
 }
 
 model Quotes {
-  id          String  @id @default(uuid())
-  text        String
+  id   String @id @default(uuid())
+  text String
 
-  category    QuoteCategory?
-  mood        String?
+  category QuoteCategory?
+  mood     String?
 
-  timeOfDay   TimeOfDay[]
-  tags        String[]
+  timeOfDay TimeOfDay[]
+  tags      String[]
 
-  author      String
-  active      Boolean  @default(true)
+  author String
+  active Boolean @default(true)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("quotes")
 }
 
 model Notification {
-  id          String    @id @default(cuid())
-  employeeId  String
-  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  type        NotificationType
-  module      String    // "SIMS", "LEAVE", "ATTENDANCE", "HR"
-  title       String
-  message     String
-  isRead      Boolean   @default(false)
-  actionUrl   String?
-  metadata    Json?     // any extra structured data the module wants to attach
-  createdAt  DateTime   @default(now())
+  id         String           @id @default(cuid())
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       NotificationType
+  module     String // "SIMS", "LEAVE", "ATTENDANCE", "HR"
+  title      String
+  message    String
+  isRead     Boolean          @default(false)
+  actionUrl  String?
+  metadata   Json? // any extra structured data the module wants to attach
+  createdAt  DateTime         @default(now())
 
   @@index([employeeId, isRead])
   @@index([employeeId, createdAt])
   @@index([employeeId, module])
 }
 
+// TICKETING SYSTEM
+
+model Tickets {
+  id          String           @id @default(uuid())
+  organizationId String
+  raisedById  String
+  type        TicketType
+  module      String    // "SIMS", "LEAVE", "ATTENDANCE", "HR"
+  subject     String
+  message     String
+  department  String?
+  status      TicketStatus     @default(OPEN)
+  updates     TicketUpdate[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  raisedBy     Employee      @relation("ticketsRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([raisedById, createdAt])
+}
+
+model TicketUpdate {
+  id                String        @id @default(uuid())
+  ticketId          String
+  updatedById       String
+  statusChanged     TicketStatus?
+  typeChanged       TicketType?
+  note              String?
+  createdAt         DateTime      @default(now())
+
+  ticket            Tickets   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  updatedBy         Employee @relation(fields: [updatedById], references: [id])
+}
+
 // SIMS: Suggestions and Idea Management System
 
 enum SuggestionStatus {
+  WAITING_FOR_REVIEW
   UNDER_REVIEW
   APPROVED_FOR_IMPLEMENTATION
   REJECTED
   ON_HOLD
   SELECTED_FOR_SGA
+  IMPLEMENTED
+}
+
+enum DecisionType {
+  WORKPLACE_CORRECTION
+  DAILY_KAIZEN
 }
 
 enum ImplementationStatus {
@@ -390,40 +468,45 @@ enum SuggestionCategory {
 }
 
 model Suggestion {
-  id                   String                @id @default(uuid())
-  title                String
-  description          String
-  imageUrl             String?
-  status               SuggestionStatus      @default(UNDER_REVIEW)
-  implementationStatus ImplementationStatus?
-  implementationNote   String?
-  categories           SuggestionCategory[]  @default([])
-  isAnonymous          Boolean               @default(false)
-  employeeId           String
-  organizationId       String
-  departmentId         String?
-  hodId                String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  id                     String                @id @default(uuid())
+  title                  String
+  description            String
+  imageUrl               String?
+  status                 SuggestionStatus      @default(WAITING_FOR_REVIEW)
+  implementationStatus   ImplementationStatus?
+  implementationNote     String?
+  decisionType           DecisionType?
+  decisionDetails        Json?
+  categories             SuggestionCategory[]  @default([])
+  isAnonymous            Boolean               @default(false)
+  employeeId             String
+  organizationId         String
+  departmentId           String?
+  hodId                  String?
+  committeeId            String?
+  forwardedToCommitteeAt DateTime?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
 
   employee     Employee           @relation("EmployeeSuggestions", fields: [employeeId], references: [id])
   organization Organization       @relation(fields: [organizationId], references: [id])
   department   Department?        @relation(fields: [departmentId], references: [id])
   hod          Employee?          @relation("HODSuggestions", fields: [hodId], references: [id], onDelete: SetNull)
+  committee    SteeringCommittee? @relation(fields: [committeeId], references: [id], onDelete: SetNull)
   reviews      SuggestionReview[]
 }
 
 // Audit trail: every status change by a reviewer is recorded here
 model SuggestionReview {
-  id                  String           @id @default(uuid())
-  suggestionId        String
-  reviewerId          String
-  statusChanged       SuggestionStatus
-  note                String?
-  createdAt           DateTime         @default(now())
+  id            String           @id @default(uuid())
+  suggestionId  String
+  reviewerId    String
+  statusChanged SuggestionStatus
+  note          String?
+  createdAt     DateTime         @default(now())
 
-  suggestion          Suggestion         @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
-  reviewer            Employee           @relation(fields: [reviewerId], references: [id])
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  reviewer   Employee   @relation(fields: [reviewerId], references: [id])
 }
 
 // ── Calendar: Consultancy Visit Scheduling ────────────────────────────────────
@@ -460,6 +543,7 @@ enum EventRecurrencePattern {
   DAILY
   WEEKLY
   MONTHLY
+  YEARLY
 }
 
 enum InvitationStatus {
@@ -482,34 +566,37 @@ enum VisitRequestStatus {
 }
 
 model CalendarEvent {
-  id             String               @id @default(uuid())
-  title          String
-  description    String?
-  label          String?
-  color          EventColor           @default(PEACOCK)
-  visibility     EventVisibility      @default(PRIVATE)
-  startAt        DateTime
-  endAt          DateTime
-  allDay         Boolean              @default(false)
-  organizationId String
-  createdById    String
+  id              String               @id @default(uuid())
+  title           String
+  description     String?
+  label           String?
+  color           EventColor           @default(PEACOCK)
+  visibility      EventVisibility      @default(PRIVATE)
+  startAt         DateTime
+  endAt           DateTime
+  allDay          Boolean              @default(false)
+  organizationId  String
+  createdById     String
+  // Free-text prospect/company name — set only for "New Client Visit" quick-created
+  // events (initial meetings with a company not yet onboarded as a Partner Organization)
+  prospectOrgName String?
 
   // Recurrence
-  isRecurring         Boolean                @default(false)
-  recurrencePattern   EventRecurrencePattern?
-  recurrenceInterval  Int                    @default(1)
-  recurrenceEndAt     DateTime?
-  parentEventId       String?
+  isRecurring        Boolean                 @default(false)
+  recurrencePattern  EventRecurrencePattern?
+  recurrenceInterval Int                     @default(1)
+  recurrenceEndAt    DateTime?
+  parentEventId      String?
 
-  organization   Organization         @relation(fields: [organizationId], references: [id])
-  createdBy      Employee             @relation("CalendarEventCreator", fields: [createdById], references: [id])
-  invitations    EventInvitation[]
-  participants   EventParticipant[]
-  parentEvent    CalendarEvent?       @relation("EventSeries", fields: [parentEventId], references: [id])
-  childEvents    CalendarEvent[]      @relation("EventSeries")
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  createdBy    Employee           @relation("CalendarEventCreator", fields: [createdById], references: [id])
+  invitations  EventInvitation[]
+  participants EventParticipant[]
+  parentEvent  CalendarEvent?     @relation("EventSeries", fields: [parentEventId], references: [id])
+  childEvents  CalendarEvent[]    @relation("EventSeries")
 
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId, startAt])
   @@index([createdById, startAt])
@@ -523,10 +610,10 @@ model EventInvitation {
   status      InvitationStatus @default(PENDING)
   respondedAt DateTime?
 
-  event       CalendarEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  invitee     Employee         @relation("ReceivedInvitations", fields: [inviteeId], references: [id], onDelete: Cascade)
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitee Employee      @relation("ReceivedInvitations", fields: [inviteeId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([eventId, inviteeId])
   @@index([inviteeId, status])
@@ -534,37 +621,37 @@ model EventInvitation {
 
 // Assigned participants for training sessions and audits (no accept/decline flow)
 model EventParticipant {
-  id         String        @id @default(uuid())
+  id         String @id @default(uuid())
   eventId    String
   employeeId String
 
-  event      CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  employee   Employee      @relation("EventParticipations", fields: [employeeId], references: [id], onDelete: Cascade)
+  event    CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  employee Employee      @relation("EventParticipations", fields: [employeeId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime      @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([eventId, employeeId])
 }
 
 model ConsultancyVisit {
-  id                 String              @id @default(uuid())
-  title              String
-  clientOrgId        String
-  date               DateTime
-  endDate            DateTime?
-  startTime          String?
-  endTime            String?
-  status             VisitStatus         @default(TENTATIVE)
-  notes              String?
-  internalNotes      String?
-  completionNote     String?
-  recurrencePattern  RecurrencePattern?
-  recurrenceEndDate  DateTime?
-  recurrenceGroupId  String?
-  rescheduleCount    Int                 @default(0)
-  createdById        String
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                String             @id @default(uuid())
+  title             String
+  clientOrgId       String
+  date              DateTime
+  endDate           DateTime?
+  startTime         String?
+  endTime           String?
+  status            VisitStatus        @default(TENTATIVE)
+  notes             String?
+  internalNotes     String?
+  completionNote    String?
+  recurrencePattern RecurrencePattern?
+  recurrenceEndDate DateTime?
+  recurrenceGroupId String?
+  rescheduleCount   Int                @default(0)
+  createdById       String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   clientOrg          Organization        @relation(fields: [clientOrgId], references: [id])
   createdBy          User                @relation(fields: [createdById], references: [id])
@@ -575,32 +662,32 @@ model ConsultancyVisit {
 }
 
 model VisitMonthPlan {
-  id          String         @id @default(uuid())
+  id          String   @id @default(uuid())
   clientOrgId String
   year        Int
   month       Int
-  plannedDays Int            @default(1)
+  plannedDays Int      @default(1)
   createdById String
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  clientOrg   Organization   @relation(fields: [clientOrgId], references: [id])
-  createdBy   User           @relation(fields: [createdById], references: [id])
-  slots       VisitPlanSlot[]
+  clientOrg Organization    @relation(fields: [clientOrgId], references: [id])
+  createdBy User            @relation(fields: [createdById], references: [id])
+  slots     VisitPlanSlot[]
 
   @@unique([clientOrgId, year, month])
 }
 
 model VisitPlanSlot {
-  id         String         @id @default(uuid())
-  planId     String
-  slotIndex  Int
-  date       DateTime?
-  agenda     String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id        String    @id @default(uuid())
+  planId    String
+  slotIndex Int
+  date      DateTime?
+  agenda    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  plan       VisitMonthPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan VisitMonthPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@unique([planId, slotIndex])
 }
@@ -624,13 +711,13 @@ model VisitRequest {
 }
 
 model VisitAttendee {
-  id         String           @id @default(uuid())
+  id         String  @id @default(uuid())
   visitId    String
   employeeId String
   role       String?
 
-  visit      ConsultancyVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
-  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  visit    ConsultancyVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  employee Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([visitId, employeeId])
 }
@@ -646,9 +733,25 @@ model CalendarBlock {
   type        CalendarBlockType
   label       String?
   createdById String
+  employeeId  String?
   createdAt   DateTime          @default(now())
 
   createdBy   User              @relation(fields: [createdById], references: [id])
+  employee    Employee?         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+// Google Calendar-style user-defined filters for the holistic calendar agenda
+model CalendarFilter {
+  id         String   @id @default(uuid())
+  employeeId String
+  name       String
+  kinds      String[] @default([])
+  orgIds     String[] @default([])
+  colors     String[] @default([])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 }
 
 // ── Leave Management ──────────────────────────────────────────────────────────
@@ -661,28 +764,28 @@ enum LeaveStatus {
 }
 
 model LeaveRequest {
-  id             String      @id @default(uuid())
-  employeeId     String
-  organizationId String
-  type           String
-  status         LeaveStatus @default(PENDING)
-  startDate      DateTime
-  endDate        DateTime
-  days           Int
+  id                  String      @id @default(uuid())
+  employeeId          String
+  organizationId      String
+  type                String
+  status              LeaveStatus @default(PENDING)
+  startDate           DateTime
+  endDate             DateTime
+  days                Int
   reason              String?
   handoverEmployeeId  String?
   handoverNotes       String?
   handoverEmployee2Id String?
   handoverNotes2      String?
   reviewedById        String?
-  reviewedAt      DateTime?
-  reviewNote      String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  reviewedAt          DateTime?
+  reviewNote          String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
   employee          Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   organization      Organization @relation(fields: [organizationId], references: [id])
-  handoverEmployee  Employee?    @relation("LeaveHandover",  fields: [handoverEmployeeId],  references: [id], onDelete: SetNull)
+  handoverEmployee  Employee?    @relation("LeaveHandover", fields: [handoverEmployeeId], references: [id], onDelete: SetNull)
   handoverEmployee2 Employee?    @relation("LeaveHandover2", fields: [handoverEmployee2Id], references: [id], onDelete: SetNull)
   reviewedBy        User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
@@ -692,43 +795,43 @@ model LeaveRequest {
 }
 
 model LeaveBalance {
-  id          String    @id @default(uuid())
-  employeeId  String
-  year        Int
-  type        String
-  allocated   Int       @default(0)
-  used        Int       @default(0)
+  id         String @id @default(uuid())
+  employeeId String
+  year       Int
+  type       String
+  allocated  Int    @default(0)
+  used       Int    @default(0)
 
-  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, year, type])
   @@index([employeeId, year])
 }
 
 model LeavePolicy {
-  id             String       @id @default(uuid())
+  id             String   @id @default(uuid())
   organizationId String
   year           Int
   type           String
-  allocated      Int          @default(0)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  allocated      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@unique([organizationId, year, type])
   @@index([organizationId, year])
 }
 
 model LeaveSettings {
-  id                String   @id @default(uuid())
-  organizationId    String   @unique
-  workingDays       Int[]    @default([1,2,3,4,5])
-  enabledTypes      String[] @default([])
-  customLeaveTypes  Json     @default("[]")
-  updatedAt         DateTime @updatedAt
+  id               String   @id @default(uuid())
+  organizationId   String   @unique
+  workingDays      Int[]    @default([1, 2, 3, 4, 5])
+  enabledTypes     String[] @default([])
+  customLeaveTypes Json     @default("[]")
+  updatedAt        DateTime @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 }
 
 model Notice {
@@ -742,8 +845,205 @@ model Notice {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, createdAt])
 }
-   
+
+model Task {
+  id                       String         @id @default(uuid())
+  title                    String
+  frequency                TaskFrequency
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  assignedById             String?
+  completionPercent        Int            @default(0)
+  description              String?
+  ownerId                  String
+  status                   TaskStatus     @default(PENDING)
+  acknowledgedAt           DateTime?
+  completionNote           String?
+  completionAttachmentUrl  String?
+  completionAttachmentName String?
+  dueDate                  DateTime?
+  isAdhoc                  Boolean        @default(false)
+  priority                 Priority?      @default(MEDIUM)
+  departmentId             String?
+  ownerName                String?
+  assignedByName           String?
+  approvedById             String?
+  overdueAlertTo           OverdueAlertTo @default(ASSIGNER)
+  backupOwnerId            String?
+  assignedBy               Employee?      @relation("TaskAssignedBy", fields: [assignedById], references: [id])
+  owner                    Employee       @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  approvedBy               Employee?      @relation("TaskApprovedBy", fields: [approvedById], references: [id])
+  backupOwner              Employee?      @relation("TaskBackupOwner", fields: [backupOwnerId], references: [id])
+  instances                TaskInstance[]
+  department               Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([assignedById])
+  @@index([departmentId])
+  @@index([approvedById])
+  @@index([backupOwnerId])
+}
+
+model TaskInstance {
+  id                String        @id @default(uuid())
+  taskId            String
+  ownerId           String
+  frequency         TaskFrequency
+  scheduledFor      DateTime
+  dueAt             DateTime
+  status            TaskStatus    @default(PENDING)
+  completionPercent Int           @default(0)
+  completedAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  owner             Employee      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  task              Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  alerts            Alert[]
+
+  @@unique([taskId, scheduledFor])
+  @@index([ownerId, frequency])
+  @@index([ownerId, scheduledFor])
+  @@index([taskId])
+}
+
+model Alert {
+  id               String      @id @default(uuid())
+  type             AlertType
+  title            String
+  description      String
+  raisedById       String
+  organizationId   String?
+  severity         Severity
+  status           AlertStatus @default(OPEN)
+  correctiveAction String?
+  closureNote      String?
+  resolvedAt       DateTime?
+  taskInstanceId   String?
+  departmentId     String?
+  againstUserId    String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  raisedBy     Employee      @relation("AlertsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskInstance TaskInstance? @relation(fields: [taskInstanceId], references: [id], onDelete: SetNull)
+  department   Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  againstUser  Employee?     @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
+
+  @@index([raisedById])
+  @@index([organizationId])
+  @@index([taskInstanceId])
+  @@index([departmentId])
+  @@index([againstUserId])
+}
+
+enum AlertType {
+  BREAKDOWN
+  DELAY
+  QUALITY_ISSUE
+  WRONG_ENTRY
+  WRONG_DELIVERY
+  SAFETY_CONCERN
+  PROCESS_DEVIATION
+  MISSED_ACTIVITY
+  REPEATED_PROBLEM
+  DISCIPLINE_ISSUE
+  ABNORMAL_SITUATION
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  ESCALATED
+}
+
+enum TaskFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  PLANNED
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  APPROVAL_PENDING
+  PARTLY_DONE
+  LESS_THAN_50
+  NOT_APPLICABLE
+  OVERDUE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum OverdueAlertTo {
+  ASSIGNER
+  MANAGER
+}
+
+enum ViewLevel {
+  OWN
+  DEPARTMENT
+  ORGANIZATION
+}
+
+enum EscalationContactRule {
+  ASSIGNER
+  MANAGER
+  HOD
+  HIGHER_LEVEL_MANAGERS
+  CUSTOM
+}
+
+enum TaskPermissionRole {
+  ADMIN
+  MANAGEMENT
+  HOD
+  DIRECT_MANAGER
+  HIGHER_LEVEL_MANAGERS
+  OWNER
+  ANYONE
+  CUSTOM
+}
+
+model DwmsPermissionConfig {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  approverRoles             TaskPermissionRole[] @default([])
+  approverCustomEmployeeIds String[]             @default([])
+
+  alertViewLevel     ViewLevel @default(OWN)
+  analyticsViewLevel ViewLevel @default(DEPARTMENT)
+
+  escalateUnacknowledgedMediumMins   Int                     @default(1440)
+  escalateUnacknowledgedHighMins     Int                     @default(480)
+  escalateUnacknowledgedCriticalMins Int                     @default(120)
+  escalateUnacknowledgedMins         Int                     @default(60)
+  escalationContactRules             EscalationContactRule[] @default([])
+  customEscalationContactIds         String[]                @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

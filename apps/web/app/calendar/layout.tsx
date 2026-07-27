@@ -14,7 +14,7 @@ export default function CalendarLayout({ children }: { children: React.ReactNode
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggle={toggle} />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "lg:pl-16" : "lg:pl-64"}`}>
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 p-4 md:p-6">
+        <main className="flex-1 p-4 md:p-6">  
           <ModuleGuard moduleKey="CALENDAR">{children}</ModuleGuard>
         </main>
       </div>

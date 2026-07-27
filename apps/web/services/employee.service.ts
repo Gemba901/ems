@@ -20,7 +20,7 @@ export interface EmployeeApiResponse {
     id: string;
     firstName: string;
     lastName: string;
-    email: string;
+    email: string | null;
     phone: string | null;
     departmentId: string | null;
     organizationId: string;
@@ -68,7 +68,7 @@ export interface OrgStatsResponse {
         id: string;
         firstName: string;
         lastName: string;
-        email: string;
+        email: string | null;
         department: string | null;
         createdAt: string;
         hasActiveAccount: boolean;

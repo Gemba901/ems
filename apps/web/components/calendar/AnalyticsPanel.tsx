@@ -85,7 +85,7 @@ export function AnalyticsPanel({
 
           {isAdmin && analytics.byOrg && analytics.byOrg.length > 0 && (
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
-              <h3 className="text-sm font-bold text-slate-800 mb-4">Visits by Client</h3>
+              <h3 className="text-sm font-bold text-slate-800 mb-4">Visits by Partner</h3>
               <div className="space-y-3">
                 {analytics.byOrg.map((row: any) => (
                   <div key={row.orgId}>

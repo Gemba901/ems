@@ -25,6 +25,8 @@ export interface CalendarBlock {
   date: string; // YYYY-MM-DD
   type: CalendarBlockType;
   label: string | null;
+  employeeId?: string | null;
+  employeeName?: string | null;
 }
 
 export interface VisitAttendee {
@@ -48,6 +50,7 @@ export interface CalendarVisit {
   title?: string;
   clientOrgId?: string;
   clientOrgName?: string;
+  clientOrgColor?: string | null;
   notes?: string;
   internalNotes?: string;
   completionNote?: string;
@@ -72,10 +75,12 @@ export interface CalendarRequest {
 
 export type CalendarEntry = CalendarVisit | CalendarRequest;
 
-export interface ClientOrg {
+export interface PartnerOrg {
   id: string;
   name: string;
   logoUrl: string | null;
+  shortName?: string | null;
+  primaryColor: string | null;
 }
 
 export interface AdminOrg {
@@ -180,7 +185,7 @@ export type EventColor =
 export type EventVisibility = "PRIVATE" | "ORG_WIDE";
 
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED";
-export type EventRecurrencePattern = "DAILY" | "WEEKLY" | "MONTHLY";
+export type EventRecurrencePattern = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
 
 export interface HolisticCalendarEvent {
   id: string;
@@ -197,6 +202,7 @@ export interface HolisticCalendarEvent {
   recurrenceInterval: number;
   recurrenceEndAt: string | null;
   parentEventId: string | null;
+  prospectOrgName: string | null;
   isOwner: boolean;
   myInvitationStatus: InvitationStatus | null;
   createdBy: { id: string; name: string; avatarUrl: string | null } | null;
@@ -233,6 +239,7 @@ export interface CreateCalendarEventPayload {
   recurrenceInterval?: number;
   recurrenceEndAt?: string;
   inviteeIds?: string[];
+  prospectOrgName?: string;
 }
 
 export interface UpdateCalendarEventPayload {
@@ -247,6 +254,7 @@ export interface UpdateCalendarEventPayload {
   addInviteeIds?: string[];
   removeInviteeIds?: string[];
   updateMode?: "THIS_ONLY" | "ALL_IN_SERIES";
+  prospectOrgName?: string;
 }
 
 export const EVENT_COLORS: EventColor[] = [
@@ -331,7 +339,18 @@ export interface VisitMonthPlan {
 
 // ── Unified agenda ────────────────────────────────────────────────────────────
 
-export type AgendaItemKind = "EVENT" | "VISIT" | "REQUEST" | "BLOCK";
+export type AgendaItemKind = "EVENT" | "VISIT" | "REQUEST" | "BLOCK" | "BIRTHDAY" | "CLIENT_VISIT" | "HOLIDAY";
+
+export interface BirthdayDetail {
+  employeeId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+export interface HolidayDetail {
+  date: string;
+  name: string;
+}
 
 export interface AgendaItem {
   id: string;
@@ -341,7 +360,8 @@ export interface AgendaItem {
   endAt: string;   // ISO
   allDay: boolean;
   color: EventColor | string;
-  detail: HolisticCalendarEvent | CalendarVisit | CalendarRequest | CalendarBlock;
+  orgColor?: string | null;
+  detail: HolisticCalendarEvent | CalendarVisit | CalendarRequest | CalendarBlock | BirthdayDetail | HolidayDetail;
 }
 
 export interface AgendaResponse {
@@ -349,6 +369,25 @@ export interface AgendaResponse {
   pendingInvitationsCount: number;
   busyDates: string[];
   items: AgendaItem[];
+}
+
+// ── Custom user filters (Google Calendar-style) ──────────────────────────────
+
+export interface CalendarFilterDto {
+  id: string;
+  name: string;
+  kinds: string[];
+  orgIds: string[];
+  colors: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCalendarFilterPayload {
+  name: string;
+  kinds?: string[];
+  orgIds?: string[];
+  colors?: string[];
 }
 
 export const CalendarService = {
@@ -439,7 +478,7 @@ export const CalendarService = {
     return handleResponse(res);
   },
 
-  async getClientOrganizations(token: string): Promise<ClientOrg[]> {
+  async getPartnerOrganizations(token: string): Promise<PartnerOrg[]> {
     const res = await apiClient(`${API_URL}/calendar/organizations`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
@@ -457,7 +496,7 @@ export const CalendarService = {
   },
 
   async createBlock(
-    data: { date: string; type: CalendarBlockType; label?: string },
+    data: { date: string; type: CalendarBlockType; label?: string; employeeId?: string },
     token: string,
   ): Promise<CalendarBlock> {
     const res = await apiClient(`${API_URL}/calendar/blocks`, {
@@ -651,5 +690,29 @@ export const CalendarService = {
       token,
     );
     return handleResponse(res);
+  },
+
+  // ── Custom user filters (Google Calendar-style) ─────────────────────────────
+
+  async getFilters(token: string): Promise<CalendarFilterDto[]> {
+    const res = await apiClient(`${API_URL}/calendar/filters`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async createFilter(data: CreateCalendarFilterPayload, token: string): Promise<CalendarFilterDto> {
+    const res = await apiClient(`${API_URL}/calendar/filters`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async deleteFilter(id: string, token: string): Promise<void> {
+    const res = await apiClient(`${API_URL}/calendar/filters/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }, token);
+    await handleResponse(res);
   },
 };

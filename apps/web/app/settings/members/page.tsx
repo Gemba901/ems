@@ -101,7 +101,9 @@ function MemberRow({
                         <p className="text-sm font-semibold text-slate-900 truncate">
                             {emp.firstName} {emp.lastName}
                         </p>
-                        <p className="text-xs text-slate-400 truncate">{emp.email}</p>
+                        <p className="text-xs text-slate-400 truncate">
+                            {emp.email ?? <span className="italic text-slate-300">No email on file</span>}
+                        </p>
                     </div>
                 </div>
             </td>
@@ -220,9 +222,10 @@ function MembersContent() {
     const total = empData?.pagination.total ?? null;
     const totalPages = Math.max(1, empData?.pagination.pages ?? 1);
 
-    const handleRoleUpdated = (empId: string, roleId: number, roleName: string) => {
-        // Role update is handled optimistically via local state in MemberRow
-        // The MemberRow's useEffect on emp.id will keep in sync on page changes
+    const handleRoleUpdated = () => {
+        // MemberRow derives currentRole from the `emp` prop, so refetching
+        // brings back the new role and lets isDirty/saved state settle correctly.
+        void refetch();
     };
 
     const startProgress = (phases: { label: string; target: number; duration: number }[]) => {

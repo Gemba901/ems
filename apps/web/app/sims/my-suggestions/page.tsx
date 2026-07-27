@@ -14,10 +14,12 @@ import {
 } from "lucide-react";
 
 const STATUS_CONFIG: Record<SuggestionStatus, { label: string; badge: string; icon: React.ReactNode }> = {
+  WAITING_FOR_REVIEW:          { label: "Waiting for Review",         badge: "bg-slate-100 text-slate-600",   icon: <Clock className="h-3.5 w-3.5" /> },
   UNDER_REVIEW:                { label: "Under Review",               badge: "bg-amber-100 text-amber-700",   icon: <Clock className="h-3.5 w-3.5" /> },
   ON_HOLD:                     { label: "On Hold",                    badge: "bg-orange-100 text-orange-700", icon: <AlertCircle className="h-3.5 w-3.5" /> },
   SELECTED_FOR_SGA:            { label: "Selected for SGA",           badge: "bg-indigo-100 text-indigo-700", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  APPROVED_FOR_IMPLEMENTATION: { label: "Approved for Implementation", badge: "bg-emerald-100 text-emerald-700", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  APPROVED_FOR_IMPLEMENTATION: { label: "Approved for Implementation", badge: "bg-teal-100 text-teal-700",     icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  IMPLEMENTED:                 { label: "Implemented",                badge: "bg-emerald-100 text-emerald-700", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
   REJECTED:                    { label: "Rejected",                   badge: "bg-red-100 text-red-700",       icon: <XCircle className="h-3.5 w-3.5" /> },
 };
 

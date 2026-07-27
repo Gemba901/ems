@@ -16,6 +16,7 @@ interface User {
     roleLevel: Role;
     isAdminOrg: boolean;
     jobTitle: string | null;
+    departmentId: string | null;
 }
 
 interface AuthState {

@@ -870,8 +870,8 @@ export class CalendarService {
         id: `holiday-${h.date}`,
         kind: 'HOLIDAY',
         title: h.name,
-        startAt: new Date(`${h.date}T00:00:00`).toISOString(),
-        endAt: new Date(`${h.date}T23:59:59`).toISOString(),
+        startAt: new Date(`${h.date}T00:00:00Z`).toISOString(),
+        endAt: new Date(`${h.date}T23:59:59Z`).toISOString(),
         allDay: true,
         color: 'BASIL',
         detail: { date: h.date, name: h.name },
@@ -901,8 +901,8 @@ export class CalendarService {
       items.push({
         id: v.id, kind: 'VISIT',
         title: `${v.title}${v.clientOrgName ? ' — ' + v.clientOrgName : ''}`,
-        startAt: new Date(`${v.date}T${v.startTime || '00:00'}:00`).toISOString(),
-        endAt: new Date(`${endDateStr}T${v.endTime || '23:59'}:00`).toISOString(),
+        startAt: new Date(`${v.date}T${v.startTime || '00:00'}:00Z`).toISOString(),
+        endAt: new Date(`${endDateStr}T${v.endTime || '23:59'}:00Z`).toISOString(),
         allDay: !v.startTime,
         color: CalendarService.VISIT_STATUS_COLOR[v.status] ?? 'PEACOCK',
         orgColor: v.clientOrgColor ?? null,
@@ -917,8 +917,8 @@ export class CalendarService {
       items.push({
         id: r.id, kind: 'REQUEST',
         title: `Visit request${r.organizationName ? ' — ' + r.organizationName : ''}`,
-        startAt: new Date(`${r.date}T00:00:00`).toISOString(),
-        endAt: new Date(`${r.date}T23:59:59`).toISOString(),
+        startAt: new Date(`${r.date}T00:00:00Z`).toISOString(),
+        endAt: new Date(`${r.date}T23:59:59Z`).toISOString(),
         allDay: true, color: 'GRAPE', detail: r,
       });
     }
@@ -928,8 +928,8 @@ export class CalendarService {
       items.push({
         id: b.id, kind: 'BLOCK',
         title: b.label || defaultTitle,
-        startAt: new Date(`${b.date}T00:00:00`).toISOString(),
-        endAt: new Date(`${b.date}T23:59:59`).toISOString(),
+        startAt: new Date(`${b.date}T00:00:00Z`).toISOString(),
+        endAt: new Date(`${b.date}T23:59:59Z`).toISOString(),
         allDay: true, color: 'TOMATO', detail: b,
       });
     }

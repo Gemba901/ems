@@ -11,6 +11,7 @@ import {
   X, Loader2, CheckCircle2, RefreshCw, Users, AlertTriangle, Check, Globe2, Lock,
 } from "lucide-react";
 import { CreateTypeTabs, CreateFlowType } from "./CreateTypeTabs";
+import { isSundayDate } from "./calendarUtils";
 
 function toYMD(y: number, m: number, d: number) {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -106,6 +107,7 @@ export function EventFormModal({
     if (new Date(endAt) <= new Date(startAt)) { setError("End must be after start."); return; }
     if (!editing && isNewRecurring && recEnds === "on" && !recEndAt) { setError("End date is required when 'On date' is selected."); return; }
     if (whoCanSee === "SELECTED" && inviteeIds.length === 0) { setError("Select at least one person who can see this event."); return; }
+    if (showProspectField && isSundayDate(startAt.split("T")[0])) { setError("Client visits cannot be scheduled on Sundays."); return; }
 
     const visibility: EventVisibility = whoCanSee === "ORG_WIDE" ? "ORG_WIDE" : "PRIVATE";
 
@@ -189,6 +191,7 @@ export function EventFormModal({
               active={quickCreateProspect ? "CLIENT_VISIT" : "EVENT"}
               isAdmin={isAdmin}
               adminOrgConfigured={adminOrgConfigured}
+              dateStr={quickCreateProspect ? startAt.split("T")[0] : undefined}
               onSelect={onSwitchType}
             />
           )}

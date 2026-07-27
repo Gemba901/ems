@@ -17,11 +17,15 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export type SuggestionStatus =
+  | "WAITING_FOR_REVIEW"
   | "UNDER_REVIEW"
   | "APPROVED_FOR_IMPLEMENTATION"
   | "REJECTED"
   | "ON_HOLD"
-  | "SELECTED_FOR_SGA";
+  | "SELECTED_FOR_SGA"
+  | "IMPLEMENTED";
+
+export type DecisionType = "WORKPLACE_CORRECTION" | "DAILY_KAIZEN";
 
 export type ImplementationStatus =
   | "WORK_IN_PROGRESS"
@@ -78,8 +82,13 @@ export interface Suggestion {
   isAnonymous: boolean;
   employeeId: string;
   organizationId: string;
+  departmentId: string | null;
   hodId: string | null;
   hod: { id: string; firstName: string; lastName: string } | null;
+  decisionType: DecisionType | null;
+  decisionDetails: Record<string, any> | null;
+  committeeId: string | null;
+  forwardedToCommitteeAt: string | null;
   createdAt: string;
   updatedAt: string;
   employee: { id: string; firstName: string; lastName: string; department: { id: string; name: string } | null } | null;
@@ -105,6 +114,8 @@ export interface ReviewPayload {
   note?: string;
   implementationStatus?: ImplementationStatus;
   implementationNote?: string;
+  decisionType?: DecisionType;
+  decisionDetails?: Record<string, any>;
 }
 
 export interface UpdateImplementationPayload {
@@ -198,6 +209,11 @@ export const SimsService = {
     return handleResponse(res);
   },
 
+  async getDepartmentLeaderboard(token: string): Promise<{ id: string; name: string; marks: number; total: number }[]> {
+    const res = await apiClient(`${API_URL}/sims/leaderboard/departments`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
   async getById(id: string, token: string): Promise<Suggestion> {
     const res = await apiClient(`${API_URL}/sims/${id}`, { headers: authHeaders(token) }, token);
     return handleResponse<Suggestion>(res);
@@ -219,6 +235,17 @@ export const SimsService = {
       body: JSON.stringify(data),
     }, token);
     return handleResponse<Suggestion>(res);
+  },
+
+  // Suggestions forwarded to a steering committee (SELECTED_FOR_SGA + a designated committee)
+  async getCommitteeReport(
+    token: string,
+    params: { status?: SuggestionStatus; category?: SuggestionCategory; page?: number; limit?: number },
+  ): Promise<PaginatedSuggestions> {
+    const res = await apiClient(`${API_URL}/sims/committee-report${buildQuery(params)}`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<PaginatedSuggestions>(res);
   },
 
 };

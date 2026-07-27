@@ -15,6 +15,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronRight,
+  Users,
+  List,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
@@ -32,7 +34,14 @@ const SIMS_NAV = [
     href: "/sims",
     icon: LayoutGrid,
     exact: true,
-    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE],
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE],
+  },
+  {
+    name: "All Suggestions",
+    href: "/sims/all",
+    icon: List,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD],
   },
   {
     name: "My Suggestions",
@@ -61,6 +70,13 @@ const SIMS_NAV = [
     icon: BarChart2,
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+  },
+  {
+    name: "Committees",
+    href: "/sims/committees",
+    icon: Users,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE],
   },
 ];
 

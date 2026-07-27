@@ -71,10 +71,10 @@ export class SimsController {
 
   /**
    * GET /sims
-   * Admin and Management view all suggestions org-wide with optional filters.
+   * Admin, Management, and HR view all suggestions org-wide with optional filters.
    */
   @Get()
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR)
   async getAll(
     @Query() query: QuerySuggestionsDto,
     @CurrentUser() user: { organizationId: string },
@@ -103,6 +103,30 @@ export class SimsController {
   @Get('leaderboard')
   async getLeaderboard(@CurrentUser() user: { organizationId: string }) {
     return this.simsService.getLeaderboard(user.organizationId);
+  }
+
+  /**
+   * GET /sims/leaderboard/departments
+   * Org-wide department marks — 1 mark per implemented suggestion. Available to all roles.
+   */
+  @Get('leaderboard/departments')
+  async getDepartmentLeaderboard(@CurrentUser() user: { organizationId: string }) {
+    return this.simsService.getDepartmentLeaderboard(user.organizationId);
+  }
+
+  /**
+   * GET /sims/committee-report
+   * Suggestions forwarded to a steering committee (SELECTED_FOR_SGA with a
+   * designated committee). Committee members see their own committee's
+   * suggestions; Admin/Management/SuperAdmin see all. Filtering is done in
+   * the service since committee membership isn't a RoleName.
+   */
+  @Get('committee-report')
+  async getCommitteeReport(
+    @Query() query: QuerySuggestionsDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.simsService.getCommitteeReport(user.userId, user.organizationId, query);
   }
 
   /**

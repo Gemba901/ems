@@ -15,6 +15,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 
 export type OrgStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
+export type ModuleType = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS";
 export type ModuleType = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "STEEL";
 
 export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: string }[] = [
@@ -22,6 +23,7 @@ export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: s
     { key: "EMS",      label: "EMS",      description: "Employee Master Data" },
     { key: "CALENDAR", label: "Calendar", description: "Visit Scheduling" },
     { key: "LEAVE",    label: "Leave",    description: "Leave Request Management" },
+    { key: "DWMS",     label: "DWMS",     description: "Daily Work Management: Tasks & Alerts" },
     { key: "STEEL",    label: "Steel Manufacturing", description: "Production Planning (Process 1)" },
 ];
 

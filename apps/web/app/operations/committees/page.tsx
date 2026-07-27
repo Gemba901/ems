@@ -160,7 +160,7 @@ export default function CommitteesPage() {
       return (
         e.firstName.toLowerCase().includes(q) ||
         e.lastName.toLowerCase().includes(q) ||
-        e.email.toLowerCase().includes(q) ||
+        (e.email ?? "").toLowerCase().includes(q) ||
         (e.department?.name ?? "").toLowerCase().includes(q)
       );
     });

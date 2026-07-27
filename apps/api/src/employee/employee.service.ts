@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as XLSX from 'xlsx';
+import { RoleName } from 'db';
 
 type EmployeeImportRow = {
     rowNumber: number;
@@ -10,7 +11,7 @@ type EmployeeImportRow = {
     middleName?: string;
     lastName: string;
     fullName?: string;
-    email: string;
+    email?: string;
     personalEmail?: string;
     phone?: string;
     department?: string;
@@ -21,11 +22,13 @@ type EmployeeImportRow = {
     dateOfBirth?: Date;
     nationalId?: string;
     employmentStatus?: string;
+    employmentType?: string;
     dateJoined?: Date;
     skillLevel?: string;
     trainingNeeded?: boolean;
     jobDescription?: string;
     homeAddress?: string;
+    roleName?: RoleName;
 };
 
 type ImportIssue = { row: number; message: string };
@@ -411,6 +414,9 @@ export class EmployeeService {
         const employeeRole = await this.prisma.role.findUnique({ where: { name: 'EMPLOYEE' } });
         if (!employeeRole) throw new BadRequestException('EMPLOYEE role is not configured');
 
+        const roles = await this.prisma.role.findMany();
+        const roleIdByName = new Map(roles.map((r) => [r.name, r.id]));
+
         const currentEmployee = currentUserId
             ? await this.prisma.employee.findFirst({ where: { userId: currentUserId, organizationId } })
             : null;
@@ -470,7 +476,7 @@ export class EmployeeService {
         }
 
         // Pre-fetch users and departments outside the transaction to keep writes fast
-        const rowEmails = normalizedRows.map((r) => r.email).filter(Boolean);
+        const rowEmails = normalizedRows.map((r) => r.email).filter(Boolean) as string[];
         const rowPhones = normalizedRows.map((r) => r.phone).filter(Boolean) as string[];
         const preloadedUsers =
             rowEmails.length > 0 || rowPhones.length > 0
@@ -504,11 +510,16 @@ export class EmployeeService {
             const preloadedUser =
                 preloadedUsers.find(
                     (u) =>
-                        (u.email && this.normalizeEmail(u.email) === this.normalizeEmail(row.email)) ||
+                        (u.email && row.email && this.normalizeEmail(u.email) === this.normalizeEmail(row.email)) ||
                         (u.phone && row.phone && this.normalizePhone(u.phone) === this.normalizePhone(row.phone)),
                 ) ?? null;
 
-            const user = await this.getOrCreateImportUser(db, row, organizationId, employeeRole.id, preloadedUser);
+            // A recognized Role/Access Level cell always wins (including demotions from a manual
+            // change in Settings > Members). A blank/unrecognized cell leaves an existing member's
+            // role untouched rather than silently resetting them to EMPLOYEE.
+            const resolvedRoleId = row.roleName ? roleIdByName.get(row.roleName) : undefined;
+
+            const user = await this.getOrCreateImportUser(db, row, organizationId, employeeRole.id, resolvedRoleId, preloadedUser);
 
             const employeeData = {
                 firstName: row.firstName,
@@ -523,6 +534,7 @@ export class EmployeeService {
                 dateOfBirth: row.dateOfBirth ?? null,
                 nationalId: row.nationalId ?? null,
                 employmentStatus: this.toEmploymentStatus(row.employmentStatus) as any,
+                employmentType: this.toEmploymentType(row.employmentType) as any,
                 jobTitle: row.jobTitle ?? null,
                 dateJoined: row.dateJoined ?? null,
                 workStation: row.workStation ?? row.section ?? null,
@@ -598,10 +610,18 @@ export class EmployeeService {
             const companyEmail = this.cleanEmail(this.valueAt(source, headerMap, ['company email', 'email address', 'email', 'email id']));
             const personalEmail = this.cleanEmail(this.valueAt(source, headerMap, ['personal email']));
             const phone = this.cleanPhone(this.valueAt(source, headerMap, ['mobile number', 'phone number', 'phone']));
+            const employeeCode = this.cleanString(this.valueAt(source, headerMap, ['employee code', 'employee numbers']));
             const rowNumber = i + 1;
 
+            // Template rows with no identifying data (e.g. a leftover formula fill-down in an
+            // unused row) aren't real employees — skip them silently instead of reporting an issue.
+            if (!firstName && !middleName && !lastName && !fullName && !companyEmail && !personalEmail && !phone && !employeeCode) {
+                continue;
+            }
+
             const names = this.resolveNames(firstName, middleName, lastName, fullName);
-            const email = companyEmail || personalEmail || this.generatedImportEmail(source, headerMap, names, rowNumber);
+            const email = companyEmail || personalEmail || undefined;
+            const roleName = this.toImportRoleName(this.cleanString(this.valueAt(source, headerMap, ['role', 'access level'])));
 
             if (!names.firstName || !names.lastName) {
                 issues.push({ row: rowNumber, message: 'First name and last name are required' });
@@ -610,7 +630,7 @@ export class EmployeeService {
 
             rows.push({
                 rowNumber,
-                employeeCode: this.cleanString(this.valueAt(source, headerMap, ['employee code'])),
+                employeeCode,
                 firstName: names.firstName,
                 middleName,
                 lastName: names.lastName,
@@ -618,7 +638,7 @@ export class EmployeeService {
                 email,
                 personalEmail,
                 phone,
-                department: this.cleanString(this.valueAt(source, headerMap, ['department', 'employees department location', 'employees department'])),
+                department: this.cleanString(this.valueAt(source, headerMap, ['department', 'employees department location', 'employees department', 'employee s current department', 'current department'])),
                 section: this.cleanString(this.valueAt(source, headerMap, ['section area', 'sub section line'])),
                 workStation: this.cleanString(this.valueAt(source, headerMap, ['work location'])),
                 jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation'])),
@@ -626,18 +646,27 @@ export class EmployeeService {
                 dateOfBirth: this.toDate(this.valueAt(source, headerMap, ['date of birth'])),
                 nationalId: this.cleanString(this.valueAt(source, headerMap, ['national id passport no', 'national id'])),
                 employmentStatus: this.cleanString(this.valueAt(source, headerMap, ['employment status', 'employee status'])),
+                employmentType: this.cleanString(this.valueAt(source, headerMap, ['employment type'])),
                 dateJoined: this.toDate(this.valueAt(source, headerMap, ['date of joining', 'date joined'])),
                 skillLevel: this.cleanString(this.valueAt(source, headerMap, ['skill level'])),
                 trainingNeeded: this.toBoolean(this.valueAt(source, headerMap, ['training needed'])),
                 jobDescription: this.cleanString(this.valueAt(source, headerMap, ['primary work role'])),
                 homeAddress: this.cleanString(this.valueAt(source, headerMap, ['address'])),
+                roleName: roleName ?? undefined,
             });
         }
 
         return { rows, issues };
     }
 
-    private async getOrCreateImportUser(tx: any, row: EmployeeImportRow, organizationId: string, roleId: number, existingUser: any | null) {
+    private async getOrCreateImportUser(
+        tx: any,
+        row: EmployeeImportRow,
+        organizationId: string,
+        defaultRoleId: number,
+        resolvedRoleId: number | undefined,
+        existingUser: any | null,
+    ) {
         let user = existingUser;
 
         if (!user) {
@@ -661,8 +690,8 @@ export class EmployeeService {
 
         await tx.userOrganization.upsert({
             where: { userId_organizationId: { userId: user.id, organizationId } },
-            update: {},
-            create: { userId: user.id, organizationId, roleId },
+            update: resolvedRoleId ? { roleId: resolvedRoleId } : {},
+            create: { userId: user.id, organizationId, roleId: resolvedRoleId ?? defaultRoleId },
         });
 
         return user;
@@ -720,7 +749,7 @@ export class EmployeeService {
     ) {
         const candidates = employees.filter((employee) => allowMatched || !matchedIds.has(employee.id));
         return candidates.find((employee) => row.employeeCode && employee.employeeCode === row.employeeCode)
-            ?? candidates.find((employee) => this.normalizeEmail(employee.email) === this.normalizeEmail(row.email))
+            ?? candidates.find((employee) => row.email && employee.email && this.normalizeEmail(employee.email) === this.normalizeEmail(row.email))
             ?? candidates.find((employee) => row.phone && this.normalizePhone(employee.phone) === this.normalizePhone(row.phone));
     }
 
@@ -751,11 +780,23 @@ export class EmployeeService {
         return { firstName: firstName ?? '', lastName: lastName ?? '' };
     }
 
-    private generatedImportEmail(row: any[], headerMap: Map<string, number>, names: { firstName: string; lastName: string }, rowNumber: number) {
-        const code = this.cleanString(this.valueAt(row, headerMap, ['employee code']));
-        if (code) return `${this.normalizeKey(code).replace(/\s+/g, '-')}@employee.import.local`;
-        const slug = `${names.firstName}.${names.lastName}`.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
-        return `${slug || `row-${rowNumber}`}@employee.import.local`;
+    // maps the workbook's "Role" / "Access Level" column to a system RoleName.
+    // SUPER_ADMIN is intentionally never a target here — it can't be assigned via import.
+    private toImportRoleName(value?: string): RoleName | null {
+        const key = this.normalizeKey(value);
+        if (!key) return null;
+        const map: Record<string, RoleName> = {
+            admin: RoleName.ADMIN,
+            administrator: RoleName.ADMIN,
+            management: RoleName.MANAGEMENT,
+            manager: RoleName.MANAGEMENT,
+            hr: RoleName.HR,
+            'human resources': RoleName.HR,
+            hod: RoleName.HOD,
+            'head of department': RoleName.HOD,
+            employee: RoleName.EMPLOYEE,
+        };
+        return map[key] ?? null;
     }
 
     private cleanString(value: any): string | undefined {
@@ -840,6 +881,19 @@ export class EmployeeService {
             'contract ended': 'CONTRACT_ENDED',
         };
         return map[key] ?? 'ACTIVE';
+    }
+
+    private toEmploymentType(value?: string) {
+        const key = this.normalizeKey(value);
+        const map: Record<string, string> = {
+            'full time': 'FULL_TIME',
+            'part time': 'PART_TIME',
+            contract: 'CONTRACT',
+            intern: 'INTERN',
+            internship: 'INTERN',
+            casual: 'CASUAL',
+        };
+        return map[key] ?? null;
     }
 
     private toSkillLevel(value?: string) {

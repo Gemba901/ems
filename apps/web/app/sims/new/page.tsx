@@ -10,7 +10,7 @@ import { SimsService, SuggestionCategory, uploadSuggestionImage } from "@/servic
 import { EmployeeService } from "@/services/employee.service";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { SpeechToTextButton } from "@/components/ui/SpeechToTextButton";
-import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, X, Loader2 } from "lucide-react";
+import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, Camera, X, Loader2 } from "lucide-react";
 
 const QCDSMT_CATEGORIES: {
   value: SuggestionCategory;
@@ -153,6 +153,7 @@ export default function NewSuggestionPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const submitMutation = useMutation({
     mutationFn: async (payload: { title: string; description: string; categories: SuggestionCategory[]; isAnonymous: boolean; imageFile: File | null; departmentId?: string }) => {
@@ -193,6 +194,7 @@ export default function NewSuggestionPage() {
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(null);
     if (imageInputRef.current) imageInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   // Speech-to-text handlers
@@ -374,19 +376,37 @@ export default function NewSuggestionPage() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => imageInputRef.current?.click()}
-                      className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl py-5 text-sm text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all"
-                    >
-                      <ImagePlus className="h-4 w-4" />
-                      Click to attach an image
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => imageInputRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl py-5 text-sm text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all"
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Click to attach an image
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl py-5 text-sm text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all"
+                      >
+                        <Camera className="h-4 w-4" />
+                        Take a photo
+                      </button>
+                    </div>
                   )}
                   <input
                     ref={imageInputRef}
                     type="file"
                     accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
                     onChange={handleImageChange}
                     className="hidden"
                   />

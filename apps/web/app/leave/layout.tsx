@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Header } from "@/components/Header";
-import { Sidebar } from "@/components/Sidebar";
+import { LeaveSidebar } from "@/components/leave/LeaveSidebar";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
 import { ModuleGuard } from "@/components/ModuleGuard";
 
@@ -12,7 +12,7 @@ export default function LeaveLayout({ children }: { children: React.ReactNode })
 
     return (
         <div className="min-h-screen bg-[#F4F7FA] font-sans">
-            <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggle={toggle} />
+            <LeaveSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggle={toggle} />
             <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "lg:pl-16" : "lg:pl-64"}`}>
                 <Header onMenuClick={() => setSidebarOpen(true)} />
                 <main className="flex-1">

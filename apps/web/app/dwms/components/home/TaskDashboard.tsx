@@ -1,0 +1,645 @@
+"use client";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useAuthStore } from "@/store/auth.store";
+import TaskHeader, { TaskSubTabType } from "./TaskHeader";
+import TaskDetailModal from "./TaskDetailModal";
+import TaskMiniCard from "./TaskMiniCard";
+import {
+  DwmsService,
+  type DwmsTaskItem as TaskItem,
+  type DwmsTaskStatus as TaskStatus,
+} from "@/services/dwms.service";
+import { uploadImage } from "@/services/uploads.service";
+
+type SortType = "DUE_DATE" | "TITLE" | "COMPLETION";
+
+export default function TaskDashboard() {
+  // Tasks and loading state
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [completionTask, setCompletionTask] = useState<{
+    instanceId: string;
+    status: TaskStatus;
+  } | null>(null);
+  const [completionNote, setCompletionNote] = useState("");
+  const [completionFile, setCompletionFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filters & Search states
+  const [activeTab, setActiveTab] = useState<TaskSubTabType>("ALL");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy] = useState<SortType>("DUE_DATE");
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
+  const [frequencyFilter, setFrequencyFilter] = useState<string>("ALL");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+  const assigneeButtonRef = useRef<HTMLButtonElement>(null);
+  const assigneePanelRef = useRef<HTMLDivElement>(null);
+
+  // Toggle helpers to ensure only one dropdown is open at a time
+  const toggleFilterMenu = () => {
+    setIsFilterMenuOpen(!isFilterMenuOpen);
+    setIsAssigneeMenuOpen(false);
+  };
+
+  const toggleAssigneeMenu = () => {
+    setIsAssigneeMenuOpen(!isAssigneeMenuOpen);
+    setIsFilterMenuOpen(false);
+  };
+
+  // Derive unique list of assigners for the assigned-by filter
+  const uniqueAssignees = useMemo(() => {
+    const map = new Map<string, string>();
+    tasks.forEach((t) => {
+      if (t.assignedBy) {
+        map.set(t.assignedBy.id, t.assignedBy.name);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [tasks]);
+
+  // Status mapping for toggling checkboxes
+  const statusCompletion: Record<TaskStatus, number> = {
+    PENDING: 0,
+    IN_PROGRESS: 20,
+    DONE: 100,
+    APPROVAL_PENDING: 100,
+    PARTLY_DONE: 50,
+    LESS_THAN_50: 10,
+    NOT_APPLICABLE: 0,
+    OVERDUE: 0,
+  };
+
+  async function loadTasks() {
+    setLoading(true);
+    setError(null);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const token = useAuthStore.getState().accessToken ?? "";
+      const res = await DwmsService.getTodayTasks(token, today);
+      setTasks(res?.tasks ?? []);
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Failed to load tasks";
+      setError(message);
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadTasks();
+  }, []);
+
+  useEffect(() => {
+    function isInsideAny(
+      refs: Array<React.RefObject<HTMLElement | null>>,
+      event: MouseEvent,
+    ) {
+      const path = event.composedPath?.() ?? [];
+      return refs.some((ref) => {
+        const el = ref.current;
+        return !!el && (el.contains(event.target as Node) || path.includes(el));
+      });
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      if (!isInsideAny([filterButtonRef, filterPanelRef], event)) {
+        setIsFilterMenuOpen(false);
+      }
+      if (!isInsideAny([assigneeButtonRef, assigneePanelRef], event)) {
+        setIsAssigneeMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handleOutsideClick, true);
+    return () =>
+      document.removeEventListener("pointerdown", handleOutsideClick, true);
+  }, []);
+
+  // Patch task completion status
+  async function handleStatusChange(
+    instanceId: string,
+    nextStatus: TaskStatus,
+  ) {
+    if (nextStatus === "DONE") {
+      setCompletionTask({ instanceId, status: nextStatus });
+      setCompletionNote("");
+      setCompletionFile(null);
+      setError(null);
+      return;
+    }
+
+    setSavingId(instanceId);
+    setError(null);
+    try {
+      const token = useAuthStore.getState().accessToken ?? "";
+      await DwmsService.updateTaskStatus(token, instanceId, {
+        status: nextStatus,
+        completionPercent: statusCompletion[nextStatus],
+      });
+      await loadTasks();
+    } catch (saveError) {
+      const message =
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to update task";
+      setError(message);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleCompletionSubmit(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (!completionTask) return;
+
+    setSavingId(completionTask.instanceId);
+    setError(null);
+    try {
+      const token = useAuthStore.getState().accessToken ?? "";
+      const upload = completionFile
+        ? await uploadImage(completionFile, "dwms/task-completions", token)
+        : null;
+      await DwmsService.updateTaskStatus(token, completionTask.instanceId, {
+        status: completionTask.status,
+        completionPercent: statusCompletion[completionTask.status],
+        completionNote: completionNote.trim() || null,
+        completionAttachmentUrl: upload?.fileUrl ?? null,
+        completionAttachmentName: completionFile?.name ?? null,
+      });
+      setCompletionTask(null);
+      setCompletionNote("");
+      setCompletionFile(null);
+      await loadTasks();
+    } catch (saveError) {
+      const message =
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to complete task";
+      setError(message);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  // Task acknowledgement
+  async function handleAcknowledgement(taskId: string) {
+    try {
+      const token = useAuthStore.getState().accessToken ?? "";
+      await DwmsService.acknowledgeTask(token, taskId);
+      await loadTasks();
+    } catch (saveError) {
+      const message =
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to acknowledge task";
+      setError(message);
+    }
+  }
+
+  // Derived subtab task categories
+  const overdueTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) => t.status !== "DONE" && (t.isOverdue || t.status === "OVERDUE"),
+      ),
+    [tasks],
+  );
+  const completedTasks = useMemo(
+    () => tasks.filter((t) => t.status === "DONE"),
+    [tasks],
+  );
+  const notAcknowledgedTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          !t.acknowledgedAt && t.status !== "DONE" && t.status !== "OVERDUE",
+      ),
+    [tasks],
+  );
+  const pendingTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          !!t.acknowledgedAt && t.status !== "DONE" && t.status !== "OVERDUE",
+      ),
+    [tasks],
+  );
+
+  // Counts for the subtabs
+  const tabCounts = useMemo(() => {
+    const all = tasks.length;
+    const overdue = overdueTasks.length;
+    const completed = completedTasks.length;
+    const notAcknowledged = notAcknowledgedTasks.length;
+    const pending = pendingTasks.length;
+    return { all, overdue, completed, notAcknowledged, pending };
+  }, [tasks, overdueTasks, completedTasks, notAcknowledgedTasks, pendingTasks]);
+
+  // Filter & Sort Logic
+  const filteredTasks = useMemo(() => {
+    let result = [...tasks];
+
+    // 1. Filter by Active Subtab
+    if (activeTab === "OVERDUE") {
+      result = overdueTasks;
+    } else if (activeTab === "COMPLETED") {
+      result = completedTasks;
+    } else if (activeTab === "NOT_ACKNOWLEDGED") {
+      result = notAcknowledgedTasks;
+    } else if (activeTab === "PENDING") {
+      result = pendingTasks;
+    }
+
+    // 2. Filter by Frequency (dropdown filter option)
+    if (frequencyFilter !== "ALL") {
+      result = result.filter((t) => t.frequency === frequencyFilter);
+    }
+
+    // 3. Filter by who assigned the task
+    if (assigneeFilter !== "ALL") {
+      result = result.filter((t) => t.assignedBy?.id === assigneeFilter);
+    }
+
+    // 4. Filter by text search
+    if (searchTerm.trim() !== "") {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(
+        (t) =>
+          t.title.toLowerCase().includes(term) ||
+          (t.description && t.description.toLowerCase().includes(term)),
+      );
+    }
+
+    // 5. Sorting
+    result.sort((a, b) => {
+      if (sortBy === "TITLE") {
+        return a.title.localeCompare(b.title);
+      }
+      if (sortBy === "COMPLETION") {
+        return b.completionPercent - a.completionPercent;
+      }
+      // default: DUE_DATE
+      return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+    });
+
+    return result;
+  }, [
+    tasks,
+    activeTab,
+    overdueTasks,
+    completedTasks,
+    notAcknowledgedTasks,
+    pendingTasks,
+    searchTerm,
+    sortBy,
+    frequencyFilter,
+    assigneeFilter,
+  ]);
+
+  // Click details modal handler
+  const selectedTask = useMemo(() => {
+    if (!selectedTaskId) return null;
+    return tasks.find((t) => t.instanceId === selectedTaskId) ?? null;
+  }, [selectedTaskId, tasks]);
+
+  // Standard status colors helper for detail modals
+  const statusTone: Record<TaskStatus, string> = {
+    PENDING:
+      "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-350",
+    IN_PROGRESS:
+      "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300",
+    DONE: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-350",
+    APPROVAL_PENDING:
+      "bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300",
+    PARTLY_DONE:
+      "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-350",
+    LESS_THAN_50:
+      "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-350",
+    NOT_APPLICABLE:
+      "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-350",
+    OVERDUE:
+      "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-350",
+  };
+
+  const statusLabel = (status: TaskStatus) => {
+    return status
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const formatDateOnly = (value: string) => {
+    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
+      new Date(value),
+    );
+  };
+
+  const formatDateTime = (value: string) => {
+    return new Intl.DateTimeFormat("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  };
+
+  return (
+    <div className="relative pb-12">
+      <main className="mx-auto max-w-none px-4 pb-8 sm:px-6 lg:px-8 flex flex-col gap-6 pt-0">
+        {/* Sticky Header Zone */}
+        <div className="flex flex-col gap-4 pt-8 pb-4">
+          {/* Title Zone & Filter Pills */}
+          <TaskHeader
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            counts={tabCounts}
+          />
+
+          {/* Search & Action Filter Inputs */}
+          <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
+            {/* Search Input */}
+            <div className="relative flex-1 w-full">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2.2}
+                stroke="currentColor"
+                className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400/80"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z"
+                />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10.5 pr-4 py-2.5 text-sm border border-slate-200 bg-white text-slate-800 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 transition placeholder-slate-400/70"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-start sm:justify-end shrink-0">
+              {/* Filter Toggle */}
+              <div className="relative">
+                <button
+                  ref={filterButtonRef}
+                  onClick={toggleFilterMenu}
+                  className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-4 text-xs font-semibold transition cursor-pointer select-none ${
+                    frequencyFilter !== "ALL"
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
+                  }`}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="h-4 w-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z"
+                    />
+                  </svg>
+                  Filter
+                </button>
+                {isFilterMenuOpen && (
+                  <div
+                    ref={filterPanelRef}
+                    className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl z-50 text-left"
+                  >
+                    <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider px-2.5 mb-1.5">
+                      Frequency
+                    </p>
+                    {["ALL", "DAILY", "WEEKLY", "MONTHLY"].map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => {
+                          setFrequencyFilter(f);
+                          setIsFilterMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                          frequencyFilter === f
+                            ? "bg-blue-50 text-blue-700"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {f.charAt(0) + f.slice(1).toLowerCase()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Assigned By Toggle */}
+              <div className="relative">
+                <button
+                  ref={assigneeButtonRef}
+                  onClick={toggleAssigneeMenu}
+                  className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-4 text-xs font-semibold transition cursor-pointer select-none ${
+                    assigneeFilter !== "ALL"
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
+                  }`}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="h-4.5 w-4.5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+                    />
+                  </svg>
+                  Assigned By
+                </button>
+                {isAssigneeMenuOpen && (
+                  <div
+                    ref={assigneePanelRef}
+                    className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl z-50 text-left"
+                  >
+                    <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider px-2.5 mb-1.5">
+                      Assigned By
+                    </p>
+                    <button
+                      onClick={() => {
+                        setAssigneeFilter("ALL");
+                        setIsAssigneeMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                        assigneeFilter === "ALL"
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      All Assigners
+                    </button>
+                    {uniqueAssignees.map((a) => (
+                      <button
+                        key={a.id}
+                        onClick={() => {
+                          setAssigneeFilter(a.id);
+                          setIsAssigneeMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                          assigneeFilter === a.id
+                            ? "bg-blue-50 text-blue-700"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {a.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Global Loading / Error Notifications */}
+        {error && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+            {error}
+          </div>
+        )}
+
+        {/* Unified Tasks List */}
+        {loading ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-24 text-center text-sm text-slate-500">
+            Loading tasks...
+          </div>
+        ) : filteredTasks.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-20 text-center text-sm text-slate-500">
+            {activeTab === "ALL" && "No tasks found."}
+            {activeTab === "OVERDUE" && "No overdue tasks."}
+            {activeTab === "NOT_ACKNOWLEDGED" && "No unacknowledged tasks."}
+            {activeTab === "PENDING" && "No pending tasks."}
+            {activeTab === "COMPLETED" && "No completed tasks."}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredTasks.map((t) => (
+              <TaskMiniCard
+                key={t.instanceId}
+                task={t}
+                onClick={() => setSelectedTaskId(t.instanceId)}
+                onStatusChange={handleStatusChange}
+                onAcknowledgement={handleAcknowledgement}
+                saving={savingId === t.instanceId}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+
+      <TaskDetailModal
+        task={selectedTask}
+        open={!!selectedTask}
+        statusTone={statusTone}
+        statusLabel={statusLabel}
+        formatDateOnly={formatDateOnly}
+        formatDateTime={formatDateTime}
+        onClose={() => setSelectedTaskId(null)}
+      />
+
+      {completionTask && (
+        <div
+          className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
+          onClick={() => {
+            if (!savingId) setCompletionTask(null);
+          }}
+        >
+          <form
+            onSubmit={handleCompletionSubmit}
+            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">
+                  Complete task
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-slate-900">
+                  Attach completion file
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCompletionTask(null)}
+                disabled={!!savingId}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Close completion dialog"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+
+            <label className="mt-5 block text-xs font-semibold text-slate-700">
+              Completion note
+              <textarea
+                value={completionNote}
+                onChange={(event) => setCompletionNote(event.target.value)}
+                rows={3}
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                placeholder="Add a short note for the approver..."
+              />
+            </label>
+
+            <label className="mt-4 block text-xs font-semibold text-slate-700">
+              Completion file
+              <input
+                type="file"
+                onChange={(event) =>
+                  setCompletionFile(event.target.files?.[0] ?? null)
+                }
+                className="mt-2 block w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+              />
+            </label>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCompletionTask(null)}
+                disabled={!!savingId}
+                className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!!savingId}
+                className="inline-flex h-9 items-center justify-center rounded-full bg-emerald-600 px-4 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingId ? "Uploading..." : "Mark Done"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}

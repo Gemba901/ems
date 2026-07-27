@@ -36,7 +36,7 @@ export class NotificationsService {
         ]);
 
         if (employee) {
-            // fire-and-forget — channel failures must not break the main flow
+            // fire-and-forget, channel failures must not break the main flow
             void this.dispatcher.dispatch(employee, {
                 title: input.title,
                 message: input.message,
@@ -48,7 +48,31 @@ export class NotificationsService {
     }
 
     async createMany(inputs: CreateNotificationInput[]) {
-        return this.prisma.notification.createMany({ data: inputs });
+        if (inputs.length === 0) return this.prisma.notification.createMany({ data: [] });
+
+        const [result, employees] = await Promise.all([
+            this.prisma.notification.createMany({ data: inputs }),
+            this.prisma.employee.findMany({
+                where: { id: { in: inputs.map((i) => i.employeeId) } },
+                select: { id: true, email: true, phone: true, whatsappNumber: true, notificationPreferences: true },
+            }),
+        ]);
+
+        const employeeById = new Map(employees.map((e) => [e.id, e]));
+        // fire-and-forget, channel failures must not break the main flow
+        void Promise.allSettled(
+            inputs.map((input) => {
+                const employee = employeeById.get(input.employeeId);
+                if (!employee) return Promise.resolve();
+                return this.dispatcher.dispatch(employee, {
+                    title: input.title,
+                    message: input.message,
+                    actionUrl: input.actionUrl,
+                });
+            }),
+        );
+
+        return result;
     }
 
     async getNotificationsForEmployee(employeeId: string, page = 1, limit = 20) {

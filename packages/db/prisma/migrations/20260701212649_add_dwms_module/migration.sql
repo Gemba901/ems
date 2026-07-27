@@ -58,34 +58,39 @@ CREATE TYPE "EscalationContactRule" AS ENUM ('ASSIGNER', 'MANAGER', 'HOD', 'HIGH
 CREATE TYPE "TaskPermissionRole" AS ENUM ('ADMIN', 'MANAGEMENT', 'HOD', 'DIRECT_MANAGER', 'HIGHER_LEVEL_MANAGERS', 'OWNER', 'ANYONE', 'CUSTOM');
 
 -- DropForeignKey
-ALTER TABLE "LeaveRequest" DROP CONSTRAINT "LeaveRequest_handoverEmployee2Id_fkey";
+ALTER TABLE "LeaveRequest" DROP CONSTRAINT IF EXISTS "LeaveRequest_handoverEmployee2Id_fkey";
 
 -- DropForeignKey
-ALTER TABLE "LeaveSettings" DROP CONSTRAINT "LeaveSettings_orgId_fkey";
+-- may already be renamed to LeaveSettings_organizationId_fkey on environments
+-- where this migration was never applied but a later-dated one touched the
+-- same column (out-of-order branch merge).
+ALTER TABLE "LeaveSettings" DROP CONSTRAINT IF EXISTS "LeaveSettings_orgId_fkey";
 
 -- DropForeignKey
 ALTER TABLE "Suggestion" DROP CONSTRAINT IF EXISTS "Suggestion_committeeId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "SuggestionReview" DROP CONSTRAINT "SuggestionReview_reviewerCommitteeId_fkey";
+-- reviewerCommitteeId may already have been dropped (see
+-- 20260702_reconcile_suggestion_hod_review_and_employee_notifications).
+ALTER TABLE "SuggestionReview" DROP CONSTRAINT IF EXISTS "SuggestionReview_reviewerCommitteeId_fkey";
 
 -- DropIndex
-DROP INDEX "ConsultancyVisit_clientOrgId_date_idx";
+DROP INDEX IF EXISTS "ConsultancyVisit_clientOrgId_date_idx";
 
 -- DropIndex
-DROP INDEX "ConsultancyVisit_date_idx";
+DROP INDEX IF EXISTS "ConsultancyVisit_date_idx";
 
 -- DropIndex
-DROP INDEX "LeaveRequest_handoverEmployeeId_idx";
+DROP INDEX IF EXISTS "LeaveRequest_handoverEmployeeId_idx";
 
 -- DropIndex
-DROP INDEX "VisitRequest_organizationId_idx";
+DROP INDEX IF EXISTS "VisitRequest_organizationId_idx";
 
 -- DropIndex
-DROP INDEX "quotes_active_idx";
+DROP INDEX IF EXISTS "quotes_active_idx";
 
 -- DropIndex
-DROP INDEX "quotes_timeOfDay_idx";
+DROP INDEX IF EXISTS "quotes_timeOfDay_idx";
 
 -- AlterTable
 ALTER TABLE "CalendarEvent" ALTER COLUMN "id" DROP DEFAULT,
@@ -126,8 +131,20 @@ ALTER TABLE "Organization" ADD COLUMN IF NOT EXISTS "shortName" TEXT;
 ALTER TABLE "Role" ALTER COLUMN "name" SET NOT NULL;
 
 -- AlterTable
-ALTER TABLE "RolePermission" ALTER COLUMN "roleId" SET NOT NULL,
-ADD CONSTRAINT "RolePermission_pkey" PRIMARY KEY ("roleId", "permissionId");
+-- RolePermission_pkey may already have been added on environments where this
+-- migration was never applied but a later-dated one touched the same table.
+ALTER TABLE "RolePermission" ALTER COLUMN "roleId" SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class cl ON c.conrelid = cl.oid
+    WHERE c.conname = 'RolePermission_pkey' AND cl.relname = 'RolePermission'
+  ) THEN
+    ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_pkey" PRIMARY KEY ("roleId", "permissionId");
+  END IF;
+END $$;
 
 -- AlterTable
 -- committeeId drop and hodId/implementationNote/implementationStatus adds
@@ -138,7 +155,7 @@ ALTER TABLE "Suggestion" ADD COLUMN IF NOT EXISTS "implementationNote" TEXT;
 ALTER TABLE "Suggestion" ADD COLUMN IF NOT EXISTS "implementationStatus" "ImplementationStatus";
 
 -- AlterTable
-ALTER TABLE "SuggestionReview" DROP COLUMN "reviewerCommitteeId";
+ALTER TABLE "SuggestionReview" DROP COLUMN IF EXISTS "reviewerCommitteeId";
 
 -- AlterTable
 ALTER TABLE "quotes" ALTER COLUMN "id" DROP DEFAULT;
@@ -338,7 +355,18 @@ END $$;
 ALTER TABLE "LeaveRequest" ADD CONSTRAINT "LeaveRequest_handoverEmployee2Id_fkey" FOREIGN KEY ("handoverEmployee2Id") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "LeaveSettings" ADD CONSTRAINT "LeaveSettings_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- may already exist under this name on environments where a later-dated
+-- migration renamed it before this one ran (see DropForeignKey note above).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class cl ON c.conrelid = cl.oid
+    WHERE c.conname = 'LeaveSettings_organizationId_fkey' AND cl.relname = 'LeaveSettings'
+  ) THEN
+    ALTER TABLE "LeaveSettings" ADD CONSTRAINT "LeaveSettings_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
 ALTER TABLE "Task" ADD CONSTRAINT "Task_assignedById_fkey" FOREIGN KEY ("assignedById") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -380,4 +408,12 @@ ALTER TABLE "Alert" ADD CONSTRAINT "Alert_againstUserId_fkey" FOREIGN KEY ("agai
 ALTER TABLE "DwmsPermissionConfig" ADD CONSTRAINT "DwmsPermissionConfig_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- RenameIndex
-ALTER INDEX "LeaveSettings_orgId_key" RENAME TO "LeaveSettings_organizationId_key";
+-- may already be renamed on environments where a later-dated migration
+-- touched this index before this one ran.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'LeaveSettings_orgId_key')
+     AND NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'LeaveSettings_organizationId_key') THEN
+    ALTER INDEX "LeaveSettings_orgId_key" RENAME TO "LeaveSettings_organizationId_key";
+  END IF;
+END $$;

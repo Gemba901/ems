@@ -254,7 +254,7 @@ export default function EmployeeDetailPage() {
     setPersonalForm({
       firstName: employee.firstName,
       lastName: employee.lastName,
-      email: employee.email,
+      email: employee.email ?? "",
       phone: empRaw?.phone ?? employee.phone ?? "",
     });
     setSelectedRoleId(systemRoleId);
@@ -510,7 +510,7 @@ export default function EmployeeDetailPage() {
                       {[
                         { label: "First Name", value: employee.firstName },
                         { label: "Last Name", value: employee.lastName },
-                        { label: "Email", value: employee.email, full: true },
+                        { label: "Email", value: employee.email ?? "—", full: true },
                         { label: "Phone", value: employee.phone ?? "—" },
                         { label: "Employment Type", value: employee.employmentType
                             ? EMPLOYMENT_TYPE_LABELS[employee.employmentType as keyof typeof EMPLOYMENT_TYPE_LABELS] ?? employee.employmentType
@@ -843,7 +843,7 @@ export default function EmployeeDetailPage() {
               <CardHeader icon={Phone} title="Section 4 — Contact" iconColor="text-teal-500" iconBg="bg-teal-50" />
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Mobile Number (system)"><input className={readonlyCls} value={employee.phone ?? ""} readOnly /></Field>
-                <Field label="Company Email (system)"><input className={readonlyCls} value={employee.email} readOnly /></Field>
+                <Field label="Company Email (system)"><input className={readonlyCls} value={employee.email ?? ""} readOnly /></Field>
                 <Field label="WhatsApp Number"><input className={inputCls} value={form.whatsappNumber ?? ""} onChange={(e) => set("whatsappNumber", e.target.value)} placeholder="e.g. 254712345678" /></Field>
                 <Field label="Home Address"><input className={inputCls} value={form.homeAddress ?? ""} onChange={(e) => set("homeAddress", e.target.value)} placeholder="Full home address" /></Field>
                 <Field label="Emergency Contact Name"><input className={inputCls} value={form.emergencyContactName ?? ""} onChange={(e) => set("emergencyContactName", e.target.value)} placeholder="Full name" /></Field>

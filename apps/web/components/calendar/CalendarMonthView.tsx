@@ -7,6 +7,7 @@ import { DAYS, MONTHS, getDaysInMonth, getFirstDayOfWeek, toYMD } from "./calend
 
 export function CalendarMonthView({
   year, month, byDate, todayStr, selectedDate, isLoading, onSelectDate, onOpenItem, onPrev, onNext,
+  isAdmin, adminOrgConfigured, busyDates,
 }: {
   year: number;
   month: number;
@@ -18,7 +19,11 @@ export function CalendarMonthView({
   onOpenItem: (item: AgendaItem) => void;
   onPrev: () => void;
   onNext: () => void;
+  isAdmin?: boolean;
+  adminOrgConfigured?: boolean;
+  busyDates?: Set<string>;
 }) {
+  const canRequestVisit = !isAdmin && !!adminOrgConfigured;
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfWeek(year, month);
 
@@ -51,8 +56,8 @@ export function CalendarMonthView({
         </button>
       </div>
       <div className="grid shrink-0 grid-cols-7 border-b border-slate-100">
-        {DAYS.map(d => (
-          <div key={d} className="py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-400">{d}</div>
+        {DAYS.map((d, i) => (
+          <div key={d} className={`py-2 text-center text-[10px] font-bold uppercase tracking-wide ${i === 0 ? "text-red-500" : "text-slate-400"}`}>{d}</div>
         ))}
       </div>
       {isLoading ? (
@@ -61,7 +66,7 @@ export function CalendarMonthView({
         </div>
       ) : (
         <div className="grid flex-1 grid-cols-7">
-          {cells.map(({ dateStr, dayNumber, outside }) => (
+          {cells.map(({ dateStr, dayNumber, outside }, i) => (
             <DayCell
               key={dateStr}
               dateStr={dateStr}
@@ -70,6 +75,8 @@ export function CalendarMonthView({
               isToday={dateStr === todayStr}
               isSelected={dateStr === selectedDate}
               isOutsideMonth={outside}
+              isSunday={i % 7 === 0}
+              isAvailable={canRequestVisit && !outside && i % 7 !== 0 && dateStr >= todayStr && !busyDates?.has(dateStr)}
               onSelectDay={onSelectDate}
               onOpenItem={onOpenItem}
               density="compact"

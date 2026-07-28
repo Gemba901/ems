@@ -410,7 +410,12 @@ export class LeaveService {
             where,
             orderBy: { createdAt: 'desc' },
             include: {
-                employee: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
+                employee: {
+                    select: {
+                        id: true, firstName: true, lastName: true, jobTitle: true,
+                        department: { select: { id: true, name: true } },
+                    },
+                },
                 handoverEmployee:  { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
                 handoverEmployee2: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
             },
@@ -423,7 +428,12 @@ export class LeaveService {
         const req = await (this.prisma.leaveRequest as any).findFirst({
             where: { id, organizationId },
             include: {
-                employee: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
+                employee: {
+                    select: {
+                        id: true, firstName: true, lastName: true, jobTitle: true,
+                        department: { select: { id: true, name: true } },
+                    },
+                },
                 handoverEmployee:  { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
                 handoverEmployee2: { select: { id: true, firstName: true, lastName: true, jobTitle: true } },
                 reviewedBy: { select: { id: true, name: true } },
@@ -600,6 +610,16 @@ export class LeaveService {
         }));
     }
 
+    async getBalanceSummary(organizationId: string, year: number) {
+        const agg = await this.prisma.leaveBalance.aggregate({
+            where: { year, employee: { organizationId } },
+            _sum: { allocated: true, used: true },
+        });
+        const allocated = agg._sum.allocated ?? 0;
+        const used = agg._sum.used ?? 0;
+        return { year, allocated, used, remaining: allocated - used };
+    }
+
     async upsertBalance(employeeId: string, organizationId: string, dto: LeaveBalanceUpsertDto) {
         const employee = await this.prisma.employee.findFirst({
             where: { id: employeeId, organizationId },
@@ -661,6 +681,58 @@ export class LeaveService {
         );
 
         return { applied: employees.length, leaveTypes: policies.length, year: dto.year };
+    }
+
+    // ── Coverage alerts ───────────────────────────────────────────────────────
+    // Reuses the same min-headcount check applied on approval (see reviewRequest)
+    // to surface departments already below threshold today.
+
+    async getCoverageAlerts(organizationId: string, roleLevel: string, userId: string) {
+        let departmentIds: string[] | undefined;
+
+        if (roleLevel === 'HOD') {
+            const hodEmployee = await this.prisma.employee.findFirst({
+                where: { userId, organizationId },
+                select: { departmentId: true },
+            });
+            if (!hodEmployee?.departmentId) return [];
+            departmentIds = [hodEmployee.departmentId];
+        }
+
+        const departments = await (this.prisma.department as any).findMany({
+            where: { organizationId, ...(departmentIds ? { id: { in: departmentIds } } : {}) },
+            select: { id: true, name: true, minLeaveHeadcount: true },
+        });
+
+        const today = new Date();
+        const alerts = await Promise.all(
+            departments
+                .filter((dept) => dept.minLeaveHeadcount > 0)
+                .map(async (dept) => {
+                    const [total, onLeaveToday] = await Promise.all([
+                        this.prisma.employee.count({ where: { departmentId: dept.id, organizationId } }),
+                        this.prisma.leaveRequest.count({
+                            where: {
+                                employee: { departmentId: dept.id },
+                                status: LeaveStatus.APPROVED,
+                                startDate: { lte: today },
+                                endDate: { gte: today },
+                            },
+                        }),
+                    ]);
+                    const remaining = total - onLeaveToday;
+                    return {
+                        departmentId: dept.id,
+                        departmentName: dept.name,
+                        total,
+                        onLeaveToday,
+                        remaining,
+                        minLeaveHeadcount: dept.minLeaveHeadcount,
+                    };
+                }),
+        );
+
+        return alerts.filter((a) => a.remaining < a.minLeaveHeadcount);
     }
 
     // ── Summary / Analytics ───────────────────────────────────────────────────

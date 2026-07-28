@@ -130,4 +130,29 @@ export class CommitteeService {
       select: { id: true, name: true, type: true },
     });
   }
+
+  // The single committee SELECTED_FOR_SGA suggestions are forwarded to for this org
+  async setDesignatedSgaCommittee(committeeId: string, organizationId: string) {
+    const committee = await this.prisma.steeringCommittee.findUnique({
+      where: { id: committeeId },
+    });
+    if (!committee || committee.organizationId !== organizationId) {
+      throw new NotFoundException('Committee not found');
+    }
+
+    await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { sgaCommitteeId: committeeId },
+    });
+
+    return this.getCommittee(committeeId, organizationId);
+  }
+
+  async getDesignatedSgaCommittee(organizationId: string) {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { sgaCommittee: { select: { id: true, name: true, type: true } } },
+    });
+    return organization?.sgaCommittee ?? null;
+  }
 }

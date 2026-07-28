@@ -64,8 +64,27 @@ export interface LeaveRequest {
     reviewedAt: string | null;
     reviewNote: string | null;
     createdAt: string;
-    employee?: { id: string; firstName: string; lastName: string; jobTitle: string | null };
+    employee?: {
+        id: string; firstName: string; lastName: string; jobTitle: string | null;
+        department?: { id: string; name: string } | null;
+    };
     reviewedBy?: { id: string; name: string } | null;
+}
+
+export interface LeaveBalanceSummary {
+    year: number;
+    allocated: number;
+    used: number;
+    remaining: number;
+}
+
+export interface LeaveCoverageAlert {
+    departmentId: string;
+    departmentName: string;
+    total: number;
+    onLeaveToday: number;
+    remaining: number;
+    minLeaveHeadcount: number;
 }
 
 export interface LeaveBalance {
@@ -219,6 +238,17 @@ export const LeaveService = {
 
     async getEmployeeBalance(token: string, employeeId: string): Promise<LeaveBalance[]> {
         const res = await fetch(`${API_URL}/leave/balance/${employeeId}`, { headers: authHeaders(token) });
+        return handleResponse(res);
+    },
+
+    async getBalanceSummary(token: string, year?: number): Promise<LeaveBalanceSummary> {
+        const qs = year ? `?year=${year}` : "";
+        const res = await fetch(`${API_URL}/leave/balance/summary${qs}`, { headers: authHeaders(token) });
+        return handleResponse(res);
+    },
+
+    async getCoverageAlerts(token: string): Promise<LeaveCoverageAlert[]> {
+        const res = await fetch(`${API_URL}/leave/coverage`, { headers: authHeaders(token) });
         return handleResponse(res);
     },
 

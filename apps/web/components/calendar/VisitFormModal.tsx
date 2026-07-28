@@ -3,18 +3,26 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Loader2, CheckCircle2, Minus, Plus, ChevronDown, Users, UserPlus } from "lucide-react";
-import { CalendarService, CalendarVisit, ClientOrg, VisitStatus } from "@/services/calendar.service";
-import { MONTHS } from "./calendarUtils";
+import { CalendarService, CalendarVisit, PartnerOrg, VisitStatus } from "@/services/calendar.service";
+import { MONTHS, isSundayDate } from "./calendarUtils";
+import { CreateTypeTabs, CreateFlowType } from "./CreateTypeTabs";
+
+function weekdayLabel(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
+}
 
 export function VisitFormModal({
-  orgs, token, editing, defaultDate, year, month, onClose, onSaved,
+  orgs, token, editing, defaultDate, year, month, isAdmin, adminOrgConfigured, onSwitchType, onClose, onSaved,
 }: {
-  orgs: ClientOrg[];
+  orgs: PartnerOrg[];
   token: string;
   editing: CalendarVisit | null;
   defaultDate?: string;
   year: number;
   month: number;
+  isAdmin: boolean;
+  adminOrgConfigured: boolean;
+  onSwitchType: (type: CreateFlowType) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -70,10 +78,11 @@ export function VisitFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientOrgId) { setError("Please select a client."); return; }
+    if (!clientOrgId) { setError("Please select a partner."); return; }
     setSaving(true); setError(null);
     try {
       if (editing) {
+        if (editDate && isSundayDate(editDate)) { setError("Partner visits cannot be scheduled on Sundays."); setSaving(false); return; }
         await CalendarService.updateVisit(editing.id, {
           clientOrgId,
           date: editDate || undefined,
@@ -84,7 +93,8 @@ export function VisitFormModal({
       } else {
         const datedSlots = slots.filter((s) => s.date);
         if (datedSlots.length === 0) { setError("Set a date for at least one visit."); setSaving(false); return; }
-        const orgName = selectedOrg?.name ?? "Client";
+        if (datedSlots.some((s) => isSundayDate(s.date))) { setError("Partner visits cannot be scheduled on Sundays."); setSaving(false); return; }
+        const orgName = selectedOrg?.name ?? "Partner";
         for (let i = 0; i < slots.length; i++) {
           const s = slots[i];
           if (!s.date) continue;
@@ -112,16 +122,20 @@ export function VisitFormModal({
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in zoom-in-95 fade-in">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-          <h2 className="text-base font-bold text-slate-900">{editing ? "Edit Visit" : "Schedule Visit"}</h2>
+          <h2 className="text-base font-bold text-slate-900">{editing ? "Edit Partner Visit" : "Schedule Partner Visit"}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
-          {/* Client */}
+          {!editing && (
+            <CreateTypeTabs active="VISIT" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} dateStr={defaultDate} onSelect={onSwitchType} />
+          )}
+
+          {/* Partner */}
           <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">Client Organization</label>
+            <label className="text-xs font-semibold text-slate-500 block mb-1">Partner Organization</label>
             <select className={`${inputCls} bg-white`} value={clientOrgId} onChange={(e) => setClientOrgId(e.target.value)}>
-              <option value="">— Select client —</option>
+              <option value="">— Select partner —</option>
               {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           </div>
@@ -155,12 +169,19 @@ export function VisitFormModal({
                       <span className="h-5 w-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
                       <span className="text-xs font-semibold text-slate-600">Visit {i + 1}</span>
                     </div>
-                    <input
-                      type="date" value={slot.date}
-                      min={`${monthPrefix}-01`} max={`${monthPrefix}-31`}
-                      onChange={(e) => updateSlot(i, "date", e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date" value={slot.date}
+                        min={`${monthPrefix}-01`} max={`${monthPrefix}-31`}
+                        onChange={(e) => updateSlot(i, "date", e.target.value)}
+                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                      />
+                      {slot.date && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+                          {weekdayLabel(slot.date)}
+                        </span>
+                      )}
+                    </div>
                     <textarea
                       rows={2} placeholder="Agenda for this visit…" value={slot.agenda}
                       onChange={(e) => updateSlot(i, "agenda", e.target.value)}
@@ -177,7 +198,14 @@ export function VisitFormModal({
             <>
               <div>
                 <label className="text-xs font-semibold text-slate-500 block mb-1">Date</label>
-                <input type="date" className={inputCls} value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                <div className="flex items-center gap-2">
+                  <input type="date" className={`${inputCls} flex-1`} value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                  {editDate && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+                      {weekdayLabel(editDate)}
+                    </span>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-500 block mb-1">Agenda</label>
@@ -229,7 +257,7 @@ export function VisitFormModal({
                     </div>
                   ))}
                   <div className="border-t border-slate-100 pt-2">
-                    <p className="text-[10px] text-slate-400 font-semibold mb-1.5">ADD FROM CLIENT ORG</p>
+                    <p className="text-[10px] text-slate-400 font-semibold mb-1.5">ADD FROM PARTNER ORG</p>
                     <div className="space-y-1 max-h-32 overflow-y-auto">
                       {orgEmployees.filter((e) => !currentAttendeeIds.has(e.id)).map((e) => (
                         <button key={e.id} type="button" onClick={() => addAttendeeMutation.mutate({ employeeId: e.id })}

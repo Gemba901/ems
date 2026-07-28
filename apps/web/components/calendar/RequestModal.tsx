@@ -3,13 +3,18 @@
 import { useState } from "react";
 import { Lock, Loader2, Send, X } from "lucide-react";
 import { CalendarService } from "@/services/calendar.service";
+import { CreateTypeTabs, CreateFlowType } from "./CreateTypeTabs";
+import { isSundayDate } from "./calendarUtils";
 
 export function RequestModal({
-  token, defaultDate, busyDates, onClose, onSaved,
+  token, defaultDate, busyDates, isAdmin, adminOrgConfigured, onSwitchType, onClose, onSaved,
 }: {
   token: string;
   defaultDate?: string;
   busyDates: Set<string>;
+  isAdmin: boolean;
+  adminOrgConfigured: boolean;
+  onSwitchType: (type: CreateFlowType) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -20,11 +25,13 @@ export function RequestModal({
   const [error,         setError]         = useState<string | null>(null);
 
   const dateIsBusy = !!date && busyDates.has(date);
+  const dateIsSunday = !!date && isSundayDate(date);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date) { setError("Please select a date."); return; }
     if (dateIsBusy) { setError("This date is unavailable. Please choose another date."); return; }
+    if (dateIsSunday) { setError("Sundays are reserved for personal events. Please choose another date."); return; }
     setSaving(true); setError(null);
     try {
       await CalendarService.createRequest({ requestedDate: date, preferredTime: preferredTime || undefined, message: message || undefined }, token);
@@ -44,14 +51,25 @@ export function RequestModal({
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <CreateTypeTabs active="REQUEST" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} dateStr={date || undefined} onSelect={onSwitchType} />
+
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Requested Date</label>
             <input type="date" className={inputCls} value={date} onChange={(e) => { setDate(e.target.value); setError(null); }} />
+            {date && !dateIsBusy && !dateIsSunday && (
+              <p className="mt-1 text-[11px] font-semibold text-emerald-600">Available</p>
+            )}
           </div>
           {dateIsBusy && (
             <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
               <Lock className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
               <p className="text-xs text-slate-600">This date is already booked. Please select a different date.</p>
+            </div>
+          )}
+          {dateIsSunday && !dateIsBusy && (
+            <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <Lock className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-slate-600">Sundays are reserved for personal events. Please choose another date.</p>
             </div>
           )}
           <div>
@@ -64,7 +82,7 @@ export function RequestModal({
           </div>
           {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
           <div className="flex gap-3">
-            <button type="submit" disabled={saving || dateIsBusy} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
+            <button type="submit" disabled={saving || dateIsBusy || dateIsSunday} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {saving ? "Sending…" : "Send Request"}
             </button>

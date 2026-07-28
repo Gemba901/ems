@@ -39,3 +39,5 @@ yarn-error.log*
 
 /import-ready
 /scripts
+seed_new.ts
+employee_details.md

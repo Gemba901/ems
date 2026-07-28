@@ -31,3 +31,6 @@ export function addDays(date: Date, n: number) {
 export function dateToYMD(d: Date) {
   return toYMD(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
+export function isSundayDate(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00`).getDay() === 0;
+}

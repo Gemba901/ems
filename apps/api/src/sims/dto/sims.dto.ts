@@ -3,7 +3,7 @@ import {
   IsNumber, Min, IsArray, ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SuggestionCategory, SuggestionStatus, ImplementationStatus } from 'db';
+import { SuggestionCategory, SuggestionStatus, ImplementationStatus, DecisionType } from 'db';
 
 export class CreateSuggestionDto {
   @IsString()
@@ -48,6 +48,15 @@ export class ReviewSuggestionDto {
   @IsString()
   @IsOptional()
   implementationNote?: string;
+
+  /** Required when statusChanged === APPROVED_FOR_IMPLEMENTATION */
+  @IsEnum(DecisionType, { message: 'Invalid decision type' })
+  @IsOptional()
+  decisionType?: DecisionType;
+
+  /** Shape depends on statusChanged/decisionType — see sims-review-pipeline-timeline.md */
+  @IsOptional()
+  decisionDetails?: Record<string, any>;
 }
 
 export class UpdateImplementationDto {

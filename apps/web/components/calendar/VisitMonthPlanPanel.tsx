@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  CalendarService, ClientOrg, VisitPlanSlot,
+  CalendarService, PartnerOrg, VisitPlanSlot,
 } from "@/services/calendar.service";
 import {
   Loader2, Save, Plus, Minus, CalendarDays, CheckCircle2, Building2,
@@ -15,7 +15,7 @@ const MONTHS = [
 ];
 
 interface VisitMonthPlanPanelProps {
-  orgs: ClientOrg[];
+  orgs: PartnerOrg[];
   token: string;
   year: number;
   month: number;
@@ -214,6 +214,11 @@ function SlotRow({
               onChange={(e) => { setDate(e.target.value); setDirty(true); setExpanded(true); }}
               className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all bg-white"
             />
+            {date && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+                {new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" })}
+              </span>
+            )}
           </div>
 
           {/* Agenda — shown when expanded or has content */}

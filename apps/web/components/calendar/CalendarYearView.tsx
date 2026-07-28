@@ -48,7 +48,12 @@ function MiniMonth({
               }`}
             >
               {day}
-              {hasItems && !isToday && <span className={`absolute bottom-0 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${dotClass(items[0].color)}`} />}
+              {hasItems && !isToday && (
+                <span
+                  style={items[0].orgColor ? { backgroundColor: items[0].orgColor } : undefined}
+                  className={`absolute bottom-0 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${items[0].orgColor ? "" : dotClass(items[0].color)}`}
+                />
+              )}
             </button>
           );
         })}

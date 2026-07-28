@@ -49,9 +49,10 @@ export async function getNotifications(
   page = 1,
   limit = 20,
 ): Promise<NotificationsResponse> {
-  const res = await fetch(
+  const res = await apiClient(
     `${API_URL}/notifications?page=${page}&limit=${limit}`,
     { headers: authHeaders(token) },
+    token,
   );
   return handleResponse<NotificationsResponse>(res);
 }

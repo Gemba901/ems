@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -39,6 +40,28 @@ export class CommitteeController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
   async list(@CurrentUser() user: { organizationId: string }) {
     return this.committeeService.listCommittees(user.organizationId);
+  }
+
+  /**
+   * GET /committees/designated
+   * Returns the single committee SELECTED_FOR_SGA suggestions are forwarded to, or null.
+   */
+  @Get('designated')
+  async getDesignated(@CurrentUser() user: { organizationId: string }) {
+    return this.committeeService.getDesignatedSgaCommittee(user.organizationId);
+  }
+
+  /**
+   * PATCH /committees/designated/:committeeId
+   * Only Super Admin/Admin can change the org's designated SGA committee.
+   */
+  @Patch('designated/:committeeId')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  async setDesignated(
+    @Param('committeeId') committeeId: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.committeeService.setDesignatedSgaCommittee(committeeId, user.organizationId);
   }
 
   /**

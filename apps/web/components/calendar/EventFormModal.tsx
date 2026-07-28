@@ -10,6 +10,8 @@ import {
 import {
   X, Loader2, CheckCircle2, RefreshCw, Users, AlertTriangle, Check, Globe2, Lock,
 } from "lucide-react";
+import { CreateTypeTabs, CreateFlowType } from "./CreateTypeTabs";
+import { isSundayDate } from "./calendarUtils";
 
 function toYMD(y: number, m: number, d: number) {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -21,28 +23,33 @@ function toLocalDatetimeInput(iso: string) {
 }
 
 export function EventFormModal({
-  token, defaultDate, editing, isOrgManager, onClose, onSaved,
+  token, defaultDate, editing, isOrgManager, quickCreateProspect, isAdmin, adminOrgConfigured, onSwitchType, onClose, onSaved,
 }: {
   token: string;
   defaultDate?: string;
   editing: HolisticCalendarEvent | null;
   isOrgManager: boolean;
+  quickCreateProspect?: boolean;
+  isAdmin: boolean;
+  adminOrgConfigured: boolean;
+  onSwitchType: (type: CreateFlowType) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const now = new Date();
   const baseDate = defaultDate ?? toYMD(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  const showProspectField = quickCreateProspect || !!editing?.prospectOrgName;
 
-  const [title, setTitle] = useState(editing?.title ?? "");
+  const [title, setTitle] = useState(editing?.title ?? (quickCreateProspect ? "Initial Meeting" : ""));
+  const [prospectOrgName, setProspectOrgName] = useState(editing?.prospectOrgName ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [label, setLabel] = useState(editing?.label ?? "");
   const [color, setColor] = useState<EventColor>(editing?.color ?? "PEACOCK");
-  const [visibility, setVisibility] = useState<EventVisibility>(editing?.visibility ?? "PRIVATE");
   const [allDay, setAllDay] = useState(editing?.allDay ?? false);
   const [startAt, setStartAt] = useState(editing ? toLocalDatetimeInput(editing.startAt) : `${baseDate}T09:00`);
   const [endAt, setEndAt] = useState(editing ? toLocalDatetimeInput(editing.endAt) : `${baseDate}T10:00`);
 
-  const [recPreset, setRecPreset] = useState<"none" | "daily" | "weekly" | "monthly" | "custom">("none");
+  const [recPreset, setRecPreset] = useState<"none" | "daily" | "weekly" | "monthly" | "yearly" | "custom">("none");
   const [recPattern, setRecPattern] = useState<EventRecurrencePattern>("WEEKLY");
   const [recInterval, setRecInterval] = useState(1);
   const [recEnds, setRecEnds] = useState<"never" | "on">("never");
@@ -51,6 +58,13 @@ export function EventFormModal({
 
   const initialInviteeIds = (editing?.invitations ?? []).map(i => i.invitee.id);
   const [inviteeIds, setInviteeIds] = useState<string[]>(initialInviteeIds);
+  const [whoCanSee, setWhoCanSee] = useState<"ORG_WIDE" | "JUST_YOU" | "SELECTED">(
+    editing?.visibility === "ORG_WIDE" ? "ORG_WIDE" : initialInviteeIds.length > 0 ? "SELECTED" : "JUST_YOU"
+  );
+  const selectWhoCanSee = (mode: "ORG_WIDE" | "JUST_YOU" | "SELECTED") => {
+    setWhoCanSee(mode);
+    if (mode === "JUST_YOU") setInviteeIds([]);
+  };
   const [onLeaveNames, setOnLeaveNames] = useState<string[]>([]);
   const [updateScope, setUpdateScope] = useState<"THIS_ONLY" | "ALL_IN_SERIES">("THIS_ONLY");
 
@@ -88,9 +102,14 @@ export function EventFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) { setError("Title is required."); return; }
+    if (quickCreateProspect && !prospectOrgName.trim()) { setError("Prospect / company name is required."); return; }
     if (!startAt || !endAt) { setError("Start and end time are required."); return; }
     if (new Date(endAt) <= new Date(startAt)) { setError("End must be after start."); return; }
     if (!editing && isNewRecurring && recEnds === "on" && !recEndAt) { setError("End date is required when 'On date' is selected."); return; }
+    if (whoCanSee === "SELECTED" && inviteeIds.length === 0) { setError("Select at least one person who can see this event."); return; }
+    if (showProspectField && isSundayDate(startAt.split("T")[0])) { setError("Client visits cannot be scheduled on Sundays."); return; }
+
+    const visibility: EventVisibility = whoCanSee === "ORG_WIDE" ? "ORG_WIDE" : "PRIVATE";
 
     setSaving(true);
     setError(null);
@@ -110,6 +129,7 @@ export function EventFormModal({
           addInviteeIds: added.length ? added : undefined,
           removeInviteeIds: removed.length ? removed : undefined,
           updateMode: editing.isRecurring ? updateScope : undefined,
+          prospectOrgName: showProspectField ? (prospectOrgName.trim() || undefined) : undefined,
         };
         await CalendarService.updateEvent(editing.id, payload, token);
       } else {
@@ -124,11 +144,12 @@ export function EventFormModal({
           allDay,
           isRecurring: isNewRecurring,
           recurrencePattern: isNewRecurring
-            ? recPreset === "daily" ? "DAILY" : recPreset === "weekly" ? "WEEKLY" : recPreset === "monthly" ? "MONTHLY" : recPattern
+            ? recPreset === "daily" ? "DAILY" : recPreset === "weekly" ? "WEEKLY" : recPreset === "monthly" ? "MONTHLY" : recPreset === "yearly" ? "YEARLY" : recPattern
             : undefined,
           recurrenceInterval: isNewRecurring ? (recPreset === "custom" ? recInterval : 1) : undefined,
           recurrenceEndAt: isNewRecurring && recEnds === "on" && recEndAt ? new Date(`${recEndAt}T23:59`).toISOString() : undefined,
           inviteeIds,
+          prospectOrgName: quickCreateProspect ? prospectOrgName.trim() : undefined,
         };
         const result = await CalendarService.createEvent(payload, token);
         if (result.onLeaveWarnings.length > 0) {
@@ -153,7 +174,9 @@ export function EventFormModal({
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 fade-in">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-bold text-slate-900">{editing ? "Edit Event" : "New Event"}</h2>
+          <h2 className="text-base font-bold text-slate-900">
+            {quickCreateProspect ? "New Client Visit" : editing ? "Edit Event" : "New Event"}
+          </h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
         </div>
 
@@ -162,6 +185,29 @@ export function EventFormModal({
             <label className="mb-1 block text-xs font-semibold text-slate-500">Title</label>
             <input autoFocus className={inputCls} value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title…" />
           </div>
+
+          {!editing && (
+            <CreateTypeTabs
+              active={quickCreateProspect ? "CLIENT_VISIT" : "EVENT"}
+              isAdmin={isAdmin}
+              adminOrgConfigured={adminOrgConfigured}
+              dateStr={quickCreateProspect ? startAt.split("T")[0] : undefined}
+              onSelect={onSwitchType}
+            />
+          )}
+
+          {showProspectField && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Prospect / company name</label>
+              <input
+                className={inputCls}
+                value={prospectOrgName}
+                onChange={e => setProspectOrgName(e.target.value)}
+                placeholder="e.g. Acme Corp"
+                maxLength={120}
+              />
+            </div>
+          )}
 
           <div>
             <label className="mb-2 block text-xs font-semibold text-slate-500">Color</label>
@@ -226,20 +272,44 @@ export function EventFormModal({
             </div>
           )}
 
-          {isOrgManager && (
-            <label className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2.5">
-              <span className="flex items-center gap-2 text-sm text-slate-600">
-                {visibility === "ORG_WIDE" ? <Globe2 className="h-4 w-4 text-blue-500" /> : <Lock className="h-4 w-4 text-slate-400" />}
+          <div className="space-y-2 rounded-xl border border-slate-100 p-3">
+            <p className="text-xs font-semibold text-slate-500">Who can see</p>
+            {isOrgManager && (
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="radio"
+                  name="whoCanSee"
+                  checked={whoCanSee === "ORG_WIDE"}
+                  onChange={() => selectWhoCanSee("ORG_WIDE")}
+                  className="accent-blue-600"
+                />
+                <Globe2 className="h-4 w-4 text-blue-500" />
                 Whole organization
-              </span>
-              <div
-                onClick={() => setVisibility(v => (v === "ORG_WIDE" ? "PRIVATE" : "ORG_WIDE"))}
-                className={`relative h-5 w-9 cursor-pointer rounded-full transition-colors ${visibility === "ORG_WIDE" ? "bg-blue-600" : "bg-slate-200"}`}
-              >
-                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${visibility === "ORG_WIDE" ? "translate-x-4" : "translate-x-0.5"}`} />
-              </div>
+              </label>
+            )}
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+              <input
+                type="radio"
+                name="whoCanSee"
+                checked={whoCanSee === "JUST_YOU"}
+                onChange={() => selectWhoCanSee("JUST_YOU")}
+                className="accent-blue-600"
+              />
+              <Lock className="h-4 w-4 text-slate-400" />
+              Just you
             </label>
-          )}
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+              <input
+                type="radio"
+                name="whoCanSee"
+                checked={whoCanSee === "SELECTED"}
+                onChange={() => selectWhoCanSee("SELECTED")}
+                className="accent-blue-600"
+              />
+              <Users className="h-4 w-4 text-indigo-400" />
+              Select who can see
+            </label>
+          </div>
 
           {!editing && (
             <div className="space-y-3 rounded-xl border border-slate-100 p-3">
@@ -256,6 +326,7 @@ export function EventFormModal({
                   if (v === "daily") { setRecPattern("DAILY"); setRecInterval(1); }
                   if (v === "weekly") { setRecPattern("WEEKLY"); setRecInterval(1); }
                   if (v === "monthly") { setRecPattern("MONTHLY"); setRecInterval(1); }
+                  if (v === "yearly") { setRecPattern("YEARLY"); setRecInterval(1); }
                   if (v === "none") { setRecEnds("never"); setRecEndAt(""); }
                 }}
               >
@@ -267,6 +338,9 @@ export function EventFormModal({
                   {startAt
                     ? (["th", "st", "nd", "rd"][[11, 12, 13].includes(new Date(startAt).getDate()) ? 0 : Math.min(new Date(startAt).getDate() % 10, 3)] ?? "th")
                     : ""}
+                </option>
+                <option value="yearly">
+                  Every year on {startAt ? new Date(startAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" }) : "…"}
                 </option>
                 <option value="custom">Custom…</option>
               </select>
@@ -290,6 +364,7 @@ export function EventFormModal({
                     <option value="DAILY">{recInterval === 1 ? "day" : "days"}</option>
                     <option value="WEEKLY">{recInterval === 1 ? "week" : "weeks"}</option>
                     <option value="MONTHLY">{recInterval === 1 ? "month" : "months"}</option>
+                    <option value="YEARLY">{recInterval === 1 ? "year" : "years"}</option>
                   </select>
                 </div>
               )}
@@ -337,14 +412,16 @@ export function EventFormModal({
             </div>
           )}
 
-          <PeoplePicker
-            label="Guests"
-            employees={orgEmployees}
-            loading={loadingEmployees}
-            selected={inviteeIds}
-            onToggle={toggleInvitee}
-            onLeaveNames={onLeaveNames}
-          />
+          {whoCanSee !== "JUST_YOU" && (
+            <PeoplePicker
+              label={whoCanSee === "SELECTED" ? "Select who can see" : "Guests"}
+              employees={orgEmployees}
+              loading={loadingEmployees}
+              selected={inviteeIds}
+              onToggle={toggleInvitee}
+              onLeaveNames={onLeaveNames}
+            />
+          )}
 
           {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
@@ -355,7 +432,7 @@ export function EventFormModal({
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              {saving ? "Saving…" : editing ? "Save Changes" : "Create Event"}
+              {saving ? "Saving…" : editing ? "Save Changes" : quickCreateProspect ? "Create Client Visit" : "Create Event"}
             </button>
             <button type="button" onClick={onClose} className="rounded-xl px-5 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100">
               Cancel

@@ -99,7 +99,7 @@ enum EmploymentType {
 
 enum TicketType {
   SYSTEM_TICKET
-  COMPANY_TICKET  
+  COMPANY_TICKET
 }
 
 enum TicketStatus {
@@ -146,19 +146,7 @@ model Organization {
   // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
   sgaCommitteeId String?
   sgaCommittee   SteeringCommittee? @relation("OrgSgaCommittee", fields: [sgaCommitteeId], references: [id], onDelete: SetNull)
-  userOrganizations UserOrganization[]
-  employees   Employee[]
-  departments Department[]
-  suggestions Suggestion[]
-  committees  SteeringCommittee[]
-  consultancyVisits ConsultancyVisit[]
-  visitRequests     VisitRequest[]
-  visitMonthPlans   VisitMonthPlan[]
-  leaveRequests     LeaveRequest[]
-  leavePolicies     LeavePolicy[]
-  leaveSettings     LeaveSettings?
-  calendarEvents    CalendarEvent[]
-  notices           Notice[]
+
   steelProductionPlans SteelProductionPlan[]
   steelSourcingOrders  SteelSourcingOrder[]
   suppliers            Supplier[]
@@ -296,7 +284,6 @@ model Employee {
   hrRecordOwnerId    String?
   hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)
   hrManagedEmployees Employee[] @relation("HRRecordOwner")
-  
 
   department            Department?               @relation(fields: [departmentId], references: [id])
   organization          Organization              @relation(fields: [organizationId], references: [id])
@@ -309,36 +296,32 @@ model Employee {
   visitAttendances      VisitAttendee[]
   leaveRequests         LeaveRequest[]
   leaveBalances         LeaveBalance[]
-  handoverForLeaves     LeaveRequest[]     @relation("LeaveHandover")
-  handoverForLeaves2    LeaveRequest[]     @relation("LeaveHandover2")
-  createdCalendarEvents CalendarEvent[]    @relation("CalendarEventCreator")
-  receivedInvitations   EventInvitation[]  @relation("ReceivedInvitations")
-  eventParticipations   EventParticipant[] @relation("EventParticipations")
+  handoverForLeaves     LeaveRequest[]            @relation("LeaveHandover")
+  handoverForLeaves2    LeaveRequest[]            @relation("LeaveHandover2")
+  createdCalendarEvents CalendarEvent[]           @relation("CalendarEventCreator")
+  receivedInvitations   EventInvitation[]         @relation("ReceivedInvitations")
+  eventParticipations   EventParticipant[]        @relation("EventParticipations")
   oooBlocks             CalendarBlock[]
   calendarFilters       CalendarFilter[]
-  assignedTasks         Task[]             @relation("TaskAssignedBy")
-  tasks                 Task[]             @relation("TaskOwner")
-  tasksToApprove        Task[]             @relation("TaskApprovedBy")
-  backupTasks           Task[]             @relation("TaskBackupOwner")
+  assignedTasks         Task[]                    @relation("TaskAssignedBy")
+  tasks                 Task[]                    @relation("TaskOwner")
+  tasksToApprove        Task[]                    @relation("TaskApprovedBy")
+  backupTasks           Task[]                    @relation("TaskBackupOwner")
   taskInstances         TaskInstance[]
-  alertsRaised          Alert[]            @relation("AlertsRaised")
-  alertsAgainst         Alert[]            @relation("AlertsAgainst")
-  ticketsRaised         Tickets[]          @relation("ticketsRaisedBy")
-  ticketUpdates         TicketUpdate[]     
-
+  alertsRaised          Alert[]                   @relation("AlertsRaised")
+  alertsAgainst         Alert[]                   @relation("AlertsAgainst")
+  ticketsRaised         Tickets[]                 @relation("ticketsRaisedBy")
+  ticketUpdates         TicketUpdate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  steelPlansCreated     SteelProductionPlan[]  @relation("SteelPlanCreatedBy")
-  steelPlansApproved    SteelProductionPlan[]  @relation("SteelPlanApprovedBy")
-  steelActivityLogs     SteelPlanActivityLog[]
-  steelDepartmentAcks   SteelPlanDepartmentAck[]
-  steelSourcingOrdersCreated  SteelSourcingOrder[]        @relation("SteelSourcingCreatedBy")
-  steelSourcingActivityLogs   SteelSourcingActivityLog[]  @relation("SteelSourcingPerformedBy")
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  steelPlansCreated          SteelProductionPlan[]      @relation("SteelPlanCreatedBy")
+  steelPlansApproved         SteelProductionPlan[]      @relation("SteelPlanApprovedBy")
+  steelActivityLogs          SteelPlanActivityLog[]
+  steelDepartmentAcks        SteelPlanDepartmentAck[]
+  steelSourcingOrdersCreated SteelSourcingOrder[]       @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs  SteelSourcingActivityLog[] @relation("SteelSourcingPerformedBy")
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
@@ -364,10 +347,10 @@ model SteeringCommittee {
   organizationId String
   createdAt      DateTime      @default(now())
 
-  organization Organization              @relation(fields: [organizationId], references: [id])
-  members      SteeringCommitteeMember[]
-  suggestions  Suggestion[]
-  designatedForOrgs Organization[]       @relation("OrgSgaCommittee")
+  organization      Organization              @relation(fields: [organizationId], references: [id])
+  members           SteeringCommitteeMember[]
+  suggestions       Suggestion[]
+  designatedForOrgs Organization[]            @relation("OrgSgaCommittee")
 }
 
 model SteeringCommitteeMember {
@@ -421,37 +404,37 @@ model Notification {
 // TICKETING SYSTEM
 
 model Tickets {
-  id          String           @id @default(uuid())
+  id             String         @id @default(uuid())
   organizationId String
-  raisedById  String
-  type        TicketType
-  module      String    // "SIMS", "LEAVE", "ATTENDANCE", "HR"
-  subject     String
-  message     String
-  department  String?
-  status      TicketStatus     @default(OPEN)
-  updates     TicketUpdate[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  raisedById     String
+  type           TicketType
+  module         String // "SIMS", "LEAVE", "ATTENDANCE", "HR"
+  subject        String
+  message        String
+  department     String?
+  status         TicketStatus   @default(OPEN)
+  updates        TicketUpdate[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  raisedBy     Employee      @relation("ticketsRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+  raisedBy     Employee     @relation("ticketsRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
 
   @@index([organizationId, status])
   @@index([raisedById, createdAt])
 }
 
 model TicketUpdate {
-  id                String        @id @default(uuid())
-  ticketId          String
-  updatedById       String
-  statusChanged     TicketStatus?
-  typeChanged       TicketType?
-  note              String?
-  createdAt         DateTime      @default(now())
+  id            String        @id @default(uuid())
+  ticketId      String
+  updatedById   String
+  statusChanged TicketStatus?
+  typeChanged   TicketType?
+  note          String?
+  createdAt     DateTime      @default(now())
 
-  ticket            Tickets   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  updatedBy         Employee @relation(fields: [updatedById], references: [id])
+  ticket    Tickets  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  updatedBy Employee @relation(fields: [updatedById], references: [id])
 }
 
 // SIMS: Suggestions and Idea Management System
@@ -562,8 +545,8 @@ enum EventColor {
 }
 
 enum EventVisibility {
-  PRIVATE   // visible only to creator + invited guests
-  ORG_WIDE  // visible to every employee in the organization
+  PRIVATE // visible only to creator + invited guests
+  ORG_WIDE // visible to every employee in the organization
 }
 
 enum EventRecurrencePattern {
@@ -593,15 +576,15 @@ enum VisitRequestStatus {
 }
 
 model CalendarEvent {
-  id              String               @id @default(uuid())
+  id              String          @id @default(uuid())
   title           String
   description     String?
   label           String?
-  color           EventColor           @default(PEACOCK)
-  visibility      EventVisibility      @default(PRIVATE)
+  color           EventColor      @default(PEACOCK)
+  visibility      EventVisibility @default(PRIVATE)
   startAt         DateTime
   endAt           DateTime
-  allDay          Boolean              @default(false)
+  allDay          Boolean         @default(false)
   organizationId  String
   createdById     String
   // Free-text prospect/company name — set only for "New Client Visit" quick-created
@@ -680,10 +663,10 @@ model ConsultancyVisit {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
-  clientOrg          Organization        @relation(fields: [clientOrgId], references: [id])
-  createdBy          User                @relation(fields: [createdById], references: [id])
-  attendees          VisitAttendee[]
-  sourceRequest      VisitRequest?
+  clientOrg     Organization    @relation(fields: [clientOrgId], references: [id])
+  createdBy     User            @relation(fields: [createdById], references: [id])
+  attendees     VisitAttendee[]
+  sourceRequest VisitRequest?
 
   @@index([recurrenceGroupId])
 }
@@ -720,21 +703,21 @@ model VisitPlanSlot {
 }
 
 model VisitRequest {
-  id              String             @id @default(uuid())
-  organizationId  String
-  requestedDate   DateTime
-  preferredTime   String?
-  message         String?
-  status          VisitRequestStatus @default(PENDING)
-  responseNote    String?
-  visitId         String?            @unique
-  createdById     String
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  id             String             @id @default(uuid())
+  organizationId String
+  requestedDate  DateTime
+  preferredTime  String?
+  message        String?
+  status         VisitRequestStatus @default(PENDING)
+  responseNote   String?
+  visitId        String?            @unique
+  createdById    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
-  organization    Organization      @relation(fields: [organizationId], references: [id])
-  createdBy       User              @relation(fields: [createdById], references: [id])
-  visit           ConsultancyVisit? @relation(fields: [visitId], references: [id])
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  createdBy    User              @relation(fields: [createdById], references: [id])
+  visit        ConsultancyVisit? @relation(fields: [visitId], references: [id])
 }
 
 model VisitAttendee {
@@ -763,8 +746,8 @@ model CalendarBlock {
   employeeId  String?
   createdAt   DateTime          @default(now())
 
-  createdBy   User              @relation(fields: [createdById], references: [id])
-  employee    Employee?         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id])
+  employee  Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 }
 
 // Google Calendar-style user-defined filters for the holistic calendar agenda
@@ -778,7 +761,7 @@ model CalendarFilter {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 }
 
 // ── Leave Management ──────────────────────────────────────────────────────────
@@ -876,7 +859,7 @@ model Notice {
 
   @@index([organizationId, createdAt])
 }
-   
+
 // ── Steel ──────────────────────────────────────────────────────────
 // ── Steel Manufacturing: Process 1 — Planning (P01-A01..A12) ─────────────────
 
@@ -1054,28 +1037,28 @@ enum SteelSourcingActivity {
 
 // Approved supplier master — checked at P02-A03/A04, referenced by every sourcing order.
 model Supplier {
-  id              String                   @id @default(uuid())
-  organizationId  String
-  name            String
-  code            String?
-  materialTypes   SteelMaterialType[]      @default([])
-  approvalStatus  SupplierApprovalStatus   @default(PENDING)
-  rejectionCount  Int                      @default(0)
-  qualityScore    Float?
-  deliveryScore   Float?
-  contactPerson   String?
-  phone           String?
-  email           String?
-  country         String?
-  isImportSource  Boolean                  @default(false)
-  notes           String?
+  id             String                 @id @default(uuid())
+  organizationId String
+  name           String
+  code           String?
+  materialTypes  SteelMaterialType[]    @default([])
+  approvalStatus SupplierApprovalStatus @default(PENDING)
+  rejectionCount Int                    @default(0)
+  qualityScore   Float?
+  deliveryScore  Float?
+  contactPerson  String?
+  phone          String?
+  email          String?
+  country        String?
+  isImportSource Boolean                @default(false)
+  notes          String?
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization    Organization              @relation(fields: [organizationId], references: [id])
-  sourcingOrders  SteelSourcingOrder[]
-  quotations      SteelSourcingQuotation[]
+  organization   Organization             @relation(fields: [organizationId], references: [id])
+  sourcingOrders SteelSourcingOrder[]
+  quotations     SteelSourcingQuotation[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -1085,26 +1068,26 @@ model Supplier {
 // One record per material requirement sourced against a released production plan,
 // carried through P02-A01 -> P02-A12.
 model SteelSourcingOrder {
-  id              String               @id @default(uuid())
-  sourcingNumber  String               @unique
-  organizationId  String
-  planId          String
-  createdById     String
-  stage           SteelSourcingStage   @default(A01_REQUIREMENT_REVIEWED)
-  status          SteelSourcingStatus  @default(DRAFT)
+  id             String              @id @default(uuid())
+  sourcingNumber String              @unique
+  organizationId String
+  planId         String
+  createdById    String
+  stage          SteelSourcingStage  @default(A01_REQUIREMENT_REVIEWED)
+  status         SteelSourcingStatus @default(DRAFT)
 
   // P02-A01 — Review material requirement from production plan
-  materialRequirementNotes  String?
-  requiredByDate            DateTime?
+  materialRequirementNotes String?
+  requiredByDate           DateTime?
 
   // P02-A02 — Identify material type needed
-  materialType       SteelMaterialType?
-  materialTypeNotes  String?
+  materialType      SteelMaterialType?
+  materialTypeNotes String?
 
   // P02-A03 — Check approved supplier list
-  supplierId                 String?
-  supplierApprovalConfirmed  Boolean?
-  supplierCheckNotes         String?
+  supplierId                String?
+  supplierApprovalConfirmed Boolean?
+  supplierCheckNotes        String?
 
   // P02-A04 — Check supplier quality and rejection history
   supplierRiskLevel     SupplierRiskLevel?
@@ -1112,54 +1095,54 @@ model SteelSourcingOrder {
   complaintHistoryNotes String?
 
   // P02-A05 — Collect price and availability confirmation (see SteelSourcingQuotation)
-  quotationsCollectedAt  DateTime?
+  quotationsCollectedAt DateTime?
 
   // P02-A06 — Compare supplier options using QCD logic
-  selectedSupplierId  String?
-  qcdComparisonNotes  String?
+  selectedSupplierId String?
+  qcdComparisonNotes String?
 
   // P02-A07 — Confirm technical specification and documents required
-  specificationRequirementNotes  String?
-  certificateRequired             Boolean?
-  documentsRequired               String[]  @default([])
+  specificationRequirementNotes String?
+  certificateRequired           Boolean?
+  documentsRequired             String[] @default([])
 
   // P02-A08 — Create purchase order
-  poNumber         String?
-  poItem           String?
-  poQuantity       Float?
-  poPrice          Float?
-  poCurrency       String?
-  poDeliveryTerms  String?
-  poCreatedAt      DateTime?
+  poNumber        String?
+  poItem          String?
+  poQuantity      Float?
+  poPrice         Float?
+  poCurrency      String?
+  poDeliveryTerms String?
+  poCreatedAt     DateTime?
 
   // P02-A09 — Confirm delivery schedule with supplier
-  confirmedDispatchDate  DateTime?
-  confirmedArrivalDate   DateTime?
-  vehicleContainerInfo   String?
+  confirmedDispatchDate DateTime?
+  confirmedArrivalDate  DateTime?
+  vehicleContainerInfo  String?
 
   // P02-A10 — Prepare import/local logistics if applicable (Imported Billet Route)
-  billOfLading          String?
-  countryOfOrigin       String?
-  portClearanceStatus   String?
-  importLogisticsNotes  String?
+  billOfLading         String?
+  countryOfOrigin      String?
+  portClearanceStatus  String?
+  importLogisticsNotes String?
 
   // P02-A11 — Inform raw material intake team
-  intakeInformedAt   DateTime?
-  intakeNotifyNotes  String?
+  intakeInformedAt  DateTime?
+  intakeNotifyNotes String?
 
   // P02-A12 — Close sourcing handover to intake
-  handoverClosedAt  DateTime?
-  handoverNotes     String?
+  handoverClosedAt DateTime?
+  handoverNotes    String?
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization  Organization              @relation(fields: [organizationId], references: [id])
-  plan          SteelProductionPlan       @relation(fields: [planId], references: [id])
-  createdBy     Employee                  @relation("SteelSourcingCreatedBy", fields: [createdById], references: [id])
-  supplier      Supplier?                 @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  quotations    SteelSourcingQuotation[]
-  activityLogs  SteelSourcingActivityLog[]
+  organization Organization               @relation(fields: [organizationId], references: [id])
+  plan         SteelProductionPlan        @relation(fields: [planId], references: [id])
+  createdBy    Employee                   @relation("SteelSourcingCreatedBy", fields: [createdById], references: [id])
+  supplier     Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  quotations   SteelSourcingQuotation[]
+  activityLogs SteelSourcingActivityLog[]
 
   @@index([organizationId])
   @@index([organizationId, stage])
@@ -1169,125 +1152,125 @@ model SteelSourcingOrder {
 
 // P02-A05: one quotation per supplier considered, used for the P02-A06 QCD comparison.
 model SteelSourcingQuotation {
-  id                 String     @id @default(uuid())
-  sourcingId         String
-  supplierId         String
-  price              Float
-  currency           String     @default("USD")
-  quantityAvailable  Float?
-  deliveryDate       DateTime?
-  paymentTerms       String?
-  qualityRiskNotes   String?
-  createdAt          DateTime   @default(now())
+  id                String    @id @default(uuid())
+  sourcingId        String
+  supplierId        String
+  price             Float
+  currency          String    @default("USD")
+  quantityAvailable Float?
+  deliveryDate      DateTime?
+  paymentTerms      String?
+  qualityRiskNotes  String?
+  createdAt         DateTime  @default(now())
 
-  order     SteelSourcingOrder  @relation(fields: [sourcingId], references: [id], onDelete: Cascade)
-  supplier  Supplier            @relation(fields: [supplierId], references: [id])
+  order    SteelSourcingOrder @relation(fields: [sourcingId], references: [id], onDelete: Cascade)
+  supplier Supplier           @relation(fields: [supplierId], references: [id])
 
   @@index([sourcingId])
 }
 
 // Audit trail: every activity performed against a sourcing order is recorded here
 model SteelSourcingActivityLog {
-  id             String                  @id @default(uuid())
-  sourcingId     String
-  activity       SteelSourcingActivity
-  performedById  String
-  notes          String?
-  data           Json?
-  createdAt      DateTime                @default(now())
+  id            String                @id @default(uuid())
+  sourcingId    String
+  activity      SteelSourcingActivity
+  performedById String
+  notes         String?
+  data          Json?
+  createdAt     DateTime              @default(now())
 
-  order        SteelSourcingOrder  @relation(fields: [sourcingId], references: [id], onDelete: Cascade)
-  performedBy  Employee            @relation("SteelSourcingPerformedBy", fields: [performedById], references: [id])
+  order       SteelSourcingOrder @relation(fields: [sourcingId], references: [id], onDelete: Cascade)
+  performedBy Employee           @relation("SteelSourcingPerformedBy", fields: [performedById], references: [id])
 
   @@index([sourcingId])
 }
 
 model SteelProductionPlan {
-  id             String                  @id @default(uuid())
-  planNumber     String                  @unique
+  id             String                 @id @default(uuid())
+  planNumber     String                 @unique
   organizationId String
   createdById    String
-  stage          SteelPlanStage          @default(A01_DEMAND_CAPTURED)
-  status         SteelPlanOverallStatus  @default(DRAFT)
+  stage          SteelPlanStage         @default(A01_DEMAND_CAPTURED)
+  status         SteelPlanOverallStatus @default(DRAFT)
 
   // P01-A01 — Capture customer enquiry, sales order, forecast, or stock requirement
-  demandSource               DemandSource
-  customerName               String?
-  dealerName                 String?
-  projectReference           String?
-  salesOrderNumber           String?
-  forecastReference          String?
-  stockRequirementReference  String?
-  expectedDeliveryDate       DateTime?
-  requestedQuantityTonnes    Float
-  demandNotes                String?
+  demandSource              DemandSource
+  customerName              String?
+  dealerName                String?
+  projectReference          String?
+  salesOrderNumber          String?
+  forecastReference         String?
+  stockRequirementReference String?
+  expectedDeliveryDate      DateTime?
+  requestedQuantityTonnes   Float
+  demandNotes               String?
 
   // P01-A02 — Confirm customer and order priority
-  priority               OrderPriority?
-  deliveryPromiseDate    DateTime?
-  creditStatus           CreditStatus?
+  priority            OrderPriority?
+  deliveryPromiseDate DateTime?
+  creditStatus        CreditStatus?
 
   // P01-A03 — Confirm product type and standard required
-  productType            ProductType?
-  productStandard        String?
-  customerSpecification  String?
+  productType           ProductType?
+  productStandard       String?
+  customerSpecification String?
 
   // P01-A04 — Confirm grade, size, length, bundle, and quantity
-  grade           String?
-  size            String?
-  length          String?
-  bundleType      String?
-  totalQuantity   Float?
-  toleranceNotes  String?
+  grade          String?
+  size           String?
+  length         String?
+  bundleType     String?
+  totalQuantity  Float?
+  toleranceNotes String?
 
   // P01-A05 — Check certified finished goods stock
-  certifiedStockAvailableQty  Float?
-  stockBundleIds              String[]  @default([])
-  stockHeatNumbers            String[]  @default([])
-  stockCertificateRefs        String[]  @default([])
+  certifiedStockAvailableQty Float?
+  stockBundleIds             String[] @default([])
+  stockHeatNumbers           String[] @default([])
+  stockCertificateRefs       String[] @default([])
 
   // P01-A06 — Decide dispatch from stock or production required
-  stockDecision       StockDecision?
-  stockDecisionNotes  String?
+  stockDecision      StockDecision?
+  stockDecisionNotes String?
 
   // P01-A07 — Select applicable plant route
-  plantRoute  PlantRoute?
-  routeNotes  String?
+  plantRoute PlantRoute?
+  routeNotes String?
 
   // P01-A08 — Check raw material or billet availability
-  materialAvailability      AvailabilityStatus?
-  materialShortageNotes     String?
-  purchaseRequirementNotes  String?
+  materialAvailability     AvailabilityStatus?
+  materialShortageNotes    String?
+  purchaseRequirementNotes String?
 
   // P01-A09 — Check equipment, maintenance, and manpower availability
-  equipmentAvailability      AvailabilityStatus?
-  manpowerAvailability       AvailabilityStatus?
-  maintenanceShutdownNotes   String?
-  shiftPlanNotes             String?
+  equipmentAvailability    AvailabilityStatus?
+  manpowerAvailability     AvailabilityStatus?
+  maintenanceShutdownNotes String?
+  shiftPlanNotes           String?
 
   // P01-A10 — Prepare production plan and sequence
-  productionSequence  Json?
-  plannedStartDate    DateTime?
-  plannedEndDate      DateTime?
-  planNotes           String?
+  productionSequence Json?
+  plannedStartDate   DateTime?
+  plannedEndDate     DateTime?
+  planNotes          String?
 
   // P01-A11 — Communicate plan to all concerned departments
-  planCommunicatedAt  DateTime?
+  planCommunicatedAt DateTime?
 
   // P01-A12 — Release approved production plan
-  approvedById   String?
-  approvedAt     DateTime?
-  releaseNotes   String?
+  approvedById String?
+  approvedAt   DateTime?
+  releaseNotes String?
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization    Organization              @relation(fields: [organizationId], references: [id])
-  createdBy       Employee                  @relation("SteelPlanCreatedBy", fields: [createdById], references: [id])
-  approvedBy      Employee?                 @relation("SteelPlanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
-  activityLogs    SteelPlanActivityLog[]
-  departmentAcks  SteelPlanDepartmentAck[]
-  sourcingOrders  SteelSourcingOrder[]
+  organization   Organization             @relation(fields: [organizationId], references: [id])
+  createdBy      Employee                 @relation("SteelPlanCreatedBy", fields: [createdById], references: [id])
+  approvedBy     Employee?                @relation("SteelPlanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  activityLogs   SteelPlanActivityLog[]
+  departmentAcks SteelPlanDepartmentAck[]
+  sourcingOrders SteelSourcingOrder[]
 
   @@index([organizationId])
   @@index([organizationId, stage])
@@ -1296,33 +1279,33 @@ model SteelProductionPlan {
 
 // Audit trail: every activity performed against a plan is recorded here
 model SteelPlanActivityLog {
-  id            String             @id @default(uuid())
+  id            String            @id @default(uuid())
   planId        String
   activity      SteelPlanActivity
   performedById String
   notes         String?
   data          Json?
-  createdAt     DateTime           @default(now())
+  createdAt     DateTime          @default(now())
 
-  plan        SteelProductionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
-  performedBy Employee             @relation(fields: [performedById], references: [id])
+  plan        SteelProductionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  performedBy Employee            @relation(fields: [performedById], references: [id])
 
   @@index([planId])
 }
 
 // P01-A11: department acknowledgement of the communicated plan
 model SteelPlanDepartmentAck {
-  id               String           @id @default(uuid())
+  id               String          @id @default(uuid())
   planId           String
   department       SteelDepartment
-  acknowledged     Boolean          @default(false)
+  acknowledged     Boolean         @default(false)
   acknowledgedById String?
   acknowledgedAt   DateTime?
   notes            String?
-  createdAt        DateTime         @default(now())
+  createdAt        DateTime        @default(now())
 
-  plan            SteelProductionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
-  acknowledgedBy  Employee?            @relation(fields: [acknowledgedById], references: [id], onDelete: SetNull)
+  plan           SteelProductionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  acknowledgedBy Employee?           @relation(fields: [acknowledgedById], references: [id], onDelete: SetNull)
 
   @@unique([planId, department])
   @@index([planId])
@@ -1525,4 +1508,3 @@ model DwmsPermissionConfig {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-

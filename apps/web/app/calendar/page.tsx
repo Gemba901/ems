@@ -11,7 +11,7 @@ import { useAuthStore } from "@/store/auth.store";
 import {
   CalendarService, AgendaItem, AgendaItemKind, HolisticCalendarEvent, CalendarVisit, CalendarFilterDto,
 } from "@/services/calendar.service";
-import { MONTHS, getWeekStart, addDays, dateToYMD, toYMD, today as todayYMD } from "@/components/calendar/calendarUtils";
+import { MONTHS, getWeekStart, addDays, dateToYMD, toYMD, today as todayYMD, isSundayDate } from "@/components/calendar/calendarUtils";
 import { AGENDA_KIND_FILTERS, CalendarViewMode, groupAgendaByDate } from "@/components/calendar/types";
 import { MiniMonthNav } from "@/components/calendar/MiniMonthNav";
 import { DayQuickPopover } from "@/components/calendar/DayQuickPopover";
@@ -383,6 +383,7 @@ export default function CalendarPage() {
   const handleUnblock = (id: string) => { if (confirm("Remove this block?")) unblockMutation.mutate(id); };
 
   const createMenuDate = selectedDate ?? todayStr;
+  const createMenuIsSunday = isSundayDate(createMenuDate);
 
   return (
     <ProtectedRoute allowedRoles={ALL_ROLES}>
@@ -447,7 +448,7 @@ export default function CalendarPage() {
                   >
                     Event
                   </button>
-                  {isAdmin && adminOrgConfigured && (
+                  {isAdmin && adminOrgConfigured && !createMenuIsSunday && (
                     <button
                       onClick={() => openCreateFlow("CLIENT_VISIT")}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
@@ -455,7 +456,7 @@ export default function CalendarPage() {
                       New Client Visit
                     </button>
                   )}
-                  {isAdmin && adminOrgConfigured && (
+                  {isAdmin && adminOrgConfigured && !createMenuIsSunday && (
                     <button
                       onClick={() => openCreateFlow("VISIT")}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
@@ -463,7 +464,7 @@ export default function CalendarPage() {
                       Scheduled Partner Visit
                     </button>
                   )}
-                  {!isAdmin && adminOrgConfigured && (
+                  {!isAdmin && adminOrgConfigured && !createMenuIsSunday && (
                     <button
                       onClick={() => openCreateFlow("REQUEST")}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
@@ -471,13 +472,18 @@ export default function CalendarPage() {
                       Request a visit
                     </button>
                   )}
-                  {isAdmin && adminOrgConfigured && (
+                  {isAdmin && adminOrgConfigured && !createMenuIsSunday && (
                     <button
                       onClick={() => openCreateFlow("BLOCK")}
                       className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                     >
                       Out of Office
                     </button>
+                  )}
+                  {createMenuIsSunday && (
+                    <p className="px-4 py-2 text-[11px] text-slate-400">
+                      Sundays only allow personal events.
+                    </p>
                   )}
                 </div>
               )}
@@ -575,6 +581,7 @@ export default function CalendarPage() {
                   year={year} month={month} byDate={byDatePrimary} todayStr={todayStr} selectedDate={selectedDate}
                   isLoading={primaryLoading} onSelectDate={handleDayClick} onOpenItem={handleOpenItem}
                   onPrev={prevMonth} onNext={nextMonth}
+                  isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} busyDates={busyDates}
                 />
               )}
               {viewMode === "week" && (
@@ -582,6 +589,7 @@ export default function CalendarPage() {
                   weekStart={weekStart} byDate={byDatePrimary} todayStr={todayStr} selectedDate={selectedDate}
                   isLoading={primaryLoading} onSelectDate={handleDayClick} onOpenItem={handleOpenItem}
                   onPrev={prevWeek} onNext={nextWeek}
+                  isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} busyDates={busyDates}
                 />
               )}
               {viewMode === "day" && (

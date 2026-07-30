@@ -35,7 +35,7 @@ export function MiniMonthNav({
       </div>
       <div className="mb-1 grid grid-cols-7">
         {DAY_LABELS.map((d, i) => (
-          <div key={i} className="text-center text-[8px] font-bold text-slate-300">{d}</div>
+          <div key={i} className={`text-center text-[8px] font-bold ${i === 0 ? "text-red-400" : "text-slate-300"}`}>{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-y-0.5">
@@ -44,6 +44,7 @@ export function MiniMonthNav({
           const dateStr = toYMD(year, month, day);
           const isToday = dateStr === todayStr;
           const isSelected = dateStr === selectedDate;
+          const isSunday = (firstDay + day - 1) % 7 === 0;
           const hasItems = markedDates.has(dateStr);
           return (
             <button
@@ -54,6 +55,8 @@ export function MiniMonthNav({
                   ? "bg-blue-600 text-white"
                   : isSelected
                   ? "bg-blue-100 font-bold text-blue-700"
+                  : isSunday
+                  ? "text-red-500 hover:bg-slate-100"
                   : "text-slate-600 hover:bg-slate-100"
               }`}
             >

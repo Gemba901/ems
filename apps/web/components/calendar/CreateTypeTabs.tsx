@@ -1,5 +1,7 @@
 "use client";
 
+import { isSundayDate } from "./calendarUtils";
+
 export type CreateFlowType = "EVENT" | "CLIENT_VISIT" | "VISIT" | "REQUEST" | "BLOCK";
 
 const ALL_TABS: { key: CreateFlowType; label: string; adminOnly?: boolean; nonAdminOnly?: boolean }[] = [
@@ -11,19 +13,31 @@ const ALL_TABS: { key: CreateFlowType; label: string; adminOnly?: boolean; nonAd
 ];
 
 export function CreateTypeTabs({
-  active, isAdmin, adminOrgConfigured, onSelect,
+  active, isAdmin, adminOrgConfigured, dateStr, onSelect,
 }: {
   active: CreateFlowType;
   isAdmin: boolean;
   adminOrgConfigured: boolean;
+  dateStr?: string;
   onSelect: (type: CreateFlowType) => void;
 }) {
+  const sundayOnly = !!dateStr && isSundayDate(dateStr);
+
   const tabs = ALL_TABS.filter(t => {
+    if (sundayOnly && t.key !== "EVENT") return false;
     if ((t.adminOnly || t.nonAdminOnly) && !adminOrgConfigured) return false;
     if (t.adminOnly && !isAdmin) return false;
     if (t.nonAdminOnly && isAdmin) return false;
     return true;
   });
+
+  if (sundayOnly) {
+    return (
+      <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-500">
+        Sundays are reserved for personal events only.
+      </p>
+    );
+  }
 
   if (tabs.length <= 1) return null;
 

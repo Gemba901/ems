@@ -56,7 +56,7 @@ export function BlockDayModal({
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <CreateTypeTabs active="BLOCK" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} onSelect={onSwitchType} />
+          <CreateTypeTabs active="BLOCK" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} dateStr={date} onSelect={onSwitchType} />
 
           <p className="text-xs text-slate-500">{displayDate}</p>
           <div>

@@ -45,7 +45,7 @@ import { NoticeService, Notice, NoticeType } from "@/services/notice.service";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -79,21 +79,21 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
       // { label: "Review Queue",      href: "/sims/queue",          icon: Inbox, roles: [Role.HOD, Role.ADMIN, Role.SUPER_ADMIN, Role.MANAGEMENT] },
     ],
   },
-  // EMS: {
-  //   key: "EMS",
-  //   label: "Employee Master Data",
-  //   tagline: "Record Completeness",
-  //   description: "Track how complete your employee records are, identify gaps, and ensure all staff data is accurate and up to date.",
-  //   icon: ClipboardList,
-  //   color: "text-indigo-600",
-  //   bg: "bg-indigo-50",
-  //   ring: "ring-indigo-200",
-  //   href: "/ems",
-  //   actions: [
-  //     // { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
-  //     { label: "My Profile",             href: "/ems/my-profile", icon: UserCircle, roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
-  //   ],
-  // },
+  EMS: {
+    key: "EMS",
+    label: "Employee Master Data",
+    tagline: "Record Completeness",
+    description: "Track how complete your employee records are, identify gaps, and ensure all staff data is accurate and up to date.",
+    icon: ClipboardList,
+    color: "text-indigo-600",
+    bg: "bg-indigo-50",
+    ring: "ring-indigo-200",
+    href: "/ems",
+    actions: [
+      // { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
+      { label: "My Profile",             href: "/ems/my-profile", icon: UserCircle, roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
+    ],
+  },
   CALENDAR: {
     key: "CALENDAR",
     label: "Calendar",
@@ -153,6 +153,20 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     actions: [
       { label: "Production Plans",       href: "/steel/p01", icon: ClipboardList },
       { label: "Raw Material Sourcing",  href: "/steel/p02", icon: Package },
+    ],
+  },
+  KAIZEN: {
+    key: "KAIZEN",
+    label: "Daily Gemba Kaizen",
+    tagline: "Daily Gemba Walks",
+    description: "Raise, track, and close out daily Kaizen improvements from the gemba, with before/after photos and status tracking.",
+    icon: Sparkles,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    ring: "ring-blue-200",
+    href: "/kaizen",
+    actions: [
+      { label: "New Kaizen", href: "/kaizen/new", icon: FileEdit },
     ],
   },
 };

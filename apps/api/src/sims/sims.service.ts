@@ -14,6 +14,7 @@ import {
   UpdateImplementationDto,
 } from './dto/sims.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { KaizenService } from 'src/kaizen/kaizen.service';
 
 // Suggestions begin life at WAITING_FOR_REVIEW
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
@@ -57,6 +58,7 @@ export class SimsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private kaizenService: KaizenService,
   ) { }
 
   private async resolveEmployee(userId: string, organizationId?: string) {
@@ -428,11 +430,9 @@ export class SimsService {
           if (!details.action || !details.responsible || !details.targetDate) {
             throw new BadRequestException('Workplace correction requires action, responsible and targetDate');
           }
-        } else if (decisionType === 'DAILY_KAIZEN') {
-          if (!details.owner || !details.targetDate || !details.expectedResult) {
-            throw new BadRequestException('Daily kaizen requires owner, targetDate and expectedResult');
-          }
         }
+        // DAILY_KAIZEN's requirements (a real Kaizen record) are validated separately in
+        // reviewSuggestion, since it needs suggestion.employeeId/imageUrl to fall back on.
         break;
       }
       case 'SELECTED_FOR_SGA': {
@@ -526,6 +526,38 @@ export class SimsService {
       forwardCommitteeId = organization?.sgaCommitteeId ?? null;
     }
 
+    // Raise a real Kaizen, owned by the original suggester, the moment a suggestion is
+    // approved for implementation as a Daily Gemba Kaizen (once per suggestion).
+    let createdKaizenId: string | null = null;
+    if (
+      dto.statusChanged === 'APPROVED_FOR_IMPLEMENTATION' &&
+      dto.decisionType === 'DAILY_KAIZEN' &&
+      !suggestion.linkedKaizenId
+    ) {
+      if (!dto.kaizenDetails) {
+        throw new BadRequestException('Kaizen details are required for a Daily Gemba Kaizen decision');
+      }
+      const beforePhotoUrl = dto.kaizenDetails.beforePhotoUrl || suggestion.imageUrl;
+      if (!beforePhotoUrl) {
+        throw new BadRequestException('A before photo is required to raise a Kaizen from this suggestion');
+      }
+      const problem = dto.kaizenDetails.problem?.trim() || suggestion.title;
+
+      const createdKaizen = await this.kaizenService.createKaizenForEmployee(
+        suggestion.employeeId,
+        {
+          problem,
+          beforePhotoUrl,
+          teamMembers: dto.kaizenDetails.teamMembers,
+          benefitCategory: dto.kaizenDetails.benefitCategory,
+          comments: dto.kaizenDetails.comments,
+          startImprovement: dto.kaizenDetails.startImprovement,
+        },
+        organizationId,
+      );
+      createdKaizenId = createdKaizen.id;
+    }
+
     const review = await this.prisma.$transaction(async (tx) => {
       await tx.suggestion.update({
         where: { id },
@@ -536,6 +568,7 @@ export class SimsService {
           ...(dto.decisionType && { decisionType: dto.decisionType }),
           ...(dto.decisionDetails && { decisionDetails: dto.decisionDetails }),
           ...(forwardCommitteeId && { committeeId: forwardCommitteeId, forwardedToCommitteeAt: new Date() }),
+          ...(createdKaizenId && { linkedKaizenId: createdKaizenId }),
           // Optionally update the assigned hodId to the person who actually reviewed it
           hodId: reviewer.id,
         }
@@ -565,6 +598,19 @@ export class SimsService {
       actionUrl: `/sims/${id}`,
       metadata: { suggestionId: id, newStatus: dto.statusChanged },
     });
+
+    // notify the suggester that their suggestion became a real Kaizen
+    if (createdKaizenId) {
+      await this.notifications.create({
+        employeeId: suggestion.employeeId,
+        type: 'INFO',
+        module: 'KAIZEN',
+        title: 'Your suggestion was raised as a Daily Gemba Kaizen',
+        message: `Suggestion "${suggestion.title}" has been raised as a Kaizen for you to work on.`,
+        actionUrl: `/kaizen/${createdKaizenId}`,
+        metadata: { suggestionId: id, kaizenId: createdKaizenId },
+      });
+    }
 
     // notify the committee's members when a suggestion is freshly forwarded to them
     if (forwardCommitteeId) {

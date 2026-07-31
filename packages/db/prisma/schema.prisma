@@ -36,6 +36,7 @@ enum ModuleType {
   LEAVE
   DWMS
   STEEL
+  KAIZEN
 }
 
 enum CommitteeType {
@@ -142,6 +143,7 @@ model Organization {
   notices              Notice[]
   alerts               Alert[]
   tickets              Tickets[]
+  kaizens              Kaizen[]
 
   // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
   sgaCommitteeId String?
@@ -312,6 +314,9 @@ model Employee {
   alertsAgainst         Alert[]                   @relation("AlertsAgainst")
   ticketsRaised         Tickets[]                 @relation("ticketsRaisedBy")
   ticketUpdates         TicketUpdate[]
+  kaizensRaised         Kaizen[]                  @relation("KaizenRaisedBy")
+  kaizensVerified       Kaizen[]                  @relation("KaizenVerifiedBy")
+  kaizenReviews         KaizenReview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -338,6 +343,7 @@ model Department {
   suggestions  Suggestion[]
   tasks        Task[]
   alerts       Alert[]
+  kaizens      Kaizen[]
 }
 
 model SteeringCommittee {
@@ -495,6 +501,7 @@ model Suggestion {
   hodId                  String?
   committeeId            String?
   forwardedToCommitteeAt DateTime?
+  linkedKaizenId         String?               @unique
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
@@ -503,6 +510,7 @@ model Suggestion {
   department   Department?        @relation(fields: [departmentId], references: [id])
   hod          Employee?          @relation("HODSuggestions", fields: [hodId], references: [id], onDelete: SetNull)
   committee    SteeringCommittee? @relation(fields: [committeeId], references: [id], onDelete: SetNull)
+  kaizen       Kaizen?            @relation(fields: [linkedKaizenId], references: [id], onDelete: SetNull)
   reviews      SuggestionReview[]
 }
 
@@ -1507,4 +1515,68 @@ model DwmsPermissionConfig {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+
+
+// DAILY GEMBA KAIZEN
+
+enum KaizenStatus {
+  DRAFT
+  IN_PROGRESS
+  SUBMITTED_FOR_VERIFICATION
+  VERIFIED_CLOSED
+  FURTHER_IMPROVEMENT_REQUIRED
+  MOVED_TO_SGA
+}
+
+model Kaizen {
+  id                       String           @id @default(uuid())
+  organizationId           String
+  employeeId               String
+  departmentId             String
+  status                   KaizenStatus     @default(DRAFT)
+
+  problem                  String
+  beforePhotoUrl           String
+  improvementDescription   String?
+  afterPhotoUrl            String?
+  benefitAchieved          String?
+
+  teamMembers              String?
+  benefitCategory          String?
+  beforeValue              String?
+  afterValue               String?
+  costSaving               String?
+  comments                 String?
+
+  verifiedById             String?
+  verificationComment      String?
+  standardUpdated          Boolean?
+  linkedSgaId              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee     @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  verifiedBy   Employee?    @relation("KaizenVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  reviews      KaizenReview[]
+  sourceSuggestion Suggestion?
+
+  @@index([organizationId, status])
+  @@index([employeeId, createdAt])
+}
+
+model KaizenReview {
+  id            String     @id @default(uuid())
+  kaizenId      String
+  reviewerId    String
+  statusChanged KaizenStatus
+  note          String?
+  createdAt     DateTime   @default(now())
+
+  kaizen   Kaizen   @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
+  reviewer Employee @relation(fields: [reviewerId], references: [id])
 }

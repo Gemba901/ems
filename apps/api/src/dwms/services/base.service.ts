@@ -1,4 +1,4 @@
-﻿import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { EscalationContactRule, TaskPermissionRole, TaskStatus } from 'db';
@@ -173,6 +173,18 @@ export abstract class DwmsBaseService {
         config.escalateUnacknowledgedCriticalMins,
         120,
       ),
+      abnormalityMediumMins: this.normalizeAckWindowFallback(
+        config.abnormalityMediumMins,
+        1440,
+      ),
+      abnormalityHighMins: this.normalizeAckWindowFallback(
+        config.abnormalityHighMins,
+        480,
+      ),
+      abnormalityCriticalMins: this.normalizeAckWindowFallback(
+        config.abnormalityCriticalMins,
+        120,
+      ),
       customEscalationContactIds:
         Array.isArray(config.customEscalationContactIds) &&
         config.customEscalationContactIds.length > 0
@@ -233,3 +245,4 @@ export abstract class DwmsBaseService {
     return false;
   }
 }
+

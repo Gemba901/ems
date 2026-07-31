@@ -88,8 +88,9 @@ DROP INDEX "quotes_active_idx";
 DROP INDEX "quotes_timeOfDay_idx";
 
 -- AlterTable
-ALTER TABLE "CalendarEvent" ALTER COLUMN "id" DROP DEFAULT,
-ALTER COLUMN "updatedAt" DROP DEFAULT;
+-- Keep the id default intact: calendar event creation relies on the database
+-- UUID default when Prisma inserts without an explicit id.
+ALTER TABLE "CalendarEvent" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
 -- may already exist (see 20260702_add_org_shortname_visit_reschedule_count).
@@ -97,12 +98,6 @@ ALTER TABLE "ConsultancyVisit" ADD COLUMN IF NOT EXISTS "rescheduleCount" INTEGE
 
 -- AlterTable
 ALTER TABLE "Employee" ALTER COLUMN "updatedAt" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "EventInvitation" ALTER COLUMN "id" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "EventParticipant" ALTER COLUMN "id" DROP DEFAULT;
 
 -- AlterTable
 ALTER TABLE "LeaveBalance" ALTER COLUMN "id" DROP DEFAULT;

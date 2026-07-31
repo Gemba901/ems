@@ -1,10 +1,10 @@
-﻿import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { EscalationContactRule, TaskPermissionRole } from 'db';
 import { UpdateDwmsPermissionConfigDto } from '../dto/dwmsSettings.dto';
 import { UserPayload } from './base.service';
-import { DwmsTaskService } from './task.service';
+import { DwmsActivityService } from './activity.service';
 
-export abstract class DwmsSettingsService extends DwmsTaskService {
+export abstract class DwmsSettingsService extends DwmsActivityService {
   async getDwmsPermissionConfig(user: UserPayload) {
     await this.getEmployee(user.userId, user.organizationId);
 
@@ -82,6 +82,21 @@ export abstract class DwmsSettingsService extends DwmsTaskService {
         dto.escalateUnacknowledgedCriticalMins,
       );
     }
+    if (dto.abnormalityMediumMins !== undefined) {
+      updateData.abnormalityMediumMins = Math.trunc(
+        dto.abnormalityMediumMins,
+      );
+    }
+    if (dto.abnormalityHighMins !== undefined) {
+      updateData.abnormalityHighMins = Math.trunc(
+        dto.abnormalityHighMins,
+      );
+    }
+    if (dto.abnormalityCriticalMins !== undefined) {
+      updateData.abnormalityCriticalMins = Math.trunc(
+        dto.abnormalityCriticalMins,
+      );
+    }
 
     if (dto.escalationContactRules !== undefined) {
       const escalationContactRules = this.normalizeEscalationContactRules(
@@ -137,3 +152,4 @@ export abstract class DwmsSettingsService extends DwmsTaskService {
     };
   }
 }
+

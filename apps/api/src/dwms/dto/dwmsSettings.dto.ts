@@ -66,6 +66,21 @@ export class UpdateDwmsPermissionConfigDto {
   escalateUnacknowledgedCriticalMins?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  abnormalityMediumMins?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  abnormalityHighMins?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  abnormalityCriticalMins?: number;
+
+  @IsOptional()
   @IsArray()
   @ArrayUnique()
   @IsEnum(EscalationContactRule, { each: true })
@@ -78,3 +93,5 @@ export class UpdateDwmsPermissionConfigDto {
   @IsString({ each: true })
   customEscalationContactIds?: string[];
 }
+
+

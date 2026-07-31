@@ -30,12 +30,14 @@ import {
   AlertTriangle,
   Pin,
   ClipboardCheck,
+  Factory,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import { useQuery } from "@tanstack/react-query";
 import DashboardHero from "@/components/DashboardHero";
 import DashboardRoleSection from "@/components/DashboardRoleSection";
+import { DashboardTour } from "@/components/onboarding/DashboardTour";
 import { Role } from "@/types/role";
 import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
 import { LeaveService, LEAVE_TYPE_LABELS } from "@/services/leave.service";
@@ -43,7 +45,7 @@ import { NoticeService, Notice, NoticeType } from "@/services/notice.service";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -136,6 +138,35 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
       { label: "My tasks",       href: "/dwms/assignedTasks", icon: ListChecks },
       // { label: "Raise an alert", href: "/dwms/alerts",        icon: AlertTriangle },
       // { label: "Approvals",      href: "/dwms/approvalTasks", icon: Inbox, roles: [Role.HOD, Role.ADMIN, Role.SUPER_ADMIN, Role.MANAGEMENT] },
+    ],
+  },
+  STEEL: {
+    key: "STEEL",
+    label: "Steel Manufacturing",
+    tagline: "Production & Sourcing",
+    description: "Plan production runs, track raw material sourcing, and manage the steel manufacturing workflow end to end.",
+    icon: Factory,
+    color: "text-slate-600",
+    bg: "bg-slate-50",
+    ring: "ring-slate-200",
+    href: "/steel",
+    actions: [
+      { label: "Production Plans",       href: "/steel/p01", icon: ClipboardList },
+      { label: "Raw Material Sourcing",  href: "/steel/p02", icon: Package },
+    ],
+  },
+  KAIZEN: {
+    key: "KAIZEN",
+    label: "Daily Gemba Kaizen",
+    tagline: "Daily Gemba Walks",
+    description: "Raise, track, and close out daily Kaizen improvements from the gemba, with before/after photos and status tracking.",
+    icon: Sparkles,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    ring: "ring-blue-200",
+    href: "/kaizen",
+    actions: [
+      { label: "New Kaizen", href: "/kaizen/new", icon: FileEdit },
     ],
   },
 };
@@ -306,6 +337,8 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto space-y-10 pb-16">
 
+      <DashboardTour />
+
       <DashboardHero />
 
       {accessToken && <RemindersStrip token={accessToken} />}
@@ -313,7 +346,7 @@ export default function DashboardPage() {
       {/* <DashboardRoleSection /> */}
 
       {/* Active modules */}
-      <section>
+      <section data-tour="tour-modules">
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Your Modules</h2>

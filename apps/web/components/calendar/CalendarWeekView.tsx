@@ -7,6 +7,7 @@ import { MONTHS, MONTH_SHORT, addDays, dateToYMD } from "./calendarUtils";
 
 export function CalendarWeekView({
   weekStart, byDate, todayStr, selectedDate, isLoading, onSelectDate, onOpenItem, onPrev, onNext,
+  isAdmin, adminOrgConfigured, busyDates,
 }: {
   weekStart: Date;
   byDate: Record<string, AgendaItem[]>;
@@ -17,7 +18,11 @@ export function CalendarWeekView({
   onOpenItem: (item: AgendaItem) => void;
   onPrev: () => void;
   onNext: () => void;
+  isAdmin?: boolean;
+  adminOrgConfigured?: boolean;
+  busyDates?: Set<string>;
 }) {
+  const canRequestVisit = !isAdmin && !!adminOrgConfigured;
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekEnd = days[6];
   const weekLabel = weekStart.getMonth() === weekEnd.getMonth()
@@ -52,6 +57,8 @@ export function CalendarWeekView({
                 items={byDate[key] ?? []}
                 isToday={key === todayStr}
                 isSelected={key === selectedDate}
+                isSunday={day.getDay() === 0}
+                isAvailable={canRequestVisit && day.getDay() !== 0 && key >= todayStr && !busyDates?.has(key)}
                 onSelectDay={onSelectDate}
                 onOpenItem={onOpenItem}
                 density="compact"

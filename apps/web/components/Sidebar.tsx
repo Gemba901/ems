@@ -18,6 +18,9 @@ import {
   Palmtree,
   UserCircle,
   Lightbulb,
+  Ticket,
+  Factory,
+  Sparkles
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -71,6 +74,22 @@ const NAV_ITEMS = [
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT],
   },
+  {
+    name: "Steel Manufacturing",
+    href: "/steel",
+    icon: Factory,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+    module: "STEEL",
+  },
+  {
+    name: "Daily Gemba Kaizen",
+    href: "/kaizen",
+    icon: Sparkles,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+    module: "KAIZEN",
+  },
   // {
   //   name: "Reports",
   //   href: "/reports",
@@ -78,7 +97,13 @@ const NAV_ITEMS = [
   //   exact: false,
   //   allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
   // },
-  
+  {
+    name: "Tickets",
+    href: "/tickets",
+    icon: Ticket,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+  },
   {
     name: "Settings",
     href: "/settings",
@@ -206,7 +231,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
         </div>
 
         {/* ── Navigation ── */}
-        <nav className="flex-1 px-2 py-3 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
+        <nav data-tour="tour-sidebar" className="flex-1 px-2 py-3 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
           {!isCollapsed && (
             <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
               Platform

@@ -29,17 +29,21 @@ type DepartmentMetric = {
 };
 
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
+  WAITING_FOR_REVIEW: "Waiting for Review",
   UNDER_REVIEW: "Under Review",
   APPROVED_FOR_IMPLEMENTATION: "Approved for Implementation",
+  IMPLEMENTED: "Implemented",
   REJECTED: "Rejected",
   ON_HOLD: "On Hold",
   SELECTED_FOR_SGA: "Selected for SGA",
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  WAITING_FOR_REVIEW: "bg-slate-400",
   UNDER_REVIEW: "bg-amber-500",
   SELECTED_FOR_SGA: "bg-indigo-500",
-  APPROVED_FOR_IMPLEMENTATION: "bg-emerald-500",
+  APPROVED_FOR_IMPLEMENTATION: "bg-teal-500",
+  IMPLEMENTED: "bg-emerald-500",
   REJECTED: "bg-red-500",
   ON_HOLD: "bg-orange-500",
 };

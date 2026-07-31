@@ -12,44 +12,26 @@ import {
   Area, AreaChart,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
-import { TrendingUp, TrendingDown, Minus, Target, Zap, Award, AlertTriangle } from "lucide-react";
+import { Target, Zap, Award, AlertTriangle } from "lucide-react";
+import { CATEGORY_COLORS, STATUS_COLORS, CHART_TOOLTIP_STYLE, KpiCard, ChartCard } from "@/components/sims/sims-ui";
 
-// ─── Colour palettes ────────────────────────────────────────────────────────
-
-const CATEGORY_COLORS: Record<SuggestionCategory, string> = {
-  QUALITY:    "#3b82f6",
-  COST:       "#10b981",
-  DELIVERY:   "#8b5cf6",
-  SAFETY:     "#ef4444",
-  MORALE:     "#f59e0b",
-  TECHNOLOGY: "#6366f1",
-  UNKNOWN:    "#94a3b8",
-};
+// ─── Chart-specific labels (shorter than the shared sims-ui labels, to fit axes) ──
 
 const CATEGORY_LABELS: Record<SuggestionCategory, string> = {
   QUALITY: "Quality", COST: "Cost", DELIVERY: "Delivery",
   SAFETY: "Safety", MORALE: "Morale", TECHNOLOGY: "Technology", UNKNOWN: "Unknown",
 };
 
-const STATUS_COLORS: Record<SuggestionStatus, string> = {
-  UNDER_REVIEW:                "#f59e0b",
-  ON_HOLD:                     "#f97316",
-  SELECTED_FOR_SGA:            "#6366f1",
-  APPROVED_FOR_IMPLEMENTATION: "#10b981",
-  REJECTED:                    "#ef4444",
-};
-
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
-  UNDER_REVIEW: "Under Review", ON_HOLD: "On Hold",
-  SELECTED_FOR_SGA: "Selected for SGA", APPROVED_FOR_IMPLEMENTATION: "Approved for Impl.", REJECTED: "Rejected",
+  WAITING_FOR_REVIEW: "Waiting for Review", UNDER_REVIEW: "Under Review", ON_HOLD: "On Hold",
+  SELECTED_FOR_SGA: "Selected for SGA", APPROVED_FOR_IMPLEMENTATION: "Approved for Impl.",
+  IMPLEMENTED: "Implemented", REJECTED: "Rejected",
 };
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_COLORS) as SuggestionCategory[];
 const ALL_STATUSES   = Object.keys(STATUS_COLORS)   as SuggestionStatus[];
 
-// ─── Tooltip styles ─────────────────────────────────────────────────────────
-
-const tooltipStyle = { backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", fontSize: "12px" };
+const tooltipStyle = CHART_TOOLTIP_STYLE;
 
 // ─── Helper: group suggestions by month ─────────────────────────────────────
 
@@ -66,41 +48,6 @@ function byMonth(suggestions: Suggestion[]) {
     const label = new Date(Number(yr), Number(mo) - 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
     return { month: label, submissions: count };
   });
-}
-
-// ─── KPI Card ───────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, sub, trend, icon, accent }: {
-  label: string; value: string | number; sub?: string;
-  trend?: "up" | "down" | "flat"; icon: React.ReactNode; accent: string;
-}) {
-  const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
-  const trendColor = trend === "up" ? "text-emerald-500" : trend === "down" ? "text-red-500" : "text-slate-400";
-  return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${accent}`}>{icon}</div>
-        {trend && <TrendIcon className={`h-4 w-4 ${trendColor}`} />}
-      </div>
-      <p className="text-2xl font-bold text-slate-900">{value}</p>
-      <p className="text-xs font-medium text-slate-500 mt-0.5">{label}</p>
-      {sub && <p className="text-[11px] text-slate-400 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
-// ─── Chart Card wrapper ──────────────────────────────────────────────────────
-
-function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
-      <div className="mb-5">
-        <p className="text-sm font-bold text-slate-800">{title}</p>
-        {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
-      </div>
-      {children}
-    </div>
-  );
 }
 
 // ─── Main page ───────────────────────────────────────────────────────────────
@@ -202,7 +149,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* KPI row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
           <KpiCard label="Total Suggestions"    value={kpis.total}         sub="All time"                                    trend="up"   accent="bg-blue-50"    icon={<Target className="h-5 w-5 text-blue-600" />} />
           <KpiCard label="Implementation Rate"  value={`${kpis.impRate}%`} sub={`${kpis.implemented} implemented`}          trend={kpis.impRate > 20 ? "up" : "down"} accent="bg-emerald-50" icon={<Award className="h-5 w-5 text-emerald-600" />} />
           <KpiCard label="Approval Rate"        value={`${kpis.approvalRate}%`} sub={`${kpis.approved} approved / implemented`} trend={kpis.approvalRate > 30 ? "up" : "flat"} accent="bg-indigo-50" icon={<Zap className="h-5 w-5 text-indigo-600" />} />

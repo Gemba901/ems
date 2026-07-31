@@ -20,7 +20,7 @@ export const InfoGrid = ({ employee, canEdit, onSave }: InfoGridProps) => {
   const [form, setForm] = useState({
     firstName: employee.firstName,
     lastName: employee.lastName,
-    email: employee.email,
+    email: employee.email ?? "",
     phone: employee.phone === "—" ? "" : employee.phone,
   });
   const [saving, setSaving] = useState(false);
@@ -101,7 +101,7 @@ export const InfoGrid = ({ employee, canEdit, onSave }: InfoGridProps) => {
           {[
             { label: "First Name", value: employee.firstName },
             { label: "Last Name", value: employee.lastName },
-            { label: "Email Address", value: employee.email, fullWidth: true },
+            { label: "Email Address", value: employee.email ?? "—", fullWidth: true },
             { label: "Phone Number", value: employee.phone },
             { label: "Employment Type", value: employee.employmentType },
           ].map((item) => (

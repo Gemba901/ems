@@ -4,8 +4,12 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Loader2, CheckCircle2, Minus, Plus, ChevronDown, Users, UserPlus } from "lucide-react";
 import { CalendarService, CalendarVisit, PartnerOrg, VisitStatus } from "@/services/calendar.service";
-import { MONTHS } from "./calendarUtils";
+import { MONTHS, isSundayDate } from "./calendarUtils";
 import { CreateTypeTabs, CreateFlowType } from "./CreateTypeTabs";
+
+function weekdayLabel(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
+}
 
 export function VisitFormModal({
   orgs, token, editing, defaultDate, year, month, isAdmin, adminOrgConfigured, onSwitchType, onClose, onSaved,
@@ -78,6 +82,7 @@ export function VisitFormModal({
     setSaving(true); setError(null);
     try {
       if (editing) {
+        if (editDate && isSundayDate(editDate)) { setError("Partner visits cannot be scheduled on Sundays."); setSaving(false); return; }
         await CalendarService.updateVisit(editing.id, {
           clientOrgId,
           date: editDate || undefined,
@@ -88,6 +93,7 @@ export function VisitFormModal({
       } else {
         const datedSlots = slots.filter((s) => s.date);
         if (datedSlots.length === 0) { setError("Set a date for at least one visit."); setSaving(false); return; }
+        if (datedSlots.some((s) => isSundayDate(s.date))) { setError("Partner visits cannot be scheduled on Sundays."); setSaving(false); return; }
         const orgName = selectedOrg?.name ?? "Partner";
         for (let i = 0; i < slots.length; i++) {
           const s = slots[i];
@@ -122,7 +128,7 @@ export function VisitFormModal({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
           {!editing && (
-            <CreateTypeTabs active="VISIT" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} onSelect={onSwitchType} />
+            <CreateTypeTabs active="VISIT" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} dateStr={defaultDate} onSelect={onSwitchType} />
           )}
 
           {/* Partner */}
@@ -163,12 +169,19 @@ export function VisitFormModal({
                       <span className="h-5 w-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
                       <span className="text-xs font-semibold text-slate-600">Visit {i + 1}</span>
                     </div>
-                    <input
-                      type="date" value={slot.date}
-                      min={`${monthPrefix}-01`} max={`${monthPrefix}-31`}
-                      onChange={(e) => updateSlot(i, "date", e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date" value={slot.date}
+                        min={`${monthPrefix}-01`} max={`${monthPrefix}-31`}
+                        onChange={(e) => updateSlot(i, "date", e.target.value)}
+                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                      />
+                      {slot.date && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+                          {weekdayLabel(slot.date)}
+                        </span>
+                      )}
+                    </div>
                     <textarea
                       rows={2} placeholder="Agenda for this visit…" value={slot.agenda}
                       onChange={(e) => updateSlot(i, "agenda", e.target.value)}
@@ -185,7 +198,14 @@ export function VisitFormModal({
             <>
               <div>
                 <label className="text-xs font-semibold text-slate-500 block mb-1">Date</label>
-                <input type="date" className={inputCls} value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                <div className="flex items-center gap-2">
+                  <input type="date" className={`${inputCls} flex-1`} value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                  {editDate && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+                      {weekdayLabel(editDate)}
+                    </span>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-500 block mb-1">Agenda</label>

@@ -4,7 +4,7 @@ import { AgendaItem, HolisticCalendarEvent } from "@/services/calendar.service";
 import { EventChip } from "./EventChip";
 
 export function DayCell({
-  dateStr, dayNumber, topLabel, items, isToday, isSelected, isOutsideMonth,
+  dateStr, dayNumber, topLabel, items, isToday, isSelected, isOutsideMonth, isSunday, isAvailable,
   maxVisible = 3, onSelectDay, onOpenItem, density = "compact", minHeight = "min-h-20",
 }: {
   dateStr: string;
@@ -14,6 +14,8 @@ export function DayCell({
   isToday: boolean;
   isSelected: boolean;
   isOutsideMonth?: boolean;
+  isSunday?: boolean;
+  isAvailable?: boolean;
   maxVisible?: number;
   onSelectDay: (dateStr: string) => void;
   onOpenItem: (item: AgendaItem) => void;
@@ -35,7 +37,7 @@ export function DayCell({
     >
       <div className={`flex ${topLabel ? "flex-col items-center" : "items-center justify-start"} gap-0.5`}>
         {topLabel && (
-          <p className={`text-[9px] font-bold uppercase tracking-wide ${isToday ? "text-blue-500" : "text-slate-400"}`}>
+          <p className={`text-[9px] font-bold uppercase tracking-wide ${isToday ? "text-blue-500" : isSunday ? "text-red-500" : "text-slate-400"}`}>
             {topLabel}
           </p>
         )}
@@ -47,6 +49,8 @@ export function DayCell({
               ? "bg-blue-100 text-blue-700"
               : isOutsideMonth
               ? "text-slate-300"
+              : isSunday
+              ? "text-red-500"
               : "text-slate-700"
           }`}
         >
@@ -72,6 +76,9 @@ export function DayCell({
           >
             +{overflow} more
           </button>
+        )}
+        {isAvailable && items.length === 0 && (
+          <p className="px-1 text-[9px] font-semibold text-emerald-600">Available</p>
         )}
       </div>
     </div>

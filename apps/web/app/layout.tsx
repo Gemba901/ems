@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/contexts/toast.context";
@@ -9,6 +9,36 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Gemba PMS",
   description: "Precision Engine Employee Management System",
+  manifest: "/manifest.json",
+  applicationName: "Gemba PMS",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Gemba PMS",
+  },
+  icons: [
+    {
+      rel: "icon",
+      url: "/icon-192.png",
+      sizes: "192x192",
+      type: "image/png",
+    },
+    {
+      rel: "icon",
+      url: "/icon-512.png",
+      sizes: "512x512",
+      type: "image/png",
+    },
+    {
+      rel: "apple-touch-icon",
+      url: "/apple-touch-icon.png",
+      sizes: "180x180",
+    },
+  ],
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({

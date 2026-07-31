@@ -15,5 +15,4 @@ const pwaConfig = withPWA({
   clientsClaim: true,
 });
 
-export default nextConfig;
 export default pwaConfig(nextConfig);

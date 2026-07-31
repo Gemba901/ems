@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -14,11 +14,13 @@ import {
   ImplementationStatus,
   SuggestionCategory,
   DecisionType,
+  KaizenDetailsPayload,
   calcWeight,
-  uploadSuggestionImage,
 } from "@/services/sims.service";
 import { CommitteeService } from "@/services/committee.service";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import { uploadImage } from "@/services/uploads.service";
+import { BENEFIT_CATEGORIES } from "@/components/kaizen/kaizen-ui";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -30,6 +32,10 @@ import {
   Info,
   TrendingUp,
   User,
+  ImagePlus,
+  Camera,
+  X,
+  Sparkles,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<SuggestionStatus, string> = {
@@ -64,13 +70,6 @@ const WORKPLACE_CORRECTION_FIELDS: DecisionField[] = [
   { key: "responsible",     label: "Responsible Person",  required: true,  type: "text" },
   { key: "supportRequired", label: "Support Required",    required: false, type: "text" },
   { key: "targetDate",      label: "Target Date",         required: true,  type: "date" },
-];
-
-const DAILY_KAIZEN_FIELDS: DecisionField[] = [
-  { key: "owner",          label: "Improvement Owner", required: true,  type: "text" },
-  { key: "supportTeam",    label: "Support Team",      required: false, type: "text" },
-  { key: "targetDate",     label: "Target Date",       required: true,  type: "date" },
-  { key: "expectedResult", label: "Expected Result",   required: true,  type: "textarea" },
 ];
 
 const SGA_FIELDS: DecisionField[] = [
@@ -258,8 +257,18 @@ export default function SuggestionDetailPage() {
   const [note, setNote]                   = useState("");
   const [decisionType, setDecisionType]   = useState<DecisionType | "">("");
   const [decisionFields, setDecisionFields] = useState<Record<string, string>>({});
-  const [evidenceFile, setEvidenceFile]   = useState<File | null>(null);
   const [reviewError, setReviewError]     = useState<string | null>(null);
+
+  // Daily Gemba Kaizen sub-form (shown when decisionType === "DAILY_KAIZEN")
+  const [kaizenProblem, setKaizenProblem]           = useState("");
+  const [kaizenPhotoFile, setKaizenPhotoFile]       = useState<File | null>(null);
+  const [kaizenPhotoPreview, setKaizenPhotoPreview] = useState<string | null>(null);
+  const [kaizenTeamMembers, setKaizenTeamMembers]   = useState("");
+  const [kaizenBenefitCategory, setKaizenBenefitCategory] = useState("");
+  const [kaizenComments, setKaizenComments]         = useState("");
+  const [kaizenStartImprovement, setKaizenStartImprovement] = useState(false);
+  const kaizenFileInputRef = useRef<HTMLInputElement>(null);
+  const kaizenCameraInputRef = useRef<HTMLInputElement>(null);
 
   // Implementation Progress panel (WORK_IN_PROGRESS etc — separate from the decision fields above)
   const [implStatus, setImplStatus]   = useState<ImplementationStatus | "">("");
@@ -301,15 +310,20 @@ export default function SuggestionDetailPage() {
   const canUpdateImplementation = isReviewerRole || isHODOfDept || isCommitteeMemberForSuggestion;
 
   const reviewMutation = useMutation({
-    mutationFn: (payload: { statusChanged: SuggestionStatus; note?: string; decisionType?: DecisionType; decisionDetails?: Record<string, any> }) =>
-      SimsService.review(suggestion!.id, payload, accessToken!),
+    mutationFn: (payload: {
+      statusChanged: SuggestionStatus;
+      note?: string;
+      decisionType?: DecisionType;
+      decisionDetails?: Record<string, any>;
+      kaizenDetails?: KaizenDetailsPayload;
+    }) => SimsService.review(suggestion!.id, payload, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sims-detail", id] });
       setNewStatus("");
       setNote("");
       setDecisionType("");
       setDecisionFields({});
-      setEvidenceFile(null);
+      resetKaizenForm();
     },
     onError: (err: any) => setReviewError(err.message),
   });
@@ -332,22 +346,72 @@ export default function SuggestionDetailPage() {
   const updateDecisionField = (key: string, value: string) =>
     setDecisionFields((f) => ({ ...f, [key]: value }));
 
+  const resetKaizenForm = () => {
+    setKaizenProblem("");
+    setKaizenPhotoFile(null);
+    setKaizenPhotoPreview(null);
+    setKaizenTeamMembers("");
+    setKaizenBenefitCategory("");
+    setKaizenComments("");
+    setKaizenStartImprovement(false);
+    if (kaizenFileInputRef.current) kaizenFileInputRef.current.value = "";
+    if (kaizenCameraInputRef.current) kaizenCameraInputRef.current.value = "";
+  };
+
+  const handleKaizenPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setReviewError("Only image files are allowed."); return; }
+    if (file.size > 10 * 1024 * 1024) { setReviewError("Image must be under 10 MB."); return; }
+    setKaizenPhotoFile(file);
+    setKaizenPhotoPreview(URL.createObjectURL(file));
+    setReviewError(null);
+  };
+
+  const removeKaizenPhoto = () => {
+    if (kaizenPhotoFile && kaizenPhotoPreview) URL.revokeObjectURL(kaizenPhotoPreview);
+    setKaizenPhotoFile(null);
+    setKaizenPhotoPreview(null);
+    if (kaizenFileInputRef.current) kaizenFileInputRef.current.value = "";
+    if (kaizenCameraInputRef.current) kaizenCameraInputRef.current.value = "";
+  };
+
   const handleReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStatus || !suggestion) return;
     setReviewError(null);
 
+    const isDailyKaizen = newStatus === "APPROVED_FOR_IMPLEMENTATION" && decisionType === "DAILY_KAIZEN";
+
     let decisionDetails: Record<string, any> | undefined;
     if (newStatus === "APPROVED_FOR_IMPLEMENTATION" || newStatus === "SELECTED_FOR_SGA" || newStatus === "ON_HOLD") {
       decisionDetails = { ...decisionFields };
-      if (newStatus === "APPROVED_FOR_IMPLEMENTATION" && decisionType === "DAILY_KAIZEN" && evidenceFile) {
+    }
+
+    let kaizenDetails: KaizenDetailsPayload | undefined;
+    if (isDailyKaizen) {
+      if (!kaizenPhotoPreview && !kaizenPhotoFile) {
+        setReviewError("A before photo is required to raise a Kaizen from this suggestion.");
+        return;
+      }
+      let beforePhotoUrl: string | undefined;
+      if (kaizenPhotoFile) {
         try {
-          decisionDetails.evidence = await uploadSuggestionImage(evidenceFile, accessToken!);
+          const { fileUrl } = await uploadImage(kaizenPhotoFile, "kaizen", accessToken!);
+          beforePhotoUrl = fileUrl;
         } catch (err: any) {
-          setReviewError(err.message || "Failed to upload evidence image");
+          setReviewError(err.message || "Failed to upload before photo");
           return;
         }
       }
+      kaizenDetails = {
+        problem: kaizenProblem.trim() || undefined,
+        beforePhotoUrl,
+        teamMembers: kaizenTeamMembers.trim() || undefined,
+        benefitCategory: kaizenBenefitCategory || undefined,
+        comments: kaizenComments.trim() || undefined,
+        startImprovement: kaizenStartImprovement,
+      };
     }
 
     reviewMutation.mutate({
@@ -355,6 +419,7 @@ export default function SuggestionDetailPage() {
       note: note || undefined,
       decisionType: newStatus === "APPROVED_FOR_IMPLEMENTATION" ? (decisionType || undefined) : undefined,
       decisionDetails,
+      kaizenDetails,
     });
   };
 
@@ -396,6 +461,14 @@ export default function SuggestionDetailPage() {
                     <span className={`text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${IMPLEMENTATION_STATUS_BADGE[suggestion.implementationStatus]}`}>
                       {IMPLEMENTATION_STATUS_LABELS[suggestion.implementationStatus]}
                     </span>
+                  )}
+                  {suggestion.linkedKaizenId && (
+                    <Link
+                      href={`/kaizen/${suggestion.linkedKaizenId}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1.5 hover:bg-emerald-100 transition-colors"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" /> Raised as a Kaizen →
+                    </Link>
                   )}
                 </div>
               </div>
@@ -478,7 +551,7 @@ export default function SuggestionDetailPage() {
                   </div>
                 )}
 
-                {suggestion.status === "IMPLEMENTED" && suggestion.decisionDetails && (
+                {suggestion.status === "IMPLEMENTED" && suggestion.decisionDetails && Object.keys(suggestion.decisionDetails).length > 0 && (
                   <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
                       <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -624,7 +697,7 @@ export default function SuggestionDetailPage() {
                               setNewStatus(e.target.value as SuggestionStatus);
                               setDecisionType("");
                               setDecisionFields({});
-                              setEvidenceFile(null);
+                              resetKaizenForm();
                             }}
                             className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                           >
@@ -644,7 +717,16 @@ export default function SuggestionDetailPage() {
                               <select
                                 required
                                 value={decisionType}
-                                onChange={(e) => { setDecisionType(e.target.value as DecisionType); setDecisionFields({}); }}
+                                onChange={(e) => {
+                                  const val = e.target.value as DecisionType;
+                                  setDecisionType(val);
+                                  setDecisionFields({});
+                                  if (val === "DAILY_KAIZEN") {
+                                    resetKaizenForm();
+                                    setKaizenProblem(`${suggestion.title}\n\n${suggestion.description}`);
+                                    setKaizenPhotoPreview(suggestion.imageUrl ?? null);
+                                  }
+                                }}
                                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                               >
                                 <option value="">Select decision type...</option>
@@ -657,20 +739,94 @@ export default function SuggestionDetailPage() {
                               <DecisionFieldsForm fields={WORKPLACE_CORRECTION_FIELDS} values={decisionFields} onChange={updateDecisionField} />
                             )}
                             {decisionType === "DAILY_KAIZEN" && (
-                              <>
-                                <DecisionFieldsForm fields={DAILY_KAIZEN_FIELDS} values={decisionFields} onChange={updateDecisionField} />
+                              <div className="space-y-4">
+                                <p className="text-xs text-slate-500 -mt-1">
+                                  This will raise a real Kaizen, owned by the original submitter, visible in the Daily Gemba Kaizen module.
+                                </p>
                                 <div>
                                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                    Before/After Evidence (optional)
+                                    Problem
                                   </label>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => setEvidenceFile(e.target.files?.[0] ?? null)}
-                                    className="text-xs w-full text-slate-500"
+                                  <textarea
+                                    rows={3}
+                                    value={kaizenProblem}
+                                    onChange={(e) => setKaizenProblem(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
                                   />
                                 </div>
-                              </>
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                    Before Photo<span className="text-red-500"> *</span>
+                                  </label>
+                                  {kaizenPhotoPreview ? (
+                                    <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={kaizenPhotoPreview} alt="Before preview" className="w-full max-h-48 object-contain" />
+                                      <button
+                                        type="button"
+                                        onClick={removeKaizenPhoto}
+                                        className="absolute top-2 right-2 h-7 w-7 rounded-full bg-slate-900/60 hover:bg-slate-900/80 flex items-center justify-center text-white transition-colors"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => kaizenFileInputRef.current?.click()}
+                                        className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl py-4 text-xs text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all"
+                                      >
+                                        <ImagePlus className="h-3.5 w-3.5" /> Attach a photo
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => kaizenCameraInputRef.current?.click()}
+                                        className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl py-4 text-xs text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all"
+                                      >
+                                        <Camera className="h-3.5 w-3.5" /> Take a photo
+                                      </button>
+                                    </div>
+                                  )}
+                                  <input ref={kaizenFileInputRef} type="file" accept="image/*" onChange={handleKaizenPhotoChange} className="hidden" />
+                                  <input ref={kaizenCameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleKaizenPhotoChange} className="hidden" />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <input
+                                    type="text"
+                                    value={kaizenTeamMembers}
+                                    onChange={(e) => setKaizenTeamMembers(e.target.value)}
+                                    placeholder="Team members (optional)"
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                  />
+                                  <select
+                                    value={kaizenBenefitCategory}
+                                    onChange={(e) => setKaizenBenefitCategory(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                  >
+                                    <option value="">Benefit category (optional)...</option>
+                                    {BENEFIT_CATEGORIES.map((c) => (
+                                      <option key={c} value={c}>{c}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <textarea
+                                  rows={2}
+                                  value={kaizenComments}
+                                  onChange={(e) => setKaizenComments(e.target.value)}
+                                  placeholder="Comments (optional)"
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+                                />
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={kaizenStartImprovement}
+                                    onChange={(e) => setKaizenStartImprovement(e.target.checked)}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+                                  />
+                                  <span className="text-xs text-slate-600">Start improvement immediately</span>
+                                </label>
+                              </div>
                             )}
                           </div>
                         )}

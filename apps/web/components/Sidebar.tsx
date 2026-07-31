@@ -19,7 +19,8 @@ import {
   UserCircle,
   Lightbulb,
   Ticket,
-  Factory
+  Factory,
+  Sparkles
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -80,6 +81,14 @@ const NAV_ITEMS = [
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
     module: "STEEL",
+  },
+  {
+    name: "Daily Gemba Kaizen",
+    href: "/kaizen",
+    icon: Sparkles,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+    module: "KAIZEN",
   },
   // {
   //   name: "Reports",

@@ -89,6 +89,7 @@ export interface Suggestion {
   decisionDetails: Record<string, any> | null;
   committeeId: string | null;
   forwardedToCommitteeAt: string | null;
+  linkedKaizenId: string | null;
   createdAt: string;
   updatedAt: string;
   employee: { id: string; firstName: string; lastName: string; department: { id: string; name: string } | null } | null;
@@ -109,6 +110,15 @@ export interface CreateSuggestionPayload {
   departmentId?: string;
 }
 
+export interface KaizenDetailsPayload {
+  problem?: string;
+  beforePhotoUrl?: string;
+  teamMembers?: string;
+  benefitCategory?: string;
+  comments?: string;
+  startImprovement?: boolean;
+}
+
 export interface ReviewPayload {
   statusChanged: SuggestionStatus;
   note?: string;
@@ -116,6 +126,7 @@ export interface ReviewPayload {
   implementationNote?: string;
   decisionType?: DecisionType;
   decisionDetails?: Record<string, any>;
+  kaizenDetails?: KaizenDetailsPayload;
 }
 
 export interface UpdateImplementationPayload {

@@ -82,6 +82,20 @@ function AssignedTasksHistoryContent() {
     return `${day} ${month}`;
   };
 
+  const formatAcknowledgedAt = (value?: string | null) => {
+    if (!value) return null;
+
+    const acknowledgedAt = new Date(value);
+    if (Number.isNaN(acknowledgedAt.getTime())) return null;
+
+    return acknowledgedAt.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const getPriorityBadgeColor = (p: string) => {
     switch (p) {
       case "CRITICAL":
@@ -126,7 +140,6 @@ function AssignedTasksHistoryContent() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [byMeTasks]);
 
-
   const openTaskDetails = (task: DwmsAssignedTaskHistoryItem) => {
     router.push(`/dwms/tasks/${task.instanceId ?? task.id}`);
   };
@@ -142,8 +155,10 @@ function AssignedTasksHistoryContent() {
       : "U";
     const priority =
       task.priority === "LOW" ? "MEDIUM" : (task.priority ?? "MEDIUM");
-    const showAcknowledgedAt = task.acknowledgedAt && !isFrequencyBasedTask(task);
-    const showWasOverdue = !!task.wasOverdue && task.status !== 'OVERDUE';
+    const acknowledgedAtLabel = !isFrequencyBasedTask(task)
+      ? formatAcknowledgedAt(task.acknowledgedAt)
+      : null;
+    const showWasOverdue = !!task.wasOverdue && task.status !== "OVERDUE";
 
     return (
       <div
@@ -210,17 +225,10 @@ function AssignedTasksHistoryContent() {
           </div>
         </div>
 
-        {showAcknowledgedAt && (
+        {acknowledgedAtLabel && (
           <div className="border-t border-border-app pt-2.5 text-[11px] text-muted-app">
             <span>Acknowledged: </span>
-            <span className="text-text-app">
-              {new Date(task.acknowledgedAt).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
+            <span className="text-text-app">{acknowledgedAtLabel}</span>
           </div>
         )}
 

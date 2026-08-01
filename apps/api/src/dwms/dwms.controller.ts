@@ -23,11 +23,17 @@ import {
   CreateAssignedTaskDto,
   UpdateProgressDto,
   CompleteAssignedTaskDto,
+  CreateTaskInstanceCommentDto,
+  TaskApprovalActionDto,
   CreateAlertDto,
+  CreateAlertCommentDto,
   LogCorrectiveActionDto,
   CloseAlertDto,
   ReassignEscalatedTaskDto,
-  ExtendEscalatedTaskDueDateDto,
+  CreateActivityDto,
+  UpdateActivityDto,
+  CreateTaskFromActivityDto,
+  IngestActivitiesDto,
 } from './dto/dwms.dto';
 import { UpdateDwmsPermissionConfigDto } from './dto/dwmsSettings.dto';
 
@@ -88,8 +94,9 @@ export class DwmsController {
     @CurrentUser() user: UserPayload,
     @Query('frequency') frequency?: string,
     @Query('date') date?: string,
+    @Query('timeZone') timeZone?: string,
   ) {
-    return this.dwmsService.getMyDwmsTasks(user, frequency, date);
+    return this.dwmsService.getMyDwmsTasks(user, frequency, date, timeZone);
   }
 
   @Get('myDwms/tasks/summary')
@@ -98,8 +105,19 @@ export class DwmsController {
   getMyDwmsTaskSummary(
     @CurrentUser() user: UserPayload,
     @Query('date') date?: string,
+    @Query('timeZone') timeZone?: string,
   ) {
-    return this.dwmsService.getMyDwmsTaskSummary(user, date);
+    return this.dwmsService.getMyDwmsTaskSummary(user, date, timeZone);
+  }
+
+  @Get('myDwms/tasks/:id')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  getMyDwmsTaskInstanceDetail(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.dwmsService.getMyDwmsTaskInstanceDetail(user, id);
   }
 
   @Patch('myDwms/tasks/:id/status')
@@ -113,6 +131,17 @@ export class DwmsController {
     return this.dwmsService.updateMyDwmsTaskStatus(user, id, dto);
   }
 
+  @Post('myDwms/tasks/:id/comments')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  addMyDwmsTaskComment(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: CreateTaskInstanceCommentDto,
+  ) {
+    return this.dwmsService.addMyDwmsTaskComment(user, id, dto);
+  }
+
   @Patch('myDwms/tasks/:id/acknowledgement')
   @UseGuards(JwtAuthGuard, ModuleGuard)
   @RequiresModule(ModuleType.DWMS)
@@ -121,6 +150,82 @@ export class DwmsController {
     @Param('id') id: string,
   ) {
     return this.dwmsService.acknowledgeAssignedTask(user, id);
+  }
+
+  // --- Activities Endpoints ---
+  @Get('activities')
+  @UseGuards(JwtAuthGuard)
+  listActivities(
+    @CurrentUser() user: UserPayload,
+    @Query('status') status?: string,
+  ) {
+    return this.dwmsService.listActivities(user, status);
+  }
+
+  @Get('activities/ingestions')
+  @UseGuards(JwtAuthGuard)
+  listActivityIngestions(@CurrentUser() user: UserPayload) {
+    return this.dwmsService.listActivityIngestions(user);
+  }
+
+  @Get('activities/ingestions/:id')
+  @UseGuards(JwtAuthGuard)
+  getActivityIngestion(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.dwmsService.getActivityIngestion(user, id);
+  }
+
+  @Get('activities/:id')
+  @UseGuards(JwtAuthGuard)
+  getActivity(@CurrentUser() user: UserPayload, @Param('id') id: string) {
+    return this.dwmsService.getActivity(user, id);
+  }
+
+  @Post('activities')
+  @UseGuards(JwtAuthGuard)
+  createActivity(
+    @CurrentUser() user: UserPayload,
+    @Body() dto: CreateActivityDto,
+  ) {
+    return this.dwmsService.createActivity(user, dto);
+  }
+
+  @Post('activities/ingest')
+  @UseGuards(JwtAuthGuard)
+  ingestActivities(
+    @CurrentUser() user: UserPayload,
+    @Body() dto: IngestActivitiesDto,
+  ) {
+    return this.dwmsService.ingestActivities(user, dto);
+  }
+
+  @Patch('activities/:id')
+  @UseGuards(JwtAuthGuard)
+  updateActivity(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: UpdateActivityDto,
+  ) {
+    return this.dwmsService.updateActivity(user, id, dto);
+  }
+
+  @Patch('activities/:id/archive')
+  @UseGuards(JwtAuthGuard)
+  archiveActivity(@CurrentUser() user: UserPayload, @Param('id') id: string) {
+    return this.dwmsService.archiveActivity(user, id);
+  }
+
+
+  @Post('activities/:id/tasks')
+  @UseGuards(JwtAuthGuard)
+  createTaskFromActivity(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: CreateTaskFromActivityDto,
+  ) {
+    return this.dwmsService.createTaskFromActivity(user, id, dto);
   }
 
   // --- Assigned Tasks Endpoints ---
@@ -161,15 +266,23 @@ export class DwmsController {
   @Patch('approvalTasks/:id/approve')
   @UseGuards(JwtAuthGuard, ModuleGuard)
   @RequiresModule(ModuleType.DWMS)
-  approveTask(@CurrentUser() user: UserPayload, @Param('id') id: string) {
-    return this.dwmsService.approveTask(user, id);
+  approveTask(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: TaskApprovalActionDto = {},
+  ) {
+    return this.dwmsService.approveTask(user, id, dto);
   }
 
   @Patch('approvalTasks/:id/reject')
   @UseGuards(JwtAuthGuard, ModuleGuard)
   @RequiresModule(ModuleType.DWMS)
-  rejectTask(@CurrentUser() user: UserPayload, @Param('id') id: string) {
-    return this.dwmsService.rejectTask(user, id);
+  rejectTask(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: TaskApprovalActionDto = {},
+  ) {
+    return this.dwmsService.rejectTask(user, id, dto);
   }
 
   @Patch('assignedTasks/:id/acknowledge')
@@ -233,6 +346,24 @@ export class DwmsController {
     return this.dwmsService.getMyResponsibleAlertCount(user);
   }
 
+
+  @Get('alerts/:id')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  getAlertDetail(@CurrentUser() user: UserPayload, @Param('id') id: string) {
+    return this.dwmsService.getAlertDetail(user, id);
+  }
+
+  @Post('alerts/:id/comments')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  addAlertComment(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: CreateAlertCommentDto,
+  ) {
+    return this.dwmsService.addAlertComment(user, id, dto);
+  }
   @Patch('alerts/:id/response')
   @UseGuards(JwtAuthGuard, ModuleGuard)
   @RequiresModule(ModuleType.DWMS)
@@ -244,6 +375,17 @@ export class DwmsController {
     return this.dwmsService.logCorrectiveAction(user, id, dto.correctiveAction);
   }
 
+  @Patch('alerts/:id/closure-request')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  requestAlertClosure(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: CloseAlertDto,
+  ) {
+    return this.dwmsService.requestAlertClosure(user, id, dto.closureNote);
+  }
+
   @Patch('alerts/:id/close')
   @UseGuards(JwtAuthGuard, ModuleGuard)
   @RequiresModule(ModuleType.DWMS)
@@ -253,6 +395,38 @@ export class DwmsController {
     @Body() dto: CloseAlertDto,
   ) {
     return this.dwmsService.closeAlert(user, id, dto.closureNote);
+  }
+
+  @Get('approvalAlerts')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  getAlertClosureApprovals(
+    @CurrentUser() user: UserPayload,
+    @Query('status') status?: string,
+  ) {
+    return this.dwmsService.getAlertClosureApprovals(user, status);
+  }
+
+  @Patch('approvalAlerts/:id/approve')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  approveAlertClosure(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: TaskApprovalActionDto = {},
+  ) {
+    return this.dwmsService.approveAlertClosure(user, id, dto?.comment);
+  }
+
+  @Patch('approvalAlerts/:id/reject')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  rejectAlertClosure(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Body() dto: TaskApprovalActionDto = {},
+  ) {
+    return this.dwmsService.rejectAlertClosure(user, id, dto?.comment);
   }
 
   @Post('alerts/:id/remind')
@@ -271,21 +445,6 @@ export class DwmsController {
     @Body() dto: ReassignEscalatedTaskDto,
   ) {
     return this.dwmsService.reassignEscalatedTask(user, id, dto.newOwnerId);
-  }
-
-  @Post('alerts/:id/extend-due-date')
-  @UseGuards(JwtAuthGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  extendEscalatedTaskDueDate(
-    @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-    @Body() dto: ExtendEscalatedTaskDueDateDto,
-  ) {
-    return this.dwmsService.extendEscalatedTaskDueDate(
-      user,
-      id,
-      dto.newDueDate,
-    );
   }
 
   @Post('alerts/:id/escalate')
@@ -384,3 +543,5 @@ export class DwmsController {
     return this.dwmsService.updateDwmsPermissionConfig(user, dto);
   }
 }
+
+

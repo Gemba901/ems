@@ -4,12 +4,16 @@ import {
   IsOptional,
   IsEnum,
   IsNumber,
+  IsInt,
+  Min,
   IsArray,
   ArrayUnique,
   ArrayMaxSize,
   NotEquals,
+  IsBoolean,
 } from 'class-validator';
 import {
+  ActivityStatus,
   TaskFrequency,
   TaskStatus,
   Priority,
@@ -18,6 +22,10 @@ import {
 } from 'db';
 
 export class CreateAssignedTaskDto {
+  @IsOptional()
+  @IsString()
+  activityId?: string;
+
   @IsNotEmpty()
   @IsString()
   title!: string;
@@ -61,6 +69,285 @@ export class CreateAssignedTaskDto {
   @IsOptional()
   @IsString()
   backupOwnerId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresCompletionDocument?: boolean;
+
+  @IsOptional()
+  @IsString()
+  completionDocumentName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isAdhoc?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  acknowledgeOnCreate?: boolean;
+}
+
+export class CreateTaskFromActivityDto {
+  @IsOptional()
+  @IsString()
+  assignedToId?: string;
+
+  @IsOptional()
+  @IsString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsEnum(Priority)
+  @NotEquals(Priority.LOW)
+  priority?: Priority;
+
+  @IsOptional()
+  @IsEnum(TaskFrequency)
+  frequency?: TaskFrequency;
+
+  @IsOptional()
+  @IsString()
+  approvedById?: string;
+
+  @IsOptional()
+  @IsString()
+  backupOwnerId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isAdhoc?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  acknowledgeOnCreate?: boolean;
+}
+
+export class CreateActivityDto {
+  @IsOptional()
+  @IsString()
+  companyUnitName?: string;
+
+  @IsOptional()
+  @IsString()
+  mainDepartmentId?: string;
+
+  @IsOptional()
+  @IsString()
+  subDepartment?: string;
+
+  @IsOptional()
+  @IsString()
+  gembaSection?: string;
+
+  @IsOptional()
+  @IsString()
+  processArea?: string;
+
+  @IsNotEmpty()
+  @IsString()
+  name!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  workMethod!: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  purpose?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsNotEmpty()
+  @IsEnum(TaskFrequency)
+  frequency!: TaskFrequency;
+
+  @IsOptional()
+  @IsString()
+  startTrigger?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  completionDeadline?: number;
+
+  @IsOptional()
+  @IsString()
+  completionOutput?: string;
+
+  @IsOptional()
+  @IsString()
+  primaryResponsibleDesignation?: string;
+
+  @IsOptional()
+  @IsString()
+  primaryResponsibleEmployeeId?: string;
+
+
+
+
+
+
+
+
+  @IsOptional()
+  @IsString()
+  evidenceRequired?: string;
+
+  @IsOptional()
+  @IsString()
+  effectiveFrom?: string;
+
+  @IsOptional()
+  @IsEnum(ActivityStatus)
+  status?: ActivityStatus;
+
+  @IsOptional()
+  @IsString()
+  remarks?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(1)
+  @IsString({ each: true })
+  parentActivityIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  parentActivityId?: string;
+}
+
+export class UpdateActivityDto {
+  @IsOptional()
+  @IsString()
+  companyUnitName?: string;
+
+  @IsOptional()
+  @IsString()
+  mainDepartmentId?: string;
+
+  @IsOptional()
+  @IsString()
+  subDepartment?: string;
+
+  @IsOptional()
+  @IsString()
+  gembaSection?: string;
+
+  @IsOptional()
+  @IsString()
+  processArea?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  workMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  purpose?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsEnum(TaskFrequency)
+  frequency?: TaskFrequency;
+
+  @IsOptional()
+  @IsString()
+  startTrigger?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  completionDeadline?: number;
+
+  @IsOptional()
+  @IsString()
+  completionOutput?: string;
+
+  @IsOptional()
+  @IsString()
+  primaryResponsibleDesignation?: string;
+
+  @IsOptional()
+  @IsString()
+  primaryResponsibleEmployeeId?: string;
+
+
+
+
+
+
+
+
+  @IsOptional()
+  @IsString()
+  evidenceRequired?: string;
+
+  @IsOptional()
+  @IsString()
+  effectiveFrom?: string;
+
+  @IsOptional()
+  @IsEnum(ActivityStatus)
+  status?: ActivityStatus;
+
+  @IsOptional()
+  @IsString()
+  remarks?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(1)
+  @IsString({ each: true })
+  parentActivityIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  parentActivityId?: string;
+}
+
+export class IngestActivityRowDto {
+  activity!: CreateActivityDto;
+
+  @IsNotEmpty()
+  @IsString()
+  responsibleEmployeeCode!: string;
+
+  @IsOptional()
+  @IsString()
+  parentActivityCode?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  rowNumber?: number;
+}
+
+export class IngestActivitiesDto {
+  @IsOptional()
+  @IsString()
+  fileName?: string;
+
+  @IsArray()
+  @ArrayMaxSize(500)
+  rows!: IngestActivityRowDto[];
 }
 
 export class UpdateProgressDto {
@@ -99,6 +386,18 @@ export class CompleteAssignedTaskDto {
   completionAttachmentName?: string;
 }
 
+export class CreateTaskInstanceCommentDto {
+  @IsNotEmpty()
+  @IsString()
+  comment!: string;
+}
+
+export class TaskApprovalActionDto {
+  @IsOptional()
+  @IsString()
+  comment?: string;
+}
+
 export class CreateAlertDto {
   @IsNotEmpty()
   @IsString()
@@ -130,6 +429,11 @@ export class CreateAlertDto {
   departmentId?: string;
 }
 
+export class CreateAlertCommentDto {
+  @IsNotEmpty()
+  @IsString()
+  comment!: string;
+}
 export class LogCorrectiveActionDto {
   @IsNotEmpty()
   @IsString()
@@ -148,8 +452,3 @@ export class ReassignEscalatedTaskDto {
   newOwnerId!: string;
 }
 
-export class ExtendEscalatedTaskDueDateDto {
-  @IsNotEmpty()
-  @IsString()
-  newDueDate!: string;
-}

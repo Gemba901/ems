@@ -1,8 +1,8 @@
 "use client";
 
-import React from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Home,
   ClipboardList,
@@ -14,10 +14,11 @@ import {
   PanelLeftOpen,
   ChevronRight,
   Send,
-  BadgeCheck,
-  Settings2
-} from 'lucide-react';
-import { useAuthStore } from '@/store/auth.store';
+  BookOpenCheck,
+  Settings2,
+  ClipboardCheck,
+} from "lucide-react";
+import { useAuthStore } from "@/store/auth.store";
 
 interface SidebarProps {
   open?: boolean;
@@ -46,6 +47,12 @@ const DWMS_NAV = [
     exact: true,
   },
   {
+    name: "Approvals",
+    href: "/dwms/approvalTasks",
+    icon: ClipboardCheck,
+    exact: true,
+  },
+  {
     name: "Alerts",
     href: "/dwms/alerts",
     icon: AlertTriangle,
@@ -57,23 +64,61 @@ const DWMS_NAV = [
     icon: LayoutGrid,
     exact: false,
   },
- 
 ];
 
-const SETTINGS_ALLOWED_ROLES = new Set(["MANAGEMENT", "SUPER_ADMIN", "ADMIN", "HR"]);
+const SETTINGS_ALLOWED_ROLES = new Set([
+  "MANAGEMENT",
+  "SUPER_ADMIN",
+  "ADMIN",
+  "HR",
+]);
+const ACTIVITY_MANAGEMENT_ALLOWED_ROLES = new Set([
+  "MANAGEMENT",
+  "SUPER_ADMIN",
+  "ADMIN",
+  "HR",
+  "HOD",
+]);
+const MANAGEMENT_NAV_ITEMS = [
+  {
+    name: "Activities",
+    href: "/dwms/activities",
+    icon: BookOpenCheck,
+    exact: false,
+  },
+];
 
 function isActive(pathname: string, href: string, exact: boolean) {
   if (exact) return pathname === href;
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: SidebarProps) {
+export function Sidebar({
+  open = false,
+  onClose,
+  collapsed = false,
+  onToggle,
+}: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
-  const canAccessSettings = SETTINGS_ALLOWED_ROLES.has(String(user?.roleLevel ?? "").toUpperCase());
-  const navItems = canAccessSettings
-    ? [...DWMS_NAV, { name: "Settings", href: "/dwms/settings", icon: Settings2, exact: false }]
-    : DWMS_NAV;
+  const roleLevel = String(user?.roleLevel ?? "").toUpperCase();
+  const canAccessSettings = SETTINGS_ALLOWED_ROLES.has(roleLevel);
+  const canAccessActivityManagement =
+    ACTIVITY_MANAGEMENT_ALLOWED_ROLES.has(roleLevel);
+  const navItems = [
+    ...DWMS_NAV,
+    ...(canAccessActivityManagement ? MANAGEMENT_NAV_ITEMS : []),
+    ...(canAccessSettings
+      ? [
+          {
+            name: "Settings",
+            href: "/dwms/settings",
+            icon: Settings2,
+            exact: false,
+          },
+        ]
+      : []),
+  ];
 
   // On mobile (open=true) always show full sidebar regardless of collapsed state
   const isCollapsed = collapsed && !open;
@@ -97,18 +142,20 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
         `}
       >
         {/* ── Header: toggle + brand ── */}
-        <div className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${isCollapsed ? "justify-center" : "px-4 gap-3"}`}>
-
+        <div
+          className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${isCollapsed ? "justify-center" : "px-4 gap-3"}`}
+        >
           {/* Collapse toggle — desktop only */}
           <button
             onClick={onToggle}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className="hidden lg:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
           >
-            {collapsed
-              ? <PanelLeftOpen className="h-4 w-4" />
-              : <PanelLeftClose className="h-4 w-4" />
-            }
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
           </button>
 
           {!isCollapsed && (
@@ -124,17 +171,23 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
         </div>
 
         {/* ── Create Action CTA ── */}
-        <div className={`px-2 pt-3 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
+        <div
+          className={`px-2 pt-3 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}
+        >
           <Link
             href="/dwms/actions/new"
             onClick={onClose}
             title={isCollapsed ? "Create Action" : undefined}
             className={`flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors cursor-pointer ${
-              isCollapsed ? "h-10 w-10 justify-center" : "h-10 w-full px-3 gap-2"
+              isCollapsed
+                ? "h-10 w-10 justify-center"
+                : "h-10 w-full px-3 gap-2"
             }`}
           >
             <Plus className="h-4 w-4 shrink-0" />
-            {!isCollapsed && <span className="text-sm font-medium">Create Action</span>}
+            {!isCollapsed && (
+              <span className="text-sm font-medium">Create Action</span>
+            )}
           </Link>
         </div>
 
@@ -159,11 +212,15 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                 } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
               >
-                <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`} />
+                <item.icon
+                  className={`h-4 w-4 shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`}
+                />
                 {!isCollapsed && (
                   <>
                     <span className="flex-1">{item.name}</span>
-                    {active && <ChevronRight className="h-3.5 w-3.5 text-blue-400" />}
+                    {active && (
+                      <ChevronRight className="h-3.5 w-3.5 text-blue-400" />
+                    )}
                   </>
                 )}
               </Link>

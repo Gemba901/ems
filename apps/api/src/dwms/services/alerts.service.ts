@@ -1,21 +1,63 @@
-﻿import {
+import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AlertClosureApprovalStatus,
   AlertStatus,
   AlertType,
   NotificationType,
-  RoleName,
   Severity,
   TaskStatus,
 } from 'db';
-import { CreateAlertDto } from '../dto/dwms.dto';
+import { CreateAlertCommentDto, CreateAlertDto } from '../dto/dwms.dto';
 import { UserPayload } from './base.service';
 import { DwmsDirectoryService } from './directory.service';
 
 export abstract class DwmsAlertsService extends DwmsDirectoryService {
+  private serializeAlertComment(comment: any) {
+    return {
+      id: comment.id,
+      comment: comment.comment,
+      createdAt: comment.createdAt.toISOString(),
+      updatedAt: comment.updatedAt.toISOString(),
+      author: comment.author
+        ? {
+            id: comment.author.id,
+            name: `${comment.author.firstName} ${comment.author.lastName}`.trim(),
+            email: comment.author.email,
+          }
+        : null,
+    };
+  }
+
+  private serializeRelatedAlert(alert: any) {
+    if (!alert) return null;
+    return {
+      id: alert.id,
+      title: alert.title,
+      description: alert.description,
+      severity: alert.severity,
+      status: alert.status,
+      isAbnormality: alert.isAbnormality,
+      abnormalitySourceAlertId: alert.abnormalitySourceAlertId,
+      createdAt: alert.createdAt.toISOString(),
+      resolvedAt: alert.resolvedAt ? alert.resolvedAt.toISOString() : null,
+    };
+  }
+
+  private async getVisibleAlertForUser(user: UserPayload, alertId: string) {
+    const list = await this.getAlerts(user);
+    const alert = (list.alerts ?? []).find((item: any) => item.id === alertId);
+
+    if (!alert) {
+      throw new NotFoundException('Alert not found');
+    }
+
+    return alert;
+  }
+
   async createAlert(user: UserPayload, dto: CreateAlertDto) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     const role = this.getDwmsRole(user.roleLevel);
@@ -62,14 +104,13 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
           'You cannot raise an alert against yourself',
         );
       }
-      const isMgmt = role === 'MANAGEMENT';
-      const isUserSuperior = await this.isSuperior(
-        employee.id,
-        dto.againstUserId,
+      const assignableUsers = await this.listReportees(user);
+      const canRaiseAgainstPerson = (assignableUsers.users ?? []).some(
+        (candidate) => candidate.id === dto.againstUserId,
       );
-      if (!isUserSuperior && !isMgmt) {
+      if (!canRaiseAgainstPerson) {
         throw new ForbiddenException(
-          'You can only raise alerts against users who report to you',
+          'You can only raise alerts against users available for task assignment',
         );
       }
     } else if (targetType === 'TASK') {
@@ -136,7 +177,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
         module: 'DWMS',
         title: 'Alert Raised Against You',
         message: `An alert was raised: "${dto.title}".`,
-        actionUrl: '/dwms/alerts',
+        actionUrl: `/dwms/alerts/${alert.id}`,
       });
     }
 
@@ -149,114 +190,30 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     const now = new Date();
     const sevenDaysAgo = new Date(now);
     sevenDaysAgo.setDate(now.getDate() - 7);
+    const assignableUsers = await this.listReportees(user);
 
-    const isMgmt = role === 'MANAGEMENT';
-    const isHod = role === 'HOD';
-
-    let allowedEmployees: any[] = [];
     let departments: any[] = [];
-
-    if (isMgmt) {
-      // Management: can raise against anyone and any department
-      allowedEmployees = await this.prisma.employee.findMany({
-        where: { organizationId: user.organizationId },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          jobTitle: true,
-        },
-      });
+    if (role === 'MANAGEMENT') {
       departments = await this.prisma.department.findMany({
         where: { organizationId: user.organizationId },
         select: { id: true, name: true },
       });
-    } else if (isHod) {
-      // HOD: can raise against other HODs, department members, or recursive reportees
-      const reportees = await this.listReporteesRecursive(employee.id);
-
-      const departmentAndHods = await this.prisma.employee.findMany({
-        where: {
-          organizationId: user.organizationId,
-          OR: [
-            employee.departmentId
-              ? { departmentId: employee.departmentId }
-              : undefined,
-            {
-              user: {
-                organizations: {
-                  some: {
-                    organizationId: user.organizationId,
-                    role: { name: RoleName.HOD },
-                  },
-                },
-              },
-            },
-          ].filter(
-            (cond): cond is Exclude<typeof cond, undefined> =>
-              cond !== undefined,
-          ),
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          jobTitle: true,
-        },
+    } else if (employee.departmentId) {
+      const dept = await this.prisma.department.findUnique({
+        where: { id: employee.departmentId },
+        select: { id: true, name: true },
       });
-
-      const uniqueMap = new Map<string, any>();
-      departmentAndHods.forEach((emp) => uniqueMap.set(emp.id, emp));
-      reportees.forEach((emp) =>
-        uniqueMap.set(emp.id, {
-          id: emp.id,
-          firstName: emp.firstName,
-          lastName: emp.lastName,
-          email: emp.email,
-          jobTitle: emp.jobTitle,
-        }),
-      );
-      uniqueMap.delete(employee.id);
-
-      allowedEmployees = Array.from(uniqueMap.values());
-
-      if (employee.departmentId) {
-        const dept = await this.prisma.department.findUnique({
-          where: { id: employee.departmentId },
-          select: { id: true, name: true },
-        });
-        departments = dept ? [dept] : [];
-      }
-    } else {
-      // Operator/Manager: can raise against recursive reportees
-      const reportees = await this.listReporteesRecursive(employee.id);
-      allowedEmployees = reportees.map((emp) => ({
-        id: emp.id,
-        firstName: emp.firstName,
-        lastName: emp.lastName,
-        email: emp.email,
-        jobTitle: emp.jobTitle,
-      }));
-
-      if (employee.departmentId) {
-        const dept = await this.prisma.department.findUnique({
-          where: { id: employee.departmentId },
-          select: { id: true, name: true },
-        });
-        departments = dept ? [dept] : [];
-      }
+      departments = dept ? [dept] : [];
     }
 
     const reporteesForTasks = await this.listReporteesRecursive(employee.id);
 
     return {
-      users: allowedEmployees.map((r) => ({
+      users: (assignableUsers.users ?? []).map((r) => ({
         id: r.id,
-        name: `${r.firstName} ${r.lastName}`,
+        name: r.name,
         email: r.email,
-        role: r.jobTitle ?? 'Employee',
+        role: r.designation ?? 'Employee',
       })),
       departments,
       tasks: await this.getRecentCompletedReporteeTasks(
@@ -459,6 +416,71 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     return { count };
   }
 
+  async getAlertDetail(user: UserPayload, alertId: string) {
+    const employee = await this.getEmployee(user.userId, user.organizationId);
+    const alert = await this.getVisibleAlertForUser(user, alertId);
+
+    const [comments, sourceAlert, abnormalities] = await Promise.all([
+      this.prisma.alertComment.findMany({
+        where: { alertId },
+        include: {
+          author: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      alert.abnormalitySourceAlertId
+        ? this.prisma.alert.findUnique({
+            where: { id: alert.abnormalitySourceAlertId },
+          })
+        : Promise.resolve(null),
+      this.prisma.alert.findMany({
+        where: { abnormalitySourceAlertId: alertId },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      alert,
+      comments: comments.map((comment) => this.serializeAlertComment(comment)),
+      sourceAlert: this.serializeRelatedAlert(sourceAlert),
+      abnormalities: abnormalities.map((item) => this.serializeRelatedAlert(item)),
+      employeeId: employee.id,
+    };
+  }
+
+  async addAlertComment(
+    user: UserPayload,
+    alertId: string,
+    dto: CreateAlertCommentDto,
+  ) {
+    const employee = await this.getEmployee(user.userId, user.organizationId);
+    await this.getVisibleAlertForUser(user, alertId);
+
+    const comment = dto.comment.trim();
+    if (!comment) {
+      throw new BadRequestException('Comment is required');
+    }
+
+    const created = await this.prisma.alertComment.create({
+      data: {
+        alertId,
+        authorId: employee.id,
+        comment,
+      },
+      include: {
+        author: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+      },
+    });
+
+    return {
+      message: 'Comment added successfully',
+      comment: this.serializeAlertComment(created),
+    };
+  }
   async logCorrectiveAction(
     user: UserPayload,
     alertId: string,
@@ -515,6 +537,340 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     return { message: 'Corrective action logged successfully', alert: updated };
   }
 
+  private async addAlertHistoryEntry(
+    alertId: string,
+    authorId: string,
+    title: string,
+    note?: string | null,
+  ) {
+    const trimmed = note?.trim();
+    const comment = trimmed ? `${title}: ${trimmed}` : title;
+
+    return this.prisma.alertComment.create({
+      data: {
+        alertId,
+        authorId,
+        comment,
+      },
+    });
+  }
+  private async isResponsibleForAlert(alert: any, employeeId: string) {
+    if (alert.againstUserId === employeeId) return true;
+    if (!alert.taskInstanceId) return false;
+
+    const instance = await this.prisma.taskInstance.findUnique({
+      where: { id: alert.taskInstanceId },
+      select: { ownerId: true },
+    });
+
+    return instance?.ownerId === employeeId;
+  }
+
+  private canApproveAlertClosure(user: UserPayload, employee: any, alert: any) {
+    const role = this.getDwmsRole(user.roleLevel);
+    const isMgmt = role === 'MANAGEMENT';
+    const isHod = role === 'HOD' && employee.departmentId === alert.departmentId;
+    const isApprover = (alert.closureApproverId ?? alert.raisedById) === employee.id;
+
+    return isApprover || isMgmt || isHod;
+  }
+
+  private serializeApprovalAlert(alert: any) {
+    return {
+      ...alert,
+      raisedBy: alert.raisedBy
+        ? {
+            id: alert.raisedBy.id,
+            name: `${alert.raisedBy.firstName} ${alert.raisedBy.lastName}`.trim(),
+            email: alert.raisedBy.email,
+          }
+        : null,
+      againstUser: alert.againstUser
+        ? {
+            id: alert.againstUser.id,
+            name: `${alert.againstUser.firstName} ${alert.againstUser.lastName}`.trim(),
+            email: alert.againstUser.email,
+          }
+        : null,
+      taskInstance: alert.taskInstance
+        ? {
+            id: alert.taskInstance.id,
+            task: alert.taskInstance.task,
+            owner: alert.taskInstance.owner
+              ? {
+                  id: alert.taskInstance.owner.id,
+                  name: `${alert.taskInstance.owner.firstName} ${alert.taskInstance.owner.lastName}`.trim(),
+                  email: alert.taskInstance.owner.email,
+                  reportingToId: alert.taskInstance.owner.reportingManagerId,
+                }
+              : null,
+          }
+        : null,
+      closureRequestedBy: alert.closureRequestedBy
+        ? {
+            id: alert.closureRequestedBy.id,
+            name: `${alert.closureRequestedBy.firstName} ${alert.closureRequestedBy.lastName}`.trim(),
+            email: alert.closureRequestedBy.email,
+          }
+        : null,
+    };
+  }
+
+  async requestAlertClosure(
+    user: UserPayload,
+    alertId: string,
+    closureNote: string,
+  ) {
+    const employee = await this.getEmployee(user.userId, user.organizationId);
+
+    const alert = await this.prisma.alert.findFirst({
+      where: { id: alertId, organizationId: user.organizationId },
+    });
+
+    if (!alert) {
+      throw new NotFoundException('Alert not found');
+    }
+    if (alert.status === AlertStatus.CLOSED) {
+      throw new BadRequestException('Alert is already closed');
+    }
+
+    const note = closureNote.trim();
+    if (!note) {
+      throw new BadRequestException('Closure note is required');
+    }
+
+    if (this.canApproveAlertClosure(user, employee, alert)) {
+      return this.closeAlert(user, alertId, note);
+    }
+
+    const isResponsible = await this.isResponsibleForAlert(alert, employee.id);
+    if (!isResponsible) {
+      throw new ForbiddenException(
+        'You are not authorized to request closure for this alert',
+      );
+    }
+
+    const approverId = alert.raisedById;
+    const updated = await this.prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        closureNote: note,
+        closureApproverId: approverId,
+        closureRequestedById: employee.id,
+        closureRequestedAt: new Date(),
+        closureApprovalStatus: AlertClosureApprovalStatus.PENDING,
+        closureRejectedAt: null,
+        closureRejectionNote: null,
+        status: AlertStatus.IN_PROGRESS,
+      },
+    });
+
+    await this.addAlertHistoryEntry(
+      alertId,
+      employee.id,
+      'Closure requested',
+      note,
+    );
+
+    if (approverId !== employee.id) {
+      await this.notifications.create({
+        employeeId: approverId,
+        type: NotificationType.ACTION_REQUIRED,
+        module: 'DWMS',
+        title: 'Alert Closure Approval Pending',
+        message: `${employee.firstName} ${employee.lastName} requested closure for alert: "${alert.title}".`,
+        actionUrl: '/dwms/approvalTasks',
+      });
+    }
+
+    return { message: 'Alert closure request submitted', alert: updated };
+  }
+
+  async getAlertClosureApprovals(user: UserPayload, status = 'pending') {
+    const employee = await this.getEmployee(user.userId, user.organizationId);
+    const normalizedStatus =
+      status === 'approved'
+        ? AlertClosureApprovalStatus.APPROVED
+        : status === 'rejected'
+          ? AlertClosureApprovalStatus.REJECTED
+          : AlertClosureApprovalStatus.PENDING;
+
+    const alerts = await this.prisma.alert.findMany({
+      where: {
+        organizationId: user.organizationId,
+        closureApprovalStatus: normalizedStatus,
+        closureApproverId: employee.id,
+      },
+      include: {
+        raisedBy: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        againstUser: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        taskInstance: {
+          select: {
+            id: true,
+            task: { select: { title: true } },
+            owner: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                reportingManagerId: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const requestedByIds = [
+      ...new Set(
+        alerts
+          .map((alert) => alert.closureRequestedById)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const requesters = await this.prisma.employee.findMany({
+      where: { id: { in: requestedByIds } },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
+    const requesterById = new Map(
+      requesters.map((requester) => [requester.id, requester]),
+    );
+
+    return {
+      count: alerts.length,
+      alerts: alerts.map((alert) =>
+        this.serializeApprovalAlert({
+          ...alert,
+          closureRequestedBy: alert.closureRequestedById
+            ? requesterById.get(alert.closureRequestedById)
+            : null,
+        }),
+      ),
+    };
+  }
+
+  async approveAlertClosure(
+    user: UserPayload,
+    alertId: string,
+    comment?: string | null,
+  ) {
+    const employee = await this.getEmployee(user.userId, user.organizationId);
+    const alert = await this.prisma.alert.findFirst({
+      where: { id: alertId, organizationId: user.organizationId },
+    });
+
+    if (!alert) {
+      throw new NotFoundException('Alert not found');
+    }
+    if (alert.closureApprovalStatus !== AlertClosureApprovalStatus.PENDING) {
+      throw new BadRequestException('Alert closure is not pending approval');
+    }
+    if (!this.canApproveAlertClosure(user, employee, alert)) {
+      throw new ForbiddenException(
+        'You are not authorized to approve this alert closure',
+      );
+    }
+
+    const approvalComment = comment?.trim() ?? '';
+    if (!approvalComment) {
+      throw new BadRequestException('Approval comment is required');
+    }
+    const updated = await this.prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        closureApprovalStatus: AlertClosureApprovalStatus.APPROVED,
+        status: AlertStatus.CLOSED,
+        resolvedAt: new Date(),
+        closureRejectionNote: null,
+        closureRejectedAt: null,
+        closureNote: approvalComment || alert.closureNote,
+      },
+    });
+
+    await this.addAlertHistoryEntry(
+      alertId,
+      employee.id,
+      'Closure approved',
+      approvalComment || 'Final acceptance confirmed',
+    );
+
+    if (alert.closureRequestedById && alert.closureRequestedById !== employee.id) {
+      await this.notifications.create({
+        employeeId: alert.closureRequestedById,
+        type: NotificationType.INFO,
+        module: 'DWMS',
+        title: 'Alert Closure Approved',
+        message: `${employee.firstName} ${employee.lastName} approved closure for alert: "${alert.title}".`,
+        actionUrl: `/dwms/alerts/${alert.id}`,
+      });
+    }
+
+    return { message: 'Alert closure approved', alert: updated };
+  }
+
+  async rejectAlertClosure(
+    user: UserPayload,
+    alertId: string,
+    comment?: string | null,
+  ) {
+    const employee = await this.getEmployee(user.userId, user.organizationId);
+    const alert = await this.prisma.alert.findFirst({
+      where: { id: alertId, organizationId: user.organizationId },
+    });
+
+    if (!alert) {
+      throw new NotFoundException('Alert not found');
+    }
+    if (alert.closureApprovalStatus !== AlertClosureApprovalStatus.PENDING) {
+      throw new BadRequestException('Alert closure is not pending approval');
+    }
+    if (!this.canApproveAlertClosure(user, employee, alert)) {
+      throw new ForbiddenException(
+        'You are not authorized to reject this alert closure',
+      );
+    }
+
+    const rejectionNote = comment?.trim() ?? '';
+    if (!rejectionNote) {
+      throw new BadRequestException('Rejection comment is required');
+    }
+    const updated = await this.prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        closureApprovalStatus: AlertClosureApprovalStatus.REJECTED,
+        closureRejectedAt: new Date(),
+        closureRejectionNote: rejectionNote,
+        status: AlertStatus.IN_PROGRESS,
+      },
+    });
+
+    await this.addAlertHistoryEntry(
+      alertId,
+      employee.id,
+      'Closure rejected',
+      rejectionNote,
+    );
+
+    if (alert.closureRequestedById && alert.closureRequestedById !== employee.id) {
+      await this.notifications.create({
+        employeeId: alert.closureRequestedById,
+        type: NotificationType.ALERT,
+        module: 'DWMS',
+        title: 'Alert Closure Rejected',
+        message: `${employee.firstName} ${employee.lastName} rejected closure for alert: "${alert.title}".`,
+        actionUrl: `/dwms/alerts/${alert.id}`,
+      });
+    }
+
+    return { message: 'Alert closure rejected', alert: updated };
+  }
+
   async closeAlert(user: UserPayload, alertId: string, closureNote: string) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
@@ -526,31 +882,39 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       throw new NotFoundException('Alert not found');
     }
 
-    // Only the raiser of the alert, an HOD of the department, or Management can close it
-    const role = this.getDwmsRole(user.roleLevel);
-    const isMgmt = role === 'MANAGEMENT';
-    const isHod =
-      role === 'HOD' && employee.departmentId === alert.departmentId;
-    const isRaiser = alert.raisedById === employee.id;
-
-    if (!isRaiser && !isMgmt && !isHod) {
+    if (!this.canApproveAlertClosure(user, employee, alert)) {
       throw new ForbiddenException(
         'You are not authorized to close this alert',
       );
     }
 
+    const note = closureNote.trim();
+    if (!note) {
+      throw new BadRequestException('Closure note is required');
+    }
+
     const updated = await this.prisma.alert.update({
       where: { id: alertId },
       data: {
-        closureNote,
+        closureNote: note,
         status: AlertStatus.CLOSED,
         resolvedAt: new Date(),
+        closureApproverId: employee.id,
+        closureApprovalStatus: AlertClosureApprovalStatus.APPROVED,
+        closureRejectedAt: null,
+        closureRejectionNote: null,
       },
     });
 
+    await this.addAlertHistoryEntry(
+      alertId,
+      employee.id,
+      'Alert closed',
+      note,
+    );
+
     return { message: 'Alert closed successfully', alert: updated };
   }
-
   async remindAlertOwner(user: UserPayload, alertId: string) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
@@ -673,58 +1037,6 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     return { message: 'Task reassigned successfully' };
   }
 
-  async extendEscalatedTaskDueDate(
-    user: UserPayload,
-    alertId: string,
-    newDueDate: string,
-  ) {
-    const employee = await this.getEmployee(user.userId, user.organizationId);
-
-    const alert = await this.prisma.alert.findFirst({
-      where: { id: alertId, organizationId: user.organizationId },
-    });
-
-    if (!alert || !alert.taskInstanceId) {
-      throw new BadRequestException('Alert is not linked to a task instance');
-    }
-
-    const taskInstance = await this.prisma.taskInstance.findUnique({
-      where: { id: alert.taskInstanceId },
-      include: { task: true },
-    });
-
-    if (!taskInstance) {
-      throw new NotFoundException('Task instance not found');
-    }
-
-    const parsedDate = new Date(newDueDate);
-    if (isNaN(parsedDate.getTime())) {
-      throw new BadRequestException('Invalid date format');
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.task.update({
-        where: { id: taskInstance.taskId },
-        data: { dueDate: parsedDate },
-      }),
-      this.prisma.taskInstance.update({
-        where: { id: taskInstance.id },
-        data: { dueAt: parsedDate },
-      }),
-    ]);
-
-    await this.notifications.create({
-      employeeId: taskInstance.ownerId,
-      type: NotificationType.INFO,
-      module: 'DWMS',
-      title: 'Task Due Date Extended',
-      message: `The due date for task "${taskInstance.task.title}" has been extended to ${newDueDate}.`,
-      actionUrl: '/dwms/tasks',
-    });
-
-    return { message: 'Task due date extended successfully' };
-  }
-
   async escalateAlertFurther(user: UserPayload, alertId: string) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
@@ -745,7 +1057,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
         module: 'DWMS',
         title: 'Alert Escalated Further',
         message: `${employee.firstName} ${employee.lastName} escalated alert "${alert.title}" to you.`,
-        actionUrl: '/dwms/alerts',
+        actionUrl: `/dwms/alerts/${alert.id}`,
       });
     } else {
       const admin = await this.prisma.employee.findFirst({
@@ -784,3 +1096,12 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     return { message: 'Alert escalated successfully', alert: updated };
   }
 }
+
+
+
+
+
+
+
+
+

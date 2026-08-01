@@ -34,7 +34,7 @@ export class DwmsEscalationService {
     private notifications: NotificationsService,
   ) {}
 
-  @Cron('*/5 * * * *')
+  @Cron('0 * * * *', { timeZone: 'GMT' })
   async checkEscalations() {
     const configs = await this.prisma.dwmsPermissionConfig.findMany();
 
@@ -161,6 +161,118 @@ export class DwmsEscalationService {
     for (const instance of overdueInstances) {
       await this.raiseInstanceAlert({ organizationId, config, instance });
     }
+
+    await this.raiseAbnormalitiesForStaleAlerts(organizationId, config, now);
+  }
+  private abnormalityWindowMins(config: any, severity: Severity) {
+    const fallbackBySeverity: Record<Severity, number> = {
+      LOW: 1440,
+      MEDIUM: 1440,
+      HIGH: 480,
+      CRITICAL: 120,
+    };
+    const fieldBySeverity: Record<Severity, string> = {
+      LOW: 'abnormalityMediumMins',
+      MEDIUM: 'abnormalityMediumMins',
+      HIGH: 'abnormalityHighMins',
+      CRITICAL: 'abnormalityCriticalMins',
+    };
+    const raw = config[fieldBySeverity[severity]];
+    const fallback = fallbackBySeverity[severity];
+    return typeof raw === 'number' && Number.isFinite(raw)
+      ? Math.max(0, Math.trunc(raw))
+      : fallback;
+  }
+
+  private async raiseAbnormalitiesForStaleAlerts(
+    organizationId: string,
+    config: any,
+    now: Date,
+  ) {
+    const alerts = await this.prisma.alert.findMany({
+      where: {
+        organizationId,
+        status: { not: AlertStatus.CLOSED },
+        correctiveAction: null,
+        isAbnormality: false,
+      },
+      include: {
+        taskInstance: {
+          select: {
+            ownerId: true,
+            task: { select: { title: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    for (const alert of alerts) {
+      const windowMins = this.abnormalityWindowMins(config, alert.severity);
+      const ageMins = Math.floor(
+        (now.getTime() - alert.createdAt.getTime()) / 60_000,
+      );
+
+      if (ageMins < windowMins) continue;
+
+      const existing = await this.prisma.alert.findFirst({
+        where: { abnormalitySourceAlertId: alert.id },
+        select: { id: true },
+      });
+      if (existing) continue;
+
+      const title = `Abnormality: ${alert.title}`;
+      const linkedTaskTitle = alert.taskInstance?.task?.title;
+      const description = [
+        `Alert "${alert.title}" has not been worked upon for ${ageMins} minutes.`,
+        `Configured abnormality window for ${alert.severity} severity is ${windowMins} minutes.`,
+        linkedTaskTitle ? `Linked task: ${linkedTaskTitle}.` : null,
+        alert.description ? `Original alert details: ${alert.description}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      const abnormality = await this.prisma.alert.create({
+        data: {
+          type: AlertType.ABNORMAL_SITUATION,
+          title,
+          description,
+          severity: alert.severity,
+          status: AlertStatus.OPEN,
+          organizationId,
+          raisedById: alert.raisedById,
+          taskInstanceId: alert.taskInstanceId,
+          departmentId: alert.departmentId,
+          againstUserId: alert.againstUserId ?? alert.taskInstance?.ownerId ?? null,
+          isAbnormality: true,
+          abnormalitySourceAlertId: alert.id,
+        },
+      });
+
+      const notificationTargets = new Set<string>();
+      notificationTargets.add(alert.raisedById);
+      if (alert.againstUserId) notificationTargets.add(alert.againstUserId);
+      if (alert.taskInstance?.ownerId) {
+        notificationTargets.add(alert.taskInstance.ownerId);
+      }
+
+      await Promise.all(
+        Array.from(notificationTargets).map((employeeId) =>
+          this.notifications.create({
+            employeeId,
+            type: NotificationType.ALERT,
+            module: 'DWMS',
+            title: 'Alert Abnormality Created',
+            message: `An abnormality was created because alert "${alert.title}" was not worked upon in time.`,
+            actionUrl: `/dwms/alerts/${abnormality.id}`,
+          }),
+        ),
+      );
+
+      this.logger.debug(
+        `Created DWMS abnormality ${abnormality.id} from alert ${alert.id}`,
+      );
+    }
   }
 
   private async raiseTaskAlert(params: {
@@ -175,6 +287,13 @@ export class DwmsEscalationService {
         ? `Overdue task: ${task.title}`
         : `Unacknowledged task: ${task.title}`;
 
+    const contactIds = await this.resolveContactIds(
+      config,
+      organizationId,
+      task.owner,
+      task.assignedById,
+    );
+
     const existing = await this.prisma.alert.findFirst({
       where: {
         organizationId,
@@ -185,20 +304,18 @@ export class DwmsEscalationService {
       select: { id: true },
     });
 
+    const notificationTargets = new Set(contactIds);
+    notificationTargets.add(task.ownerId);
+
     if (existing) return;
 
-    const contactIds = await this.resolveContactIds(
-      config,
-      organizationId,
-      task.owner,
-    );
     const raisedById = task.assignedById ?? task.ownerId;
     const description =
       reason === 'overdue'
         ? `Task "${task.title}" assigned to ${task.owner.firstName} ${task.owner.lastName} is overdue.`
         : `Task "${task.title}" assigned to ${task.owner.firstName} ${task.owner.lastName} has not been acknowledged within ${config.escalateUnacknowledgedMins} minutes.`;
 
-    await this.prisma.alert.create({
+    const alert = await this.prisma.alert.create({
       data: {
         type: AlertType.DELAY,
         title,
@@ -211,14 +328,14 @@ export class DwmsEscalationService {
       },
     });
 
-    for (const contactId of contactIds) {
+    for (const contactId of notificationTargets) {
       await this.notifications.create({
         employeeId: contactId,
         type: NotificationType.ALERT,
         module: 'DWMS',
         title,
         message: description,
-        actionUrl: '/dwms/alerts',
+        actionUrl: contactId === task.ownerId ? `/dwms/alerts/${alert.id}` : undefined,
       });
     }
   }
@@ -231,6 +348,13 @@ export class DwmsEscalationService {
     const { organizationId, config, instance } = params;
     const title = `Overdue task instance: ${instance.task.title}`;
 
+    const contactIds = await this.resolveContactIds(
+      config,
+      organizationId,
+      instance.owner,
+      instance.task.assignedById,
+    );
+
     const existing = await this.prisma.alert.findFirst({
       where: {
         organizationId,
@@ -240,17 +364,15 @@ export class DwmsEscalationService {
       select: { id: true },
     });
 
+    const notificationTargets = new Set(contactIds);
+    notificationTargets.add(instance.ownerId);
+
     if (existing) return;
 
-    const contactIds = await this.resolveContactIds(
-      config,
-      organizationId,
-      instance.owner,
-    );
     const raisedById = instance.task.assignedById ?? instance.ownerId;
     const description = `Task instance for "${instance.task.title}" assigned to ${instance.owner.firstName} ${instance.owner.lastName} is overdue.`;
 
-    await this.prisma.alert.create({
+    const alert = await this.prisma.alert.create({
       data: {
         type: AlertType.DELAY,
         title,
@@ -264,14 +386,14 @@ export class DwmsEscalationService {
       },
     });
 
-    for (const contactId of contactIds) {
+    for (const contactId of notificationTargets) {
       await this.notifications.create({
         employeeId: contactId,
         type: NotificationType.ALERT,
         module: 'DWMS',
         title,
         message: description,
-        actionUrl: '/dwms/alerts',
+        actionUrl: contactId === instance.ownerId ? `/dwms/alerts/${alert.id}` : undefined,
       });
     }
   }
@@ -280,6 +402,7 @@ export class DwmsEscalationService {
     config: any,
     organizationId: string,
     owner: any,
+    assignedById?: string | null,
   ) {
     const rules =
       Array.isArray(config.escalationContactRules) &&
@@ -361,6 +484,8 @@ export class DwmsEscalationService {
           }
           break;
         case 'ASSIGNER':
+          if (assignedById) contactIds.add(assignedById);
+          break;
         default:
           break;
       }
@@ -394,3 +519,4 @@ export class DwmsEscalationService {
     return assigner?.id ? [assigner.id] : owner.id ? [owner.id] : [];
   }
 }
+

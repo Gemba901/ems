@@ -24,6 +24,18 @@ const DWMS_HEADERS: Record<string, { title: string; subtitle: string; purpose: s
     purpose: "This page lists all tasks assigned to you. Filter by status (Pending, Completed, Overdue) or search by keywords to track, update, or acknowledge task executions.",
     dotColor: "bg-blue-500"
   },
+  "/dwms/activities": {
+    title: "Activity Master",
+    subtitle: "Manage standard activity blueprints used to create DWMS tasks.",
+    purpose: "Use the Activity Master to maintain reusable activity blueprints for DWMS tasks. Search by activity details, filter by status, and add new standard activities for task creation.",
+    dotColor: "bg-blue-500"
+  },
+  "/dwms/activities/ingestions": {
+    title: "Activity Ingestion History",
+    subtitle: "Review uploaded sheets and row-level ingestion results.",
+    purpose: "Use this page to audit Activity Sheet imports, see how many rows created activities and tasks, and inspect declined rows with their exact failure reason.",
+    dotColor: "bg-emerald-500"
+  },
   "/dwms/alerts": {
     title: "Alerts Dashboard",
     subtitle: "Track operational abnormalities, raise new alerts, and manage resolution closures.",
@@ -69,7 +81,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const getInitials = (name: string) =>
     name.split(" ").map((n) => n[0]).join("").toUpperCase();
 
-  const dwmsHeader = DWMS_HEADERS[pathname] || null;
+  const dwmsHeader = DWMS_HEADERS[pathname] || (pathname.startsWith("/dwms/activities/ingestions/") ? DWMS_HEADERS["/dwms/activities/ingestions"] : null);
 
   return (
     <header className="flex min-h-[5rem] py-3 items-center justify-between px-4 lg:px-8 bg-transparent">

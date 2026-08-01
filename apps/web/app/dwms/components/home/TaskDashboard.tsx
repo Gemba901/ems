@@ -1,37 +1,65 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import TaskHeader, { TaskSubTabType } from "./TaskHeader";
-import TaskDetailModal from "./TaskDetailModal";
 import TaskMiniCard from "./TaskMiniCard";
 import {
   DwmsService,
+  getDwmsErrorMessage,
   type DwmsTaskItem as TaskItem,
   type DwmsTaskStatus as TaskStatus,
 } from "@/services/dwms.service";
 import { uploadImage } from "@/services/uploads.service";
 
-type SortType = "DUE_DATE" | "TITLE" | "COMPLETION";
+const frequencyBasedTaskFrequencies = new Set([
+  "DAILY",
+  "WEEKLY",
+  "MONTHLY",
+  "QUARTERLY",
+  "YEARLY",
+]);
+
+function isFrequencyBasedTask(task: TaskItem) {
+  return frequencyBasedTaskFrequencies.has(String(task.frequency ?? ""));
+}
+
+function groupFrequencyBasedTasks(tasksToGroup: TaskItem[]) {
+  const grouped = new Map<string, TaskItem>();
+
+  tasksToGroup.forEach((task) => {
+    const key = isFrequencyBasedTask(task) ? task.taskId : task.instanceId;
+    if (!grouped.has(key)) {
+      grouped.set(key, task);
+    }
+  });
+
+  return Array.from(grouped.values());
+}
+
 
 export default function TaskDashboard() {
+  const router = useRouter();
+
   // Tasks and loading state
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [completionTask, setCompletionTask] = useState<{
     instanceId: string;
     status: TaskStatus;
+    requiresCompletionDocument: boolean;
+    completionDocumentName?: string | null;
   } | null>(null);
   const [completionNote, setCompletionNote] = useState("");
   const [completionFile, setCompletionFile] = useState<File | null>(null);
+  const [completionError, setCompletionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Filters & Search states
   const [activeTab, setActiveTab] = useState<TaskSubTabType>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy] = useState<SortType>("DUE_DATE");
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
   const [frequencyFilter, setFrequencyFilter] = useState<string>("ALL");
@@ -75,11 +103,12 @@ export default function TaskDashboard() {
     OVERDUE: 0,
   };
 
-  async function loadTasks() {
+  const loadTasks = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const token = useAuthStore.getState().accessToken ?? "";
       const res = await DwmsService.getTodayTasks(token, today);
       setTasks(res?.tasks ?? []);
@@ -93,11 +122,11 @@ export default function TaskDashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     void loadTasks();
-  }, []);
+  }, [loadTasks]);
 
   useEffect(() => {
     function isInsideAny(
@@ -131,9 +160,16 @@ export default function TaskDashboard() {
     nextStatus: TaskStatus,
   ) {
     if (nextStatus === "DONE") {
-      setCompletionTask({ instanceId, status: nextStatus });
+      const task = tasks.find((item) => item.instanceId === instanceId);
+      setCompletionTask({
+        instanceId,
+        status: nextStatus,
+        requiresCompletionDocument: !!task?.requiresCompletionDocument,
+        completionDocumentName: task?.completionDocumentName ?? null,
+      });
       setCompletionNote("");
       setCompletionFile(null);
+      setCompletionError(null);
       setError(null);
       return;
     }
@@ -163,8 +199,13 @@ export default function TaskDashboard() {
   ) {
     event.preventDefault();
     if (!completionTask) return;
+    if (completionTask.requiresCompletionDocument && !completionFile) {
+      setCompletionError("Completion document is required for this task.");
+      return;
+    }
 
     setSavingId(completionTask.instanceId);
+    setCompletionError(null);
     setError(null);
     try {
       const token = useAuthStore.getState().accessToken ?? "";
@@ -181,13 +222,11 @@ export default function TaskDashboard() {
       setCompletionTask(null);
       setCompletionNote("");
       setCompletionFile(null);
+      setCompletionError(null);
       await loadTasks();
-    } catch (saveError) {
-      const message =
-        saveError instanceof Error
-          ? saveError.message
-          : "Failed to complete task";
-      setError(message);
+    } catch (saveError: unknown) {
+      const message = getDwmsErrorMessage(saveError, "Failed to complete task");
+      setCompletionError(message);
     } finally {
       setSavingId(null);
     }
@@ -195,6 +234,8 @@ export default function TaskDashboard() {
 
   // Task acknowledgement
   async function handleAcknowledgement(taskId: string) {
+    setSavingId(taskId);
+    setError(null);
     try {
       const token = useAuthStore.getState().accessToken ?? "";
       await DwmsService.acknowledgeTask(token, taskId);
@@ -205,6 +246,8 @@ export default function TaskDashboard() {
           ? saveError.message
           : "Failed to acknowledge task";
       setError(message);
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -212,7 +255,10 @@ export default function TaskDashboard() {
   const overdueTasks = useMemo(
     () =>
       tasks.filter(
-        (t) => t.status !== "DONE" && (t.isOverdue || t.status === "OVERDUE"),
+        (t) =>
+          t.status !== "DONE" &&
+          t.status !== "APPROVAL_PENDING" &&
+          (t.isOverdue || t.status === "OVERDUE"),
       ),
     [tasks],
   );
@@ -220,11 +266,20 @@ export default function TaskDashboard() {
     () => tasks.filter((t) => t.status === "DONE"),
     [tasks],
   );
+  const approvalPendingTasks = useMemo(
+    () => tasks.filter((t) => t.status === "APPROVAL_PENDING"),
+    [tasks],
+  );
   const notAcknowledgedTasks = useMemo(
     () =>
-      tasks.filter(
-        (t) =>
-          !t.acknowledgedAt && t.status !== "DONE" && t.status !== "OVERDUE",
+      groupFrequencyBasedTasks(
+        tasks.filter(
+          (t) =>
+            !t.acknowledgedAt &&
+            t.status !== "DONE" &&
+            t.status !== "OVERDUE" &&
+            t.status !== "APPROVAL_PENDING",
+        ),
       ),
     [tasks],
   );
@@ -232,7 +287,10 @@ export default function TaskDashboard() {
     () =>
       tasks.filter(
         (t) =>
-          !!t.acknowledgedAt && t.status !== "DONE" && t.status !== "OVERDUE",
+          !!t.acknowledgedAt &&
+          t.status !== "DONE" &&
+          t.status !== "OVERDUE" &&
+          t.status !== "APPROVAL_PENDING",
       ),
     [tasks],
   );
@@ -244,8 +302,16 @@ export default function TaskDashboard() {
     const completed = completedTasks.length;
     const notAcknowledged = notAcknowledgedTasks.length;
     const pending = pendingTasks.length;
-    return { all, overdue, completed, notAcknowledged, pending };
-  }, [tasks, overdueTasks, completedTasks, notAcknowledgedTasks, pendingTasks]);
+    const approvalPending = approvalPendingTasks.length;
+    return { all, overdue, completed, notAcknowledged, pending, approvalPending };
+  }, [
+    tasks,
+    overdueTasks,
+    completedTasks,
+    notAcknowledgedTasks,
+    pendingTasks,
+    approvalPendingTasks,
+  ]);
 
   // Filter & Sort Logic
   const filteredTasks = useMemo(() => {
@@ -260,6 +326,8 @@ export default function TaskDashboard() {
       result = notAcknowledgedTasks;
     } else if (activeTab === "PENDING") {
       result = pendingTasks;
+    } else if (activeTab === "APPROVAL_PENDING") {
+      result = approvalPendingTasks;
     }
 
     // 2. Filter by Frequency (dropdown filter option)
@@ -282,16 +350,44 @@ export default function TaskDashboard() {
       );
     }
 
-    // 5. Sorting
+    // 5. Relevance-first sorting per tab
+    const timeValue = (value?: string | null) => {
+      if (!value) return 0;
+      const time = new Date(value).getTime();
+      return Number.isNaN(time) ? 0 : time;
+    };
+    const recentActivityTime = (task: TaskItem) =>
+      Math.max(
+        timeValue(task.instanceUpdatedAt),
+        timeValue(task.completedAt),
+        timeValue(task.dueAt),
+        timeValue(task.scheduledFor),
+      );
+    const statusRank = (task: TaskItem) => {
+      if (task.status === "OVERDUE" || task.isOverdue) return 0;
+      if (task.status === "APPROVAL_PENDING") return 1;
+      if (!task.acknowledgedAt) return 2;
+      if (task.status === "PENDING" || task.status === "IN_PROGRESS") return 3;
+      if (task.status === "PARTLY_DONE" || task.status === "LESS_THAN_50") return 4;
+      if (task.status === "DONE") return 5;
+      return 6;
+    };
+
     result.sort((a, b) => {
-      if (sortBy === "TITLE") {
-        return a.title.localeCompare(b.title);
+      if (activeTab === "COMPLETED") {
+        return timeValue(b.completedAt) - timeValue(a.completedAt);
       }
-      if (sortBy === "COMPLETION") {
-        return b.completionPercent - a.completionPercent;
+      if (activeTab === "OVERDUE") {
+        return timeValue(a.dueAt) - timeValue(b.dueAt);
       }
-      // default: DUE_DATE
-      return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+      if (activeTab === "APPROVAL_PENDING") {
+        return recentActivityTime(b) - recentActivityTime(a);
+      }
+      if (activeTab === "ALL") {
+        const rankDiff = statusRank(a) - statusRank(b);
+        if (rankDiff !== 0) return rankDiff;
+      }
+      return recentActivityTime(b) - recentActivityTime(a);
     });
 
     return result;
@@ -302,56 +398,12 @@ export default function TaskDashboard() {
     completedTasks,
     notAcknowledgedTasks,
     pendingTasks,
+    approvalPendingTasks,
     searchTerm,
-    sortBy,
     frequencyFilter,
     assigneeFilter,
   ]);
 
-  // Click details modal handler
-  const selectedTask = useMemo(() => {
-    if (!selectedTaskId) return null;
-    return tasks.find((t) => t.instanceId === selectedTaskId) ?? null;
-  }, [selectedTaskId, tasks]);
-
-  // Standard status colors helper for detail modals
-  const statusTone: Record<TaskStatus, string> = {
-    PENDING:
-      "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-350",
-    IN_PROGRESS:
-      "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300",
-    DONE: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-350",
-    APPROVAL_PENDING:
-      "bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300",
-    PARTLY_DONE:
-      "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-350",
-    LESS_THAN_50:
-      "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-350",
-    NOT_APPLICABLE:
-      "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-350",
-    OVERDUE:
-      "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-350",
-  };
-
-  const statusLabel = (status: TaskStatus) => {
-    return status
-      .replace(/_/g, " ")
-      .toLowerCase()
-      .replace(/\b\w/g, (char) => char.toUpperCase());
-  };
-
-  const formatDateOnly = (value: string) => {
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
-      new Date(value),
-    );
-  };
-
-  const formatDateTime = (value: string) => {
-    return new Intl.DateTimeFormat("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
-  };
 
   return (
     <div className="relative pb-12">
@@ -538,33 +590,28 @@ export default function TaskDashboard() {
             {activeTab === "OVERDUE" && "No overdue tasks."}
             {activeTab === "NOT_ACKNOWLEDGED" && "No unacknowledged tasks."}
             {activeTab === "PENDING" && "No pending tasks."}
+            {activeTab === "APPROVAL_PENDING" && "No approval pending tasks."}
             {activeTab === "COMPLETED" && "No completed tasks."}
           </div>
         ) : (
           <div className="space-y-4">
             {filteredTasks.map((t) => (
               <TaskMiniCard
-                key={t.instanceId}
+                key={
+                  activeTab === "NOT_ACKNOWLEDGED" && isFrequencyBasedTask(t)
+                    ? t.taskId
+                    : t.instanceId
+                }
                 task={t}
-                onClick={() => setSelectedTaskId(t.instanceId)}
+                onClick={() => router.push(`/dwms/tasks/${t.instanceId}`)}
                 onStatusChange={handleStatusChange}
                 onAcknowledgement={handleAcknowledgement}
-                saving={savingId === t.instanceId}
+                saving={savingId === t.instanceId || savingId === t.taskId}
               />
             ))}
           </div>
         )}
       </main>
-
-      <TaskDetailModal
-        task={selectedTask}
-        open={!!selectedTask}
-        statusTone={statusTone}
-        statusLabel={statusLabel}
-        formatDateOnly={formatDateOnly}
-        formatDateTime={formatDateTime}
-        onClose={() => setSelectedTaskId(null)}
-      />
 
       {completionTask && (
         <div
@@ -586,10 +633,20 @@ export default function TaskDashboard() {
                 <h2 className="mt-1 text-lg font-semibold text-slate-900">
                   Attach completion file
                 </h2>
+                {completionTask.requiresCompletionDocument && (
+                  <p className="mt-1 text-xs text-rose-600">
+                    {completionTask.completionDocumentName
+                      ? `Required document: ${completionTask.completionDocumentName}`
+                      : "A document is required before this task can be completed."}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
-                onClick={() => setCompletionTask(null)}
+                onClick={() => {
+                  setCompletionTask(null);
+                  setCompletionError(null);
+                }}
                 disabled={!!savingId}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 aria-label="Close completion dialog"
@@ -597,6 +654,12 @@ export default function TaskDashboard() {
                 <span aria-hidden="true">×</span>
               </button>
             </div>
+
+            {completionError && (
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                {completionError}
+              </div>
+            )}
 
             <label className="mt-5 block text-xs font-semibold text-slate-700">
               Completion note
@@ -610,9 +673,15 @@ export default function TaskDashboard() {
             </label>
 
             <label className="mt-4 block text-xs font-semibold text-slate-700">
-              Completion file
+              {completionTask.completionDocumentName
+                ? `Upload ${completionTask.completionDocumentName}`
+                : "Completion file"}
+              {completionTask.requiresCompletionDocument && (
+                <span className="ml-0.5 text-red-500">*</span>
+              )}
               <input
                 type="file"
+                required={completionTask.requiresCompletionDocument}
                 onChange={(event) =>
                   setCompletionFile(event.target.files?.[0] ?? null)
                 }
@@ -623,7 +692,10 @@ export default function TaskDashboard() {
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setCompletionTask(null)}
+                onClick={() => {
+                  setCompletionTask(null);
+                  setCompletionError(null);
+                }}
                 disabled={!!savingId}
                 className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >

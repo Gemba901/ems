@@ -60,7 +60,7 @@ const DECISION_TYPE_LABELS: Record<DecisionType, string> = {
 type DecisionField = { key: string; label: string; required: boolean; type: "text" | "textarea" | "date" };
 
 const WORKPLACE_CORRECTION_FIELDS: DecisionField[] = [
-  { key: "action",          label: "Action",              required: true,  type: "text" },
+  { key: "action",          label: "Correction Required", required: true,  type: "text" },
   { key: "responsible",     label: "Responsible Person",  required: true,  type: "text" },
   { key: "supportRequired", label: "Support Required",    required: false, type: "text" },
   { key: "targetDate",      label: "Target Date",         required: true,  type: "date" },
@@ -661,7 +661,7 @@ export default function SuggestionDetailPage() {
                                 <DecisionFieldsForm fields={DAILY_KAIZEN_FIELDS} values={decisionFields} onChange={updateDecisionField} />
                                 <div>
                                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                    Before/After Evidence (optional)
+                                    Problem/Opportunity for Improvement
                                   </label>
                                   <input
                                     type="file"

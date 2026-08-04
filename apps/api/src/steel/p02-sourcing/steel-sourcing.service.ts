@@ -4,12 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  SteelSourcingStage,
-  SteelSourcingStatus,
-  SteelSourcingActivity,
-  Prisma,
-} from 'db';
+import { SteelSourcingStage, SteelSourcingActivity, Prisma } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateSteelSourcingOrderDto,
@@ -50,12 +45,24 @@ const STAGE_ORDER: SteelSourcingStage[] = [
 const orderInclude = {
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   supplier: true,
-  quotations: { orderBy: { price: 'asc' as const }, include: { supplier: true } },
+  quotations: {
+    orderBy: { price: 'asc' as const },
+    include: { supplier: true },
+  },
   activityLogs: {
     orderBy: { createdAt: 'asc' as const },
-    include: { performedBy: { select: { id: true, firstName: true, lastName: true } } },
+    include: {
+      performedBy: { select: { id: true, firstName: true, lastName: true } },
+    },
   },
-  plan: { select: { id: true, planNumber: true, plantRoute: true, customerName: true } },
+  plan: {
+    select: {
+      id: true,
+      planNumber: true,
+      plantRoute: true,
+      customerName: true,
+    },
+  },
 };
 
 @Injectable()
@@ -68,7 +75,9 @@ export class SteelSourcingService {
       select: { id: true },
     });
     if (!employee) {
-      throw new ForbiddenException('No employee profile linked to your account');
+      throw new ForbiddenException(
+        'No employee profile linked to your account',
+      );
     }
     return employee;
   }
@@ -82,7 +91,10 @@ export class SteelSourcingService {
     return order;
   }
 
-  private assertStage(currentStage: SteelSourcingStage, requiredStage: SteelSourcingStage) {
+  private assertStage(
+    currentStage: SteelSourcingStage,
+    requiredStage: SteelSourcingStage,
+  ) {
     const currentIdx = STAGE_ORDER.indexOf(currentStage);
     const requiredIdx = STAGE_ORDER.indexOf(requiredStage);
     if (currentIdx < requiredIdx - 1) {
@@ -97,7 +109,10 @@ export class SteelSourcingService {
     }
   }
 
-  private async generateSourcingNumber(tx: Prisma.TransactionClient, organizationId: string) {
+  private async generateSourcingNumber(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+  ) {
     const year = new Date().getFullYear();
     const count = await tx.steelSourcingOrder.count({
       where: {
@@ -132,7 +147,11 @@ export class SteelSourcingService {
   }
 
   // ── P02-A01 — Review material requirement from production plan ──
-  async createOrder(dto: CreateSteelSourcingOrderDto, userId: string, organizationId: string) {
+  async createOrder(
+    dto: CreateSteelSourcingOrderDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
     const plan = await this.prisma.steelProductionPlan.findFirst({
@@ -146,7 +165,10 @@ export class SteelSourcingService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const sourcingNumber = await this.generateSourcingNumber(tx, organizationId);
+      const sourcingNumber = await this.generateSourcingNumber(
+        tx,
+        organizationId,
+      );
 
       const order = await tx.steelSourcingOrder.create({
         data: {
@@ -157,12 +179,24 @@ export class SteelSourcingService {
           stage: 'A01_REQUIREMENT_REVIEWED',
           status: 'IN_PROGRESS',
           materialRequirementNotes: dto.materialRequirementNotes,
-          requiredByDate: dto.requiredByDate ? new Date(dto.requiredByDate) : null,
+          requiredByDate: dto.requiredByDate
+            ? new Date(dto.requiredByDate)
+            : null,
         },
       });
 
-      await this.logActivity(tx, order.id, 'A01', employee.id, dto.materialRequirementNotes, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: order.id }, include: orderInclude });
+      await this.logActivity(
+        tx,
+        order.id,
+        'A01',
+        employee.id,
+        dto.materialRequirementNotes,
+        { ...dto },
+      );
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: order.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -186,13 +220,28 @@ export class SteelSourcingService {
           stage: 'A02_MATERIAL_TYPE_IDENTIFIED',
         },
       });
-      await this.logActivity(tx, id, 'A02', employee.id, dto.materialTypeNotes, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      await this.logActivity(
+        tx,
+        id,
+        'A02',
+        employee.id,
+        dto.materialTypeNotes,
+        { ...dto },
+      );
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
   // ── P02-A03 — Check approved supplier list ──
-  async checkSupplier(id: string, dto: CheckSteelSupplierDto, userId: string, organizationId: string) {
+  async checkSupplier(
+    id: string,
+    dto: CheckSteelSupplierDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const order = await this.findOrderOrThrow(id, organizationId);
     this.assertStage(order.stage, 'A03_SUPPLIER_CHECKED');
@@ -201,7 +250,10 @@ export class SteelSourcingService {
       where: { id: dto.supplierId, organizationId },
     });
     if (!supplier) throw new NotFoundException('Supplier not found');
-    if (dto.supplierApprovalConfirmed && supplier.approvalStatus !== 'APPROVED') {
+    if (
+      dto.supplierApprovalConfirmed &&
+      supplier.approvalStatus !== 'APPROVED'
+    ) {
       throw new BadRequestException(
         `Supplier is not on the approved list (status: ${supplier.approvalStatus}). Approve the supplier first or select a different one.`,
       );
@@ -217,8 +269,18 @@ export class SteelSourcingService {
           stage: 'A03_SUPPLIER_CHECKED',
         },
       });
-      await this.logActivity(tx, id, 'A03', employee.id, dto.supplierCheckNotes, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      await this.logActivity(
+        tx,
+        id,
+        'A03',
+        employee.id,
+        dto.supplierCheckNotes,
+        { ...dto },
+      );
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -243,8 +305,18 @@ export class SteelSourcingService {
           stage: 'A04_SUPPLIER_RISK_REVIEWED',
         },
       });
-      await this.logActivity(tx, id, 'A04', employee.id, dto.rejectionRateNotes, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      await this.logActivity(
+        tx,
+        id,
+        'A04',
+        employee.id,
+        dto.rejectionRateNotes,
+        { ...dto },
+      );
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -280,22 +352,39 @@ export class SteelSourcingService {
 
       const updated = await tx.steelSourcingOrder.update({
         where: { id },
-        data: { quotationsCollectedAt: new Date(), stage: 'A05_QUOTATIONS_COLLECTED' },
+        data: {
+          quotationsCollectedAt: new Date(),
+          stage: 'A05_QUOTATIONS_COLLECTED',
+        },
       });
-      await this.logActivity(tx, id, 'A05', employee.id, undefined, { count: dto.quotations.length });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      await this.logActivity(tx, id, 'A05', employee.id, undefined, {
+        count: dto.quotations.length,
+      });
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
   // ── P02-A06 — Compare supplier options using QCD logic ──
-  async selectSupplier(id: string, dto: SelectSteelSupplierDto, userId: string, organizationId: string) {
+  async selectSupplier(
+    id: string,
+    dto: SelectSteelSupplierDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const order = await this.findOrderOrThrow(id, organizationId);
     this.assertStage(order.stage, 'A06_SUPPLIER_SELECTED');
 
-    const quoted = order.quotations.some((q) => q.supplierId === dto.selectedSupplierId);
+    const quoted = order.quotations.some(
+      (q) => q.supplierId === dto.selectedSupplierId,
+    );
     if (!quoted) {
-      throw new BadRequestException('Selected supplier must be one of the collected quotations');
+      throw new BadRequestException(
+        'Selected supplier must be one of the collected quotations',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -307,8 +396,18 @@ export class SteelSourcingService {
           stage: 'A06_SUPPLIER_SELECTED',
         },
       });
-      await this.logActivity(tx, id, 'A06', employee.id, dto.qcdComparisonNotes, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      await this.logActivity(
+        tx,
+        id,
+        'A06',
+        employee.id,
+        dto.qcdComparisonNotes,
+        { ...dto },
+      );
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -333,8 +432,18 @@ export class SteelSourcingService {
           stage: 'A07_SPEC_CONFIRMED',
         },
       });
-      await this.logActivity(tx, id, 'A07', employee.id, dto.specificationRequirementNotes, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      await this.logActivity(
+        tx,
+        id,
+        'A07',
+        employee.id,
+        dto.specificationRequirementNotes,
+        { ...dto },
+      );
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -365,7 +474,10 @@ export class SteelSourcingService {
         },
       });
       await this.logActivity(tx, id, 'A08', employee.id, undefined, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -384,14 +496,21 @@ export class SteelSourcingService {
       const updated = await tx.steelSourcingOrder.update({
         where: { id },
         data: {
-          confirmedDispatchDate: dto.confirmedDispatchDate ? new Date(dto.confirmedDispatchDate) : null,
-          confirmedArrivalDate: dto.confirmedArrivalDate ? new Date(dto.confirmedArrivalDate) : null,
+          confirmedDispatchDate: dto.confirmedDispatchDate
+            ? new Date(dto.confirmedDispatchDate)
+            : null,
+          confirmedArrivalDate: dto.confirmedArrivalDate
+            ? new Date(dto.confirmedArrivalDate)
+            : null,
           vehicleContainerInfo: dto.vehicleContainerInfo,
           stage: 'A09_DELIVERY_CONFIRMED',
         },
       });
       await this.logActivity(tx, id, 'A09', employee.id, undefined, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -419,8 +538,18 @@ export class SteelSourcingService {
           stage: 'A10_LOGISTICS_PREPARED',
         },
       });
-      await this.logActivity(tx, id, 'A10', employee.id, dto.importLogisticsNotes, { ...dto });
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      await this.logActivity(
+        tx,
+        id,
+        'A10',
+        employee.id,
+        dto.importLogisticsNotes,
+        { ...dto },
+      );
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -445,7 +574,10 @@ export class SteelSourcingService {
         },
       });
       await this.logActivity(tx, id, 'A11', employee.id, dto.intakeNotifyNotes);
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
@@ -471,12 +603,19 @@ export class SteelSourcingService {
         },
       });
       await this.logActivity(tx, id, 'A12', employee.id, dto.handoverNotes);
-      return tx.steelSourcingOrder.findUnique({ where: { id: updated.id }, include: orderInclude });
+      return tx.steelSourcingOrder.findUnique({
+        where: { id: updated.id },
+        include: orderInclude,
+      });
     });
   }
 
   // Manual override for exceptional cases (e.g. putting an order ON_HOLD or CANCELLED)
-  async updateStatus(id: string, dto: UpdateSteelSourcingStatusDto, organizationId: string) {
+  async updateStatus(
+    id: string,
+    dto: UpdateSteelSourcingStatusDto,
+    organizationId: string,
+  ) {
     await this.findOrderOrThrow(id, organizationId);
     return this.prisma.steelSourcingOrder.update({
       where: { id },
@@ -524,7 +663,10 @@ export class SteelSourcingService {
       this.prisma.steelSourcingOrder.count({ where }),
     ]);
 
-    return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+    return {
+      data,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    };
   }
 
   async getSummary(organizationId: string) {
@@ -533,13 +675,13 @@ export class SteelSourcingService {
         by: ['stage'],
         where: { organizationId },
         orderBy: { stage: 'asc' },
-        _count: { stage: true },
+        _count: true,
       }),
       this.prisma.steelSourcingOrder.groupBy({
         by: ['status'],
         where: { organizationId },
         orderBy: { status: 'asc' },
-        _count: { status: true },
+        _count: true,
       }),
       this.prisma.steelSourcingOrder.count({ where: { organizationId } }),
     ]);

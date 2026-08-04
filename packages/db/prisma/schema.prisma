@@ -152,6 +152,7 @@ model Organization {
   steelProductionPlans SteelProductionPlan[]
   steelSourcingOrders  SteelSourcingOrder[]
   suppliers            Supplier[]
+  steelMaterialIntakes SteelMaterialIntake[]
 }
 
 //specific user
@@ -321,12 +322,14 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  steelPlansCreated          SteelProductionPlan[]      @relation("SteelPlanCreatedBy")
-  steelPlansApproved         SteelProductionPlan[]      @relation("SteelPlanApprovedBy")
+  steelPlansCreated          SteelProductionPlan[]            @relation("SteelPlanCreatedBy")
+  steelPlansApproved         SteelProductionPlan[]            @relation("SteelPlanApprovedBy")
   steelActivityLogs          SteelPlanActivityLog[]
   steelDepartmentAcks        SteelPlanDepartmentAck[]
-  steelSourcingOrdersCreated SteelSourcingOrder[]       @relation("SteelSourcingCreatedBy")
-  steelSourcingActivityLogs  SteelSourcingActivityLog[] @relation("SteelSourcingPerformedBy")
+  steelSourcingOrdersCreated SteelSourcingOrder[]             @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs  SteelSourcingActivityLog[]       @relation("SteelSourcingPerformedBy")
+  steelIntakesCreated        SteelMaterialIntake[]            @relation("SteelIntakeCreatedBy")
+  steelIntakeActivityLogs    SteelMaterialIntakeActivityLog[] @relation("SteelIntakePerformedBy")
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
@@ -1043,6 +1046,58 @@ enum SteelSourcingActivity {
   A12
 }
 
+// Tracks how far the intake has progressed through P03-A01..A14
+enum SteelIntakeStage {
+  A01_GATE_ARRIVAL_RECORDED
+  A02_DOCUMENTS_VERIFIED
+  A03_GROSS_WEIGHT_CAPTURED
+  A04_SAFETY_CHECKED
+  A05_AREA_ASSIGNED
+  A06_VISUAL_INSPECTED
+  A07_HAZARD_CHECKED
+  A08_RADIATION_CHECKED
+  A09_CERTIFICATE_VERIFIED
+  A10_ACCEPTANCE_DECIDED
+  A11_UNLOADED
+  A12_NET_WEIGHT_CAPTURED
+  A13_YARD_STORED
+  A14_STOCK_RELEASED
+}
+
+enum SteelIntakeStatus {
+  DRAFT
+  IN_PROGRESS
+  ON_HOLD
+  REJECTED
+  RELEASED
+  CANCELLED
+}
+
+// P03-A10 — Decide accept, hold, or reject material
+enum MaterialAcceptanceDecision {
+  ACCEPT
+  HOLD
+  REJECT
+}
+
+// Identifies each of the 14 intake activities for the audit trail
+enum SteelIntakeActivity {
+  A01
+  A02
+  A03
+  A04
+  A05
+  A06
+  A07
+  A08
+  A09
+  A10
+  A11
+  A12
+  A13
+  A14
+}
+
 // Approved supplier master — checked at P02-A03/A04, referenced by every sourcing order.
 model Supplier {
   id             String                 @id @default(uuid())
@@ -1145,12 +1200,13 @@ model SteelSourcingOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization               @relation(fields: [organizationId], references: [id])
-  plan         SteelProductionPlan        @relation(fields: [planId], references: [id])
-  createdBy    Employee                   @relation("SteelSourcingCreatedBy", fields: [createdById], references: [id])
-  supplier     Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  quotations   SteelSourcingQuotation[]
-  activityLogs SteelSourcingActivityLog[]
+  organization    Organization               @relation(fields: [organizationId], references: [id])
+  plan            SteelProductionPlan        @relation(fields: [planId], references: [id])
+  createdBy       Employee                   @relation("SteelSourcingCreatedBy", fields: [createdById], references: [id])
+  supplier        Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  quotations      SteelSourcingQuotation[]
+  activityLogs    SteelSourcingActivityLog[]
+  materialIntakes SteelMaterialIntake[]
 
   @@index([organizationId])
   @@index([organizationId, stage])
@@ -1317,6 +1373,107 @@ model SteelPlanDepartmentAck {
 
   @@unique([planId, department])
   @@index([planId])
+}
+
+// One record per delivery received against a sourcing order, carried through P03-A01 -> P03-A14.
+model SteelMaterialIntake {
+  id              String            @id @default(uuid())
+  intakeNumber    String            @unique
+  organizationId  String
+  sourcingOrderId String
+  createdById     String
+  stage           SteelIntakeStage  @default(A01_GATE_ARRIVAL_RECORDED)
+  status          SteelIntakeStatus @default(DRAFT)
+
+  // P03-A01 — Record truck/container arrival at gate
+  vehicleNumber   String
+  driverName      String?
+  transporterName String?
+  arrivalDateTime DateTime?
+  gateEntryRef    String?
+
+  // P03-A02 — Verify purchase order and delivery documents
+  purchaseOrderVerified     Boolean?
+  deliveryDocumentRef       String?
+  documentVerificationNotes String?
+
+  // P03-A03 — Send vehicle to weighbridge for gross weight
+  grossWeightTonnes Float?
+  grossWeighedAt    DateTime?
+
+  // P03-A04 — Perform basic safety and access check
+  safetyCheckPassed Boolean?
+  safetyCheckNotes  String?
+
+  // P03-A05 — Assign unloading or inspection area
+  unloadingArea String?
+
+  // P03-A06 — Carry out visual inspection of material
+  visualInspectionNotes String?
+
+  // P03-A07 — Check scrap hazard and contamination
+  hazardOrContaminationFound Boolean?
+  hazardNotes                String?
+
+  // P03-A08 — Perform radiation check if required
+  radiationCheckRequired Boolean?
+  radiationCheckPassed   Boolean?
+
+  // P03-A09 — Verify billet certificate, heat number, and grade if billet received
+  materialType   SteelMaterialType?
+  grade          String?
+  heatNumber     String?
+  certificateRef String?
+
+  // P03-A10 — Decide accept, hold, or reject material
+  acceptanceDecision MaterialAcceptanceDecision?
+  decisionNotes      String?
+
+  // P03-A11 — Unload approved material safely
+  unloadedAt DateTime?
+
+  // P03-A12 — Capture tare weight and net weight
+  tareWeightTonnes Float?
+  netWeightTonnes  Float?
+  weighedAt        DateTime?
+
+  // P03-A13 — Store material in correct yard location
+  yardLocation String?
+  storedAt     DateTime?
+
+  // P03-A14 — Update stock and release for preparation/use
+  stockReleasedAt   DateTime?
+  stockReleaseNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization                     @relation(fields: [organizationId], references: [id])
+  sourcingOrder SteelSourcingOrder               @relation(fields: [sourcingOrderId], references: [id])
+  createdBy     Employee                         @relation("SteelIntakeCreatedBy", fields: [createdById], references: [id])
+  activityLogs  SteelMaterialIntakeActivityLog[]
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([organizationId, status])
+  @@index([sourcingOrderId])
+  @@index([createdAt])
+}
+
+// Audit trail: every activity performed against a material intake is recorded here
+model SteelMaterialIntakeActivityLog {
+  id            String              @id @default(uuid())
+  intakeId      String
+  activity      SteelIntakeActivity
+  performedById String
+  notes         String?
+  data          Json?
+  createdAt     DateTime            @default(now())
+
+  intake      SteelMaterialIntake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+  performedBy Employee            @relation("SteelIntakePerformedBy", fields: [performedById], references: [id])
+
+  @@index([intakeId])
 }
 
 model Task {
@@ -1517,8 +1674,6 @@ model DwmsPermissionConfig {
   updatedAt DateTime @updatedAt
 }
 
-
-
 // DAILY GEMBA KAIZEN
 
 enum KaizenStatus {
@@ -1531,38 +1686,38 @@ enum KaizenStatus {
 }
 
 model Kaizen {
-  id                       String           @id @default(uuid())
-  organizationId           String
-  employeeId               String
-  departmentId             String
-  status                   KaizenStatus     @default(DRAFT)
+  id             String       @id @default(uuid())
+  organizationId String
+  employeeId     String
+  departmentId   String
+  status         KaizenStatus @default(DRAFT)
 
-  problem                  String
-  beforePhotoUrl           String
-  improvementDescription   String?
-  afterPhotoUrl            String?
-  benefitAchieved          String?
+  problem                String
+  beforePhotoUrl         String
+  improvementDescription String?
+  afterPhotoUrl          String?
+  benefitAchieved        String?
 
-  teamMembers              String?
-  benefitCategory          String?
-  beforeValue              String?
-  afterValue               String?
-  costSaving               String?
-  comments                 String?
+  teamMembers     String?
+  benefitCategory String?
+  beforeValue     String?
+  afterValue      String?
+  costSaving      String?
+  comments        String?
 
-  verifiedById             String?
-  verificationComment      String?
-  standardUpdated          Boolean?
-  linkedSgaId              String?
+  verifiedById        String?
+  verificationComment String?
+  standardUpdated     Boolean?
+  linkedSgaId         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  employee     Employee     @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
-  department   Department?  @relation(fields: [departmentId], references: [id])
-  verifiedBy   Employee?    @relation("KaizenVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
-  reviews      KaizenReview[]
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  employee         Employee       @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
+  department       Department?    @relation(fields: [departmentId], references: [id])
+  verifiedBy       Employee?      @relation("KaizenVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  reviews          KaizenReview[]
   sourceSuggestion Suggestion?
 
   @@index([organizationId, status])
@@ -1570,12 +1725,12 @@ model Kaizen {
 }
 
 model KaizenReview {
-  id            String     @id @default(uuid())
+  id            String       @id @default(uuid())
   kaizenId      String
   reviewerId    String
   statusChanged KaizenStatus
   note          String?
-  createdAt     DateTime   @default(now())
+  createdAt     DateTime     @default(now())
 
   kaizen   Kaizen   @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
   reviewer Employee @relation(fields: [reviewerId], references: [id])

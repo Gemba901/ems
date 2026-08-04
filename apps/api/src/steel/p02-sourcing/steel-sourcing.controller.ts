@@ -39,7 +39,12 @@ import { ModuleType } from 'db';
 type AuthUser = { userId: string; organizationId: string; roleLevel: string };
 
 // Same role scope as the planning module — no dedicated PROCUREMENT role exists yet.
-const SOURCING_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD];
+const SOURCING_ROLES = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN,
+  Role.MANAGEMENT,
+  Role.HOD,
+];
 const PO_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
 @Controller('steel/sourcing')
@@ -55,13 +60,23 @@ export class SteelSourcingController {
    * Requires the referenced plan to already be at P01-A12 (released).
    */
   @Post()
-  async create(@Body() dto: CreateSteelSourcingOrderDto, @CurrentUser() user: AuthUser) {
-    return this.steelSourcingService.createOrder(dto, user.userId, user.organizationId);
+  async create(
+    @Body() dto: CreateSteelSourcingOrderDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.createOrder(
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /** GET /steel/sourcing — list sourcing orders for the organization. */
   @Get()
-  async getAll(@Query() query: QuerySteelSourcingOrdersDto, @CurrentUser() user: AuthUser) {
+  async getAll(
+    @Query() query: QuerySteelSourcingOrdersDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.steelSourcingService.getAll(user.organizationId, query);
   }
 
@@ -73,13 +88,19 @@ export class SteelSourcingController {
 
   /** GET /steel/sourcing/suppliers — approved supplier list, for P02-A03 selection. */
   @Get('suppliers')
-  async getSuppliers(@Query() query: QuerySuppliersDto, @CurrentUser() user: AuthUser) {
+  async getSuppliers(
+    @Query() query: QuerySuppliersDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.steelSourcingService.getSuppliers(user.organizationId, query);
   }
 
   /** POST /steel/sourcing/suppliers — add a supplier to the master list. */
   @Post('suppliers')
-  async createSupplier(@Body() dto: CreateSupplierDto, @CurrentUser() user: AuthUser) {
+  async createSupplier(
+    @Body() dto: CreateSupplierDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.steelSourcingService.createSupplier(dto, user.organizationId);
   }
 
@@ -99,7 +120,12 @@ export class SteelSourcingController {
     @Body() dto: IdentifySteelMaterialTypeDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.identifyMaterialType(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.identifyMaterialType(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -112,7 +138,12 @@ export class SteelSourcingController {
     @Body() dto: CheckSteelSupplierDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.checkSupplier(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.checkSupplier(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -125,7 +156,12 @@ export class SteelSourcingController {
     @Body() dto: ReviewSteelSupplierRiskDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.reviewSupplierRisk(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.reviewSupplierRisk(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -138,7 +174,12 @@ export class SteelSourcingController {
     @Body() dto: CollectSteelQuotationsDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.collectQuotations(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.collectQuotations(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -151,7 +192,12 @@ export class SteelSourcingController {
     @Body() dto: SelectSteelSupplierDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.selectSupplier(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.selectSupplier(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -164,7 +210,12 @@ export class SteelSourcingController {
     @Body() dto: ConfirmSteelSourcingSpecDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.confirmSpecification(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.confirmSpecification(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -178,7 +229,12 @@ export class SteelSourcingController {
     @Body() dto: CreateSteelPurchaseOrderDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.createPurchaseOrder(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.createPurchaseOrder(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -191,7 +247,12 @@ export class SteelSourcingController {
     @Body() dto: ConfirmSteelDeliveryScheduleDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.confirmDeliverySchedule(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.confirmDeliverySchedule(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -204,7 +265,12 @@ export class SteelSourcingController {
     @Body() dto: PrepareSteelImportLogisticsDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.prepareLogistics(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.prepareLogistics(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -217,7 +283,12 @@ export class SteelSourcingController {
     @Body() dto: InformSteelIntakeTeamDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.informIntakeTeam(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.informIntakeTeam(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -231,7 +302,12 @@ export class SteelSourcingController {
     @Body() dto: CloseSteelSourcingHandoverDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.closeHandover(id, dto, user.userId, user.organizationId);
+    return this.steelSourcingService.closeHandover(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**

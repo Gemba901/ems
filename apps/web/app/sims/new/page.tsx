@@ -256,7 +256,7 @@ export default function NewSuggestionPage() {
           onClose={() => router.push(successRedirect)}
         />
       )}
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto">
+      <div className="px-4 py-4 md:px-8 md:py-6">
 
         <Link href="/sims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back to Suggestions
@@ -267,8 +267,8 @@ export default function NewSuggestionPage() {
           {/* LEFT , Form */}
           <div className="xl:col-span-2">
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-slate-900">New Suggestion</h1>
-              <p className="text-sm text-slate-500 mt-1">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">New Suggestion</h1>
+              <p className="hidden sm:block text-sm text-slate-500 mt-1">
                 Help us evolve. Submit your ideas across our QCDSMT pillars, every voice matters.
               </p>
             </div>

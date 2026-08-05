@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import {
   LayoutGrid,
   Settings,
@@ -141,10 +142,12 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const { hasModule } = useOrgModules();
+  const queryClient = useQueryClient();
 
   const handleLogout = async () => {
     await AuthService.logout();
     logout();
+    queryClient.clear();
     router.push("/login");
   };
 

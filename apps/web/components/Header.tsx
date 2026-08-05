@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, CalendarDays } from "lucide-react";
@@ -9,6 +10,37 @@ import { NotificationsBell } from "./NotificationsBell";
 
 interface HeaderProps {
   onMenuClick?: () => void;
+}
+
+function BrandGear({ size = 18, teeth = 8 }: { size?: number; teeth?: number }) {
+  const r = size / 2;
+  const innerR = r * 0.72;
+  const holeR = r * 0.28;
+  const toothW = (2 * Math.PI * innerR) / (teeth * 2.5);
+  const toothH = (r - innerR) * 1.15;
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <mask id="brand-gear-mask">
+        <rect width={size} height={size} fill="white" />
+        <circle cx={r} cy={r} r={holeR} fill="black" />
+      </mask>
+      <g mask="url(#brand-gear-mask)" fill="currentColor">
+        <circle cx={r} cy={r} r={innerR} />
+        {Array.from({ length: teeth }).map((_, i) => (
+          <rect
+            key={i}
+            x={r - toothW / 2}
+            y={r - innerR - toothH + 2}
+            width={toothW}
+            height={toothH}
+            rx={1}
+            transform={`rotate(${(i * 360) / teeth}, ${r}, ${r})`}
+          />
+        ))}
+      </g>
+    </svg>
+  );
 }
 
 const PAGE_TITLES: Record<string, string> = {
@@ -31,7 +63,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/sims/new": "New Suggestion",
   "/sims/my-suggestions": "My Suggestions",
   "/sims/queue": "Review Queue",
-  "/sims/reviews": "Reviews",
   "/sims/analytics": "Analytics",
   "/sims/committees": "Committee Report",
   "/sims/archived": "Archived",
@@ -68,8 +99,33 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const pageTitle = resolveTitle(pathname);
 
+  const [visible, setVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    lastScrollY.current = window.scrollY;
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      const delta = currentY - lastScrollY.current;
+      if (currentY < 64) {
+        setVisible(true);
+      } else if (delta > 8) {
+        setVisible(false);
+      } else if (delta < -8) {
+        setVisible(true);
+      }
+      lastScrollY.current = currentY;
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <header className="flex h-16 items-center justify-between px-4 lg:px-8 bg-transparent">
+    <header
+      className={`sticky top-0 z-30 flex h-14 items-center justify-between px-4 lg:px-8 bg-slate-50/85 backdrop-blur-md border-b border-slate-200/70 transition-transform duration-300 will-change-transform ${
+        visible ? "translate-y-0" : "-translate-y-full"
+      }`}
+    >
 
       {/* Left: brand + page context */}
       <div className="flex items-center gap-3">
@@ -81,12 +137,13 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Menu className="h-5 w-5" />
         </button>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center h-7 px-2 rounded-lg bg-indigo-600">
-            <span className="text-[11px] font-black tracking-widest text-white leading-none">
-              GEMBA
-            </span>
+        <div className="flex items-center gap-2" title="Business Excellence EcoSystem">
+          <div className="flex shrink-0 items-center justify-center text-indigo-600">
+            <BrandGear size={22} />
           </div>
+          <span className="text-sm font-black tracking-tight text-slate-900 leading-none">
+            BEES
+          </span>
           {pageTitle && (
             <div className="hidden sm:flex items-center gap-2 min-w-0">
               <span className="text-slate-300 text-sm select-none">/</span>

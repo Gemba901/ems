@@ -6,7 +6,7 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus, calcWeight } from "@/services/sims.service";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, EyeOff, Clock, AlertCircle, HelpCircle } from "lucide-react";
+import { Clock } from "lucide-react";
 
 const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
   QUALITY:    "bg-blue-100 text-blue-700",
@@ -18,65 +18,63 @@ const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
   UNKNOWN:    "bg-slate-100 text-slate-500",
 };
 
-function QueueCard({ s, accentBar, router }: { s: Suggestion; accentBar: string; router: ReturnType<typeof useRouter> }) {
+function QueueCard({ s, router }: { s: Suggestion; router: ReturnType<typeof useRouter> }) {
   const daysSince = Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 86400000);
   return (
     <div
       onClick={() => router.push(`/sims/${s.id}`)}
-      className="flex items-center gap-3 px-4 py-4 sm:px-6 hover:bg-slate-50/70 cursor-pointer transition-colors group"
+      className="px-4 py-4 sm:px-6 sm:py-5 hover:bg-slate-50/70 cursor-pointer transition-colors group"
     >
-      <div className={`w-1 self-stretch rounded-full shrink-0 ${accentBar}`} />
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap mb-1.5">
-          {s.categories.map((c) => {
-            const badge = CATEGORY_BADGE[c as SuggestionCategory];
-            return badge ? (
-              <span key={c} className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${badge}`}>
-                {c.charAt(0) + c.slice(1).toLowerCase()}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          {/* Badges row */}
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            {s.categories.map((c) => {
+              const badge = CATEGORY_BADGE[c as SuggestionCategory];
+              return badge ? (
+                <span key={c} className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${badge}`}>
+                  {c.charAt(0) + c.slice(1).toLowerCase()}
+                </span>
+              ) : null;
+            })}
+            {calcWeight(s.categories) > 0 && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-100">
+                W {calcWeight(s.categories).toFixed(1)}
               </span>
-            ) : null;
-          })}
-          {calcWeight(s.categories) > 0 && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-100">
-              W {calcWeight(s.categories).toFixed(1)}
-            </span>
-          )}
-        </div>
+            )}
+            {s.isAnonymous && (
+              <span className="text-[10px] text-slate-400 italic">Anonymous</span>
+            )}
+          </div>
 
-        <p className="text-sm font-semibold text-slate-900 truncate">{s.title}</p>
+          {/* Title + description */}
+          <p className="text-sm font-semibold text-slate-900 leading-snug">{s.title}</p>
+          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{s.description}</p>
 
-        <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400 flex-wrap">
-          {s.employee ? (
-            <div className="flex items-center gap-1.5">
-              <div className="h-4 w-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-bold shrink-0">
-                {s.employee.firstName[0]}{s.employee.lastName[0]}
-              </div>
-              <span>{s.employee.firstName} {s.employee.lastName}</span>
+          {/* Submitter */}
+          {s.employee && (
+            <div className="flex items-center gap-2 mt-2.5 text-[11px] text-slate-400 flex-wrap">
+              <span className="font-medium text-slate-500">{s.employee.firstName} {s.employee.lastName}</span>
               {s.employee.department?.name && (
                 <><span className="text-slate-300">·</span><span>{s.employee.department.name}</span></>
               )}
             </div>
-          ) : (
-            <span className="flex items-center gap-1"><EyeOff className="h-3 w-3" /> Anonymous</span>
-          )}
-          <span className="text-slate-300">·</span>
-          <span>{daysSince === 0 ? "Today" : `${daysSince}d ago`}</span>
-          {s.reviews.length > 0 && (
-            <><span className="text-slate-300">·</span>
-            <span>{s.reviews.length} review{s.reviews.length !== 1 ? "s" : ""}</span></>
           )}
         </div>
-      </div>
 
-      <div className="flex items-center gap-2 shrink-0">
-        <button
-          onClick={(e) => { e.stopPropagation(); router.push(`/sims/${s.id}`); }}
-          className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
-        >
-          Review
-        </button>
-        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors hidden sm:block" />
+        {/* Right meta + action */}
+        <div className="flex flex-col items-end gap-2 shrink-0 text-right">
+          <button
+            onClick={(e) => { e.stopPropagation(); router.push(`/sims/${s.id}`); }}
+            className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
+          >
+            Review
+          </button>
+          <p className="text-[11px] text-slate-400">{daysSince === 0 ? "Today" : `${daysSince}d ago`}</p>
+          <span className="text-[11px] text-slate-400">
+            {s.reviews.length} review{s.reviews.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -109,7 +107,7 @@ export default function QueuePage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-5">
+      <div className="px-4 py-4 md:px-8 md:py-6 space-y-5">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -141,19 +139,13 @@ export default function QueuePage() {
         {/* Under Review section */}
         {!loading && underReview.length > 0 && (
           <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2.5 px-6 py-4 border-b bg-amber-50 border-amber-100">
-              <AlertCircle className="h-4 w-4 text-amber-500" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-slate-800">Ready for Review</h2>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{underReview.length}</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">Awaiting decision or feedback.</p>
-              </div>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Ready for Review</p>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{underReview.length}</span>
             </div>
             <div className="divide-y divide-slate-50">
               {underReview.map((s) => (
-                <QueueCard key={s.id} s={s} accentBar="bg-amber-400" router={router} />
+                <QueueCard key={s.id} s={s} router={router} />
               ))}
             </div>
           </div>
@@ -162,19 +154,13 @@ export default function QueuePage() {
         {/* On Hold section */}
         {!loading && onHold.length > 0 && (
           <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2.5 px-6 py-4 border-b bg-orange-50 border-orange-100">
-              <HelpCircle className="h-4 w-4 text-orange-500" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-slate-800">On Hold</h2>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">{onHold.length}</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">Paused — awaiting further information or a decision.</p>
-              </div>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">On Hold</p>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{onHold.length}</span>
             </div>
             <div className="divide-y divide-slate-50">
               {onHold.map((s) => (
-                <QueueCard key={s.id} s={s} accentBar="bg-orange-400" router={router} />
+                <QueueCard key={s.id} s={s} router={router} />
               ))}
             </div>
           </div>
@@ -183,19 +169,13 @@ export default function QueuePage() {
         {/* Selected for SGA section */}
         {!loading && selectedForSGA.length > 0 && (
           <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2.5 px-6 py-4 border-b bg-indigo-50 border-indigo-100">
-              <AlertCircle className="h-4 w-4 text-indigo-500" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-slate-800">Selected for SGA</h2>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{selectedForSGA.length}</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">Escalated to a Small Group Activity for deeper evaluation.</p>
-              </div>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Selected for SGA</p>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{selectedForSGA.length}</span>
             </div>
             <div className="divide-y divide-slate-50">
               {selectedForSGA.map((s) => (
-                <QueueCard key={s.id} s={s} accentBar="bg-indigo-400" router={router} />
+                <QueueCard key={s.id} s={s} router={router} />
               ))}
             </div>
           </div>

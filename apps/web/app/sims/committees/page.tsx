@@ -165,22 +165,24 @@ export default function CommitteeReportPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto">
+      <div className="px-4 py-4 md:px-8 md:py-6">
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-          <div>
+        <div className="flex items-center sm:items-start justify-between gap-3 mb-6">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <Users className="h-5 w-5 text-slate-400" />
-              <h1 className="text-2xl font-bold text-slate-900">Committee Report</h1>
+              <Users className="hidden sm:block h-5 w-5 text-slate-400" />
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Committee Report</h1>
             </div>
-            <p className="text-sm text-slate-500">Suggestions forwarded to the SGA steering committee.</p>
+            <p className="hidden sm:block text-sm text-slate-500">Suggestions forwarded to the SGA steering committee.</p>
           </div>
           <button
             onClick={() => exportToCSV(suggestions)}
             disabled={suggestions.length === 0}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors whitespace-nowrap shrink-0"
           >
-            <Download className="h-3.5 w-3.5" /> Export CSV
+            <Download className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Export CSV</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
 

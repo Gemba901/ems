@@ -60,14 +60,14 @@ export default function ArchivedPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-6">
+      <div className="px-4 py-4 md:px-8 md:py-6 space-y-6">
 
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center">
             <CheckCircle2 className="h-5 w-5 text-slate-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Closed Suggestions</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Closed Suggestions</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               {loading ? "Loading..." : `${suggestions.length} resolved suggestion${suggestions.length !== 1 ? "s" : ""}`}
             </p>

@@ -315,14 +315,14 @@ export default function SimsAllSuggestionsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD]}>
-      <div className="mx-5 space-y-5">
+      <div className="mx-5 pt-4 md:pt-6 space-y-5">
 
         {/* Page header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center sm:items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600">SIMS</p>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{pageTitle}</h1>
-            <p className="text-sm text-slate-500 mt-1 max-w-xl">
+            <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wider text-blue-600">SIMS</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 sm:mt-0.5 truncate">{pageTitle}</h1>
+            <p className="hidden sm:block text-sm text-slate-500 mt-1 max-w-xl">
               Browse, search, and filter {role === Role.HOD ? "your department's" : "the organisation's"} full suggestion history.
             </p>
           </div>
@@ -332,7 +332,8 @@ export default function SimsAllSuggestionsPage() {
             className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
           >
             <Download className="h-3.5 w-3.5" />
-            Export CSV
+            <span className="hidden sm:inline">Export CSV</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
 

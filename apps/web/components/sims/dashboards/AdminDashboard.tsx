@@ -60,47 +60,22 @@ export default function AdminDashboard() {
   const categoryData = useMemo(() => computeCategoryChartData(suggestions), [suggestions]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 sm:gap-6">
       {/* KPI row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className="order-1 sm:order-none grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <KpiCard label="Total" value={loading ? "—" : kpis.total} sub="Org-wide suggestions" icon={<Lightbulb className="h-5 w-5 text-blue-600" />} accent="bg-blue-50" />
         <KpiCard label="Pending" value={loading ? "—" : kpis.pending} sub={kpis.pending > 0 ? "need attention" : "all clear"} icon={<Clock className="h-5 w-5 text-amber-500" />} accent="bg-amber-50" />
         <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="Approved / implemented" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
         <KpiCard label="On Hold" value={loading ? "—" : kpis.onHold} sub={kpis.onHold > 0 ? "paused" : "none"} icon={<AlertCircle className="h-5 w-5 text-orange-500" />} accent="bg-orange-50" />
       </div>
 
-      {/* Per-status breakdown — org-wide suggestions, every status incl. Selected for SGA */}
-      <StatusCountStrip suggestions={suggestions} />
-
-      {/* Quick links */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        {QUICK_LINKS.map((q) => (
-          <Link
-            key={q.label}
-            href={q.href}
-            className="flex items-center gap-2 sm:gap-3 bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-sm hover:shadow-md hover:border-slate-200 transition-all"
-          >
-            <div className={`h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${q.accent}`}>
-              <q.icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${q.iconColor}`} />
-            </div>
-            <span className="text-xs sm:text-sm font-semibold text-slate-800 flex-1 line-clamp-1">{q.label}</span>
-            <ChevronRight className="hidden sm:block h-4 w-4 text-slate-300 shrink-0" />
-          </Link>
-        ))}
+      {/* Per-status breakdown — desktop only; the KPI row above already covers this at a glance on mobile */}
+      <div className="hidden sm:block sm:order-none">
+        <StatusCountStrip suggestions={suggestions} />
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Status Breakdown" subtitle="Org-wide suggestions by current status">
-          <StatusDonutChart data={statusData} />
-        </ChartCard>
-        <ChartCard title="Category Mix" subtitle="Org-wide suggestions by QCDSMT category">
-          <CategoryBarChart data={categoryData} />
-        </ChartCard>
-      </div>
-
-      {/* Recent activity + leaderboards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      {/* Recent activity + leaderboards — surfaced right after the KPIs on mobile since this is the actual daily workspace content, not just stats */}
+      <div className="order-2 sm:order-none grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2">
           <RecentActivityTable
             suggestions={suggestions}
@@ -114,6 +89,43 @@ export default function AdminDashboard() {
         <div className="space-y-4">
           <TopContributors ranked={leaderboard} loading={leaderboardLoading} currentUserId={user?.userId} />
           <DepartmentLeaderboard ranked={departmentLeaderboard} loading={departmentLeaderboardLoading} />
+        </div>
+      </div>
+
+      {/* Quick links */}
+      <div className="order-3 sm:order-none">
+        <p className="sm:hidden text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">
+          Quick access
+        </p>
+        <div className="flex gap-2.5 overflow-x-auto -mx-5 px-5 pb-1 sm:mx-0 sm:px-0 sm:pb-0 sm:overflow-visible sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+          {QUICK_LINKS.map((q) => (
+            <Link
+              key={q.label}
+              href={q.href}
+              className="flex items-center gap-2 sm:gap-3 bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-sm hover:shadow-md hover:border-slate-200 transition-all shrink-0 w-[164px] sm:w-auto"
+            >
+              <div className={`h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${q.accent}`}>
+                <q.icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${q.iconColor}`} />
+              </div>
+              <span className="text-xs sm:text-sm font-semibold text-slate-800 flex-1 line-clamp-1">{q.label}</span>
+              <ChevronRight className="hidden sm:block h-4 w-4 text-slate-300 shrink-0" />
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Charts */}
+      <div className="order-4 sm:order-none">
+        <p className="sm:hidden text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">
+          Insights
+        </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartCard title="Status Breakdown" subtitle="Org-wide suggestions by current status">
+            <StatusDonutChart data={statusData} />
+          </ChartCard>
+          <ChartCard title="Category Mix" subtitle="Org-wide suggestions by QCDSMT category">
+            <CategoryBarChart data={categoryData} />
+          </ChartCard>
         </div>
       </div>
     </div>

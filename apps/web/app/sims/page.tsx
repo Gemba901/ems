@@ -17,26 +17,27 @@ export default function SimsOverviewPage() {
     <ProtectedRoute
       allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}
     >
-      <div className="mx-5 space-y-6">
+      <div className="mx-5 pt-4 md:pt-6 space-y-6">
 
         {/* Page header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center sm:items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600">SIMS</p>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">
+            <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wider text-blue-600">SIMS</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 sm:mt-0.5 truncate">
               Suggestions & Ideas
             </h1>
-            <p className="text-sm text-slate-500 mt-1 max-w-xl">
+            <p className="hidden sm:block text-sm text-slate-500 mt-1 max-w-xl">
               {user?.organizationName ? `${user.organizationName}'s kaizen suggestion scheme.` : "Your kaizen suggestion scheme."} Submit ideas, track their progress, and see what&apos;s shipped.
             </p>
           </div>
 
           <Link
             href="/sims/new"
-            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-slate-800 whitespace-nowrap shrink-0"
+            className="flex items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-1.5 text-sm font-semibold sm:font-medium text-white shadow-sm hover:bg-blue-700 whitespace-nowrap shrink-0"
           >
-            <Plus className="h-3.5 w-3.5" />
-            New Suggestion
+            <span className="sm:hidden">New</span>
+            <span className="hidden sm:inline">New Suggestion</span>
+            <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5 sm:order-first" />
           </Link>
         </div>
 

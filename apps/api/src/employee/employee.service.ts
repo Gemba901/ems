@@ -621,7 +621,7 @@ export class EmployeeService {
 
             const names = this.resolveNames(firstName, middleName, lastName, fullName);
             const email = companyEmail || personalEmail || undefined;
-            const roleName = this.toImportRoleName(this.cleanString(this.valueAt(source, headerMap, ['role', 'access level'])));
+            const roleName = this.toImportRoleName(this.cleanString(this.valueAt(source, headerMap, ['role', 'access level', 'bees access level'])));
 
             if (!names.firstName || !names.lastName) {
                 issues.push({ row: rowNumber, message: 'First name and last name are required' });
@@ -788,6 +788,8 @@ export class EmployeeService {
         const map: Record<string, RoleName> = {
             admin: RoleName.ADMIN,
             administrator: RoleName.ADMIN,
+            'admin it': RoleName.ADMIN,
+            'admin coordinator': RoleName.ADMIN,
             management: RoleName.MANAGEMENT,
             manager: RoleName.MANAGEMENT,
             hr: RoleName.HR,

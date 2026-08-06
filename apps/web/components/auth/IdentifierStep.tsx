@@ -174,7 +174,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
 
         {/* Input */}
         <div className="space-y-1.5">
-          <div className={`flex rounded-lg border overflow-hidden transition-all focus-within:ring-2 ${
+          <div className={`flex rounded-lg border transition-all focus-within:ring-2 ${
             error
               ? "border-red-500/50 focus-within:ring-red-500/20 focus-within:border-red-500"
               : "border-slate-200 focus-within:ring-blue-600/20 focus-within:border-blue-600"
@@ -185,7 +185,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
                 <button
                   type="button"
                   onClick={() => setShowCodes(v => !v)}
-                  className="flex items-center gap-1 px-2.5 py-3 bg-slate-50 border-r border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors h-full whitespace-nowrap"
+                  className="flex items-center gap-1 px-2.5 py-3 bg-slate-50 rounded-l-lg border-r border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors h-full whitespace-nowrap"
                 >
                   <span className="text-base leading-none">{selected.flag}</span>
                   <span className="text-slate-500 text-xs">+{selected.code}</span>
@@ -236,7 +236,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
                 mode === "email" ? "e.g. jane@company.com" :
                 "e.g. EMP-0042"
               }
-              className="flex-1 min-w-0 px-3 py-3 bg-white text-sm outline-none placeholder:text-slate-400 font-mono"
+              className="flex-1 min-w-0 px-3 py-3 bg-white text-sm outline-none placeholder:text-slate-400 font-mono rounded-lg"
             />
           </div>
 

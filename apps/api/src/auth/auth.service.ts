@@ -52,15 +52,20 @@ export class AuthService {
         return crypto.createHash('sha256').update(raw).digest('hex');
     }
 
+    // Kept in sync with COUNTRY_CODES in apps/web/components/auth/IdentifierStep.tsx
+    private static readonly SUPPORTED_COUNTRY_CODES = ['254', '255', '256', '250', '251', '91'];
+
     private phoneVariants(raw: string): string[] {
         const digits = raw.replace(/\D/g, '');
         const variants = new Set([digits, `+${digits}`]);
         if (digits.startsWith('0')) {
+            // Legacy fallback for numbers stored/typed without a country code — assumes Kenya.
             const intl = '254' + digits.slice(1);
             variants.add(intl);
             variants.add(`+${intl}`);
-        } else if (digits.startsWith('254')) {
-            variants.add('0' + digits.slice(3));
+        } else {
+            const countryCode = AuthService.SUPPORTED_COUNTRY_CODES.find((code) => digits.startsWith(code));
+            if (countryCode) variants.add('0' + digits.slice(countryCode.length));
         }
         return [...variants];
     }

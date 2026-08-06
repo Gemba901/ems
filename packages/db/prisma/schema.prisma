@@ -149,10 +149,11 @@ model Organization {
   sgaCommitteeId String?
   sgaCommittee   SteeringCommittee? @relation("OrgSgaCommittee", fields: [sgaCommitteeId], references: [id], onDelete: SetNull)
 
-  steelProductionPlans SteelProductionPlan[]
-  steelSourcingOrders  SteelSourcingOrder[]
-  suppliers            Supplier[]
-  steelMaterialIntakes SteelMaterialIntake[]
+  steelProductionPlans    SteelProductionPlan[]
+  steelSourcingOrders     SteelSourcingOrder[]
+  suppliers               Supplier[]
+  steelMaterialIntakes    SteelMaterialIntake[]
+  steelChargePreparations SteelChargePreparation[]
 }
 
 //specific user
@@ -322,14 +323,16 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  steelPlansCreated          SteelProductionPlan[]            @relation("SteelPlanCreatedBy")
-  steelPlansApproved         SteelProductionPlan[]            @relation("SteelPlanApprovedBy")
+  steelPlansCreated          SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
+  steelPlansApproved         SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
   steelActivityLogs          SteelPlanActivityLog[]
   steelDepartmentAcks        SteelPlanDepartmentAck[]
-  steelSourcingOrdersCreated SteelSourcingOrder[]             @relation("SteelSourcingCreatedBy")
-  steelSourcingActivityLogs  SteelSourcingActivityLog[]       @relation("SteelSourcingPerformedBy")
-  steelIntakesCreated        SteelMaterialIntake[]            @relation("SteelIntakeCreatedBy")
-  steelIntakeActivityLogs    SteelMaterialIntakeActivityLog[] @relation("SteelIntakePerformedBy")
+  steelSourcingOrdersCreated SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs  SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
+  steelIntakesCreated        SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
+  steelIntakeActivityLogs    SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
+  steelChargePrepsCreated    SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
+  steelChargeActivityLogs    SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
@@ -1329,12 +1332,13 @@ model SteelProductionPlan {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization   Organization             @relation(fields: [organizationId], references: [id])
-  createdBy      Employee                 @relation("SteelPlanCreatedBy", fields: [createdById], references: [id])
-  approvedBy     Employee?                @relation("SteelPlanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
-  activityLogs   SteelPlanActivityLog[]
-  departmentAcks SteelPlanDepartmentAck[]
-  sourcingOrders SteelSourcingOrder[]
+  organization       Organization             @relation(fields: [organizationId], references: [id])
+  createdBy          Employee                 @relation("SteelPlanCreatedBy", fields: [createdById], references: [id])
+  approvedBy         Employee?                @relation("SteelPlanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  activityLogs       SteelPlanActivityLog[]
+  departmentAcks     SteelPlanDepartmentAck[]
+  sourcingOrders     SteelSourcingOrder[]
+  chargePreparations SteelChargePreparation[]
 
   @@index([organizationId])
   @@index([organizationId, stage])
@@ -1448,10 +1452,11 @@ model SteelMaterialIntake {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization  Organization                     @relation(fields: [organizationId], references: [id])
-  sourcingOrder SteelSourcingOrder               @relation(fields: [sourcingOrderId], references: [id])
-  createdBy     Employee                         @relation("SteelIntakeCreatedBy", fields: [createdById], references: [id])
-  activityLogs  SteelMaterialIntakeActivityLog[]
+  organization       Organization                     @relation(fields: [organizationId], references: [id])
+  sourcingOrder      SteelSourcingOrder               @relation(fields: [sourcingOrderId], references: [id])
+  createdBy          Employee                         @relation("SteelIntakeCreatedBy", fields: [createdById], references: [id])
+  activityLogs       SteelMaterialIntakeActivityLog[]
+  chargeMaterialLots SteelChargeMaterialLot[]
 
   @@index([organizationId])
   @@index([organizationId, stage])
@@ -1474,6 +1479,173 @@ model SteelMaterialIntakeActivityLog {
   performedBy Employee            @relation("SteelIntakePerformedBy", fields: [performedById], references: [id])
 
   @@index([intakeId])
+}
+
+// ── Steel Manufacturing: Process 4 — Raw Material Preparation, Sorting,
+// Cutting and Charge Planning (P04-A01..A12) ────────────────────────────
+
+// Tracks how far the charge preparation has progressed through P04-A01..A12
+enum SteelChargeStage {
+  A01_REQUIREMENT_REVIEWED
+  A02_LOTS_SELECTED
+  A03_SCRAP_SORTED
+  A04_SCRAP_CUT
+  A05_CONTAMINANTS_REMOVED
+  A06_ADDITIVES_PREPARED
+  A07_RETURN_SCRAP_CHECKED
+  A08_RECIPE_PREPARED
+  A09_MATERIAL_STAGED
+  A10_VERIFICATION_DONE
+  A11_CHARGE_RELEASED
+  A12_HANDOVER_CLOSED
+}
+
+enum SteelChargeStatus {
+  DRAFT
+  IN_PROGRESS
+  ON_HOLD
+  CLOSED
+  CANCELLED
+}
+
+// Identifies each of the 12 charge-preparation activities for the audit trail
+enum SteelChargeActivity {
+  A01
+  A02
+  A03
+  A04
+  A05
+  A06
+  A07
+  A08
+  A09
+  A10
+  A11
+  A12
+}
+
+// One record per furnace charge prepared against a released production plan,
+// carried through P04-A01 -> P04-A12. Hands off to P05 (furnace) once
+// released and closed (no P05 model exists in this repository yet).
+model SteelChargePreparation {
+  id             String            @id @default(uuid())
+  prepNumber     String            @unique
+  organizationId String
+  planId         String
+  createdById    String
+  stage          SteelChargeStage  @default(A01_REQUIREMENT_REVIEWED)
+  status         SteelChargeStatus @default(DRAFT)
+
+  // P04-A01 — Review production plan and material requirement
+  stockAvailabilityConfirmed Boolean?
+  requirementNotes           String?
+
+  // P04-A02 — Select raw material lots for preparation (see SteelChargeMaterialLot)
+  lotSelectionNotes String?
+
+  // P04-A03 — Sort scrap by grade and usability
+  sortedWeightTonnes Float?
+  rejectedItemsNotes String?
+  scrapGradeNotes    String?
+
+  // P04-A04 — Cut oversized scrap if needed
+  cuttingRequired       Boolean?
+  cuttingTimeMinutes    Float?
+  cuttingPowerOrGasUsed String?
+  cutQuantityTonnes     Float?
+
+  // P04-A05 — Remove contaminants and unsafe items
+  contaminantsRemoved     Boolean?
+  removedItemsNotes       String?
+  contaminationIssueNotes String?
+
+  // P04-A06 — Prepare additives and alloys
+  additivesPrepared Json?
+  additivesNotes    String?
+
+  // P04-A07 — Check internal return scrap availability
+  returnScrapQtyTonnes          Float?
+  returnScrapSource             String?
+  returnScrapGrade              String?
+  returnScrapContaminationNotes String?
+  returnScrapAvailable          Boolean?
+
+  // P04-A08 — Prepare furnace charge recipe
+  recipeScrapWeightTonnes    Float?
+  recipeDriWeightTonnes      Float?
+  recipeAlloyWeightTonnes    Float?
+  recipeAdditiveWeightTonnes Float?
+  targetChemistry            Json?
+  recipeNotes                String?
+
+  // P04-A09 — Stage material near furnace charging area
+  stagingLocation    String?
+  stagedWeightTonnes Float?
+  stagingSequence    Int?
+
+  // P04-A10 — Verify actual material against charge recipe
+  actualWeightTonnes   Float?
+  actualGrade          String?
+  weightVarianceTonnes Float?
+  varianceApproved     Boolean?
+  verificationNotes    String?
+
+  // P04-A11 — Create and release Charge ID
+  chargeNumber     String?   @unique
+  chargeReleasedAt DateTime?
+
+  // P04-A12 — Close preparation handover to furnace
+  furnaceReadinessConfirmed Boolean?
+  plannedHeatReference      String?
+  handoverNotes             String?
+  handoverClosedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization                        @relation(fields: [organizationId], references: [id])
+  plan         SteelProductionPlan                 @relation(fields: [planId], references: [id])
+  createdBy    Employee                            @relation("SteelChargePrepCreatedBy", fields: [createdById], references: [id])
+  materialLots SteelChargeMaterialLot[]
+  activityLogs SteelChargePreparationActivityLog[]
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([organizationId, status])
+  @@index([planId])
+}
+
+// P04-A02: join table linking a charge preparation to the SteelMaterialIntake
+// records (lots) selected for it. There is no separate "lot" model — a
+// released SteelMaterialIntake already serves as the material lot.
+model SteelChargeMaterialLot {
+  id                  String   @id @default(uuid())
+  chargePreparationId String
+  intakeId            String
+  createdAt           DateTime @default(now())
+
+  chargePreparation SteelChargePreparation @relation(fields: [chargePreparationId], references: [id], onDelete: Cascade)
+  intake            SteelMaterialIntake    @relation(fields: [intakeId], references: [id])
+
+  @@unique([chargePreparationId, intakeId])
+  @@index([chargePreparationId])
+  @@index([intakeId])
+}
+
+// Audit trail: every activity performed against a charge preparation is recorded here
+model SteelChargePreparationActivityLog {
+  id                  String              @id @default(uuid())
+  chargePreparationId String
+  activity            SteelChargeActivity
+  performedById       String
+  notes               String?
+  data                Json?
+  createdAt           DateTime            @default(now())
+
+  chargePreparation SteelChargePreparation @relation(fields: [chargePreparationId], references: [id], onDelete: Cascade)
+  performedBy       Employee               @relation("SteelChargePrepPerformedBy", fields: [performedById], references: [id])
+
+  @@index([chargePreparationId])
 }
 
 model Task {

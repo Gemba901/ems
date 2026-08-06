@@ -50,7 +50,7 @@ const STEEL_PROCESSES: SteelProcess[] = [
     description: "Weigh, inspect, accept or reject incoming material, and store it correctly in the yard.",
     icon: Scale,
     href: "/steel/p03",
-    available: false,
+    available: true,
   },
   {
     code: "P04",

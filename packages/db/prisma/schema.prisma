@@ -338,6 +338,7 @@ model Employee {
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
+  @@unique([employeeCode, organizationId])
 }
 
 model Department {

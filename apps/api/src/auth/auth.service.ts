@@ -74,6 +74,12 @@ export class AuthService {
         return crypto.randomBytes(64).toString('hex');
     }
 
+    // Employee codes are only guaranteed unique within one organization (see the
+    // @@unique([employeeCode, organizationId]) constraint on Employee), so the same code can
+    // legitimately belong to different people at different companies. We deliberately don't
+    // disambiguate by showing which companies matched — that would leak one tenant's identity
+    // to someone who merely typed in a matching code at another tenant. Instead we point the
+    // user at their phone/email, which is inherently scoped to their own account.
     private async getUserIdByEmployeeCode(employeeCode: string): Promise<string> {
         const employees = await this.prisma.employee.findMany({
             where: { employeeCode: employeeCode.trim(), userId: { not: null } },
@@ -87,7 +93,7 @@ export class AuthService {
         }
 
         if (userIds.length > 1) {
-            throw new UnauthorizedException('Account not found! Please contact your administrator.');
+            throw new UnauthorizedException('This employee code is registered at more than one company. Please log in using your phone number or email instead.');
         }
 
         return userIds[0];

@@ -176,7 +176,9 @@ export class SelectSteelRouteDto {
 
 // P01-A08 — Check raw material or billet availability
 export class SteelMaterialCheckDto {
-  @IsEnum(AvailabilityStatus, { message: 'Invalid material availability status' })
+  @IsEnum(AvailabilityStatus, {
+    message: 'Invalid material availability status',
+  })
   materialAvailability!: AvailabilityStatus;
 
   @IsString()
@@ -190,10 +192,14 @@ export class SteelMaterialCheckDto {
 
 // P01-A09 — Check equipment, maintenance, and manpower availability
 export class SteelCapacityCheckDto {
-  @IsEnum(AvailabilityStatus, { message: 'Invalid equipment availability status' })
+  @IsEnum(AvailabilityStatus, {
+    message: 'Invalid equipment availability status',
+  })
   equipmentAvailability!: AvailabilityStatus;
 
-  @IsEnum(AvailabilityStatus, { message: 'Invalid manpower availability status' })
+  @IsEnum(AvailabilityStatus, {
+    message: 'Invalid manpower availability status',
+  })
   manpowerAvailability!: AvailabilityStatus;
 
   @IsString()

@@ -8,6 +8,7 @@ import {
   Plus,
   LayoutGrid,
   Truck,
+  PackageSearch,
   Grid3x3,
   ArrowLeft,
   PanelLeftClose,
@@ -38,6 +39,14 @@ const STEEL_NAV = [
     href: "/steel/p02",
     newHref: "/steel/p02/new",
     icon: Truck,
+    exact: true,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+  },
+  {
+    name: "P03 — Material Intake",
+    href: "/steel/p03",
+    newHref: "/steel/p03/new",
+    icon: PackageSearch,
     exact: true,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
   },
@@ -126,10 +135,14 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
           </Link>
         </div>
 
-{/* ── New record CTA (context-aware: P01 vs P02) ── */}
+{/* ── New record CTA (context-aware: P01 vs P02 vs P03) ── */}
         <div className={`px-2 pt-2 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
           <Link
-            href={pathname.startsWith("/steel/p02") ? "/steel/p02/new" : "/steel/p01/new"}
+            href={
+              pathname.startsWith("/steel/p03") ? "/steel/p03/new"
+                : pathname.startsWith("/steel/p02") ? "/steel/p02/new"
+                  : "/steel/p01/new"
+            }
             onClick={onClose}
             title={isCollapsed ? "New" : undefined}
             className={`flex items-center bg-slate-800 hover:bg-slate-900 text-white rounded-xl transition-colors ${
@@ -139,7 +152,9 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
             <Plus className="h-4 w-4 shrink-0" />
             {!isCollapsed && (
               <span className="text-sm font-medium">
-                {pathname.startsWith("/steel/p02") ? "New Sourcing Order" : "New Production Plan"}
+                {pathname.startsWith("/steel/p03") ? "New Material Intake"
+                  : pathname.startsWith("/steel/p02") ? "New Sourcing Order"
+                    : "New Production Plan"}
               </span>
             )}
           </Link>

@@ -22,7 +22,9 @@ import {
 // P02-A01 — Review material requirement from production plan
 export class CreateSteelSourcingOrderDto {
   @IsUUID()
-  @IsNotEmpty({ message: 'A released production plan is required to start sourcing' })
+  @IsNotEmpty({
+    message: 'A released production plan is required to start sourcing',
+  })
   planId!: string;
 
   @IsString()

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, CalendarDays } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/auth.store";
+import { useOrgModules } from "@/hooks/useOrgModules";
 import { NotificationsBell } from "./NotificationsBell";
 
 interface HeaderProps {
@@ -93,6 +94,7 @@ function resolveTitle(pathname: string): string {
 export function Header({ onMenuClick }: HeaderProps) {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
+  const { hasModule } = useOrgModules();
 
   const getInitials = (name: string) =>
     name.split(" ").map((n) => n[0]).join("").toUpperCase();
@@ -155,17 +157,19 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       {/* Right: calendar + notifications + user */}
       <div className="flex items-center gap-2 sm:gap-4">
-        <Link
-          href="/calendar"
-          title="My Calendar"
-          className={`h-9 w-9 flex items-center justify-center rounded-xl transition-colors ${
-            pathname === "/calendar" || pathname.startsWith("/calendar/")
-              ? "bg-indigo-100 text-indigo-600"
-              : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-          }`}
-        >
-          <CalendarDays className="h-5 w-5" />
-        </Link>
+        {hasModule("CALENDAR") && (
+          <Link
+            href="/calendar"
+            title="My Calendar"
+            className={`h-9 w-9 flex items-center justify-center rounded-xl transition-colors ${
+              pathname === "/calendar" || pathname.startsWith("/calendar/")
+                ? "bg-indigo-100 text-indigo-600"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            }`}
+          >
+            <CalendarDays className="h-5 w-5" />
+          </Link>
+        )}
         <span data-tour="tour-notifications"><NotificationsBell /></span>
 
         <Link

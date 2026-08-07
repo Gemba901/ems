@@ -397,7 +397,7 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {/* Explore more */}
+      {/* Explore more
       {canSeeExploreMore && upcomingToShow.length > 0 && (
         <section>
           <div className="flex items-center gap-3 mb-5">
@@ -431,7 +431,7 @@ export default function DashboardPage() {
             ))}
           </div>
         </section>
-      )}
+      )} */}
 
     </div>
   );

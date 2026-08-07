@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle, ChevronDown, Hash, Loader2, Mail, Phone } from "lucide-react";
 import { AuthService } from "@/services/auth.service";
+import { COUNTRY_CODES } from "@/lib/countries";
 import Image from "next/image";
 
 interface IdentifierStepProps {
@@ -20,15 +21,6 @@ interface IdentifierStepProps {
 }
 
 type Mode = "phone" | "email" | "code";
-
-const COUNTRY_CODES = [
-  { code: "254", flag: "🇰🇪", name: "Kenya" },
-  { code: "255", flag: "🇹🇿", name: "Tanzania" },
-  { code: "256", flag: "🇺🇬", name: "Uganda" },
-  { code: "250", flag: "🇷🇼", name: "Rwanda" },
-  { code: "251", flag: "🇪🇹", name: "Ethiopia" },
-  { code: "91",  flag: "🇮🇳", name: "India" },
-];
 
 function sanitizePhoneInput(raw: string): string {
   return raw.replace(/^\+/, "").replace(/[\s\-()]/g, "");

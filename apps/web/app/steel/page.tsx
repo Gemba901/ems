@@ -58,7 +58,7 @@ const STEEL_PROCESSES: SteelProcess[] = [
     description: "Prepare scrap, additives, and charge recipe, or prepare input material for the next process.",
     icon: Wrench,
     href: "/steel/p04",
-    available: false,
+    available: true,
   },
   {
     code: "P05",

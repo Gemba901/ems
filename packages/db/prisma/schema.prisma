@@ -123,6 +123,7 @@ model Organization {
   status       OrgStatus    @default(ACTIVE)
   modules      ModuleType[] @default([])
   primaryColor String?      @default("#4F46E5")
+  timeZone     String       @default("Africa/Nairobi")
   isAdminOrg   Boolean      @default(false)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -3118,3 +3119,4 @@ model KaizenReview {
   kaizen   Kaizen   @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
   reviewer Employee @relation(fields: [reviewerId], references: [id])
 }
+

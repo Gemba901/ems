@@ -94,9 +94,9 @@ export class DwmsController {
     @CurrentUser() user: UserPayload,
     @Query('frequency') frequency?: string,
     @Query('date') date?: string,
-    @Query('timeZone') timeZone?: string,
+    @Query('scope') scope?: string,
   ) {
-    return this.dwmsService.getMyDwmsTasks(user, frequency, date, timeZone);
+    return this.dwmsService.getMyDwmsTasks(user, frequency, date, scope);
   }
 
   @Get('myDwms/tasks/summary')
@@ -105,9 +105,8 @@ export class DwmsController {
   getMyDwmsTaskSummary(
     @CurrentUser() user: UserPayload,
     @Query('date') date?: string,
-    @Query('timeZone') timeZone?: string,
   ) {
-    return this.dwmsService.getMyDwmsTaskSummary(user, date, timeZone);
+    return this.dwmsService.getMyDwmsTaskSummary(user, date);
   }
 
   @Get('myDwms/tasks/:id')
@@ -543,5 +542,6 @@ export class DwmsController {
     return this.dwmsService.updateDwmsPermissionConfig(user, dto);
   }
 }
+
 
 

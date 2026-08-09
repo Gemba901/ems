@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import TaskMiniCard from "./components/home/TaskMiniCard";
+import TaskDateSeparator, { getDateSeparatorMeta } from "./components/TaskDateSeparator";
 import { useAuthStore } from "@/store/auth.store";
 import {
   DwmsService,
@@ -11,8 +12,8 @@ import {
   type DwmsTaskItem as TaskItem,
   type DwmsTaskStatus as TaskStatus,
 } from "@/services/dwms.service";
-import { AlertTriangle, PlusCircle, TrendingUp } from "lucide-react";
 import { uploadImage } from "@/services/uploads.service";
+import { AlertTriangle, PlusCircle, TrendingUp } from "lucide-react";
 
 type HomeTaskView = "TODAY" | "WEEK" | "MONTH";
 
@@ -45,6 +46,10 @@ function isTaskDueInWindow(task: TaskItem, start: Date, end: Date) {
 
 function isHomeVisibleTask(task: TaskItem) {
   return !task.isOverdue && task.status !== "OVERDUE";
+}
+
+function getHomeTaskDateValue(task: TaskItem) {
+  return task.scheduledFor ?? task.dueAt;
 }
 export default function HomePage() {
   return (
@@ -106,7 +111,21 @@ function HomeContent() {
     void loadData(taskView);
   }, [loadData, taskView]);
 
-  const visibleTasks = useMemo(() => tasks, [tasks]);
+  const visibleTasks = useMemo(() => {
+    const timeValue = (value?: string | null) => {
+      if (!value) return Number.MAX_SAFE_INTEGER;
+      const time = new Date(value).getTime();
+      return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+    };
+
+    return [...tasks].sort((a, b) => {
+      const dateDiff =
+        timeValue(a.scheduledFor ?? a.dueAt) -
+        timeValue(b.scheduledFor ?? b.dueAt);
+      if (dateDiff !== 0) return dateDiff;
+      return a.title.localeCompare(b.title);
+    });
+  }, [tasks]);
 
 
   const stats = useMemo(() => {
@@ -347,16 +366,30 @@ function HomeContent() {
           </div>
         ) : (
           <div className="space-y-3">
-            {visibleTasks.map((task) => (
-              <TaskMiniCard
-                key={task.instanceId}
-                task={task}
-                onClick={() => router.push(`/dwms/tasks/${task.instanceId}`)}
-                onStatusChange={handleStatusChange}
-                onAcknowledgement={handleAcknowledgement}
-                saving={savingId === task.instanceId || savingId === task.taskId}
-              />
-            ))}
+            {(() => {
+              let previousDateKey: string | null = null;
+              return visibleTasks.map((task) => {
+                const dateMeta = getDateSeparatorMeta(
+                  getHomeTaskDateValue(task),
+                  task.organizationTimeZone,
+                );
+                const showSeparator = !!dateMeta && dateMeta.key !== previousDateKey;
+                if (dateMeta) previousDateKey = dateMeta.key;
+
+                return (
+                  <React.Fragment key={task.instanceId}>
+                    {dateMeta && showSeparator && <TaskDateSeparator label={dateMeta.label} />}
+                    <TaskMiniCard
+                      task={task}
+                      onClick={() => router.push(`/dwms/tasks/${task.instanceId}`)}
+                      onStatusChange={handleStatusChange}
+                      onAcknowledgement={handleAcknowledgement}
+                      saving={savingId === task.instanceId || savingId === task.taskId}
+                    />
+                  </React.Fragment>
+                );
+              });
+            })()}
           </div>
         )}
       </section>
@@ -463,3 +496,4 @@ function HomeContent() {
     </div>
   );
 }
+

@@ -88,6 +88,31 @@ function getTimeZoneOffsetMs(value: Date, timeZone: string): number {
   return zonedAsUtc - value.getTime();
 }
 
+export function startOfDayInTimeZone(value: Date, timeZone: string | null): Date {
+  if (!timeZone) {
+    return toUtcDateOnly(value);
+  }
+
+  try {
+    const localStartAsUtc = Date.UTC(
+      value.getUTCFullYear(),
+      value.getUTCMonth(),
+      value.getUTCDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    const firstPass = new Date(
+      localStartAsUtc - getTimeZoneOffsetMs(new Date(localStartAsUtc), timeZone),
+    );
+    const offset = getTimeZoneOffsetMs(firstPass, timeZone);
+    return new Date(localStartAsUtc - offset);
+  } catch {
+    return toUtcDateOnly(value);
+  }
+}
+
 export function endOfDayInTimeZone(value: Date, timeZone: string | null): Date {
   if (!timeZone) {
     return endOfUtcDay(value);

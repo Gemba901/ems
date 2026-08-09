@@ -45,6 +45,10 @@ export class CreateOrganizationDto {
     @IsEnum(ModuleType, { each: true })
     modules?: ModuleType[];
 
+    @IsOptional()
+    @IsString()
+    timeZone?: string;
+
     // Initial admin user
     @IsString()
     @IsNotEmpty()
@@ -96,6 +100,10 @@ export class UpdateOrganizationDto {
     @IsArray()
     @IsEnum(ModuleType, { each: true })
     modules?: ModuleType[];
+
+    @IsOptional()
+    @IsString()
+    timeZone?: string;
 
     @IsOptional()
     @IsString()

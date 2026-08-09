@@ -37,6 +37,7 @@ export interface Organization {
     address: string | null;
     status: OrgStatus;
     modules: ModuleType[];
+    timeZone: string;
     isAdminOrg: boolean;
     createdAt: string;
     updatedAt: string;

@@ -10,11 +10,145 @@ type Props = {
   saving: boolean;
 };
 
+function toUtcDateOnly(value: Date) {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+}
+
+function getTimeZoneOffsetMs(value: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(value);
+
+  const partMap = new Map(parts.map((part) => [part.type, part.value]));
+  const zonedAsUtc = Date.UTC(
+    Number(partMap.get('year')),
+    Number(partMap.get('month')) - 1,
+    Number(partMap.get('day')),
+    Number(partMap.get('hour')),
+    Number(partMap.get('minute')),
+    Number(partMap.get('second')),
+    value.getUTCMilliseconds(),
+  );
+
+  return zonedAsUtc - value.getTime();
+}
+
+function startOfDayInTimeZone(value: Date, timeZone: string): Date {
+  const localStartAsUtc = Date.UTC(
+    value.getUTCFullYear(),
+    value.getUTCMonth(),
+    value.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  const firstPass = new Date(
+    localStartAsUtc - getTimeZoneOffsetMs(new Date(localStartAsUtc), timeZone),
+  );
+  const offset = getTimeZoneOffsetMs(firstPass, timeZone);
+  return new Date(localStartAsUtc - offset);
+}
+
+function getTaskTimeZone(task: TaskItem) {
+  return task.organizationTimeZone;
+}
+
+function getCompletionWindowStart(task: TaskItem): Date | null {
+  const scheduledFor = new Date(task.scheduledFor);
+  if (Number.isNaN(scheduledFor.getTime())) return null;
+
+  const date = toUtcDateOnly(scheduledFor);
+  const timeZone = getTaskTimeZone(task);
+  switch (task.frequency) {
+    case 'DAILY':
+      return startOfDayInTimeZone(date, timeZone);
+    case 'WEEKLY': {
+      const start = new Date(date);
+      const mondayOffset = (start.getUTCDay() + 6) % 7;
+      start.setUTCDate(start.getUTCDate() - mondayOffset);
+      return startOfDayInTimeZone(start, timeZone);
+    }
+    case 'MONTHLY':
+      return startOfDayInTimeZone(
+        new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)),
+        timeZone,
+      );
+    case 'QUARTERLY': {
+      const quarterStartMonth = Math.floor(date.getUTCMonth() / 3) * 3;
+      return startOfDayInTimeZone(
+        new Date(Date.UTC(date.getUTCFullYear(), quarterStartMonth, 1)),
+        timeZone,
+      );
+    }
+    case 'YEARLY':
+      return startOfDayInTimeZone(
+        new Date(Date.UTC(date.getUTCFullYear(), 0, 1)),
+        timeZone,
+      );
+    default:
+      return null;
+  }
+}
+
+function getCompletionWindowLabel(frequency: TaskItem['frequency']) {
+  switch (frequency) {
+    case 'DAILY':
+      return 'day';
+    case 'WEEKLY':
+      return 'week';
+    case 'MONTHLY':
+      return 'month';
+    case 'QUARTERLY':
+      return 'quarter';
+    case 'YEARLY':
+      return 'year';
+    default:
+      return 'schedule window';
+  }
+}
+
+function formatWindowDate(value: Date, timeZone: string) {
+  return value.toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone,
+  });
+}
+
+function getStatusLockReason(task: TaskItem) {
+  if (task.frequency === 'PLANNED') return null;
+
+  const windowStart = getCompletionWindowStart(task);
+  const dueAt = new Date(task.dueAt);
+  if (!windowStart || Number.isNaN(dueAt.getTime())) return null;
+
+  const now = new Date();
+  if (now >= windowStart && now <= dueAt) return null;
+
+  const timeZone = getTaskTimeZone(task);
+  const windowLabel = getCompletionWindowLabel(task.frequency);
+  if (now < windowStart) {
+    return `Status can be changed in its scheduled ${windowLabel}, from ${formatWindowDate(windowStart, timeZone)}.`;
+  }
+
+  return `Status can no longer be changed after the due date, ${formatWindowDate(dueAt, timeZone)}.`;
+}
 export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowledgement, saving }: Props) {
   const isCompleted = task.status === 'DONE';
   const isOverdue = task.isOverdue || task.status === 'OVERDUE';
   const wasOverdue = !!task.wasOverdue && !isOverdue;
   const isPrerequisiteBlocked = !!task.prerequisiteBlocked;
+  const statusLockReason = getStatusLockReason(task);
+  const isStatusLockedBySchedule = !!statusLockReason;
   const prerequisiteLabel = task.prerequisiteActivityNames?.length
     ? `Locked until ${task.prerequisiteActivityNames.join(', ')} is done`
     : 'Locked until prerequisite activity is done';
@@ -53,7 +187,12 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
   };
 
   const getSelectableStatuses = (): TaskStatus[] => {
-    if (isPrerequisiteBlocked || task.status === 'DONE' || task.status === 'APPROVAL_PENDING') {
+    if (
+      isPrerequisiteBlocked ||
+      isStatusLockedBySchedule ||
+      task.status === 'DONE' ||
+      task.status === 'APPROVAL_PENDING'
+    ) {
       return [];
     }
     const statusOrder: Record<TaskStatus, number> = {
@@ -211,6 +350,11 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
               {prerequisiteLabel}
             </p>
           )}
+          {!isPrerequisiteBlocked && isStatusLockedBySchedule && task.acknowledgedAt && (
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              {statusLockReason}
+            </p>
+          )}
         </div>
 
         {/* Status Dropdown Pill */}
@@ -221,20 +365,20 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (!isPrerequisiteBlocked) {
+                  if (!isPrerequisiteBlocked && !isStatusLockedBySchedule) {
                     setIsStatusOpen((current) => !current);
                   }
                 }}
-                disabled={saving || isPrerequisiteBlocked || task.status === 'DONE' || task.status === 'APPROVAL_PENDING'}
-                title={isPrerequisiteBlocked ? prerequisiteLabel : undefined}
+                disabled={saving || isPrerequisiteBlocked || isStatusLockedBySchedule || task.status === 'DONE' || task.status === 'APPROVAL_PENDING'}
+                title={isPrerequisiteBlocked ? prerequisiteLabel : statusLockReason ?? undefined}
                 className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span>{formatStatus(task.status)}</span>
-                {!isPrerequisiteBlocked && task.status !== 'DONE' && task.status !== 'APPROVAL_PENDING' && (
+                {!isPrerequisiteBlocked && !isStatusLockedBySchedule && task.status !== 'DONE' && task.status !== 'APPROVAL_PENDING' && (
                   <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" strokeWidth={1.5} />
                 )}
               </button>
-              {isStatusOpen && !isPrerequisiteBlocked && (
+              {isStatusOpen && !isPrerequisiteBlocked && !isStatusLockedBySchedule && (
                 <div className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
                   {getSelectableStatuses().map((status) => (
                     <button
@@ -308,5 +452,8 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
     </article>
   );
 }
+
+
+
 
 

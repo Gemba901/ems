@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import TaskHeader, { TaskSubTabType } from "./TaskHeader";
 import TaskMiniCard from "./TaskMiniCard";
+import TaskDateSeparator, { getDateSeparatorMeta } from "../TaskDateSeparator";
 import {
   DwmsService,
   getDwmsErrorMessage,
@@ -25,6 +26,16 @@ function isFrequencyBasedTask(task: TaskItem) {
   return frequencyBasedTaskFrequencies.has(String(task.frequency ?? ""));
 }
 
+
+function getDashboardTaskDateValue(task: TaskItem, activeTab: TaskSubTabType) {
+  if (activeTab === "COMPLETED") {
+    return task.completedAt ?? task.dueAt ?? task.scheduledFor;
+  }
+  if (activeTab === "OVERDUE") {
+    return task.dueAt ?? task.scheduledFor;
+  }
+  return task.scheduledFor ?? task.dueAt ?? task.completedAt;
+}
 function groupFrequencyBasedTasks(tasksToGroup: TaskItem[]) {
   const grouped = new Map<string, TaskItem>();
 
@@ -44,6 +55,7 @@ export default function TaskDashboard() {
 
   // Tasks and loading state
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [completedHistoryTasks, setCompletedHistoryTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completionTask, setCompletionTask] = useState<{
@@ -83,13 +95,13 @@ export default function TaskDashboard() {
   // Derive unique list of assigners for the assigned-by filter
   const uniqueAssignees = useMemo(() => {
     const map = new Map<string, string>();
-    tasks.forEach((t) => {
+    [...tasks, ...completedHistoryTasks].forEach((t) => {
       if (t.assignedBy) {
         map.set(t.assignedBy.id, t.assignedBy.name);
       }
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [tasks]);
+  }, [tasks, completedHistoryTasks]);
 
   // Status mapping for toggling checkboxes
   const statusCompletion: Record<TaskStatus, number> = {
@@ -110,8 +122,12 @@ export default function TaskDashboard() {
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const token = useAuthStore.getState().accessToken ?? "";
-      const res = await DwmsService.getTodayTasks(token, today);
-      setTasks(res?.tasks ?? []);
+      const [scheduledRes, completedRes] = await Promise.all([
+        DwmsService.getTodayTasks(token, today, "scheduled"),
+        DwmsService.getTodayTasks(token, today, "completed"),
+      ]);
+      setTasks(scheduledRes?.tasks ?? []);
+      setCompletedHistoryTasks(completedRes?.tasks ?? []);
     } catch (fetchError) {
       const message =
         fetchError instanceof Error
@@ -119,6 +135,7 @@ export default function TaskDashboard() {
           : "Failed to load tasks";
       setError(message);
       setTasks([]);
+      setCompletedHistoryTasks([]);
     } finally {
       setLoading(false);
     }
@@ -263,8 +280,8 @@ export default function TaskDashboard() {
     [tasks],
   );
   const completedTasks = useMemo(
-    () => tasks.filter((t) => t.status === "DONE"),
-    [tasks],
+    () => completedHistoryTasks.filter((t) => t.status === "DONE"),
+    [completedHistoryTasks],
   );
   const approvalPendingTasks = useMemo(
     () => tasks.filter((t) => t.status === "APPROVAL_PENDING"),
@@ -350,44 +367,30 @@ export default function TaskDashboard() {
       );
     }
 
-    // 5. Relevance-first sorting per tab
+    // 5. Date-first sorting per tab
     const timeValue = (value?: string | null) => {
-      if (!value) return 0;
+      if (!value) return Number.MAX_SAFE_INTEGER;
       const time = new Date(value).getTime();
-      return Number.isNaN(time) ? 0 : time;
+      return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
     };
-    const recentActivityTime = (task: TaskItem) =>
-      Math.max(
-        timeValue(task.instanceUpdatedAt),
-        timeValue(task.completedAt),
-        timeValue(task.dueAt),
-        timeValue(task.scheduledFor),
-      );
-    const statusRank = (task: TaskItem) => {
-      if (task.status === "OVERDUE" || task.isOverdue) return 0;
-      if (task.status === "APPROVAL_PENDING") return 1;
-      if (!task.acknowledgedAt) return 2;
-      if (task.status === "PENDING" || task.status === "IN_PROGRESS") return 3;
-      if (task.status === "PARTLY_DONE" || task.status === "LESS_THAN_50") return 4;
-      if (task.status === "DONE") return 5;
-      return 6;
-    };
+    const scheduledTime = (task: TaskItem) =>
+      timeValue(task.scheduledFor ?? task.dueAt ?? task.completedAt);
+    const completedTime = (task: TaskItem) =>
+      timeValue(task.completedAt ?? task.dueAt ?? task.scheduledFor);
+    const dueTime = (task: TaskItem) =>
+      timeValue(task.dueAt ?? task.scheduledFor ?? task.completedAt);
 
     result.sort((a, b) => {
       if (activeTab === "COMPLETED") {
-        return timeValue(b.completedAt) - timeValue(a.completedAt);
+        return completedTime(b) - completedTime(a);
       }
       if (activeTab === "OVERDUE") {
-        return timeValue(a.dueAt) - timeValue(b.dueAt);
+        return dueTime(b) - dueTime(a);
       }
-      if (activeTab === "APPROVAL_PENDING") {
-        return recentActivityTime(b) - recentActivityTime(a);
-      }
-      if (activeTab === "ALL") {
-        const rankDiff = statusRank(a) - statusRank(b);
-        if (rankDiff !== 0) return rankDiff;
-      }
-      return recentActivityTime(b) - recentActivityTime(a);
+
+      const dateDiff = scheduledTime(a) - scheduledTime(b);
+      if (dateDiff !== 0) return dateDiff;
+      return a.title.localeCompare(b.title);
     });
 
     return result;
@@ -595,20 +598,34 @@ export default function TaskDashboard() {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredTasks.map((t) => (
-              <TaskMiniCard
-                key={
+            {(() => {
+              let previousDateKey: string | null = null;
+              return filteredTasks.map((t) => {
+                const itemKey =
                   activeTab === "NOT_ACKNOWLEDGED" && isFrequencyBasedTask(t)
                     ? t.taskId
-                    : t.instanceId
-                }
-                task={t}
-                onClick={() => router.push(`/dwms/tasks/${t.instanceId}`)}
-                onStatusChange={handleStatusChange}
-                onAcknowledgement={handleAcknowledgement}
-                saving={savingId === t.instanceId || savingId === t.taskId}
-              />
-            ))}
+                    : t.instanceId;
+                const dateMeta = getDateSeparatorMeta(
+                  getDashboardTaskDateValue(t, activeTab),
+                  t.organizationTimeZone,
+                );
+                const showSeparator = !!dateMeta && dateMeta.key !== previousDateKey;
+                if (dateMeta) previousDateKey = dateMeta.key;
+
+                return (
+                  <React.Fragment key={itemKey}>
+                    {dateMeta && showSeparator && <TaskDateSeparator label={dateMeta.label} />}
+                    <TaskMiniCard
+                      task={t}
+                      onClick={() => router.push(`/dwms/tasks/${t.instanceId}`)}
+                      onStatusChange={handleStatusChange}
+                      onAcknowledgement={handleAcknowledgement}
+                      saving={savingId === t.instanceId || savingId === t.taskId}
+                    />
+                  </React.Fragment>
+                );
+              });
+            })()}
           </div>
         )}
       </main>
@@ -715,3 +732,4 @@ export default function TaskDashboard() {
     </div>
   );
 }
+

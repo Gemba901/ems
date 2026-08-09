@@ -56,13 +56,6 @@ async function sendJson<T>(
   return handleResponse<T>(res);
 }
 
-function getBrowserTimeZone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 function buildQuery(
   params: Record<string, string | number | undefined | null>,
@@ -427,6 +420,7 @@ export interface DwmsTaskItem {
   status: DwmsTaskStatus;
   dueAt: string;
   frequency: DwmsFrequency;
+  organizationTimeZone: string;
   owner: DwmsUserRef;
   assignedBy?: DwmsUserRef | null;
   approvedBy?: DwmsUserRef | null;
@@ -467,6 +461,7 @@ export interface DwmsAssignedTaskHistoryItem {
   title: string;
   description?: string | null;
   frequency?: DwmsFrequency | string;
+  organizationTimeZone?: string | null;
   priority?: DwmsPriority | string | null;
   status: DwmsTaskStatus;
   completionPercent?: number;
@@ -1206,9 +1201,10 @@ export const DwmsService = {
   async getTodayTasks(
     token: string,
     date: string,
+    scope?: "scheduled" | "completed",
   ): Promise<{ tasks?: DwmsTaskItem[] }> {
     return getJson(
-      `/dwms/myDwms/tasks${buildQuery({ date, timeZone: getBrowserTimeZone() })}`,
+      `/dwms/myDwms/tasks${buildQuery({ date, scope })}`,
       token,
     );
   },
@@ -1273,3 +1269,4 @@ function toHours(minutes: number) {
 function toMinutes(hours: number) {
   return Number.isFinite(hours) ? Math.max(0, Math.round(hours * 60)) : 0;
 }
+

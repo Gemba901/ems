@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Factory, ClipboardList, Flame, BadgeCheck, Truck, AlertTriangle, Minus } from "lucide-react";
+import { Loader2, Factory, ClipboardList, Flame, ShieldCheck, Truck, AlertTriangle, Minus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuthStore } from "@/store/auth.store";
 import { SteelService } from "@/services/steel.service";
@@ -71,7 +71,7 @@ export function SteelKpiCards() {
     {
       label: "Quality Pass Rate",
       unit: "%",
-      icon: BadgeCheck,
+      icon: ShieldCheck,
       tone: "text-slate-400 bg-slate-100",
       value: null,
       isLoading: false,
@@ -124,7 +124,7 @@ export function SteelKpiCards() {
                 </div>
               )}
 
-              <div className="flex items-center gap-1.5 text-xs">
+              <div className="inline-flex items-center gap-1.5 text-[11px] rounded-full bg-slate-50 px-2 py-1 w-fit">
                 {unavailable ? (
                   <span className="text-slate-400">{item.note}</span>
                 ) : (

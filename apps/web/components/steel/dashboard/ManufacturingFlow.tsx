@@ -14,10 +14,10 @@ import { STEEL_PROCESSES } from "./steelProcesses";
 
 type FlowStatus = "live" | "attention" | "future";
 
-const STATUS_RING: Record<FlowStatus, string> = {
-  live: "border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer",
-  attention: "border-amber-500 bg-amber-50 text-amber-700 hover:bg-amber-100 cursor-pointer",
-  future: "border-dashed border-slate-300 bg-slate-50 text-slate-400 cursor-default",
+const STATUS_DOT: Record<FlowStatus, string> = {
+  live: "bg-emerald-500",
+  attention: "bg-amber-500",
+  future: "bg-slate-300",
 };
 
 const STATUS_LABEL: Record<FlowStatus, string> = {
@@ -102,13 +102,23 @@ export function ManufacturingFlow() {
               const status: FlowStatus = process.live ? info?.status ?? "live" : "future";
 
               const node = (
-                <div className="flex flex-col items-center gap-1.5 w-[92px] shrink-0">
-                  <div
-                    className={`h-11 w-11 rounded-full flex items-center justify-center border-2 transition-colors ${STATUS_RING[status]}`}
-                  >
-                    <Icon className="h-4.5 w-4.5" />
+                <div className={`flex flex-col items-center gap-1.5 w-[96px] shrink-0 ${process.live ? "" : "opacity-50"}`}>
+                  <div className="relative">
+                    <div
+                      className={`h-12 w-12 rounded-full flex items-center justify-center transition-transform ${process.color.bg} ${
+                        process.live ? "hover:scale-105 cursor-pointer" : "cursor-default"
+                      }`}
+                    >
+                      <Icon className={`h-5 w-5 ${process.color.text}`} />
+                    </div>
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${STATUS_DOT[status]}`}
+                    />
                   </div>
-                  <span className="text-[10px] font-mono text-slate-500">{process.code}</span>
+                  <span className="text-[10px] font-mono text-slate-400">{process.code}</span>
+                  <span className="text-[11px] font-medium text-slate-700 text-center leading-tight">
+                    {process.shortName}
+                  </span>
                   {process.live && (
                     <span className="text-[9px] text-slate-400 leading-tight text-center">
                       {info?.metric !== null && info?.metric !== undefined

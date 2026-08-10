@@ -25,7 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CheckCircle2, Circle, Lock, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Lock, Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
 
 const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
@@ -90,19 +90,42 @@ export default function SteelPlanDetailPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: plan, isLoading } = useQuery({
+  const { data: plan, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["steel-plan", params.id],
     queryFn: () => SteelService.getById(params.id, accessToken!),
     enabled: !!accessToken && !!params.id,
+    retry: false,
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["steel-plan", params.id] });
   const onError = (err: unknown) => toast(err instanceof Error ? err.message : "Something went wrong", "error");
 
-  if (isLoading || !plan) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (isError || !plan) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-24 text-center px-4">
+        <AlertTriangle className="h-6 w-6 text-red-500" />
+        <p className="text-sm text-slate-600">
+          {error instanceof Error ? error.message : "This production plan could not be loaded."}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Retry"}
+          </Button>
+          <Link href="/steel/p01">
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Production Plans
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }

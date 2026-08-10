@@ -210,7 +210,7 @@ export interface SteelPlanSummary {
   byStatus: Partial<Record<SteelPlanOverallStatus, number>>;
 }
 
-function buildQuery(params: Record<string, string | number | undefined>) {
+function buildQuery(params: Record<string, string | number | boolean | undefined>) {
   const q = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== "")
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
@@ -322,7 +322,17 @@ export const SteelService = {
 
   async getAll(
     token: string,
-    params: { stage?: SteelPlanStage; status?: SteelPlanOverallStatus; priority?: OrderPriority; search?: string; page?: number; limit?: number },
+    params: {
+      stage?: SteelPlanStage;
+      status?: SteelPlanOverallStatus;
+      priority?: OrderPriority;
+      search?: string;
+      scheduledOnly?: boolean;
+      sortBy?: "createdAt" | "plannedStartDate";
+      sortOrder?: "asc" | "desc";
+      page?: number;
+      limit?: number;
+    },
   ): Promise<PaginatedSteelPlans> {
     const res = await apiClient(`${API_URL}/steel/plans${buildQuery(params)}`, {
       headers: authHeaders(token),

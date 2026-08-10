@@ -626,13 +626,24 @@ export class SteelService {
   }
 
   async getAll(organizationId: string, query: QuerySteelPlansDto) {
-    const { stage, status, priority, search, page, limit } = query;
+    const {
+      stage,
+      status,
+      priority,
+      search,
+      scheduledOnly,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      page,
+      limit,
+    } = query;
 
     const where: Prisma.SteelProductionPlanWhereInput = {
       organizationId,
       ...(stage && { stage }),
       ...(status && { status }),
       ...(priority && { priority }),
+      ...(scheduledOnly && { plannedStartDate: { not: null } }),
       ...(search && {
         OR: [
           { planNumber: { contains: search, mode: 'insensitive' } },
@@ -650,7 +661,7 @@ export class SteelService {
           approvedBy: { select: { id: true, firstName: true, lastName: true } },
           _count: { select: { departmentAcks: true, activityLogs: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
       }),

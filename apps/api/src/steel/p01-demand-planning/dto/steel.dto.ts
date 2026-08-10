@@ -8,6 +8,7 @@ import {
   IsArray,
   IsDateString,
   IsBoolean,
+  IsIn,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -304,6 +305,23 @@ export class QuerySteelPlansDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  // Scopes to plans that have an internal production schedule set
+  // (plannedStartDate, captured at P01-A10 — the actual shop-floor
+  // scheduling step, as opposed to expectedDeliveryDate/deliveryPromiseDate
+  // which are customer-facing dates captured earlier at A01/A02).
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  scheduledOnly?: boolean;
+
+  @IsIn(['createdAt', 'plannedStartDate'])
+  @IsOptional()
+  sortBy?: 'createdAt' | 'plannedStartDate' = 'createdAt';
+
+  @IsIn(['asc', 'desc'])
+  @IsOptional()
+  sortOrder?: 'asc' | 'desc' = 'desc';
 
   @Type(() => Number)
   @IsNumber()

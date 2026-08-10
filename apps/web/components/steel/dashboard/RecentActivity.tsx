@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthStore } from "@/store/auth.store";
 import { SteelDashboardService } from "@/services/steel-dashboard.service";
 import { QueryErrorState } from "./QueryErrorState";
+import { STEEL_PROCESSES } from "./steelProcesses";
 
 // Activity codes are process-scoped (A01-A12/A14) — labels mirror each
 // process controller's own activity documentation (P01-A01..A12,
@@ -72,6 +73,16 @@ const ACTIVITY_LABELS: Record<string, Record<string, string>> = {
   },
 };
 
+// The final activity code in each process's own state machine — used only
+// to badge a row as "completed" (real signal already encoded in the code),
+// not a separate fabricated status.
+const TERMINAL_ACTIVITY: Record<string, string> = {
+  P01: "A12",
+  P02: "A12",
+  P03: "A14",
+  P04: "A12",
+};
+
 function formatActivity(process: string, activity: string) {
   return ACTIVITY_LABELS[process]?.[activity] ?? activity;
 }
@@ -112,27 +123,47 @@ export function RecentActivity() {
         ) : items.length === 0 ? (
           <p className="text-sm text-slate-500 py-4 text-center">No recent activity.</p>
         ) : (
-          <ul className="space-y-1">
-            {items.map((item) => (
-              <li key={item.id}>
-                <Link
-                  href={item.href}
-                  className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded-lg transition-colors"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-slate-800 truncate">
-                      <span className="font-mono text-xs text-slate-400 mr-1.5">{item.process}</span>
-                      {formatActivity(item.process, item.activity)}
-                      <span className="text-slate-400"> · {item.reference}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400">{item.performedBy}</p>
+          <ul>
+            {items.map((item, idx) => {
+              const process = STEEL_PROCESSES.find((p) => p.code === item.process);
+              const Icon = process?.icon ?? CheckCircle2;
+              const isTerminal = TERMINAL_ACTIVITY[item.process] === item.activity;
+              const isLast = idx === items.length - 1;
+
+              return (
+                <li key={item.id} className="relative flex gap-3 pb-4 last:pb-0">
+                  {!isLast && (
+                    <span className="absolute left-4 top-9 bottom-0 w-px bg-slate-100" aria-hidden />
+                  )}
+                  <div className="relative shrink-0">
+                    <div
+                      className={`h-8 w-8 rounded-full flex items-center justify-center ${process?.color.bg ?? "bg-slate-100"}`}
+                    >
+                      <Icon className={`h-4 w-4 ${process?.color.text ?? "text-slate-400"}`} />
+                    </div>
+                    {isTerminal && (
+                      <CheckCircle2 className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 text-emerald-500 bg-white rounded-full" />
+                    )}
                   </div>
-                  <span className="text-[11px] text-slate-400 shrink-0">
-                    {formatTimestamp(item.createdAt)}
-                  </span>
-                </Link>
-              </li>
-            ))}
+
+                  <Link
+                    href={item.href}
+                    className="min-w-0 flex-1 flex items-start justify-between gap-3 rounded-lg hover:bg-slate-50 -my-0.5 py-0.5 px-1.5 -mx-1.5 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-slate-800 truncate">
+                        <span className="font-mono text-[10px] text-slate-400 mr-1.5">{item.process}</span>
+                        {formatActivity(item.process, item.activity)}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate">{item.reference} · {item.performedBy}</p>
+                    </div>
+                    <span className="text-[11px] text-slate-400 shrink-0 pt-0.5">
+                      {formatTimestamp(item.createdAt)}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </CardContent>

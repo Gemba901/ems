@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { SteelService } from "@/services/steel.service";
@@ -17,6 +17,8 @@ const DEFAULT_FILTERS: P01FiltersState = {
   status: "",
   priority: "",
   scheduledOnly: false,
+  fromDate: "",
+  toDate: "",
   sortBy: "createdAt",
   sortOrder: "desc",
 };
@@ -25,7 +27,8 @@ export default function SteelPlansPage() {
   const { accessToken } = useAuthStore();
   const [filters, setFilters] = useState<P01FiltersState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
-  const listRef = useRef<HTMLDivElement>(null);
+
+  const dateRangeInvalid = !!(filters.fromDate && filters.toDate && filters.fromDate > filters.toDate);
 
   const summaryQuery = useQuery({
     queryKey: ["steel-plans-summary"],
@@ -42,12 +45,16 @@ export default function SteelPlansPage() {
         status: filters.status || undefined,
         priority: filters.priority || undefined,
         scheduledOnly: filters.scheduledOnly || undefined,
+        fromDate: filters.fromDate || undefined,
+        toDate: filters.toDate || undefined,
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
         page,
         limit: 10,
       }),
-    enabled: !!accessToken,
+    // Skip fetching an invalid range client-side rather than round-tripping
+    // to the backend just to get the 400 it would correctly return.
+    enabled: !!accessToken && !dateRangeInvalid,
   });
 
   function updateFilters(next: P01FiltersState) {
@@ -55,23 +62,20 @@ export default function SteelPlansPage() {
     setPage(1);
   }
 
-  function scrollToList() {
-    listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   function filterPendingApproval() {
     updateFilters({ ...DEFAULT_FILTERS, stage: "A11_PLAN_COMMUNICATED", status: "IN_PROGRESS" });
-    scrollToList();
-  }
-
-  function filterAttention() {
-    updateFilters({ ...DEFAULT_FILTERS, status: "ON_HOLD" });
-    scrollToList();
   }
 
   function viewSchedule() {
-    updateFilters({ ...DEFAULT_FILTERS, scheduledOnly: true, sortBy: "plannedStartDate", sortOrder: "asc" });
-    scrollToList();
+    const today = new Date().toISOString().slice(0, 10);
+    const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    updateFilters({
+      ...DEFAULT_FILTERS,
+      fromDate: today,
+      toDate: in30Days,
+      sortBy: "plannedStartDate",
+      sortOrder: "asc",
+    });
   }
 
   return (
@@ -80,18 +84,9 @@ export default function SteelPlansPage() {
 
       <P01KpiCards summary={summaryQuery.data} isLoading={summaryQuery.isLoading} />
 
-      <StageOverview summary={summaryQuery.data} isLoading={summaryQuery.isLoading} />
+      <P01Filters value={filters} onChange={updateFilters} />
 
-      <QuickActions
-        summary={summaryQuery.data}
-        onFilterPendingApproval={filterPendingApproval}
-        onFilterAttention={filterAttention}
-        onViewSchedule={viewSchedule}
-      />
-
-      <div ref={listRef} className="space-y-4 scroll-mt-4">
-        <P01Filters value={filters} onChange={updateFilters} />
-
+      <div className="grid grid-cols-1 lg:grid-cols-[60%_40%] xl:grid-cols-[68%_32%] gap-4 items-start">
         <ProductionPlanList
           data={plansQuery.data}
           isLoading={plansQuery.isLoading}
@@ -101,6 +96,16 @@ export default function SteelPlansPage() {
           page={page}
           onPageChange={setPage}
         />
+
+        <div className="space-y-4">
+          <StageOverview summary={summaryQuery.data} isLoading={summaryQuery.isLoading} />
+          <QuickActions
+            summary={summaryQuery.data}
+            filters={filters}
+            onFilterPendingApproval={filterPendingApproval}
+            onViewSchedule={viewSchedule}
+          />
+        </div>
       </div>
     </div>
   );

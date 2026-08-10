@@ -208,6 +208,7 @@ export interface SteelPlanSummary {
   total: number;
   byStage: Partial<Record<SteelPlanStage, number>>;
   byStatus: Partial<Record<SteelPlanOverallStatus, number>>;
+  byStageStatus: Array<{ stage: SteelPlanStage; status: SteelPlanOverallStatus; count: number }>;
 }
 
 function buildQuery(params: Record<string, string | number | boolean | undefined>) {
@@ -328,6 +329,8 @@ export const SteelService = {
       priority?: OrderPriority;
       search?: string;
       scheduledOnly?: boolean;
+      fromDate?: string;
+      toDate?: string;
       sortBy?: "createdAt" | "plannedStartDate";
       sortOrder?: "asc" | "desc";
       page?: number;

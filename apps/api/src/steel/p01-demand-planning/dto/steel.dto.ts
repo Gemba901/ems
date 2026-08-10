@@ -315,6 +315,18 @@ export class QuerySteelPlansDto {
   @IsOptional()
   scheduledOnly?: boolean;
 
+  // Date-range filter on the same canonical scheduling field
+  // (plannedStartDate). Cross-field ordering (fromDate <= toDate) is
+  // checked in the service, since class-validator has no built-in
+  // cross-property comparator without a custom decorator.
+  @IsDateString()
+  @IsOptional()
+  fromDate?: string;
+
+  @IsDateString()
+  @IsOptional()
+  toDate?: string;
+
   @IsIn(['createdAt', 'plannedStartDate'])
   @IsOptional()
   sortBy?: 'createdAt' | 'plannedStartDate' = 'createdAt';

@@ -632,18 +632,37 @@ export class SteelService {
       priority,
       search,
       scheduledOnly,
+      fromDate,
+      toDate,
       sortBy = 'createdAt',
       sortOrder = 'desc',
       page,
       limit,
     } = query;
 
+    if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+      throw new BadRequestException('fromDate must not be after toDate');
+    }
+
+    // fromDate/toDate filter the same canonical scheduling field as
+    // scheduledOnly (plannedStartDate) — merged into one clause so passing
+    // both doesn't produce two conflicting `plannedStartDate` keys.
+    const plannedStartDateFilter: Prisma.DateTimeNullableFilter = {};
+    if (scheduledOnly) plannedStartDateFilter.not = null;
+    if (fromDate) plannedStartDateFilter.gte = new Date(fromDate);
+    if (toDate) {
+      const end = new Date(toDate);
+      end.setHours(23, 59, 59, 999);
+      plannedStartDateFilter.lte = end;
+    }
+    const hasPlannedStartDateFilter = Object.keys(plannedStartDateFilter).length > 0;
+
     const where: Prisma.SteelProductionPlanWhereInput = {
       organizationId,
       ...(stage && { stage }),
       ...(status && { status }),
       ...(priority && { priority }),
-      ...(scheduledOnly && { plannedStartDate: { not: null } }),
+      ...(hasPlannedStartDateFilter && { plannedStartDate: plannedStartDateFilter }),
       ...(search && {
         OR: [
           { planNumber: { contains: search, mode: 'insensitive' } },
@@ -675,7 +694,7 @@ export class SteelService {
   }
 
   async getSummary(organizationId: string) {
-    const [byStage, byStatus, total] = await this.prisma.$transaction([
+    const [byStage, byStatus, byStageStatus, total] = await this.prisma.$transaction([
       this.prisma.steelProductionPlan.groupBy({
         by: ['stage'],
         where: {
@@ -698,6 +717,22 @@ export class SteelService {
         _count: true,
       }),
 
+      // Cross-tab of (stage, status) — read-only, additive. Needed because
+      // byStage and byStatus above are independent single-axis groupings and
+      // cannot be combined client-side to build a mutually-exclusive
+      // workflow-category breakdown (e.g. distinguishing an ON_HOLD plan
+      // from an IN_PROGRESS one at the same stage) without this.
+      this.prisma.steelProductionPlan.groupBy({
+        by: ['stage', 'status'],
+        where: {
+          organizationId,
+        },
+        orderBy: {
+          stage: 'asc',
+        },
+        _count: true,
+      }),
+
       this.prisma.steelProductionPlan.count({
         where: {
           organizationId,
@@ -709,6 +744,11 @@ export class SteelService {
       total,
       byStage: Object.fromEntries(byStage.map((r) => [r.stage, r._count])),
       byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count])),
+      byStageStatus: byStageStatus.map((r) => ({
+        stage: r.stage,
+        status: r.status,
+        count: r._count,
+      })),
     };
   }
 }

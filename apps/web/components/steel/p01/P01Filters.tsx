@@ -21,6 +21,8 @@ export interface P01FiltersState {
   status: SteelPlanOverallStatus | "";
   priority: OrderPriority | "";
   scheduledOnly: boolean;
+  fromDate: string;
+  toDate: string;
   sortBy: "createdAt" | "plannedStartDate";
   sortOrder: "asc" | "desc";
 }
@@ -31,16 +33,16 @@ interface Props {
 }
 
 const selectClass = "h-9 rounded-lg border border-input bg-transparent px-3 text-sm";
+const dateInputClass = "h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm";
 
-// The backend's search only matches plan number, customer name, and sales
-// order number (apps/api/.../steel.service.ts getAll) — no product/grade
-// search field exists, so that isn't claimed here. Priority, scheduled-only,
-// and sort are all real, backend-supported query params (QuerySteelPlansDto)
-// tucked into an advanced panel rather than cluttering the primary row.
+// fromDate/toDate filter GET /steel/plans against plannedStartDate — the
+// backend's real, validated date-range query params (QuerySteelPlansDto).
+// No client-side date filtering happens here; every change re-fetches.
 export function P01Filters({ value, onChange }: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const advancedActive = value.priority !== "" || value.scheduledOnly || value.sortBy !== "createdAt";
+  const dateRangeInvalid = !!(value.fromDate && value.toDate && value.fromDate > value.toDate);
 
   function set<K extends keyof P01FiltersState>(key: K, v: P01FiltersState[K]) {
     onChange({ ...value, [key]: v });
@@ -48,6 +50,10 @@ export function P01Filters({ value, onChange }: Props) {
 
   function clearAdvanced() {
     onChange({ ...value, priority: "", scheduledOnly: false, sortBy: "createdAt", sortOrder: "desc" });
+  }
+
+  function clearDates() {
+    onChange({ ...value, fromDate: "", toDate: "" });
   }
 
   return (
@@ -88,6 +94,30 @@ export function P01Filters({ value, onChange }: Props) {
           ))}
         </select>
 
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-slate-400">From</label>
+          <input
+            type="date"
+            className={dateInputClass}
+            value={value.fromDate}
+            max={value.toDate || undefined}
+            onChange={(e) => set("fromDate", e.target.value)}
+          />
+          <label className="text-xs text-slate-400">To</label>
+          <input
+            type="date"
+            className={dateInputClass}
+            value={value.toDate}
+            min={value.fromDate || undefined}
+            onChange={(e) => set("toDate", e.target.value)}
+          />
+          {(value.fromDate || value.toDate) && (
+            <button type="button" onClick={clearDates} className="text-slate-400 hover:text-slate-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
         <Button
           type="button"
           size="sm"
@@ -96,7 +126,7 @@ export function P01Filters({ value, onChange }: Props) {
           onClick={() => setAdvancedOpen((o) => !o)}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          Filters {advancedActive ? "•" : "+"}
+          More {advancedActive ? "•" : "+"}
         </Button>
 
         {advancedActive && (
@@ -111,8 +141,12 @@ export function P01Filters({ value, onChange }: Props) {
         )}
       </div>
 
+      {dateRangeInvalid && (
+        <p className="text-xs text-red-600">&quot;From&quot; date must not be after &quot;To&quot; date.</p>
+      )}
+
       {advancedOpen && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
           <div className="flex items-center gap-2">
             <label className="text-xs text-slate-500">Priority</label>
             <select

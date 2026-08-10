@@ -1,26 +1,95 @@
 "use client";
 
-import { Loader2, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { STAGE_LABELS, type SteelPlanStage, type SteelPlanSummary } from "@/services/steel.service";
+import type { SteelPlanSummary, SteelPlanStage, SteelPlanOverallStatus } from "@/services/steel.service";
 
 interface Props {
   summary?: SteelPlanSummary;
   isLoading: boolean;
 }
 
-// Groups the real 12 stages into the same phases the workbook activities
-// naturally fall into (A01-A04 demand/spec, A05-A07 stock/route,
-// A08-A10 capacity/scheduling, A11-A12 release) — no stage is removed or
-// renamed, this is purely a visual grouping of the same STAGE_ORDER data.
-const PHASES: { name: string; stages: SteelPlanStage[] }[] = [
-  { name: "Demand & Specification", stages: ["A01_DEMAND_CAPTURED", "A02_PRIORITY_CONFIRMED", "A03_PRODUCT_CONFIRMED", "A04_SPEC_CONFIRMED"] },
-  { name: "Stock & Route", stages: ["A05_STOCK_CHECKED", "A06_STOCK_DECISION_MADE", "A07_ROUTE_SELECTED"] },
-  { name: "Capacity & Scheduling", stages: ["A08_MATERIAL_CHECKED", "A09_CAPACITY_CHECKED", "A10_PLAN_DRAFTED"] },
-  { name: "Release", stages: ["A11_PLAN_COMMUNICATED", "A12_PLAN_RELEASED"] },
+interface Category {
+  key: string;
+  name: string;
+  description: string;
+  color: string; // hex, used by both the dot and the donut slice
+  dotClass: string;
+}
+
+// Six real, mutually-exclusive workflow categories derived from the actual
+// P01 state machine (STAGE_ORDER/SteelPlanOverallStatus) — not a literal
+// copy of any illustrative example. Status is checked first (ON_HOLD /
+// CANCELLED / RELEASED can happen at any stage, per updateStatus/releasePlan
+// in the backend), and the remaining active plans are grouped by their
+// current stage phase. This requires the (stage, status) cross-tab
+// (summary.byStageStatus) rather than the independent byStage/byStatus
+// groupings, since a plan's stage and status can't be recombined client-side
+// without it.
+const CATEGORIES: (Category & {
+  matches: (stage: SteelPlanStage, status: SteelPlanOverallStatus) => boolean;
+})[] = [
+  {
+    key: "demand-spec",
+    name: "Demand & Specification",
+    description: "Demand, priority, product & spec confirmed",
+    color: "#2563eb",
+    dotClass: "bg-blue-600",
+    matches: (stage, status) =>
+      !["ON_HOLD", "CANCELLED", "RELEASED"].includes(status) &&
+      ["A01_DEMAND_CAPTURED", "A02_PRIORITY_CONFIRMED", "A03_PRODUCT_CONFIRMED", "A04_SPEC_CONFIRMED"].includes(stage),
+  },
+  {
+    key: "stock-route",
+    name: "Stock & Route",
+    description: "Stock availability & plant route checked",
+    color: "#f97316",
+    dotClass: "bg-orange-500",
+    matches: (stage, status) =>
+      !["ON_HOLD", "CANCELLED", "RELEASED"].includes(status) &&
+      ["A05_STOCK_CHECKED", "A06_STOCK_DECISION_MADE", "A07_ROUTE_SELECTED"].includes(stage),
+  },
+  {
+    key: "planning",
+    name: "Planning in Progress",
+    description: "Capacity checked & production plan drafted",
+    color: "#9333ea",
+    dotClass: "bg-purple-600",
+    matches: (stage, status) =>
+      !["ON_HOLD", "CANCELLED", "RELEASED"].includes(status) &&
+      ["A08_MATERIAL_CHECKED", "A09_CAPACITY_CHECKED", "A10_PLAN_DRAFTED"].includes(stage),
+  },
+  {
+    key: "awaiting-approval",
+    name: "Awaiting Approval",
+    description: "Plan communicated, pending release",
+    color: "#eab308",
+    dotClass: "bg-yellow-500",
+    matches: (stage, status) => !["ON_HOLD", "CANCELLED", "RELEASED"].includes(status) && stage === "A11_PLAN_COMMUNICATED",
+  },
+  {
+    key: "released",
+    name: "Released",
+    description: "Approved & released to execution",
+    color: "#10b981",
+    dotClass: "bg-emerald-500",
+    matches: (_stage, status) => status === "RELEASED",
+  },
+  {
+    key: "hold-cancelled",
+    name: "On Hold / Cancelled",
+    description: "Not currently proceeding",
+    color: "#ef4444",
+    dotClass: "bg-red-500",
+    matches: (_stage, status) => status === "ON_HOLD" || status === "CANCELLED",
+  },
 ];
 
 export function StageOverview({ summary, isLoading }: Props) {
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+
   if (isLoading || !summary) {
     return (
       <Card>
@@ -34,14 +103,16 @@ export function StageOverview({ summary, isLoading }: Props) {
     );
   }
 
-  // "Bottleneck" = the stage currently holding the most plans, excluding the
-  // terminal A12 stage (released plans aren't stuck anywhere). Real, derived
-  // directly from summary.byStage — not fabricated.
-  const wipStages = Object.entries(summary.byStage).filter(
-    ([stage, count]) => stage !== "A12_PLAN_RELEASED" && (count ?? 0) > 0,
-  ) as [SteelPlanStage, number][];
-  const bottleneck = wipStages.sort((a, b) => b[1] - a[1])[0];
-  const onHold = summary.byStatus["ON_HOLD"] ?? 0;
+  const counts = CATEGORIES.map((cat) => ({
+    ...cat,
+    count: summary.byStageStatus
+      .filter((r) => cat.matches(r.stage, r.status))
+      .reduce((sum, r) => sum + r.count, 0),
+  }));
+
+  const chartData = counts
+    .filter((c) => c.count > 0)
+    .map((c) => ({ key: c.key, name: c.name, value: c.count, color: c.color }));
 
   return (
     <Card>
@@ -49,48 +120,71 @@ export function StageOverview({ summary, isLoading }: Props) {
         <CardTitle>Stage Overview</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {(bottleneck || onHold > 0) && (
-          <div className="flex flex-wrap gap-2">
-            {bottleneck && (
-              <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                <span className="font-semibold">{bottleneck[1]}</span>
-                plans currently at <span className="font-medium">{STAGE_LABELS[bottleneck[0]]}</span> — largest concentration
+        {/* Donut chart — kept single-column since this card now lives in a
+            narrow sidebar column; a side-by-side split would be cramped. */}
+        <div className="relative">
+          {chartData.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-400">No production plans yet.</p>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={74}
+                    paddingAngle={chartData.length > 1 ? 3 : 0}
+                    dataKey="value"
+                    onMouseEnter={(_, index) => setActiveKey(chartData[index].key)}
+                    onMouseLeave={() => setActiveKey(null)}
+                  >
+                    {chartData.map((entry) => (
+                      <Cell
+                        key={entry.key}
+                        fill={entry.color}
+                        stroke="none"
+                        opacity={activeKey && activeKey !== entry.key ? 0.35 : 1}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value, name) => [value, name]}
+                    contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Total</span>
+                <span className="text-2xl font-bold text-slate-900">{summary.total}</span>
+                <span className="text-[11px] text-slate-400">Total Plans</span>
               </div>
-            )}
-            {onHold > 0 && (
-              <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                <span className="font-semibold">{onHold}</span> {onHold === 1 ? "plan" : "plans"} on hold (stage not specified by status)
-              </div>
-            )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {PHASES.map((phase) => {
-            const phaseTotal = phase.stages.reduce((sum, s) => sum + (summary.byStage[s] ?? 0), 0);
+        {/* Workflow category list */}
+        <div className="space-y-0.5">
+          {counts.map((cat) => {
+            const isActive = activeKey === cat.key;
             return (
-              <div key={phase.name} className="rounded-xl border border-slate-100 p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-slate-600">{phase.name}</p>
-                  <span className="text-xs font-bold text-slate-900">{phaseTotal}</span>
+              <div
+                key={cat.key}
+                onMouseEnter={() => setActiveKey(cat.key)}
+                onMouseLeave={() => setActiveKey(null)}
+                className={`flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors ${
+                  isActive ? "bg-slate-50" : ""
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${cat.dotClass}`} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-slate-900 truncate">{cat.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{cat.description}</p>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  {phase.stages.map((stage) => {
-                    const count = summary.byStage[stage] ?? 0;
-                    const isBottleneck = bottleneck?.[0] === stage;
-                    return (
-                      <div key={stage} className="flex items-center justify-between text-[11px]">
-                        <span className={isBottleneck ? "font-semibold text-blue-700" : "text-slate-500"}>
-                          {STAGE_LABELS[stage]}
-                        </span>
-                        <span className={isBottleneck ? "font-semibold text-blue-700" : "text-slate-400"}>
-                          {count}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <span className="text-sm font-bold text-slate-900 shrink-0">{cat.count}</span>
               </div>
             );
           })}

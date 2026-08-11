@@ -6,12 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  STAGE_LABELS,
-  STAGE_ORDER,
   type PaginatedSteelPlans,
   type SteelPlanOverallStatus,
 } from "@/services/steel.service";
 import { QueryErrorState } from "@/components/steel/dashboard/QueryErrorState";
+import { SCREENS, stageToScreenIndex } from "./screenMap";
 
 const STATUS_STYLES: Record<SteelPlanOverallStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-600",
@@ -57,8 +56,9 @@ export function ProductionPlanList({ data, isLoading, isError, isFetching, onRet
               {data.data.map((plan) => {
                 const targetDate = formatDate(plan.plannedStartDate) ?? formatDate(plan.expectedDeliveryDate);
                 const quantity = plan.totalQuantity ?? plan.requestedQuantityTonnes;
-                const stageIdx = STAGE_ORDER.indexOf(plan.stage);
-                const stageProgressPct = Math.round(((stageIdx + 1) / STAGE_ORDER.length) * 100);
+                const screenIdx = stageToScreenIndex(plan.stage);
+                const screen = SCREENS[screenIdx];
+                const screenProgressPct = Math.round(((screenIdx + 1) / SCREENS.length) * 100);
 
                 return (
                   <Link
@@ -99,14 +99,16 @@ export function ProductionPlanList({ data, isLoading, isError, isFetching, onRet
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-400 uppercase tracking-wide shrink-0">Stage</span>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wide shrink-0">
+                        {screen.code}/{SCREENS.length}
+                      </span>
                       <div className="h-1.5 flex-1 max-w-[160px] rounded-full bg-slate-100 overflow-hidden">
                         <div
                           className="h-full rounded-full bg-blue-500"
-                          style={{ width: `${stageProgressPct}%` }}
+                          style={{ width: `${screenProgressPct}%` }}
                         />
                       </div>
-                      <span className="text-[11px] text-slate-600 font-medium">{STAGE_LABELS[plan.stage]}</span>
+                      <span className="text-[11px] text-slate-600 font-medium">{screen.label}</span>
                     </div>
                   </Link>
                 );

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/contexts/toast.context";
 import {
@@ -16,8 +15,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { WorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
+import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
 import {
-  ArrowLeft,
   Loader2,
   Route as RouteIcon,
   Factory,
@@ -40,80 +41,6 @@ import {
   Users,
   PackageCheck,
 } from "lucide-react";
-
-const SCREENS = [
-  { code: "S1", label: "Demand & Priority" },
-  { code: "S2", label: "Product & Specification" },
-  { code: "S3", label: "Stock & Fulfilment" },
-  { code: "S4", label: "Feasibility & Route" },
-  { code: "S5", label: "Plan Preparation" },
-  { code: "S6", label: "Plan Release" },
-];
-
-function WorkflowIndicator() {
-  return (
-    <Card>
-      <CardContent className="py-1">
-        <div className="flex items-center overflow-x-auto">
-          {SCREENS.map((s, i) => {
-            const isDone = i < 3;
-            const isActive = i === 3;
-            return (
-              <div key={s.code} className="flex items-center shrink-0">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={
-                      "h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 " +
-                      (isDone
-                        ? "bg-emerald-500 text-white"
-                        : isActive
-                          ? "bg-blue-600 text-white"
-                          : "bg-slate-100 text-slate-400 ring-1 ring-slate-200")
-                    }
-                  >
-                    {isDone || isActive ? <Check className="h-3.5 w-3.5" /> : i + 1}
-                  </div>
-                  <span
-                    className={
-                      "text-xs font-medium whitespace-nowrap " +
-                      (isDone || isActive ? "text-slate-900" : "text-slate-400")
-                    }
-                  >
-                    {s.label}
-                  </span>
-                </div>
-                {i < SCREENS.length - 1 && <div className="h-px w-8 md:w-10 bg-slate-200 mx-2 shrink-0" />}
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Header() {
-  return (
-    <div className="space-y-3">
-      <Link
-        href="/steel/p01"
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to Production Planning
-      </Link>
-      <div className="flex items-center gap-3">
-        <div className="h-11 w-11 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-          <RouteIcon className="h-5 w-5 text-blue-600" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 leading-tight">Feasibility & Route Planning</h1>
-          <p className="text-sm text-slate-500">Confirm the production route, material readiness and operational capacity.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function ContextSummary({ plan }: { plan: SteelProductionPlan }) {
   const qty = plan.totalQuantity ?? plan.requestedQuantityTonnes;
@@ -229,7 +156,7 @@ function ReadinessChecklist({ plan }: { plan: SteelProductionPlan }) {
 function Sidebar({ plan, subStep }: { plan: SteelProductionPlan; subStep: "A07" | "A08" | "A09" | "done" }) {
   const qty = plan.totalQuantity ?? plan.requestedQuantityTonnes;
   return (
-    <div className="space-y-4">
+    <ScreenSidebar>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -333,7 +260,7 @@ function Sidebar({ plan, subStep }: { plan: SteelProductionPlan; subStep: "A07" 
           </ul>
         </CardContent>
       </Card>
-    </div>
+    </ScreenSidebar>
   );
 }
 
@@ -763,8 +690,12 @@ export function S4FeasibilityRoute({
 
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
-      <Header />
-      <WorkflowIndicator />
+      <ScreenHeader
+        icon={RouteIcon}
+        title="Feasibility & Route Planning"
+        subtitle="Confirm the production route, material readiness and operational capacity."
+      />
+      <WorkflowIndicator doneCount={3} activeIndex={3} />
       <ContextSummary plan={plan} />
       <ReadinessChecklist plan={plan} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">

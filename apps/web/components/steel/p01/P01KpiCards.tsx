@@ -2,11 +2,15 @@
 
 import { Loader2, ClipboardList, Hourglass, PauseCircle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { QueryErrorState } from "@/components/steel/dashboard/QueryErrorState";
 import type { SteelPlanSummary } from "@/services/steel.service";
 
 interface Props {
   summary?: SteelPlanSummary;
   isLoading: boolean;
+  isError?: boolean;
+  isFetching?: boolean;
+  onRetry?: () => void;
 }
 
 function pct(value: number, total: number) {
@@ -16,7 +20,17 @@ function pct(value: number, total: number) {
 // Context here is derived directly from the current snapshot (share of
 // total, zero-state messaging) — never a historical/time-series comparison,
 // since the backend stores no such history for production plans.
-export function P01KpiCards({ summary, isLoading }: Props) {
+export function P01KpiCards({ summary, isLoading, isError, isFetching, onRetry }: Props) {
+  if (isError) {
+    return (
+      <Card>
+        <CardContent>
+          <QueryErrorState onRetry={onRetry ?? (() => {})} isRetrying={isFetching} message="Could not load plan summary." />
+        </CardContent>
+      </Card>
+    );
+  }
+
   const total = summary?.total ?? 0;
   const inProgress = summary?.byStatus["IN_PROGRESS"] ?? 0;
   const onHold = summary?.byStatus["ON_HOLD"] ?? 0;

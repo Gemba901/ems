@@ -34,6 +34,7 @@ export default function SteelPlansPage() {
     queryKey: ["steel-plans-summary"],
     queryFn: () => SteelService.getSummary(accessToken!),
     enabled: !!accessToken,
+    retry: false,
   });
 
   const plansQuery = useQuery({
@@ -66,6 +67,10 @@ export default function SteelPlansPage() {
     updateFilters({ ...DEFAULT_FILTERS, stage: "A11_PLAN_COMMUNICATED", status: "IN_PROGRESS" });
   }
 
+  function filterOnHold() {
+    updateFilters({ ...DEFAULT_FILTERS, status: "ON_HOLD" });
+  }
+
   function viewSchedule() {
     const today = new Date().toISOString().slice(0, 10);
     const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -82,7 +87,13 @@ export default function SteelPlansPage() {
     <div className="p-4 md:p-8 space-y-6">
       <P01Header />
 
-      <P01KpiCards summary={summaryQuery.data} isLoading={summaryQuery.isLoading} />
+      <P01KpiCards
+        summary={summaryQuery.data}
+        isLoading={summaryQuery.isLoading}
+        isError={summaryQuery.isError}
+        isFetching={summaryQuery.isFetching}
+        onRetry={() => summaryQuery.refetch()}
+      />
 
       <P01Filters value={filters} onChange={updateFilters} />
 
@@ -98,11 +109,21 @@ export default function SteelPlansPage() {
         />
 
         <div className="space-y-4">
-          <StageOverview summary={summaryQuery.data} isLoading={summaryQuery.isLoading} />
+          <StageOverview
+            summary={summaryQuery.data}
+            isLoading={summaryQuery.isLoading}
+            isError={summaryQuery.isError}
+            isFetching={summaryQuery.isFetching}
+            onRetry={() => summaryQuery.refetch()}
+          />
           <QuickActions
             summary={summaryQuery.data}
+            summaryIsError={summaryQuery.isError}
+            summaryIsFetching={summaryQuery.isFetching}
+            onRetrySummary={() => summaryQuery.refetch()}
             filters={filters}
             onFilterPendingApproval={filterPendingApproval}
+            onFilterOnHold={filterOnHold}
             onViewSchedule={viewSchedule}
           />
         </div>

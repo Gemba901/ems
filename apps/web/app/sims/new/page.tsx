@@ -78,7 +78,7 @@ function SuccessModal({ name, onClose }: { name: string; onClose: () => void }) 
   const firstName = name.split(" ")[0];
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5 animate-in zoom-in-95 fade-in">
         <div className="h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center">
           <CheckCircle2 className="h-9 w-9 text-emerald-500" />
@@ -249,7 +249,7 @@ export default function NewSuggestionPage() {
   const canSubmit         = !submitting && categories.length > 0 && title.trim().length >= TITLE_MIN && description.trim().length >= DESC_MIN && (!isPrivileged || !!departmentId);
 
   return (
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
+    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
       {successRedirect && (
         <SuccessModal
           name={user?.name ?? "there"}
@@ -293,7 +293,9 @@ export default function NewSuggestionPage() {
                     >
                       <option value="">Select a department…</option>
                       {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
+                        <option key={d.id} value={d.id}>
+                          {d.name}{d.hod ? ` - ${d.hod.firstName} ${d.hod.lastName}` : ""}
+                        </option>
                       ))}
                     </select>
                     <p className="text-xs text-slate-400 mt-1">Your suggestion will be directed to this department for review.</p>

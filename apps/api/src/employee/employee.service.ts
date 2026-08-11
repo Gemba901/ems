@@ -126,11 +126,29 @@ export class EmployeeService {
     }
 
     async getDepartmentsByOrganization(organizationId: string) {
-        return this.prisma.department.findMany({
+        const departments = await this.prisma.department.findMany({
             where: { organizationId },
             orderBy: { name: 'asc' },
-            include: { _count: { select: { employees: true } } },
+            include: {
+                _count: { select: { employees: true } },
+                employees: {
+                    where: {
+                        organizationId,
+                        user: {
+                            organizations: {
+                                some: { organizationId, role: { name: RoleName.HOD } },
+                            },
+                        },
+                    },
+                    select: { id: true, firstName: true, lastName: true },
+                },
+            },
         });
+
+        return departments.map(({ employees, ...department }) => ({
+            ...department,
+            hod: employees[0] ?? null,
+        }));
     }
 
     // get the employee record that belongs to the logged-in user within their current org

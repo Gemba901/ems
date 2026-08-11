@@ -87,7 +87,7 @@ export default function MySuggestionsPage() {
   ];
 
   return (
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
+    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
       <div className="mx-5 pt-4 md:pt-6 space-y-5">
 
         {/* Page header */}

@@ -123,11 +123,11 @@ export const EmployeeService = {
         return handleResponse<EmployeeApiResponse>(res);
     },
 
-    async getDepartments(orgId: string, token: string): Promise<{ id: string; name: string; _count: { employees: number } }[]> {
+    async getDepartments(orgId: string, token: string): Promise<{ id: string; name: string; _count: { employees: number }; hod: { id: string; firstName: string; lastName: string } | null }[]> {
         const res = await apiClient(`${API_URL}/employee/organization/${orgId}/departments`, {
             headers: authHeaders(token),
         }, token);
-        return handleResponse<{ id: string; name: string; _count: { employees: number } }[]>(res);
+        return handleResponse<{ id: string; name: string; _count: { employees: number }; hod: { id: string; firstName: string; lastName: string } | null }[]>(res);
     },
 
     async getOrgStats(orgId: string, token: string): Promise<OrgStatsResponse> {

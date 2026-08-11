@@ -4,13 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  SteelPlanStage,
-  SteelPlanOverallStatus,
-  SteelPlanActivity,
-  SteelDepartment,
-  Prisma,
-} from 'db';
+import { SteelPlanStage, SteelPlanActivity, SteelDepartment, Prisma } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateSteelDemandDto,
@@ -74,7 +68,9 @@ export class SteelService {
       select: { id: true },
     });
     if (!employee) {
-      throw new ForbiddenException('No employee profile linked to your account');
+      throw new ForbiddenException(
+        'No employee profile linked to your account',
+      );
     }
     return employee;
   }
@@ -90,7 +86,10 @@ export class SteelService {
 
   // Ensures activities are recorded in order, and prevents re-running a step
   // that a later step already depends on (the plan has moved past it).
-  private assertStage(currentStage: SteelPlanStage, requiredStage: SteelPlanStage) {
+  private assertStage(
+    currentStage: SteelPlanStage,
+    requiredStage: SteelPlanStage,
+  ) {
     const currentIdx = STAGE_ORDER.indexOf(currentStage);
     const requiredIdx = STAGE_ORDER.indexOf(requiredStage);
     if (currentIdx < requiredIdx - 1) {
@@ -105,7 +104,10 @@ export class SteelService {
     }
   }
 
-  private async generatePlanNumber(tx: Prisma.TransactionClient, organizationId: string) {
+  private async generatePlanNumber(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+  ) {
     const year = new Date().getFullYear();
     const count = await tx.steelProductionPlan.count({
       where: {
@@ -140,7 +142,11 @@ export class SteelService {
   }
 
   // ── P01-A01 — Capture customer enquiry, sales order, forecast, or stock requirement ──
-  async createDemand(dto: CreateSteelDemandDto, userId: string, organizationId: string) {
+  async createDemand(
+    dto: CreateSteelDemandDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
     return this.prisma.$transaction(async (tx) => {
@@ -160,20 +166,32 @@ export class SteelService {
           salesOrderNumber: dto.salesOrderNumber,
           forecastReference: dto.forecastReference,
           stockRequirementReference: dto.stockRequirementReference,
-          expectedDeliveryDate: dto.expectedDeliveryDate ? new Date(dto.expectedDeliveryDate) : null,
+          expectedDeliveryDate: dto.expectedDeliveryDate
+            ? new Date(dto.expectedDeliveryDate)
+            : null,
           requestedQuantityTonnes: dto.requestedQuantityTonnes,
           demandNotes: dto.demandNotes,
         },
       });
 
-      await this.logActivity(tx, plan.id, 'A01', employee.id, dto.demandNotes, { ...dto });
+      await this.logActivity(tx, plan.id, 'A01', employee.id, dto.demandNotes, {
+        ...dto,
+      });
 
-      return tx.steelProductionPlan.findUnique({ where: { id: plan.id }, include: planInclude });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: plan.id },
+        include: planInclude,
+      });
     });
   }
 
   // ── P01-A02 — Confirm customer and order priority ──
-  async confirmPriority(id: string, dto: ConfirmSteelPriorityDto, userId: string, organizationId: string) {
+  async confirmPriority(
+    id: string,
+    dto: ConfirmSteelPriorityDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A02_PRIORITY_CONFIRMED');
@@ -183,18 +201,28 @@ export class SteelService {
         where: { id },
         data: {
           priority: dto.priority,
-          deliveryPromiseDate: dto.deliveryPromiseDate ? new Date(dto.deliveryPromiseDate) : null,
+          deliveryPromiseDate: dto.deliveryPromiseDate
+            ? new Date(dto.deliveryPromiseDate)
+            : null,
           creditStatus: dto.creditStatus,
           stage: 'A02_PRIORITY_CONFIRMED',
         },
       });
       await this.logActivity(tx, id, 'A02', employee.id, dto.notes, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
   // ── P01-A03 — Confirm product type and standard required ──
-  async confirmProduct(id: string, dto: ConfirmSteelProductDto, userId: string, organizationId: string) {
+  async confirmProduct(
+    id: string,
+    dto: ConfirmSteelProductDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A03_PRODUCT_CONFIRMED');
@@ -210,7 +238,10 @@ export class SteelService {
         },
       });
       await this.logActivity(tx, id, 'A03', employee.id, dto.notes, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
@@ -238,13 +269,23 @@ export class SteelService {
           stage: 'A04_SPEC_CONFIRMED',
         },
       });
-      await this.logActivity(tx, id, 'A04', employee.id, dto.toleranceNotes, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      await this.logActivity(tx, id, 'A04', employee.id, dto.toleranceNotes, {
+        ...dto,
+      });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
   // ── P01-A05 — Check certified finished goods stock ──
-  async checkStock(id: string, dto: SteelStockCheckDto, userId: string, organizationId: string) {
+  async checkStock(
+    id: string,
+    dto: SteelStockCheckDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A05_STOCK_CHECKED');
@@ -261,7 +302,10 @@ export class SteelService {
         },
       });
       await this.logActivity(tx, id, 'A05', employee.id, undefined, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
@@ -285,13 +329,28 @@ export class SteelService {
           stage: 'A06_STOCK_DECISION_MADE',
         },
       });
-      await this.logActivity(tx, id, 'A06', employee.id, dto.stockDecisionNotes, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      await this.logActivity(
+        tx,
+        id,
+        'A06',
+        employee.id,
+        dto.stockDecisionNotes,
+        { ...dto },
+      );
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
   // ── P01-A07 — Select applicable plant route ──
-  async selectRoute(id: string, dto: SelectSteelRouteDto, userId: string, organizationId: string) {
+  async selectRoute(
+    id: string,
+    dto: SelectSteelRouteDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A07_ROUTE_SELECTED');
@@ -305,13 +364,23 @@ export class SteelService {
           stage: 'A07_ROUTE_SELECTED',
         },
       });
-      await this.logActivity(tx, id, 'A07', employee.id, dto.routeNotes, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      await this.logActivity(tx, id, 'A07', employee.id, dto.routeNotes, {
+        ...dto,
+      });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
   // ── P01-A08 — Check raw material or billet availability ──
-  async checkMaterial(id: string, dto: SteelMaterialCheckDto, userId: string, organizationId: string) {
+  async checkMaterial(
+    id: string,
+    dto: SteelMaterialCheckDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A08_MATERIAL_CHECKED');
@@ -326,13 +395,28 @@ export class SteelService {
           stage: 'A08_MATERIAL_CHECKED',
         },
       });
-      await this.logActivity(tx, id, 'A08', employee.id, dto.materialShortageNotes, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      await this.logActivity(
+        tx,
+        id,
+        'A08',
+        employee.id,
+        dto.materialShortageNotes,
+        { ...dto },
+      );
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
   // ── P01-A09 — Check equipment, maintenance, and manpower availability ──
-  async checkCapacity(id: string, dto: SteelCapacityCheckDto, userId: string, organizationId: string) {
+  async checkCapacity(
+    id: string,
+    dto: SteelCapacityCheckDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A09_CAPACITY_CHECKED');
@@ -348,8 +432,13 @@ export class SteelService {
           stage: 'A09_CAPACITY_CHECKED',
         },
       });
-      await this.logActivity(tx, id, 'A09', employee.id, dto.shiftPlanNotes, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      await this.logActivity(tx, id, 'A09', employee.id, dto.shiftPlanNotes, {
+        ...dto,
+      });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
@@ -366,7 +455,9 @@ export class SteelService {
 
     if (dto.plannedStartDate && dto.plannedEndDate) {
       if (new Date(dto.plannedEndDate) < new Date(dto.plannedStartDate)) {
-        throw new BadRequestException('Planned end date cannot be before the planned start date');
+        throw new BadRequestException(
+          'Planned end date cannot be before the planned start date',
+        );
       }
     }
 
@@ -374,15 +465,25 @@ export class SteelService {
       const updated = await tx.steelProductionPlan.update({
         where: { id },
         data: {
-          productionSequence: dto.productionSequence as unknown as Prisma.InputJsonValue,
-          plannedStartDate: dto.plannedStartDate ? new Date(dto.plannedStartDate) : null,
-          plannedEndDate: dto.plannedEndDate ? new Date(dto.plannedEndDate) : null,
+          productionSequence:
+            dto.productionSequence as unknown as Prisma.InputJsonValue,
+          plannedStartDate: dto.plannedStartDate
+            ? new Date(dto.plannedStartDate)
+            : null,
+          plannedEndDate: dto.plannedEndDate
+            ? new Date(dto.plannedEndDate)
+            : null,
           planNotes: dto.planNotes,
           stage: 'A10_PLAN_DRAFTED',
         },
       });
-      await this.logActivity(tx, id, 'A10', employee.id, dto.planNotes, { ...dto });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      await this.logActivity(tx, id, 'A10', employee.id, dto.planNotes, {
+        ...dto,
+      });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
@@ -415,8 +516,13 @@ export class SteelService {
         },
       });
 
-      await this.logActivity(tx, id, 'A11', employee.id, dto.notes, { departments: dto.departments });
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      await this.logActivity(tx, id, 'A11', employee.id, dto.notes, {
+        departments: dto.departments,
+      });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
@@ -432,14 +538,18 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
 
     if (!plan.planCommunicatedAt) {
-      throw new BadRequestException('The plan has not been communicated to departments yet');
+      throw new BadRequestException(
+        'The plan has not been communicated to departments yet',
+      );
     }
 
     const ack = await this.prisma.steelPlanDepartmentAck.findUnique({
       where: { planId_department: { planId: id, department } },
     });
     if (!ack) {
-      throw new NotFoundException('This department was not included in the communication');
+      throw new NotFoundException(
+        'This department was not included in the communication',
+      );
     }
 
     return this.prisma.steelPlanDepartmentAck.update({
@@ -450,12 +560,21 @@ export class SteelService {
         acknowledgedAt: new Date(),
         notes: dto.notes,
       },
-      include: { acknowledgedBy: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        acknowledgedBy: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
     });
   }
 
   // ── P01-A12 — Release approved production plan ──
-  async releasePlan(id: string, dto: ReleaseSteelPlanDto, userId: string, organizationId: string) {
+  async releasePlan(
+    id: string,
+    dto: ReleaseSteelPlanDto,
+    userId: string,
+    organizationId: string,
+  ) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A12_PLAN_RELEASED');
@@ -479,12 +598,19 @@ export class SteelService {
         },
       });
       await this.logActivity(tx, id, 'A12', employee.id, dto.releaseNotes);
-      return tx.steelProductionPlan.findUnique({ where: { id: updated.id }, include: planInclude });
+      return tx.steelProductionPlan.findUnique({
+        where: { id: updated.id },
+        include: planInclude,
+      });
     });
   }
 
   // Manual override for exceptional cases (e.g. putting a plan ON_HOLD or CANCELLED)
-  async updateStatus(id: string, dto: UpdateSteelPlanStatusDto, organizationId: string) {
+  async updateStatus(
+    id: string,
+    dto: UpdateSteelPlanStatusDto,
+    organizationId: string,
+  ) {
     await this.findPlanOrThrow(id, organizationId);
     return this.prisma.steelProductionPlan.update({
       where: { id },
@@ -500,13 +626,43 @@ export class SteelService {
   }
 
   async getAll(organizationId: string, query: QuerySteelPlansDto) {
-    const { stage, status, priority, search, page, limit } = query;
+    const {
+      stage,
+      status,
+      priority,
+      search,
+      scheduledOnly,
+      fromDate,
+      toDate,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      page,
+      limit,
+    } = query;
+
+    if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+      throw new BadRequestException('fromDate must not be after toDate');
+    }
+
+    // fromDate/toDate filter the same canonical scheduling field as
+    // scheduledOnly (plannedStartDate) — merged into one clause so passing
+    // both doesn't produce two conflicting `plannedStartDate` keys.
+    const plannedStartDateFilter: Prisma.DateTimeNullableFilter = {};
+    if (scheduledOnly) plannedStartDateFilter.not = null;
+    if (fromDate) plannedStartDateFilter.gte = new Date(fromDate);
+    if (toDate) {
+      const end = new Date(toDate);
+      end.setHours(23, 59, 59, 999);
+      plannedStartDateFilter.lte = end;
+    }
+    const hasPlannedStartDateFilter = Object.keys(plannedStartDateFilter).length > 0;
 
     const where: Prisma.SteelProductionPlanWhereInput = {
       organizationId,
       ...(stage && { stage }),
       ...(status && { status }),
       ...(priority && { priority }),
+      ...(hasPlannedStartDateFilter && { plannedStartDate: plannedStartDateFilter }),
       ...(search && {
         OR: [
           { planNumber: { contains: search, mode: 'insensitive' } },
@@ -524,7 +680,7 @@ export class SteelService {
           approvedBy: { select: { id: true, firstName: true, lastName: true } },
           _count: { select: { departmentAcks: true, activityLogs: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -537,49 +693,62 @@ export class SteelService {
     };
   }
 
-async getSummary(organizationId: string) {
-  const [byStage, byStatus, total] = await this.prisma.$transaction([
-    this.prisma.steelProductionPlan.groupBy({
-      by: ['stage'],
-      where: {
-        organizationId,
-      },
-      orderBy: {
-        stage: 'asc',
-      },
-      _count: {
-        stage: true,
-      },
-    }),
+  async getSummary(organizationId: string) {
+    const [byStage, byStatus, byStageStatus, total] = await this.prisma.$transaction([
+      this.prisma.steelProductionPlan.groupBy({
+        by: ['stage'],
+        where: {
+          organizationId,
+        },
+        orderBy: {
+          stage: 'asc',
+        },
+        _count: true,
+      }),
 
-    this.prisma.steelProductionPlan.groupBy({
-      by: ['status'],
-      where: {
-        organizationId,
-      },
-      orderBy: {
-        status: 'asc',
-      },
-      _count: {
-        status: true,
-      },
-    }),
+      this.prisma.steelProductionPlan.groupBy({
+        by: ['status'],
+        where: {
+          organizationId,
+        },
+        orderBy: {
+          status: 'asc',
+        },
+        _count: true,
+      }),
 
-    this.prisma.steelProductionPlan.count({
-      where: {
-        organizationId,
-      },
-    }),
-  ]);
+      // Cross-tab of (stage, status) — read-only, additive. Needed because
+      // byStage and byStatus above are independent single-axis groupings and
+      // cannot be combined client-side to build a mutually-exclusive
+      // workflow-category breakdown (e.g. distinguishing an ON_HOLD plan
+      // from an IN_PROGRESS one at the same stage) without this.
+      this.prisma.steelProductionPlan.groupBy({
+        by: ['stage', 'status'],
+        where: {
+          organizationId,
+        },
+        orderBy: {
+          stage: 'asc',
+        },
+        _count: true,
+      }),
 
-  return {
-    total,
-    byStage: Object.fromEntries(
-      byStage.map((r) => [r.stage, r._count]),
-    ),
-    byStatus: Object.fromEntries(
-      byStatus.map((r) => [r.status, r._count]),
-    ),
-  };
-}
+      this.prisma.steelProductionPlan.count({
+        where: {
+          organizationId,
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      byStage: Object.fromEntries(byStage.map((r) => [r.stage, r._count])),
+      byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count])),
+      byStageStatus: byStageStatus.map((r) => ({
+        stage: r.stage,
+        status: r.status,
+        count: r._count,
+      })),
+    };
+  }
 }

@@ -6,9 +6,19 @@ import { usePathname } from "next/navigation"
 import {
   Factory,
   Plus,
+  Home,
   LayoutGrid,
   Truck,
-  Grid3x3,
+  PackageSearch,
+  Wrench,
+  Flame,
+  FlaskConical,
+  Box,
+  PackageCheck,
+  Layers,
+  BadgeCheck,
+  Warehouse,
+  Headset,
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,27 +34,26 @@ interface SteelSidebarProps {
   onToggle?: () => void;
 }
 
+const PROCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD];
+
+// Steel Processes nav — P01-P04 are live and link to their existing
+// routes; P05-P12 have no backend/pages yet and render disabled.
 const STEEL_NAV = [
-  {
-    name: "P01 — Production Plans",
-    href: "/steel/p01",
-    newHref: "/steel/p01/new",
-    icon: LayoutGrid,
-    exact: true,
-    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
-  },
-  {
-    name: "P02 — Raw Material Sourcing",
-    href: "/steel/p02",
-    newHref: "/steel/p02/new",
-    icon: Truck,
-    exact: true,
-    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
-  },
+  { code: "P01", name: "Production Planning", href: "/steel/p01", newHref: "/steel/p01/new", icon: LayoutGrid, live: true, allowedRoles: PROCESS_ROLES },
+  { code: "P02", name: "Sourcing & Procurement", href: "/steel/p02", newHref: "/steel/p02/new", icon: Truck, live: true, allowedRoles: PROCESS_ROLES },
+  { code: "P03", name: "Receiving & Inspection", href: "/steel/p03", newHref: "/steel/p03/new", icon: PackageSearch, live: true, allowedRoles: PROCESS_ROLES },
+  { code: "P04", name: "Charge Preparation", href: "/steel/p04", newHref: "/steel/p04/new", icon: Wrench, live: true, allowedRoles: PROCESS_ROLES },
+  { code: "P05", name: "Melting", href: "/steel/p05", icon: Flame, live: false, allowedRoles: PROCESS_ROLES },
+  { code: "P06", name: "Heat Approval", href: "/steel/p06", icon: FlaskConical, live: false, allowedRoles: PROCESS_ROLES },
+  { code: "P07", name: "Casting", href: "/steel/p07", icon: Box, live: false, allowedRoles: PROCESS_ROLES },
+  { code: "P08", name: "Billet Control", href: "/steel/p08", icon: PackageCheck, live: false, allowedRoles: PROCESS_ROLES },
+  { code: "P09", name: "Rolling", href: "/steel/p09", icon: Layers, live: false, allowedRoles: PROCESS_ROLES },
+  { code: "P10", name: "Quality Control", href: "/steel/p10", icon: BadgeCheck, live: false, allowedRoles: PROCESS_ROLES },
+  { code: "P11", name: "Storage & Dispatch", href: "/steel/p11", icon: Warehouse, live: false, allowedRoles: PROCESS_ROLES },
+  { code: "P12", name: "Customer Support", href: "/steel/p12", icon: Headset, live: false, allowedRoles: PROCESS_ROLES },
 ];
 
-function isActive(pathname: string, href: string, exact: boolean) {
-  if (exact) return pathname === href;
+function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -99,37 +108,46 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
               </div>
               <div className="min-w-0 flex flex-col">
                 <span className="text-sm font-bold text-slate-900 truncate leading-tight">
-                  Steel Manufacturing
+                  {user?.organizationName || "Acme Steel Ltd."}
                 </span>
                 <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">
-                  Planning
+                  Steel Manufacturing ERP
                 </span>
               </div>
             </>
           )}
         </div>
 
-        {/* ── All processes link ── */}
+        {/* ── Steel Home — the single home destination ── */}
         <div className={`px-2 pt-3 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
+          {!isCollapsed && (
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-1">
+              Steel Home
+            </p>
+          )}
           <Link
             href="/steel"
             onClick={onClose}
-            title={isCollapsed ? "All processes" : undefined}
+            title={isCollapsed ? "Steel Home" : undefined}
             className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
               pathname === "/steel"
                 ? "bg-slate-100 text-slate-900"
                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             } ${isCollapsed ? "h-10 w-10 justify-center" : "h-9 w-full px-3 gap-2"}`}
           >
-            <Grid3x3 className="h-4 w-4 shrink-0" />
-            {!isCollapsed && <span>All processes</span>}
+            <Home className="h-4 w-4 shrink-0" />
+            {!isCollapsed && <span>Steel Home</span>}
           </Link>
         </div>
 
-{/* ── New record CTA (context-aware: P01 vs P02) ── */}
+{/* ── New record CTA (context-aware: P01 vs P02 vs P03) ── */}
         <div className={`px-2 pt-2 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
           <Link
-            href={pathname.startsWith("/steel/p02") ? "/steel/p02/new" : "/steel/p01/new"}
+            href={
+              pathname.startsWith("/steel/p03") ? "/steel/p03/new"
+                : pathname.startsWith("/steel/p02") ? "/steel/p02/new"
+                  : "/steel/p01/new"
+            }
             onClick={onClose}
             title={isCollapsed ? "New" : undefined}
             className={`flex items-center bg-slate-800 hover:bg-slate-900 text-white rounded-xl transition-colors ${
@@ -139,7 +157,9 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
             <Plus className="h-4 w-4 shrink-0" />
             {!isCollapsed && (
               <span className="text-sm font-medium">
-                {pathname.startsWith("/steel/p02") ? "New Sourcing Order" : "New Production Plan"}
+                {pathname.startsWith("/steel/p03") ? "New Material Intake"
+                  : pathname.startsWith("/steel/p02") ? "New Sourcing Order"
+                    : "New Production Plan"}
               </span>
             )}
           </Link>
@@ -153,13 +173,37 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
             </p>
           )}
           {filteredNav.map((item) => {
-            const active = isActive(pathname, item.href, item.exact);
+            if (!item.live) {
+              return (
+                <div
+                  key={item.code}
+                  title={isCollapsed ? `${item.code} — ${item.name} (not started)` : undefined}
+                  className={`flex items-center rounded-xl text-sm font-medium text-slate-300 cursor-not-allowed ${
+                    isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
+                  }`}
+                >
+                  <item.icon className="h-4 w-4 shrink-0 text-slate-300" />
+                  {!isCollapsed && (
+                    <>
+                      <span className="flex-1 truncate">
+                        {item.code} {item.name}
+                      </span>
+                      <span className="text-[9px] font-medium uppercase tracking-wide text-slate-300 shrink-0">
+                        Soon
+                      </span>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
+            const active = isActive(pathname, item.href);
             return (
               <Link
-                key={item.name}
+                key={item.code}
                 href={item.href}
                 onClick={onClose}
-                title={isCollapsed ? item.name : undefined}
+                title={isCollapsed ? `${item.code} — ${item.name}` : undefined}
                 className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
                   active
                     ? "bg-slate-100 text-slate-900"
@@ -169,7 +213,9 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
                 <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-slate-800" : "text-slate-400"}`} />
                 {!isCollapsed && (
                   <>
-                    <span className="flex-1">{item.name}</span>
+                    <span className="flex-1 truncate">
+                      {item.code} {item.name}
+                    </span>
                     {active && <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
                   </>
                 )}

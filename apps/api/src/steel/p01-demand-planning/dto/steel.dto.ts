@@ -8,6 +8,7 @@ import {
   IsArray,
   IsDateString,
   IsBoolean,
+  IsIn,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -176,7 +177,9 @@ export class SelectSteelRouteDto {
 
 // P01-A08 — Check raw material or billet availability
 export class SteelMaterialCheckDto {
-  @IsEnum(AvailabilityStatus, { message: 'Invalid material availability status' })
+  @IsEnum(AvailabilityStatus, {
+    message: 'Invalid material availability status',
+  })
   materialAvailability!: AvailabilityStatus;
 
   @IsString()
@@ -190,10 +193,14 @@ export class SteelMaterialCheckDto {
 
 // P01-A09 — Check equipment, maintenance, and manpower availability
 export class SteelCapacityCheckDto {
-  @IsEnum(AvailabilityStatus, { message: 'Invalid equipment availability status' })
+  @IsEnum(AvailabilityStatus, {
+    message: 'Invalid equipment availability status',
+  })
   equipmentAvailability!: AvailabilityStatus;
 
-  @IsEnum(AvailabilityStatus, { message: 'Invalid manpower availability status' })
+  @IsEnum(AvailabilityStatus, {
+    message: 'Invalid manpower availability status',
+  })
   manpowerAvailability!: AvailabilityStatus;
 
   @IsString()
@@ -298,6 +305,35 @@ export class QuerySteelPlansDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  // Scopes to plans that have an internal production schedule set
+  // (plannedStartDate, captured at P01-A10 — the actual shop-floor
+  // scheduling step, as opposed to expectedDeliveryDate/deliveryPromiseDate
+  // which are customer-facing dates captured earlier at A01/A02).
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  scheduledOnly?: boolean;
+
+  // Date-range filter on the same canonical scheduling field
+  // (plannedStartDate). Cross-field ordering (fromDate <= toDate) is
+  // checked in the service, since class-validator has no built-in
+  // cross-property comparator without a custom decorator.
+  @IsDateString()
+  @IsOptional()
+  fromDate?: string;
+
+  @IsDateString()
+  @IsOptional()
+  toDate?: string;
+
+  @IsIn(['createdAt', 'plannedStartDate'])
+  @IsOptional()
+  sortBy?: 'createdAt' | 'plannedStartDate' = 'createdAt';
+
+  @IsIn(['asc', 'desc'])
+  @IsOptional()
+  sortOrder?: 'asc' | 'desc' = 'desc';
 
   @Type(() => Number)
   @IsNumber()

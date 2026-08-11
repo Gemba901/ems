@@ -39,7 +39,12 @@ type AuthUser = { userId: string; organizationId: string; roleLevel: string };
 
 // Planning/production staff. There is no dedicated PLANNER role in the system yet,
 // so this module is available to the same management-level roles used elsewhere.
-const PLANNING_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD];
+const PLANNING_ROLES = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN,
+  Role.MANAGEMENT,
+  Role.HOD,
+];
 const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
 @Controller('steel/plans')
@@ -54,8 +59,15 @@ export class SteelController {
    * P01-A01 — Capture customer enquiry, sales order, forecast, or stock requirement.
    */
   @Post()
-  async create(@Body() dto: CreateSteelDemandDto, @CurrentUser() user: AuthUser) {
-    return this.steelService.createDemand(dto, user.userId, user.organizationId);
+  async create(
+    @Body() dto: CreateSteelDemandDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelService.createDemand(
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -63,7 +75,10 @@ export class SteelController {
    * List production plans for the organization, with filters and pagination.
    */
   @Get()
-  async getAll(@Query() query: QuerySteelPlansDto, @CurrentUser() user: AuthUser) {
+  async getAll(
+    @Query() query: QuerySteelPlansDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.steelService.getAll(user.organizationId, query);
   }
 
@@ -95,7 +110,12 @@ export class SteelController {
     @Body() dto: ConfirmSteelPriorityDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.confirmPriority(id, dto, user.userId, user.organizationId);
+    return this.steelService.confirmPriority(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -108,7 +128,12 @@ export class SteelController {
     @Body() dto: ConfirmSteelProductDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.confirmProduct(id, dto, user.userId, user.organizationId);
+    return this.steelService.confirmProduct(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -121,7 +146,12 @@ export class SteelController {
     @Body() dto: ConfirmSteelSpecificationDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.confirmSpecification(id, dto, user.userId, user.organizationId);
+    return this.steelService.confirmSpecification(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -134,7 +164,12 @@ export class SteelController {
     @Body() dto: SteelStockCheckDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.checkStock(id, dto, user.userId, user.organizationId);
+    return this.steelService.checkStock(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -147,7 +182,12 @@ export class SteelController {
     @Body() dto: SteelStockDecisionDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.decideStockOrProduction(id, dto, user.userId, user.organizationId);
+    return this.steelService.decideStockOrProduction(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -160,7 +200,12 @@ export class SteelController {
     @Body() dto: SelectSteelRouteDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.selectRoute(id, dto, user.userId, user.organizationId);
+    return this.steelService.selectRoute(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -173,7 +218,12 @@ export class SteelController {
     @Body() dto: SteelMaterialCheckDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.checkMaterial(id, dto, user.userId, user.organizationId);
+    return this.steelService.checkMaterial(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -186,7 +236,12 @@ export class SteelController {
     @Body() dto: SteelCapacityCheckDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.checkCapacity(id, dto, user.userId, user.organizationId);
+    return this.steelService.checkCapacity(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -199,7 +254,12 @@ export class SteelController {
     @Body() dto: PrepareSteelProductionPlanDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.prepareProductionPlan(id, dto, user.userId, user.organizationId);
+    return this.steelService.prepareProductionPlan(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -212,7 +272,12 @@ export class SteelController {
     @Body() dto: CommunicateSteelPlanDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.communicatePlan(id, dto, user.userId, user.organizationId);
+    return this.steelService.communicatePlan(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -227,7 +292,13 @@ export class SteelController {
     @Body() dto: AckSteelPlanDepartmentDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.acknowledgeDepartment(id, department, dto, user.userId, user.organizationId);
+    return this.steelService.acknowledgeDepartment(
+      id,
+      department,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -241,7 +312,12 @@ export class SteelController {
     @Body() dto: ReleaseSteelPlanDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.releasePlan(id, dto, user.userId, user.organizationId);
+    return this.steelService.releasePlan(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 
   /**

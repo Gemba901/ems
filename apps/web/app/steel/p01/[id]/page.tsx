@@ -26,6 +26,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, CheckCircle2, Circle, Lock, Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { S2ProductSpecification } from "./S2ProductSpecification";
+import { S3StockFulfilment } from "./S3StockFulfilment";
+import { S4FeasibilityRoute } from "./S4FeasibilityRoute";
+import { S5PlanPreparation } from "./S5PlanPreparation";
+import { S6PlanRelease } from "./S6PlanRelease";
 
 const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
@@ -89,6 +94,13 @@ export default function SteelPlanDetailPage() {
   const { accessToken, user } = useAuthStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // Tracks whether the user has acknowledged S3's completion card (shown
+  // right after the A06 decision) so "Continue to S4" can hand off to the
+  // existing flat page without needing a fake client-side stage — the
+  // server stage (A06_STOCK_DECISION_MADE) doesn't change at that point.
+  const [s3Acknowledged, setS3Acknowledged] = useState(false);
+  // Same pattern for S4's completion card (shown after A09).
+  const [s4Acknowledged, setS4Acknowledged] = useState(false);
 
   const { data: plan, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["steel-plan", params.id],
@@ -128,6 +140,74 @@ export default function SteelPlanDetailPage() {
         </div>
       </div>
     );
+  }
+
+  // S2 (P01-A03/A04) is a dedicated screen — intercept here while the plan
+  // is in that range so it's not also shown inline in the flat waterfall
+  // below. Server stage remains authoritative; once A04 completes, this
+  // branch stops matching and the existing flat page (S3-S6, unmodified)
+  // takes over as before.
+  if (plan.stage === "A02_PRIORITY_CONFIRMED" || plan.stage === "A03_PRODUCT_CONFIRMED") {
+    return <S2ProductSpecification plan={plan} token={accessToken!} onRefresh={refresh} />;
+  }
+
+  // S3 (P01-A05/A06) is a dedicated screen — same interception pattern as
+  // S2. A06_STOCK_DECISION_MADE is included so the completion card renders
+  // once (whether just decided or resumed after a refresh); "Continue to S4"
+  // acknowledges it locally so the existing flat page (S4-S6, unmodified)
+  // takes over without inventing a new server stage.
+  if (
+    plan.stage === "A04_SPEC_CONFIRMED" ||
+    plan.stage === "A05_STOCK_CHECKED" ||
+    (plan.stage === "A06_STOCK_DECISION_MADE" && !s3Acknowledged)
+  ) {
+    return (
+      <S3StockFulfilment
+        plan={plan}
+        token={accessToken!}
+        onRefresh={() => {
+          if (plan.stage === "A06_STOCK_DECISION_MADE") setS3Acknowledged(true);
+          refresh();
+        }}
+      />
+    );
+  }
+
+  // S4 (P01-A07/A08/A09) — same interception + acknowledgement pattern as
+  // S3. A09_CAPACITY_CHECKED is included so the completion card renders
+  // once; "Continue to S5" acknowledges it locally so the existing flat
+  // page (S5-S6, unmodified) takes over without inventing a server stage.
+  if (
+    plan.stage === "A06_STOCK_DECISION_MADE" ||
+    plan.stage === "A07_ROUTE_SELECTED" ||
+    plan.stage === "A08_MATERIAL_CHECKED" ||
+    (plan.stage === "A09_CAPACITY_CHECKED" && !s4Acknowledged)
+  ) {
+    return (
+      <S4FeasibilityRoute
+        plan={plan}
+        token={accessToken!}
+        onRefresh={() => {
+          if (plan.stage === "A09_CAPACITY_CHECKED") setS4Acknowledged(true);
+          refresh();
+        }}
+      />
+    );
+  }
+
+  // S5 (P01-A10/A11) — covers drafting the production plan and initiating
+  // department communication. Once communicate succeeds, plan.stage becomes
+  // A11_PLAN_COMMUNICATED, this branch stops matching, and S6 (below) takes
+  // over — S6 owns acknowledgement tracking and the release gate, so there's
+  // no need for a client-side "leave" flag here.
+  if (plan.stage === "A09_CAPACITY_CHECKED" || plan.stage === "A10_PLAN_DRAFTED") {
+    return <S5PlanPreparation plan={plan} token={accessToken!} onRefresh={refresh} onContinue={refresh} />;
+  }
+
+  // S6 (P01-A12) — department acknowledgement tracking and final release
+  // approval, plus the released/success state (with "Continue to P02").
+  if (plan.stage === "A11_PLAN_COMMUNICATED" || plan.stage === "A12_PLAN_RELEASED") {
+    return <S6PlanRelease plan={plan} token={accessToken!} onRefresh={refresh} />;
   }
 
   const currentIdx = STAGE_ORDER.indexOf(plan.stage);

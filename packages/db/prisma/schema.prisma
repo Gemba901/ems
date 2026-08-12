@@ -162,6 +162,8 @@ model Organization {
   heatMaterialCharges        HeatMaterialCharge[]
   heatCycleEvents            HeatCycleEvent[]
   activities                 Activity[]
+  jobTitleActivities    JobTitleActivity[]
+  employeeActivityAssignments EmployeeActivityAssignment[]
   activityIngestions         ActivityIngestion[]
   activityIngestionRows      ActivityIngestionRow[]
   customers                  Customer[]
@@ -350,6 +352,7 @@ model Employee {
   taskInstances         TaskInstance[]
   taskInstanceComments  TaskInstanceComment[]
   taskInstanceEvents    TaskInstanceEvent[]
+  activityAssignments       EmployeeActivityAssignment[]
   activityIngestions    ActivityIngestion[]       @relation("ActivityIngestionUploader")
   primaryActivities     Activity[]                @relation("ActivityPrimaryResponsible")
   alertsRaised          Alert[]                   @relation("AlertsRaised")
@@ -971,6 +974,8 @@ model Activity {
   parentActivity             Activity?              @relation("ActivityParent", fields: [parentActivityId], references: [id], onDelete: SetNull)
   childActivities            Activity[]             @relation("ActivityParent")
   tasks                      Task[]
+  jobTitleActivities         JobTitleActivity[]
+  employeeAssignments        EmployeeActivityAssignment[]
   ingestionRows              ActivityIngestionRow[]
 
   @@unique([organizationId, code])
@@ -978,6 +983,43 @@ model Activity {
   @@index([mainDepartmentId])
   @@index([primaryResponsibleEmployeeId])
   @@index([parentActivityId])
+}
+
+model JobTitleActivity {
+  id             String   @id @default(uuid())
+  organizationId String
+  jobTitle       String
+  activityId     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, jobTitle, activityId])
+  @@index([organizationId, jobTitle])
+  @@index([activityId])
+}
+
+model EmployeeActivityAssignment {
+  id             String                 @id @default(uuid())
+  organizationId String
+  employeeId     String
+  activityId     String
+  status         EmployeeActivityStatus @default(ACTIVE)
+  activatedAt    DateTime?
+  deactivatedAt  DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, activityId])
+  @@index([organizationId, status])
+  @@index([employeeId, status])
+  @@index([activityId])
 }
 
 model ActivityIngestion {
@@ -2835,6 +2877,11 @@ enum ActivityStatus {
   ARCHIVED
 }
 
+enum EmployeeActivityStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum Priority {
   LOW
   MEDIUM
@@ -3119,4 +3166,3 @@ model KaizenReview {
   kaizen   Kaizen   @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
   reviewer Employee @relation(fields: [reviewerId], references: [id])
 }
-

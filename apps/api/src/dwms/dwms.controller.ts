@@ -34,6 +34,7 @@ import {
   UpdateActivityDto,
   CreateTaskFromActivityDto,
   IngestActivitiesDto,
+  UpdateEmployeeActivityAssignmentDto,
 } from './dto/dwms.dto';
 import { UpdateDwmsPermissionConfigDto } from './dto/dwmsSettings.dto';
 
@@ -216,7 +217,6 @@ export class DwmsController {
     return this.dwmsService.archiveActivity(user, id);
   }
 
-
   @Post('activities/:id/tasks')
   @UseGuards(JwtAuthGuard)
   createTaskFromActivity(
@@ -227,6 +227,41 @@ export class DwmsController {
     return this.dwmsService.createTaskFromActivity(user, id, dto);
   }
 
+  @Get('employees/:employeeId/profile')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  getEmployeeDwmsProfile(
+    @CurrentUser() user: UserPayload,
+    @Param('employeeId') employeeId: string,
+  ) {
+    return this.dwmsService.getEmployeeDwmsProfile(user, employeeId);
+  }
+  @Get('employees/:employeeId/activities')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  listEmployeeRoleActivities(
+    @CurrentUser() user: UserPayload,
+    @Param('employeeId') employeeId: string,
+  ) {
+    return this.dwmsService.listEmployeeRoleActivities(user, employeeId);
+  }
+
+  @Patch('employees/:employeeId/activities/:activityId')
+  @UseGuards(JwtAuthGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  updateEmployeeActivityAssignment(
+    @CurrentUser() user: UserPayload,
+    @Param('employeeId') employeeId: string,
+    @Param('activityId') activityId: string,
+    @Body() dto: UpdateEmployeeActivityAssignmentDto,
+  ) {
+    return this.dwmsService.updateEmployeeActivityAssignment(
+      user,
+      employeeId,
+      activityId,
+      dto,
+    );
+  }
   // --- Assigned Tasks Endpoints ---
   @Post('assignedTasks')
   @UseGuards(JwtAuthGuard, ModuleGuard)
@@ -344,7 +379,6 @@ export class DwmsController {
   getMyResponsibleAlertCount(@CurrentUser() user: UserPayload) {
     return this.dwmsService.getMyResponsibleAlertCount(user);
   }
-
 
   @Get('alerts/:id')
   @UseGuards(JwtAuthGuard, ModuleGuard)
@@ -542,6 +576,3 @@ export class DwmsController {
     return this.dwmsService.updateDwmsPermissionConfig(user, dto);
   }
 }
-
-
-

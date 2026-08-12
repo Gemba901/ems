@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, ClipboardCheck, CalendarClock, Download, Loader2 } from "lucide-react";
+import { PauseCircle, ClipboardCheck, CalendarClock, Download, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { QueryErrorState } from "@/components/steel/dashboard/QueryErrorState";
 import { useAuthStore } from "@/store/auth.store";
 import { useToast } from "@/contexts/toast.context";
 import { SteelService, STAGE_LABELS, type SteelPlanSummary } from "@/services/steel.service";
@@ -12,8 +12,12 @@ import type { P01FiltersState } from "./P01Filters";
 
 interface Props {
   summary?: SteelPlanSummary;
+  summaryIsError?: boolean;
+  summaryIsFetching?: boolean;
+  onRetrySummary?: () => void;
   filters: P01FiltersState;
   onFilterPendingApproval: () => void;
+  onFilterOnHold: () => void;
   onViewSchedule: () => void;
 }
 
@@ -53,6 +57,9 @@ function exportToCSV(plans: Array<{
 
 // Every action maps to real, backend-supported functionality:
 // - Pending Approvals reuses the existing stage/status query params.
+// - On Hold Plans reuses the existing status filter (real count already
+//   present on the summary) — kept instead of a second "New Production
+//   Plan" tile, which duplicated the header's own primary CTA.
 // - Production Schedule uses the new fromDate/toDate range params
 //   (today .. +30 days) — a real filter over real dates, not a fabricated
 //   count. The 30-day window is a UI framing choice, not invented data.
@@ -61,7 +68,9 @@ function exportToCSV(plans: Array<{
 //   list endpoint and writes a real CSV from that response — no backend
 //   export endpoint exists, so this is capped and client-side rather than
 //   claiming a server-side export.
-export function QuickActions({ summary, filters, onFilterPendingApproval, onViewSchedule }: Props) {
+export function QuickActions({
+  summary, summaryIsError, summaryIsFetching, onRetrySummary, filters, onFilterPendingApproval, onFilterOnHold, onViewSchedule,
+}: Props) {
   const { accessToken } = useAuthStore();
   const { toast } = useToast();
   const [exporting, setExporting] = useState(false);
@@ -77,6 +86,24 @@ export function QuickActions({ summary, filters, onFilterPendingApproval, onView
   });
 
   const pendingApprovalCount = summary?.byStage["A11_PLAN_COMMUNICATED"] ?? null;
+  const onHoldCount = summary?.byStatus["ON_HOLD"] ?? null;
+
+  if (summaryIsError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <QueryErrorState
+            onRetry={onRetrySummary ?? (() => {})}
+            isRetrying={summaryIsFetching}
+            message="Could not load quick action data."
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   async function handleExport() {
     if (!accessToken) return;
@@ -109,14 +136,6 @@ export function QuickActions({ summary, filters, onFilterPendingApproval, onView
 
   const actions = [
     {
-      label: "New Production Plan",
-      description: "Create a new P01 plan.",
-      icon: Plus,
-      tone: "text-blue-700 bg-blue-50",
-      as: "link" as const,
-      href: "/steel/p01/new",
-    },
-    {
       label: "Pending Approvals",
       description:
         pendingApprovalCount === null
@@ -128,10 +147,25 @@ export function QuickActions({ summary, filters, onFilterPendingApproval, onView
       onClick: onFilterPendingApproval,
     },
     {
+      label: "On Hold Plans",
+      description:
+        onHoldCount === null
+          ? "Plans currently on hold."
+          : onHoldCount === 0
+            ? "No plans currently on hold."
+            : `${onHoldCount} plan${onHoldCount === 1 ? "" : "s"} on hold.`,
+      icon: PauseCircle,
+      tone: onHoldCount && onHoldCount > 0 ? "text-red-700 bg-red-50" : "text-slate-700 bg-slate-100",
+      as: "button" as const,
+      onClick: onFilterOnHold,
+    },
+    {
       label: "Production Schedule",
       description: scheduledCount.isLoading
         ? "Loading..."
-        : `${scheduledCount.data?.pagination.total ?? 0} plans scheduled in the next 30 days.`,
+        : scheduledCount.isError
+          ? "Unable to load scheduled count."
+          : `${scheduledCount.data?.pagination.total ?? 0} plans scheduled in the next 30 days.`,
       icon: CalendarClock,
       tone: "text-teal-700 bg-teal-50",
       as: "button" as const,
@@ -175,11 +209,7 @@ export function QuickActions({ summary, filters, onFilterPendingApproval, onView
             const className =
               "w-full flex items-start gap-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm px-3 py-3 text-left transition-all disabled:opacity-60 disabled:cursor-not-allowed";
 
-            return action.as === "link" ? (
-              <Link key={action.label} href={action.href} className={className}>
-                {content}
-              </Link>
-            ) : (
+            return (
               <button
                 key={action.label}
                 type="button"

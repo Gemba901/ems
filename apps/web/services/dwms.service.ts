@@ -56,7 +56,6 @@ async function sendJson<T>(
   return handleResponse<T>(res);
 }
 
-
 function buildQuery(
   params: Record<string, string | number | undefined | null>,
 ) {
@@ -209,6 +208,44 @@ export interface DwmsActivityItem {
   remarks?: string | null;
 }
 
+export type EmployeeActivityAssignmentStatus = "ACTIVE" | "INACTIVE";
+
+export interface DwmsEmployeeRoleActivityItem {
+  activity: DwmsActivityItem;
+  status: EmployeeActivityAssignmentStatus;
+  assignmentId?: string | null;
+  activatedAt?: string | null;
+  deactivatedAt?: string | null;
+}
+
+export interface DwmsEmployeeRoleActivitiesResponse {
+  jobTitle: string | null;
+  count: number;
+  activities: DwmsEmployeeRoleActivityItem[];
+}
+export interface DwmsEmployeeProfileResponse {
+  employee?: {
+    id: string;
+    name: string;
+    email?: string | null;
+    employeeCode?: string | null;
+    jobTitle?: string | null;
+    department?: DwmsDepartmentOption | null;
+  };
+  counts?: {
+    currentTasks: number;
+    currentAlerts: number;
+    abnormalities: number;
+    raisedAlerts: number;
+    applicableActivities: number;
+    activeActivities: number;
+  };
+  currentTasks?: DwmsTaskItem[];
+  currentAlerts?: DwmsAlertItem[];
+  abnormalities?: DwmsAlertItem[];
+  raisedAlerts?: DwmsAlertItem[];
+  applicableActivities?: DwmsEmployeeRoleActivityItem[];
+}
 export interface DwmsSettingsResponse {
   approverRoles?: DwmsApproverRule[];
   approverCustomEmployeeIds?: string[];
@@ -691,7 +728,7 @@ export interface CreateActivityPayload {
 
 export interface IngestActivityRowPayload {
   rowNumber?: number;
-  responsibleEmployeeCode: string;
+  responsibleEmployeeCode?: string;
   parentActivityCode?: string | null;
   activity: CreateActivityPayload;
 }
@@ -1178,6 +1215,38 @@ export const DwmsService = {
   },
 
 
+  async getEmployeeDwmsProfile(
+    token: string,
+    employeeId: string,
+  ): Promise<DwmsEmployeeProfileResponse> {
+    return getJson(
+      `/dwms/employees/${encodeURIComponent(employeeId)}/profile`,
+      token,
+    );
+  },
+  async getEmployeeRoleActivities(
+    token: string,
+    employeeId: string,
+  ): Promise<DwmsEmployeeRoleActivitiesResponse> {
+    return getJson(
+      `/dwms/employees/${encodeURIComponent(employeeId)}/activities`,
+      token,
+    );
+  },
+
+  async updateEmployeeActivityStatus(
+    token: string,
+    employeeId: string,
+    activityId: string,
+    status: EmployeeActivityAssignmentStatus,
+  ): Promise<{ item?: DwmsEmployeeRoleActivityItem; message?: string }> {
+    return sendJson(
+      `/dwms/employees/${encodeURIComponent(employeeId)}/activities/${encodeURIComponent(activityId)}`,
+      token,
+      "PATCH",
+      { status },
+    );
+  },
   async createAssignedTask(
     token: string,
     body: CreateAssignedTaskPayload,
@@ -1203,10 +1272,7 @@ export const DwmsService = {
     date: string,
     scope?: "scheduled" | "completed",
   ): Promise<{ tasks?: DwmsTaskItem[] }> {
-    return getJson(
-      `/dwms/myDwms/tasks${buildQuery({ date, scope })}`,
-      token,
-    );
+    return getJson(`/dwms/myDwms/tasks${buildQuery({ date, scope })}`, token);
   },
 
   async getTaskInstanceDetail(
@@ -1269,4 +1335,3 @@ function toHours(minutes: number) {
 function toMinutes(hours: number) {
   return Number.isFinite(hours) ? Math.max(0, Math.round(hours * 60)) : 0;
 }
-

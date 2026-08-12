@@ -385,6 +385,13 @@ export class DwmsEscalationService {
         againstUserId: instance.ownerId,
       },
     });
+    await this.raiseRepeatedOverdueAbnormality({
+      organizationId,
+      instance,
+      sourceAlertId: alert.id,
+      raisedById,
+      notificationTargets,
+    });
 
     for (const contactId of notificationTargets) {
       await this.notifications.create({
@@ -396,6 +403,86 @@ export class DwmsEscalationService {
         actionUrl: contactId === instance.ownerId ? `/dwms/alerts/${alert.id}` : undefined,
       });
     }
+  }
+
+  private async raiseRepeatedOverdueAbnormality(params: {
+    organizationId: string;
+    instance: any;
+    sourceAlertId: string;
+    raisedById: string;
+    notificationTargets: Set<string>;
+  }) {
+    const {
+      organizationId,
+      instance,
+      sourceAlertId,
+      raisedById,
+      notificationTargets,
+    } = params;
+
+    const overdueAlertCount = await this.prisma.alert.count({
+      where: {
+        organizationId,
+        type: AlertType.DELAY,
+        isAbnormality: false,
+        againstUserId: instance.ownerId,
+        taskInstance: { taskId: instance.taskId },
+      },
+    });
+
+    if (overdueAlertCount < 3) return;
+
+    const title = `Repeated overdue task: ${instance.task.title}`;
+    const existing = await this.prisma.alert.findFirst({
+      where: {
+        organizationId,
+        type: AlertType.ABNORMAL_SITUATION,
+        isAbnormality: true,
+        title,
+        againstUserId: instance.ownerId,
+        taskInstance: { taskId: instance.taskId },
+      },
+      select: { id: true },
+    });
+
+    if (existing) return;
+
+    const description = [
+      `The task "${instance.task.title}" has generated ${overdueAlertCount} overdue alerts for ${instance.owner.firstName} ${instance.owner.lastName}.`,
+      'This abnormality was created because the same task was not completed on time three times.',
+      `Latest overdue instance date: ${instance.dueAt.toISOString()}.`,
+    ].join('\n');
+
+    const abnormality = await this.prisma.alert.create({
+      data: {
+        type: AlertType.ABNORMAL_SITUATION,
+        title,
+        description,
+        severity: Severity.HIGH,
+        status: AlertStatus.OPEN,
+        organizationId,
+        raisedById,
+        taskInstanceId: instance.id,
+        againstUserId: instance.ownerId,
+        isAbnormality: true,
+        abnormalitySourceAlertId: sourceAlertId,
+      },
+    });
+
+    notificationTargets.add(instance.ownerId);
+
+    await Promise.all(
+      Array.from(notificationTargets).map((employeeId) =>
+        this.notifications.create({
+          employeeId,
+          type: NotificationType.ALERT,
+          module: 'DWMS',
+          title: 'Repeated Overdue Abnormality Created',
+          message: `An abnormality was created because "${instance.task.title}" became overdue three times.`,
+          actionUrl: `/dwms/alerts/${abnormality.id}`,
+        }),
+      ),
+    );
   }
 
   private async resolveContactIds(

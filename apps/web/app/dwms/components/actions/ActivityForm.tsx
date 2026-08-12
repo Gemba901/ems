@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -52,6 +52,20 @@ const EMPTY_FORM: CreateActivityPayload = {
 
 type ActivityFormProps = {
   onCreated?: () => void;
+};
+
+type ParsedActivitySheet = {
+  sheetName: string;
+  rows: string[][];
+};
+
+type ParsedActivityRow = {
+  rowNumber: number;
+  sourceRowNumber: number;
+  sheetName: string;
+  headers: string[];
+  values: string[];
+  row: Record<string, string>;
 };
 
 function normalizeHeader(value: string) {
@@ -153,22 +167,31 @@ function cellToText(value: unknown) {
   return String(value).trim();
 }
 
-async function parseActivityRows(file: File) {
-  if (!isExcelFile(file)) return parseDelimited(await file.text());
+async function parseActivitySheets(file: File): Promise<ParsedActivitySheet[]> {
+  if (!isExcelFile(file)) {
+    return [{ sheetName: file.name, rows: parseDelimited(await file.text()) }];
+  }
 
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(await file.arrayBuffer(), {
     type: "array",
     cellDates: true,
   });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = sheetName ? workbook.Sheets[sheetName] : null;
-  if (!sheet) return [];
 
-  return XLSX.utils
-    .sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true })
-    .map((row) => row.map(cellToText))
-    .filter((row) => row.some(Boolean));
+  return workbook.SheetNames.map((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = sheet
+      ? XLSX.utils
+          .sheet_to_json<unknown[]>(sheet, {
+            header: 1,
+            defval: "",
+            raw: true,
+          })
+          .map((row) => row.map(cellToText))
+          .filter((row) => row.some(Boolean))
+      : [];
+    return { sheetName, rows };
+  }).filter((sheet) => sheet.rows.length > 0);
 }
 
 function parseEstimatedHours(value: string): number | null {
@@ -353,32 +376,58 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
     if (!accessToken) return;
     setImporting(true);
     setMessage(null);
+    setFailedRowsCsv(null);
     try {
-      const rows = await parseActivityRows(file);
-      const headerIndex = findActivityHeaderRowIndex(rows);
-      if (headerIndex === -1) {
+      const sheets = await parseActivitySheets(file);
+      if (sheets.length === 0) {
+        throw new Error("No activity rows found in the file.");
+      }
+
+      const parsedRows: ParsedActivityRow[] = [];
+      const skippedSheets: string[] = [];
+      let importRowNumber = 1;
+
+      for (const sheet of sheets) {
+        const headerIndex = findActivityHeaderRowIndex(sheet.rows);
+        if (headerIndex === -1) {
+          skippedSheets.push(sheet.sheetName);
+          continue;
+        }
+
+        const headers = sheet.rows[headerIndex];
+        const dataRows = sheet.rows.slice(headerIndex + 1);
+        if (!headers || dataRows.length === 0) continue;
+
+        const normalizedHeaders = headers.map(normalizeHeader);
+        for (const [index, row] of dataRows.entries()) {
+          parsedRows.push({
+            rowNumber: importRowNumber,
+            sourceRowNumber: headerIndex + index + 2,
+            sheetName: sheet.sheetName,
+            headers,
+            values: row,
+            row: Object.fromEntries(
+              normalizedHeaders.map((header, columnIndex) => [
+                header,
+                row[columnIndex] ?? "",
+              ]),
+            ),
+          });
+          importRowNumber += 1;
+        }
+      }
+
+      if (parsedRows.length === 0) {
         throw new Error(
-          "Could not find activity headers. Include Process Name and Description / SOP columns.",
+          skippedSheets.length > 0
+            ? "Could not find activity headers in any worksheet. Include Process Name and Description / SOP columns."
+            : "No activity rows found in the file.",
         );
       }
 
-      const headers = rows[headerIndex];
-      const dataRows = rows.slice(headerIndex + 1);
-      if (!headers || dataRows.length === 0) {
-        throw new Error("No activity rows found in the file.");
-      }
-      const normalizedHeaders = headers.map(normalizeHeader);
-      const parsedRows = dataRows.map((row, index) => ({
-        rowNumber: headerIndex + index + 2,
-        values: row,
-        row: Object.fromEntries(
-          normalizedHeaders.map((header, columnIndex) => [
-            header,
-            row[columnIndex] ?? "",
-          ]),
-        ),
-      }));
-      const rowByNumber = new Map(parsedRows.map((row) => [row.rowNumber, row]));
+      const rowByNumber = new Map(
+        parsedRows.map((row) => [row.rowNumber, row]),
+      );
       const payloads = parsedRows
         .map(({ row, rowNumber }) => rowToIngestPayload(row, rowNumber))
         .filter(
@@ -402,12 +451,21 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
           failures.map((failure) => [failure.rowNumber, failure.message]),
         );
         const failedCsvRows = [
-          [...headers, "Import Error"],
+          ["Sheet", "Row", "Import Error", "Original Row Values"],
           ...failures.map((failure) => {
-            const originalRow = rowByNumber.get(failure.rowNumber)?.values ?? [];
+            const original = rowByNumber.get(failure.rowNumber);
             return [
-              ...headers.map((_, columnIndex) => originalRow[columnIndex] ?? ""),
+              original?.sheetName ?? "",
+              String(original?.sourceRowNumber ?? failure.rowNumber),
               failureByRowNumber.get(failure.rowNumber) ?? failure.message,
+              original
+                ? original.headers
+                    .map(
+                      (header, columnIndex) =>
+                        `${header}: ${original.values[columnIndex] ?? ""}`,
+                    )
+                    .join(" | ")
+                : "",
             ];
           }),
         ];
@@ -418,12 +476,21 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
       }
       const failureSummary = failures
         .slice(0, 3)
-        .map((row) => `Row ${row.rowNumber}: ${row.message}`)
+        .map((row) => {
+          const original = rowByNumber.get(row.rowNumber);
+          const location = original
+            ? `${original.sheetName} row ${original.sourceRowNumber}`
+            : `Row ${row.rowNumber}`;
+          return `${location}: ${row.message}`;
+        })
         .join(" ");
+      const skippedSummary = skippedSheets.length
+        ? ` Skipped sheets without activity headers: ${skippedSheets.join(", ")}.`
+        : "";
       setMessage(
         failures.length > 0
-          ? `Imported ${result.created} activities and tasks. ${result.failed} rows failed. ${failureSummary}`
-          : `Imported ${result.created} activities and tasks successfully.`,
+          ? `Imported ${result.created} activities. ${result.failed} rows failed. ${failureSummary}${skippedSummary}`
+          : `Imported ${result.created} activities successfully.${skippedSummary}`,
       );
       onCreated?.();
     } catch (error) {
@@ -432,7 +499,6 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
       setImporting(false);
     }
   }
-
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
       {!canManageActivities ? (
@@ -558,7 +624,9 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                 searchEnabled
                 allowClear
                 emptyMessage="No same-frequency activities found."
-                onChange={(value) => setField("parentActivityIds", value ? [value] : [])}
+                onChange={(value) =>
+                  setField("parentActivityIds", value ? [value] : [])
+                }
                 triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </label>
@@ -624,15 +692,33 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               }}
             />
           </label>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500">
-            Required headers: Process Name, Description / SOP, Frequency, and
-            Emp ID. XLSX imports use the first worksheet. Activity ingestion
-            does not use due dates; rows must use DAILY, WEEKLY, MONTHLY,
-            QUARTERLY, or YEARLY. Optional headers: Department, Sub -
-            Department, Activity Code, Estimated Time, Purpose, Responsible Job
-            Designation, Expected Output, Documents Required, Parent Activity Code. Emp ID can also be
-            named Employee ID, Employee Code, Responsible Emp ID, or Responsible
-            Employee Code.
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-600">
+            <div>
+              <p className="font-bold text-slate-700">Workbook import</p>
+              <p>
+                XLSX and XLS imports read every worksheet in the workbook. Each
+                worksheet should have its own header row; sheets without activity
+                headers are skipped.
+              </p>
+            </div>
+            <div>
+              <p className="font-bold text-slate-700">Required columns</p>
+              <p>Process Name, Description / SOP, Frequency.</p>
+            </div>
+            <div>
+              <p className="font-bold text-slate-700">Optional columns</p>
+              <p>
+                Department, Sub - Department, Activity Code, Estimated Time,
+                Purpose, Responsible Job Designation, Expected Output, Documents
+                Required, Parent Activity Code, Emp ID.
+              </p>
+            </div>
+            <p>
+              Frequency must be DAILY, WEEKLY, MONTHLY, QUARTERLY, or YEARLY.
+              Activity ingestion does not use due dates. Emp ID can also be named
+              Employee ID, Employee Code, Responsible Emp ID, or Responsible
+              Employee Code, and is stored only for import traceability.
+            </p>
           </div>
         </aside>
       )}
@@ -742,3 +828,6 @@ function SelectField({
     </label>
   );
 }
+
+
+

@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   AlertStatus,
   AlertType,
+  EmployeeActivityStatus,
   NotificationType,
   Priority,
   Severity,
@@ -49,6 +50,7 @@ type OfficeScheduledTask = {
   dueDate?: Date | null;
   createdAt?: Date;
   ownerId?: string | null;
+  activityId?: string | null;
   owner?: { organizationId?: string | null } | null;
 };
 
@@ -385,7 +387,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       }
 
       if (instance.alerts.length === 0) {
-        await this.prisma.alert.create({
+        const alert = await this.prisma.alert.create({
           data: {
             type: AlertType.DELAY,
             title: `Delay: Task "${instance.task.title}" is overdue`,
@@ -397,6 +399,13 @@ export abstract class DwmsTaskService extends DwmsBaseService {
             againstUserId: instance.ownerId,
             status: AlertStatus.OPEN,
           },
+        });
+
+        await this.raiseRepeatedOverdueAbnormality({
+          organizationId,
+          instance,
+          sourceAlertId: alert.id,
+          raisedById,
         });
 
         await this.notifications.create({
@@ -411,12 +420,111 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     }
   }
 
+  private async raiseRepeatedOverdueAbnormality(params: {
+    organizationId: string;
+    instance: any;
+    sourceAlertId: string;
+    raisedById: string;
+  }) {
+    const { organizationId, instance, sourceAlertId, raisedById } = params;
+
+    const overdueAlertCount = await this.prisma.alert.count({
+      where: {
+        organizationId,
+        type: AlertType.DELAY,
+        isAbnormality: false,
+        againstUserId: instance.ownerId,
+        taskInstance: { taskId: instance.taskId },
+      },
+    });
+
+    if (overdueAlertCount < 3) return;
+
+    const title = `Repeated overdue task: ${instance.task.title}`;
+    const existing = await this.prisma.alert.findFirst({
+      where: {
+        organizationId,
+        type: AlertType.ABNORMAL_SITUATION,
+        isAbnormality: true,
+        title,
+        againstUserId: instance.ownerId,
+        taskInstance: { taskId: instance.taskId },
+      },
+      select: { id: true },
+    });
+
+    if (existing) return;
+
+    const description = [
+      `The task "${instance.task.title}" has generated ${overdueAlertCount} overdue alerts for ${instance.owner.firstName} ${instance.owner.lastName}.`,
+      'This abnormality was created because the same task was not completed on time three times.',
+      `Latest overdue instance date: ${instance.dueAt.toISOString()}.`,
+    ].join('\n');
+
+    const abnormality = await this.prisma.alert.create({
+      data: {
+        type: AlertType.ABNORMAL_SITUATION,
+        title,
+        description,
+        severity: Severity.HIGH,
+        status: AlertStatus.OPEN,
+        organizationId,
+        raisedById,
+        taskInstanceId: instance.id,
+        againstUserId: instance.ownerId,
+        isAbnormality: true,
+        abnormalitySourceAlertId: sourceAlertId,
+      },
+    });
+
+    const notificationTargets = new Set<string>();
+    notificationTargets.add(instance.ownerId);
+    if (instance.task.assignedById) {
+      notificationTargets.add(instance.task.assignedById);
+    }
+
+    await Promise.all(
+      Array.from(notificationTargets).map((employeeId) =>
+        this.notifications.create({
+          employeeId,
+          type: NotificationType.ALERT,
+          module: 'DWMS',
+          title: 'Repeated Overdue Abnormality Created',
+          message: `An abnormality was created because "${instance.task.title}" became overdue three times.`,
+          actionUrl: `/dwms/alerts/${abnormality.id}`,
+        }),
+      ),
+    );
+  }
+  private async canGenerateTaskInstance(task: OfficeScheduledTask) {
+    if (
+      !task.activityId ||
+      !task.ownerId ||
+      !isRecurringTaskFrequency(task.frequency)
+    ) {
+      return true;
+    }
+
+    const assignment = await this.prisma.employeeActivityAssignment.findUnique({
+      where: {
+        employeeId_activityId: {
+          employeeId: task.ownerId,
+          activityId: task.activityId,
+        },
+      },
+      select: { status: true },
+    });
+
+    return assignment?.status === EmployeeActivityStatus.ACTIVE;
+  }
   // Ensure task instance exists for a scheduled date
   async ensureTaskInstance(
     task: any,
     scheduledFor: Date,
     timeZone?: string | null,
   ) {
+    if (!(await this.canGenerateTaskInstance(task))) return null;
+
     const effectiveScheduledFor =
       isPlannedTaskFrequency(task.frequency) && task.dueDate
         ? toUtcDateOnly(task.dueDate)
@@ -848,7 +956,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       instance.task.ownerId === employee.id ||
       instance.task.assignedById === employee.id ||
       instance.task.approvedById === employee.id;
-    const organizationTimeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
     const serializedTask = {
       ...this.serializeTaskInstance(instance.task, instance),
       organizationTimeZone,
@@ -892,7 +1002,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
             this.serializeTaskInstanceComment(comment),
           )
         : [],
-      events: hasFullTaskAccess ? this.serializeTaskInstanceHistory(instance) : [],
+      events: hasFullTaskAccess
+        ? this.serializeTaskInstanceHistory(instance)
+        : [],
       alerts: hasFullTaskAccess
         ? instance.alerts.map((alert) => ({
             id: alert.id,
@@ -901,7 +1013,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
             status: alert.status,
             severity: alert.severity,
             createdAt: alert.createdAt.toISOString(),
-            resolvedAt: alert.resolvedAt ? alert.resolvedAt.toISOString() : null,
+            resolvedAt: alert.resolvedAt
+              ? alert.resolvedAt.toISOString()
+              : null,
           }))
         : [],
     };
@@ -1026,7 +1140,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
       await Promise.all(
         tasks.map(async (t) => {
-          for (let offset = 0; offset < TASK_INSTANCE_GENERATION_DAYS; offset += 1) {
+          for (
+            let offset = 0;
+            offset < TASK_INSTANCE_GENERATION_DAYS;
+            offset += 1
+          ) {
             const candidate = new Date(referenceDate);
             candidate.setUTCDate(referenceDate.getUTCDate() + offset);
             const scheduledFor = await this.getOfficeScheduledForTaskDate(
@@ -1037,8 +1155,12 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
             if (!scheduledFor) continue;
 
-            const inst = await this.ensureTaskInstance(t, scheduledFor, timeZone);
-            if (seenInstanceIds.has(inst.id)) continue;
+            const inst = await this.ensureTaskInstance(
+              t,
+              scheduledFor,
+              timeZone,
+            );
+            if (!inst || seenInstanceIds.has(inst.id)) continue;
 
             seenInstanceIds.add(inst.id);
             const instance = await this.getTaskInstanceWithComments(inst.id);
@@ -1049,7 +1171,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
       allTaskInstances = scheduledItems.sort(
         (a, b) =>
-          a.instance.scheduledFor.getTime() - b.instance.scheduledFor.getTime() ||
+          a.instance.scheduledFor.getTime() -
+            b.instance.scheduledFor.getTime() ||
           a.instance.dueAt.getTime() - b.instance.dueAt.getTime() ||
           a.task.title.localeCompare(b.task.title),
       );
@@ -1086,6 +1209,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           if (!scheduledFor) return null;
 
           const inst = await this.ensureTaskInstance(t, scheduledFor, timeZone);
+          if (!inst) return null;
           const instance = await this.getTaskInstanceWithComments(inst.id);
           return { task: t, instance };
         }),
@@ -1152,7 +1276,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           ...this.serializeTaskInstance(task, instance),
           organizationTimeZone: timeZone,
           prerequisiteBlocked: unmetParents.length > 0,
-          prerequisiteActivityNames: unmetParents.map((activity) => activity.name),
+          prerequisiteActivityNames: unmetParents.map(
+            (activity) => activity.name,
+          ),
         };
       }),
     );
@@ -1166,10 +1292,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     };
   }
 
-  async getMyDwmsTaskSummary(
-    user: UserPayload,
-    rawDate?: string,
-  ) {
+  async getMyDwmsTaskSummary(user: UserPayload, rawDate?: string) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
 
@@ -1399,7 +1522,10 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     }
 
     if (completedStatuses.has(effectiveStatus)) {
-      await this.assertTaskCanBeCompletedNow(existingInstance, user.organizationId);
+      await this.assertTaskCanBeCompletedNow(
+        existingInstance,
+        user.organizationId,
+      );
     }
 
     await this.assertParentActivitiesDoneBeforeStatusChange(
@@ -1517,7 +1643,12 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       );
       if (!scheduledFor) continue;
 
-      await this.ensureTaskInstance(task, scheduledFor, timeZone);
+      const instance = await this.ensureTaskInstance(
+        task,
+        scheduledFor,
+        timeZone,
+      );
+      if (!instance) continue;
       createdOrEnsured += 1;
     }
 
@@ -1754,6 +1885,28 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       },
     });
 
+    if (activity && isRecurringTaskFrequency(frequency)) {
+      await this.prisma.employeeActivityAssignment.upsert({
+        where: {
+          employeeId_activityId: {
+            employeeId: dto.assignedToId,
+            activityId: activity.id,
+          },
+        },
+        update: {
+          status: EmployeeActivityStatus.ACTIVE,
+          activatedAt: new Date(),
+          deactivatedAt: null,
+        },
+        create: {
+          organizationId: user.organizationId,
+          employeeId: dto.assignedToId,
+          activityId: activity.id,
+          status: EmployeeActivityStatus.ACTIVE,
+          activatedAt: new Date(),
+        },
+      });
+    }
     await this.generateInstancesForTask(
       task,
       toUtcDateOnly(new Date()),
@@ -1843,7 +1996,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
     });
 
-    const organizationTimeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
 
     return {
       count: instances.length,
@@ -1922,7 +2077,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
     });
 
-    const organizationTimeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
 
     return {
       count: instances.length,
@@ -1985,7 +2142,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    const organizationTimeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
 
     return {
       count: instances.length,
@@ -2319,7 +2478,13 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (!scheduledFor) {
       throw new NotFoundException('No task instance is scheduled for today');
     }
-    return this.ensureTaskInstance(task, scheduledFor, null);
+    const instance = await this.ensureTaskInstance(task, scheduledFor, null);
+    if (!instance) {
+      throw new NotFoundException(
+        'No active task instance is scheduled for today',
+      );
+    }
+    return instance;
   }
 
   async updateAssignedTaskProgress(
@@ -2526,12 +2691,3 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     return { message: 'Task completed successfully', task, instance: updated };
   }
 }
-
-
-
-
-
-
-
-
-

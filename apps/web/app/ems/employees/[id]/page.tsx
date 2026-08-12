@@ -19,6 +19,7 @@ import {
   Camera, Pencil, Lock, Building2, Users, Shield,
 } from "lucide-react";
 import { CalendarService, EVENT_COLOR_CONFIG } from "@/services/calendar.service";
+import EmployeeDwmsPanel from "@/app/dwms/components/EmployeeDwmsPanel";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -140,7 +141,7 @@ const ROLE_OPTIONS = [
   { id: 5, name: "EMPLOYEE" },
 ];
 
-type Tab = "profile" | "master-data" | "activity";
+type Tab = "profile" | "master-data" | "dwms" | "activity";
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -334,6 +335,7 @@ export default function EmployeeDetailPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "master-data", label: "Master Data" },
+    { id: "dwms", label: "DWMS" },
     { id: "activity", label: "Activity" },
   ];
 
@@ -893,6 +895,15 @@ export default function EmployeeDetailPage() {
               )}
             </div>
           </div>
+        )}
+
+        {activeTab === "dwms" && employee && accessToken && id && (
+          <EmployeeDwmsPanel
+            employeeId={id}
+            accessToken={accessToken}
+            jobTitle={employee.jobTitle}
+            canManageActivities={isAdminOrHr}
+          />
         )}
 
         {/* ── Activity tab ──────────────────────────────────────────────── */}

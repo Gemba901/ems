@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SuggestionStatus, ImplementationStatus, DecisionType } from 'db';
+import { SuggestionStatus, ImplementationStatus, DecisionType, KaizenTrigger } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import {
@@ -542,15 +542,24 @@ export class SimsService {
         throw new BadRequestException('A before photo is required to raise a Kaizen from this suggestion');
       }
       const problem = dto.kaizenDetails.problem?.trim() || suggestion.title;
+      const defaultTargetCompletionDate = new Date();
+      defaultTargetCompletionDate.setDate(defaultTargetCompletionDate.getDate() + 30);
+      // Team members are captured as a freeform note here since SIMS reviewers pick
+      // by name, not by employee ID like the self-service Kaizen team-member picker.
+      const comments = dto.kaizenDetails.teamMembers
+        ? [dto.kaizenDetails.comments, `Team members: ${dto.kaizenDetails.teamMembers}`].filter(Boolean).join('\n')
+        : dto.kaizenDetails.comments;
 
       const createdKaizen = await this.kaizenService.createKaizenForEmployee(
         suggestion.employeeId,
         {
+          title: suggestion.title,
           problem,
-          beforePhotoUrl,
-          teamMembers: dto.kaizenDetails.teamMembers,
+          trigger: KaizenTrigger.EMPLOYEE_SUGGESTION_OR_IDEA,
+          targetCompletionDate: defaultTargetCompletionDate.toISOString(),
+          beforePhotoUrls: [beforePhotoUrl],
           benefitCategory: dto.kaizenDetails.benefitCategory,
-          comments: dto.kaizenDetails.comments,
+          comments,
           startImprovement: dto.kaizenDetails.startImprovement,
         },
         organizationId,

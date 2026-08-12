@@ -1,4 +1,4 @@
-import { KaizenStatus } from "@/services/kaizen.service";
+import { KaizenStatus, KaizenTrigger } from "@/services/kaizen.service";
 import { ChevronLeft, ChevronRight, ImageOff, Check, Lightbulb } from "lucide-react";
 
 export const STATUS_LABELS: Record<KaizenStatus, string> = {
@@ -20,6 +20,20 @@ export const STATUS_BADGE: Record<KaizenStatus, string> = {
 };
 
 export const BENEFIT_CATEGORIES = ["Quality", "Cost", "Delivery", "Safety", "Morale", "Technology"];
+
+export const KAIZEN_TRIGGERS: { value: KaizenTrigger; label: string }[] = [
+  { value: "PROBLEM_NOTICED", label: "Problem noticed" },
+  { value: "IMPROVEMENT_OPPORTUNITY_NOTICED", label: "Improvement opportunity noticed" },
+  { value: "ALERT_ACTION_REQUIRED", label: "Action required from an alert" },
+  { value: "ABNORMALITY_ACTION_REQUIRED", label: "Action required from an abnormality" },
+  { value: "EMPLOYEE_SUGGESTION_OR_IDEA", label: "Employee suggestion or idea" },
+  { value: "AUDIT_OR_GEMBA_WALK_OBSERVATION", label: "Audit or Gemba Walk observation" },
+  { value: "CUSTOMER_COMPLAINT_OR_FEEDBACK", label: "Customer complaint or feedback" },
+  { value: "MANAGEMENT_INSTRUCTION_OR_FEEDBACK", label: "Management instruction or feedback" },
+  { value: "REPEAT_PROBLEM", label: "Repeat problem" },
+  { value: "OTHER", label: "Other" },
+];
+
 
 export function StatusBadge({ status }: { status: KaizenStatus }) {
   return (

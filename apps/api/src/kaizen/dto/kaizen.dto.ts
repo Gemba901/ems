@@ -1,16 +1,33 @@
-import { IsBoolean, IsIn, IsOptional, IsString } from "class-validator"
-import { KaizenStatus } from "db"
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsOptional, IsString, MinLength, ValidateIf } from "class-validator"
+import { KaizenStatus, KaizenTrigger } from "db"
 
 export class CreateKaizenDto {
   @IsString()
+  @MinLength(5, { message: "Title must be at least 5 characters" })
+  title!: string;
+
+  @IsString()
   problem!: string;
 
-  @IsString()
-  beforePhotoUrl!: string;
+  @IsEnum(KaizenTrigger)
+  trigger!: KaizenTrigger;
 
+  @ValidateIf((o) => o.trigger === KaizenTrigger.OTHER)
   @IsString()
+  triggerOther?: string;
+
+  @IsDateString()
+  targetCompletionDate!: string;
+
+  @IsArray()
+  @ArrayMaxSize(5, { message: "You can attach up to 5 before photos" })
+  @IsString({ each: true })
+  beforePhotoUrls!: string[];
+
+  @IsArray()
   @IsOptional()
-  teamMembers?: string;
+  @IsString({ each: true })
+  teamMemberIds?: string[];
 
   @IsString()
   @IsOptional()

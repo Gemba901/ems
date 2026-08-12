@@ -24,6 +24,19 @@ export type KaizenStatus =
   | "FURTHER_IMPROVEMENT_REQUIRED"
   | "MOVED_TO_SGA";
 
+export type KaizenTrigger =
+  | "PROBLEM_NOTICED"
+  | "IMPROVEMENT_OPPORTUNITY_NOTICED"
+  | "ALERT_ACTION_REQUIRED"
+  | "ABNORMALITY_ACTION_REQUIRED"
+  | "EMPLOYEE_SUGGESTION_OR_IDEA"
+  | "AUDIT_OR_GEMBA_WALK_OBSERVATION"
+  | "CUSTOMER_COMPLAINT_OR_FEEDBACK"
+  | "MANAGEMENT_INSTRUCTION_OR_FEEDBACK"
+  | "REPEAT_PROBLEM"
+  | "OTHER";
+
+
 export interface KaizenEmployee {
   id: string;
   firstName: string;
@@ -46,13 +59,16 @@ export interface Kaizen {
   departmentId: string;
   status: KaizenStatus;
 
+  title: string | null;
   problem: string;
-  beforePhotoUrl: string;
+  trigger: KaizenTrigger | null;
+  triggerOther: string | null;
+  targetCompletionDate: string | null;
+  beforePhotoUrls: string[];
   improvementDescription: string | null;
   afterPhotoUrl: string | null;
   benefitAchieved: string | null;
 
-  teamMembers: string | null;
   benefitCategory: string | null;
   beforeValue: string | null;
   afterValue: string | null;
@@ -70,17 +86,23 @@ export interface Kaizen {
   employee: KaizenEmployee;
   department: { id: string; name: string } | null;
   verifiedBy: { id: string; firstName: string; lastName: string } | null;
+  teamMembers: { id: string; firstName: string; lastName: string }[];
   reviews: KaizenReview[];
 }
 
 export interface CreateKaizenPayload {
+  title: string;
   problem: string;
-  beforePhotoUrl: string;
-  teamMembers?: string;
+  trigger: KaizenTrigger;
+  triggerOther?: string;
+  targetCompletionDate: string;
+  beforePhotoUrls: string[];
+  teamMemberIds?: string[];
   benefitCategory?: string;
   comments?: string;
   startImprovement?: boolean;
 }
+
 
 export interface UpdateKaizenPayload {
   improvementDescription?: string;

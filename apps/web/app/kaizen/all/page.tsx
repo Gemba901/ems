@@ -130,7 +130,7 @@ export default function AllKaizensPage() {
                   href={`/kaizen/${k.id}`}
                   className="flex items-center gap-3 px-4 py-3 sm:px-6 hover:bg-slate-50 transition-colors"
                 >
-                  <Thumbnail src={k.beforePhotoUrl} alt={k.problem} />
+                  <Thumbnail src={k.beforePhotoUrls[0]} alt={k.problem} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-900 truncate">{k.problem}</p>
                     <p className="text-xs text-slate-500 mt-1">

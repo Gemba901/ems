@@ -235,19 +235,25 @@ export default function KaizenDetailPage() {
               </button>
               {showProblemSummary && (
                 <div className="px-6 pb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {kaizen.beforePhotoUrl && (
-                    <div className="rounded-lg overflow-hidden border border-slate-100">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={kaizen.beforePhotoUrl} alt="Before" className="w-full max-h-64 object-contain bg-slate-50" />
+                  {kaizen.beforePhotoUrls.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {kaizen.beforePhotoUrls.map((url, i) => (
+                        <div key={url} className="rounded-lg overflow-hidden border border-slate-100">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt={`Before ${i + 1}`} className="w-full max-h-64 object-contain bg-slate-50" />
+                        </div>
+                      ))}
                     </div>
                   )}
                   <div className="space-y-3">
                     <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{kaizen.problem}</p>
                     <div className="grid grid-cols-2 gap-3">
-                      {kaizen.teamMembers && (
+                      {kaizen.teamMembers.length > 0 && (
                         <div>
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Team Members</p>
-                          <p className="text-sm text-slate-700">{kaizen.teamMembers}</p>
+                          <p className="text-sm text-slate-700">
+                            {kaizen.teamMembers.map((m) => `${m.firstName} ${m.lastName}`).join(", ")}
+                          </p>
                         </div>
                       )}
                       {kaizen.benefitCategory && (
@@ -407,7 +413,7 @@ export default function KaizenDetailPage() {
                   rows={[
                     { label: "Problem", value: kaizen.problem.length > 40 ? `${kaizen.problem.slice(0, 40)}...` : kaizen.problem },
                     { label: "Department", value: kaizen.department?.name ?? "No department" },
-                    { label: "Raised By", value: `${kaizen.employee.firstName} ${kaizen.employee.lastName}` },
+                    { label: "Kaizen Owner", value: `${kaizen.employee.firstName} ${kaizen.employee.lastName}` },
                     { label: "Raised Date", value: formatDateTime(kaizen.createdAt) },
                     { label: "Status", value: <StatusBadge status={kaizen.status} /> },
                   ]}
@@ -424,10 +430,14 @@ export default function KaizenDetailPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Condition Before</p>
-                        {kaizen.beforePhotoUrl && (
-                          <div className="rounded-lg overflow-hidden border border-slate-100 mb-2">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={kaizen.beforePhotoUrl} alt="Before" className="w-full max-h-48 object-contain bg-slate-50" />
+                        {kaizen.beforePhotoUrls.length > 0 && (
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            {kaizen.beforePhotoUrls.map((url, i) => (
+                              <div key={url} className="rounded-lg overflow-hidden border border-slate-100">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={url} alt={`Before ${i + 1}`} className="w-full max-h-48 object-contain bg-slate-50" />
+                              </div>
+                            ))}
                           </div>
                         )}
                         <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{kaizen.problem}</p>

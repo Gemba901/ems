@@ -154,9 +154,6 @@ model Organization {
   suppliers               Supplier[]
   steelMaterialIntakes    SteelMaterialIntake[]
   steelChargePreparations SteelChargePreparation[]
-  steelProductionPlans SteelProductionPlan[]
-  steelSourcingOrders  SteelSourcingOrder[]
-  suppliers            Supplier[]
   activities            Activity[]
   activityIngestions    ActivityIngestion[]
   activityIngestionRows ActivityIngestionRow[]
@@ -328,6 +325,7 @@ model Employee {
   ticketUpdates         TicketUpdate[]
   kaizensRaised         Kaizen[]                  @relation("KaizenRaisedBy")
   kaizensVerified       Kaizen[]                  @relation("KaizenVerifiedBy")
+  kaizenTeamMemberships Kaizen[]                  @relation("KaizenTeamMembers")
   kaizenReviews         KaizenReview[]
   alertComments             AlertComment[]
 
@@ -2045,6 +2043,20 @@ enum KaizenStatus {
   MOVED_TO_SGA
 }
 
+enum KaizenTrigger {
+  PROBLEM_NOTICED
+  IMPROVEMENT_OPPORTUNITY_NOTICED
+  ALERT_ACTION_REQUIRED
+  ABNORMALITY_ACTION_REQUIRED
+  EMPLOYEE_SUGGESTION_OR_IDEA
+  AUDIT_OR_GEMBA_WALK_OBSERVATION
+  CUSTOMER_COMPLAINT_OR_FEEDBACK
+  MANAGEMENT_INSTRUCTION_OR_FEEDBACK
+  REPEAT_PROBLEM
+  OTHER
+}
+
+
 model Kaizen {
   id             String       @id @default(uuid())
   organizationId String
@@ -2052,13 +2064,16 @@ model Kaizen {
   departmentId   String
   status         KaizenStatus @default(DRAFT)
 
+  title                  String?
   problem                String
-  beforePhotoUrl         String
+  trigger                KaizenTrigger?
+  triggerOther           String?
+  targetCompletionDate   DateTime?
+  beforePhotoUrls        String[]       @default([])
   improvementDescription String?
   afterPhotoUrl          String?
   benefitAchieved        String?
 
-  teamMembers     String?
   benefitCategory String?
   beforeValue     String?
   afterValue      String?
@@ -2077,6 +2092,7 @@ model Kaizen {
   employee         Employee       @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
   department       Department?    @relation(fields: [departmentId], references: [id])
   verifiedBy       Employee?      @relation("KaizenVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  teamMembers      Employee[]     @relation("KaizenTeamMembers")
   reviews          KaizenReview[]
   sourceSuggestion Suggestion?
 

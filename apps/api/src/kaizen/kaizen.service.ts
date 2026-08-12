@@ -16,6 +16,7 @@ const kaizenInclude = {
     employee: { select: employeeSelect },
     department: { select: { id: true, name: true } },
     verifiedBy: { select: { id: true, firstName: true, lastName: true } },
+    teamMembers: { select: { id: true, firstName: true, lastName: true } },
     reviews: {
         orderBy: { createdAt: 'asc' as const },
         include: { reviewer: { select: { id: true, firstName: true, lastName: true } } },
@@ -81,17 +82,37 @@ export class KaizenService {
             throw new BadRequestException('Employee profile has no department assigned');
         }
 
-        const { startImprovement, ...rest } = dto
-        return this.prisma.kaizen.create({
+        const { startImprovement, teamMemberIds, ...rest } = dto
+        const kaizen = await this.prisma.kaizen.create({
             data: {
                 ...rest,
                 employeeId: employee.id,
                 departmentId: employee.departmentId,
                 organizationId,
-                status: startImprovement ? 'IN_PROGRESS' : 'DRAFT'
-            }
-
+                status: startImprovement ? 'IN_PROGRESS' : 'DRAFT',
+                ...(teamMemberIds?.length && {
+                    teamMembers: { connect: teamMemberIds.map((id) => ({ id })) },
+                }),
+            },
         })
+
+        if (teamMemberIds?.length) {
+            await this.notifications.createMany(
+                teamMemberIds
+                    .filter((id) => id !== employee.id)
+                    .map((memberId) => ({
+                        employeeId: memberId,
+                        type: 'INFO' as const,
+                        module: 'KAIZEN',
+                        title: 'Added to a kaizen team',
+                        message: `You were added as a team member on the kaizen "${kaizen.title ?? kaizen.problem}".`,
+                        actionUrl: `/kaizen/${kaizen.id}`,
+                        metadata: { kaizenId: kaizen.id },
+                    }))
+            )
+        }
+
+        return kaizen
     }
 
     // create kaizen

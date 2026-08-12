@@ -24,9 +24,9 @@ export default function KpiCards({ stats }: KpiCardsProps) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {/* 1. Tasks Performed Today */}
-      <div className="rounded-3xl border border-border-app bg-white p-6 shadow-sm flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-muted-app uppercase tracking-wide">Tasks Performed Today</p>
+      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
+        <div className="min-w-0 space-y-1">
+          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">Tasks Performed Today</p>
           <h3 className="text-2xl font-bold tracking-tight text-text-app">
             {tasksPerformedTodayPercent}%
           </h3>
@@ -36,9 +36,9 @@ export default function KpiCards({ stats }: KpiCardsProps) {
       </div>
 
       {/* 3. Time Taken to Acknowledge a Task */}
-      <div className="rounded-3xl border border-border-app bg-white p-6 shadow-sm flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-muted-app uppercase tracking-wide">Avg Acknowledge Time</p>
+      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
+        <div className="min-w-0 space-y-1">
+          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">Avg Acknowledge Time</p>
           <h3 className="text-2xl font-bold tracking-tight text-text-app">
             {formatDuration(avgAcknowledgeTimeMin)}
           </h3>
@@ -52,9 +52,9 @@ export default function KpiCards({ stats }: KpiCardsProps) {
       </div>
 
       {/* 3. Number of Overdue Tasks */}
-      <div className="rounded-3xl border border-border-app bg-white p-6 shadow-sm flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-muted-app uppercase tracking-wide">Overdue Tasks</p>
+      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
+        <div className="min-w-0 space-y-1">
+          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">Overdue Tasks</p>
           <h3 className="text-2xl font-bold tracking-tight text-text-app">
             {overdueTasks}
           </h3>
@@ -68,9 +68,9 @@ export default function KpiCards({ stats }: KpiCardsProps) {
       </div>
 
       {/* 4. Average Time to Complete a Task */}
-      <div className="rounded-3xl border border-border-app bg-white p-6 shadow-sm flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-muted-app uppercase tracking-wide">Avg Completion Time</p>
+      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
+        <div className="min-w-0 space-y-1">
+          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">Avg Completion Time</p>
           <h3 className="text-2xl font-bold tracking-tight text-text-app">
             {formatDuration(avgCloseTimeMin)}
           </h3>

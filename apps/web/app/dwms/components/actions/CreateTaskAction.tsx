@@ -723,7 +723,7 @@ export default function CreateTaskAction() {
       )}
 
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-        <div className="w-full rounded-2xl border border-border-app bg-white p-6 shadow-sm dark:bg-zinc-900 sm:p-8 lg:col-span-8">
+        <div className="w-full rounded-2xl border border-border-app bg-white p-4 shadow-sm dark:bg-zinc-900 sm:p-8 lg:col-span-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
@@ -1093,7 +1093,7 @@ export default function CreateTaskAction() {
           </form>
         </div>
 
-        <div className="sticky top-6 w-full rounded-2xl border border-border-app bg-white p-6 shadow-sm lg:col-span-4">
+        <div className="w-full rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-6 lg:sticky lg:top-6 lg:col-span-4">
           <div className="flex items-center gap-2 border-b border-border-app pb-3">
             <Lightbulb className="h-4 w-4 shrink-0 text-amber-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-text-app">

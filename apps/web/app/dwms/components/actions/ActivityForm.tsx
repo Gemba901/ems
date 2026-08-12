@@ -502,14 +502,14 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
       {!canManageActivities ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 lg:col-span-12">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:p-6 lg:col-span-12">
           Activity creation is available to Management, Admin, Super Admin, HR,
           and HOD users.
         </div>
       ) : (
         <form
           onSubmit={submitActivity}
-          className="space-y-6 rounded-2xl border border-border-app bg-white p-6 shadow-sm lg:col-span-8"
+          className="space-y-6 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-6 lg:col-span-8"
         >
           {message && (
             <div
@@ -662,7 +662,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
       )}
 
       {canManageActivities && (
-        <aside className="space-y-4 rounded-2xl border border-border-app bg-white p-6 shadow-sm lg:col-span-4">
+        <aside className="space-y-4 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-6 lg:col-span-4">
           <div className="flex items-center gap-3 border-b border-border-app pb-4">
             <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
             <div>

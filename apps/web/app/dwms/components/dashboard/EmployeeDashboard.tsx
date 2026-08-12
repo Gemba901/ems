@@ -27,11 +27,11 @@ export default function EmployeeDashboard({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {(activeSubTab === 'team' && isSelf) && employeeData.reporteesPerformance && employeeData.reporteesPerformance.length > 0 && (
-        <div className="lg:col-span-3 rounded-3xl border border-border-app bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6 lg:col-span-3">
           <h3 className="font-semibold text-text-app mb-1">My Reportees Performance</h3>
           <p className="text-xs text-muted-app mb-4">Click on any reportee to view their detailed performance insights, trends, and tasks.</p>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="min-w-[42rem] w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-border-app text-muted-app font-semibold">
                   <th className="py-2.5 px-3">Name</th>

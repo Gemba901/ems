@@ -84,10 +84,10 @@ export function Header({ onMenuClick }: HeaderProps) {
   const dwmsHeader = DWMS_HEADERS[pathname] || (pathname.startsWith("/dwms/activities/ingestions/") ? DWMS_HEADERS["/dwms/activities/ingestions"] : null);
 
   return (
-    <header className="flex min-h-[5rem] py-3 items-center justify-between px-4 lg:px-8 bg-transparent">
+    <header className="flex min-h-[4.5rem] items-center justify-between gap-3 bg-transparent px-4 py-3 lg:min-h-[5rem] lg:px-8">
 
       {/* Left: brand + page context */}
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <button
           className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100 cursor-pointer animate-in fade-in"
           onClick={onMenuClick}
@@ -97,12 +97,12 @@ export function Header({ onMenuClick }: HeaderProps) {
         </button>
 
         {dwmsHeader && (
-          <div className="flex flex-col min-w-0 animate-in fade-in slide-in-from-left-2 duration-200">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 leading-tight">
+          <div className="min-w-0 flex-1 animate-in fade-in slide-in-from-left-2 duration-200">
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="min-w-0 truncate text-xl font-extrabold tracking-tight text-slate-900 leading-tight sm:text-3xl">
                 {dwmsHeader.title}
               </h1>
-              <div className="relative group">
+              <div className="relative shrink-0 group">
                 <button
                   type="button"
                   title="Page Info"
@@ -112,9 +112,9 @@ export function Header({ onMenuClick }: HeaderProps) {
                 </button>
                 
                 {/* Purpose Popover */}
-                <div className="absolute left-0 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 origin-top-left z-50">
+                <div className="absolute left-1/2 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 origin-top sm:left-0 sm:translate-x-0 sm:origin-top-left">
                   <h4 className="font-bold text-xs text-slate-900 mb-1.5 flex items-center gap-1.5">
-                    ℹ️ About this Page
+                    About this Page
                   </h4>
                   <p className="text-[11px] font-medium text-slate-500 leading-relaxed whitespace-normal">
                     {dwmsHeader.purpose}
@@ -130,7 +130,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       {/* Right: calendar + notifications + user */}
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-4">
         <Link
           href="/calendar"
           title="My Calendar"

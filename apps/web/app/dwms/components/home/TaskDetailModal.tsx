@@ -33,7 +33,7 @@ export default function TaskDetailModal({
       onClick={onClose}
     >
       <article
-        className="max-h-[88vh] w-full max-w-3xl overflow-auto rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl sm:p-7 transition-colors duration-200"
+        className="max-h-[88vh] w-full max-w-3xl overflow-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl transition-colors duration-200 sm:rounded-[28px] sm:p-7"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">

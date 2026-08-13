@@ -75,7 +75,7 @@ export function P03Filters({ value, onChange }: Props) {
               </select>
             )}
           />
-          <TooltipContent>Filter intakes by their current workflow stage.</TooltipContent>
+          <TooltipContent>Filter deliveries by where they currently are in the process.</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -94,7 +94,7 @@ export function P03Filters({ value, onChange }: Props) {
               </select>
             )}
           />
-          <TooltipContent>Filter by the intake&apos;s current business status.</TooltipContent>
+          <TooltipContent>Filter by the intake&apos;s current status.</TooltipContent>
         </Tooltip>
 
         {active && (

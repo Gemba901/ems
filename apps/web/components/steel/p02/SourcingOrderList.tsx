@@ -127,8 +127,7 @@ export function SourcingOrderList({
                               )}
                             />
                             <TooltipContent>
-                              {activityCode} — {SOURCING_STAGE_LABELS[order.stage]}. This is the backend workflow stage;
-                              {" "}{screen.code} is the user-facing screen it belongs to.
+                              {activityCode} — {SOURCING_STAGE_LABELS[order.stage]}. Part of the {screen.code} step in the sourcing process.
                             </TooltipContent>
                           </Tooltip>
                           <span className="flex items-center gap-1">

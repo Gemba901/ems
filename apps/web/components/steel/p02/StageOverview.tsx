@@ -86,7 +86,7 @@ export function StageOverview({ summary, isLoading, isError, isFetching, onRetry
             <Tooltip>
               <TooltipTrigger render={(triggerProps) => <Info {...triggerProps} className="h-3.5 w-3.5 text-slate-400" />} />
               <TooltipContent>
-                These five screens group the 12 backend workflow stages into the actual user-facing sourcing process.
+                These five steps group all the stages of a sourcing order into the overall sourcing process.
               </TooltipContent>
             </Tooltip>
           </div>

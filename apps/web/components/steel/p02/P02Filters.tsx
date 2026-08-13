@@ -98,7 +98,7 @@ export function P02Filters({ value, onChange }: Props) {
                 </select>
               )}
             />
-            <TooltipContent>Filter by the order&apos;s current business status.</TooltipContent>
+            <TooltipContent>Filter by the order&apos;s current status.</TooltipContent>
           </Tooltip>
 
           <Tooltip>

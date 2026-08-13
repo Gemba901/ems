@@ -83,7 +83,7 @@ export function StageOverview({ data, isLoading, isError, isFetching, onRetry }:
             <Tooltip>
               <TooltipTrigger render={(triggerProps) => <Info {...triggerProps} className="h-3.5 w-3.5 text-slate-400" />} />
               <TooltipContent>
-                These three screens group the 14 backend workflow stages into the actual user-facing intake process.
+                These three screens group all the individual steps of receiving material into one simple process.
               </TooltipContent>
             </Tooltip>
           </div>

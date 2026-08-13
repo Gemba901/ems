@@ -7,11 +7,12 @@ import {
   SteelSourcingService,
   SteelSourcingOrder,
   SteelMaterialType,
+  SteelSourcingMaterialSource,
   SupplierRiskLevel,
   Supplier,
   SupplierApprovalStatus,
   IdentifyMaterialTypePayload,
-  CheckSupplierPayload,
+  SelectMaterialSourcePayload,
   ReviewSupplierRiskPayload,
 } from "@/services/steel-sourcing.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,8 @@ import {
   Gauge,
   ArrowRight,
   Users,
+  Warehouse,
+  Truck,
 } from "lucide-react";
 
 const MATERIAL_TYPES: { value: SteelMaterialType; label: string; icon: typeof Box }[] = [
@@ -126,6 +129,7 @@ function ContextSummary({ order }: { order: SteelSourcingOrder }) {
 // ── Sidebar ───────────────────────────────────────────────────────────────
 
 function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A02" | "A03" | "A04" | "done" }) {
+  const isStock = order.materialSource === "EXISTING_STOCK";
   return (
     <ScreenSidebar>
       <Card>
@@ -137,8 +141,8 @@ function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A02"
         </CardHeader>
         <CardContent>
           <p className="text-xs text-slate-500 leading-relaxed">
-            S2 covers P02-A02 (classify the material type), P02-A03 (check the supplier against the approved list),
-            and P02-A04 (review supplier risk). All three happen in this one screen, in order.
+            S2 covers P02-A02 (classify the material type), P02-A03 (select material source — existing stock or an
+            external supplier), and — for external supplier only — P02-A04 (review supplier risk).
           </p>
         </CardContent>
       </Card>
@@ -148,7 +152,7 @@ function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A02"
           <CardTitle>Selections So Far</CardTitle>
         </CardHeader>
         <CardContent>
-          {order.materialType || order.supplier || order.supplierRiskLevel ? (
+          {order.materialType || order.materialSource ? (
             <dl className="text-xs space-y-2">
               {order.materialType && (
                 <div className="flex items-center justify-between gap-2">
@@ -156,13 +160,19 @@ function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A02"
                   <dd className="text-slate-700 font-medium text-right">{order.materialType.replace(/_/g, " ")}</dd>
                 </div>
               )}
-              {order.supplier && (
+              {order.materialSource && (
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-slate-400">Source</dt>
+                  <dd className="text-slate-700 font-medium text-right">{isStock ? "Existing Stock" : "External Supplier"}</dd>
+                </div>
+              )}
+              {!isStock && order.supplier && (
                 <div className="flex items-center justify-between gap-2">
                   <dt className="text-slate-400">Supplier</dt>
                   <dd className="text-slate-700 font-medium text-right truncate max-w-[160px]">{order.supplier.name}</dd>
                 </div>
               )}
-              {order.supplierRiskLevel && (
+              {!isStock && order.supplierRiskLevel && (
                 <div className="flex items-center justify-between gap-2">
                   <dt className="text-slate-400">Risk Level</dt>
                   <dd className="text-slate-700 font-medium text-right">{order.supplierRiskLevel}</dd>
@@ -185,8 +195,10 @@ function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A02"
         <CardContent>
           <p className="text-xs text-slate-500 leading-relaxed">
             {subStep === "done"
-              ? "Once you continue, this order moves to S3 — Quote Comparison & Selection."
-              : "Complete material type, supplier check, and risk review — in order — to continue to S3."}
+              ? isStock
+                ? "Supplier and purchasing steps are skipped. This order continues through delivery/logistics scheduling and handover to intake."
+                : "Once you continue, this order moves to S3 — Quote Comparison & Selection."
+              : "Choose a material source at P02-A03 — Existing Stock skips supplier and purchasing steps entirely; External Supplier continues through supplier risk, quotes, and PO."}
           </p>
         </CardContent>
       </Card>
@@ -200,6 +212,7 @@ function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A02"
         </CardHeader>
         <CardContent>
           <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
+            <li>Existing Stock: material already held by the company, fulfilled without an external purchase order.</li>
             <li>Only suppliers with an APPROVED status can be confirmed as approved here.</li>
             <li>A high risk rating doesn&apos;t block progress, but is worth flagging for later steps.</li>
           </ul>
@@ -334,7 +347,91 @@ function MaterialTypeForm({ id, token, onDone }: { id: string; token: string; on
   );
 }
 
-// ── A03 — Supplier check ─────────────────────────────────────────────────────
+// ── A03 — Select material source ─────────────────────────────────────────────
+
+function SourceChoiceCards({ onChoose }: { onChoose: (source: SteelSourcingMaterialSource) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-4">
+        <div className="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center">
+          <Warehouse className="h-4.5 w-4.5 text-slate-600" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Existing Stock</p>
+          <p className="text-xs text-slate-500 mt-1">Material is already available in company stock.</p>
+          <p className="text-xs text-slate-400 mt-1">No supplier or PO required.</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => onChoose("EXISTING_STOCK")}>
+          Use Existing Stock
+        </Button>
+      </div>
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-4">
+        <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center">
+          <Truck className="h-4.5 w-4.5 text-blue-600" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-900">External Supplier</p>
+          <p className="text-xs text-slate-500 mt-1">Material must be purchased from an approved supplier.</p>
+          <p className="text-xs text-slate-400 mt-1">Supplier assessment applies.</p>
+        </div>
+        <Button size="sm" onClick={() => onChoose("EXTERNAL_SUPPLIER")}>
+          Select Supplier
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ExistingStockForm({ id, token, onDone, onBack }: { id: string; token: string; onDone: () => void; onBack: () => void }) {
+  const { toast } = useToast();
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: (payload: SelectMaterialSourcePayload) => SteelSourcingService.selectMaterialSource(id, payload, token),
+    onSuccess: () => {
+      toast("Fulfilling from existing stock — supplier and purchasing steps are skipped.", "success");
+      onDone();
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+      <div className="rounded-lg bg-blue-50 border border-blue-100 text-blue-800 text-sm px-3 py-2 flex items-start gap-2">
+        <Info className="h-4 w-4 shrink-0 mt-0.5" />
+        <span>
+          Supplier assessment, quote comparison, supplier selection, and purchase order creation will be skipped —
+          this requirement moves straight to delivery/logistics scheduling and handover.
+        </span>
+      </div>
+      <div>
+        <label className="text-sm font-medium text-slate-700 block mb-1">
+          Notes <span className="text-slate-400 font-normal">(optional)</span>
+        </label>
+        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any context on the stock fulfillment" />
+      </div>
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={onBack} className="text-xs text-slate-400 hover:text-slate-600">
+          ← Change source
+        </button>
+        <Button
+          onClick={() => mutation.mutate({ source: "EXISTING_STOCK", stockFulfillmentNotes: notes || undefined })}
+          disabled={mutation.isPending}
+          className="gap-2"
+        >
+          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Use Existing Stock →"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function SupplierPicker({
   suppliers, selectedId, onSelect,
@@ -377,7 +474,7 @@ function SupplierPicker({
   );
 }
 
-function SupplierCheckForm({ id, token, onDone }: { id: string; token: string; onDone: () => void }) {
+function SupplierCheckForm({ id, token, onDone, onBack }: { id: string; token: string; onDone: () => void; onBack: () => void }) {
   const { toast } = useToast();
   const suppliersQuery = useQuery({
     queryKey: ["suppliers"],
@@ -403,7 +500,7 @@ function SupplierCheckForm({ id, token, onDone }: { id: string; token: string; o
   };
 
   const mutation = useMutation({
-    mutationFn: (payload: CheckSupplierPayload) => SteelSourcingService.checkSupplier(id, payload, token),
+    mutationFn: (payload: SelectMaterialSourcePayload) => SteelSourcingService.selectMaterialSource(id, payload, token),
     onSuccess: () => {
       toast("Supplier checked — continue to the risk review.", "success");
       onDone();
@@ -418,7 +515,12 @@ function SupplierCheckForm({ id, token, onDone }: { id: string; token: string; o
       setError("Please select a supplier.");
       return;
     }
-    mutation.mutate({ supplierId, supplierApprovalConfirmed: confirmed, supplierCheckNotes: notes || undefined });
+    mutation.mutate({
+      source: "EXTERNAL_SUPPLIER",
+      supplierId,
+      supplierApprovalConfirmed: confirmed,
+      supplierCheckNotes: notes || undefined,
+    });
   };
 
   if (suppliersQuery.isLoading) {
@@ -489,13 +591,30 @@ function SupplierCheckForm({ id, token, onDone }: { id: string; token: string; o
         <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any context on the supplier check" />
       </div>
 
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={onBack} className="text-xs text-slate-400 hover:text-slate-600">
+          ← Change source
+        </button>
         <Button type="submit" disabled={!supplierId || mutation.isPending} className="gap-2">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Supplier →"}
         </Button>
       </div>
     </form>
   );
+}
+
+// ── A03 dispatcher — source choice, then the matching path's form ────────────
+
+function MaterialSourceForm({ id, token, onDone }: { id: string; token: string; onDone: () => void }) {
+  const [chosen, setChosen] = useState<SteelSourcingMaterialSource | null>(null);
+
+  if (chosen === "EXISTING_STOCK") {
+    return <ExistingStockForm id={id} token={token} onDone={onDone} onBack={() => setChosen(null)} />;
+  }
+  if (chosen === "EXTERNAL_SUPPLIER") {
+    return <SupplierCheckForm id={id} token={token} onDone={onDone} onBack={() => setChosen(null)} />;
+  }
+  return <SourceChoiceCards onChoose={setChosen} />;
 }
 
 // ── A04 — Supplier risk ──────────────────────────────────────────────────────
@@ -622,6 +741,7 @@ function SupplierRiskForm({ id, token, onDone }: { id: string; token: string; on
 // ── S2 completion ─────────────────────────────────────────────────────────────
 
 function S2CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onContinue: () => void }) {
+  const isStock = order.materialSource === "EXISTING_STOCK";
   return (
     <Card>
       <CardHeader>
@@ -633,14 +753,25 @@ function S2CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onCo
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Material Type" value={order.materialType?.replace(/_/g, " ")} />
-          <Field label="Supplier" value={order.supplier?.name} />
-          <Field label="Risk Level" value={order.supplierRiskLevel} />
+          <Field label="Source" value={isStock ? "Existing Stock" : "External Supplier"} />
+          {isStock ? (
+            <Field label="Notes" value={order.stockFulfillmentNotes} />
+          ) : (
+            <Field label="Supplier" value={order.supplier?.name} />
+          )}
         </div>
-        <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-500">
-          Next: <span className="font-medium text-slate-700">S3 — Quote Comparison &amp; Selection</span>
-        </div>
+        {isStock ? (
+          <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-500">
+            Supplier assessment, quote comparison, and PO creation were skipped. Next:{" "}
+            <span className="font-medium text-slate-700">Delivery/logistics scheduling &amp; handover to intake</span>
+          </div>
+        ) : (
+          <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-500">
+            Next: <span className="font-medium text-slate-700">S3 — Quote Comparison &amp; Selection</span>
+          </div>
+        )}
         <Button onClick={onContinue} className="gap-2">
-          Continue to S3 — Quote Comparison <ArrowRight className="h-4 w-4" />
+          {isStock ? "Continue" : "Continue to S3 — Quote Comparison"} <ArrowRight className="h-4 w-4" />
         </Button>
       </CardContent>
     </Card>
@@ -659,26 +790,34 @@ export function S2IdentifyAssess({
     onRefresh();
   };
 
+  const isStock = order.materialSource === "EXISTING_STOCK";
+
+  // Local ordering restricted to S2's own activities — the real sequencing/
+  // gating is still enforced server-side. For the Existing Stock path, the
+  // server jumps the order's stage straight to A08_PO_CREATED (skipping
+  // A04-A08, which don't apply without a supplier) — that stage isn't in
+  // this S2-local list, so it's treated as "beyond A04" rather than looked
+  // up by index.
+  const order12: SteelSourcingOrder["stage"][] = [
+    "A01_REQUIREMENT_REVIEWED",
+    "A02_MATERIAL_TYPE_IDENTIFIED",
+    "A03_SUPPLIER_CHECKED",
+    "A04_SUPPLIER_RISK_REVIEWED",
+  ];
+  const rawIdx = order12.indexOf(order.stage);
+  const effectiveIdx = rawIdx === -1 ? order12.length : rawIdx;
+
   const statusFor = (stage: SteelSourcingOrder["stage"]): "done" | "active" | "locked" => {
-    // Local ordering restricted to S2's own three activities — the real
-    // sequencing/gating is still enforced server-side by SOURCING_STAGE_ORDER.
-    const order12: SteelSourcingOrder["stage"][] = [
-      "A01_REQUIREMENT_REVIEWED",
-      "A02_MATERIAL_TYPE_IDENTIFIED",
-      "A03_SUPPLIER_CHECKED",
-      "A04_SUPPLIER_RISK_REVIEWED",
-    ];
-    const currentIdx = order12.indexOf(order.stage);
     const targetIdx = order12.indexOf(stage);
-    if (currentIdx >= targetIdx) return "done";
-    if (currentIdx === targetIdx - 1) return "active";
+    if (effectiveIdx >= targetIdx) return "done";
+    if (effectiveIdx === targetIdx - 1) return "active";
     return "locked";
   };
 
   const a02Status = statusFor("A02_MATERIAL_TYPE_IDENTIFIED");
   const a03Status = statusFor("A03_SUPPLIER_CHECKED");
   const a04Status = statusFor("A04_SUPPLIER_RISK_REVIEWED");
-  const allDone = order.stage === "A04_SUPPLIER_RISK_REVIEWED";
+  const allDone = isStock ? a03Status === "done" : order.stage === "A04_SUPPLIER_RISK_REVIEWED";
 
   const subStep: "A02" | "A03" | "A04" | "done" = allDone
     ? "done"
@@ -713,37 +852,47 @@ export function S2IdentifyAssess({
             )}
           </StepSection>
 
-          <StepSection code="P02-A03" icon={Users} title="Check Approved Supplier List" status={a03Status}>
+          <StepSection code="P02-A03" icon={Users} title="Select Material Source" status={a03Status}>
             {a03Status === "done" ? (
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Supplier" value={order.supplier?.name} />
-                <Field
-                  label="Approval status"
-                  value={order.supplier ? <Badge className={APPROVAL_STYLES[order.supplier.approvalStatus]}>{order.supplier.approvalStatus}</Badge> : null}
-                />
-                <Field label="Approval confirmed" value={order.supplierApprovalConfirmed ? "Yes" : "No"} />
-                <Field label="Notes" value={order.supplierCheckNotes} />
-              </div>
+              isStock ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Source" value="Existing Stock" />
+                  <Field label="Notes" value={order.stockFulfillmentNotes} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Source" value="External Supplier" />
+                  <Field label="Supplier" value={order.supplier?.name} />
+                  <Field
+                    label="Approval status"
+                    value={order.supplier ? <Badge className={APPROVAL_STYLES[order.supplier.approvalStatus]}>{order.supplier.approvalStatus}</Badge> : null}
+                  />
+                  <Field label="Approval confirmed" value={order.supplierApprovalConfirmed ? "Yes" : "No"} />
+                  <Field label="Notes" value={order.supplierCheckNotes} />
+                </div>
+              )
             ) : a03Status === "active" ? (
-              <SupplierCheckForm id={order.id} token={token} onDone={refresh} />
+              <MaterialSourceForm id={order.id} token={token} onDone={refresh} />
             ) : (
               <p className="text-sm text-slate-400">Complete the previous step first.</p>
             )}
           </StepSection>
 
-          <StepSection code="P02-A04" icon={ShieldAlert} title="Check Supplier Quality & Rejection History" status={a04Status}>
-            {a04Status === "done" ? (
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Risk level" value={order.supplierRiskLevel} />
-                <Field label="Rejection notes" value={order.rejectionRateNotes} />
-                <Field label="Complaint history" value={order.complaintHistoryNotes} />
-              </div>
-            ) : a04Status === "active" ? (
-              <SupplierRiskForm id={order.id} token={token} onDone={refresh} />
-            ) : (
-              <p className="text-sm text-slate-400">Complete the previous step first.</p>
-            )}
-          </StepSection>
+          {!isStock && (
+            <StepSection code="P02-A04" icon={ShieldAlert} title="Check Supplier Quality & Rejection History" status={a04Status}>
+              {a04Status === "done" ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Risk level" value={order.supplierRiskLevel} />
+                  <Field label="Rejection notes" value={order.rejectionRateNotes} />
+                  <Field label="Complaint history" value={order.complaintHistoryNotes} />
+                </div>
+              ) : a04Status === "active" ? (
+                <SupplierRiskForm id={order.id} token={token} onDone={refresh} />
+              ) : (
+                <p className="text-sm text-slate-400">Complete the previous step first.</p>
+              )}
+            </StepSection>
+          )}
 
           {allDone && <S2CompleteCard order={order} onContinue={refresh} />}
         </div>

@@ -131,10 +131,12 @@ export interface SteelSourcingOrder {
   materialType: SteelMaterialType | null;
   materialTypeNotes: string | null;
 
+  materialSource: SteelSourcingMaterialSource | null;
   supplierId: string | null;
   supplier: Supplier | null;
   supplierApprovalConfirmed: boolean | null;
   supplierCheckNotes: string | null;
+  stockFulfillmentNotes: string | null;
 
   supplierRiskLevel: SupplierRiskLevel | null;
   rejectionRateNotes: string | null;
@@ -210,10 +212,14 @@ export interface IdentifyMaterialTypePayload {
   materialTypeNotes?: string;
 }
 
-export interface CheckSupplierPayload {
-  supplierId: string;
-  supplierApprovalConfirmed: boolean;
+export type SteelSourcingMaterialSource = "EXISTING_STOCK" | "EXTERNAL_SUPPLIER";
+
+export interface SelectMaterialSourcePayload {
+  source: SteelSourcingMaterialSource;
+  supplierId?: string;
+  supplierApprovalConfirmed?: boolean;
   supplierCheckNotes?: string;
+  stockFulfillmentNotes?: string;
 }
 
 export interface ReviewSupplierRiskPayload {
@@ -332,8 +338,8 @@ export const SteelSourcingService = {
     return handleResponse<SteelSourcingOrder>(res);
   },
 
-  async checkSupplier(id: string, data: CheckSupplierPayload, token: string): Promise<SteelSourcingOrder> {
-    const res = await apiClient(`${API_URL}/steel/sourcing/${id}/supplier-check`, {
+  async selectMaterialSource(id: string, data: SelectMaterialSourcePayload, token: string): Promise<SteelSourcingOrder> {
+    const res = await apiClient(`${API_URL}/steel/sourcing/${id}/material-source`, {
       method: "PATCH", headers: authHeaders(token), body: JSON.stringify(data),
     }, token);
     return handleResponse<SteelSourcingOrder>(res);

@@ -12,7 +12,7 @@ import { SteelSourcingService } from './steel-sourcing.service';
 import {
   CreateSteelSourcingOrderDto,
   IdentifySteelMaterialTypeDto,
-  CheckSteelSupplierDto,
+  SelectMaterialSourceDto,
   ReviewSteelSupplierRiskDto,
   CollectSteelQuotationsDto,
   SelectSteelSupplierDto,
@@ -129,16 +129,16 @@ export class SteelSourcingController {
   }
 
   /**
-   * PATCH /steel/sourcing/:id/supplier-check
-   * P02-A03 — Check approved supplier list.
+   * PATCH /steel/sourcing/:id/material-source
+   * P02-A03 — Select material source (existing stock or external supplier).
    */
-  @Patch(':id/supplier-check')
-  async checkSupplier(
+  @Patch(':id/material-source')
+  async selectMaterialSource(
     @Param('id') id: string,
-    @Body() dto: CheckSteelSupplierDto,
+    @Body() dto: SelectMaterialSourceDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.checkSupplier(
+    return this.steelSourcingService.selectMaterialSource(
       id,
       dto,
       user.userId,

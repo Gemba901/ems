@@ -1024,6 +1024,12 @@ enum SteelSourcingStage {
   A12_HANDOVER_CLOSED
 }
 
+// P02-A03 — how a sourcing requirement's material will be fulfilled
+enum SteelSourcingMaterialSource {
+  EXISTING_STOCK
+  EXTERNAL_SUPPLIER
+}
+
 enum SteelSourcingStatus {
   DRAFT
   IN_PROGRESS
@@ -1150,10 +1156,16 @@ model SteelSourcingOrder {
   materialType      SteelMaterialType?
   materialTypeNotes String?
 
-  // P02-A03 — Check approved supplier list
+  // P02-A03 — Select material source: fulfilled from existing stock, or
+  // purchased from an external supplier. Supplier fields only apply to the
+  // EXTERNAL_SUPPLIER path; stockFulfillmentNotes only to EXISTING_STOCK.
+  // Real stock quantity/location lookup is not modeled yet — this only
+  // records the fulfillment decision itself.
+  materialSource            SteelSourcingMaterialSource?
   supplierId                String?
   supplierApprovalConfirmed Boolean?
   supplierCheckNotes        String?
+  stockFulfillmentNotes     String?
 
   // P02-A04 — Check supplier quality and rejection history
   supplierRiskLevel     SupplierRiskLevel?

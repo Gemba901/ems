@@ -50,30 +50,40 @@ export default function SteelSourcingOrderDetailPage() {
     );
   }
 
-  // S2 (P02-A02/A03/A04)
+  // Existing Stock path: A03 jumps the server stage straight to
+  // A08_PO_CREATED (supplier assessment/quotes/PO don't apply without a
+  // supplier) — S3 and S4 never apply to this path, so it gets its own
+  // acknowledgement-gated branch here rather than falling into S4's stage
+  // check below (which assumes a real supplier/PO flow happened).
+  const isStockJump = order.materialSource === "EXISTING_STOCK" && order.stage === "A08_PO_CREATED";
+
+  // S2 (P02-A02/A03/A04, or A02/A03 only for the Existing Stock path)
   if (
     order.stage === "A01_REQUIREMENT_REVIEWED" ||
     order.stage === "A02_MATERIAL_TYPE_IDENTIFIED" ||
     order.stage === "A03_SUPPLIER_CHECKED" ||
-    (order.stage === "A04_SUPPLIER_RISK_REVIEWED" && !s2Acknowledged)
+    (order.stage === "A04_SUPPLIER_RISK_REVIEWED" && !s2Acknowledged) ||
+    (isStockJump && !s2Acknowledged)
   ) {
     return (
       <S2IdentifyAssess
         order={order}
         token={accessToken!}
         onRefresh={() => {
-          if (order.stage === "A04_SUPPLIER_RISK_REVIEWED") setS2Acknowledged(true);
+          if (order.stage === "A04_SUPPLIER_RISK_REVIEWED" || isStockJump) setS2Acknowledged(true);
           refresh();
         }}
       />
     );
   }
 
-  // S3 (P02-A05/A06) — same acknowledgement pattern as S2.
+  // S3 (P02-A05/A06) — same acknowledgement pattern as S2. Never reached for
+  // the Existing Stock path (isStockJump goes straight to S5 below).
   if (
-    (order.stage === "A04_SUPPLIER_RISK_REVIEWED" && s2Acknowledged) ||
-    order.stage === "A05_QUOTATIONS_COLLECTED" ||
-    (order.stage === "A06_SUPPLIER_SELECTED" && !s3Acknowledged)
+    !isStockJump &&
+    ((order.stage === "A04_SUPPLIER_RISK_REVIEWED" && s2Acknowledged) ||
+      order.stage === "A05_QUOTATIONS_COLLECTED" ||
+      (order.stage === "A06_SUPPLIER_SELECTED" && !s3Acknowledged))
   ) {
     return (
       <S3QuoteSelection
@@ -87,11 +97,14 @@ export default function SteelSourcingOrderDetailPage() {
     );
   }
 
-  // S4 (P02-A07/A08) — same acknowledgement pattern as S2/S3.
+  // S4 (P02-A07/A08) — same acknowledgement pattern as S2/S3. Never reached
+  // for the Existing Stock path (isStockJump goes straight to S5 below,
+  // since A08_PO_CREATED was reached by skipping, not by a real PO).
   if (
-    (order.stage === "A06_SUPPLIER_SELECTED" && s3Acknowledged) ||
-    order.stage === "A07_SPEC_CONFIRMED" ||
-    (order.stage === "A08_PO_CREATED" && !s4Acknowledged)
+    !isStockJump &&
+    ((order.stage === "A06_SUPPLIER_SELECTED" && s3Acknowledged) ||
+      order.stage === "A07_SPEC_CONFIRMED" ||
+      (order.stage === "A08_PO_CREATED" && !s4Acknowledged))
   ) {
     return (
       <S4SpecificationPO

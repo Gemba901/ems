@@ -17,6 +17,7 @@ import {
   SupplierRiskLevel,
   SteelSourcingStage,
   SteelSourcingStatus,
+  SteelSourcingMaterialSource,
 } from 'db';
 
 // P02-A01 — Review material requirement from production plan
@@ -46,18 +47,28 @@ export class IdentifySteelMaterialTypeDto {
   materialTypeNotes?: string;
 }
 
-// P02-A03 — Check approved supplier list
-export class CheckSteelSupplierDto {
+// P02-A03 — Select material source: existing stock or an external supplier.
+// Supplier fields are required only when source === EXTERNAL_SUPPLIER
+// (validated in the service, since they're conditional on `source`).
+export class SelectMaterialSourceDto {
+  @IsEnum(SteelSourcingMaterialSource, { message: 'Invalid material source' })
+  source!: SteelSourcingMaterialSource;
+
   @IsUUID()
-  @IsNotEmpty({ message: 'A supplier must be selected' })
-  supplierId!: string;
+  @IsOptional()
+  supplierId?: string;
 
   @IsBoolean()
-  supplierApprovalConfirmed!: boolean;
+  @IsOptional()
+  supplierApprovalConfirmed?: boolean;
 
   @IsString()
   @IsOptional()
   supplierCheckNotes?: string;
+
+  @IsString()
+  @IsOptional()
+  stockFulfillmentNotes?: string;
 }
 
 // P02-A04 — Check supplier quality and rejection history

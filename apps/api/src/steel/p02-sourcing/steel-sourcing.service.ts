@@ -9,7 +9,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateSteelSourcingOrderDto,
   IdentifySteelMaterialTypeDto,
-  CheckSteelSupplierDto,
+  SelectMaterialSourceDto,
   ReviewSteelSupplierRiskDto,
   CollectSteelQuotationsDto,
   SelectSteelSupplierDto,
@@ -235,10 +235,24 @@ export class SteelSourcingService {
     });
   }
 
-  // ── P02-A03 — Check approved supplier list ──
-  async checkSupplier(
+  // ── P02-A03 — Select material source (existing stock or external supplier) ──
+  //
+  // EXTERNAL_SUPPLIER preserves the original supplier-check behavior exactly
+  // and continues through A04-A12 unchanged.
+  //
+  // EXISTING_STOCK has no supplier to check, so supplier assessment, quote
+  // comparison, supplier selection, specification, and PO creation
+  // (A04-A08) don't apply — the order advances directly to A08_PO_CREATED
+  // (the last purchasing-specific stage) so A09 onward — delivery/logistics
+  // scheduling for physically moving the stock, and intake/handover — still
+  // apply to both paths. This does NOT verify real stock availability or
+  // reserve any quantity: no stock/inventory model exists in the schema yet,
+  // so only the fulfillment-source decision itself is recorded. A genuine
+  // "how much is available, where" check requires that model to be added
+  // first — see the P03 final report / project notes for this limitation.
+  async selectMaterialSource(
     id: string,
-    dto: CheckSteelSupplierDto,
+    dto: SelectMaterialSourceDto,
     userId: string,
     organizationId: string,
   ) {
@@ -246,27 +260,56 @@ export class SteelSourcingService {
     const order = await this.findOrderOrThrow(id, organizationId);
     this.assertStage(order.stage, 'A03_SUPPLIER_CHECKED');
 
-    const supplier = await this.prisma.supplier.findFirst({
-      where: { id: dto.supplierId, organizationId },
-    });
-    if (!supplier) throw new NotFoundException('Supplier not found');
-    if (
-      dto.supplierApprovalConfirmed &&
-      supplier.approvalStatus !== 'APPROVED'
-    ) {
-      throw new BadRequestException(
-        `Supplier is not on the approved list (status: ${supplier.approvalStatus}). Approve the supplier first or select a different one.`,
-      );
+    if (dto.source === 'EXTERNAL_SUPPLIER') {
+      if (!dto.supplierId) {
+        throw new BadRequestException('A supplier must be selected');
+      }
+      const supplier = await this.prisma.supplier.findFirst({
+        where: { id: dto.supplierId, organizationId },
+      });
+      if (!supplier) throw new NotFoundException('Supplier not found');
+      if (
+        dto.supplierApprovalConfirmed &&
+        supplier.approvalStatus !== 'APPROVED'
+      ) {
+        throw new BadRequestException(
+          `Supplier is not on the approved list (status: ${supplier.approvalStatus}). Approve the supplier first or select a different one.`,
+        );
+      }
+
+      return this.prisma.$transaction(async (tx) => {
+        const updated = await tx.steelSourcingOrder.update({
+          where: { id },
+          data: {
+            materialSource: 'EXTERNAL_SUPPLIER',
+            supplierId: dto.supplierId,
+            supplierApprovalConfirmed: dto.supplierApprovalConfirmed,
+            supplierCheckNotes: dto.supplierCheckNotes,
+            stage: 'A03_SUPPLIER_CHECKED',
+          },
+        });
+        await this.logActivity(
+          tx,
+          id,
+          'A03',
+          employee.id,
+          dto.supplierCheckNotes,
+          { ...dto },
+        );
+        return tx.steelSourcingOrder.findUnique({
+          where: { id: updated.id },
+          include: orderInclude,
+        });
+      });
     }
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelSourcingOrder.update({
         where: { id },
         data: {
-          supplierId: dto.supplierId,
-          supplierApprovalConfirmed: dto.supplierApprovalConfirmed,
-          supplierCheckNotes: dto.supplierCheckNotes,
-          stage: 'A03_SUPPLIER_CHECKED',
+          materialSource: 'EXISTING_STOCK',
+          stockFulfillmentNotes: dto.stockFulfillmentNotes,
+          stage: 'A08_PO_CREATED',
         },
       });
       await this.logActivity(
@@ -274,8 +317,9 @@ export class SteelSourcingService {
         id,
         'A03',
         employee.id,
-        dto.supplierCheckNotes,
-        { ...dto },
+        dto.stockFulfillmentNotes ??
+          'Fulfilled from existing stock — supplier assessment, quote comparison, and PO creation were skipped.',
+        { source: 'EXISTING_STOCK' },
       );
       return tx.steelSourcingOrder.findUnique({
         where: { id: updated.id },

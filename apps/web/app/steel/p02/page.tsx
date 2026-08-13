@@ -1,142 +1,112 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
-import {
-  SteelSourcingService,
-  SteelSourcingStage,
-  SteelSourcingStatus,
-  SOURCING_STAGE_LABELS,
-  SOURCING_STAGE_ORDER,
-} from "@/services/steel-sourcing.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Plus, Search, Truck, Loader2 } from "lucide-react";
-
-const STATUS_STYLES: Record<SteelSourcingStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  PO_ISSUED: "bg-indigo-50 text-indigo-700",
-  CLOSED: "bg-emerald-50 text-emerald-700",
-  CANCELLED: "bg-red-50 text-red-700",
-};
+import { SteelSourcingService } from "@/services/steel-sourcing.service";
+import { P02Header } from "@/components/steel/p02/P02Header";
+import { P02KpiCards } from "@/components/steel/p02/P02KpiCards";
+import { P02Filters, type P02FiltersState, DEFAULT_P02_FILTERS } from "@/components/steel/p02/P02Filters";
+import { SourcingOrderList } from "@/components/steel/p02/SourcingOrderList";
+import { StageOverview } from "@/components/steel/p02/StageOverview";
+import { QuickActions } from "@/components/steel/p02/QuickActions";
 
 export default function SteelSourcingOrdersPage() {
   const { accessToken } = useAuthStore();
-  const [search, setSearch] = useState("");
-  const [stage, setStage] = useState<SteelSourcingStage | "">("");
-  const [status, setStatus] = useState<SteelSourcingStatus | "">("");
+  const [filters, setFilters] = useState<P02FiltersState>(DEFAULT_P02_FILTERS);
   const [page, setPage] = useState(1);
 
-  const { data: summary } = useQuery({
+  // KPI cards and the order list use `isPending` (not `isLoading`) below —
+  // `isLoading` is `isPending && isFetching`, which is false while these
+  // queries are disabled (accessToken not yet hydrated from storage), so it
+  // was letting "0" / "no orders" render before the query had even run once.
+  const summaryQuery = useQuery({
     queryKey: ["steel-sourcing-summary"],
     queryFn: () => SteelSourcingService.getSummary(accessToken!),
     enabled: !!accessToken,
+    retry: false,
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["steel-sourcing-orders", search, stage, status, page],
+  const ordersQuery = useQuery({
+    queryKey: ["steel-sourcing-orders", filters, page],
     queryFn: () =>
       SteelSourcingService.getAll(accessToken!, {
-        search: search || undefined,
-        stage: stage || undefined,
-        status: status || undefined,
+        search: filters.search || undefined,
+        stage: filters.stage || undefined,
+        status: filters.status || undefined,
+        materialType: filters.materialType || undefined,
         page,
         limit: 10,
       }),
     enabled: !!accessToken,
   });
 
+  function updateFilters(next: P02FiltersState) {
+    setFilters(next);
+    setPage(1);
+  }
+
+  function filterAwaitingPOApproval() {
+    updateFilters({ ...DEFAULT_P02_FILTERS, stage: "A07_SPEC_CONFIRMED" });
+  }
+
+  function filterAwaitingHandoverClose() {
+    updateFilters({ ...DEFAULT_P02_FILTERS, stage: "A11_INTAKE_INFORMED" });
+  }
+
+  function filterOnHold() {
+    updateFilters({ ...DEFAULT_P02_FILTERS, status: "ON_HOLD" });
+  }
+
+  const filtersActive = filters.search !== "" || filters.stage !== "" || filters.status !== "" || filters.materialType !== "";
+
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center">
-            <Truck className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Raw Material Sourcing</h1>
-            <p className="text-sm text-slate-500">P02 — Supplier Selection & Purchase Order</p>
-          </div>
-        </div>
-        <Link href="/steel/p02/new">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Sourcing Order
-          </Button>
-        </Link>
-      </div>
+    <div className="p-4 md:p-8 space-y-6">
+      <P02Header />
 
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card><CardContent className="p-4"><p className="text-xs text-slate-400">Total</p><p className="text-2xl font-bold">{summary.total}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><p className="text-xs text-slate-400">In Progress</p><p className="text-2xl font-bold">{summary.byStatus?.IN_PROGRESS ?? 0}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><p className="text-xs text-slate-400">PO Issued</p><p className="text-2xl font-bold">{summary.byStatus?.PO_ISSUED ?? 0}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><p className="text-xs text-slate-400">Closed</p><p className="text-2xl font-bold">{summary.byStatus?.CLOSED ?? 0}</p></CardContent></Card>
-        </div>
-      )}
+      <P02KpiCards
+        summary={summaryQuery.data}
+        isLoading={summaryQuery.isPending}
+        isError={summaryQuery.isError}
+        isFetching={summaryQuery.isFetching}
+        onRetry={() => summaryQuery.refetch()}
+      />
 
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Search sourcing orders or PO number..."
-            className="pl-8"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+      <P02Filters value={filters} onChange={updateFilters} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[60%_40%] xl:grid-cols-[68%_32%] gap-4 items-start">
+        <SourcingOrderList
+          data={ordersQuery.data}
+          isLoading={ordersQuery.isPending}
+          isError={ordersQuery.isError}
+          isFetching={ordersQuery.isFetching}
+          onRetry={() => ordersQuery.refetch()}
+          page={page}
+          onPageChange={setPage}
+          filtersActive={filtersActive}
+          onClearFilters={() => updateFilters(DEFAULT_P02_FILTERS)}
+        />
+
+        <div className="space-y-4">
+          <StageOverview
+            summary={summaryQuery.data}
+            isLoading={summaryQuery.isLoading}
+            isError={summaryQuery.isError}
+            isFetching={summaryQuery.isFetching}
+            onRetry={() => summaryQuery.refetch()}
+          />
+          <QuickActions
+            summary={summaryQuery.data}
+            summaryIsError={summaryQuery.isError}
+            summaryIsFetching={summaryQuery.isFetching}
+            onRetrySummary={() => summaryQuery.refetch()}
+            filters={filters}
+            onFilterAwaitingPOApproval={filterAwaitingPOApproval}
+            onFilterAwaitingHandoverClose={filterAwaitingHandoverClose}
+            onFilterOnHold={filterOnHold}
           />
         </div>
-        <select
-          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
-          value={stage}
-          onChange={(e) => { setStage(e.target.value as SteelSourcingStage | ""); setPage(1); }}
-        >
-          <option value="">All stages</option>
-          {SOURCING_STAGE_ORDER.map((s) => <option key={s} value={s}>{SOURCING_STAGE_LABELS[s]}</option>)}
-        </select>
-        <select
-          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
-          value={status}
-          onChange={(e) => { setStatus(e.target.value as SteelSourcingStatus | ""); setPage(1); }}
-        >
-          <option value="">All statuses</option>
-          {Object.keys(STATUS_STYLES).map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
       </div>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Sourcing Orders</CardTitle></CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
-          ) : (
-            <div className="space-y-2">
-              {data?.data.map((order) => (
-                <div key={order.id} className="flex items-center justify-between border-b border-slate-100 py-2.5 last:border-0">
-                  <div>
-                    <Link href={`/steel/p02/${order.id}`} className="font-medium text-slate-900 hover:underline">
-                      {order.sourcingNumber}
-                    </Link>
-                    <p className="text-xs text-slate-500">{order.plan?.planNumber ?? "—"} · {order.supplier?.name ?? "No supplier yet"}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">{SOURCING_STAGE_LABELS[order.stage]}</span>
-                    <Badge className={STATUS_STYLES[order.status]}>{order.status}</Badge>
-                  </div>
-                </div>
-              ))}
-              {data?.data.length === 0 && (
-                <p className="text-sm text-slate-400 text-center py-8">No sourcing orders yet.</p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

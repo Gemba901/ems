@@ -5,36 +5,21 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { useToast } from "@/contexts/toast.context";
-import {
-  MaterialIntakeService,
-  AllowedIntakeAction,
-  INTAKE_STAGE_LABELS,
-} from "@/services/material-intake.service";
+import { MaterialIntakeService, AllowedIntakeAction } from "@/services/material-intake.service";
+import { SteelSourcingService } from "@/services/steel-sourcing.service";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Circle,
-  Loader2,
-  PackageCheck,
-  AlertTriangle,
-  XCircle,
-} from "lucide-react";
-import { S9GateArrival } from "./steps/S9GateArrival";
-import { S10Inspection } from "./steps/S10Inspection";
-import { S11Unloading } from "./steps/S11Unloading";
-import { S12Storage } from "./steps/S12Storage";
+import { ArrowLeft, Loader2, AlertTriangle, Ban } from "lucide-react";
+import { S1GateDocuments } from "./S1GateDocuments";
+import { S2InspectionAcceptance } from "./S2InspectionAcceptance";
+import { S3UnloadingStorageRelease } from "./S3UnloadingStorageRelease";
 
-const GROUPS = [
-  { code: "S9", label: "Gate & Documents" },
-  { code: "S10", label: "Inspection & Acceptance" },
-  { code: "S11", label: "Unloading & Weighing" },
-  { code: "S12", label: "Yard & Stock Release" },
-];
-
-// Which stepper group a given allowed action belongs to.
-const ACTION_GROUP: Record<AllowedIntakeAction, number> = {
+// Which of the 3 screens (S1/S2/S3) owns each server-computed allowed
+// action. This is the ONLY stage->screen taxonomy for P03 detail routing —
+// it mirrors components/steel/p03/screenMap.ts's SCREENS grouping exactly,
+// just keyed by action instead of by stage (allowedActions is the backend's
+// authoritative "what can happen next", so routing follows it directly
+// rather than re-deriving the same answer from stage/status locally).
+const ACTION_SCREEN: Record<AllowedIntakeAction, number> = {
   VERIFY_DOCUMENTS: 0,
   RECORD_GROSS_WEIGHT: 0,
   RECORD_SAFETY_CHECK: 0,
@@ -43,18 +28,30 @@ const ACTION_GROUP: Record<AllowedIntakeAction, number> = {
   RECORD_ACCEPTANCE_DECISION: 1,
   RECORD_UNLOADING: 2,
   RECORD_NET_WEIGHT: 2,
-  ASSIGN_YARD_LOCATION: 3,
-  RELEASE_TO_STOCK: 3,
+  ASSIGN_YARD_LOCATION: 2,
+  RELEASE_TO_STOCK: 2,
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  REJECTED: "bg-red-50 text-red-700",
-  RELEASED: "bg-emerald-50 text-emerald-700",
-  CANCELLED: "bg-red-50 text-red-700",
-};
+// A manual CANCELLED override can happen at any stage via the status
+// endpoint — it isn't owned by any single screen, so it gets a small
+// generic terminal card here rather than forcing it into S1/S2/S3.
+function CancelledState() {
+  return (
+    <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4">
+      <Link href="/steel/p03" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+        <ArrowLeft className="h-4 w-4" />
+        Back to material intakes
+      </Link>
+      <Card className="border-red-200">
+        <CardContent className="py-8 text-center space-y-2">
+          <Ban className="h-8 w-8 text-red-500 mx-auto" />
+          <p className="text-sm font-semibold text-slate-900">Material Intake Cancelled</p>
+          <p className="text-xs text-slate-500">This intake was cancelled and cannot be progressed further.</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function MaterialIntakeDetailPage() {
   const params = useParams<{ id: string }>();
@@ -75,11 +72,20 @@ export default function MaterialIntakeDetailPage() {
     },
   });
 
-  const onSaved = () => {
+  // Richer P02 context (PO number/quantity/price/terms) isn't included on
+  // the intake's own embedded sourcingOrder — fetched separately from the
+  // real, existing P02 endpoint. Screens degrade gracefully while this is
+  // loading or if it fails, using only the lighter embedded fields.
+  const sourcingOrderQuery = useQuery({
+    queryKey: ["steel-sourcing-order", intake?.sourcingOrderId],
+    queryFn: () => SteelSourcingService.getById(intake!.sourcingOrderId, accessToken!),
+    enabled: !!accessToken && !!intake?.sourcingOrderId,
+  });
+
+  const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["material-intake", params.id] });
     toast("Saved", "success");
   };
-  const onError = (err: unknown) => toast(err instanceof Error ? err.message : "Something went wrong", "error");
 
   if (isLoading) {
     return (
@@ -120,112 +126,23 @@ export default function MaterialIntakeDetailPage() {
     );
   }
 
-  const actions = intake.allowedActions ?? [];
-  const stageIdx = [
-    "A01_GATE_ARRIVAL_RECORDED", "A02_DOCUMENTS_VERIFIED", "A03_GROSS_WEIGHT_CAPTURED", "A04_SAFETY_CHECKED",
-    "A05_AREA_ASSIGNED", "A06_VISUAL_INSPECTED", "A07_HAZARD_CHECKED", "A08_RADIATION_CHECKED", "A09_CERTIFICATE_VERIFIED",
-    "A10_ACCEPTANCE_DECIDED", "A11_UNLOADED", "A12_NET_WEIGHT_CAPTURED", "A13_YARD_STORED", "A14_STOCK_RELEASED",
-  ].indexOf(intake.stage);
-
-  let activeGroup: number;
-  if (actions.length > 0) {
-    activeGroup = ACTION_GROUP[actions[0]];
-  } else if (stageIdx <= 3) {
-    activeGroup = 0;
-  } else if (stageIdx <= 9) {
-    activeGroup = 1;
-  } else if (stageIdx <= 11) {
-    activeGroup = 2;
-  } else {
-    activeGroup = 3;
+  if (intake.status === "CANCELLED") {
+    return <CancelledState />;
   }
 
-  const stepComponents = [S9GateArrival, S10Inspection, S11Unloading, S12Storage];
-  const ActiveStep = stepComponents[activeGroup];
+  const sourcingOrder = sourcingOrderQuery.data;
+  const actions = intake.allowedActions ?? [];
+  // REJECTED (no further actions, owned by S2) and RELEASED (owned by S3)
+  // are rendered by their natural screen rather than a generic fallback —
+  // actions.length === 0 only happens for those two terminal outcomes once
+  // CANCELLED is already handled above.
+  const screenIdx = actions.length > 0 ? ACTION_SCREEN[actions[0]] : intake.status === "REJECTED" ? 1 : 2;
 
-  return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-4">
-      <Link href="/steel/p03" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" />
-        Back to material intakes
-      </Link>
-
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">{intake.intakeNumber}</h1>
-          <p className="text-sm text-slate-500">
-            Material Intake ·{" "}
-            <Link href={`/steel/p02/${intake.sourcingOrderId}`} className="hover:underline">
-              {intake.sourcingOrder.sourcingNumber}
-            </Link>
-            {intake.sourcingOrder.supplier && <> · {intake.sourcingOrder.supplier.name}</>}
-          </p>
-        </div>
-        <Badge className={STATUS_STYLES[intake.status] ?? ""}>{intake.status.replace(/_/g, " ")}</Badge>
-      </div>
-
-      <Card>
-        <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div>
-            <p className="text-xs text-slate-400">Material</p>
-            <p className="text-sm font-medium text-slate-800">{intake.materialType?.replace(/_/g, " ") ?? intake.sourcingOrder.materialType?.replace(/_/g, " ") ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Grade</p>
-            <p className="text-sm font-medium text-slate-800">{intake.grade ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Net weight</p>
-            <p className="text-sm font-medium text-slate-800">{intake.netWeightTonnes !== null ? `${intake.netWeightTonnes} t` : "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Stage</p>
-            <p className="text-sm font-medium text-slate-800">{INTAKE_STAGE_LABELS[intake.stage]}</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {intake.status === "REJECTED" && (
-        <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">
-          <XCircle className="h-4 w-4 shrink-0" />
-          This material intake was rejected. {intake.decisionNotes && <>Reason: {intake.decisionNotes}</>}
-        </div>
-      )}
-      {intake.status === "ON_HOLD" && (
-        <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm px-3 py-2">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          This material intake is on hold. {intake.decisionNotes && <>Reason: {intake.decisionNotes}</>}
-        </div>
-      )}
-      {intake.status === "RELEASED" && (
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-3 py-2">
-          <PackageCheck className="h-4 w-4 shrink-0" />
-          Material released for preparation/use.
-        </div>
-      )}
-
-      <div className="flex items-center gap-1 overflow-x-auto pb-1">
-        {GROUPS.map((g, i) => (
-          <div key={g.code} className="flex items-center gap-1 shrink-0">
-            <div
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
-                i < activeGroup
-                  ? "bg-emerald-50 text-emerald-700"
-                  : i === activeGroup
-                    ? "bg-blue-50 text-blue-700"
-                    : "bg-slate-100 text-slate-400"
-              }`}
-            >
-              {i < activeGroup ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
-              <span className="text-slate-400 font-mono">{g.code}</span>
-              {g.label}
-            </div>
-            {i < GROUPS.length - 1 && <div className="w-4 h-px bg-slate-200" />}
-          </div>
-        ))}
-      </div>
-
-      <ActiveStep intake={intake} token={accessToken!} onSaved={onSaved} onError={onError} />
-    </div>
-  );
+  if (screenIdx === 0) {
+    return <S1GateDocuments intake={intake} token={accessToken!} onRefresh={refresh} sourcingOrder={sourcingOrder} />;
+  }
+  if (screenIdx === 1) {
+    return <S2InspectionAcceptance intake={intake} token={accessToken!} onRefresh={refresh} sourcingOrder={sourcingOrder} />;
+  }
+  return <S3UnloadingStorageRelease intake={intake} token={accessToken!} onRefresh={refresh} sourcingOrder={sourcingOrder} />;
 }

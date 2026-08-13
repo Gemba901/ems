@@ -125,8 +125,8 @@ export function MaterialIntakeList({
                               )}
                             />
                             <TooltipContent>
-                              {activityCode} — {INTAKE_STAGE_LABELS[intake.stage]}. This is the backend workflow stage;
-                              {" "}{screen.code} is the user-facing screen it belongs to.
+                              {activityCode} is this delivery&apos;s current step — {INTAKE_STAGE_LABELS[intake.stage]}.
+                              {" "}{screen.code} groups it with related steps on this screen.
                             </TooltipContent>
                           </Tooltip>
                           <span className="flex items-center gap-1">

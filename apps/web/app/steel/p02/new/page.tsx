@@ -117,7 +117,7 @@ function Sidebar({ plan }: { plan: SteelProductionPlan | null }) {
         </CardHeader>
         <CardContent>
           <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            <li>Only production plans released from P01 (stage A12) are eligible for sourcing.</li>
+            <li>Only production plans that have been released from P01 are eligible for sourcing.</li>
             <li>Required-by date and notes are optional but help suppliers plan delivery.</li>
           </ul>
         </CardContent>
@@ -278,7 +278,7 @@ export default function NewSteelSourcingOrderPage() {
           <Card>
             <CardHeader>
               <CardTitle>Select Released Production Plan</CardTitle>
-              <p className="text-sm text-slate-500">Only plans released from P01 (stage A12) are eligible.</p>
+              <p className="text-sm text-slate-500">Only plans that have been released from P01 are eligible.</p>
             </CardHeader>
             <CardContent>
               <PlanPicker

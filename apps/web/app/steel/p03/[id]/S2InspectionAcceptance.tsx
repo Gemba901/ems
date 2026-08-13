@@ -252,8 +252,8 @@ function AcceptanceLockedCard() {
         <div>
           <p className="text-sm font-semibold text-slate-900">Management decision required</p>
           <p className="text-xs text-slate-500 mt-1 max-w-sm">
-            Only Management, Admin, or Super Admin roles can record the acceptance decision for this material intake.
-            Ask a Management or Admin user to complete this step.
+            Only Management or Admin can accept, hold, or reject this delivery. Ask a Management or Admin user to
+            make the call before it can move forward.
           </p>
         </div>
       </CardContent>

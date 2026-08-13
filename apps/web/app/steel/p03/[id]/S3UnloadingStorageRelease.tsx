@@ -55,8 +55,8 @@ function Sidebar({ intake }: { intake: SteelMaterialIntake }) {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-slate-500 leading-relaxed">
-            S3 covers P03-A11 (unload the accepted material), P03-A12 (capture tare weight — net weight is
-            server-computed), P03-A13 (assign a yard storage location), and P03-A14 (release to stock — the final,
+            S3 covers P03-A11 (unload the accepted material), P03-A12 (capture tare weight — we work out the net
+            weight for you), P03-A13 (assign a yard storage location), and P03-A14 (release to stock — the final,
             Management-approved step).
           </p>
         </CardContent>
@@ -104,7 +104,7 @@ function Sidebar({ intake }: { intake: SteelMaterialIntake }) {
         </CardHeader>
         <CardContent>
           <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            <li>Net weight is calculated by the server as gross weight minus tare weight — never entered directly.</li>
+            <li>We work out the net weight for you from the gross and tare weights — you don&apos;t enter it directly.</li>
             <li>Only Management, Admin, or Super Admin can release material to stock.</li>
           </ul>
         </CardContent>
@@ -161,7 +161,7 @@ function NetWeightForm({
           <label className="text-sm font-medium text-slate-700">Tare weight (tonnes)</label>
           <Tooltip>
             <TooltipTrigger render={(p) => <HelpCircle {...p} className="h-3 w-3 text-slate-300" />} />
-            <TooltipContent>Net weight is calculated by the server as gross weight minus tare weight.</TooltipContent>
+            <TooltipContent>We work out the net weight for you once you enter the tare weight.</TooltipContent>
           </Tooltip>
         </div>
         <Input type="number" step="0.001" value={tare} onChange={(e) => setTare(e.target.value)} />
@@ -171,7 +171,7 @@ function NetWeightForm({
       )}
       {preview !== null && (
         <p className="text-xs text-slate-400">
-          Net weight preview: {preview.toFixed(3)} t — the server will confirm this on save.
+          Estimated net weight: {preview.toFixed(3)} t — this will be confirmed when you save.
         </p>
       )}
       <Button size="sm" disabled={!valid || mutation.isPending} onClick={() => mutation.mutate({ tareWeightTonnes: Number(tare) })}>
@@ -216,8 +216,8 @@ function ReleaseLockedCard() {
         <div>
           <p className="text-sm font-semibold text-slate-900">Management approval required to release stock</p>
           <p className="text-xs text-slate-500 mt-1 max-w-sm">
-            Only Management, Admin, or Super Admin roles can release this material intake to stock. Ask a Management
-            or Admin user to complete this step.
+            Only Management or Admin can release this delivery to stock. Ask a Management or Admin user to complete
+            this step.
           </p>
         </div>
       </CardContent>
@@ -279,8 +279,8 @@ function ReleasePanel({
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2">
-        Stock release is recorded against the material intake. Full inventory stock integration will be enabled when
-        the inventory module/model is available.
+        Releasing to stock updates this material intake. Full inventory tracking isn&apos;t connected yet, but that&apos;s
+        on the way.
       </div>
       <Input placeholder="Release notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
       <Button size="sm" onClick={() => setConfirming(true)} className="gap-2 bg-red-600 hover:bg-red-700">

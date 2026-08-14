@@ -541,26 +541,23 @@ export class SimsService {
       if (!beforePhotoUrl) {
         throw new BadRequestException('A before photo is required to raise a Kaizen from this suggestion');
       }
-      const problem = dto.kaizenDetails.problem?.trim() || suggestion.title;
+      const conditionDescription = dto.kaizenDetails.conditionDescription?.trim() || suggestion.title;
+      const now = new Date();
       const defaultTargetCompletionDate = new Date();
       defaultTargetCompletionDate.setDate(defaultTargetCompletionDate.getDate() + 30);
-      // Team members are captured as a freeform note here since SIMS reviewers pick
-      // by name, not by employee ID like the self-service Kaizen team-member picker.
-      const comments = dto.kaizenDetails.teamMembers
-        ? [dto.kaizenDetails.comments, `Team members: ${dto.kaizenDetails.teamMembers}`].filter(Boolean).join('\n')
-        : dto.kaizenDetails.comments;
 
+      // A HOD already approved the underlying suggestion, so the kaizen skips the
+      // part-7 pre-implementation review gate and starts directly in implementation.
       const createdKaizen = await this.kaizenService.createKaizenForEmployee(
         suggestion.employeeId,
         {
-          title: suggestion.title,
-          problem,
           trigger: KaizenTrigger.EMPLOYEE_SUGGESTION_OR_IDEA,
+          conditionDescription,
+          title: suggestion.title,
+          startDate: now.toISOString(),
           targetCompletionDate: defaultTargetCompletionDate.toISOString(),
-          beforePhotoUrls: [beforePhotoUrl],
-          benefitCategory: dto.kaizenDetails.benefitCategory,
-          comments,
-          startImprovement: dto.kaizenDetails.startImprovement,
+          conditionEvidenceUrls: [beforePhotoUrl],
+          status: 'IN_IMPLEMENTATION',
         },
         organizationId,
       );

@@ -111,12 +111,8 @@ export interface CreateSuggestionPayload {
 }
 
 export interface KaizenDetailsPayload {
-  problem?: string;
+  conditionDescription?: string;
   beforePhotoUrl?: string;
-  teamMembers?: string;
-  benefitCategory?: string;
-  comments?: string;
-  startImprovement?: boolean;
 }
 
 export interface ReviewPayload {

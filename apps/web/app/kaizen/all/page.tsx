@@ -14,11 +14,14 @@ import { Search, X } from "lucide-react";
 const STATUS_FILTERS: (KaizenStatus | "ALL")[] = [
   "ALL",
   "DRAFT",
-  "IN_PROGRESS",
-  "SUBMITTED_FOR_VERIFICATION",
-  "VERIFIED_CLOSED",
-  "FURTHER_IMPROVEMENT_REQUIRED",
+  "PENDING_HOD_PRE_REVIEW",
+  "RETURNED_FOR_REVISION",
+  "REJECTED",
   "MOVED_TO_SGA",
+  "IN_IMPLEMENTATION",
+  "PENDING_VERIFICATION",
+  "RETURNED_FOR_REWORK",
+  "VERIFIED_CLOSED",
 ];
 
 const PAGE_SIZE = 10;
@@ -46,7 +49,7 @@ export default function AllKaizensPage() {
     return kaizens
       .filter((k) => statusFilter === "ALL" || k.status === statusFilter)
       .filter((k) => departmentFilter === "ALL" || k.department?.id === departmentFilter)
-      .filter((k) => !search.trim() || k.problem.toLowerCase().includes(search.trim().toLowerCase()))
+      .filter((k) => !search.trim() || (k.title || k.conditionDescription).toLowerCase().includes(search.trim().toLowerCase()))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [kaizens, statusFilter, departmentFilter, search]);
 
@@ -130,9 +133,9 @@ export default function AllKaizensPage() {
                   href={`/kaizen/${k.id}`}
                   className="flex items-center gap-3 px-4 py-3 sm:px-6 hover:bg-slate-50 transition-colors"
                 >
-                  <Thumbnail src={k.beforePhotoUrls[0]} alt={k.problem} />
+                  <Thumbnail src={k.conditionEvidenceUrls[0]} alt={k.title || k.conditionDescription} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{k.problem}</p>
+                    <p className="text-sm font-semibold text-slate-900 truncate">{k.title || k.conditionDescription}</p>
                     <p className="text-xs text-slate-500 mt-1">
                       {k.employee.firstName} {k.employee.lastName} · {k.department?.name ?? "No department"} · {formatDate(k.createdAt)}
                     </p>

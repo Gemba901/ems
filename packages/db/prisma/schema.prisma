@@ -968,6 +968,7 @@ enum SteelPlanActivity {
   A10
   A11
   A12
+  STATUS_OVERRIDE
 }
 
 // Departments that must acknowledge the released plan (P01-A11)
@@ -1053,6 +1054,7 @@ enum SteelSourcingActivity {
   A10
   A11
   A12
+  STATUS_OVERRIDE
 }
 
 // Tracks how far the intake has progressed through P03-A01..A14
@@ -1105,6 +1107,7 @@ enum SteelIntakeActivity {
   A12
   A13
   A14
+  STATUS_OVERRIDE
 }
 
 // Approved supplier master — checked at P02-A03/A04, referenced by every sourcing order.
@@ -1534,6 +1537,7 @@ enum SteelChargeActivity {
   A10
   A11
   A12
+  STATUS_OVERRIDE
 }
 
 // One record per furnace charge prepared against a released production plan,
@@ -1640,8 +1644,8 @@ model SteelChargeMaterialLot {
   intake            SteelMaterialIntake    @relation(fields: [intakeId], references: [id])
 
   @@unique([chargePreparationId, intakeId])
+  @@unique([intakeId])
   @@index([chargePreparationId])
-  @@index([intakeId])
 }
 
 // Audit trail: every activity performed against a charge preparation is recorded here

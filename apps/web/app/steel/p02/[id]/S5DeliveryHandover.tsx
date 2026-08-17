@@ -458,12 +458,17 @@ function ConfirmCloseModal({
 }: { onConfirm: () => void; onCancel: () => void; submitting: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-close-handover-title"
+        className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4"
+      >
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
             <ShieldCheck className="h-5 w-5 text-red-600" />
           </div>
-          <h2 className="text-base font-bold text-slate-900">Close this sourcing handover?</h2>
+          <h2 id="confirm-close-handover-title" className="text-base font-bold text-slate-900">Close this sourcing handover?</h2>
         </div>
         <p className="text-sm text-slate-500">
           This is final. The sourcing order will move to <span className="font-medium text-slate-700">CLOSED</span> and

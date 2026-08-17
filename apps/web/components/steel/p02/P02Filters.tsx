@@ -52,6 +52,7 @@ export function P02Filters({ value, onChange }: Props) {
                 <div {...triggerProps} className="relative flex-1 min-w-[220px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
+                    aria-label="Search sourcing orders or PO number"
                     placeholder="Search sourcing orders or PO number..."
                     className="pl-9"
                     value={value.search}
@@ -68,6 +69,7 @@ export function P02Filters({ value, onChange }: Props) {
               render={(triggerProps) => (
                 <select
                   {...triggerProps}
+                  aria-label="Filter by stage"
                   className={selectClass}
                   value={value.stage}
                   onChange={(e) => set("stage", e.target.value as SteelSourcingStage | "")}
@@ -87,6 +89,7 @@ export function P02Filters({ value, onChange }: Props) {
               render={(triggerProps) => (
                 <select
                   {...triggerProps}
+                  aria-label="Filter by status"
                   className={selectClass}
                   value={value.status}
                   onChange={(e) => set("status", e.target.value as SteelSourcingStatus | "")}
@@ -106,6 +109,7 @@ export function P02Filters({ value, onChange }: Props) {
               render={(triggerProps) => (
                 <select
                   {...triggerProps}
+                  aria-label="Filter by material type"
                   className={selectClass}
                   value={value.materialType}
                   onChange={(e) => set("materialType", e.target.value as SteelMaterialType | "")}

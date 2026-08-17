@@ -224,8 +224,13 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
           })}
         </nav>
 
-        {/* ── Footer nav ── */}
+        {/* ── Main App section ── */}
         <div className="px-2 pb-2 border-t border-slate-100 pt-2 space-y-0.5">
+          {!isCollapsed && (
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
+              Main App
+            </p>
+          )}
           <Link
             href="/"
             onClick={onClose}

@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { WorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
 import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
 import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
@@ -28,7 +29,36 @@ import {
   ListChecks,
   Lightbulb,
   AlertTriangle,
+  ClipboardEdit,
 } from "lucide-react";
+
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  DRAFT: "bg-slate-100 text-slate-600",
+  IN_PROGRESS: "bg-blue-50 text-blue-700",
+  ON_HOLD: "bg-amber-50 text-amber-700",
+  RELEASED: "bg-emerald-50 text-emerald-700",
+  CANCELLED: "bg-red-50 text-red-700",
+};
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <Badge className={STATUS_BADGE_STYLES[status] ?? "bg-slate-100 text-slate-600"}>
+      {status.replace(/_/g, " ").replace(/\w\S*/g, (t) => t.charAt(0) + t.slice(1).toLowerCase())}
+    </Badge>
+  );
+}
+
+function CurrentTaskBanner({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+      <ClipboardEdit className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+      <p className="text-sm text-blue-900">
+        <span className="font-semibold">What to do now: </span>
+        {text}
+      </p>
+    </div>
+  );
+}
 
 const PRODUCT_TYPES: { value: ProductType; label: string; description: string; icon: typeof Box }[] = [
   { value: "TMT_BAR", label: "TMT Bar", description: "Thermo-mechanically treated reinforcement bar.", icon: Component },
@@ -496,12 +526,20 @@ export function S2ProductSpecification({
       <ScreenHeader
         icon={Layers}
         title="Product & Specification"
-        subtitle="Define the product standard and finalize the exact production specification."
+        subtitle={`${plan.planNumber} — define the product standard and finalize the exact production specification.`}
+        rightContent={<StatusBadge status={plan.status} />}
       />
       <WorkflowIndicator doneCount={1} activeIndex={1} />
       <ContextSummary plan={plan} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4">
+          <CurrentTaskBanner
+            text={
+              subStep === "A03"
+                ? "Classify the product type and confirm the applicable standard."
+                : "Enter the exact grade, size, and quantity for this plan."
+            }
+          />
           {subStep === "A03" ? (
             <ProductClassificationForm planId={plan.id} token={token} onDone={refresh} />
           ) : (

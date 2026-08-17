@@ -350,6 +350,76 @@ function QuotationEntryForm({
 
 // ── A06 — Comparison & selection ─────────────────────────────────────────────
 
+function ConfirmSupplierSelectionModal({
+  sourcingNumber, quotation, onConfirm, onCancel, submitting,
+}: {
+  sourcingNumber: string;
+  quotation: SteelSourcingOrder["quotations"][number] | undefined;
+  onConfirm: () => void;
+  onCancel: () => void;
+  submitting: boolean;
+}) {
+  const supplierName = quotation?.supplier?.name ?? "this supplier";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-supplier-selection-title"
+        className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+            <Trophy className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 id="confirm-supplier-selection-title" className="text-base font-bold text-slate-900">Confirm supplier selection?</h2>
+            <p className="text-xs text-slate-400">Sourcing order {sourcingNumber}</p>
+          </div>
+        </div>
+        <p className="text-sm text-slate-500">
+          This will select <span className="font-medium text-slate-700">{supplierName}</span> for this sourcing order and
+          continue the procurement process. Once confirmed, this decision cannot be changed from here.
+        </p>
+        {quotation && (
+          <dl className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <div>
+              <dt className="text-xs text-slate-400">Quoted Price</dt>
+              <dd className="font-medium text-slate-800">{quotation.price} {quotation.currency}</dd>
+            </div>
+            {quotation.quantityAvailable != null && (
+              <div>
+                <dt className="text-xs text-slate-400">Qty Available</dt>
+                <dd className="font-medium text-slate-800">{quotation.quantityAvailable}</dd>
+              </div>
+            )}
+            {quotation.deliveryDate && (
+              <div>
+                <dt className="text-xs text-slate-400">Delivery Date</dt>
+                <dd className="font-medium text-slate-800">{new Date(quotation.deliveryDate).toLocaleDateString()}</dd>
+              </div>
+            )}
+            {quotation.paymentTerms && (
+              <div>
+                <dt className="text-xs text-slate-400">Payment Terms</dt>
+                <dd className="font-medium text-slate-800">{quotation.paymentTerms}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={onConfirm} disabled={submitting} className="gap-2">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Supplier Selection"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function QuotationComparison({
   order, token, onDone, onRevise, canRevise,
 }: { order: SteelSourcingOrder; token: string; onDone: () => void; onRevise: () => void; canRevise: boolean }) {
@@ -357,15 +427,20 @@ function QuotationComparison({
   const [selected, setSelected] = useState(order.selectedSupplierId ?? "");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const decided = order.stage === "A06_SUPPLIER_SELECTED";
 
   const mutation = useMutation({
     mutationFn: (payload: SelectSupplierPayload) => SteelSourcingService.selectSupplier(order.id, payload, token),
     onSuccess: () => {
       toast("Supplier selected.", "success");
+      setConfirming(false);
       onDone();
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err: Error) => {
+      setError(err.message);
+      setConfirming(false);
+    },
   });
 
   const handleConfirm = () => {
@@ -374,8 +449,10 @@ function QuotationComparison({
       setError("Select a supplier from the comparison before confirming.");
       return;
     }
-    mutation.mutate({ selectedSupplierId: selected, qcdComparisonNotes: notes || undefined });
+    setConfirming(true);
   };
+
+  const selectedQuotation = order.quotations.find((q) => q.supplierId === selected);
 
   return (
     <Card>
@@ -491,6 +568,16 @@ function QuotationComparison({
           </div>
         )}
       </CardContent>
+
+      {confirming && (
+        <ConfirmSupplierSelectionModal
+          sourcingNumber={order.sourcingNumber}
+          quotation={selectedQuotation}
+          submitting={mutation.isPending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => mutation.mutate({ selectedSupplierId: selected, qcdComparisonNotes: notes || undefined })}
+        />
+      )}
     </Card>
   );
 }

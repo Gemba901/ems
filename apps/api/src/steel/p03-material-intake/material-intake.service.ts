@@ -708,16 +708,36 @@ export class MaterialIntakeService {
   }
 
   // Manual override for exceptional cases (e.g. putting an intake ON_HOLD or CANCELLED)
+  // Administrative override for exceptional cases (e.g. putting an intake
+  // ON_HOLD or CANCELLED outside the normal A01-A14 flow). Restricted to
+  // RELEASE_ROLES at the controller. Deliberately does not re-validate
+  // stage/status transitions the way the staged A01-A14 actions do — that's
+  // the point of an override — but it is transactional and logged like
+  // every other write, so the change is auditable.
   async updateStatus(
     id: string,
     dto: UpdateMaterialIntakeStatusDto,
+    userId: string,
     organizationId: string,
   ) {
-    await this.findIntakeOrThrow(id, organizationId);
-    return this.prisma.steelMaterialIntake.update({
-      where: { id },
-      data: { status: dto.status },
-      include: intakeInclude,
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const intake = await this.findIntakeOrThrow(id, organizationId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.steelMaterialIntake.update({
+        where: { id },
+        data: { status: dto.status },
+        include: intakeInclude,
+      });
+      await this.logActivity(
+        tx,
+        id,
+        'STATUS_OVERRIDE',
+        employee.id,
+        dto.notes,
+        { previousStatus: intake.status, newStatus: dto.status },
+      );
+      return updated;
     });
   }
 

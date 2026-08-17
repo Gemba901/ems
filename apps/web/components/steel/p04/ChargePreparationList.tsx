@@ -1,35 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2, ChevronLeft, ChevronRight, Clock, ArrowRight, X } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Clock, ArrowRight, X, Boxes } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { QueryErrorState } from "@/components/steel/dashboard/QueryErrorState";
 import {
-  type PaginatedSteelSourcingOrders,
-  type SteelSourcingStatus,
-  SOURCING_STAGE_LABELS,
-} from "@/services/steel-sourcing.service";
+  type PaginatedChargePreparations,
+  type SteelChargeStatus,
+  CHARGE_STAGE_LABELS,
+} from "@/services/steel-charge-preparation.service";
 import { SCREENS, stageToScreenIndex } from "./screenMap";
 
-const STATUS_STYLES: Record<SteelSourcingStatus, string> = {
+const STATUS_STYLES: Record<SteelChargeStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-600",
   IN_PROGRESS: "bg-blue-50 text-blue-700",
   ON_HOLD: "bg-amber-50 text-amber-700",
-  PO_ISSUED: "bg-indigo-50 text-indigo-700",
   CLOSED: "bg-emerald-50 text-emerald-700",
   CANCELLED: "bg-red-50 text-red-700",
 };
 
-const STATUS_TOOLTIPS: Record<SteelSourcingStatus, string> = {
-  DRAFT: "Order created but not yet actively progressing.",
-  IN_PROGRESS: "Actively moving through the sourcing workflow.",
-  ON_HOLD: "Progress paused on this order.",
-  PO_ISSUED: "The purchase order has been issued.",
-  CLOSED: "The handover process has been completed.",
-  CANCELLED: "This sourcing order was cancelled.",
+const STATUS_TOOLTIPS: Record<SteelChargeStatus, string> = {
+  DRAFT: "Preparation created but not yet actively progressing.",
+  IN_PROGRESS: "Actively moving through the preparation workflow.",
+  ON_HOLD: "Paused and not currently progressing.",
+  CLOSED: "Furnace handover complete — preparation finished.",
+  CANCELLED: "This charge preparation was cancelled.",
 };
 
 function formatDate(iso: string | null) {
@@ -38,7 +36,7 @@ function formatDate(iso: string | null) {
 }
 
 interface Props {
-  data?: PaginatedSteelSourcingOrders;
+  data?: PaginatedChargePreparations;
   isLoading: boolean;
   isError: boolean;
   isFetching: boolean;
@@ -49,14 +47,14 @@ interface Props {
   onClearFilters: () => void;
 }
 
-export function SourcingOrderList({
+export function ChargePreparationList({
   data, isLoading, isError, isFetching, onRetry, page, onPageChange, filtersActive, onClearFilters,
 }: Props) {
   return (
     <TooltipProvider>
       <Card>
         <CardHeader>
-          <CardTitle>Sourcing Orders</CardTitle>
+          <CardTitle>Charge Preparations</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -64,11 +62,11 @@ export function SourcingOrderList({
               <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             </div>
           ) : isError ? (
-            <QueryErrorState onRetry={onRetry} isRetrying={isFetching} message="Could not load sourcing orders." />
+            <QueryErrorState onRetry={onRetry} isRetrying={isFetching} message="Could not load charge preparations." />
           ) : !data || data.data.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
               <p className="text-sm text-slate-500">
-                {filtersActive ? "No sourcing orders match these filters." : "No sourcing orders yet."}
+                {filtersActive ? "No charge preparations match these filters." : "No charge preparations found."}
               </p>
               {filtersActive ? (
                 <button
@@ -80,40 +78,39 @@ export function SourcingOrderList({
                   Clear filters
                 </button>
               ) : (
-                <p className="text-xs text-slate-400">Create a sourcing order from a released production plan to get started.</p>
+                <p className="text-xs text-slate-400">Start a new charge preparation against a released production plan to get started.</p>
               )}
             </div>
           ) : (
             <>
               <div className="space-y-2.5">
-                {data.data.map((order) => {
-                  const screenIdx = stageToScreenIndex(order.stage);
+                {data.data.map((prep) => {
+                  const screenIdx = stageToScreenIndex(prep.stage);
                   const screen = SCREENS[screenIdx];
                   const screenProgressPct = Math.round(((screenIdx + 1) / SCREENS.length) * 100);
-                  const activityCode = order.stage.split("_")[0];
+                  const activityCode = prep.stage.split("_")[0];
 
                   return (
                     <Link
-                      key={order.id}
-                      href={`/steel/p02/${order.id}`}
+                      key={prep.id}
+                      href={`/steel/p04/${prep.id}`}
                       className="group flex flex-col gap-2.5 rounded-xl border border-slate-100 hover:border-slate-300 hover:shadow-sm px-4 py-3 transition-all"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="min-w-0 space-y-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-slate-900">{order.sourcingNumber}</span>
-                            {order.poNumber && (
-                              <span className="text-xs text-slate-400">PO {order.poNumber}</span>
-                            )}
+                            <span className="font-semibold text-slate-900">{prep.prepNumber}</span>
                             <Tooltip>
-                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={STATUS_STYLES[order.status]}>{order.status.replace(/_/g, " ")}</Badge>} />
-                              <TooltipContent>{STATUS_TOOLTIPS[order.status]}</TooltipContent>
+                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={STATUS_STYLES[prep.status]}>{prep.status.replace(/_/g, " ")}</Badge>} />
+                              <TooltipContent>{STATUS_TOOLTIPS[prep.status]}</TooltipContent>
                             </Tooltip>
+                            {prep.chargeNumber && <Badge className="bg-slate-100 text-slate-600">{prep.chargeNumber}</Badge>}
                           </div>
-                          <p className="text-xs text-slate-500">
-                            {order.plan?.planNumber ?? "—"}
-                            {order.plan?.customerName && <span> · {order.plan.customerName}</span>}
-                            {order.supplier?.name && <span> · {order.supplier.name}</span>}
+                          <p className="text-xs text-slate-500 flex items-center gap-1">
+                            {prep.plan?.planNumber ?? "—"}
+                            <span className="inline-flex items-center gap-1">
+                              <Boxes className="h-3 w-3 text-slate-400" /> {prep._count?.materialLots ?? 0} lot{(prep._count?.materialLots ?? 0) === 1 ? "" : "s"}
+                            </span>
                           </p>
                         </div>
 
@@ -127,12 +124,12 @@ export function SourcingOrderList({
                               )}
                             />
                             <TooltipContent>
-                              {activityCode} — {SOURCING_STAGE_LABELS[order.stage]}. Part of the {screen.code} step in the sourcing process.
+                              {activityCode} — {CHARGE_STAGE_LABELS[prep.stage]}. This is the current step; {screen.code} is the screen it belongs to.
                             </TooltipContent>
                           </Tooltip>
                           <span className="flex items-center gap-1">
                             <Clock className="h-3.5 w-3.5 text-slate-400" />
-                            {formatDate(order.updatedAt) ?? "—"}
+                            {formatDate(prep.updatedAt) ?? "—"}
                           </span>
                           <span className="flex items-center gap-1 text-slate-500 font-medium group-hover:text-slate-900 transition-colors">
                             View <ArrowRight className="h-3.5 w-3.5" />
@@ -160,13 +157,12 @@ export function SourcingOrderList({
               {data.pagination.pages > 1 && (
                 <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
                   <span className="text-xs text-slate-400">
-                    Page {data.pagination.page} of {data.pagination.pages} · {data.pagination.total} orders
+                    Page {data.pagination.page} of {data.pagination.pages} · {data.pagination.total} preparations
                   </span>
                   <div className="flex items-center gap-1.5">
                     <Button
                       size="sm"
                       variant="outline"
-                      aria-label="Previous page"
                       disabled={page <= 1}
                       onClick={() => onPageChange(page - 1)}
                     >
@@ -175,7 +171,6 @@ export function SourcingOrderList({
                     <Button
                       size="sm"
                       variant="outline"
-                      aria-label="Next page"
                       disabled={page >= data.pagination.pages}
                       onClick={() => onPageChange(page + 1)}
                     >

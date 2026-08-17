@@ -2,7 +2,6 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { useToast } from "@/contexts/toast.context";
@@ -11,7 +10,8 @@ import { SteelService } from "@/services/steel.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ScreenHeader } from "@/components/steel/p04/ScreenHeader";
+import { ClipboardList, Loader2 } from "lucide-react";
 
 export default function NewChargePreparationPage() {
   return (
@@ -69,17 +69,17 @@ function NewChargePreparationForm() {
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4">
-      <Link href="/steel/p04" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" />
-        Back to charge preparations
-      </Link>
+      <ScreenHeader
+        icon={ClipboardList}
+        title="New Charge Preparation"
+        subtitle="Review the production plan and material requirement to start preparing a furnace charge."
+        backHref="/steel/p04"
+        backLabel="Back to Charge Preparations"
+      />
 
       <Card>
         <CardHeader>
-          <CardTitle>New Charge Preparation</CardTitle>
-          <p className="text-sm text-slate-500">
-            P04-A01 — Review the production plan and material requirement.
-          </p>
+          <CardTitle>Production Plan & Requirement</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

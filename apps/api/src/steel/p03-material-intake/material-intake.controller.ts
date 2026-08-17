@@ -282,6 +282,7 @@ export class MaterialIntakeController {
     return this.materialIntakeService.updateStatus(
       id,
       dto,
+      user.userId,
       user.organizationId,
     );
   }

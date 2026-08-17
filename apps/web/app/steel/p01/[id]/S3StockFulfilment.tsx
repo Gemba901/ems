@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { WorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
 import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
 import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
@@ -27,7 +28,36 @@ import {
   Lightbulb,
   AlertTriangle,
   ArrowRight,
+  ClipboardEdit,
 } from "lucide-react";
+
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  DRAFT: "bg-slate-100 text-slate-600",
+  IN_PROGRESS: "bg-blue-50 text-blue-700",
+  ON_HOLD: "bg-amber-50 text-amber-700",
+  RELEASED: "bg-emerald-50 text-emerald-700",
+  CANCELLED: "bg-red-50 text-red-700",
+};
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <Badge className={STATUS_BADGE_STYLES[status] ?? "bg-slate-100 text-slate-600"}>
+      {status.replace(/_/g, " ").replace(/\w\S*/g, (t) => t.charAt(0) + t.slice(1).toLowerCase())}
+    </Badge>
+  );
+}
+
+function CurrentTaskBanner({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+      <ClipboardEdit className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+      <p className="text-sm text-blue-900">
+        <span className="font-semibold">What to do now: </span>
+        {text}
+      </p>
+    </div>
+  );
+}
 
 function ContextSummary({ plan, requiredQty }: { plan: SteelProductionPlan; requiredQty: number }) {
   return (
@@ -546,12 +576,21 @@ export function S3StockFulfilment({
       <ScreenHeader
         icon={PackageSearch}
         title="Stock Check & Fulfilment"
-        subtitle="Verify certified finished-goods availability and determine the fulfilment path."
+        subtitle={`${plan.planNumber} — verify certified finished-goods availability and determine the fulfilment path.`}
+        rightContent={<StatusBadge status={plan.status} />}
       />
       <WorkflowIndicator doneCount={2} activeIndex={2} />
       <ContextSummary plan={plan} requiredQty={requiredQty} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        <div className="space-y-4">{body}</div>
+        <div className="space-y-4">
+          {subStep === "A05" && (
+            <CurrentTaskBanner text="Record how much certified finished-goods stock is available against this requirement." />
+          )}
+          {subStep === "A06" && plan.stage === "A05_STOCK_CHECKED" && (
+            <CurrentTaskBanner text="Decide whether to dispatch from stock or route this plan to production." />
+          )}
+          {body}
+        </div>
         <Sidebar plan={plan} requiredQty={requiredQty} certifiedQty={certifiedQty} subStep={subStep} />
       </div>
     </div>

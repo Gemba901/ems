@@ -143,16 +143,15 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
   STEEL: {
     key: "STEEL",
     label: "Steel Manufacturing",
-    tagline: "Production & Sourcing",
-    description: "Plan production runs, track raw material sourcing, and manage the steel manufacturing workflow end to end.",
+    tagline: "End-to-end steel production workflow",
+    description: "Plan, source, receive, prepare, and manage steel production from start to finish. Follow each process from production planning and raw-material sourcing through material intake, preparation, production, quality checks, and final handover.",
     icon: Factory,
     color: "text-slate-600",
     bg: "bg-slate-50",
     ring: "ring-slate-200",
     href: "/steel",
     actions: [
-      { label: "Production Plans",       href: "/steel/p01", icon: ClipboardList },
-      { label: "Raw Material Sourcing",  href: "/steel/p02", icon: Package },
+      { label: "Start Steel Manufacturing", href: "/steel", icon: ArrowRight },
     ],
   },
   KAIZEN: {

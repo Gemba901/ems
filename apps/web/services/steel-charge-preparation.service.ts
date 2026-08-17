@@ -184,6 +184,9 @@ export interface SteelChargePreparation {
   activityLogs: ChargePrepActivityLog[];
   // Only present on getById — backend's authoritative list of next valid actions.
   allowedActions?: AllowedChargeAction[];
+  // Only present on getAll (list rows return counts instead of the full
+  // materialLots/activityLogs relations to keep the list endpoint light).
+  _count?: { materialLots: number; activityLogs: number };
 }
 
 export interface PaginatedChargePreparations {

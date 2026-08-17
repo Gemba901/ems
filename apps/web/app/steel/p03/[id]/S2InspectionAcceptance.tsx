@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
@@ -28,6 +28,7 @@ import { IntakeProgress } from "@/components/steel/p03/IntakeProgress";
 import { Field, SelectField, SubStepCard, SaveButton, LockedNote, SubStepStatus } from "@/components/steel/p03/shared";
 import {
   ClipboardCheck, Info, ListChecks, Lightbulb, Gavel, Lock, XCircle, AlertTriangle, HelpCircle,
+  ThumbsUp, PauseCircle,
 } from "lucide-react";
 
 // Same authority scope enforced server-side by the material-intake
@@ -261,19 +262,70 @@ function AcceptanceLockedCard() {
   );
 }
 
+function ConfirmRejectModal({
+  onConfirm, onCancel, submitting,
+}: { onConfirm: () => void; onCancel: () => void; submitting: boolean }) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    cancelRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel, submitting]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="reject-modal-title"
+        className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+            <XCircle className="h-5 w-5 text-red-600" />
+          </div>
+          <h2 id="reject-modal-title" className="text-base font-bold text-slate-900">Reject this delivery?</h2>
+        </div>
+        <p className="text-sm text-slate-500">
+          This delivery will be marked as <span className="font-medium text-slate-700">REJECTED</span> and will not
+          proceed to Charge Preparation. This cannot be undone from here.
+        </p>
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting} ref={cancelRef}>
+            Cancel
+          </Button>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={submitting} className="gap-2">
+            <SaveButton pending={submitting} label="Reject Delivery" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DecisionForm({
   intake, token, onDone,
 }: { intake: SteelMaterialIntake; token: string; onDone: () => void }) {
   const [decision, setDecision] = useState<MaterialAcceptanceDecision | "">("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirmingReject, setConfirmingReject] = useState(false);
   const mutation = useMutation({
     mutationFn: (payload: RecordAcceptanceDecisionPayload) => MaterialIntakeService.recordAcceptanceDecision(intake.id, payload, token),
     onSuccess: onDone,
-    onError: (err: Error) => setError(err.message),
+    onError: (err: Error) => {
+      setError(err.message);
+      setConfirmingReject(false);
+    },
   });
   const reasonRequired = decision === "HOLD" || decision === "REJECT";
   const valid = decision && (!reasonRequired || notes.trim());
+  const submitDecision = () =>
+    mutation.mutate({ decision: decision as MaterialAcceptanceDecision, decisionNotes: notes || undefined });
 
   return (
     <div className="space-y-3">
@@ -284,23 +336,29 @@ function DecisionForm({
           This intake is on hold — re-decide below to accept or reject.
         </div>
       )}
-      <div className="flex gap-2">
-        {(["ACCEPT", "HOLD", "REJECT"] as MaterialAcceptanceDecision[]).map((d) => (
+      <div role="radiogroup" aria-label="Acceptance decision" className="grid grid-cols-3 gap-2">
+        {(
+          [
+            { d: "ACCEPT" as const, Icon: ThumbsUp, hint: "Proceed to unloading & storage", active: "bg-emerald-600 text-white border-emerald-600" },
+            { d: "HOLD" as const, Icon: PauseCircle, hint: "Pause for re-decision", active: "bg-amber-500 text-white border-amber-500" },
+            { d: "REJECT" as const, Icon: XCircle, hint: "Close the intake — cannot proceed", active: "bg-red-600 text-white border-red-600" },
+          ]
+        ).map(({ d, Icon, hint, active }) => (
           <button
             key={d}
             type="button"
+            role="radio"
+            aria-checked={decision === d}
             onClick={() => setDecision(d)}
-            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-              decision === d
-                ? d === "ACCEPT"
-                  ? "bg-emerald-600 text-white border-emerald-600"
-                  : d === "HOLD"
-                    ? "bg-amber-500 text-white border-amber-500"
-                    : "bg-red-600 text-white border-red-600"
-                : "border-input text-slate-600 hover:bg-slate-50"
+            className={`flex flex-col items-center gap-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+              decision === d ? active : "border-input text-slate-600 hover:bg-slate-50"
             }`}
           >
+            <Icon className="h-4 w-4" />
             {d}
+            <span className={`text-[10px] font-normal leading-tight text-center ${decision === d ? "text-white/85" : "text-slate-400"}`}>
+              {hint}
+            </span>
           </button>
         ))}
       </div>
@@ -315,10 +373,18 @@ function DecisionForm({
       <Button
         size="sm"
         disabled={!valid || mutation.isPending}
-        onClick={() => mutation.mutate({ decision: decision as MaterialAcceptanceDecision, decisionNotes: notes || undefined })}
+        onClick={() => (decision === "REJECT" ? setConfirmingReject(true) : submitDecision())}
       >
         <SaveButton pending={mutation.isPending} label="Save decision" />
       </Button>
+
+      {confirmingReject && (
+        <ConfirmRejectModal
+          submitting={mutation.isPending}
+          onCancel={() => setConfirmingReject(false)}
+          onConfirm={submitDecision}
+        />
+      )}
     </div>
   );
 }

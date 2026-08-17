@@ -512,8 +512,8 @@ export class KaizenService {
         const roles = await this.getUserRoles(userId, organizationId);
         const isDepartmentHOD = roles.includes(Role.HOD) && reviewer.departmentId === kaizen.departmentId;
 
-        if (!isDepartmentHOD && !this.isPrivileged(roles)) {
-            throw new ForbiddenException('Only the department HOD or admin can review this kaizen');
+        if (!isDepartmentHOD) {
+            throw new ForbiddenException('Only the department HOD can review this kaizen');
         }
 
         const statusByDecision: Record<typeof dto.decision, KaizenStatus> = {

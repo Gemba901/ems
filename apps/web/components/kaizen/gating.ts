@@ -48,7 +48,7 @@ export function getKaizenGating(kaizen: Kaizen, ctx: KaizenAccessContext): Kaize
 
   const hodPreReview: SectionAccess = {
     visible: kaizen.status !== "DRAFT",
-    editable: (ctx.isDeptHOD || ctx.isPrivileged) && kaizen.status === "PENDING_HOD_PRE_REVIEW",
+    editable: ctx.isDeptHOD && kaizen.status === "PENDING_HOD_PRE_REVIEW",
   };
 
   const implementation: SectionAccess = {

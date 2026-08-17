@@ -67,8 +67,9 @@ export default function KaizenForm({
 
   const [hodReviewError, setHodReviewError] = useState<string | null>(null);
   const [verificationError, setVerificationError] = useState<string | null>(null);
-  const [saveProgressError, setSaveProgressError] = useState<string | null>(null);
-  const [savingProgress, setSavingProgress] = useState(false);
+  const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [submittingHodReview, setSubmittingHodReview] = useState(false);
 
   const reasonRef = useRef<KaizenSectionHandle>(null);
   const referenceRef = useRef<KaizenSectionHandle>(null);
@@ -78,20 +79,25 @@ export default function KaizenForm({
   const wasteRef = useRef<KaizenSectionHandle>(null);
   const implementationPlanRef = useRef<KaizenSectionHandle>(null);
 
-  const saveProgress = async () => {
-    setSaveProgressError(null);
-    setSavingProgress(true);
+  const saveAllSections = async (): Promise<boolean> => {
+    const refs = [reasonRef, referenceRef, conditionRef, basicInfoRef, qcdsmtImpactRef, wasteRef, implementationPlanRef];
+    let allOk = true;
+    for (const sectionRef of refs) {
+      if (!sectionRef.current) continue;
+      const ok = await sectionRef.current.save();
+      if (!ok) allOk = false;
+    }
+    return allOk;
+  };
+
+  const handleSaveDraft = async () => {
+    setSaveDraftError(null);
+    setSavingDraft(true);
     try {
-      const refs = [reasonRef, referenceRef, conditionRef, basicInfoRef, qcdsmtImpactRef, wasteRef, implementationPlanRef];
-      let allOk = true;
-      for (const sectionRef of refs) {
-        if (!sectionRef.current) continue;
-        const ok = await sectionRef.current.save();
-        if (!ok) allOk = false;
-      }
-      if (!allOk) setSaveProgressError("Some sections failed to save. Check the errors above and try again.");
+      const ok = await saveAllSections();
+      if (!ok) setSaveDraftError("Some sections failed to save. Check the errors above and try again.");
     } finally {
-      setSavingProgress(false);
+      setSavingDraft(false);
     }
   };
 
@@ -100,6 +106,23 @@ export default function KaizenForm({
     onSuccess: (updated) => onSaved(updated),
     onError: (err: any) => setHodReviewError(err instanceof Error ? err.message : "Failed to submit"),
   });
+
+  const handleSubmitForHodReview = async () => {
+    setHodReviewError(null);
+    setSubmittingHodReview(true);
+    try {
+      const ok = await saveAllSections();
+      if (!ok) {
+        setHodReviewError("Some sections failed to save. Check the errors above and try again.");
+        return;
+      }
+      await submitForHodReview.mutateAsync();
+    } catch {
+      // handled by the mutation's onError
+    } finally {
+      setSubmittingHodReview(false);
+    }
+  };
 
   const submitForVerification = useMutation({
     mutationFn: () => KaizenService.submitForVerification(kaizen.id, token),
@@ -135,38 +158,31 @@ export default function KaizenForm({
 
           {gating.initialSubmission.editable && (
             <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-              {saveProgressError && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{saveProgressError}</p>
+              {(saveDraftError || hodReviewError) && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
+                  {saveDraftError || hodReviewError}
+                </p>
               )}
-              <button
-                type="button"
-                disabled={savingProgress}
-                onClick={saveProgress}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-              >
-                {savingProgress ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save Progress
-              </button>
-            </div>
-          )}
-
-          {gating.canSubmitForHodReview && (
-            <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-              {hodReviewError && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{hodReviewError}</p>
-              )}
-              <button
-                type="button"
-                disabled={submitForHodReview.isPending}
-                onClick={() => {
-                  setHodReviewError(null);
-                  submitForHodReview.mutate();
-                }}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-              >
-                {submitForHodReview.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Submit for HOD Pre-Review
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  disabled={savingDraft || submittingHodReview}
+                  onClick={handleSaveDraft}
+                  className="flex items-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save as Draft
+                </button>
+                <button
+                  type="button"
+                  disabled={savingDraft || submittingHodReview}
+                  onClick={handleSubmitForHodReview}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  {submittingHodReview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Submit for HOD Pre-Review
+                </button>
+              </div>
             </div>
           )}
 

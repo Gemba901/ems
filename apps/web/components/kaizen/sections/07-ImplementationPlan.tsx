@@ -48,7 +48,7 @@ const ImplementationPlanSection = forwardRef<KaizenSectionHandle, KaizenSectionP
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n={7}>Required Materials &amp; Estimated Cost</SectionLabel>
+        <SectionLabel n="1.7">Required Materials &amp; Estimated Cost</SectionLabel>
         <p className="text-sm text-slate-700 whitespace-pre-wrap mb-3">{kaizen.requiredMaterials || "Not set."}</p>
         {kaizen.estimatedCost && (
           <div>
@@ -64,7 +64,7 @@ const ImplementationPlanSection = forwardRef<KaizenSectionHandle, KaizenSectionP
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n={7}>Required Materials &amp; Estimated Cost</SectionLabel>
+      <SectionLabel n="1.7">Required Materials &amp; Estimated Cost</SectionLabel>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">

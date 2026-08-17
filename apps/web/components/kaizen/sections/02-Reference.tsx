@@ -47,7 +47,7 @@ const ReferenceSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n={2}>Reference</SectionLabel>
+        <SectionLabel n="1.2">Reference</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Applicability</p>
@@ -66,7 +66,7 @@ const ReferenceSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n={2}>Reference</SectionLabel>
+      <SectionLabel n="1.2">Reference</SectionLabel>
       <p className="text-xs text-slate-400 mb-4">
         If this kaizen was triggered by an alert, abnormality, audit finding, or other record, reference it here.
       </p>

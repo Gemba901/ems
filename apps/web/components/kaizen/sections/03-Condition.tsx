@@ -73,7 +73,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n={3}>Condition or Opportunity</SectionLabel>
+        <SectionLabel n="1.3">Condition or Opportunity</SectionLabel>
         <p className="text-sm text-slate-700 whitespace-pre-wrap mb-4">{kaizen.conditionDescription}</p>
         {kaizen.conditionEvidenceUrls.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -104,7 +104,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n={3}>Condition or Opportunity</SectionLabel>
+      <SectionLabel n="1.3">Condition or Opportunity</SectionLabel>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">

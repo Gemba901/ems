@@ -70,7 +70,7 @@ const QcdsmtImpactSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n={5}>QCDSMT Impact</SectionLabel>
+        <SectionLabel n="1.5">QCDSMT Impact</SectionLabel>
         {kaizen.qcdsmtImpacts.length === 0 ? (
           <p className="text-sm text-slate-400">No QCDSMT impacts recorded.</p>
         ) : (
@@ -93,7 +93,7 @@ const QcdsmtImpactSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n={5}>QCDSMT Impact</SectionLabel>
+      <SectionLabel n="1.5">QCDSMT Impact</SectionLabel>
       <p className="text-xs text-slate-400 mb-4">
         Record the Quality / Cost / Delivery / Safety / Morale / Technology dimensions this kaizen affects.
       </p>

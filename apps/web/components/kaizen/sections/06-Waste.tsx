@@ -80,7 +80,7 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n={6}>Waste Reduced</SectionLabel>
+        <SectionLabel n="1.6">Waste Reduced</SectionLabel>
         {kaizen.wasteImpacts.length === 0 ? (
           <p className="text-sm text-slate-400">Not set.</p>
         ) : (
@@ -107,7 +107,7 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n={6}>Waste Reduced</SectionLabel>
+      <SectionLabel n="1.6">Waste Reduced</SectionLabel>
       <p className="text-xs text-slate-400 mb-4">
         Which of the 7 wastes does this kaizen reduce? Record a before/after measurement for each.
       </p>

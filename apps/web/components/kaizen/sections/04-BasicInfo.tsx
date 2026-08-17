@@ -106,7 +106,7 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n={4}>Basic Daily Kaizen Information</SectionLabel>
+        <SectionLabel n="1.4">Basic Daily Kaizen Information</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Title</p>
@@ -147,7 +147,7 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n={4}>Basic Daily Kaizen Information</SectionLabel>
+      <SectionLabel n="1.4">Basic Daily Kaizen Information</SectionLabel>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">

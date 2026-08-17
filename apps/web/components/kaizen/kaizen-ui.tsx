@@ -340,7 +340,7 @@ export function KaizenProgress({ states }: { states: Record<KaizenStageKey, Kaiz
   );
 }
 
-export function LockedSection({ n, label }: { n: number; label: string }) {
+export function LockedSection({ n, label }: { n: number | string; label: string }) {
   return (
     <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-5 flex items-center gap-3 text-slate-400">
       <div className="h-8 w-8 rounded-full border-2 border-slate-200 flex items-center justify-center shrink-0">
@@ -353,7 +353,7 @@ export function LockedSection({ n, label }: { n: number; label: string }) {
   );
 }
 
-export function SectionLabel({ n, children }: { n: number; children: React.ReactNode }) {
+export function SectionLabel({ n, children }: { n: number | string; children: React.ReactNode }) {
   return (
     <h3 className="text-sm font-semibold text-blue-600 pb-2 mb-4 border-b border-blue-100">
       {n}. {children}

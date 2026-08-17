@@ -132,7 +132,7 @@ export default function VerificationSection({ kaizen, access, token, onSaved, ct
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n={10}>Verification &amp; Closure</SectionLabel>
+      <SectionLabel n={4}>Verification &amp; Closure</SectionLabel>
       <p className="text-xs text-slate-400 mb-4">
         This kaizen closes once all three stages verify it. Any stage returning it sends it back to Part 9 for rework.
       </p>

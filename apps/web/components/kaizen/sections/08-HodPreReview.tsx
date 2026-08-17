@@ -24,7 +24,7 @@ export default function HodPreReviewSection({ kaizen, access, token, onSaved }: 
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n={8}>HOD Pre-Implementation Review</SectionLabel>
+        <SectionLabel n={2}>HOD Pre-Implementation Review</SectionLabel>
         {kaizen.hodPreReviewDecision === "PENDING" ? (
           <p className="text-sm text-slate-400">Awaiting department HOD review.</p>
         ) : (
@@ -42,7 +42,7 @@ export default function HodPreReviewSection({ kaizen, access, token, onSaved }: 
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n={8}>HOD Pre-Implementation Review</SectionLabel>
+      <SectionLabel n={2}>HOD Pre-Implementation Review</SectionLabel>
       <p className="text-xs text-slate-400 mb-4">Review parts 1-7 before this kaizen proceeds to implementation.</p>
       <div className="space-y-4">
         <div>

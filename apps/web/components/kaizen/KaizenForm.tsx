@@ -173,13 +173,13 @@ export default function KaizenForm({
           {gating.hodPreReview.visible ? (
             <HodPreReviewSection kaizen={kaizen} access={gating.hodPreReview} token={token} onSaved={onSaved} />
           ) : (
-            <LockedSection n={8} label="HOD Pre-Implementation Review" />
+            <LockedSection n={2} label="HOD Pre-Implementation Review" />
           )}
 
           {gating.implementation.visible ? (
             <ImplementationSection kaizen={kaizen} access={gating.implementation} token={token} onSaved={onSaved} />
           ) : (
-            <LockedSection n={9} label="Implementation" />
+            <LockedSection n={3} label="Implementation" />
           )}
 
           {gating.canSubmitForVerification && (
@@ -205,7 +205,7 @@ export default function KaizenForm({
           {gating.verification.visible ? (
             <VerificationSection kaizen={kaizen} access={gating.verification} token={token} onSaved={onSaved} ctx={ctx} />
           ) : (
-            <LockedSection n={10} label="Verification & Closure" />
+            <LockedSection n={4} label="Verification & Closure" />
           )}
 
           {/* Review History */}

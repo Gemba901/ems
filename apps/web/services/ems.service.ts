@@ -86,6 +86,7 @@ export interface EmployeeProfile {
   employmentType: EmploymentType | null;
   jobTitle: string | null;
   dateJoined: string | null;
+  plantBranch: string | null;
   workStation: string | null;
   section: string | null;
   subSection: string | null;
@@ -183,6 +184,7 @@ export interface UpdateEmployeeEmsPayload {
   employmentType?: EmploymentType;
   jobTitle?: string;
   dateJoined?: string;
+  plantBranch?: string;
   workStation?: string;
   section?: string;
   subSection?: string;

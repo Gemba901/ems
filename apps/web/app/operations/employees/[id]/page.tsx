@@ -18,7 +18,7 @@ function mapToProfileData(emp: EmployeeApiResponse): EmployeeProfileData {
   return {
     id: emp.id,
     userId: emp.userId,
-    employeeId: `EMP-${emp.id.slice(0, 5).toUpperCase()}`,
+    employeeId: emp.employeeCode ?? "—",
     firstName: emp.firstName,
     lastName: emp.lastName,
     name: `${emp.firstName} ${emp.lastName}`,

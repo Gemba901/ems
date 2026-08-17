@@ -21,6 +21,7 @@ import { LeaveModule } from './leave/leave.module';
 import { NoticesModule } from './notices/notices.module';
 import { DwmsModule } from './dwms/dwms.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { KaizenModule } from './kaizen/kaizen.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { TicketsModule } from './tickets/tickets.module';
     NoticesModule,
     DwmsModule,
     TicketsModule,
+    KaizenModule,
   ],
   controllers: [AppController],
   providers: [AppService],

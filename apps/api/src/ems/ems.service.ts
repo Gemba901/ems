@@ -6,7 +6,7 @@ import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 // ── Field groups that define completeness ────────────────────────────────────
 export const EMS_GROUPS = {
   IDENTITY:            ['firstName', 'lastName', 'employeeCode', 'middleName', 'gender', 'nationalId', 'dateOfBirth', 'nationality'],
-  WORK_ALLOCATION:     ['departmentId', 'employmentStatus', 'employmentType', 'jobTitle', 'dateJoined', 'workStation', 'section', 'subSection', 'shift', 'reportingManagerId'],
+  WORK_ALLOCATION:     ['departmentId', 'employmentStatus', 'employmentType', 'jobTitle', 'dateJoined', 'plantBranch', 'workStation', 'section', 'subSection', 'shift', 'reportingManagerId'],
   ROLE_RESPONSIBILITY: ['jobDescription', 'level', 'grade', 'jobCategory', 'primaryWorkRole', 'machineProcess'],
   CONTACT:             ['phone', 'email', 'whatsappNumber', 'homeAddress', 'emergencyContactName', 'emergencyContactPhone'],
   SKILL:               ['skillLevel'],
@@ -66,7 +66,7 @@ const EMS_EMPLOYEE_SELECT = {
 
   // Work Allocation
   employmentStatus: true, employmentType: true, jobTitle: true, dateJoined: true,
-  workStation: true, section: true, subSection: true, shift: true,
+  plantBranch: true, workStation: true, section: true, subSection: true, shift: true,
   reportingManagerId: true,
   reportingManager: { select: { id: true, firstName: true, lastName: true } },
   hrRecordOwnerId: true,

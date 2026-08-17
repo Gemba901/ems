@@ -31,6 +31,15 @@ export class CreateSuggestionDto {
   @IsString()
   @IsOptional()
   departmentId?: string;
+
+  /**
+   * HOD / MANAGEMENT / ADMIN may target a specific HOD directly (preferred over departmentId —
+   * department names aren't plant-scoped, so a generic name like "Production" can map to several
+   * HODs). When set, the suggestion's department is derived from this HOD's own department.
+   */
+  @IsString()
+  @IsOptional()
+  hodId?: string;
 }
 
 export class ReviewSuggestionDto {

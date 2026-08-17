@@ -15,6 +15,7 @@ type EmployeeImportRow = {
     personalEmail?: string;
     phone?: string;
     department?: string;
+    plantBranch?: string;
     section?: string;
     workStation?: string;
     jobTitle?: string;
@@ -149,6 +150,49 @@ export class EmployeeService {
             ...department,
             hod: employees[0] ?? null,
         }));
+    }
+
+    // Every HOD in the org, for the suggestion routing dropdown. Departments aren't
+    // plant-scoped, so a generic department name (e.g. "Production") can have several
+    // HODs — one per plant/branch. Listing HODs individually (name + plant + department +
+    // designation) lets the picker disambiguate which one a suggestion should go to.
+    async getDepartmentHODs(organizationId: string) {
+        const hods = await this.prisma.employee.findMany({
+            where: {
+                organizationId,
+                departmentId: { not: null },
+                user: {
+                    organizations: {
+                        some: { organizationId, role: { name: RoleName.HOD } },
+                    },
+                },
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                jobTitle: true,
+                plantBranch: true,
+                department: { select: { id: true, name: true } },
+            },
+            orderBy: [{ department: { name: 'asc' } }, { firstName: 'asc' }],
+        });
+
+        return hods
+            .filter((h) => h.department)
+            .map((h) => ({
+                id: h.id,
+                name: `${h.firstName} ${h.lastName}`,
+                plantBranch: h.plantBranch,
+                jobTitle: h.jobTitle,
+                department: h.department!,
+                label: [
+                    `${h.firstName} ${h.lastName}`,
+                    h.plantBranch,
+                    h.department!.name,
+                    h.jobTitle,
+                ].filter(Boolean).join(' - '),
+            }));
     }
 
     // get the employee record that belongs to the logged-in user within their current org
@@ -555,6 +599,7 @@ export class EmployeeService {
                 employmentType: this.toEmploymentType(row.employmentType) as any,
                 jobTitle: row.jobTitle ?? null,
                 dateJoined: row.dateJoined ?? null,
+                plantBranch: row.plantBranch ?? null,
                 workStation: row.workStation ?? row.section ?? null,
                 jobDescription: row.jobDescription ?? null,
                 homeAddress: row.homeAddress ?? null,
@@ -657,6 +702,7 @@ export class EmployeeService {
                 personalEmail,
                 phone,
                 department: this.cleanString(this.valueAt(source, headerMap, ['department', 'employees department location', 'employees department', 'employee s current department', 'current department'])),
+                plantBranch: this.cleanString(this.valueAt(source, headerMap, ['plant branch name or code', 'company plant branch name or code', 'plant branch'])),
                 section: this.cleanString(this.valueAt(source, headerMap, ['section area', 'sub section line'])),
                 workStation: this.cleanString(this.valueAt(source, headerMap, ['work location'])),
                 jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation'])),

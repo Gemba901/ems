@@ -228,6 +228,7 @@ export default function EmployeeDetailPage() {
       employmentType: employee.employmentType ?? undefined,
       jobTitle: employee.jobTitle ?? "",
       dateJoined: employee.dateJoined ? employee.dateJoined.split("T")[0] : "",
+      plantBranch: employee.plantBranch ?? "",
       workStation: employee.workStation ?? "",
       section: employee.section ?? "",
       subSection: employee.subSection ?? "",
@@ -755,6 +756,9 @@ export default function EmployeeDetailPage() {
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Department">
                   <input className={readonlyCls} value={employee.department?.name ?? "—"} readOnly />
+                </Field>
+                <Field label="Plant / Branch">
+                  <input className={inputCls} value={form.plantBranch ?? ""} onChange={(e) => set("plantBranch", e.target.value)} placeholder="e.g. Head Office, ROTO" />
                 </Field>
                 <Field label="Employment Status">
                   <select className={selectCls} value={form.employmentStatus ?? ""} onChange={(e) => set("employmentStatus", e.target.value || undefined)}>

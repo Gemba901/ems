@@ -75,6 +75,13 @@ export class EmployeeController {
     return this.employeeService.getDepartmentsByOrganization(orgId);
   }
 
+  // GET /employee/organization/:orgId/department-hods — HODs for the suggestion routing picker
+  @Get('organization/:orgId/department-hods')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR)
+  async getDepartmentHODs(@Param('orgId') orgId: string) {
+    return this.employeeService.getDepartmentHODs(orgId);
+  }
+
   /**
    * Get employee by ID
    * All authenticated users can view employee details

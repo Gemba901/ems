@@ -236,6 +236,7 @@ model Employee {
   dateOfBirth  DateTime?
   nationalId   String?
   nationality  String?
+  plantBranch  String?
 
   // EMS: Work Allocation group
   employmentStatus   EmploymentStatus @default(ACTIVE)

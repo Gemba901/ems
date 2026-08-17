@@ -171,6 +171,26 @@ export class EmployeeService {
         return employee;
     }
 
+    // get the logged-in user's department colleagues (for team-member pickers)
+    async getMyColleagues(userId: string, organizationId: string) {
+        const me = await this.prisma.employee.findFirst({
+            where: { userId, organizationId },
+            select: { id: true, departmentId: true },
+        });
+        if (!me) throw new BadRequestException('Employee profile not found for this user');
+        if (!me.departmentId) return [];
+
+        return this.prisma.employee.findMany({
+            where: {
+                departmentId: me.departmentId,
+                organizationId,
+                id: { not: me.id },
+            },
+            select: { id: true, firstName: true, lastName: true, jobTitle: true },
+            orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        });
+    }
+
     // get employee details by id
     async getEmployeeById(id: string) {
         const employee = await this.prisma.employee.findUnique({

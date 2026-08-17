@@ -116,6 +116,13 @@ export const EmployeeService = {
         return handleResponse<EmployeeApiResponse>(res);
     },
 
+    async getMyColleagues(token: string): Promise<{ id: string; firstName: string; lastName: string; jobTitle: string | null }[]> {
+        const res = await apiClient(`${API_URL}/employee/me/colleagues`, {
+            headers: authHeaders(token),
+        }, token);
+        return handleResponse<{ id: string; firstName: string; lastName: string; jobTitle: string | null }[]>(res);
+    },
+
     async getById(id: string, token: string): Promise<EmployeeApiResponse> {
         const res = await apiClient(`${API_URL}/employee/${id}`, {
             headers: authHeaders(token),

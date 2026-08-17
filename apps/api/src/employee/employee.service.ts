@@ -707,7 +707,7 @@ export class EmployeeService {
                 plantBranch: this.cleanString(this.valueAt(source, headerMap, ['plant branch name or code', 'company plant branch name or code', 'plant branch'])),
                 section: this.cleanString(this.valueAt(source, headerMap, ['section area', 'sub section line'])),
                 workStation: this.cleanString(this.valueAt(source, headerMap, ['work location'])),
-                jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation'])),
+                jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation', 'employee s job designation'])),
                 gender: this.cleanString(this.valueAt(source, headerMap, ['gender'])),
                 dateOfBirth: this.toDate(this.valueAt(source, headerMap, ['date of birth'])),
                 nationalId: this.cleanString(this.valueAt(source, headerMap, ['national id passport no', 'national id'])),

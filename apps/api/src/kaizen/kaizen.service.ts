@@ -244,13 +244,20 @@ export class KaizenService {
         }
 
         return this.prisma.kaizen.findMany({
-            where: { organizationId, departmentId },
+            where: {
+                organizationId,
+                departmentId,
+                OR: [
+                    { NOT: { status: { in: EDITABLE_STATUSES } } },
+                    { employeeId: employee.id },
+                ],
+            },
             include: kaizenInclude,
             orderBy: { createdAt: 'asc' }
         })
     }
 
-    // kaizens awaiting the current user's part-9 verification action (steering committee / finance)
+    // kaizens awaiting the current user's action: part-8 HOD pre-review, or part-9 verification (HOD / steering committee / finance)
     async getPendingVerification(userId: string, organizationId: string) {
         const employee = await this.resolveEmployee(userId, organizationId);
         const roles = await this.getUserRoles(userId, organizationId);
@@ -264,13 +271,27 @@ export class KaizenService {
             return [];
         }
 
+        const orConditions: Array<Record<string, unknown>> = [];
+
+        if (isCommitteeMember || isFinanceHod || this.isPrivileged(roles)) {
+            orConditions.push({ status: 'PENDING_VERIFICATION' });
+        } else if (isDeptHod) {
+            orConditions.push({ status: 'PENDING_VERIFICATION', departmentId: employee.departmentId ?? undefined });
+        }
+
+        // only the department HOD acts on part-8 pre-review; no privileged bypass here
+        if (isDeptHod) {
+            orConditions.push({ status: 'PENDING_HOD_PRE_REVIEW', departmentId: employee.departmentId ?? undefined });
+        }
+
+        if (orConditions.length === 0) {
+            return [];
+        }
+
         return this.prisma.kaizen.findMany({
             where: {
                 organizationId,
-                status: 'PENDING_VERIFICATION',
-                ...(!this.isPrivileged(roles) && !isCommitteeMember && !isFinanceHod
-                    ? { departmentId: employee.departmentId ?? undefined }
-                    : {}),
+                OR: orConditions,
             },
             include: kaizenInclude,
             orderBy: { createdAt: 'asc' },

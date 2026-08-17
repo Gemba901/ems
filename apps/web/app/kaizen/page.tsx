@@ -103,7 +103,7 @@ export default function KaizenOverviewPage() {
   const TABS: { key: TabKey; label: string; visible: boolean }[] = [
     { key: "mine", label: "My Kaizens", visible: true },
     { key: "department", label: "My Department", visible: canSeeDepartment && !isPrivileged },
-    { key: "verification", label: "Pending My Verification", visible: true },
+    { key: "verification", label: "Pending My Review", visible: true },
   ];
 
   const showDepartmentFilter = tab === "verification" && isPrivileged;
@@ -114,7 +114,7 @@ export default function KaizenOverviewPage() {
     ? "No kaizens yet. Raise your first one."
     : tab === "department"
     ? "No kaizens in your department yet."
-    : "Nothing awaiting your verification.";
+    : "Nothing awaiting your review.";
 
   const filtered = useMemo(() => {
     return activeList.filter((k) => {
@@ -159,7 +159,7 @@ export default function KaizenOverviewPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KpiCard label="My Kaizens" value={mine.length} icon={<Lightbulb className="h-4 w-4 text-blue-600" />} accent="bg-blue-50" />
           <KpiCard label="In Implementation" value={inImplementationCount} icon={<Loader2 className="h-4 w-4 text-amber-600" />} accent="bg-amber-50" />
-          <KpiCard label="Pending My Verification" value={pendingMyVerificationCount} icon={<ShieldCheck className="h-4 w-4 text-purple-600" />} accent="bg-purple-50" />
+          <KpiCard label="Pending My Review" value={pendingMyVerificationCount} icon={<ShieldCheck className="h-4 w-4 text-purple-600" />} accent="bg-purple-50" />
           <KpiCard label="Verified This Month" value={verifiedThisMonthCount} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" />
         </div>
 

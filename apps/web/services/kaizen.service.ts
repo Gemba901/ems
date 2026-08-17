@@ -190,6 +190,11 @@ export interface Kaizen {
 
 // Part 1
 export interface CreateKaizenReasonPayload {
+  trigger?: KaizenTrigger;
+  triggerOther?: string;
+}
+
+export interface UpdateKaizenReasonPayload {
   trigger: KaizenTrigger;
   triggerOther?: string;
 }
@@ -314,6 +319,15 @@ export const KaizenService = {
   async getHistory(id: string, token: string): Promise<KaizenReview[]> {
     const res = await apiClient(`${API_URL}/kaizen/${id}/history`, { headers: authHeaders(token) }, token);
     return handleResponse<KaizenReview[]>(res);
+  },
+
+  async updateReason(id: string, data: UpdateKaizenReasonPayload, token: string): Promise<Kaizen> {
+    const res = await apiClient(`${API_URL}/kaizen/${id}/reason`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Kaizen>(res);
   },
 
   async updateReference(id: string, data: UpdateKaizenReferencePayload, token: string): Promise<Kaizen> {

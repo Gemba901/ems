@@ -6,6 +6,7 @@ import { ModuleGuard } from 'src/auth/guards/module.guard';
 import { RequiresModule } from 'src/auth/decorators/module.decorator';
 import {
     CreateKaizenReasonDto,
+    UpdateKaizenReasonDto,
     UpdateKaizenReferenceDto,
     UpdateKaizenConditionDto,
     UpdateKaizenBasicInfoDto,
@@ -112,6 +113,19 @@ export class KaizenController {
         @CurrentUser() user: { userId: string, organizationId: string }
     ){
         return this.kaizenService.getKaizenHistory(id, user.userId, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/reason
+     * Part 1: raiser only, while editable
+     */
+    @Patch(':id/reason')
+    async updateReason(
+        @Param('id') id: string,
+        @Body() dto: UpdateKaizenReasonDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.updateReason(id, user.userId, dto, user.organizationId)
     }
 
     /**

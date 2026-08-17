@@ -22,6 +22,17 @@ import {
 
 // Part 1: select reason
 export class CreateKaizenReasonDto {
+  @IsOptional()
+  @IsEnum(KaizenTrigger)
+  trigger?: KaizenTrigger;
+
+  @ValidateIf((o) => o.trigger === KaizenTrigger.OTHER)
+  @IsString()
+  triggerOther?: string;
+}
+
+// Part 1: update reason on an existing draft
+export class UpdateKaizenReasonDto {
   @IsEnum(KaizenTrigger)
   trigger!: KaizenTrigger;
 

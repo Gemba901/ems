@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateKaizenReasonDto,
+  UpdateKaizenReasonDto,
   UpdateKaizenReferenceDto,
   UpdateKaizenConditionDto,
   UpdateKaizenBasicInfoDto,
@@ -305,6 +306,22 @@ export class KaizenService {
             include: {
                 reviewer: { select: { id: true, firstName: true, lastName: true } }
             }
+        });
+    }
+
+    // Part 1: update reason on an existing draft
+    async updateReason(kaizenId: string, userId: string, dto: UpdateKaizenReasonDto, organizationId: string) {
+        const kaizen = await this.findKaizenOrThrow(kaizenId, organizationId);
+        const employee = await this.resolveEmployee(userId, organizationId);
+        this.assertEditable(kaizen, employee.id);
+
+        return this.prisma.kaizen.update({
+            where: { id: kaizenId },
+            data: {
+                trigger: dto.trigger,
+                triggerOther: dto.trigger === 'OTHER' ? dto.triggerOther : null,
+            },
+            include: kaizenInclude,
         });
     }
 

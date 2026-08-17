@@ -70,6 +70,7 @@ export default function KaizenForm({
   const [saveProgressError, setSaveProgressError] = useState<string | null>(null);
   const [savingProgress, setSavingProgress] = useState(false);
 
+  const reasonRef = useRef<KaizenSectionHandle>(null);
   const referenceRef = useRef<KaizenSectionHandle>(null);
   const conditionRef = useRef<KaizenSectionHandle>(null);
   const basicInfoRef = useRef<KaizenSectionHandle>(null);
@@ -81,7 +82,7 @@ export default function KaizenForm({
     setSaveProgressError(null);
     setSavingProgress(true);
     try {
-      const refs = [referenceRef, conditionRef, basicInfoRef, qcdsmtImpactRef, wasteRef, implementationPlanRef];
+      const refs = [reasonRef, referenceRef, conditionRef, basicInfoRef, qcdsmtImpactRef, wasteRef, implementationPlanRef];
       let allOk = true;
       for (const sectionRef of refs) {
         if (!sectionRef.current) continue;
@@ -124,7 +125,7 @@ export default function KaizenForm({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         <div className="lg:col-span-2 space-y-5">
-          <ReasonSection kaizen={kaizen} access={{ visible: true, editable: false }} token={token} onSaved={onSaved} />
+          <ReasonSection ref={reasonRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
           <ReferenceSection ref={referenceRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
           <ConditionSection ref={conditionRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
           <BasicInfoSection ref={basicInfoRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />

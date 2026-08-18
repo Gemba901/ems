@@ -11,12 +11,17 @@ import { ModuleType } from 'db';
 
 type AuthUser = { userId: string; organizationId: string; roleLevel: string };
 
-// Same role scope as P01-P04 day-to-day access — this only surfaces
+// Same role scope as P01-P05 day-to-day access — this only surfaces
 // activity already visible through those processes' own endpoints.
-const DASHBOARD_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD];
+const DASHBOARD_ROLES = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN,
+  Role.MANAGEMENT,
+  Role.HOD,
+];
 
 /**
- * Steel Operations home — cross-process recent activity feed (P01-P04).
+ * Steel Operations home — cross-process recent activity feed (P01-P05).
  */
 @Controller('steel/dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
@@ -25,9 +30,12 @@ const DASHBOARD_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD
 export class SteelDashboardController {
   constructor(private dashboardService: SteelDashboardService) {}
 
-  /** GET /steel/dashboard/recent-activity — last activities across P01-P04, most recent first. */
+  /** GET /steel/dashboard/recent-activity — last activities across P01-P05, most recent first. */
   @Get('recent-activity')
-  getRecentActivity(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {
+  getRecentActivity(
+    @CurrentUser() user: AuthUser,
+    @Query('limit') limit?: string,
+  ) {
     const parsed = limit ? parseInt(limit, 10) : undefined;
     return this.dashboardService.getRecentActivity(
       user.organizationId,

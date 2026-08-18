@@ -1922,9 +1922,14 @@ model SteelHeatApproval {
   correctionMaterials    Json?
   correctionNotApplicable Boolean?
 
-  // P06-A06 — Re-test chemistry if required (conditional)
+  // P06-A06 — Re-test chemistry if required (conditional). Each time a
+  // re-test still doesn't match the required grade, the record loops back
+  // to A04_DECIDE_CORRECTION for another correction pass and this counter
+  // increments — capped (see heat-approval.service.ts) since repeated
+  // correction is itself a cost/delay signal worth surfacing.
   retestChemistryComposition Json?
   retestNotApplicable         Boolean?
+  correctionAttempts          Int      @default(0)
 
   // P06-A07 — Check liquid steel temperature
   liquidTemperatureCelsius Float?

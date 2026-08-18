@@ -89,6 +89,14 @@ export class RetestChemistryDto {
   @IsObject()
   @IsOptional()
   retestChemistryComposition?: Record<string, number>;
+
+  // When a correction was required, explicitly false signals the re-test
+  // still does not meet the required grade — the record loops back to
+  // A04_DECIDE_CORRECTION for another correction attempt (capped; see
+  // heat-approval.service.ts). Omitted/true means the re-test passed.
+  @IsBoolean()
+  @IsOptional()
+  retestMatchesGrade?: boolean;
 }
 
 // P06-A07 — Check liquid steel temperature

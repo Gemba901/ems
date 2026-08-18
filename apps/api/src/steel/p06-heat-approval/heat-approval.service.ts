@@ -117,9 +117,23 @@ function computeAllowedActions(heatApproval: {
  * happen twice for the same record. No P07 model/code exists yet in this
  * repository.
  */
+// Default cap on how many times the A05<->A06 correction/re-test cycle can
+// loop before the heat is escalated to ON_HOLD. Configurable via
+// STEEL_P06_MAX_CORRECTION_ATTEMPTS for environments that want a different
+// threshold without a code change.
+const DEFAULT_MAX_CORRECTION_ATTEMPTS = 3;
+
 @Injectable()
 export class HeatApprovalService {
-  constructor(private prisma: PrismaService) {}
+  private readonly maxCorrectionAttempts: number;
+
+  constructor(private prisma: PrismaService) {
+    const configured = Number(process.env.STEEL_P06_MAX_CORRECTION_ATTEMPTS);
+    this.maxCorrectionAttempts =
+      Number.isInteger(configured) && configured > 0
+        ? configured
+        : DEFAULT_MAX_CORRECTION_ATTEMPTS;
+  }
 
   private async resolveEmployee(userId: string, organizationId: string) {
     const employee = await this.prisma.employee.findFirst({
@@ -455,6 +469,68 @@ export class HeatApprovalService {
       throw new BadRequestException(
         'Chemistry must be re-tested and recorded after a correction was made.',
       );
+    }
+
+    // A correction was required and the re-test still doesn't match the
+    // grade — loop back to A04_DECIDE_CORRECTION for another correction
+    // pass, capped at MAX_CORRECTION_ATTEMPTS since repeated correction is
+    // itself a cost/delay signal (matches the workbook).
+    const stillNeedsCorrection =
+      !!heatApproval.correctionRequired && dto.retestMatchesGrade === false;
+
+    if (stillNeedsCorrection) {
+      const nextAttempts = heatApproval.correctionAttempts + 1;
+
+      if (nextAttempts >= this.maxCorrectionAttempts) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.steelHeatApproval.update({
+            where: { id },
+            data: {
+              retestChemistryComposition: dto.retestChemistryComposition
+                ? (dto.retestChemistryComposition as Prisma.InputJsonValue)
+                : Prisma.JsonNull,
+              correctionAttempts: nextAttempts,
+              status: 'ON_HOLD',
+            },
+          });
+          await this.logActivity(
+            tx,
+            id,
+            'A06',
+            employee.id,
+            `Correction attempt limit (${this.maxCorrectionAttempts}) reached — escalated to hold`,
+            { ...dto, correctionAttempts: nextAttempts },
+          );
+        });
+        throw new ConflictException(
+          `Chemistry correction has been attempted ${nextAttempts} time(s) without success — this heat has been placed on hold pending escalation.`,
+        );
+      }
+
+      return this.prisma.$transaction(async (tx) => {
+        const updated = await tx.steelHeatApproval.update({
+          where: { id },
+          data: {
+            retestChemistryComposition: dto.retestChemistryComposition
+              ? (dto.retestChemistryComposition as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+            correctionAttempts: nextAttempts,
+            stage: 'A04_DECIDE_CORRECTION',
+          },
+        });
+        await this.logActivity(
+          tx,
+          id,
+          'A06',
+          employee.id,
+          'Retest still does not match the required grade — looping back for another correction attempt',
+          { ...dto, correctionAttempts: nextAttempts },
+        );
+        return tx.steelHeatApproval.findUnique({
+          where: { id: updated.id },
+          include: heatApprovalInclude,
+        });
+      });
     }
 
     return this.prisma.$transaction(async (tx) => {

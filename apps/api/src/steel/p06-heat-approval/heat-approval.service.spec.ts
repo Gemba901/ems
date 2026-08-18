@@ -463,6 +463,119 @@ describe('HeatApprovalService', () => {
     });
   });
 
+  // ── retestChemistry (P06-A06) — correction/re-test loop cap ──
+  describe('retestChemistry correction-loop cap', () => {
+    it('loops back to A04_DECIDE_CORRECTION and increments correctionAttempts when the re-test still fails, under the cap', async () => {
+      prisma.steelHeatApproval.findFirst.mockResolvedValue({
+        id: 'ha-1',
+        organizationId: ORG_ID,
+        status: 'IN_PROGRESS',
+        stage: 'A05_ADD_CORRECTION_MATERIAL',
+        correctionRequired: true,
+        correctionAttempts: 0,
+      });
+      prisma.steelHeatApproval.update.mockResolvedValue({ id: 'ha-1' });
+      prisma.steelHeatApproval.findUnique.mockResolvedValue({
+        id: 'ha-1',
+        stage: 'A04_DECIDE_CORRECTION',
+        correctionAttempts: 1,
+      });
+
+      const result = await service.retestChemistry(
+        'ha-1',
+        {
+          retestChemistryComposition: { C: 0.3 },
+          retestMatchesGrade: false,
+        },
+        USER_ID,
+        ORG_ID,
+      );
+
+      expect(prisma.steelHeatApproval.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            stage: 'A04_DECIDE_CORRECTION',
+            correctionAttempts: 1,
+          }) as unknown,
+        }),
+      );
+      expect(result).toMatchObject({ correctionAttempts: 1 });
+    });
+
+    it('escalates to ON_HOLD and throws ConflictException once the attempt cap is reached, without advancing the stage', async () => {
+      prisma.steelHeatApproval.findFirst.mockResolvedValue({
+        id: 'ha-1',
+        organizationId: ORG_ID,
+        status: 'IN_PROGRESS',
+        stage: 'A05_ADD_CORRECTION_MATERIAL',
+        correctionRequired: true,
+        correctionAttempts: 2, // default cap is 3 -> this is the 3rd attempt
+      });
+      prisma.steelHeatApproval.update.mockResolvedValue({ id: 'ha-1' });
+
+      await expect(
+        service.retestChemistry(
+          'ha-1',
+          {
+            retestChemistryComposition: { C: 0.3 },
+            retestMatchesGrade: false,
+          },
+          USER_ID,
+          ORG_ID,
+        ),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.steelHeatApproval.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'ON_HOLD',
+            correctionAttempts: 3,
+          }) as unknown,
+        }),
+      );
+      // The escalating write does not set `stage` — the record stays put,
+      // it does not advance to A06 or loop back to A04.
+      const call = (
+        prisma.steelHeatApproval.update.mock.calls as unknown[][]
+      )[0][0] as { data: Record<string, unknown> };
+      expect(call.data.stage).toBeUndefined();
+    });
+
+    it('does not loop when retestMatchesGrade is true, even if correction was required', async () => {
+      prisma.steelHeatApproval.findFirst.mockResolvedValue({
+        id: 'ha-1',
+        organizationId: ORG_ID,
+        status: 'IN_PROGRESS',
+        stage: 'A05_ADD_CORRECTION_MATERIAL',
+        correctionRequired: true,
+        correctionAttempts: 0,
+      });
+      prisma.steelHeatApproval.update.mockResolvedValue({ id: 'ha-1' });
+      prisma.steelHeatApproval.findUnique.mockResolvedValue({
+        id: 'ha-1',
+        stage: 'A06_RETEST_CHEMISTRY',
+      });
+
+      await service.retestChemistry(
+        'ha-1',
+        {
+          retestChemistryComposition: { C: 0.2 },
+          retestMatchesGrade: true,
+        },
+        USER_ID,
+        ORG_ID,
+      );
+
+      expect(prisma.steelHeatApproval.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            stage: 'A06_RETEST_CHEMISTRY',
+          }) as unknown,
+        }),
+      );
+    });
+  });
+
   // ── checkLadleReadiness (P06-A08) — safety-gate validation ──
   describe('checkLadleReadiness validation', () => {
     const baseHeatApproval = {

@@ -5,6 +5,7 @@ import { MaterialIntakeModule } from './p03-material-intake/material-intake.modu
 import { ChargePreparationModule } from './p04-charge-preparation/charge-preparation.module';
 import { MeltingModule } from './p05-melting/melting.module';
 import { HeatApprovalModule } from './p06-heat-approval/heat-approval.module';
+import { TraceabilityModule } from './traceability/traceability.module';
 import { SteelDashboardModule } from './dashboard/dashboard.module';
 
 /**
@@ -24,6 +25,7 @@ import { SteelDashboardModule } from './dashboard/dashboard.module';
     ChargePreparationModule,
     MeltingModule,
     HeatApprovalModule,
+    TraceabilityModule,
     SteelDashboardModule,
   ],
 })

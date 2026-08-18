@@ -21,7 +21,7 @@ const DASHBOARD_ROLES = [
 ];
 
 /**
- * Steel Operations home — cross-process recent activity feed (P01-P05).
+ * Steel Operations home — cross-process recent activity feed and KPIs (P01-P06).
  */
 @Controller('steel/dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
@@ -30,7 +30,7 @@ const DASHBOARD_ROLES = [
 export class SteelDashboardController {
   constructor(private dashboardService: SteelDashboardService) {}
 
-  /** GET /steel/dashboard/recent-activity — last activities across P01-P05, most recent first. */
+  /** GET /steel/dashboard/recent-activity — last activities across P01-P06, most recent first. */
   @Get('recent-activity')
   getRecentActivity(
     @CurrentUser() user: AuthUser,
@@ -41,5 +41,11 @@ export class SteelDashboardController {
       user.organizationId,
       parsed && !Number.isNaN(parsed) ? parsed : undefined,
     );
+  }
+
+  /** GET /steel/dashboard/kpis — cross-process operational KPIs (P01-P06). */
+  @Get('kpis')
+  getKpis(@CurrentUser() user: AuthUser) {
+    return this.dashboardService.getKpis(user.organizationId);
   }
 }

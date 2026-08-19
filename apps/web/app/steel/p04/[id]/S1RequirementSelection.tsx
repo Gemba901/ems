@@ -18,7 +18,7 @@ import { ScreenSidebar } from "@/components/steel/p04/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p04/ContextSummary";
 import { ChargeProgress } from "@/components/steel/p04/ChargeProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p04/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, SubStepStatus } from "@/components/steel/p04/shared";
+import { Field, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p04/shared";
 import { ClipboardList, Info, ListChecks, Lightbulb, Loader2 } from "lucide-react";
 
 function subStatus(active: boolean, done: boolean): SubStepStatus {
@@ -171,35 +171,28 @@ export function S1RequirementSelection({
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
-            <SubStepCard code="P04-A01" title="Production Plan & Material Requirement" status="done">
+            <SubStep
+              code="P04-A01"
+              title="Production Plan & Material Requirement"
+              status="done"
+              summary={`Plan ${prep.plan?.planNumber ?? "—"}${prep.stockAvailabilityConfirmed ? " · stock confirmed" : ""}`}
+            >
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Field label="Plan" value={prep.plan?.planNumber} />
                 <Field label="Plan status" value={prep.plan?.status} />
                 <Field label="Stock availability confirmed" value={prep.stockAvailabilityConfirmed === null ? null : prep.stockAvailabilityConfirmed ? "Yes" : "No"} />
                 <Field label="Requirement notes" value={prep.requirementNotes} />
               </div>
-            </SubStepCard>
+            </SubStep>
 
-            <SubStepCard code="P04-A02" title="Select Raw Material Lots" status={lotsStatus}>
-              {lotsStatus === "done" ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-slate-400">Selected lots</p>
-                  <div className="border border-slate-200 rounded-lg divide-y divide-slate-100">
-                    {prep.materialLots.map((lot) => (
-                      <div key={lot.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                        <span className="font-medium text-slate-800">{lot.intake.intakeNumber}</span>
-                        <span className="text-slate-500">{lot.intake.materialType?.replace(/_/g, " ") ?? "—"} · {lot.intake.grade ?? "—"} · {lot.intake.netWeightTonnes !== null ? `${lot.intake.netWeightTonnes} t` : "—"}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Field label="Notes" value={prep.lotSelectionNotes} />
-                </div>
-              ) : lotsStatus === "active" ? (
-                <LotSelectionForm prep={prep} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P04-A02"
+              title="Select Raw Material Lots"
+              status={lotsStatus}
+              summary={prep.materialLots.length ? `${prep.materialLots.length} lot(s) selected` : undefined}
+            >
+              {lotsStatus === "active" && <LotSelectionForm prep={prep} token={token} onDone={onRefresh} />}
+            </SubStep>
           </div>
           <ScreenSidebar>
             <ChargeProgress prep={prep} />

@@ -21,7 +21,7 @@ import { ScreenSidebar } from "@/components/steel/p04/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p04/ContextSummary";
 import { ChargeProgress } from "@/components/steel/p04/ChargeProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p04/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, SubStepStatus } from "@/components/steel/p04/shared";
+import { Field, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p04/shared";
 import {
   ShieldCheck, Info, ListChecks, Lightbulb, Lock, Flame, CheckCircle2, HelpCircle, Loader2,
 } from "lucide-react";
@@ -415,42 +415,30 @@ export function S3VerificationRelease({
               <ClosedState prep={prep} />
             ) : (
               <>
-                <SubStepCard code="P04-A10" title="Verify Actual Material vs Recipe" status={verificationStatus}>
-                  {verificationStatus === "done" ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Actual weight" value={prep.actualWeightTonnes !== null ? `${prep.actualWeightTonnes} t` : null} />
-                      <Field label="Actual grade" value={prep.actualGrade} />
-                      <Field label="Difference from recipe" value={prep.weightVarianceTonnes !== null ? `${prep.weightVarianceTonnes > 0 ? "+" : ""}${prep.weightVarianceTonnes} t` : null} />
-                      <Field label="Difference approved" value={prep.varianceApproved === null ? null : prep.varianceApproved ? "Yes" : "No"} />
-                      <Field label="Verification notes" value={prep.verificationNotes} />
-                    </div>
-                  ) : verificationStatus === "active" ? (
-                    <VerificationForm prep={prep} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P04-A10"
+                  title="Verify Actual Material vs Recipe"
+                  status={verificationStatus}
+                  summary={prep.actualWeightTonnes !== null ? `Actual ${prep.actualWeightTonnes} t${prep.weightVarianceTonnes ? ` · variance ${prep.weightVarianceTonnes > 0 ? "+" : ""}${prep.weightVarianceTonnes} t` : ""}` : undefined}
+                >
+                  {verificationStatus === "active" && <VerificationForm prep={prep} token={token} onDone={onRefresh} />}
+                </SubStep>
 
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1 px-1">
                     <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
                     <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Charge Release</p>
                   </div>
-                  <SubStepCard code="P04-A11" title="Release Charge ID" status={releaseStatus}>
-                    {releaseStatus === "done" ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-3 py-2">
-                          <CheckCircle2 className="h-4 w-4 shrink-0" />
-                          Charge released — Charge ID <span className="font-mono font-semibold">{prep.chargeNumber}</span>
-                        </div>
-                        <Field label="Released at" value={prep.chargeReleasedAt ? new Date(prep.chargeReleasedAt).toLocaleString() : null} />
-                      </div>
-                    ) : releaseStatus === "active" ? (
+                  <SubStep
+                    code="P04-A11"
+                    title="Release Charge ID"
+                    status={releaseStatus}
+                    summary={prep.chargeNumber ? `Charge ID ${prep.chargeNumber}` : undefined}
+                  >
+                    {releaseStatus === "active" ? (
                       <ReleasePanel prep={prep} token={token} canRelease={canAct} onDone={onRefresh} />
-                    ) : (
-                      <LockedNote />
-                    )}
-                  </SubStepCard>
+                    ) : null}
+                  </SubStep>
                 </div>
 
                 <div className="relative">
@@ -458,13 +446,9 @@ export function S3VerificationRelease({
                     <Flame className="h-3.5 w-3.5 text-red-500" />
                     <p className="text-xs font-medium text-red-500 uppercase tracking-wide">Final Furnace Handover / Authority Gate</p>
                   </div>
-                  <SubStepCard code="P04-A12" title="Close Furnace Handover" status={handoverStatus}>
-                    {handoverStatus === "active" ? (
-                      <HandoverPanel prep={prep} token={token} canClose={canAct} onDone={onRefresh} />
-                    ) : (
-                      <LockedNote />
-                    )}
-                  </SubStepCard>
+                  <SubStep code="P04-A12" title="Close Furnace Handover" status={handoverStatus}>
+                    {handoverStatus === "active" && <HandoverPanel prep={prep} token={token} canClose={canAct} onDone={onRefresh} />}
+                  </SubStep>
                 </div>
               </>
             )}

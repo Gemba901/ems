@@ -25,7 +25,7 @@ import { ScreenSidebar } from "@/components/steel/p04/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p04/ContextSummary";
 import { ChargeProgress } from "@/components/steel/p04/ChargeProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p04/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, SubStepStatus } from "@/components/steel/p04/shared";
+import { Field, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p04/shared";
 import { Recycle, Info, ListChecks, Lightbulb, Trash2, Plus } from "lucide-react";
 
 function subStatus(active: boolean, done: boolean): SubStepStatus {
@@ -420,118 +420,71 @@ export function S2MaterialPreparation({ prep, token, onRefresh }: Props) {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wide px-1">1. Material Sorting</p>
-            <SubStepCard code="P04-A03" title="Scrap Sorting" status={sortingStatus}>
-              {sortingStatus === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Sorted weight" value={prep.sortedWeightTonnes !== null ? `${prep.sortedWeightTonnes} t` : null} />
-                  <Field label="Rejected items" value={prep.rejectedItemsNotes} />
-                  <Field label="Grade notes" value={prep.scrapGradeNotes} />
-                </div>
-              ) : sortingStatus === "active" ? (
-                <ScrapSortingForm prep={prep} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P04-A03"
+              title="Scrap Sorting"
+              status={sortingStatus}
+              summary={prep.sortedWeightTonnes !== null ? `Sorted ${prep.sortedWeightTonnes} t` : undefined}
+            >
+              {sortingStatus === "active" && <ScrapSortingForm prep={prep} token={token} onDone={onRefresh} />}
+            </SubStep>
 
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wide px-1 pt-2">2. Cutting & Cleanup</p>
-            <SubStepCard code="P04-A04" title="Oversized Scrap Cutting" status={cuttingStatus}>
-              {cuttingStatus === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Cutting required" value={prep.cuttingRequired ? "Yes" : "No"} />
-                  <Field label="Cutting time" value={prep.cuttingTimeMinutes !== null ? `${prep.cuttingTimeMinutes} min` : null} />
-                  <Field label="Power/gas used" value={prep.cuttingPowerOrGasUsed} />
-                  <Field label="Cut quantity" value={prep.cutQuantityTonnes !== null ? `${prep.cutQuantityTonnes} t` : null} />
-                </div>
-              ) : cuttingStatus === "active" ? (
-                <ScrapCuttingForm prep={prep} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P04-A04"
+              title="Oversized Scrap Cutting"
+              status={cuttingStatus}
+              summary={`Cutting ${prep.cuttingRequired ? "required" : "not required"}`}
+            >
+              {cuttingStatus === "active" && <ScrapCuttingForm prep={prep} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P04-A05" title="Contaminant / Unsafe Item Removal" status={contaminantStatus}>
-              {contaminantStatus === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Contaminants removed" value={prep.contaminantsRemoved ? "Yes" : "No"} />
-                  <Field label="Removed items" value={prep.removedItemsNotes} />
-                  <Field label="Issue notes" value={prep.contaminationIssueNotes} />
-                </div>
-              ) : contaminantStatus === "active" ? (
-                <ContaminantRemovalForm prep={prep} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P04-A05"
+              title="Contaminant / Unsafe Item Removal"
+              status={contaminantStatus}
+              summary={`Contaminants ${prep.contaminantsRemoved ? "removed" : "not removed"}`}
+            >
+              {contaminantStatus === "active" && <ContaminantRemovalForm prep={prep} token={token} onDone={onRefresh} />}
+            </SubStep>
 
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wide px-1 pt-2">3. Additives & Return Scrap</p>
-            <SubStepCard code="P04-A06" title="Additives & Alloys Preparation" status={additivesStatus}>
-              {additivesStatus === "done" ? (
-                <div className="space-y-2">
-                  {(prep.additivesPrepared ?? []).length > 0 ? (
-                    <div className="border border-slate-200 rounded-lg divide-y divide-slate-100">
-                      {prep.additivesPrepared!.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between px-3 py-2 text-sm">
-                          <span className="font-medium text-slate-800">{item.itemName}</span>
-                          <span className="text-slate-500">{item.quantity}{item.lot ? ` · ${item.lot}` : ""}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400">No additives recorded.</p>
-                  )}
-                  <Field label="Notes" value={prep.additivesNotes} />
-                </div>
-              ) : additivesStatus === "active" ? (
-                <AdditivesForm prep={prep} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P04-A06"
+              title="Additives & Alloys Preparation"
+              status={additivesStatus}
+              summary={(prep.additivesPrepared ?? []).length > 0 ? `${prep.additivesPrepared!.length} additive(s) recorded` : "No additives recorded"}
+            >
+              {additivesStatus === "active" && <AdditivesForm prep={prep} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P04-A07" title="Internal Return Scrap Check" status={returnScrapStatus}>
-              {returnScrapStatus === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Available" value={prep.returnScrapAvailable ? "Yes" : "No"} />
-                  <Field label="Quantity" value={prep.returnScrapQtyTonnes !== null ? `${prep.returnScrapQtyTonnes} t` : null} />
-                  <Field label="Source" value={prep.returnScrapSource} />
-                  <Field label="Grade" value={prep.returnScrapGrade} />
-                  <Field label="Contamination notes" value={prep.returnScrapContaminationNotes} />
-                </div>
-              ) : returnScrapStatus === "active" ? (
-                <ReturnScrapForm prep={prep} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P04-A07"
+              title="Internal Return Scrap Check"
+              status={returnScrapStatus}
+              summary={`Return scrap ${prep.returnScrapAvailable ? "available" : "not available"}`}
+            >
+              {returnScrapStatus === "active" && <ReturnScrapForm prep={prep} token={token} onDone={onRefresh} />}
+            </SubStep>
 
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wide px-1 pt-2">4. Charge Recipe</p>
-            <SubStepCard code="P04-A08" title="Furnace Charge Recipe" status={recipeStatus}>
-              {recipeStatus === "done" ? (
-                <div className="space-y-3">
-                  <RecipeTable prep={prep} />
-                  <Field label="Recipe notes" value={prep.recipeNotes} />
-                </div>
-              ) : recipeStatus === "active" ? (
-                <RecipeForm prep={prep} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P04-A08"
+              title="Furnace Charge Recipe"
+              status={recipeStatus}
+              summary={prep.recipeScrapWeightTonnes !== null ? `Scrap ${prep.recipeScrapWeightTonnes} t recipe saved` : undefined}
+            >
+              {recipeStatus === "active" && <RecipeForm prep={prep} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P04-A09" title="Stage Material Near Furnace" status={stagingStatus}>
-              {stagingStatus === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Staging location" value={prep.stagingLocation} />
-                  <Field label="Staged weight" value={prep.stagedWeightTonnes !== null ? `${prep.stagedWeightTonnes} t` : null} />
-                  <Field label="Staging sequence" value={prep.stagingSequence} />
-                </div>
-              ) : stagingStatus === "active" ? (
-                <StagingForm prep={prep} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P04-A09"
+              title="Stage Material Near Furnace"
+              status={stagingStatus}
+              summary={prep.stagingLocation ? `Staged at ${prep.stagingLocation}` : undefined}
+            >
+              {stagingStatus === "active" && <StagingForm prep={prep} token={token} onDone={onRefresh} />}
+            </SubStep>
           </div>
           <ScreenSidebar>
             <ChargeProgress prep={prep} />

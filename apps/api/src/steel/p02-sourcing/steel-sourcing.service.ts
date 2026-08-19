@@ -109,6 +109,32 @@ export class SteelSourcingService {
     }
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates a row in separate steps — two concurrent requests can read the
+  // same count before either writes, producing duplicate numbers. The
+  // number FORMAT is unchanged; this only makes generate-then-create safe
+  // under concurrency by regenerating and retrying on conflict.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generateSourcingNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -169,40 +195,42 @@ export class SteelSourcingService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const sourcingNumber = await this.generateSourcingNumber(
-        tx,
-        organizationId,
-      );
-
-      const order = await tx.steelSourcingOrder.create({
-        data: {
-          sourcingNumber,
+    return this.withUniqueRetry('sourcingNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const sourcingNumber = await this.generateSourcingNumber(
+          tx,
           organizationId,
-          planId: dto.planId,
-          createdById: employee.id,
-          stage: 'A01_REQUIREMENT_REVIEWED',
-          status: 'IN_PROGRESS',
-          materialRequirementNotes: dto.materialRequirementNotes,
-          requiredByDate: dto.requiredByDate
-            ? new Date(dto.requiredByDate)
-            : null,
-        },
-      });
+        );
 
-      await this.logActivity(
-        tx,
-        order.id,
-        'A01',
-        employee.id,
-        dto.materialRequirementNotes,
-        { ...dto },
-      );
-      return tx.steelSourcingOrder.findUnique({
-        where: { id: order.id },
-        include: orderInclude,
-      });
-    });
+        const order = await tx.steelSourcingOrder.create({
+          data: {
+            sourcingNumber,
+            organizationId,
+            planId: dto.planId,
+            createdById: employee.id,
+            stage: 'A01_REQUIREMENT_REVIEWED',
+            status: 'IN_PROGRESS',
+            materialRequirementNotes: dto.materialRequirementNotes,
+            requiredByDate: dto.requiredByDate
+              ? new Date(dto.requiredByDate)
+              : null,
+          },
+        });
+
+        await this.logActivity(
+          tx,
+          order.id,
+          'A01',
+          employee.id,
+          dto.materialRequirementNotes,
+          { ...dto },
+        );
+        return tx.steelSourcingOrder.findUnique({
+          where: { id: order.id },
+          include: orderInclude,
+        });
+      }),
+    );
   }
 
   // ── P02-A02 — Identify material type needed ──

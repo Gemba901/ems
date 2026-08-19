@@ -187,6 +187,32 @@ export class ChargePreparationService {
     );
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates/updates a row in separate steps — two concurrent requests can
+  // read the same count before either writes, producing duplicate numbers.
+  // The number FORMAT is unchanged; this only makes generate-then-write
+  // safe under concurrency by regenerating and retrying on conflict.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generatePrepNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -261,30 +287,32 @@ export class ChargePreparationService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const prepNumber = await this.generatePrepNumber(tx, organizationId);
+    return this.withUniqueRetry('prepNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const prepNumber = await this.generatePrepNumber(tx, organizationId);
 
-      const prep = await tx.steelChargePreparation.create({
-        data: {
-          prepNumber,
-          organizationId,
-          planId: dto.planId,
-          createdById: employee.id,
-          stage: 'A01_REQUIREMENT_REVIEWED',
-          status: 'IN_PROGRESS',
-          stockAvailabilityConfirmed: dto.stockAvailabilityConfirmed,
-          requirementNotes: dto.requirementNotes,
-        },
-      });
+        const prep = await tx.steelChargePreparation.create({
+          data: {
+            prepNumber,
+            organizationId,
+            planId: dto.planId,
+            createdById: employee.id,
+            stage: 'A01_REQUIREMENT_REVIEWED',
+            status: 'IN_PROGRESS',
+            stockAvailabilityConfirmed: dto.stockAvailabilityConfirmed,
+            requirementNotes: dto.requirementNotes,
+          },
+        });
 
-      await this.logActivity(tx, prep.id, 'A01', employee.id, undefined, {
-        ...dto,
-      });
-      return tx.steelChargePreparation.findUnique({
-        where: { id: prep.id },
-        include: chargePrepInclude,
-      });
-    });
+        await this.logActivity(tx, prep.id, 'A01', employee.id, undefined, {
+          ...dto,
+        });
+        return tx.steelChargePreparation.findUnique({
+          where: { id: prep.id },
+          include: chargePrepInclude,
+        });
+      }),
+    );
   }
 
   // ── P04-A02 — Select raw material lots for preparation ──
@@ -698,24 +726,29 @@ export class ChargePreparationService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const chargeNumber = await this.generateChargeNumber(tx, organizationId);
-      const updated = await tx.steelChargePreparation.update({
-        where: { id },
-        data: {
+    return this.withUniqueRetry('chargeNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const chargeNumber = await this.generateChargeNumber(
+          tx,
+          organizationId,
+        );
+        const updated = await tx.steelChargePreparation.update({
+          where: { id },
+          data: {
+            chargeNumber,
+            chargeReleasedAt: new Date(),
+            stage: 'A11_CHARGE_RELEASED',
+          },
+        });
+        await this.logActivity(tx, id, 'A11', employee.id, dto.releaseNotes, {
           chargeNumber,
-          chargeReleasedAt: new Date(),
-          stage: 'A11_CHARGE_RELEASED',
-        },
-      });
-      await this.logActivity(tx, id, 'A11', employee.id, dto.releaseNotes, {
-        chargeNumber,
-      });
-      return tx.steelChargePreparation.findUnique({
-        where: { id: updated.id },
-        include: chargePrepInclude,
-      });
-    });
+        });
+        return tx.steelChargePreparation.findUnique({
+          where: { id: updated.id },
+          include: chargePrepInclude,
+        });
+      }),
+    );
   }
 
   // ── P04-A12 — Close preparation handover to furnace ──

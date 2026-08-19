@@ -197,6 +197,33 @@ export class HeatApprovalService {
     );
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates a row in separate steps — two concurrent requests can read the
+  // same count before either writes, producing duplicate numbers. The
+  // number FORMAT is unchanged; this only makes generate-then-create safe
+  // under concurrency by regenerating and retrying on conflict. Conflicts
+  // on other fields (e.g. meltingId) are rethrown untouched.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generateApprovalNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -256,40 +283,42 @@ export class HeatApprovalService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const approvalNumber = await this.generateApprovalNumber(
-          tx,
-          organizationId,
-        );
-
-        const heatApproval = await tx.steelHeatApproval.create({
-          data: {
-            approvalNumber,
+      return await this.withUniqueRetry('approvalNumber', () =>
+        this.prisma.$transaction(async (tx) => {
+          const approvalNumber = await this.generateApprovalNumber(
+            tx,
             organizationId,
-            meltingId: dto.meltingId,
-            createdById: employee.id,
-            stage: 'A01_TAKE_SAMPLE',
-            status: 'IN_PROGRESS',
-            sampleRef: dto.sampleRef,
-            sampleTakenAt: dto.sampleTakenAt
-              ? new Date(dto.sampleTakenAt)
-              : new Date(),
-          },
-        });
+          );
 
-        await this.logActivity(
-          tx,
-          heatApproval.id,
-          'A01',
-          employee.id,
-          undefined,
-          { ...dto },
-        );
-        return tx.steelHeatApproval.findUnique({
-          where: { id: heatApproval.id },
-          include: heatApprovalInclude,
-        });
-      });
+          const heatApproval = await tx.steelHeatApproval.create({
+            data: {
+              approvalNumber,
+              organizationId,
+              meltingId: dto.meltingId,
+              createdById: employee.id,
+              stage: 'A01_TAKE_SAMPLE',
+              status: 'IN_PROGRESS',
+              sampleRef: dto.sampleRef,
+              sampleTakenAt: dto.sampleTakenAt
+                ? new Date(dto.sampleTakenAt)
+                : new Date(),
+            },
+          });
+
+          await this.logActivity(
+            tx,
+            heatApproval.id,
+            'A01',
+            employee.id,
+            undefined,
+            { ...dto },
+          );
+          return tx.steelHeatApproval.findUnique({
+            where: { id: heatApproval.id },
+            include: heatApprovalInclude,
+          });
+        }),
+      );
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&

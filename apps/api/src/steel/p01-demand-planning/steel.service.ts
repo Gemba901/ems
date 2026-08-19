@@ -104,6 +104,32 @@ export class SteelService {
     }
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates a row in separate steps — two concurrent requests can read the
+  // same count before either writes, producing duplicate numbers. The
+  // number FORMAT is unchanged; this only makes generate-then-create safe
+  // under concurrency by regenerating and retrying on conflict.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generatePlanNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -149,40 +175,49 @@ export class SteelService {
   ) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
-    return this.prisma.$transaction(async (tx) => {
-      const planNumber = await this.generatePlanNumber(tx, organizationId);
+    return this.withUniqueRetry('planNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const planNumber = await this.generatePlanNumber(tx, organizationId);
 
-      const plan = await tx.steelProductionPlan.create({
-        data: {
-          planNumber,
-          organizationId,
-          createdById: employee.id,
-          stage: 'A01_DEMAND_CAPTURED',
-          status: 'IN_PROGRESS',
-          demandSource: dto.demandSource,
-          customerName: dto.customerName,
-          dealerName: dto.dealerName,
-          projectReference: dto.projectReference,
-          salesOrderNumber: dto.salesOrderNumber,
-          forecastReference: dto.forecastReference,
-          stockRequirementReference: dto.stockRequirementReference,
-          expectedDeliveryDate: dto.expectedDeliveryDate
-            ? new Date(dto.expectedDeliveryDate)
-            : null,
-          requestedQuantityTonnes: dto.requestedQuantityTonnes,
-          demandNotes: dto.demandNotes,
-        },
-      });
+        const plan = await tx.steelProductionPlan.create({
+          data: {
+            planNumber,
+            organizationId,
+            createdById: employee.id,
+            stage: 'A01_DEMAND_CAPTURED',
+            status: 'IN_PROGRESS',
+            demandSource: dto.demandSource,
+            customerName: dto.customerName,
+            dealerName: dto.dealerName,
+            projectReference: dto.projectReference,
+            salesOrderNumber: dto.salesOrderNumber,
+            forecastReference: dto.forecastReference,
+            stockRequirementReference: dto.stockRequirementReference,
+            expectedDeliveryDate: dto.expectedDeliveryDate
+              ? new Date(dto.expectedDeliveryDate)
+              : null,
+            requestedQuantityTonnes: dto.requestedQuantityTonnes,
+            demandNotes: dto.demandNotes,
+          },
+        });
 
-      await this.logActivity(tx, plan.id, 'A01', employee.id, dto.demandNotes, {
-        ...dto,
-      });
+        await this.logActivity(
+          tx,
+          plan.id,
+          'A01',
+          employee.id,
+          dto.demandNotes,
+          {
+            ...dto,
+          },
+        );
 
-      return tx.steelProductionPlan.findUnique({
-        where: { id: plan.id },
-        include: planInclude,
-      });
-    });
+        return tx.steelProductionPlan.findUnique({
+          where: { id: plan.id },
+          include: planInclude,
+        });
+      }),
+    );
   }
 
   // ── P01-A02 — Confirm customer and order priority ──

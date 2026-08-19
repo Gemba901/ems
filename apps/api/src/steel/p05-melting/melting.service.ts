@@ -170,6 +170,33 @@ export class MeltingService {
     );
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates a row in separate steps — two concurrent requests can read the
+  // same count before either writes, producing duplicate numbers. The
+  // number FORMAT is unchanged; this only makes generate-then-create safe
+  // under concurrency by regenerating and retrying on conflict. Conflicts
+  // on other fields (e.g. chargePreparationId) are rethrown untouched.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generateHeatInProcessNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -226,40 +253,49 @@ export class MeltingService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const heatInProcessNumber = await this.generateHeatInProcessNumber(
-          tx,
-          organizationId,
-        );
-
-        const melting = await tx.steelMelting.create({
-          data: {
-            heatInProcessNumber,
+      return await this.withUniqueRetry('heatInProcessNumber', () =>
+        this.prisma.$transaction(async (tx) => {
+          const heatInProcessNumber = await this.generateHeatInProcessNumber(
+            tx,
             organizationId,
-            chargePreparationId: dto.chargePreparationId,
-            createdById: employee.id,
-            stage: 'A01_CONFIRM_FURNACE_AVAILABILITY',
-            status: 'IN_PROGRESS',
-            chargeNumberSnapshot: charge.chargeNumber,
-            recipeScrapWeightSnapshot: charge.recipeScrapWeightTonnes,
-            recipeDriWeightSnapshot: charge.recipeDriWeightTonnes,
-            recipeAlloyWeightSnapshot: charge.recipeAlloyWeightTonnes,
-            recipeAdditiveWeightSnapshot: charge.recipeAdditiveWeightTonnes,
-            furnaceId: dto.furnaceId,
-            plannedHeatRef: dto.plannedHeatRef,
-            operatorName: dto.operatorName,
-            shift: dto.shift,
-          },
-        });
+          );
 
-        await this.logActivity(tx, melting.id, 'A01', employee.id, undefined, {
-          ...dto,
-        });
-        return tx.steelMelting.findUnique({
-          where: { id: melting.id },
-          include: meltingInclude,
-        });
-      });
+          const melting = await tx.steelMelting.create({
+            data: {
+              heatInProcessNumber,
+              organizationId,
+              chargePreparationId: dto.chargePreparationId,
+              createdById: employee.id,
+              stage: 'A01_CONFIRM_FURNACE_AVAILABILITY',
+              status: 'IN_PROGRESS',
+              chargeNumberSnapshot: charge.chargeNumber,
+              recipeScrapWeightSnapshot: charge.recipeScrapWeightTonnes,
+              recipeDriWeightSnapshot: charge.recipeDriWeightTonnes,
+              recipeAlloyWeightSnapshot: charge.recipeAlloyWeightTonnes,
+              recipeAdditiveWeightSnapshot: charge.recipeAdditiveWeightTonnes,
+              furnaceId: dto.furnaceId,
+              plannedHeatRef: dto.plannedHeatRef,
+              operatorName: dto.operatorName,
+              shift: dto.shift,
+            },
+          });
+
+          await this.logActivity(
+            tx,
+            melting.id,
+            'A01',
+            employee.id,
+            undefined,
+            {
+              ...dto,
+            },
+          );
+          return tx.steelMelting.findUnique({
+            where: { id: melting.id },
+            include: meltingInclude,
+          });
+        }),
+      );
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&

@@ -68,11 +68,24 @@ export class EmployeeController {
     return this.employeeService.getMyEmployeeProfile(user.userId, user.organizationId);
   }
 
+  // GET /employee/me/colleagues — department colleagues of the logged-in user (for team-member pickers)
+  @Get('me/colleagues')
+  async getMyColleagues(@CurrentUser() user: { userId: string; organizationId: string }) {
+    return this.employeeService.getMyColleagues(user.userId, user.organizationId);
+  }
+
   // GET /employee/organization/:orgId/departments
   @Get('organization/:orgId/departments')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR)
   async getDepartments(@Param('orgId') orgId: string) {
     return this.employeeService.getDepartmentsByOrganization(orgId);
+  }
+
+  // GET /employee/organization/:orgId/department-hods — HODs for the suggestion routing picker
+  @Get('organization/:orgId/department-hods')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR)
+  async getDepartmentHODs(@Param('orgId') orgId: string) {
+    return this.employeeService.getDepartmentHODs(orgId);
   }
 
   /**

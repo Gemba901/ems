@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SuggestionStatus, ImplementationStatus, DecisionType } from 'db';
+import { SuggestionStatus, ImplementationStatus, DecisionType, KaizenTrigger } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import {
@@ -102,8 +102,25 @@ export class SimsService {
     const isPrivileged = [Role.HOD, Role.MANAGEMENT, Role.ADMIN, Role.SUPER_ADMIN].includes(role as Role);
 
     let targetDepartmentId: string | null;
+    let targetHodIds: string[];
 
-    if (isPrivileged && dto.departmentId) {
+    if (isPrivileged && dto.hodId) {
+      // Privileged roles may target a specific HOD directly — department names aren't
+      // plant-scoped, so this disambiguates which HOD (of possibly several sharing a
+      // department name) the suggestion should go to.
+      const hod = await this.prisma.employee.findFirst({
+        where: {
+          id: dto.hodId,
+          organizationId,
+          departmentId: { not: null },
+          user: { organizations: { some: { organizationId, role: { name: Role.HOD } } } },
+        },
+        select: { id: true, departmentId: true },
+      });
+      if (!hod || !hod.departmentId) throw new BadRequestException('Selected HOD not found in this organization');
+      targetDepartmentId = hod.departmentId;
+      targetHodIds = [hod.id];
+    } else if (isPrivileged && dto.departmentId) {
       // Privileged roles may direct their suggestion to any department in the org
       const dept = await this.prisma.department.findFirst({
         where: { id: dto.departmentId, organizationId },
@@ -111,15 +128,15 @@ export class SimsService {
       });
       if (!dept) throw new BadRequestException('Selected department not found in this organization');
       targetDepartmentId = dto.departmentId;
+      targetHodIds = await this.findDepartmentHODs(targetDepartmentId, organizationId);
     } else {
       // Employees are tied to their own department
       if (!employee.departmentId) {
         throw new BadRequestException('You must be assigned to a department to submit a suggestion');
       }
       targetDepartmentId = employee.departmentId;
+      targetHodIds = await this.findDepartmentHODs(targetDepartmentId, organizationId);
     }
-
-    const hodIds = await this.findDepartmentHODs(targetDepartmentId, organizationId);
 
     const suggestion = await this.prisma.suggestion.create({
       data: {
@@ -132,12 +149,12 @@ export class SimsService {
         employeeId: employee.id,
         organizationId,
         departmentId: targetDepartmentId,
-        hodId: hodIds[0] || null,
+        hodId: targetHodIds[0] || null,
       }
     });
 
     // notify HODs about new suggestion
-    for (const hodId of hodIds) {
+    for (const hodId of targetHodIds) {
         // Don't notify yourself if you are an HOD submitting a suggestion
         if (hodId === employee.id) continue;
 
@@ -541,17 +558,23 @@ export class SimsService {
       if (!beforePhotoUrl) {
         throw new BadRequestException('A before photo is required to raise a Kaizen from this suggestion');
       }
-      const problem = dto.kaizenDetails.problem?.trim() || suggestion.title;
+      const conditionDescription = dto.kaizenDetails.conditionDescription?.trim() || suggestion.title;
+      const now = new Date();
+      const defaultTargetCompletionDate = new Date();
+      defaultTargetCompletionDate.setDate(defaultTargetCompletionDate.getDate() + 30);
 
+      // A HOD already approved the underlying suggestion, so the kaizen skips the
+      // part-7 pre-implementation review gate and starts directly in implementation.
       const createdKaizen = await this.kaizenService.createKaizenForEmployee(
         suggestion.employeeId,
         {
-          problem,
-          beforePhotoUrl,
-          teamMembers: dto.kaizenDetails.teamMembers,
-          benefitCategory: dto.kaizenDetails.benefitCategory,
-          comments: dto.kaizenDetails.comments,
-          startImprovement: dto.kaizenDetails.startImprovement,
+          trigger: KaizenTrigger.EMPLOYEE_SUGGESTION_OR_IDEA,
+          conditionDescription,
+          title: suggestion.title,
+          startDate: now.toISOString(),
+          targetCompletionDate: defaultTargetCompletionDate.toISOString(),
+          conditionEvidenceUrls: [beforePhotoUrl],
+          status: 'IN_IMPLEMENTATION',
         },
         organizationId,
       );

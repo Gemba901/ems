@@ -1,21 +1,51 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
-import TaskMiniCard from './components/home/TaskMiniCard';
-import { useAuthStore } from '@/store/auth.store';
-import { DwmsService, getDwmsErrorMessage, type DwmsTaskItem as TaskItem, type DwmsTaskStatus as TaskStatus } from '@/services/dwms.service';
-import { PlusCircle } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import TaskMiniCard from "./components/home/TaskMiniCard";
+import { useAuthStore } from "@/store/auth.store";
+import {
+  DwmsService,
+  getDwmsErrorMessage,
+  type DwmsTaskItem as TaskItem,
+  type DwmsTaskStatus as TaskStatus,
+} from "@/services/dwms.service";
+import { AlertTriangle, PlusCircle, TrendingUp } from "lucide-react";
+import { uploadImage } from "@/services/uploads.service";
 
-function getTodayDateKey() {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+type HomeTaskView = "TODAY" | "WEEK" | "MONTH";
+
+function toDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getTaskWindow(view: HomeTaskView) {
+  const start = startOfLocalDay(new Date());
+  const days = view === "TODAY" ? 1 : view === "WEEK" ? 7 : 30;
+  const end = addDays(start, days);
+  return { start, end, days };
+}
+
+function isTaskDueInWindow(task: TaskItem, start: Date, end: Date) {
+  const dueAt = new Date(task.dueAt);
+  if (Number.isNaN(dueAt.getTime())) return false;
+  return dueAt >= start && dueAt < end;
+}
+
+function isHomeVisibleTask(task: TaskItem) {
+  return !task.isOverdue && task.status !== "OVERDUE";
+}
 export default function HomePage() {
   return (
     <ProtectedRoute>
@@ -28,69 +58,64 @@ function HomeContent() {
   const router = useRouter();
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [taskView, setTaskView] = useState<HomeTaskView>("TODAY");
   const [activeAlertsCount, setActiveAlertsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [completionTask, setCompletionTask] = useState<{
+    instanceId: string;
+    status: TaskStatus;
+    requiresCompletionDocument: boolean;
+    completionDocumentName?: string | null;
+  } | null>(null);
+  const [completionNote, setCompletionNote] = useState("");
+  const [completionFile, setCompletionFile] = useState<File | null>(null);
+  const [completionError, setCompletionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadData() {
+  const loadData = useCallback(async (view: HomeTaskView = taskView) => {
     setLoading(true);
     setError(null);
     try {
-      const token = useAuthStore.getState().accessToken ?? '';
-      const tasksRes = await DwmsService.getTodayTasks(token, getTodayDateKey());
-      setTasks(tasksRes?.tasks ?? []);
+      const token = useAuthStore.getState().accessToken ?? "";
+      const { start, end, days } = getTaskWindow(view);
+      const dateKeys = Array.from({ length: days }, (_, index) => toDateKey(addDays(start, index)));
+      const taskResponses = await Promise.all(dateKeys.map((date) => DwmsService.getTodayTasks(token, date)));
+      const byInstanceId = new Map<string, TaskItem>();
+
+      taskResponses.forEach((response) => {
+        (response?.tasks ?? []).forEach((task) => {
+          if (isTaskDueInWindow(task, start, end) && isHomeVisibleTask(task)) {
+            byInstanceId.set(task.instanceId, task);
+          }
+        });
+      });
+
+      setTasks(Array.from(byInstanceId.values()));
 
       const alertsRes = await DwmsService.getOpenAlertCount(token);
       setActiveAlertsCount(Number(alertsRes?.count ?? 0));
     } catch (err: unknown) {
-      setError(getDwmsErrorMessage(err, 'Failed to load home page data'));
+      setError(getDwmsErrorMessage(err, "Failed to load home page data"));
     } finally {
       setLoading(false);
     }
-  }
+  }, [taskView]);
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    void loadData(taskView);
+  }, [loadData, taskView]);
 
-  // Filter tasks to only show those due today
-  const todayTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      if (task.frequency === 'DAILY') {
-        return true;
-      }
-      
-      let dueDate: Date | null = null;
-      if (task.frequency === 'WEEKLY') {
-        const baseDate = new Date(task.dueAt);
-        const day = baseDate.getDay();
-        const diff = 6 - day;
-        baseDate.setDate(baseDate.getDate() + diff);
-        dueDate = baseDate;
-      } else if (task.frequency === 'MONTHLY') {
-        const baseDate = new Date(task.dueAt);
-        dueDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0);
-      } else if (task.assignedBy && task.assignedBy.name) {
-        dueDate = new Date(task.dueAt);
-      }
+  const visibleTasks = useMemo(() => tasks, [tasks]);
 
-      if (!dueDate || isNaN(dueDate.getTime())) {
-        return false;
-      }
-
-      const today = new Date();
-      return dueDate.toDateString() === today.toDateString();
-    });
-  }, [tasks]);
 
   const stats = useMemo(() => {
-    const total = todayTasks.length;
-    const done = todayTasks.filter(t => t.status === 'DONE').length;
+    const total = visibleTasks.length;
+    const done = visibleTasks.filter((t) => t.status === "DONE").length;
     const remaining = total - done;
     const productivity = total > 0 ? Math.round((done / total) * 100) : 100;
     return { total, done, remaining, productivity };
-  }, [todayTasks]);
+  }, [visibleTasks]);
 
   const statusCompletion: Record<TaskStatus, number> = {
     PENDING: 0,
@@ -103,18 +128,73 @@ function HomeContent() {
     OVERDUE: 0,
   };
 
-  async function handleStatusChange(instanceId: string, nextStatus: TaskStatus) {
+  async function handleStatusChange(
+    instanceId: string,
+    nextStatus: TaskStatus,
+  ) {
+    if (nextStatus === "DONE") {
+      const task = tasks.find((item) => item.instanceId === instanceId);
+      setCompletionTask({
+        instanceId,
+        status: nextStatus,
+        requiresCompletionDocument: !!task?.requiresCompletionDocument,
+        completionDocumentName: task?.completionDocumentName ?? null,
+      });
+      setCompletionNote("");
+      setCompletionFile(null);
+      setCompletionError(null);
+      setError(null);
+      return;
+    }
+
     setSavingId(instanceId);
     setError(null);
     try {
-      const token = useAuthStore.getState().accessToken ?? '';
+      const token = useAuthStore.getState().accessToken ?? "";
       await DwmsService.updateTaskStatus(token, instanceId, {
         status: nextStatus,
         completionPercent: statusCompletion[nextStatus],
       });
       await loadData();
     } catch (saveError: unknown) {
-      setError(getDwmsErrorMessage(saveError, 'Failed to update task status'));
+      setError(getDwmsErrorMessage(saveError, "Failed to update task status"));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleCompletionSubmit(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (!completionTask) return;
+    if (completionTask.requiresCompletionDocument && !completionFile) {
+      setCompletionError("Completion document is required for this task.");
+      return;
+    }
+
+    setSavingId(completionTask.instanceId);
+    setCompletionError(null);
+    setError(null);
+    try {
+      const token = useAuthStore.getState().accessToken ?? "";
+      const upload = completionFile
+        ? await uploadImage(completionFile, "dwms/task-completions", token)
+        : null;
+      await DwmsService.updateTaskStatus(token, completionTask.instanceId, {
+        status: completionTask.status,
+        completionPercent: statusCompletion[completionTask.status],
+        completionNote: completionNote.trim() || null,
+        completionAttachmentUrl: upload?.fileUrl ?? null,
+        completionAttachmentName: completionFile?.name ?? null,
+      });
+      setCompletionTask(null);
+      setCompletionNote("");
+      setCompletionFile(null);
+      setCompletionError(null);
+      await loadData();
+    } catch (saveError: unknown) {
+      setCompletionError(getDwmsErrorMessage(saveError, "Failed to complete task"));
     } finally {
       setSavingId(null);
     }
@@ -124,11 +204,11 @@ function HomeContent() {
     setSavingId(taskId);
     setError(null);
     try {
-      const token = useAuthStore.getState().accessToken ?? '';
+      const token = useAuthStore.getState().accessToken ?? "";
       await DwmsService.acknowledgeTask(token, taskId);
       await loadData();
     } catch (saveError: unknown) {
-      setError(getDwmsErrorMessage(saveError, 'Failed to acknowledge task'));
+      setError(getDwmsErrorMessage(saveError, "Failed to acknowledge task"));
     } finally {
       setSavingId(null);
     }
@@ -136,115 +216,250 @@ function HomeContent() {
 
   return (
     <div className="mx-auto flex w-full max-w-none flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-        
-        {error && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-            {error}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+          {error}
+        </div>
+      )}
+
+      {/* Today at a Glance Stats */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Card 1: Tasks Done */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between h-40 transition hover:scale-[1.01] hover:border-accent-app/20 duration-150">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-app">
+              Tasks done
+            </p>
+            <h3 className="text-4xl font-extrabold tracking-tight text-text-app mt-2">
+              {stats.done}
+              <span className="text-muted-app text-2xl font-light">
+                /{stats.total}
+              </span>
+            </h3>
+          </div>
+          <div>
+            <p className="text-xs text-muted-app mb-2.5 font-light">
+              {stats.remaining} remaining
+            </p>
+            <div className="w-full bg-border-app h-1.5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-accent-app rounded-full transition-all duration-300"
+                style={{
+                  width: `${stats.total > 0 ? (stats.done / stats.total) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Open Alerts */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between h-40 transition hover:scale-[1.01] hover:border-accent-app/20 duration-150">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-app">
+              Open alerts
+            </p>
+            <h3 className="text-4xl font-extrabold tracking-tight text-text-app mt-2">
+              {activeAlertsCount}
+            </h3>
+          </div>
+          <div>
+            <p className="text-xs text-rose-500 font-medium mb-2.5 flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5" /> Action needed
+            </p>
+            <div className="w-full bg-rose-500/10 h-1 rounded-full overflow-hidden">
+              <div
+                className={`h-full bg-rose-500 rounded-full transition-all duration-300 ${
+                  activeAlertsCount > 0 ? "w-2/3" : "w-0"
+                }`}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Productivity */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between h-40 transition hover:scale-[1.01] hover:border-accent-app/20 duration-150">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-app">
+              Productivity
+            </p>
+            <h3 className="text-4xl font-extrabold tracking-tight text-text-app mt-2">
+              {stats.productivity}
+              <span className="text-muted-app text-2xl font-light">%</span>
+            </h3>
+          </div>
+          <div>
+            <p className="text-xs text-emerald-500 font-medium mb-2.5 flex items-center gap-0.5">
+              <TrendingUp className="h-3.5 w-3.5" /> +6% vs last week
+            </p>
+            <div className="w-full bg-purple-500/10 h-1 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-purple-500 rounded-full transition-all duration-300"
+                style={{ width: `${stats.productivity}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Tasks Section */}
+      <section className="mt-4">
+        <div className="flex flex-col gap-3 border-b border-border-app pb-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <h2 className="text-lg font-bold tracking-tight text-text-app">
+              {taskView === "TODAY" ? "Today's tasks" : taskView === "WEEK" ? "Week's tasks" : "Monthly tasks"}
+            </h2>
+            <div className="flex rounded-full border border-slate-200 bg-white p-1">
+              {[
+                { key: "TODAY", label: "Today" },
+                { key: "WEEK", label: "Week" },
+                { key: "MONTH", label: "Month" },
+              ].map((view) => {
+                const active = taskView === view.key;
+                return (
+                  <button
+                    key={view.key}
+                    type="button"
+                    onClick={() => setTaskView(view.key as HomeTaskView)}
+                    className={`h-8 rounded-full px-3 text-xs font-semibold transition ${active ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}
+                  >
+                    {view.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <button
+            onClick={() => router.push("/dwms/actions/new?mode=TASK")}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 cursor-pointer select-none sm:w-auto"
+          >
+            <PlusCircle className="h-4 w-4" />
+            <span>Assign a Task</span>
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="rounded-2xl border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app">
+            Loading tasks...
+          </div>
+        ) : visibleTasks.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app italic">
+            {taskView === "TODAY" ? "No tasks due today." : taskView === "WEEK" ? "No tasks due this week." : "No tasks due this month."}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {visibleTasks.map((task) => (
+              <TaskMiniCard
+                key={task.instanceId}
+                task={task}
+                onClick={() => router.push(`/dwms/tasks/${task.instanceId}`)}
+                onStatusChange={handleStatusChange}
+                onAcknowledgement={handleAcknowledgement}
+                saving={savingId === task.instanceId || savingId === task.taskId}
+              />
+            ))}
           </div>
         )}
+      </section>
 
-        {/* Today at a Glance Stats */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Tasks Done */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between h-40 transition hover:scale-[1.01] hover:border-accent-app/20 duration-150">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-app">Tasks done</p>
-              <h3 className="text-4xl font-extrabold tracking-tight text-text-app mt-2">
-                {stats.done}<span className="text-muted-app text-2xl font-light">/{stats.total}</span>
-              </h3>
-            </div>
-            <div>
-              <p className="text-xs text-muted-app mb-2.5 font-light">{stats.remaining} remaining</p>
-              <div className="w-full bg-border-app h-1.5 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-accent-app rounded-full transition-all duration-300"
-                  style={{ width: `${stats.total > 0 ? (stats.done / stats.total) * 100 : 0}%` }}
-                />
+      {completionTask && (
+        <div
+          className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
+          onClick={() => {
+            if (!savingId) setCompletionTask(null);
+          }}
+        >
+          <form
+            onSubmit={handleCompletionSubmit}
+            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">
+                  Complete task
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-slate-900">
+                  Attach completion file
+                </h2>
+                {completionTask.requiresCompletionDocument && (
+                  <p className="mt-1 text-xs text-rose-600">
+                    {completionTask.completionDocumentName
+                      ? `Required document: ${completionTask.completionDocumentName}`
+                      : "A document is required before this task can be completed."}
+                  </p>
+                )}
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCompletionTask(null);
+                  setCompletionError(null);
+                }}
+                disabled={!!savingId}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Close completion dialog"
+              >
+                <span aria-hidden="true">x</span>
+              </button>
             </div>
-          </div>
 
-          {/* Card 2: Open Alerts */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between h-40 transition hover:scale-[1.01] hover:border-accent-app/20 duration-150">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-app">Open alerts</p>
-              <h3 className="text-4xl font-extrabold tracking-tight text-text-app mt-2">
-                {activeAlertsCount}
-              </h3>
-            </div>
-            <div>
-              <p className="text-xs text-rose-500 font-medium mb-2.5 flex items-center gap-1">
-                <span>⚠️</span> Action needed
-              </p>
-              <div className="w-full bg-rose-500/10 h-1 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full bg-rose-500 rounded-full transition-all duration-300 ${
-                    activeAlertsCount > 0 ? 'w-2/3' : 'w-0'
-                  }`}
-                />
+            {completionError && (
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                {completionError}
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Card 3: Productivity */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between h-40 transition hover:scale-[1.01] hover:border-accent-app/20 duration-150">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-app">Productivity</p>
-              <h3 className="text-4xl font-extrabold tracking-tight text-text-app mt-2">
-                {stats.productivity}<span className="text-muted-app text-2xl font-light">%</span>
-              </h3>
-            </div>
-            <div>
-              <p className="text-xs text-emerald-500 font-medium mb-2.5 flex items-center gap-0.5">
-                <span>↗</span> +6% vs last week
-              </p>
-              <div className="w-full bg-purple-500/10 h-1 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-purple-500 rounded-full transition-all duration-300"
-                  style={{ width: `${stats.productivity}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </section>
+            <label className="mt-5 block text-xs font-semibold text-slate-700">
+              Completion note
+              <textarea
+                value={completionNote}
+                onChange={(event) => setCompletionNote(event.target.value)}
+                rows={3}
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                placeholder="Add a short note for the approver..."
+              />
+            </label>
 
-        {/* Today's Tasks Section */}
-        <section className="mt-4">
-          <div className="flex flex-col gap-3 border-b border-border-app pb-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-bold tracking-tight text-text-app">Today&apos;s tasks</h2>
-            <button 
-              onClick={() => router.push('/dwms/actions/new')}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 cursor-pointer select-none sm:w-auto"
-            >
-              <PlusCircle className="h-4 w-4" />
-              <span>Assign a Task</span>
-            </button>
-          </div>
+            <label className="mt-4 block text-xs font-semibold text-slate-700">
+              {completionTask.completionDocumentName
+                ? `Upload ${completionTask.completionDocumentName}`
+                : "Completion file"}
+              {completionTask.requiresCompletionDocument && (
+                <span className="ml-0.5 text-red-500">*</span>
+              )}
+              <input
+                type="file"
+                required={completionTask.requiresCompletionDocument}
+                onChange={(event) =>
+                  setCompletionFile(event.target.files?.[0] ?? null)
+                }
+                className="mt-2 block w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+              />
+            </label>
 
-          {loading ? (
-            <div className="rounded-2xl border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app">
-              Loading tasks...
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCompletionTask(null);
+                  setCompletionError(null);
+                }}
+                disabled={!!savingId}
+                className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!!savingId}
+                className="inline-flex h-9 items-center justify-center rounded-full bg-emerald-600 px-4 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingId ? "Uploading..." : "Mark Done"}
+              </button>
             </div>
-          ) : todayTasks.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app italic">
-              🎉 No tasks due today. Enjoy your day!
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {todayTasks.map((task) => (
-                <TaskMiniCard
-                  key={task.instanceId}
-                  task={task}
-                  onClick={() => {}}
-                  onStatusChange={handleStatusChange}
-                  onAcknowledgement={handleAcknowledgement}
-                  saving={savingId === task.instanceId}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
+          </form>
+        </div>
+      )}
     </div>
   );
 }

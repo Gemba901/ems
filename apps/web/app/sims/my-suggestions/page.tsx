@@ -10,7 +10,7 @@ import { SimsService, SuggestionStatus, SuggestionCategory } from "@/services/si
 import { useQuery } from "@tanstack/react-query";
 import {
   Lightbulb, ChevronRight, Clock, CheckCircle2,
-  XCircle, AlertCircle,
+  XCircle, AlertCircle, Plus,
 } from "lucide-react";
 
 const STATUS_CONFIG: Record<SuggestionStatus, { label: string; badge: string; icon: React.ReactNode }> = {
@@ -88,18 +88,20 @@ export default function MySuggestionsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="mx-5 space-y-5">
+      <div className="mx-5 pt-4 md:pt-6 space-y-5">
 
         {/* Page header */}
         <div className="flex items-center justify-between gap-3 flex-nowrap">
-          <h1 className="text-base sm:text-lg font-semibold text-slate-900 truncate">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">
             My Suggestions
           </h1>
           <Link
             href="/sims/new"
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-slate-800 whitespace-nowrap"
+            className="flex items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-1.5 text-sm font-semibold sm:font-medium text-white shadow-sm hover:bg-blue-700 whitespace-nowrap shrink-0"
           >
-            New
+            <span className="sm:hidden">New</span>
+            <span className="hidden sm:inline">New Suggestion</span>
+            <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5 sm:order-first" />
           </Link>
         </div>
 
@@ -120,12 +122,12 @@ export default function MySuggestionsPage() {
         )}
 
         {/* Status filter tabs */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 sm:mx-0 sm:px-0">
           {(["", ...Object.keys(STATUS_CONFIG)] as (SuggestionStatus | "")[]).map((s) => (
             <button
               key={s}
               onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap shrink-0 ${
                 filter === s
                   ? "bg-slate-900 text-white border-slate-900"
                   : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"

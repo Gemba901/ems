@@ -6,6 +6,7 @@ const allowedTaskFrequencies = new Set<TaskFrequency>([
   TaskFrequency.MONTHLY,
   TaskFrequency.QUARTERLY,
   TaskFrequency.YEARLY,
+  TaskFrequency.PLANNED,
 ]);
 
 export function parseTaskFrequency(value: string | null | undefined): TaskFrequency | null {
@@ -47,9 +48,75 @@ export function endOfUtcDay(value: Date): Date {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate(), 23, 59, 59, 999));
 }
 
+
+export function parseTimeZone(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date());
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function getTimeZoneOffsetMs(value: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(value);
+
+  const partMap = new Map(parts.map((part) => [part.type, part.value]));
+  const zonedAsUtc = Date.UTC(
+    Number(partMap.get('year')),
+    Number(partMap.get('month')) - 1,
+    Number(partMap.get('day')),
+    Number(partMap.get('hour')),
+    Number(partMap.get('minute')),
+    Number(partMap.get('second')),
+    value.getUTCMilliseconds(),
+  );
+
+  return zonedAsUtc - value.getTime();
+}
+
+export function endOfDayInTimeZone(value: Date, timeZone: string | null): Date {
+  if (!timeZone) {
+    return endOfUtcDay(value);
+  }
+
+  try {
+    const localEndAsUtc = Date.UTC(
+      value.getUTCFullYear(),
+      value.getUTCMonth(),
+      value.getUTCDate(),
+      23,
+      59,
+      59,
+      999,
+    );
+    const firstPass = new Date(
+      localEndAsUtc - getTimeZoneOffsetMs(new Date(localEndAsUtc), timeZone),
+    );
+    const offset = getTimeZoneOffsetMs(firstPass, timeZone);
+    return new Date(localEndAsUtc - offset);
+  } catch {
+    return endOfUtcDay(value);
+  }
+}
+
 export function isBeforeUtcDate(value: Date, reference: Date): boolean {
   return toUtcDateOnly(value).getTime() < toUtcDateOnly(reference).getTime();
 }
+
 
 export function addFrequencyInterval(value: Date, frequency: TaskFrequency): Date {
   const next = new Date(value);

@@ -41,7 +41,7 @@ async function getJson<T>(path: string, token: string): Promise<T> {
 async function sendJson<T>(
   path: string,
   token: string,
-  method: "POST" | "PATCH",
+  method: "POST" | "PATCH" | "DELETE",
   body?: unknown,
 ): Promise<T> {
   const res = await apiClient(
@@ -54,6 +54,14 @@ async function sendJson<T>(
     token,
   );
   return handleResponse<T>(res);
+}
+
+function getBrowserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function buildQuery(
@@ -69,8 +77,40 @@ function buildQuery(
   return query ? `?${query}` : "";
 }
 
+export function cleanDwmsMessage(
+  message: string | null | undefined,
+  fallback = "Something went wrong",
+) {
+  const raw = String(message ?? "").trim();
+  if (!raw) return fallback;
+
+  if (raw.includes("TaskStatus") && raw.includes("ACTIVE")) {
+    return "Activity status was not compatible with the database. Please retry after the API server is restarted.";
+  }
+  if (raw.includes("Unique constraint") || raw.includes("P2002")) {
+    return "A record with the same unique value already exists.";
+  }
+
+  const cleaned = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("Invalid "))
+    .filter((line) => !/^[^\w]*\d+\s/.test(line))
+    .filter((line) => !line.startsWith("at "))
+    .filter((line) => !/^[A-Z]:\\/.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned || fallback;
+}
+
 export function getDwmsErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+  return cleanDwmsMessage(
+    error instanceof Error ? error.message : null,
+    fallback,
+  );
 }
 
 export type DwmsApproverRule =
@@ -104,6 +144,11 @@ export type DwmsFrequency =
 export type DwmsPriority = "MEDIUM" | "HIGH" | "CRITICAL";
 export type DwmsSeverity = "MEDIUM" | "HIGH" | "CRITICAL";
 export type DwmsAlertStatus = "OPEN" | "IN_PROGRESS" | "CLOSED" | "ESCALATED";
+export type DwmsAlertClosureApprovalStatus =
+  | "NONE"
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED";
 export type DwmsAlertTargetType = "GENERAL" | "PERSON" | "TASK" | "DEPARTMENT";
 export type DwmsAlertField =
   | "general"
@@ -136,6 +181,41 @@ export interface DwmsUserRef {
   email: string;
 }
 
+export interface DwmsActivityItem {
+  id: string;
+  companyUnitName?: string | null;
+  mainDepartmentId?: string | null;
+  mainDepartment?: DwmsDepartmentOption | null;
+  parentActivities?: Array<{
+    id: string;
+    name: string;
+    code?: string | null;
+    frequency?: DwmsFrequency | string | null;
+    status?: string | null;
+  }>;
+  parentActivityIds?: string[];
+  parentActivityId?: string | null;
+  subDepartment?: string | null;
+  gembaSection?: string | null;
+  processArea?: string | null;
+  name: string;
+  workMethod?: string | null;
+  code: string;
+  purpose?: string | null;
+  category?: string | null;
+  frequency: DwmsFrequency;
+  startTrigger?: string | null;
+  completionDeadline?: string | null;
+  completionOutput?: string | null;
+  primaryResponsibleDesignation?: string | null;
+  primaryResponsibleEmployeeId?: string | null;
+  primaryResponsibleEmployee?: DwmsEmployeeOption | null;
+  evidenceRequired?: string | null;
+  effectiveFrom: string;
+  status: "ACTIVE" | "ARCHIVED" | string;
+  remarks?: string | null;
+}
+
 export interface DwmsSettingsResponse {
   approverRoles?: DwmsApproverRule[];
   approverCustomEmployeeIds?: string[];
@@ -145,6 +225,9 @@ export interface DwmsSettingsResponse {
   escalateUnacknowledgedMediumMins?: number;
   escalateUnacknowledgedHighMins?: number;
   escalateUnacknowledgedCriticalMins?: number;
+  abnormalityMediumMins?: number;
+  abnormalityHighMins?: number;
+  abnormalityCriticalMins?: number;
   escalationContactRules?: string[];
   customEscalationContactIds?: string[];
   config?: DwmsSettingsResponse;
@@ -159,6 +242,9 @@ export interface DwmsSettingsState {
   escalateUnacknowledgedMediumHours: number;
   escalateUnacknowledgedHighHours: number;
   escalateUnacknowledgedCriticalHours: number;
+  abnormalityMediumHours: number;
+  abnormalityHighHours: number;
+  abnormalityCriticalHours: number;
   escalationContactRules: EscalationContactRule[];
   customEscalationContactIds: string[];
 }
@@ -172,6 +258,9 @@ export interface DwmsSettingsPayload {
   escalateUnacknowledgedMediumMins: number;
   escalateUnacknowledgedHighMins: number;
   escalateUnacknowledgedCriticalMins: number;
+  abnormalityMediumMins: number;
+  abnormalityHighMins: number;
+  abnormalityCriticalMins: number;
   escalationContactRules: EscalationContactRule[];
   customEscalationContactIds: string[];
 }
@@ -185,6 +274,9 @@ export const DEFAULT_DWMS_SETTINGS: DwmsSettingsState = {
   escalateUnacknowledgedMediumHours: 24,
   escalateUnacknowledgedHighHours: 8,
   escalateUnacknowledgedCriticalHours: 2,
+  abnormalityMediumHours: 24,
+  abnormalityHighHours: 8,
+  abnormalityCriticalHours: 2,
   escalationContactRules: ["ASSIGNER"],
   customEscalationContactIds: [],
 };
@@ -278,6 +370,55 @@ export const DWMS_ESCALATION_RULE_OPTIONS: {
   },
 ];
 
+export interface DwmsTaskInstanceComment {
+  id: string;
+  comment: string;
+  createdAt: string;
+  updatedAt: string;
+  author?: DwmsUserRef | null;
+}
+
+export interface DwmsTaskInstanceEvent {
+  id: string;
+  type: string;
+  fromStatus?: DwmsTaskStatus | string | null;
+  toStatus?: DwmsTaskStatus | string | null;
+  note?: string | null;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  createdAt: string;
+  actor?: DwmsUserRef | null;
+}
+
+export interface DwmsTaskInstanceDetailResponse {
+  access?: "full" | "relation";
+  task: DwmsTaskItem;
+  instance: {
+    id: string;
+    status: DwmsTaskStatus;
+    completionPercent: number;
+    scheduledFor: string;
+    dueAt: string;
+    completedAt?: string | null;
+  };
+  comments: DwmsTaskInstanceComment[];
+  events: DwmsTaskInstanceEvent[];
+  relatedTaskInstances?: Array<{
+    activityId: string;
+    instanceId: string;
+    status: DwmsTaskStatus | string;
+  }>;
+  alerts?: Array<{
+    id: string;
+    title: string;
+    description?: string | null;
+    status: string;
+    severity: string;
+    createdAt: string;
+    resolvedAt?: string | null;
+  }>;
+}
+
 export interface DwmsTaskItem {
   instanceId: string;
   taskId: string;
@@ -293,12 +434,25 @@ export interface DwmsTaskItem {
   completionPercent: number;
   scheduledFor: string;
   completedAt?: string | null;
+  completionNote?: string | null;
   completionAttachmentUrl?: string | null;
   completionAttachmentName?: string | null;
+  requiresCompletionDocument?: boolean;
+  completionDocumentName?: string | null;
+  prerequisiteBlocked?: boolean;
+  prerequisiteActivityNames?: string[];
+  comments?: DwmsTaskInstanceComment[];
+  events?: DwmsTaskInstanceEvent[];
   isOverdue: boolean;
+  wasOverdue?: boolean;
+  taskCreatedAt?: string;
+  taskUpdatedAt?: string;
+  instanceCreatedAt?: string;
+  instanceUpdatedAt?: string;
   isAdhoc: boolean;
   priority?: DwmsPriority | string | null;
   department?: DwmsDepartmentOption | null;
+  activity?: DwmsActivityItem | null;
   task?: { title: string };
 }
 
@@ -308,19 +462,41 @@ export interface DwmsAssignedTaskListResponse {
 
 export interface DwmsAssignedTaskHistoryItem {
   id: string;
+  instanceId: string;
+  taskId: string;
   title: string;
   description?: string | null;
+  frequency?: DwmsFrequency | string;
   priority?: DwmsPriority | string | null;
-  status: DwmsTaskStatus | string;
-  dueDate?: string | null;
+  status: DwmsTaskStatus;
+  completionPercent?: number;
+  scheduledFor?: string;
+  dueAt?: string;
+  dueDate: string;
+  completedAt?: string | null;
   ownerName?: string | null;
-  owner?: { id?: string; name?: string | null } | null;
-  assignedBy?: { name?: string | null } | null;
-  approvedBy?: { name?: string | null } | null;
+  assignedByName?: string | null;
+  approvedByName?: string | null;
+  owner?: { id?: string; name?: string | null; email?: string | null } | null;
+  assignedBy?: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+  } | null;
+  approvedBy?: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+  } | null;
   acknowledgedAt?: string | null;
   completionNote?: string | null;
   completionAttachmentUrl?: string | null;
   completionAttachmentName?: string | null;
+  requiresCompletionDocument?: boolean;
+  completionDocumentName?: string | null;
+  isOverdue?: boolean;
+  wasOverdue?: boolean;
+  isAdhoc?: boolean;
 }
 
 export interface DwmsAlertListResponse {
@@ -416,10 +592,20 @@ export interface DwmsAlertItem {
   correctiveAction?: string | null;
   closureNote?: string | null;
   resolvedAt?: string | null;
+  closureApprovalStatus?: DwmsAlertClosureApprovalStatus | string;
+  closureApproverId?: string | null;
+  closureRequestedById?: string | null;
+  closureRequestedAt?: string | null;
+  closureRejectedAt?: string | null;
+  closureRejectionNote?: string | null;
   createdAt: string;
+  updatedAt?: string;
   repeatCount?: number;
   isRepeated?: boolean;
+  isAbnormality?: boolean;
+  abnormalitySourceAlertId?: string | null;
   raisedBy?: { id: string; name: string; email: string } | null;
+  closureRequestedBy?: { id: string; name: string; email: string } | null;
   taskInstance?: {
     id: string;
     task: { title: string };
@@ -437,6 +623,21 @@ export interface DwmsAlertItem {
   taskInstanceId?: string | null;
 }
 
+export interface DwmsAlertComment {
+  id: string;
+  comment: string;
+  createdAt: string;
+  updatedAt: string;
+  author?: DwmsUserRef | null;
+}
+
+export interface DwmsAlertDetailResponse {
+  alert: DwmsAlertItem;
+  employeeId?: string;
+  comments: DwmsAlertComment[];
+  sourceAlert?: Partial<DwmsAlertItem> | null;
+  abnormalities?: Array<Partial<DwmsAlertItem> | null>;
+}
 export interface CreateDwmsAlertPayload {
   type?: string;
   severity: string;
@@ -449,6 +650,7 @@ export interface CreateDwmsAlertPayload {
 }
 
 export interface CreateAssignedTaskPayload {
+  activityId?: string | null;
   title: string;
   description?: string | null;
   assignedToId: string;
@@ -460,10 +662,88 @@ export interface CreateAssignedTaskPayload {
   overdueAlertContactId?: string | null;
   overdueAlertToEmployeeIds?: string[];
   backupOwnerId?: string | null;
+  requiresCompletionDocument?: boolean;
+  completionDocumentName?: string | null;
+  isAdhoc?: boolean;
+}
+
+export interface CreateTaskFromActivityPayload {
+  assignedToId?: string | null;
+  dueDate?: string | null;
+  frequency?: string;
+  priority?: string;
+  approvedById?: string | null;
+  backupOwnerId?: string | null;
+}
+
+export interface CreateActivityPayload {
+  mainDepartmentId?: string | null;
+  subDepartment?: string | null;
+  name: string;
+  workMethod: string;
+  code?: string | null;
+  completionDeadline?: number | null;
+  purpose?: string | null;
+  frequency: string;
+  completionOutput?: string | null;
+  primaryResponsibleDesignation?: string | null;
+  parentActivityIds?: string[];
+  parentActivityId?: string | null;
+  evidenceRequired?: string | null;
+  effectiveFrom?: string;
+  status?: string;
+}
+
+export interface IngestActivityRowPayload {
+  rowNumber?: number;
+  responsibleEmployeeCode: string;
+  parentActivityCode?: string | null;
+  activity: CreateActivityPayload;
+}
+
+export interface DwmsActivityIngestionSummary {
+  id: string;
+  fileName: string;
+  status: string;
+  totalRows: number;
+  successfulRows: number;
+  failedRows: number;
+  createdAt: string;
+  completedAt?: string | null;
+  uploadedBy?: DwmsUserRef | null;
+}
+
+export interface DwmsActivityIngestionRow {
+  id: string;
+  rowNumber: number;
+  status: string;
+  activityName?: string | null;
+  activityCode?: string | null;
+  responsibleEmployeeCode?: string | null;
+  message?: string | null;
+  activityId?: string | null;
+  taskId?: string | null;
+  createdAt: string;
+}
+
+export interface IngestActivitiesResponse {
+  message: string;
+  ingestion?: DwmsActivityIngestionSummary;
+  count: number;
+  created: number;
+  failed: number;
+  results: Array<{
+    rowNumber: number;
+    success: boolean;
+    activityId?: string;
+    taskId?: string;
+    responsibleEmployeeId?: string;
+    message: string;
+  }>;
 }
 
 export interface UpdateTaskStatusPayload {
-  status: DwmsTaskStatus | string;
+  status?: "ACTIVE" | "ARCHIVED" | string;
   completionPercent: number;
   completionNote?: string | null;
   completionAttachmentUrl?: string | null;
@@ -521,6 +801,24 @@ export function toDwmsSettingsState(
           DEFAULT_DWMS_SETTINGS.escalateUnacknowledgedCriticalHours * 60,
       ),
     ),
+    abnormalityMediumHours: toHours(
+      Number(
+        config.abnormalityMediumMins ??
+          DEFAULT_DWMS_SETTINGS.abnormalityMediumHours * 60,
+      ),
+    ),
+    abnormalityHighHours: toHours(
+      Number(
+        config.abnormalityHighMins ??
+          DEFAULT_DWMS_SETTINGS.abnormalityHighHours * 60,
+      ),
+    ),
+    abnormalityCriticalHours: toHours(
+      Number(
+        config.abnormalityCriticalMins ??
+          DEFAULT_DWMS_SETTINGS.abnormalityCriticalHours * 60,
+      ),
+    ),
   };
 }
 
@@ -552,6 +850,11 @@ export function toDwmsSettingsPayload(
     ),
     escalateUnacknowledgedCriticalMins: toMinutes(
       Number(settings.escalateUnacknowledgedCriticalHours),
+    ),
+    abnormalityMediumMins: toMinutes(Number(settings.abnormalityMediumHours)),
+    abnormalityHighMins: toMinutes(Number(settings.abnormalityHighHours)),
+    abnormalityCriticalMins: toMinutes(
+      Number(settings.abnormalityCriticalHours),
     ),
     escalationContactRules,
     customEscalationContactIds: escalationContactRules.includes("CUSTOM")
@@ -585,6 +888,16 @@ export const DwmsService = {
       token,
     );
     return data.users ?? [];
+  },
+
+  async getDepartments(token: string): Promise<DwmsDepartmentOption[]> {
+    const data = await getJson<
+      Array<DwmsDepartmentOption & { _count?: unknown }>
+    >("/departments", token);
+    return data.map((department) => ({
+      id: department.id,
+      name: department.name,
+    }));
   },
 
   async getDashboardOverview(
@@ -634,6 +947,25 @@ export const DwmsService = {
     return sendJson("/dwms/alerts", token, "POST", body);
   },
 
+  async getAlertDetail(
+    token: string,
+    alertId: string,
+  ): Promise<DwmsAlertDetailResponse> {
+    return getJson(`/dwms/alerts/${encodeURIComponent(alertId)}`, token);
+  },
+
+  async addAlertComment(
+    token: string,
+    alertId: string,
+    comment: string,
+  ): Promise<{ comment?: DwmsAlertComment }> {
+    return sendJson(
+      `/dwms/alerts/${encodeURIComponent(alertId)}/comments`,
+      token,
+      "POST",
+      { comment },
+    );
+  },
   async respondToAlert(
     token: string,
     alertId: string,
@@ -642,12 +974,51 @@ export const DwmsService = {
     return sendJson(`/dwms/alerts/${alertId}/response`, token, "PATCH", body);
   },
 
+  async requestAlertClosure(
+    token: string,
+    alertId: string,
+    body: { closureNote: string },
+  ): Promise<unknown> {
+    return sendJson(
+      `/dwms/alerts/${alertId}/closure-request`,
+      token,
+      "PATCH",
+      body,
+    );
+  },
+
   async closeAlert(
     token: string,
     alertId: string,
     body: { closureNote: string },
   ): Promise<unknown> {
     return sendJson(`/dwms/alerts/${alertId}/close`, token, "PATCH", body);
+  },
+
+  async approveAlertClosure(
+    token: string,
+    alertId: string,
+    body?: { comment?: string | null },
+  ): Promise<unknown> {
+    return sendJson(
+      `/dwms/approvalAlerts/${encodeURIComponent(alertId)}/approve`,
+      token,
+      "PATCH",
+      body,
+    );
+  },
+
+  async rejectAlertClosure(
+    token: string,
+    alertId: string,
+    body?: { comment?: string | null },
+  ): Promise<unknown> {
+    return sendJson(
+      `/dwms/approvalAlerts/${encodeURIComponent(alertId)}/reject`,
+      token,
+      "PATCH",
+      body,
+    );
   },
 
   async remindAlertOwner(token: string, alertId: string): Promise<unknown> {
@@ -661,16 +1032,6 @@ export const DwmsService = {
   ): Promise<unknown> {
     return sendJson(`/dwms/alerts/${alertId}/reassign`, token, "POST", {
       newOwnerId,
-    });
-  },
-
-  async extendEscalatedTaskDueDate(
-    token: string,
-    alertId: string,
-    newDueDate: string,
-  ): Promise<unknown> {
-    return sendJson(`/dwms/alerts/${alertId}/extend-due-date`, token, "POST", {
-      newDueDate,
     });
   },
 
@@ -689,27 +1050,46 @@ export const DwmsService = {
 
   async getApprovalTasks(
     token: string,
-    status: "pending" | "approved" = "pending",
+    status: "pending" | "approved" | "rejected" = "pending",
   ): Promise<DwmsAssignedTaskListResponse> {
     return getJson<DwmsAssignedTaskListResponse>(
       `/dwms/approvalTasks${buildQuery({ status })}`,
       token,
     );
   },
-
-  async approveTask(token: string, taskId: string): Promise<unknown> {
-    return sendJson(
-      `/dwms/approvalTasks/${encodeURIComponent(taskId)}/approve`,
+  async getApprovalAlerts(
+    token: string,
+    status: "pending" | "approved" | "rejected" = "pending",
+  ): Promise<DwmsAlertListResponse> {
+    return getJson<DwmsAlertListResponse>(
+      `/dwms/approvalAlerts${buildQuery({ status })}`,
       token,
-      "PATCH",
     );
   },
 
-  async rejectTask(token: string, taskId: string): Promise<unknown> {
+  async approveTask(
+    token: string,
+    instanceId: string,
+    body?: { comment?: string | null },
+  ): Promise<unknown> {
     return sendJson(
-      `/dwms/approvalTasks/${encodeURIComponent(taskId)}/reject`,
+      `/dwms/approvalTasks/${encodeURIComponent(instanceId)}/approve`,
       token,
       "PATCH",
+      body,
+    );
+  },
+
+  async rejectTask(
+    token: string,
+    instanceId: string,
+    body?: { comment?: string | null },
+  ): Promise<unknown> {
+    return sendJson(
+      `/dwms/approvalTasks/${encodeURIComponent(instanceId)}/reject`,
+      token,
+      "PATCH",
+      body,
     );
   },
 
@@ -737,6 +1117,72 @@ export const DwmsService = {
     );
   },
 
+  async getActivities(
+    token: string,
+    status?: DwmsTaskStatus | string,
+  ): Promise<{ activities?: DwmsActivityItem[] }> {
+    return getJson(`/dwms/activities${buildQuery({ status })}`, token);
+  },
+
+  async createActivity(
+    token: string,
+    body: CreateActivityPayload,
+  ): Promise<{ activity?: DwmsActivityItem }> {
+    return sendJson("/dwms/activities", token, "POST", body);
+  },
+
+  async ingestActivities(
+    token: string,
+    rows: IngestActivityRowPayload[],
+    fileName?: string,
+  ): Promise<IngestActivitiesResponse> {
+    return sendJson("/dwms/activities/ingest", token, "POST", {
+      fileName,
+      rows,
+    });
+  },
+
+  async getActivityIngestions(
+    token: string,
+  ): Promise<{ ingestions?: DwmsActivityIngestionSummary[] }> {
+    return getJson("/dwms/activities/ingestions", token);
+  },
+
+  async getActivityIngestion(
+    token: string,
+    ingestionId: string,
+  ): Promise<{
+    ingestion?: DwmsActivityIngestionSummary;
+    rows?: DwmsActivityIngestionRow[];
+  }> {
+    return getJson(
+      `/dwms/activities/ingestions/${encodeURIComponent(ingestionId)}`,
+      token,
+    );
+  },
+
+  async updateActivity(
+    token: string,
+    activityId: string,
+    body: Partial<CreateActivityPayload>,
+  ): Promise<{ activity?: DwmsActivityItem }> {
+    return sendJson(
+      `/dwms/activities/${encodeURIComponent(activityId)}`,
+      token,
+      "PATCH",
+      body,
+    );
+  },
+
+  async archiveActivity(token: string, activityId: string): Promise<unknown> {
+    return sendJson(
+      `/dwms/activities/${encodeURIComponent(activityId)}/archive`,
+      token,
+      "PATCH",
+    );
+  },
+
+
   async createAssignedTask(
     token: string,
     body: CreateAssignedTaskPayload,
@@ -744,11 +1190,37 @@ export const DwmsService = {
     return sendJson("/dwms/assignedTasks", token, "POST", body);
   },
 
+  async createTaskFromActivity(
+    token: string,
+    activityId: string,
+    body: CreateTaskFromActivityPayload,
+  ): Promise<unknown> {
+    return sendJson(
+      `/dwms/activities/${encodeURIComponent(activityId)}/tasks`,
+      token,
+      "POST",
+      body,
+    );
+  },
+
   async getTodayTasks(
     token: string,
     date: string,
   ): Promise<{ tasks?: DwmsTaskItem[] }> {
-    return getJson(`/dwms/myDwms/tasks${buildQuery({ date })}`, token);
+    return getJson(
+      `/dwms/myDwms/tasks${buildQuery({ date, timeZone: getBrowserTimeZone() })}`,
+      token,
+    );
+  },
+
+  async getTaskInstanceDetail(
+    token: string,
+    instanceId: string,
+  ): Promise<DwmsTaskInstanceDetailResponse> {
+    return getJson(
+      "/dwms/myDwms/tasks/" + encodeURIComponent(instanceId),
+      token,
+    );
   },
 
   async getOpenAlertCount(token: string): Promise<{ count?: number }> {
@@ -765,6 +1237,19 @@ export const DwmsService = {
       token,
       "PATCH",
       body,
+    );
+  },
+
+  async addTaskComment(
+    token: string,
+    instanceId: string,
+    comment: string,
+  ): Promise<{ comment?: DwmsTaskInstanceComment }> {
+    return sendJson(
+      "/dwms/myDwms/tasks/" + encodeURIComponent(instanceId) + "/comments",
+      token,
+      "POST",
+      { comment },
     );
   },
 

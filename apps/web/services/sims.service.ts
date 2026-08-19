@@ -108,15 +108,12 @@ export interface CreateSuggestionPayload {
   isAnonymous?: boolean;
   imageUrl?: string;
   departmentId?: string;
+  hodId?: string;
 }
 
 export interface KaizenDetailsPayload {
-  problem?: string;
+  conditionDescription?: string;
   beforePhotoUrl?: string;
-  teamMembers?: string;
-  benefitCategory?: string;
-  comments?: string;
-  startImprovement?: boolean;
 }
 
 export interface ReviewPayload {

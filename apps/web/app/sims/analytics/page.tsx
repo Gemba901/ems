@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -12,7 +12,7 @@ import {
   Area, AreaChart,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
-import { Target, Zap, Award, AlertTriangle } from "lucide-react";
+import { Target, Zap, Award, AlertTriangle, FileSpreadsheet, Download } from "lucide-react";
 import { CATEGORY_COLORS, STATUS_COLORS, CHART_TOOLTIP_STYLE, KpiCard, ChartCard } from "@/components/sims/sims-ui";
 
 // ─── Chart-specific labels (shorter than the shared sims-ui labels, to fit axes) ──
@@ -49,6 +49,21 @@ function byMonth(suggestions: Suggestion[]) {
     return { month: label, submissions: count };
   });
 }
+
+// ─── Helper: last N months as { key: "YYYY-MM", label } options ────────────
+
+function buildRecentMonths(count: number) {
+  const now = new Date();
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    return {
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    };
+  });
+}
+
+const REPORT_MONTHS = buildRecentMonths(12);
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 
@@ -127,6 +142,103 @@ export default function AnalyticsPage() {
     [suggestions]
   );
 
+  // ── Monthly report ──────────────────────────────────────────────────────
+
+  const [reportMonth, setReportMonth]     = useState(REPORT_MONTHS[0].key);
+  const [downloadingReport, setDownloadingReport] = useState(false);
+
+  const monthSuggestions = useMemo(() => {
+    const [yr, mo] = reportMonth.split("-").map(Number);
+    return suggestions.filter((s) => {
+      const d = new Date(s.createdAt);
+      return d.getFullYear() === yr && d.getMonth() + 1 === mo;
+    });
+  }, [suggestions, reportMonth]);
+
+  // HOD's suggestion feed is already scoped server-side to their own department.
+  const departmentName = useMemo(
+    () => suggestions.find((s) => s.employee?.department?.name)?.employee?.department?.name ?? "My Department",
+    [suggestions]
+  );
+
+  const reportScopeLabel = role === Role.HOD ? departmentName : (user?.organizationName || "Company-wide");
+
+  async function handleDownloadReport() {
+    setDownloadingReport(true);
+    try {
+      const XLSX = await import("xlsx");
+      const monthLabel = REPORT_MONTHS.find((m) => m.key === reportMonth)?.label ?? reportMonth;
+
+      const total    = monthSuggestions.length;
+      const approved = monthSuggestions.filter((s) => s.status === "APPROVED_FOR_IMPLEMENTATION").length;
+      const rejected = monthSuggestions.filter((s) => s.status === "REJECTED").length;
+      const pending  = monthSuggestions.filter((s) => ["UNDER_REVIEW", "SELECTED_FOR_SGA", "WAITING_FOR_REVIEW"].includes(s.status)).length;
+      const onHold   = monthSuggestions.filter((s) => s.status === "ON_HOLD").length;
+      const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
+
+      const summaryAoa: (string | number)[][] = [
+        ["SIMS Monthly Report"],
+        [`Scope: ${reportScopeLabel}`],
+        [`Month: ${monthLabel}`],
+        [`Generated: ${new Date().toLocaleString()}`],
+        [],
+        ["Metric", "Value"],
+        ["Total Suggestions", total],
+        ["Approved for Implementation", approved],
+        ["Rejected", rejected],
+        ["Pending Review", pending],
+        ["On Hold", onHold],
+        ["Approval Rate", `${approvalRate}%`],
+        [],
+        ["Category", "Submissions", "Implemented"],
+        ...ALL_CATEGORIES.map((cat) => [
+          CATEGORY_LABELS[cat],
+          monthSuggestions.filter((s) => s.categories.includes(cat)).length,
+          monthSuggestions.filter((s) => s.categories.includes(cat) && s.status === "APPROVED_FOR_IMPLEMENTATION").length,
+        ]),
+        [],
+        ["Status", "Count", "% of Month Total"],
+        ...ALL_STATUSES.map((st) => {
+          const count = monthSuggestions.filter((s) => s.status === st).length;
+          return [STATUS_LABELS[st], count, total > 0 ? `${Math.round((count / total) * 100)}%` : "0%"];
+        }),
+      ];
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryAoa);
+      summarySheet["!cols"] = [{ wch: 30 }, { wch: 16 }, { wch: 16 }];
+
+      const suggestionsAoa: (string | number)[][] = [
+        ["Title", "Employee", "Department", "Categories", "Status", "Implementation Status", "Submitted On", "Reviewed By (HOD)"],
+        ...monthSuggestions
+          .slice()
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          .map((s) => [
+            s.title,
+            s.employee ? `${s.employee.firstName} ${s.employee.lastName}` : "Anonymous",
+            s.employee?.department?.name ?? "-",
+            s.categories.map((c) => CATEGORY_LABELS[c]).join(", "),
+            STATUS_LABELS[s.status],
+            s.implementationStatus ?? "-",
+            new Date(s.createdAt).toLocaleDateString(),
+            s.hod ? `${s.hod.firstName} ${s.hod.lastName}` : "-",
+          ]),
+      ];
+      const suggestionsSheet = XLSX.utils.aoa_to_sheet(suggestionsAoa);
+      suggestionsSheet["!cols"] = [
+        { wch: 32 }, { wch: 20 }, { wch: 18 }, { wch: 24 }, { wch: 22 }, { wch: 24 }, { wch: 14 }, { wch: 20 },
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+      XLSX.utils.book_append_sheet(workbook, suggestionsSheet, "Suggestions");
+
+      const fileScope = reportScopeLabel.replace(/[^a-z0-9]+/gi, "-");
+      const fileMonth = monthLabel.replace(/\s+/g, "-");
+      XLSX.writeFile(workbook, `SIMS-Report-${fileScope}-${fileMonth}.xlsx`);
+    } finally {
+      setDownloadingReport(false);
+    }
+  }
+
   if (loading) {
     return (
       <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
@@ -137,15 +249,59 @@ export default function AnalyticsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto space-y-6">
+      <div className="px-4 py-4 md:px-8 md:py-6 space-y-6">
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Analytics</h1>
+          <p className="hidden sm:block text-sm text-slate-500 mt-1">
             {role === Role.HOD ? "Department performance insights." : "Organisation-wide suggestion intelligence."}
             {" "}<span className="font-medium text-slate-700">{kpis.total} total suggestions analysed.</span>
           </p>
+        </div>
+
+        {/* Monthly report */}
+        <div className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+              <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div className="flex-1 min-w-0 sm:hidden">
+              <p className="text-sm font-bold text-slate-800">Monthly Report</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {role === Role.HOD ? `Department report for ${reportScopeLabel}` : `Company-wide report for ${reportScopeLabel}`}
+              </p>
+              <p className="text-xs text-slate-400">
+                {monthSuggestions.length} suggestion{monthSuggestions.length !== 1 ? "s" : ""} in selected month
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:block flex-1 min-w-0">
+            <p className="text-sm font-bold text-slate-800">Monthly Report</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {role === Role.HOD ? `Department report for ${reportScopeLabel}` : `Company-wide report for ${reportScopeLabel}`}
+              {" · "}{monthSuggestions.length} suggestion{monthSuggestions.length !== 1 ? "s" : ""} in selected month
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:shrink-0">
+            <select
+              value={reportMonth}
+              onChange={(e) => setReportMonth(e.target.value)}
+              className="w-full sm:w-auto text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+            >
+              {REPORT_MONTHS.map((m) => (
+                <option key={m.key} value={m.key}>{m.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleDownloadReport}
+              disabled={downloadingReport}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            >
+              <Download className="h-4 w-4 shrink-0" />
+              {downloadingReport ? "Generating..." : "Download Report"}
+            </button>
+          </div>
         </div>
 
         {/* KPI row */}

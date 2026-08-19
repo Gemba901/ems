@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-export type TaskSubTabType = 'ALL' | 'OVERDUE' | 'NOT_ACKNOWLEDGED' | 'PENDING' | 'COMPLETED';
+export type TaskSubTabType = 'ALL' | 'OVERDUE' | 'NOT_ACKNOWLEDGED' | 'PENDING' | 'APPROVAL_PENDING' | 'COMPLETED';
 
 type Props = {
   activeTab: TaskSubTabType;
@@ -12,6 +12,7 @@ type Props = {
     overdue: number;
     notAcknowledged: number;
     pending: number;
+    approvalPending: number;
     completed: number;
   };
 };
@@ -22,6 +23,7 @@ export default function TaskHeader({ activeTab, setActiveTab, counts }: Props) {
     { key: 'OVERDUE', label: 'Overdue', count: counts.overdue, dotColor: 'bg-rose-500' },
     { key: 'NOT_ACKNOWLEDGED', label: 'Not Acknowledged', count: counts.notAcknowledged, dotColor: 'bg-amber-500' },
     { key: 'PENDING', label: 'Pending', count: counts.pending, dotColor: 'bg-sky-500' },
+    { key: 'APPROVAL_PENDING', label: 'Approval Pending', count: counts.approvalPending, dotColor: 'bg-cyan-500' },
     { key: 'COMPLETED', label: 'Completed', count: counts.completed, dotColor: 'bg-emerald-500' },
   ] as const;
 
@@ -56,3 +58,4 @@ export default function TaskHeader({ activeTab, setActiveTab, counts }: Props) {
     </div>
   );
 }
+

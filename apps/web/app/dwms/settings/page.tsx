@@ -296,6 +296,10 @@ function DwmsSettingsContent() {
       label: 'Ack windows',
       value: `Medium ${settings.escalateUnacknowledgedMediumHours}h, High ${settings.escalateUnacknowledgedHighHours}h, Critical ${settings.escalateUnacknowledgedCriticalHours}h`,
     },
+    {
+      label: 'Abnormality windows',
+      value: `Medium ${settings.abnormalityMediumHours}h, High ${settings.abnormalityHighHours}h, Critical ${settings.abnormalityCriticalHours}h`,
+    },
   ];
 
   if (isForbidden) {
@@ -419,6 +423,29 @@ function DwmsSettingsContent() {
                     />
                   </SectionCard>
 
+                  <SectionCard
+                    icon={Bell}
+                    title="Abnormality windows"
+                    description="Set how long an open alert can stay without corrective action before an abnormality is created."
+                  >
+                    <SettingRow
+                      title="Medium severity"
+                      hint="Time allowed before a medium alert becomes an abnormality."
+                      control={<HourSelect value={settings.abnormalityMediumHours} onChange={(value) => updateSetting('abnormalityMediumHours', value)} disabled={!canEdit} />}
+                    />
+
+                    <SettingRow
+                      title="High severity"
+                      hint="Time allowed before a high-severity alert becomes an abnormality."
+                      control={<HourSelect value={settings.abnormalityHighHours} onChange={(value) => updateSetting('abnormalityHighHours', value)} disabled={!canEdit} />}
+                    />
+
+                    <SettingRow
+                      title="Critical severity"
+                      hint="Time allowed before a critical alert becomes an abnormality."
+                      control={<HourSelect value={settings.abnormalityCriticalHours} onChange={(value) => updateSetting('abnormalityCriticalHours', value)} disabled={!canEdit} />}
+                    />
+                  </SectionCard>
                   <SectionCard
                     icon={Bell}
                     title="Escalation target"

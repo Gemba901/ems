@@ -247,6 +247,7 @@ model Employee {
   dateOfBirth  DateTime?
   nationalId   String?
   nationality  String?
+  plantBranch  String?
 
   // EMS: Work Allocation group
   employmentStatus   EmploymentStatus @default(ACTIVE)
@@ -314,13 +315,21 @@ model Employee {
   tasksToApprove        Task[]                    @relation("TaskApprovedBy")
   backupTasks           Task[]                    @relation("TaskBackupOwner")
   taskInstances         TaskInstance[]
+  taskInstanceComments  TaskInstanceComment[]
+  taskInstanceEvents    TaskInstanceEvent[]
+  activityIngestions    ActivityIngestion[]       @relation("ActivityIngestionUploader")
+  primaryActivities     Activity[]                @relation("ActivityPrimaryResponsible")
   alertsRaised          Alert[]                   @relation("AlertsRaised")
   alertsAgainst         Alert[]                   @relation("AlertsAgainst")
   ticketsRaised         Tickets[]                 @relation("ticketsRaisedBy")
   ticketUpdates         TicketUpdate[]
   kaizensRaised         Kaizen[]                  @relation("KaizenRaisedBy")
-  kaizensVerified       Kaizen[]                  @relation("KaizenVerifiedBy")
+  kaizensOwned          Kaizen[]                  @relation("KaizenOwner")
+  kaizenHodPreReviews   Kaizen[]                  @relation("KaizenHodPreReviewBy")
+  kaizenTeamMemberships Kaizen[]                  @relation("KaizenTeamMembers")
   kaizenReviews         KaizenReview[]
+  kaizenVerifications   KaizenVerification[]      @relation("KaizenVerificationBy")
+  alertComments         AlertComment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -342,6 +351,7 @@ model Employee {
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
+  @@unique([employeeCode, organizationId])
 }
 
 model Department {
@@ -356,6 +366,7 @@ model Department {
   tasks        Task[]
   alerts       Alert[]
   kaizens      Kaizen[]
+  activities   Activity[]
 }
 
 model SteeringCommittee {
@@ -878,6 +889,95 @@ model Notice {
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, createdAt])
+}
+
+model Activity {
+  id                            String         @id @default(uuid())
+  organizationId                String
+  companyUnitName               String?
+  mainDepartmentId              String?
+  subDepartment                 String?
+  gembaSection                  String?
+  processArea                   String?
+  name                          String
+  workMethod                    String?
+  code                          String
+  purpose                       String?
+  category                      String?
+  frequency                     TaskFrequency
+  startTrigger                  String?
+  completionDeadline            String?
+  completionOutput              String?
+  primaryResponsibleDesignation String?
+  primaryResponsibleEmployeeId  String?
+  parentActivityId              String?
+  evidenceRequired              String?
+  effectiveFrom                 DateTime
+  status                        ActivityStatus @default(ACTIVE)
+  remarks                       String?
+  createdAt                     DateTime       @default(now())
+  updatedAt                     DateTime       @updatedAt
+
+  organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mainDepartment             Department?            @relation(fields: [mainDepartmentId], references: [id], onDelete: SetNull)
+  primaryResponsibleEmployee Employee?              @relation("ActivityPrimaryResponsible", fields: [primaryResponsibleEmployeeId], references: [id], onDelete: SetNull)
+  parentActivity             Activity?              @relation("ActivityParent", fields: [parentActivityId], references: [id], onDelete: SetNull)
+  childActivities            Activity[]             @relation("ActivityParent")
+  tasks                      Task[]
+  ingestionRows              ActivityIngestionRow[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([mainDepartmentId])
+  @@index([primaryResponsibleEmployeeId])
+  @@index([parentActivityId])
+}
+
+model ActivityIngestion {
+  id             String    @id @default(uuid())
+  organizationId String
+  fileName       String
+  uploadedById   String
+  status         String    @default("COMPLETED")
+  totalRows      Int       @default(0)
+  successfulRows Int       @default(0)
+  failedRows     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  completedAt    DateTime?
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy   Employee               @relation("ActivityIngestionUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  rows         ActivityIngestionRow[]
+
+  @@index([organizationId, createdAt])
+  @@index([uploadedById])
+  @@index([status])
+}
+
+model ActivityIngestionRow {
+  id                      String   @id @default(uuid())
+  ingestionId             String
+  organizationId          String
+  rowNumber               Int
+  status                  String
+  activityName            String?
+  activityCode            String?
+  responsibleEmployeeCode String?
+  message                 String?
+  activityId              String?
+  taskId                  String?
+  createdAt               DateTime @default(now())
+
+  ingestion    ActivityIngestion @relation(fields: [ingestionId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  activity     Activity?         @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  task         Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([ingestionId, rowNumber])
+  @@index([organizationId, status])
+  @@index([activityId])
+  @@index([taskId])
 }
 
 // ── Steel ──────────────────────────────────────────────────────────
@@ -1987,37 +2087,43 @@ model SteelHeatApprovalActivityLog {
 }
 
 model Task {
-  id                       String         @id @default(uuid())
-  title                    String
-  frequency                TaskFrequency
-  createdAt                DateTime       @default(now())
-  updatedAt                DateTime       @updatedAt
-  assignedById             String?
-  completionPercent        Int            @default(0)
-  description              String?
-  ownerId                  String
-  status                   TaskStatus     @default(PENDING)
-  acknowledgedAt           DateTime?
-  completionNote           String?
-  completionAttachmentUrl  String?
-  completionAttachmentName String?
-  dueDate                  DateTime?
-  isAdhoc                  Boolean        @default(false)
-  priority                 Priority?      @default(MEDIUM)
-  departmentId             String?
-  ownerName                String?
-  assignedByName           String?
-  approvedById             String?
-  overdueAlertTo           OverdueAlertTo @default(ASSIGNER)
-  backupOwnerId            String?
-  assignedBy               Employee?      @relation("TaskAssignedBy", fields: [assignedById], references: [id])
-  owner                    Employee       @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  approvedBy               Employee?      @relation("TaskApprovedBy", fields: [approvedById], references: [id])
-  backupOwner              Employee?      @relation("TaskBackupOwner", fields: [backupOwnerId], references: [id])
-  instances                TaskInstance[]
-  department               Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  id                         String                 @id @default(uuid())
+  activityId                 String?
+  title                      String
+  frequency                  TaskFrequency
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+  assignedById               String?
+  completionPercent          Int                    @default(0)
+  description                String?
+  ownerId                    String
+  status                     TaskStatus             @default(PENDING)
+  acknowledgedAt             DateTime?
+  completionNote             String?
+  completionAttachmentUrl    String?
+  completionAttachmentName   String?
+  requiresCompletionDocument Boolean                @default(false)
+  completionDocumentName     String?
+  dueDate                    DateTime?
+  isAdhoc                    Boolean                @default(false)
+  priority                   Priority?              @default(MEDIUM)
+  departmentId               String?
+  ownerName                  String?
+  assignedByName             String?
+  approvedById               String?
+  overdueAlertTo             OverdueAlertTo         @default(ASSIGNER)
+  backupOwnerId              String?
+  activity                   Activity?              @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  assignedBy                 Employee?              @relation("TaskAssignedBy", fields: [assignedById], references: [id])
+  owner                      Employee               @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  approvedBy                 Employee?              @relation("TaskApprovedBy", fields: [approvedById], references: [id])
+  backupOwner                Employee?              @relation("TaskBackupOwner", fields: [backupOwnerId], references: [id])
+  ingestionRows              ActivityIngestionRow[]
+  instances                  TaskInstance[]
+  department                 Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
+  @@index([activityId])
   @@index([assignedById])
   @@index([departmentId])
   @@index([approvedById])
@@ -2025,20 +2131,25 @@ model Task {
 }
 
 model TaskInstance {
-  id                String        @id @default(uuid())
-  taskId            String
-  ownerId           String
-  frequency         TaskFrequency
-  scheduledFor      DateTime
-  dueAt             DateTime
-  status            TaskStatus    @default(PENDING)
-  completionPercent Int           @default(0)
-  completedAt       DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  owner             Employee      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  task              Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  alerts            Alert[]
+  id                       String                @id @default(uuid())
+  taskId                   String
+  ownerId                  String
+  frequency                TaskFrequency
+  scheduledFor             DateTime
+  dueAt                    DateTime
+  status                   TaskStatus            @default(PENDING)
+  completionPercent        Int                   @default(0)
+  completionNote           String?
+  completionAttachmentUrl  String?
+  completionAttachmentName String?
+  completedAt              DateTime?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  owner                    Employee              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  task                     Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  alerts                   Alert[]
+  comments                 TaskInstanceComment[]
+  events                   TaskInstanceEvent[]
 
   @@unique([taskId, scheduledFor])
   @@index([ownerId, frequency])
@@ -2046,35 +2157,95 @@ model TaskInstance {
   @@index([taskId])
 }
 
-model Alert {
-  id               String      @id @default(uuid())
-  type             AlertType
-  title            String
-  description      String
-  raisedById       String
-  organizationId   String?
-  severity         Severity
-  status           AlertStatus @default(OPEN)
-  correctiveAction String?
-  closureNote      String?
-  resolvedAt       DateTime?
-  taskInstanceId   String?
-  departmentId     String?
-  againstUserId    String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+model TaskInstanceComment {
+  id             String       @id @default(uuid())
+  taskInstanceId String
+  authorId       String
+  comment        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  author         Employee     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
-  raisedBy     Employee      @relation("AlertsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  taskInstance TaskInstance? @relation(fields: [taskInstanceId], references: [id], onDelete: SetNull)
-  department   Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  againstUser  Employee?     @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
+  @@index([taskInstanceId])
+  @@index([authorId])
+}
+
+model TaskInstanceEvent {
+  id             String       @id @default(uuid())
+  taskInstanceId String
+  actorId        String?
+  type           String
+  fromStatus     TaskStatus?
+  toStatus       TaskStatus?
+  note           String?
+  attachmentUrl  String?
+  attachmentName String?
+  createdAt      DateTime     @default(now())
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  actor          Employee?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([taskInstanceId])
+  @@index([actorId])
+  @@index([type])
+}
+
+model Alert {
+  id                       String                     @id @default(uuid())
+  type                     AlertType
+  title                    String
+  description              String
+  raisedById               String
+  organizationId           String?
+  severity                 Severity
+  status                   AlertStatus                @default(OPEN)
+  correctiveAction         String?
+  closureNote              String?
+  resolvedAt               DateTime?
+  taskInstanceId           String?
+  departmentId             String?
+  againstUserId            String?
+  isAbnormality            Boolean                    @default(false)
+  abnormalitySourceAlertId String?                    @unique
+  closureApprovalStatus    AlertClosureApprovalStatus @default(NONE)
+  closureApproverId        String?
+  closureRequestedById     String?
+  closureRequestedAt       DateTime?
+  closureRejectedAt        DateTime?
+  closureRejectionNote     String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+
+  raisedBy     Employee       @relation("AlertsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskInstance TaskInstance?  @relation(fields: [taskInstanceId], references: [id], onDelete: SetNull)
+  department   Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  againstUser  Employee?      @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
+  comments     AlertComment[]
 
   @@index([raisedById])
   @@index([organizationId])
   @@index([taskInstanceId])
   @@index([departmentId])
   @@index([againstUserId])
+  @@index([isAbnormality])
+  @@index([closureApproverId, closureApprovalStatus])
+  @@index([closureRequestedById])
+}
+
+model AlertComment {
+  id        String   @id @default(uuid())
+  alertId   String
+  authorId  String
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  alert  Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  author Employee @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@index([authorId])
 }
 
 enum AlertType {
@@ -2105,6 +2276,13 @@ enum AlertStatus {
   ESCALATED
 }
 
+enum AlertClosureApprovalStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum TaskFrequency {
   DAILY
   WEEKLY
@@ -2123,6 +2301,11 @@ enum TaskStatus {
   LESS_THAN_50
   NOT_APPLICABLE
   OVERDUE
+}
+
+enum ActivityStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 enum Priority {
@@ -2177,6 +2360,9 @@ model DwmsPermissionConfig {
   escalateUnacknowledgedHighMins     Int                     @default(480)
   escalateUnacknowledgedCriticalMins Int                     @default(120)
   escalateUnacknowledgedMins         Int                     @default(60)
+  abnormalityMediumMins              Int                     @default(1440)
+  abnormalityHighMins                Int                     @default(480)
+  abnormalityCriticalMins            Int                     @default(120)
   escalationContactRules             EscalationContactRule[] @default([])
   customEscalationContactIds         String[]                @default([])
 
@@ -2188,11 +2374,89 @@ model DwmsPermissionConfig {
 
 enum KaizenStatus {
   DRAFT
-  IN_PROGRESS
-  SUBMITTED_FOR_VERIFICATION
-  VERIFIED_CLOSED
-  FURTHER_IMPROVEMENT_REQUIRED
+  PENDING_HOD_PRE_REVIEW
+  RETURNED_FOR_REVISION
+  REJECTED
   MOVED_TO_SGA
+  IN_IMPLEMENTATION
+  PENDING_VERIFICATION
+  RETURNED_FOR_REWORK
+  VERIFIED_CLOSED
+}
+
+enum KaizenTrigger {
+  PROBLEM_NOTICED
+  IMPROVEMENT_OPPORTUNITY_NOTICED
+  ALERT_ACTION_REQUIRED
+  ABNORMALITY_ACTION_REQUIRED
+  EMPLOYEE_SUGGESTION_OR_IDEA
+  AUDIT_OBSERVATION
+  GEMBA_WALK_OBSERVATION
+  CUSTOMER_COMPLAINT_OR_FEEDBACK
+  MANAGEMENT_INSTRUCTION_OR_FEEDBACK
+  REPEAT_PROBLEM
+  OTHER
+}
+
+enum KaizenReferenceApplicability {
+  APPLICABLE
+  NOT_APPLICABLE
+  REFERENCE_NOT_FOUND
+}
+
+enum KaizenQcdsmtCategory {
+  QUALITY
+  COST
+  DELIVERY
+  SAFETY
+  MORALE
+  TECHNOLOGY
+}
+
+enum KaizenUnit {
+  SECONDS
+  HOURS
+  MINUTES
+  PIECES
+  KILOGRAMS
+  TONNES
+  METRES
+  LITRES
+  PERCENTAGE
+  CURRENCY
+  OTHER
+}
+
+enum KaizenWaste {
+  TRANSPORTATION
+  INVENTORY
+  MOTION
+  WAITING
+  OVERPRODUCTION
+  OVERPROCESSING
+  DEFECTS
+  NOT_APPLICABLE
+}
+
+enum KaizenHodPreReviewDecision {
+  PENDING
+  APPROVE
+  RETURN
+  REJECT
+  MOVE_TO_SGA
+}
+
+enum KaizenVerificationStage {
+  HOD
+  STEERING_COMMITTEE
+  FINANCE
+}
+
+enum KaizenVerificationDecision {
+  PENDING
+  VERIFIED
+  RETURN
+  NOT_APPLICABLE
 }
 
 model Kaizen {
@@ -2202,36 +2466,119 @@ model Kaizen {
   departmentId   String
   status         KaizenStatus @default(DRAFT)
 
-  problem                String
-  beforePhotoUrl         String
-  improvementDescription String?
-  afterPhotoUrl          String?
-  benefitAchieved        String?
+  // Part 1: reason
+  title        String?
+  trigger      KaizenTrigger?
+  triggerOther String?
 
-  teamMembers     String?
-  benefitCategory String?
-  beforeValue     String?
-  afterValue      String?
-  costSaving      String?
-  comments        String?
+  // Part 2: related reference
+  referenceValue         String?
+  referenceApplicability KaizenReferenceApplicability?
 
-  verifiedById        String?
-  verificationComment String?
-  standardUpdated     Boolean?
-  linkedSgaId         String?
+  // Part 3: condition or opportunity
+  conditionDescription  String
+  conditionEvidenceUrls String[] @default([])
+
+  // Part 4: basic daily kaizen information
+  startDate            DateTime?
+  targetCompletionDate DateTime?
+  kaizenOwnerId        String?
+
+  // Part 7: required material and estimated cost
+  requiredMaterials     String?
+  estimatedCost         Decimal? @db.Decimal(14, 2)
+  estimatedCostCurrency String?
+
+  // Part 8: HOD review before implementation
+  hodPreReviewDecision KaizenHodPreReviewDecision @default(PENDING)
+  hodPreReviewRemarks  String?
+  hodPreReviewById     String?
+  hodPreReviewAt       DateTime?
+
+  // Part 9: implementation and evidence
+  actionTaken    String?
+  afterPhotoUrls String[] @default([])
+  resultSaving   String?
+
+  linkedSgaId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization     Organization   @relation(fields: [organizationId], references: [id])
-  employee         Employee       @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
-  department       Department?    @relation(fields: [departmentId], references: [id])
-  verifiedBy       Employee?      @relation("KaizenVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  organization     Organization         @relation(fields: [organizationId], references: [id])
+  employee         Employee             @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
+  department       Department?          @relation(fields: [departmentId], references: [id])
+  kaizenOwner      Employee?            @relation("KaizenOwner", fields: [kaizenOwnerId], references: [id], onDelete: SetNull)
+  hodPreReviewBy   Employee?            @relation("KaizenHodPreReviewBy", fields: [hodPreReviewById], references: [id], onDelete: SetNull)
+  teamMembers      Employee[]           @relation("KaizenTeamMembers")
   reviews          KaizenReview[]
+  qcdsmtImpacts    KaizenQcdsmtImpact[]
+  wasteImpacts     KaizenWasteImpact[]
+  verifications    KaizenVerification[]
   sourceSuggestion Suggestion?
 
   @@index([organizationId, status])
   @@index([employeeId, createdAt])
+  @@index([kaizenOwnerId])
+  @@index([departmentId, status])
+}
+
+model KaizenQcdsmtImpact {
+  id             String               @id @default(uuid())
+  kaizenId       String
+  category       KaizenQcdsmtCategory
+  whatIsMeasured String
+  beforeValue    String?
+  afterValue     String?
+  unit           KaizenUnit
+  otherUnitLabel String?
+  currency       String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  kaizen Kaizen @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
+
+  @@unique([kaizenId, category])
+  @@index([kaizenId])
+}
+
+model KaizenWasteImpact {
+  id             String      @id @default(uuid())
+  kaizenId       String
+  waste          KaizenWaste
+  whatIsMeasured String
+  beforeValue    String?
+  afterValue     String?
+  unit           KaizenUnit
+  otherUnitLabel String?
+  currency       String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  kaizen Kaizen @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
+
+  @@unique([kaizenId, waste])
+  @@index([kaizenId])
+}
+
+model KaizenVerification {
+  id                      String                     @id @default(uuid())
+  kaizenId                String
+  stage                   KaizenVerificationStage
+  decision                KaizenVerificationDecision @default(PENDING)
+  remarks                 String?
+  verifiedBenefitAmount   Decimal?                   @db.Decimal(14, 2)
+  verifiedBenefitCurrency String?
+  verifiedById            String?
+  verifiedAt              DateTime?
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+
+  kaizen     Kaizen    @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
+  verifiedBy Employee? @relation("KaizenVerificationBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([kaizenId, stage])
+  @@index([kaizenId])
 }
 
 model KaizenReview {

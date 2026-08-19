@@ -13,6 +13,11 @@ type Props = {
 export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowledgement, saving }: Props) {
   const isCompleted = task.status === 'DONE';
   const isOverdue = task.isOverdue || task.status === 'OVERDUE';
+  const wasOverdue = !!task.wasOverdue && !isOverdue;
+  const isPrerequisiteBlocked = !!task.prerequisiteBlocked;
+  const prerequisiteLabel = task.prerequisiteActivityNames?.length
+    ? `Locked until ${task.prerequisiteActivityNames.join(', ')} is done`
+    : 'Locked until prerequisite activity is done';
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isAckOpen, setIsAckOpen] = useState(false);
   const statusMenuRef = useRef<HTMLDivElement>(null);
@@ -48,12 +53,12 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
   };
 
   const getSelectableStatuses = (): TaskStatus[] => {
-    if (task.status === 'DONE' || task.status === 'APPROVAL_PENDING') {
+    if (isPrerequisiteBlocked || task.status === 'DONE' || task.status === 'APPROVAL_PENDING') {
       return [];
     }
     const statusOrder: Record<TaskStatus, number> = {
       PENDING: 0,
-      OVERDUE: 0,
+      OVERDUE: 1,
       IN_PROGRESS: 1,
       PARTLY_DONE: 2,
       DONE: 3,
@@ -61,6 +66,9 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
       LESS_THAN_50: 99,
       NOT_APPLICABLE: 99,
     };
+    if (task.status === 'OVERDUE') {
+      return ['DONE'];
+    }
     const allOptions: TaskStatus[] = ['PENDING', 'IN_PROGRESS', 'PARTLY_DONE', 'DONE'];
     const currentOrder = statusOrder[task.status] ?? 0;
     return allOptions.filter(status => statusOrder[status] >= currentOrder);
@@ -107,7 +115,10 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
 
   // Frequency element matching mockup with extra light stroke, color-free SVG icon
   const renderFrequency = () => {
-    const label = task.frequency.charAt(0).toUpperCase() + task.frequency.slice(1).toLowerCase();
+    const label = task.frequency
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
     return (
       <div className="flex items-center gap-1.5 text-slate-500 font-normal text-[13px]">
         <Repeat className="h-3.5 w-3.5 text-slate-500 shrink-0" strokeWidth={1.5} />
@@ -143,26 +154,9 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
 
   // Due date element matching mockup with extra light stroke, color-free SVG icon
   const renderDueDate = () => {
-    let dueDate: Date | null = null;
+    const dueDate = new Date(task.dueAt);
 
-    if (task.frequency === 'DAILY') {
-      dueDate = new Date();
-    } else if (task.frequency === 'WEEKLY') {
-      const baseDate = new Date(task.dueAt);
-      const day = baseDate.getDay();
-      const diff = 6 - day;
-      baseDate.setDate(baseDate.getDate() + diff);
-      dueDate = baseDate;
-    } else if (task.frequency === 'MONTHLY') {
-      const baseDate = new Date(task.dueAt);
-      dueDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0);
-    } else if (task.assignedBy && task.assignedBy.name) {
-      dueDate = new Date(task.dueAt);
-    } else {
-      return null;
-    }
-
-    if (!dueDate || isNaN(dueDate.getTime())) {
+    if (isNaN(dueDate.getTime())) {
       return null;
     }
 
@@ -212,6 +206,11 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
               <span className="font-normal text-xs">Not Acknowledged</span>
             </div>
           )}
+          {isPrerequisiteBlocked && task.acknowledgedAt && (
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              {prerequisiteLabel}
+            </p>
+          )}
         </div>
 
         {/* Status Dropdown Pill */}
@@ -222,17 +221,20 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  setIsStatusOpen((current) => !current);
+                  if (!isPrerequisiteBlocked) {
+                    setIsStatusOpen((current) => !current);
+                  }
                 }}
-                disabled={saving || task.status === 'DONE' || task.status === 'APPROVAL_PENDING'}
+                disabled={saving || isPrerequisiteBlocked || task.status === 'DONE' || task.status === 'APPROVAL_PENDING'}
+                title={isPrerequisiteBlocked ? prerequisiteLabel : undefined}
                 className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span>{formatStatus(task.status)}</span>
-                {task.status !== 'DONE' && task.status !== 'APPROVAL_PENDING' && (
+                {!isPrerequisiteBlocked && task.status !== 'DONE' && task.status !== 'APPROVAL_PENDING' && (
                   <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" strokeWidth={1.5} />
                 )}
               </button>
-              {isStatusOpen && (
+              {isStatusOpen && !isPrerequisiteBlocked && (
                 <div className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
                   {getSelectableStatuses().map((status) => (
                     <button
@@ -291,6 +293,11 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
         {/* Left indicators */}
         <div className="flex flex-wrap items-center gap-5">
           {renderPriority()}
+          {wasOverdue && (
+            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+              Was Overdue
+            </span>
+          )}
           {renderFrequency()}
           {renderAssignedBy()}
         </div>
@@ -301,3 +308,5 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
     </article>
   );
 }
+
+

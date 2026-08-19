@@ -20,6 +20,7 @@ export interface EmployeeApiResponse {
     id: string;
     firstName: string;
     lastName: string;
+    employeeCode: string | null;
     email: string | null;
     phone: string | null;
     departmentId: string | null;
@@ -55,6 +56,16 @@ export interface EmployeeListResponse {
         total: number;
         pages: number;
     };
+}
+
+export interface DepartmentHOD {
+    id: string;
+    name: string;
+    plantBranch: string | null;
+    jobTitle: string | null;
+    department: { id: string; name: string };
+    /** "Name - Plant/Branch - Department - Job Designation", ready to render */
+    label: string;
 }
 
 export interface OrgStatsResponse {
@@ -116,6 +127,13 @@ export const EmployeeService = {
         return handleResponse<EmployeeApiResponse>(res);
     },
 
+    async getMyColleagues(token: string): Promise<{ id: string; firstName: string; lastName: string; jobTitle: string | null }[]> {
+        const res = await apiClient(`${API_URL}/employee/me/colleagues`, {
+            headers: authHeaders(token),
+        }, token);
+        return handleResponse<{ id: string; firstName: string; lastName: string; jobTitle: string | null }[]>(res);
+    },
+
     async getById(id: string, token: string): Promise<EmployeeApiResponse> {
         const res = await apiClient(`${API_URL}/employee/${id}`, {
             headers: authHeaders(token),
@@ -128,6 +146,13 @@ export const EmployeeService = {
             headers: authHeaders(token),
         }, token);
         return handleResponse<{ id: string; name: string; _count: { employees: number } }[]>(res);
+    },
+
+    async getDepartmentHODs(orgId: string, token: string): Promise<DepartmentHOD[]> {
+        const res = await apiClient(`${API_URL}/employee/organization/${orgId}/department-hods`, {
+            headers: authHeaders(token),
+        }, token);
+        return handleResponse<DepartmentHOD[]>(res);
     },
 
     async getOrgStats(orgId: string, token: string): Promise<OrgStatsResponse> {

@@ -12,6 +12,29 @@ import {
 } from "@/services/dwms.service";
 import { Clock, ExternalLink, Paperclip, PlusCircle } from "lucide-react";
 
+const frequencyBasedTaskFrequencies = new Set([
+  "DAILY",
+  "WEEKLY",
+  "MONTHLY",
+  "QUARTERLY",
+  "YEARLY",
+]);
+
+const isFrequencyBasedTask = (task: DwmsAssignedTaskHistoryItem) =>
+  frequencyBasedTaskFrequencies.has(String(task.frequency ?? ""));
+
+function groupFrequencyBasedTasks(tasksToGroup: DwmsAssignedTaskHistoryItem[]) {
+  const grouped = new Map<string, DwmsAssignedTaskHistoryItem>();
+
+  tasksToGroup.forEach((task) => {
+    const key = isFrequencyBasedTask(task) ? task.taskId : task.instanceId;
+    if (!grouped.has(key)) {
+      grouped.set(key, task);
+    }
+  });
+
+  return Array.from(grouped.values());
+}
 export default function AssignedTasksHistoryPage() {
   return (
     <ProtectedRoute>
@@ -59,6 +82,20 @@ function AssignedTasksHistoryContent() {
     return `${day} ${month}`;
   };
 
+  const formatAcknowledgedAt = (value?: string | null) => {
+    if (!value) return null;
+
+    const acknowledgedAt = new Date(value);
+    if (Number.isNaN(acknowledgedAt.getTime())) return null;
+
+    return acknowledgedAt.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const getPriorityBadgeColor = (p: string) => {
     switch (p) {
       case "CRITICAL":
@@ -103,6 +140,10 @@ function AssignedTasksHistoryContent() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [byMeTasks]);
 
+  const openTaskDetails = (task: DwmsAssignedTaskHistoryItem) => {
+    router.push(`/dwms/tasks/${task.instanceId ?? task.id}`);
+  };
+
   const renderByMeTaskCard = (task: DwmsAssignedTaskHistoryItem) => {
     const initials = task.ownerName
       ? task.ownerName
@@ -114,11 +155,24 @@ function AssignedTasksHistoryContent() {
       : "U";
     const priority =
       task.priority === "LOW" ? "MEDIUM" : (task.priority ?? "MEDIUM");
+    const acknowledgedAtLabel = !isFrequencyBasedTask(task)
+      ? formatAcknowledgedAt(task.acknowledgedAt)
+      : null;
+    const showWasOverdue = !!task.wasOverdue && task.status !== "OVERDUE";
 
     return (
       <div
         key={task.id}
-        className="rounded-2xl border border-border-app bg-white p-5 shadow-sm space-y-4 hover:border-accent-app/30 transition duration-150"
+        role="button"
+        tabIndex={0}
+        onClick={() => openTaskDetails(task)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openTaskDetails(task);
+          }
+        }}
+        className="rounded-2xl border border-border-app bg-white p-5 shadow-sm space-y-4 hover:border-accent-app/30 transition duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
@@ -133,6 +187,11 @@ function AssignedTasksHistoryContent() {
               >
                 {task.status.replace(/_/g, " ")}
               </span>
+              {showWasOverdue && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700">
+                  WAS OVERDUE
+                </span>
+              )}
             </div>
             <h4 className="text-base font-semibold text-text-app">
               {task.title}
@@ -166,17 +225,10 @@ function AssignedTasksHistoryContent() {
           </div>
         </div>
 
-        {task.acknowledgedAt && (
+        {acknowledgedAtLabel && (
           <div className="border-t border-border-app pt-2.5 text-[11px] text-muted-app">
             <span>Acknowledged: </span>
-            <span className="text-text-app">
-              {new Date(task.acknowledgedAt).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
+            <span className="text-text-app">{acknowledgedAtLabel}</span>
           </div>
         )}
 
@@ -195,6 +247,7 @@ function AssignedTasksHistoryContent() {
             <div className="border-t border-border-app pt-3 text-xs">
               <a
                 href={task.completionAttachmentUrl}
+                onClick={(event) => event.stopPropagation()}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 font-semibold text-blue-700 transition hover:border-blue-200 hover:bg-blue-100"
@@ -221,9 +274,11 @@ function AssignedTasksHistoryContent() {
   );
   const notAcknowledgedTasks = useMemo(
     () =>
-      byMeTasks.filter(
-        (t) =>
-          !t.acknowledgedAt && t.status !== "DONE" && t.status !== "OVERDUE",
+      groupFrequencyBasedTasks(
+        byMeTasks.filter(
+          (t) =>
+            !t.acknowledgedAt && t.status !== "DONE" && t.status !== "OVERDUE",
+        ),
       ),
     [byMeTasks],
   );

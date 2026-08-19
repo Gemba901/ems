@@ -20,7 +20,6 @@ import {
 import { CommitteeService } from "@/services/committee.service";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
 import { uploadImage } from "@/services/uploads.service";
-import { BENEFIT_CATEGORIES } from "@/components/kaizen/kaizen-ui";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -66,7 +65,7 @@ const DECISION_TYPE_LABELS: Record<DecisionType, string> = {
 type DecisionField = { key: string; label: string; required: boolean; type: "text" | "textarea" | "date" };
 
 const WORKPLACE_CORRECTION_FIELDS: DecisionField[] = [
-  { key: "action",          label: "Action",              required: true,  type: "text" },
+  { key: "action",          label: "Correction Required", required: true,  type: "text" },
   { key: "responsible",     label: "Responsible Person",  required: true,  type: "text" },
   { key: "supportRequired", label: "Support Required",    required: false, type: "text" },
   { key: "targetDate",      label: "Target Date",         required: true,  type: "date" },
@@ -260,13 +259,9 @@ export default function SuggestionDetailPage() {
   const [reviewError, setReviewError]     = useState<string | null>(null);
 
   // Daily Gemba Kaizen sub-form (shown when decisionType === "DAILY_KAIZEN")
-  const [kaizenProblem, setKaizenProblem]           = useState("");
+  const [kaizenCondition, setKaizenCondition]       = useState("");
   const [kaizenPhotoFile, setKaizenPhotoFile]       = useState<File | null>(null);
   const [kaizenPhotoPreview, setKaizenPhotoPreview] = useState<string | null>(null);
-  const [kaizenTeamMembers, setKaizenTeamMembers]   = useState("");
-  const [kaizenBenefitCategory, setKaizenBenefitCategory] = useState("");
-  const [kaizenComments, setKaizenComments]         = useState("");
-  const [kaizenStartImprovement, setKaizenStartImprovement] = useState(false);
   const kaizenFileInputRef = useRef<HTMLInputElement>(null);
   const kaizenCameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -347,13 +342,9 @@ export default function SuggestionDetailPage() {
     setDecisionFields((f) => ({ ...f, [key]: value }));
 
   const resetKaizenForm = () => {
-    setKaizenProblem("");
+    setKaizenCondition("");
     setKaizenPhotoFile(null);
     setKaizenPhotoPreview(null);
-    setKaizenTeamMembers("");
-    setKaizenBenefitCategory("");
-    setKaizenComments("");
-    setKaizenStartImprovement(false);
     if (kaizenFileInputRef.current) kaizenFileInputRef.current.value = "";
     if (kaizenCameraInputRef.current) kaizenCameraInputRef.current.value = "";
   };
@@ -405,12 +396,8 @@ export default function SuggestionDetailPage() {
         }
       }
       kaizenDetails = {
-        problem: kaizenProblem.trim() || undefined,
+        conditionDescription: kaizenCondition.trim() || undefined,
         beforePhotoUrl,
-        teamMembers: kaizenTeamMembers.trim() || undefined,
-        benefitCategory: kaizenBenefitCategory || undefined,
-        comments: kaizenComments.trim() || undefined,
-        startImprovement: kaizenStartImprovement,
       };
     }
 
@@ -437,7 +424,7 @@ export default function SuggestionDetailPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto">
+      <div className="px-4 py-4 md:px-8 md:py-6">
 
         <Link href="/sims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back to Suggestions
@@ -723,7 +710,7 @@ export default function SuggestionDetailPage() {
                                   setDecisionFields({});
                                   if (val === "DAILY_KAIZEN") {
                                     resetKaizenForm();
-                                    setKaizenProblem(`${suggestion.title}\n\n${suggestion.description}`);
+                                    setKaizenCondition(`${suggestion.title}\n\n${suggestion.description}`);
                                     setKaizenPhotoPreview(suggestion.imageUrl ?? null);
                                   }
                                 }}
@@ -745,12 +732,12 @@ export default function SuggestionDetailPage() {
                                 </p>
                                 <div>
                                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                    Problem
+                                    Condition/Opportunity for Improvement
                                   </label>
                                   <textarea
                                     rows={3}
-                                    value={kaizenProblem}
-                                    onChange={(e) => setKaizenProblem(e.target.value)}
+                                    value={kaizenCondition}
+                                    onChange={(e) => setKaizenCondition(e.target.value)}
                                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
                                   />
                                 </div>
@@ -791,41 +778,6 @@ export default function SuggestionDetailPage() {
                                   <input ref={kaizenFileInputRef} type="file" accept="image/*" onChange={handleKaizenPhotoChange} className="hidden" />
                                   <input ref={kaizenCameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleKaizenPhotoChange} className="hidden" />
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  <input
-                                    type="text"
-                                    value={kaizenTeamMembers}
-                                    onChange={(e) => setKaizenTeamMembers(e.target.value)}
-                                    placeholder="Team members (optional)"
-                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                                  />
-                                  <select
-                                    value={kaizenBenefitCategory}
-                                    onChange={(e) => setKaizenBenefitCategory(e.target.value)}
-                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                                  >
-                                    <option value="">Benefit category (optional)...</option>
-                                    {BENEFIT_CATEGORIES.map((c) => (
-                                      <option key={c} value={c}>{c}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <textarea
-                                  rows={2}
-                                  value={kaizenComments}
-                                  onChange={(e) => setKaizenComments(e.target.value)}
-                                  placeholder="Comments (optional)"
-                                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
-                                />
-                                <label className="flex items-center gap-2.5 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={kaizenStartImprovement}
-                                    onChange={(e) => setKaizenStartImprovement(e.target.checked)}
-                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
-                                  />
-                                  <span className="text-xs text-slate-600">Start improvement immediately</span>
-                                </label>
                               </div>
                             )}
                           </div>

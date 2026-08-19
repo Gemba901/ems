@@ -52,15 +52,20 @@ export class AuthService {
         return crypto.createHash('sha256').update(raw).digest('hex');
     }
 
+    // Kept in sync with COUNTRY_CODES in apps/web/components/auth/IdentifierStep.tsx
+    private static readonly SUPPORTED_COUNTRY_CODES = ['254', '255', '256', '250', '251', '91'];
+
     private phoneVariants(raw: string): string[] {
         const digits = raw.replace(/\D/g, '');
         const variants = new Set([digits, `+${digits}`]);
         if (digits.startsWith('0')) {
+            // Legacy fallback for numbers stored/typed without a country code — assumes Kenya.
             const intl = '254' + digits.slice(1);
             variants.add(intl);
             variants.add(`+${intl}`);
-        } else if (digits.startsWith('254')) {
-            variants.add('0' + digits.slice(3));
+        } else {
+            const countryCode = AuthService.SUPPORTED_COUNTRY_CODES.find((code) => digits.startsWith(code));
+            if (countryCode) variants.add('0' + digits.slice(countryCode.length));
         }
         return [...variants];
     }
@@ -69,6 +74,12 @@ export class AuthService {
         return crypto.randomBytes(64).toString('hex');
     }
 
+    // Employee codes are only guaranteed unique within one organization (see the
+    // @@unique([employeeCode, organizationId]) constraint on Employee), so the same code can
+    // legitimately belong to different people at different companies. We deliberately don't
+    // disambiguate by showing which companies matched — that would leak one tenant's identity
+    // to someone who merely typed in a matching code at another tenant. Instead we point the
+    // user at their phone/email, which is inherently scoped to their own account.
     private async getUserIdByEmployeeCode(employeeCode: string): Promise<string> {
         const employees = await this.prisma.employee.findMany({
             where: { employeeCode: employeeCode.trim(), userId: { not: null } },
@@ -82,7 +93,7 @@ export class AuthService {
         }
 
         if (userIds.length > 1) {
-            throw new UnauthorizedException('Account not found! Please contact your administrator.');
+            throw new UnauthorizedException('This employee code is registered at more than one company. Please log in using your phone number or email instead.');
         }
 
         return userIds[0];

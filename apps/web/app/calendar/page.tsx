@@ -9,7 +9,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import {
-  CalendarService, AgendaItem, AgendaItemKind, HolisticCalendarEvent, CalendarVisit, CalendarFilterDto,
+  CalendarService, AgendaItem, AgendaItemKind, HolisticCalendarEvent, CalendarFilterDto,
 } from "@/services/calendar.service";
 import { MONTHS, getWeekStart, addDays, dateToYMD, toYMD, today as todayYMD, isSundayDate } from "@/components/calendar/calendarUtils";
 import { AGENDA_KIND_FILTERS, CalendarViewMode, groupAgendaByDate } from "@/components/calendar/types";
@@ -78,7 +78,6 @@ export default function CalendarPage() {
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<HolisticCalendarEvent | null>(null);
   const [showVisitForm, setShowVisitForm] = useState(false);
-  const [editingVisit, setEditingVisit] = useState<CalendarVisit | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [popoverItem, setPopoverItem] = useState<AgendaItem | null>(null);
@@ -264,7 +263,7 @@ export default function CalendarPage() {
     setShowCreateMenu(false);
     setDayPopoverDate(null);
     setShowEventForm(false); setShowVisitForm(false); setShowRequestModal(false); setShowBlockModal(false);
-    setEditingEvent(null); setEditingVisit(null);
+    setEditingEvent(null);
     switch (type) {
       case "EVENT": setQuickCreateProspect(false); setShowEventForm(true); break;
       case "CLIENT_VISIT": setQuickCreateProspect(true); setShowEventForm(true); break;
@@ -378,7 +377,6 @@ export default function CalendarPage() {
 
   const handleOpenItem = (item: AgendaItem) => setPopoverItem(item);
   const handleEditEvent = (event: HolisticCalendarEvent) => { setPopoverItem(null); setEditingEvent(event); setShowEventForm(true); };
-  const handleEditVisit = (visit: CalendarVisit) => { setEditingVisit(visit); setShowVisitForm(true); };
   const handleDeleteVisit = (id: string) => { if (confirm("Delete this visit?")) deleteVisitMutation.mutate(id); };
   const handleUnblock = (id: string) => { if (confirm("Remove this block?")) unblockMutation.mutate(id); };
 
@@ -613,6 +611,9 @@ export default function CalendarPage() {
                   year={year} month={month} byDate={byDateSchedule} isLoading={primaryLoading || scheduleLoading}
                   selectedDate={selectedDate} onSelectDate={handleSelectDate} onOpenItem={handleOpenItem}
                   onPrev={prevMonth} onNext={nextMonth}
+                  token={token} isAdmin={isAdmin} onChanged={invalidateAgenda}
+                  onEditEvent={handleEditEvent}
+                  onDeleteVisit={handleDeleteVisit} onUnblock={handleUnblock}
                 />
               )}
             </div>
@@ -634,19 +635,18 @@ export default function CalendarPage() {
           />
         )}
 
-        {(showVisitForm || editingVisit) && isAdmin && (
+        {showVisitForm && isAdmin && (
           <VisitFormModal
             orgs={orgs}
             token={token}
-            editing={editingVisit}
             defaultDate={createMenuDate}
             year={year}
             month={month}
             isAdmin={isAdmin}
             adminOrgConfigured={adminOrgConfigured}
             onSwitchType={openCreateFlow}
-            onClose={() => { setShowVisitForm(false); setEditingVisit(null); }}
-            onSaved={() => { setShowVisitForm(false); setEditingVisit(null); invalidateAgenda(); }}
+            onClose={() => setShowVisitForm(false)}
+            onSaved={() => { setShowVisitForm(false); invalidateAgenda(); }}
           />
         )}
 
@@ -695,7 +695,6 @@ export default function CalendarPage() {
             onClose={() => setPopoverItem(null)}
             onChanged={invalidateAgenda}
             onEditEvent={handleEditEvent}
-            onEditVisit={handleEditVisit}
             onDeleteVisit={handleDeleteVisit}
             onUnblock={handleUnblock}
           />

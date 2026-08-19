@@ -148,6 +148,7 @@ export default function MyProfilePage() {
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Work Allocation</p>
                   <div className="space-y-2">
                     <ProfileField label="Department" value={employee.department?.name} />
+                    <ProfileField label="Plant / Branch" value={employee.plantBranch} />
                     <ProfileField label="Job Title" value={employee.jobTitle} />
                     <ProfileField label="Employment Status" value={EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]} />
                     <ProfileField label="Date Joined" value={employee.dateJoined ? new Date(employee.dateJoined).toLocaleDateString("en-GB") : null} />

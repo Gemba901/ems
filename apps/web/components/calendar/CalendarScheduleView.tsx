@@ -1,12 +1,15 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Loader2, Calendar } from "lucide-react";
-import { AgendaItem } from "@/services/calendar.service";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Calendar } from "lucide-react";
+import { AgendaItem, HolisticCalendarEvent } from "@/services/calendar.service";
 import { EventChip } from "./EventChip";
+import { AgendaItemBody } from "./AgendaItemBody";
 import { MONTHS } from "./calendarUtils";
 
 export function CalendarScheduleView({
   year, month, byDate, isLoading, selectedDate, onSelectDate, onOpenItem, onPrev, onNext,
+  token, isAdmin, onChanged, onEditEvent, onDeleteVisit, onUnblock,
 }: {
   year: number;
   month: number;
@@ -17,7 +20,21 @@ export function CalendarScheduleView({
   onOpenItem: (item: AgendaItem) => void;
   onPrev: () => void;
   onNext: () => void;
+  token: string;
+  isAdmin: boolean;
+  onChanged: () => void;
+  onEditEvent: (event: HolisticCalendarEvent) => void;
+  onDeleteVisit: (id: string) => void;
+  onUnblock: (id: string) => void;
 }) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpanded = (key: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const daysWithItems = Object.keys(byDate).filter(d => byDate[d].length > 0 && d >= monthStart).sort();
 
@@ -79,9 +96,42 @@ export function CalendarScheduleView({
                           <p className="text-xl font-bold leading-none text-slate-800">{date.getDate()}</p>
                         </div>
                         <div className="min-w-0 flex-1 space-y-1.5 pt-0.5">
-                          {items.map(item => (
-                            <EventChip key={`${item.kind}-${item.id}`} item={item} density="detailed" onClick={e => { e.stopPropagation(); onOpenItem(item); }} />
-                          ))}
+                          {items.map(item => {
+                            const key = `${item.kind}-${item.id}`;
+                            const isExpanded = expandedIds.has(key);
+                            return (
+                              <div key={key} className="flex items-start gap-1">
+                                <div className="min-w-0 flex-1">
+                                  <EventChip item={item} density="detailed" onClick={e => { e.stopPropagation(); onOpenItem(item); }} />
+                                  {isExpanded && (
+                                    <div
+                                      onClick={e => e.stopPropagation()}
+                                      className="mt-1.5 space-y-3 rounded-lg border border-slate-100 bg-slate-50/60 p-3"
+                                    >
+                                      <AgendaItemBody
+                                        item={item}
+                                        token={token}
+                                        isAdmin={isAdmin}
+                                        onChanged={onChanged}
+                                        onEditEvent={onEditEvent}
+                                        onDeleteVisit={onDeleteVisit}
+                                        onUnblock={onUnblock}
+                                        onClose={() => toggleExpanded(key)}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); toggleExpanded(key); }}
+                                  aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                                  className="mt-1.5 shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                                >
+                                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );

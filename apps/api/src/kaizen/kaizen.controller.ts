@@ -4,7 +4,19 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
 import { RequiresModule } from 'src/auth/decorators/module.decorator';
-import { CreateKaizenDto, UpdateKaizenDto, VerifyKaizenDto } from './dto/kaizen.dto';
+import {
+    CreateKaizenReasonDto,
+    UpdateKaizenReasonDto,
+    UpdateKaizenReferenceDto,
+    UpdateKaizenConditionDto,
+    UpdateKaizenBasicInfoDto,
+    UpdateKaizenQcdsmtImpactDto,
+    UpdateKaizenWasteDto,
+    UpdateKaizenImplementationPlanDto,
+    SubmitHodPreReviewDto,
+    UpdateKaizenImplementationDto,
+    SubmitVerificationStageDto,
+} from './dto/kaizen.dto';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { ModuleType } from 'db';
 import { Role } from 'src/common/enum/role.enum';
@@ -20,11 +32,11 @@ export class KaizenController {
 
     /**
      * POST /kaizen
-     * Any authenticated employee can raise a kaizen.
+     * Part 1: any authenticated employee can raise a kaizen (creates DRAFT).
      */
     @Post()
     async create(
-        @Body() dto: CreateKaizenDto,
+        @Body() dto: CreateKaizenReasonDto,
         @CurrentUser() user: { userId: string; organizationId: string }
     ) {
         return this.kaizenService.createKaizen(user.userId, dto, user.organizationId)
@@ -54,6 +66,18 @@ export class KaizenController {
     }
 
     /**
+     * GET /kaizen/pending-verification
+     * kaizens awaiting the current user's part-9 verification action
+     * (department HOD / steering committee member / Finance HOD / privileged)
+     */
+    @Get('pending-verification')
+    async getPendingVerification(
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.getPendingVerification(user.userId, user.organizationId)
+    }
+
+    /**
      * GET /kaizen/department/{departmentId}
      * hods can see their own departmental kaizens; superadmins, admins and management can view any department
      */
@@ -68,7 +92,8 @@ export class KaizenController {
 
     /**
      * GET /kaizen/:id
-     * owner, department HOD, or admin/management/superadmin can view a single kaizen
+     * owner, kaizen owner, department HOD, steering committee member, Finance HOD,
+     * or admin/management/superadmin can view a single kaizen
      */
     @Get(':id')
     async getSpecificKaizen(
@@ -91,29 +116,157 @@ export class KaizenController {
     }
 
     /**
-     * PATCH /kaizen/:id
-     * owner updates their own kaizen (progress, results, or submit for verification)
+     * PATCH /kaizen/:id/reason
+     * Part 1: raiser only, while editable
      */
-    @Patch(':id')
-    async updateKaizen(
+    @Patch(':id/reason')
+    async updateReason(
         @Param('id') id: string,
-        @Body() dto: UpdateKaizenDto,
+        @Body() dto: UpdateKaizenReasonDto,
         @CurrentUser() user: { userId: string, organizationId: string }
     ){
-        return this.kaizenService.updateKaizen(id, user.userId, dto, user.organizationId)
+        return this.kaizenService.updateReason(id, user.userId, dto, user.organizationId)
     }
 
     /**
-     * PATCH /kaizen/:id/verify
-     * department HOD or admin/management/superadmin verifies and closes, requests further improvement, or moves to SGA
+     * PATCH /kaizen/:id/reference
+     * Part 2: raiser only, while editable
      */
-    @Patch(':id/verify')
-    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD)
-    async verifyKaizen(
+    @Patch(':id/reference')
+    async updateReference(
         @Param('id') id: string,
-        @Body() dto: VerifyKaizenDto,
+        @Body() dto: UpdateKaizenReferenceDto,
         @CurrentUser() user: { userId: string, organizationId: string }
     ){
-        return this.kaizenService.verifyKaizen(id, user.userId, dto, user.organizationId)
+        return this.kaizenService.updateReference(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/condition
+     * Part 3: raiser only, while editable
+     */
+    @Patch(':id/condition')
+    async updateCondition(
+        @Param('id') id: string,
+        @Body() dto: UpdateKaizenConditionDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.updateCondition(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/basic-info
+     * Part 4: raiser only, while editable
+     */
+    @Patch(':id/basic-info')
+    async updateBasicInfo(
+        @Param('id') id: string,
+        @Body() dto: UpdateKaizenBasicInfoDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.updateBasicInfo(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/qcdsmt-impact
+     * Part 5: raiser only, while editable
+     */
+    @Patch(':id/qcdsmt-impact')
+    async updateQcdsmtImpact(
+        @Param('id') id: string,
+        @Body() dto: UpdateKaizenQcdsmtImpactDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.updateQcdsmtImpact(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/waste
+     * Part 6: raiser only, while editable
+     */
+    @Patch(':id/waste')
+    async updateWaste(
+        @Param('id') id: string,
+        @Body() dto: UpdateKaizenWasteDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.updateWaste(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/implementation-plan
+     * Part 7: raiser only, while editable
+     */
+    @Patch(':id/implementation-plan')
+    async updateImplementationPlan(
+        @Param('id') id: string,
+        @Body() dto: UpdateKaizenImplementationPlanDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.updateImplementationPlan(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/submit-for-hod-review
+     * raiser submits parts 1-7 for HOD pre-implementation review
+     */
+    @Patch(':id/submit-for-hod-review')
+    async submitForHodPreReview(
+        @Param('id') id: string,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.submitForHodPreReview(id, user.userId, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/hod-pre-review
+     * Part 8: department HOD or admin/management/superadmin
+     */
+    @Patch(':id/hod-pre-review')
+    @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD)
+    async submitHodPreReview(
+        @Param('id') id: string,
+        @Body() dto: SubmitHodPreReviewDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.submitHodPreReview(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/implementation
+     * Part 9: kaizen owner only, while in implementation
+     */
+    @Patch(':id/implementation')
+    async updateImplementation(
+        @Param('id') id: string,
+        @Body() dto: UpdateKaizenImplementationDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.updateImplementation(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/submit-for-verification
+     * kaizen owner submits part 9 for the three-stage part 10 verification
+     */
+    @Patch(':id/submit-for-verification')
+    async submitForVerification(
+        @Param('id') id: string,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.submitForVerification(id, user.userId, user.organizationId)
+    }
+
+    /**
+     * PATCH /kaizen/:id/verification-stage
+     * Part 10: per-stage authz handled in service (dept HOD / steering committee member / Finance HOD / privileged)
+     */
+    @Patch(':id/verification-stage')
+    async submitVerificationStage(
+        @Param('id') id: string,
+        @Body() dto: SubmitVerificationStageDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.kaizenService.submitVerificationStage(id, user.userId, dto, user.organizationId)
     }
 }

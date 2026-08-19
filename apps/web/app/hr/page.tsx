@@ -11,9 +11,10 @@ import {
     Search, X, ChevronRight, TrendingUp,
     ChevronLeft, Loader2, BarChart3, UserPlus,
     CheckCircle2, ArrowRight, AlertCircle, Plus, Building2,
-    Pencil, Trash2,
+    Pencil, Trash2, ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
+import { COUNTRY_CODES } from "@/lib/countries";
 
 const PAGE_SIZE = 15;
 
@@ -44,8 +45,12 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
     const [lastName,  setLastName]        = useState("");
     const [email,     setEmail]           = useState("");
     const [phone,     setPhone]           = useState("");
+    const [countryCode, setCountryCode]   = useState("254");
+    const [showCodes, setShowCodes]       = useState(false);
     const [deptId,    setDeptId]          = useState("");
     const [roleId,    setRoleId]          = useState<number>(5);
+
+    const selectedCountry = COUNTRY_CODES.find(c => c.code === countryCode) ?? COUNTRY_CODES[0];
 
     const [localDepts, setLocalDepts] = useState<{ id: string; name: string }[]>([]);
     const [showNewDept, setShowNewDept] = useState(false);
@@ -58,7 +63,8 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
     function resetForm() {
         setStep(1);
         setFirstName(""); setLastName(""); setEmail("");
-        setPhone(""); setDeptId(""); setRoleId(5);
+        setPhone(""); setCountryCode("254"); setShowCodes(false);
+        setDeptId(""); setRoleId(5);
         setError(null);
         setShowNewDept(false); setNewDeptName(""); setDeptError(null);
     }
@@ -86,7 +92,8 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
     }
 
     function isValidPhone(p: string) {
-        return /^[71]\d{8}$/.test(p.replace(/\s/g, ""));
+        const digits = p.replace(/\s/g, "");
+        return /^\d+$/.test(digits) && digits.length >= 9;
     }
 
     function canProceed() {
@@ -103,7 +110,7 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
         setSubmitting(true);
         try {
             await EmployeeService.onboard(
-                { firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim().toLowerCase(), phone: `254${phone.trim()}`, departmentId: deptId || undefined, roleId },
+                { firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim().toLowerCase(), phone: `${countryCode}${phone.trim()}`, departmentId: deptId || undefined, roleId },
                 accessToken,
             );
             const fullName = `${firstName.trim()} ${lastName.trim()}`;
@@ -210,20 +217,47 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
 
                             <div>
                                 <label className={labelCls}>Phone number <span className="text-red-400">*</span></label>
-                                <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50/50 focus-within:ring-2 focus-within:ring-indigo-500/25 focus-within:border-indigo-400 transition-all">
-                                    <span className="flex items-center px-3 text-sm font-medium text-slate-500 bg-slate-100 border-r border-slate-200 shrink-0 gap-1.5">
-                                        🇰🇪 +254
-                                    </span>
+                                <div className="flex rounded-xl overflow-visible border border-slate-200 bg-slate-50/50 focus-within:ring-2 focus-within:ring-indigo-500/25 focus-within:border-indigo-400 transition-all">
+                                    <div className="relative shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCodes((v) => !v)}
+                                            className="flex items-center gap-1.5 h-full px-3 text-sm font-medium text-slate-500 bg-slate-100 border-r border-slate-200 rounded-l-xl hover:bg-slate-200/60 transition-colors whitespace-nowrap"
+                                        >
+                                            <span>{selectedCountry.flag}</span>
+                                            <span>+{selectedCountry.code}</span>
+                                            <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform shrink-0 ${showCodes ? "rotate-180" : ""}`} />
+                                        </button>
+
+                                        {showCodes && (
+                                            <div className="absolute top-full left-0 z-20 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                                                {COUNTRY_CODES.map((c) => (
+                                                    <button
+                                                        key={c.code}
+                                                        type="button"
+                                                        onClick={() => { setCountryCode(c.code); setShowCodes(false); }}
+                                                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 transition-colors ${
+                                                            c.code === countryCode ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-700"
+                                                        }`}
+                                                    >
+                                                        <span>{c.flag}</span>
+                                                        <span>+{c.code}</span>
+                                                        <span className="text-slate-400 ml-auto">{c.name}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                     <input
                                         type="tel"
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
                                         placeholder="700 000 000"
-                                        maxLength={9}
-                                        className="flex-1 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none bg-transparent"
+                                        maxLength={10}
+                                        className="flex-1 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none bg-transparent rounded-r-xl"
                                     />
                                 </div>
-                                <p className="text-[11px] text-slate-400 mt-1.5">Enter 9 digits after +254 (e.g. 712 345 678).</p>
+                                <p className="text-[11px] text-slate-400 mt-1.5">Select country and enter the number without the leading 0.</p>
                             </div>
                         </>
                     )}
@@ -314,7 +348,7 @@ function OnboardingPanel({ open, onClose, departments, accessToken, onSuccess }:
                                 <p className="font-semibold text-slate-600 uppercase tracking-wider text-[10px]">Summary</p>
                                 <div className="flex justify-between"><span className="text-slate-500">Name</span><span className="font-medium text-slate-900">{firstName} {lastName}</span></div>
                                 <div className="flex justify-between"><span className="text-slate-500">Email</span><span className="font-medium text-slate-900 truncate max-w-50">{email}</span></div>
-                                <div className="flex justify-between"><span className="text-slate-500">Phone</span><span className="font-medium text-slate-900">+254 {phone}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-500">Phone</span><span className="font-medium text-slate-900">+{countryCode} {phone}</span></div>
                                 <div className="flex justify-between"><span className="text-slate-500">Role</span><span className="font-medium text-slate-900">{ASSIGNABLE_ROLES.find(r => r.id === roleId)?.label}</span></div>
                                 <div className="flex justify-between"><span className="text-slate-500">Department</span><span className="font-medium text-slate-900">{localDepts.find(d => d.id === deptId)?.name ?? "Unassigned"}</span></div>
                             </div>

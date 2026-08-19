@@ -27,6 +27,13 @@ import {
   UpdateMeltingStatusDto,
   QueryMeltingsDto,
 } from './dto/melting.dto';
+import {
+  AddHeatMaterialChargeDto,
+  QueryHeatMaterialChargesDto,
+  RecordHeatCycleEventDto,
+  QueryHeatCycleEventsDto,
+} from './dto/heat-operations.dto';
+import { GetMeltingDashboardDto } from './dto/dashboard.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
@@ -82,6 +89,20 @@ export class MeltingController {
   @Get('summary')
   async getSummary(@CurrentUser() user: AuthUser) {
     return this.meltingService.getSummary(user.organizationId);
+  }
+
+  /**
+   * GET /steel/melting/dashboard
+   * P05 management dashboard — KPIs, active heats, furnace/lining status,
+   * furnace comparison, recent heat history, and recent events, all
+   * aggregated server-side for the given range/furnace filter.
+   */
+  @Get('dashboard')
+  getDashboard(
+    @Query() query: GetMeltingDashboardDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.meltingService.getDashboard(user.organizationId, query);
   }
 
   /** GET /steel/melting/:id — full detail, including allowedActions. */
@@ -323,6 +344,79 @@ export class MeltingController {
       user.userId,
       user.organizationId,
     );
+  }
+
+  /**
+   * POST /steel/melting/:id/material-charges
+   * Record one material charge row (P05-A06 Load Charge / P05-A10
+   * Additions). Multiple rows are expected per heat.
+   */
+  @Post(':id/material-charges')
+  addMaterialCharge(
+    @Param('id') id: string,
+    @Body() dto: AddHeatMaterialChargeDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.meltingService.addMaterialCharge(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
+  }
+
+  /** GET /steel/melting/:id/material-charges */
+  @Get(':id/material-charges')
+  getMaterialCharges(
+    @Param('id') id: string,
+    @Query() query: QueryHeatMaterialChargesDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.meltingService.getMaterialCharges(
+      id,
+      user.organizationId,
+      query,
+    );
+  }
+
+  /**
+   * POST /steel/melting/:id/events
+   * Record a heat-cycle event (temperature reading, alarm, delay,
+   * intervention, etc).
+   */
+  @Post(':id/events')
+  recordCycleEvent(
+    @Param('id') id: string,
+    @Body() dto: RecordHeatCycleEventDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.meltingService.recordCycleEvent(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
+  }
+
+  /** GET /steel/melting/:id/events */
+  @Get(':id/events')
+  getCycleEvents(
+    @Param('id') id: string,
+    @Query() query: QueryHeatCycleEventsDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.meltingService.getCycleEvents(id, user.organizationId, query);
+  }
+
+  /**
+   * GET /steel/melting/:id/summary
+   * Heat efficiency review — stored measurements plus server-computed
+   * material input/yield %. See MeltingService.getHeatSummary for exactly
+   * which derived metrics are implemented vs not yet defined.
+   */
+  @Get(':id/summary')
+  getHeatSummary(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.meltingService.getHeatSummary(id, user.organizationId);
   }
 
   /**

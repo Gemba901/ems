@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   MeltingService,
   SteelMelting,
@@ -10,6 +10,7 @@ import {
   PreviousHeatReadinessPayload,
   VerifyChargeRecipePayload,
 } from "@/services/steel-melting.service";
+import { FurnaceService } from "@/services/steel-furnace.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,9 +74,21 @@ function Sidebar() {
 
 function LiningCheckForm({ melting, token, onDone }: { melting: SteelMelting; token: string; onDone: () => void }) {
   const [condition, setCondition] = useState("");
+  const [liningRefId, setLiningRefId] = useState("");
   const [campaignId, setCampaignId] = useState("");
   const [heatCount, setHeatCount] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Only offered when a structured furnace was selected at A01; otherwise
+  // there's no furnace to scope the lining catalog to, so fall back to
+  // free-text campaign ID below.
+  const furnaceId = melting.furnace?.id;
+  const { data: linings, isLoading: liningsLoading } = useQuery({
+    queryKey: ["furnace-linings", furnaceId],
+    queryFn: () => FurnaceService.getLinings(furnaceId!, token),
+    enabled: !!furnaceId,
+  });
+  const activeLinings = (linings ?? []).filter((l) => l.status === "ACTIVE");
 
   const mutation = useMutation({
     mutationFn: (payload: FurnaceLiningCheckPayload) => MeltingService.furnaceLiningCheck(melting.id, payload, token),
@@ -86,7 +99,31 @@ function LiningCheckForm({ melting, token, onDone }: { melting: SteelMelting; to
   return (
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
-      <Input placeholder="Lining campaign ID (optional)" value={campaignId} onChange={(e) => setCampaignId(e.target.value)} />
+      {furnaceId ? (
+        <div>
+          <label className="text-xs text-slate-400 block mb-0.5">Lining campaign</label>
+          <select
+            className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            value={liningRefId}
+            onChange={(e) => setLiningRefId(e.target.value)}
+          >
+            <option value="">{liningsLoading ? "Loading linings..." : "Select the active lining..."}</option>
+            {activeLinings.map((l) => (
+              <option key={l.id} value={l.id}>
+                Installed {new Date(l.installedAt).toLocaleDateString()} · {l.heatsCompleted} heats completed
+              </option>
+            ))}
+          </select>
+          {activeLinings.length === 0 && !liningsLoading && (
+            <p className="text-xs text-amber-600 mt-1">
+              No active lining is registered for this furnace. Record a new lining campaign in furnace master data,
+              or use the free-text fields below.
+            </p>
+          )}
+        </div>
+      ) : (
+        <Input placeholder="Lining campaign ID (optional)" value={campaignId} onChange={(e) => setCampaignId(e.target.value)} />
+      )}
       <Input type="number" placeholder="Heat count since last reline (optional)" value={heatCount} onChange={(e) => setHeatCount(e.target.value)} />
       <Input placeholder="Visual condition" value={condition} onChange={(e) => setCondition(e.target.value)} />
       <Button
@@ -94,6 +131,7 @@ function LiningCheckForm({ melting, token, onDone }: { melting: SteelMelting; to
         disabled={!condition || mutation.isPending}
         onClick={() =>
           mutation.mutate({
+            liningRefId: liningRefId || undefined,
             liningCampaignId: campaignId || undefined,
             liningHeatCount: heatCount ? Number(heatCount) : undefined,
             liningVisualCondition: condition,
@@ -241,10 +279,10 @@ export function S1FurnaceReadiness({
               code="P05-A01"
               title="Furnace Availability Confirmed"
               status="done"
-              summary={`Furnace ${melting.furnaceId ?? "—"}${melting.operatorName ? ` · ${melting.operatorName}` : ""}`}
+              summary={`Furnace ${melting.furnace ? `${melting.furnace.code} — ${melting.furnace.name}` : (melting.furnaceId ?? "—")}${melting.operatorName ? ` · ${melting.operatorName}` : ""}`}
             >
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Field label="Furnace" value={melting.furnaceId} />
+                <Field label="Furnace" value={melting.furnace ? `${melting.furnace.code} — ${melting.furnace.name}` : melting.furnaceId} />
                 <Field label="Planned heat" value={melting.plannedHeatRef} />
                 <Field label="Operator" value={melting.operatorName} />
                 <Field label="Shift" value={melting.shift} />
@@ -255,7 +293,11 @@ export function S1FurnaceReadiness({
               code="P05-A02"
               title="Furnace Lining Check"
               status={liningStatus}
-              summary={melting.liningVisualCondition ? `Condition: ${melting.liningVisualCondition}` : undefined}
+              summary={
+                melting.liningVisualCondition
+                  ? `Condition: ${melting.liningVisualCondition}${melting.lining ? ` · ${melting.lining.heatsCompleted} heats on this lining` : ""}`
+                  : undefined
+              }
             >
               {liningStatus === "active" && <LiningCheckForm melting={melting} token={token} onDone={onRefresh} />}
             </SubStep>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MeltingService,
   SteelMelting,
@@ -9,6 +9,11 @@ import {
   StartMeltingPayload,
   MonitorPowerPayload,
   MonitorTemperaturePayload,
+  AddHeatMaterialChargePayload,
+  RecordHeatCycleEventPayload,
+  HeatChargeMaterialCategory,
+  HeatCycleEventType,
+  HEAT_CYCLE_EVENT_LABELS,
 } from "@/services/steel-melting.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +26,10 @@ import { ContextSummary } from "@/components/steel/p05/ContextSummary";
 import { MeltingProgress } from "@/components/steel/p05/MeltingProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p05/screenMap";
 import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p05/shared";
-import { Thermometer, Info, ListChecks, Lightbulb } from "lucide-react";
+import { Thermometer, Info, ListChecks, Lightbulb, Layers, Activity } from "lucide-react";
+
+const MATERIAL_CATEGORIES: HeatChargeMaterialCategory[] = ["SCRAP", "RAW_METAL", "ALLOY", "ADDITIVE", "OTHER"];
+const EVENT_TYPES = Object.keys(HEAT_CYCLE_EVENT_LABELS) as HeatCycleEventType[];
 
 function Sidebar() {
   return (
@@ -172,6 +180,222 @@ function TemperatureForm({ melting, token, onDone }: { melting: SteelMelting; to
   );
 }
 
+// Multi-row material charging table — supplementary to the A06/A10 stage
+// gates rather than itself stage-gated: operators can log charge rows any
+// time the heat is active, covering both the initial charge and mid-heat
+// additions in one place.
+function MaterialChargesPanel({ melting, token }: { melting: SteelMelting; token: string }) {
+  const queryClient = useQueryClient();
+  const [material, setMaterial] = useState("");
+  const [category, setCategory] = useState<HeatChargeMaterialCategory>("SCRAP");
+  const [grade, setGrade] = useState("");
+  const [batchRef, setBatchRef] = useState("");
+  const [plannedQty, setPlannedQty] = useState("");
+  const [actualQty, setActualQty] = useState("");
+  const [unit, setUnit] = useState("MT");
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: charges } = useQuery({
+    queryKey: ["heat-material-charges", melting.id],
+    queryFn: () => MeltingService.getMaterialCharges(melting.id, token),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (payload: AddHeatMaterialChargePayload) => MeltingService.addMaterialCharge(melting.id, payload, token),
+    onSuccess: () => {
+      setMaterial("");
+      setGrade("");
+      setBatchRef("");
+      setPlannedQty("");
+      setActualQty("");
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["heat-material-charges", melting.id] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const canAdd = !!material && !!actualQty && !!unit;
+  const isClosed = melting.status === "CANCELLED" || melting.status === "CLOSED" || melting.status === "ON_HOLD";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Layers className="h-4 w-4 text-slate-500" />
+          Material Charges
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {(charges ?? []).length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-slate-400 border-b">
+                  <th className="py-1 pr-2">#</th>
+                  <th className="py-1 pr-2">Material</th>
+                  <th className="py-1 pr-2">Category</th>
+                  <th className="py-1 pr-2">Batch</th>
+                  <th className="py-1 pr-2 text-right">Planned</th>
+                  <th className="py-1 pr-2 text-right">Actual</th>
+                  <th className="py-1 pr-2">Unit</th>
+                  <th className="py-1 pr-2">Charged at</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(charges ?? []).map((c) => (
+                  <tr key={c.id} className="border-b border-slate-100">
+                    <td className="py-1 pr-2 text-slate-400">{c.sequence}</td>
+                    <td className="py-1 pr-2 font-medium text-slate-700">{c.material}{c.grade ? ` (${c.grade})` : ""}</td>
+                    <td className="py-1 pr-2">{c.materialCategory}</td>
+                    <td className="py-1 pr-2">{c.batchRef ?? "—"}</td>
+                    <td className="py-1 pr-2 text-right">{c.plannedQuantity ?? "—"}</td>
+                    <td className="py-1 pr-2 text-right">{c.actualQuantity}</td>
+                    <td className="py-1 pr-2">{c.unit}</td>
+                    <td className="py-1 pr-2 text-slate-400">{new Date(c.chargedAt).toLocaleTimeString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!isClosed && (
+          <div className="space-y-2 pt-2 border-t">
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <Input placeholder="Material" value={material} onChange={(e) => setMaterial(e.target.value)} />
+              <select
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as HeatChargeMaterialCategory)}
+              >
+                {MATERIAL_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c.replace("_", " ")}</option>
+                ))}
+              </select>
+              <Input placeholder="Grade (optional)" value={grade} onChange={(e) => setGrade(e.target.value)} />
+              <Input placeholder="Batch/lot (optional)" value={batchRef} onChange={(e) => setBatchRef(e.target.value)} />
+              <Input type="number" step="0.01" placeholder="Planned qty (optional)" value={plannedQty} onChange={(e) => setPlannedQty(e.target.value)} />
+              <Input type="number" step="0.01" placeholder="Actual qty" value={actualQty} onChange={(e) => setActualQty(e.target.value)} />
+              <Input placeholder="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!canAdd || mutation.isPending}
+              onClick={() =>
+                mutation.mutate({
+                  material,
+                  materialCategory: category,
+                  grade: grade || undefined,
+                  batchRef: batchRef || undefined,
+                  plannedQuantity: plannedQty ? Number(plannedQty) : undefined,
+                  actualQuantity: Number(actualQty),
+                  unit,
+                })
+              }
+            >
+              <SaveButton pending={mutation.isPending} label="Add charge row" />
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Chronological heat-cycle event timeline — also supplementary to stage
+// gating. Groups all monitoring events (temperature, alarms, delays,
+// interventions) into one operational log instead of a screen per event type.
+function HeatEventsPanel({ melting, token }: { melting: SteelMelting; token: string }) {
+  const queryClient = useQueryClient();
+  const [eventType, setEventType] = useState<HeatCycleEventType>("TEMPERATURE_READING");
+  const [temperature, setTemperature] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: events } = useQuery({
+    queryKey: ["heat-cycle-events", melting.id],
+    queryFn: () => MeltingService.getCycleEvents(melting.id, token),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (payload: RecordHeatCycleEventPayload) => MeltingService.recordCycleEvent(melting.id, payload, token),
+    onSuccess: () => {
+      setTemperature("");
+      setQuantity("");
+      setNotes("");
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["heat-cycle-events", melting.id] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const isClosed = melting.status === "CANCELLED" || melting.status === "CLOSED" || melting.status === "ON_HOLD";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Activity className="h-4 w-4 text-slate-500" />
+          Heat Timeline
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {(events ?? []).length > 0 && (
+          <ul className="space-y-1.5 text-xs max-h-64 overflow-y-auto">
+            {(events ?? []).map((e) => (
+              <li key={e.id} className="flex items-start gap-2 border-b border-slate-100 pb-1.5">
+                <span className="text-slate-400 shrink-0 w-16">{new Date(e.occurredAt).toLocaleTimeString()}</span>
+                <span className="font-medium text-slate-700 shrink-0">{HEAT_CYCLE_EVENT_LABELS[e.eventType]}</span>
+                {e.temperatureCelsius !== null && <span className="text-slate-500">{e.temperatureCelsius}°C</span>}
+                {e.quantity !== null && <span className="text-slate-500">{e.quantity}{e.unit ? ` ${e.unit}` : ""}</span>}
+                {e.notes && <span className="text-slate-500 truncate">{e.notes}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {!isClosed && (
+          <div className="space-y-2 pt-2 border-t">
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <select
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                value={eventType}
+                onChange={(e) => setEventType(e.target.value as HeatCycleEventType)}
+              >
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t}>{HEAT_CYCLE_EVENT_LABELS[t]}</option>
+                ))}
+              </select>
+              <Input type="number" step="1" placeholder="Temp °C (optional)" value={temperature} onChange={(e) => setTemperature(e.target.value)} />
+              <Input type="number" step="0.01" placeholder="Qty (optional)" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+            </div>
+            <Input placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() =>
+                mutation.mutate({
+                  eventType,
+                  temperatureCelsius: temperature ? Number(temperature) : undefined,
+                  quantity: quantity ? Number(quantity) : undefined,
+                  notes: notes || undefined,
+                })
+              }
+            >
+              <SaveButton pending={mutation.isPending} label="Log event" />
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function S2ChargingMelting({
   melting, token, onRefresh,
 }: { melting: SteelMelting; token: string; onRefresh: () => void }) {
@@ -233,6 +457,9 @@ export function S2ChargingMelting({
             >
               {tempStatus === "active" && <TemperatureForm melting={melting} token={token} onDone={onRefresh} />}
             </SubStep>
+
+            <MaterialChargesPanel melting={melting} token={token} />
+            <HeatEventsPanel melting={melting} token={token} />
           </div>
           <ScreenSidebar>
             <MeltingProgress melting={melting} />

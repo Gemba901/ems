@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { useToast } from "@/contexts/toast.context";
 import { MeltingService, CreateMeltingPayload } from "@/services/steel-melting.service";
 import { ChargePreparationService } from "@/services/steel-charge-preparation.service";
+import { FurnaceService } from "@/services/steel-furnace.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ function NewMeltingForm() {
   const { toast } = useToast();
 
   const [chargePreparationId, setChargePreparationId] = useState(searchParams.get("chargePreparationId") ?? "");
+  const [furnaceRefId, setFurnaceRefId] = useState("");
   const [furnaceId, setFurnaceId] = useState("");
   const [plannedHeatRef, setPlannedHeatRef] = useState("");
   const [operatorName, setOperatorName] = useState("");
@@ -41,6 +43,12 @@ function NewMeltingForm() {
     enabled: !!accessToken,
   });
   const closedPreps = (preps?.data ?? []).filter((p) => !!p.chargeNumber);
+
+  const { data: furnaces, isLoading: furnacesLoading } = useQuery({
+    queryKey: ["furnaces", "ready"],
+    queryFn: () => FurnaceService.getAll(accessToken!, { status: "READY" }),
+    enabled: !!accessToken,
+  });
 
   const mutation = useMutation({
     mutationFn: (payload: CreateMeltingPayload) => MeltingService.create(payload, accessToken!),
@@ -62,6 +70,7 @@ function NewMeltingForm() {
 
     mutation.mutate({
       chargePreparationId,
+      furnaceRefId: furnaceRefId || undefined,
       furnaceId: furnaceId || undefined,
       plannedHeatRef: plannedHeatRef || undefined,
       operatorName: operatorName || undefined,
@@ -122,7 +131,27 @@ function NewMeltingForm() {
               </div>
             )}
 
-            <Input placeholder="Furnace ID (optional)" value={furnaceId} onChange={(e) => setFurnaceId(e.target.value)} />
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1">Furnace (optional)</label>
+              <select
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                value={furnaceRefId}
+                onChange={(e) => setFurnaceRefId(e.target.value)}
+              >
+                <option value="">{furnacesLoading ? "Loading furnaces..." : "Select a ready furnace..."}</option>
+                {(furnaces ?? []).map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.code} — {f.name}
+                  </option>
+                ))}
+              </select>
+              {(furnaces ?? []).length === 0 && !furnacesLoading && (
+                <p className="text-xs text-slate-400 mt-1">
+                  No furnace master data set up yet — you can still record a free-text furnace label below.
+                </p>
+              )}
+            </div>
+            <Input placeholder="Furnace label (optional, free text)" value={furnaceId} onChange={(e) => setFurnaceId(e.target.value)} />
             <Input placeholder="Planned heat reference (optional)" value={plannedHeatRef} onChange={(e) => setPlannedHeatRef(e.target.value)} />
             <Input placeholder="Operator (optional)" value={operatorName} onChange={(e) => setOperatorName(e.target.value)} />
             <Input placeholder="Shift (optional)" value={shift} onChange={(e) => setShift(e.target.value)} />

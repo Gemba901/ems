@@ -122,11 +122,21 @@ export interface SteelMelting {
   recipeAdditiveWeightSnapshot: number | null;
 
   furnaceId: string | null;
+  furnaceRefId: string | null;
+  furnace: { id: string; code: string; name: string; status: string } | null;
   plannedHeatRef: string | null;
   operatorName: string | null;
   shift: string | null;
 
   liningCampaignId: string | null;
+  liningRefId: string | null;
+  lining: {
+    id: string;
+    installedAt: string;
+    heatsCompleted: number;
+    condition: string | null;
+    status: string;
+  } | null;
   liningHeatCount: number | null;
   liningVisualCondition: string | null;
 
@@ -187,7 +197,98 @@ export interface SteelMelting {
   activityLogs: MeltingActivityLog[];
   // Only present on getById — backend's authoritative list of next valid actions.
   allowedActions?: AllowedMeltingAction[];
-  _count?: { activityLogs: number };
+  _count?: { activityLogs: number; materialCharges?: number; cycleEvents?: number };
+}
+
+export type HeatChargeMaterialCategory = "SCRAP" | "RAW_METAL" | "ALLOY" | "ADDITIVE" | "OTHER";
+
+export interface HeatMaterialCharge {
+  id: string;
+  meltingId: string;
+  sequence: number;
+  material: string;
+  materialCategory: HeatChargeMaterialCategory;
+  grade: string | null;
+  batchRef: string | null;
+  plannedQuantity: number | null;
+  actualQuantity: number;
+  unit: string;
+  chargedAt: string;
+  chargedBy: EmployeeRef;
+  createdAt: string;
+}
+
+export type HeatCycleEventType =
+  | "HEAT_STARTED"
+  | "FURNACE_CHARGING"
+  | "HEATING_STARTED"
+  | "TEMPERATURE_READING"
+  | "MATERIAL_ADDITION"
+  | "ADJUSTMENT"
+  | "ALARM"
+  | "DELAY"
+  | "OPERATOR_INTERVENTION"
+  | "TARGET_TEMPERATURE_REACHED"
+  | "TAPPING_STARTED"
+  | "TAPPING_COMPLETED"
+  | "HEAT_COMPLETED"
+  | "OTHER";
+
+export const HEAT_CYCLE_EVENT_LABELS: Record<HeatCycleEventType, string> = {
+  HEAT_STARTED: "Heat Started",
+  FURNACE_CHARGING: "Furnace Charging",
+  HEATING_STARTED: "Heating Started",
+  TEMPERATURE_READING: "Temperature Reading",
+  MATERIAL_ADDITION: "Material Addition",
+  ADJUSTMENT: "Adjustment",
+  ALARM: "Alarm",
+  DELAY: "Delay",
+  OPERATOR_INTERVENTION: "Operator Intervention",
+  TARGET_TEMPERATURE_REACHED: "Target Temperature Reached",
+  TAPPING_STARTED: "Tapping Started",
+  TAPPING_COMPLETED: "Tapping Completed",
+  HEAT_COMPLETED: "Heat Completed",
+  OTHER: "Other",
+};
+
+export interface HeatCycleEvent {
+  id: string;
+  meltingId: string;
+  eventType: HeatCycleEventType;
+  occurredAt: string;
+  temperatureCelsius: number | null;
+  quantity: number | null;
+  unit: string | null;
+  notes: string | null;
+  recordedBy: EmployeeRef;
+  createdAt: string;
+}
+
+// Stored measurements plus server-computed derived metrics. Fields explicitly
+// documented as "not implemented" (e.g. energyPerTonne) reflect formulas the
+// business has not yet confirmed — see MeltingService.getHeatSummary on the API.
+export interface HeatSummary {
+  heatId: string;
+  heatInProcessNumber: string;
+  furnace: { id: string; code: string; name: string; status: string } | null;
+  lining: { id: string; installedAt: string; heatsCompleted: number; condition: string | null; status: string } | null;
+  stage: SteelMeltingStage;
+  status: SteelMeltingStatus;
+
+  totalMaterialInput: number;
+  totalOutputTonnes: number | null;
+  materialAdditionsCount: number;
+  eventsCount: number;
+  targetTemperatureCelsius: number | null;
+  liquidTemperatureCelsius: number | null;
+  outputEnergyTotalKwh: number | null;
+  meltingStartTime: string | null;
+  handoverToRefiningAt: string | null;
+
+  materialLossTonnes: number | null;
+  yieldPercent: number | null;
+  cycleDurationMinutes: number | null;
+  energyPerTonne: number | null;
 }
 
 export interface PaginatedMeltings {
@@ -212,6 +313,7 @@ function buildQuery(params: Record<string, string | number | undefined>) {
 export interface CreateMeltingPayload {
   chargePreparationId: string;
   furnaceId?: string;
+  furnaceRefId?: string;
   plannedHeatRef?: string;
   operatorName?: string;
   shift?: string;
@@ -219,8 +321,29 @@ export interface CreateMeltingPayload {
 
 export interface FurnaceLiningCheckPayload {
   liningCampaignId?: string;
+  liningRefId?: string;
   liningHeatCount?: number;
   liningVisualCondition?: string;
+}
+
+export interface AddHeatMaterialChargePayload {
+  material: string;
+  materialCategory: HeatChargeMaterialCategory;
+  grade?: string;
+  batchRef?: string;
+  plannedQuantity?: number;
+  actualQuantity: number;
+  unit: string;
+  chargedAt?: string;
+}
+
+export interface RecordHeatCycleEventPayload {
+  eventType: HeatCycleEventType;
+  occurredAt?: string;
+  temperatureCelsius?: number;
+  quantity?: number;
+  unit?: string;
+  notes?: string;
 }
 
 export interface FurnaceSystemsCheckPayload {
@@ -299,6 +422,131 @@ export interface RefiningHandoverPayload {
 export interface UpdateMeltingStatusPayload {
   status: SteelMeltingStatus;
   notes?: string;
+}
+
+export type MeltingDashboardRange = "TODAY" | "7D" | "30D" | "CUSTOM";
+
+interface FurnaceRef {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface DashboardFurnaceStatus {
+  id: string;
+  code: string;
+  name: string;
+  status: string; // Furnace enum: READY | MAINTENANCE | DOWN | RETIRED
+  activeHeat: {
+    id: string;
+    heatInProcessNumber: string;
+    stage: SteelMeltingStage;
+    temperatureCelsius: number | null;
+  } | null;
+  lining: {
+    id: string;
+    installedAt: string;
+    heatsCompleted: number;
+    condition: string | null;
+    thicknessRemainingMm: number | null;
+    status: string; // FurnaceLining enum: ACTIVE | RETIRED
+  } | null;
+}
+
+export interface DashboardActiveHeat {
+  id: string;
+  heatInProcessNumber: string;
+  furnace: FurnaceRef | null;
+  stage: SteelMeltingStage;
+  status: SteelMeltingStatus;
+  meltingStartTime: string | null;
+  startedAt: string;
+  temperatureCelsius: number | null;
+  materialInput: number;
+}
+
+export interface DashboardFurnacePerformance {
+  furnaceId: string;
+  code: string;
+  name: string;
+  heatsCompleted: number;
+  averageYieldPercent: number | null;
+  averageCycleDurationMinutes: number | null;
+  totalMaterialInput: number;
+  totalOutputTonnes: number;
+}
+
+export interface DashboardLiningStatus {
+  furnaceId: string;
+  furnaceCode: string;
+  id: string;
+  installedAt: string;
+  heatsCompleted: number;
+  condition: string | null;
+  thicknessRemainingMm: number | null;
+  status: string;
+}
+
+export interface DashboardRecentHeat {
+  id: string;
+  heatInProcessNumber: string;
+  chargeNumberSnapshot: string | null;
+  furnace: FurnaceRef | null;
+  liningRefId: string | null;
+  status: SteelMeltingStatus;
+  handoverToRefiningAt: string | null;
+  materialInput: number | null;
+  output: number | null;
+  materialLoss: number | null;
+  yieldPercent: number | null;
+  cycleDurationMinutes: number | null;
+}
+
+export interface DashboardRecentEvent {
+  id: string;
+  occurredAt: string;
+  eventType: HeatCycleEventType;
+  temperatureCelsius: number | null;
+  quantity: number | null;
+  unit: string | null;
+  notes: string | null;
+  meltingId: string;
+  heatInProcessNumber: string;
+  recordedBy: EmployeeRef;
+}
+
+// Mirrors MeltingService.getDashboard on the API exactly. Fields it does not
+// compute (energy/tonne, lining "efficiency") are simply absent here too —
+// no business-approved formula exists for either yet.
+export interface MeltingDashboard {
+  period: { range: MeltingDashboardRange; from: string; to: string };
+  kpis: {
+    activeHeats: number;
+    completedHeats: number;
+    averageYieldPercent: number | null;
+    totalMaterialInput: number;
+    totalOutputTonnes: number;
+    averageCycleDurationMinutes: number | null;
+  };
+  materialOverview: {
+    totalInputTonnes: number;
+    totalOutputTonnes: number;
+    totalLossTonnes: number;
+    averageYieldPercent: number | null;
+  };
+  furnaceStatus: DashboardFurnaceStatus[];
+  activeHeats: DashboardActiveHeat[];
+  furnacePerformance: DashboardFurnacePerformance[];
+  liningStatus: DashboardLiningStatus[];
+  recentHeats: DashboardRecentHeat[];
+  recentEvents: DashboardRecentEvent[];
+}
+
+export interface DashboardQueryParams {
+  range?: MeltingDashboardRange;
+  from?: string;
+  to?: string;
+  furnaceId?: string;
 }
 
 export const MeltingService = {
@@ -425,5 +673,44 @@ export const MeltingService = {
       method: "PATCH", headers: authHeaders(token), body: JSON.stringify(data),
     }, token);
     return handleResponse<SteelMelting>(res);
+  },
+
+  async addMaterialCharge(id: string, data: AddHeatMaterialChargePayload, token: string): Promise<HeatMaterialCharge> {
+    const res = await apiClient(`${API_URL}/steel/melting/${id}/material-charges`, {
+      method: "POST", headers: authHeaders(token), body: JSON.stringify(data),
+    }, token);
+    return handleResponse<HeatMaterialCharge>(res);
+  },
+
+  async getMaterialCharges(id: string, token: string): Promise<HeatMaterialCharge[]> {
+    const res = await apiClient(`${API_URL}/steel/melting/${id}/material-charges`, { headers: authHeaders(token) }, token);
+    return handleResponse<HeatMaterialCharge[]>(res);
+  },
+
+  async recordCycleEvent(id: string, data: RecordHeatCycleEventPayload, token: string): Promise<HeatCycleEvent> {
+    const res = await apiClient(`${API_URL}/steel/melting/${id}/events`, {
+      method: "POST", headers: authHeaders(token), body: JSON.stringify(data),
+    }, token);
+    return handleResponse<HeatCycleEvent>(res);
+  },
+
+  async getCycleEvents(id: string, token: string): Promise<HeatCycleEvent[]> {
+    const res = await apiClient(`${API_URL}/steel/melting/${id}/events`, { headers: authHeaders(token) }, token);
+    return handleResponse<HeatCycleEvent[]>(res);
+  },
+
+  async getHeatSummary(id: string, token: string): Promise<HeatSummary> {
+    const res = await apiClient(`${API_URL}/steel/melting/${id}/summary`, { headers: authHeaders(token) }, token);
+    return handleResponse<HeatSummary>(res);
+  },
+
+  async getDashboard(token: string, params: DashboardQueryParams = {}): Promise<MeltingDashboard> {
+    const res = await apiClient(`${API_URL}/steel/melting/dashboard${buildQuery({
+      range: params.range,
+      from: params.from,
+      to: params.to,
+      furnaceId: params.furnaceId,
+    })}`, { headers: authHeaders(token) }, token);
+    return handleResponse<MeltingDashboard>(res);
   },
 };

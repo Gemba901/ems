@@ -26,6 +26,10 @@ export class ConfirmFurnaceAvailabilityDto {
   @IsOptional()
   furnaceId?: string;
 
+  @IsUUID()
+  @IsOptional()
+  furnaceRefId?: string;
+
   @IsString()
   @IsOptional()
   plannedHeatRef?: string;
@@ -44,6 +48,10 @@ export class FurnaceLiningCheckDto {
   @IsString()
   @IsOptional()
   liningCampaignId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  liningRefId?: string;
 
   @Type(() => Number)
   @IsInt()

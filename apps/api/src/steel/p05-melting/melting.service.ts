@@ -25,6 +25,16 @@ import {
   UpdateMeltingStatusDto,
   QueryMeltingsDto,
 } from './dto/melting.dto';
+import {
+  AddHeatMaterialChargeDto,
+  QueryHeatMaterialChargesDto,
+  RecordHeatCycleEventDto,
+  QueryHeatCycleEventsDto,
+} from './dto/heat-operations.dto';
+import {
+  GetMeltingDashboardDto,
+  MeltingDashboardRange,
+} from './dto/dashboard.dto';
 
 // The order the 14 melting activities must occur in. Mirrors the
 // P01/P02/P03/P04 STAGE_ORDER pattern so a step can't be recorded before its
@@ -51,12 +61,23 @@ const meltingInclude = {
   chargePreparation: {
     select: { id: true, prepNumber: true, chargeNumber: true, status: true },
   },
+  furnace: { select: { id: true, code: true, name: true, status: true } },
+  lining: {
+    select: {
+      id: true,
+      installedAt: true,
+      heatsCompleted: true,
+      condition: true,
+      status: true,
+    },
+  },
   activityLogs: {
     orderBy: { createdAt: 'asc' as const },
     include: {
       performedBy: { select: { id: true, firstName: true, lastName: true } },
     },
   },
+  _count: { select: { materialCharges: true, cycleEvents: true } },
 };
 
 // Actions the frontend can offer, derived from (stage, status) so it never
@@ -252,6 +273,18 @@ export class MeltingService {
       );
     }
 
+    if (dto.furnaceRefId) {
+      const furnace = await this.prisma.furnace.findFirst({
+        where: { id: dto.furnaceRefId, organizationId },
+      });
+      if (!furnace) throw new NotFoundException('Furnace not found');
+      if (furnace.status !== 'READY') {
+        throw new BadRequestException(
+          `Furnace ${furnace.code} is not ready (status: ${furnace.status}).`,
+        );
+      }
+    }
+
     try {
       return await this.withUniqueRetry('heatInProcessNumber', () =>
         this.prisma.$transaction(async (tx) => {
@@ -274,6 +307,7 @@ export class MeltingService {
               recipeAlloyWeightSnapshot: charge.recipeAlloyWeightTonnes,
               recipeAdditiveWeightSnapshot: charge.recipeAdditiveWeightTonnes,
               furnaceId: dto.furnaceId,
+              furnaceRefId: dto.furnaceRefId,
               plannedHeatRef: dto.plannedHeatRef,
               operatorName: dto.operatorName,
               shift: dto.shift,
@@ -333,11 +367,29 @@ export class MeltingService {
       );
     }
 
+    if (dto.liningRefId) {
+      const lining = await this.prisma.furnaceLining.findFirst({
+        where: { id: dto.liningRefId, organizationId },
+      });
+      if (!lining) throw new NotFoundException('Furnace lining not found');
+      if (lining.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          'This lining has been retired and cannot be used for a new heat.',
+        );
+      }
+      if (melting.furnaceRefId && lining.furnaceId !== melting.furnaceRefId) {
+        throw new BadRequestException(
+          'This lining does not belong to the furnace selected for this heat.',
+        );
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
         where: { id },
         data: {
           liningCampaignId: dto.liningCampaignId,
+          liningRefId: dto.liningRefId,
           liningHeatCount: dto.liningHeatCount,
           liningVisualCondition: dto.liningVisualCondition,
           stage: 'A02_FURNACE_LINING_CHECK',
@@ -781,6 +833,12 @@ export class MeltingService {
           status: 'CLOSED',
         },
       });
+      if (melting.liningRefId) {
+        await tx.furnaceLining.update({
+          where: { id: melting.liningRefId },
+          data: { heatsCompleted: { increment: 1 } },
+        });
+      }
       await this.logActivity(tx, id, 'A14', employee.id, dto.notes, {
         ...dto,
       });
@@ -822,6 +880,548 @@ export class MeltingService {
       );
       return updated;
     });
+  }
+
+  // ── Material charges (P05-A06 onward) ──
+  //
+  // Itemized per-material charge rows, supplementary to the staged A01-A14
+  // flow above rather than a stage of their own — a heat can accept charge
+  // rows any time it's active (from A06 Load Charge through A10 Record
+  // Additions), and multiple rows are expected per heat.
+
+  async addMaterialCharge(
+    meltingId: string,
+    dto: AddHeatMaterialChargeDto,
+    userId: string,
+    organizationId: string,
+  ) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const melting = await this.findMeltingOrThrow(meltingId, organizationId);
+    this.assertActive(melting.status);
+
+    return this.prisma.$transaction(async (tx) => {
+      const last = await tx.heatMaterialCharge.findFirst({
+        where: { meltingId },
+        orderBy: { sequence: 'desc' },
+        select: { sequence: true },
+      });
+      return tx.heatMaterialCharge.create({
+        data: {
+          organizationId,
+          meltingId,
+          sequence: (last?.sequence ?? 0) + 1,
+          material: dto.material,
+          materialCategory: dto.materialCategory,
+          grade: dto.grade,
+          batchRef: dto.batchRef,
+          plannedQuantity: dto.plannedQuantity,
+          actualQuantity: dto.actualQuantity,
+          unit: dto.unit,
+          chargedAt: dto.chargedAt ? new Date(dto.chargedAt) : new Date(),
+          chargedById: employee.id,
+        },
+      });
+    });
+  }
+
+  async getMaterialCharges(
+    meltingId: string,
+    organizationId: string,
+    query: QueryHeatMaterialChargesDto,
+  ) {
+    await this.findMeltingOrThrow(meltingId, organizationId);
+    return this.prisma.heatMaterialCharge.findMany({
+      where: {
+        meltingId,
+        organizationId,
+        ...(query.materialCategory && {
+          materialCategory: query.materialCategory,
+        }),
+      },
+      include: {
+        chargedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { sequence: 'asc' },
+    });
+  }
+
+  // ── Heat-cycle events (P05-A07 onward) ──
+  //
+  // Operational timeline entries (temperature readings, alarms, delays,
+  // interventions) — distinct from SteelMeltingActivityLog, which records
+  // stage-transition actions. Like material charges, these are supplementary
+  // to the staged flow: any active heat can accept event rows.
+
+  async recordCycleEvent(
+    meltingId: string,
+    dto: RecordHeatCycleEventDto,
+    userId: string,
+    organizationId: string,
+  ) {
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const melting = await this.findMeltingOrThrow(meltingId, organizationId);
+    this.assertActive(melting.status);
+
+    return this.prisma.heatCycleEvent.create({
+      data: {
+        organizationId,
+        meltingId,
+        eventType: dto.eventType,
+        occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : new Date(),
+        temperatureCelsius: dto.temperatureCelsius,
+        quantity: dto.quantity,
+        unit: dto.unit,
+        notes: dto.notes,
+        recordedById: employee.id,
+      },
+    });
+  }
+
+  async getCycleEvents(
+    meltingId: string,
+    organizationId: string,
+    query: QueryHeatCycleEventsDto,
+  ) {
+    await this.findMeltingOrThrow(meltingId, organizationId);
+    return this.prisma.heatCycleEvent.findMany({
+      where: {
+        meltingId,
+        organizationId,
+        ...(query.eventType && { eventType: query.eventType }),
+      },
+      include: {
+        recordedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { occurredAt: 'asc' },
+    });
+  }
+
+  // ── Heat efficiency summary (P05 efficiency review) ──
+  //
+  // Only formulas explicitly supported by the business requirement are
+  // computed here: total material input (sum of actual charge quantities)
+  // and yield % (output / input × 100), both server-side so the frontend
+  // can't spoof them. Energy-per-tonne and lining "efficiency" are NOT
+  // computed — no formula for either is defined by the business yet; only
+  // the raw stored measurements needed to derive them later are returned.
+  async getHeatSummary(meltingId: string, organizationId: string) {
+    const melting = await this.findMeltingOrThrow(meltingId, organizationId);
+
+    const [charges, eventCount, additionEventCount] = await Promise.all([
+      this.prisma.heatMaterialCharge.findMany({
+        where: { meltingId, organizationId },
+        select: { actualQuantity: true, unit: true },
+      }),
+      this.prisma.heatCycleEvent.count({
+        where: { meltingId, organizationId },
+      }),
+      this.prisma.heatCycleEvent.count({
+        where: { meltingId, organizationId, eventType: 'MATERIAL_ADDITION' },
+      }),
+    ]);
+
+    const totalMaterialInput = charges.reduce(
+      (sum, c) => sum + c.actualQuantity,
+      0,
+    );
+    const totalOutputTonnes = melting.outputWeightTonnes ?? null;
+    const materialLossTonnes =
+      totalOutputTonnes !== null && charges.length > 0
+        ? totalMaterialInput - totalOutputTonnes
+        : null;
+    const yieldPercent =
+      totalOutputTonnes !== null && totalMaterialInput > 0
+        ? (totalOutputTonnes / totalMaterialInput) * 100
+        : null;
+
+    const cycleDurationMinutes =
+      melting.meltingStartTime && melting.handoverToRefiningAt
+        ? (melting.handoverToRefiningAt.getTime() -
+            melting.meltingStartTime.getTime()) /
+          60000
+        : null;
+
+    return {
+      heatId: melting.id,
+      heatInProcessNumber: melting.heatInProcessNumber,
+      furnace: melting.furnace,
+      lining: melting.lining,
+      stage: melting.stage,
+      status: melting.status,
+
+      // Stored measurements
+      totalMaterialInput,
+      totalOutputTonnes,
+      materialAdditionsCount: additionEventCount,
+      eventsCount: eventCount,
+      targetTemperatureCelsius: null, // not captured on SteelMelting; A01 has no target-temp field yet
+      liquidTemperatureCelsius: melting.liquidTemperatureCelsius,
+      outputEnergyTotalKwh: melting.outputEnergyTotalKwh,
+      meltingStartTime: melting.meltingStartTime,
+      handoverToRefiningAt: melting.handoverToRefiningAt,
+
+      // Derived — computed here, never trusted from the client
+      materialLossTonnes,
+      yieldPercent,
+      cycleDurationMinutes,
+      // Energy/tonne and lining-efficiency formulas are not implemented —
+      // not defined by the business. Consumers should treat their absence
+      // as "not yet available", not "zero".
+      energyPerTonne: null,
+    };
+  }
+
+  // ── P05 management dashboard ──
+  //
+  // Aggregated read for the P05 operations dashboard. Every derived number
+  // is computed here, server-side, from the same data model getHeatSummary
+  // uses for a single heat — nothing new is invented. Metrics with no
+  // business-approved formula (lining "efficiency", energy/tonne) are
+  // deliberately absent rather than guessed.
+  private resolveDashboardRange(dto: GetMeltingDashboardDto): {
+    gte: Date;
+    lte: Date;
+  } {
+    const now = new Date();
+    if (dto.range === MeltingDashboardRange.CUSTOM) {
+      return {
+        gte: dto.from ? new Date(dto.from) : new Date(0),
+        lte: dto.to ? new Date(dto.to) : now,
+      };
+    }
+    if (dto.range === MeltingDashboardRange.SEVEN_DAYS) {
+      return { gte: new Date(now.getTime() - 7 * 86400000), lte: now };
+    }
+    if (dto.range === MeltingDashboardRange.THIRTY_DAYS) {
+      return { gte: new Date(now.getTime() - 30 * 86400000), lte: now };
+    }
+    // TODAY (default)
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    return { gte: startOfDay, lte: now };
+  }
+
+  async getDashboard(organizationId: string, query: GetMeltingDashboardDto) {
+    const range = this.resolveDashboardRange(query);
+    const furnaceFilter = query.furnaceId
+      ? { furnaceRefId: query.furnaceId }
+      : {};
+
+    const activeHeatsWhere: Prisma.SteelMeltingWhereInput = {
+      organizationId,
+      status: 'IN_PROGRESS',
+      ...furnaceFilter,
+    };
+    const completedHeatsWhere: Prisma.SteelMeltingWhereInput = {
+      organizationId,
+      status: 'CLOSED',
+      handoverToRefiningAt: { gte: range.gte, lte: range.lte },
+      ...furnaceFilter,
+    };
+
+    const [
+      activeHeatsCount,
+      completedHeatsCount,
+      completedHeats,
+      activeHeats,
+      furnaces,
+      inputAgg,
+      outputAgg,
+      recentEvents,
+    ] = await Promise.all([
+      this.prisma.steelMelting.count({ where: activeHeatsWhere }),
+      this.prisma.steelMelting.count({ where: completedHeatsWhere }),
+      // Bounded to the 200 most recent closed heats in range — powers
+      // per-heat averages, furnace comparison, and the history table.
+      // KPI totals below come from separate aggregate queries so they stay
+      // accurate even beyond this bound.
+      this.prisma.steelMelting.findMany({
+        where: completedHeatsWhere,
+        select: {
+          id: true,
+          heatInProcessNumber: true,
+          chargeNumberSnapshot: true,
+          stage: true,
+          status: true,
+          furnaceRefId: true,
+          furnace: { select: { id: true, code: true, name: true } },
+          liningRefId: true,
+          lining: { select: { id: true, heatsCompleted: true } },
+          meltingStartTime: true,
+          handoverToRefiningAt: true,
+          outputWeightTonnes: true,
+        },
+        orderBy: { handoverToRefiningAt: 'desc' },
+        take: 200,
+      }),
+      this.prisma.steelMelting.findMany({
+        where: activeHeatsWhere,
+        select: {
+          id: true,
+          heatInProcessNumber: true,
+          stage: true,
+          status: true,
+          furnaceRefId: true,
+          furnace: { select: { id: true, code: true, name: true } },
+          meltingStartTime: true,
+          createdAt: true,
+          temperatureCelsius: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      this.prisma.furnace.findMany({
+        where: { organizationId },
+        include: {
+          linings: { where: { status: 'ACTIVE' }, take: 1 },
+        },
+        orderBy: { code: 'asc' },
+      }),
+      // "Material Processed" KPI — total actual quantity charged in range,
+      // across active and completed heats alike. Units are whatever each
+      // charge row recorded (HeatMaterialCharge.unit is free text); this sum
+      // assumes a consistent unit across charges and is not unit-converted.
+      this.prisma.heatMaterialCharge.aggregate({
+        where: {
+          organizationId,
+          chargedAt: { gte: range.gte, lte: range.lte },
+          ...(query.furnaceId
+            ? { melting: { furnaceRefId: query.furnaceId } }
+            : {}),
+        },
+        _sum: { actualQuantity: true },
+      }),
+      this.prisma.steelMelting.aggregate({
+        where: completedHeatsWhere,
+        _sum: { outputWeightTonnes: true },
+      }),
+      this.prisma.heatCycleEvent.findMany({
+        where: {
+          organizationId,
+          ...(query.furnaceId
+            ? { melting: { furnaceRefId: query.furnaceId } }
+            : {}),
+        },
+        orderBy: { occurredAt: 'desc' },
+        take: 20,
+        include: {
+          melting: { select: { id: true, heatInProcessNumber: true } },
+          recordedBy: { select: { id: true, firstName: true, lastName: true } },
+        },
+      }),
+    ]);
+
+    // Per-heat material input for the bounded completed-heats list — one
+    // groupBy instead of N queries.
+    const chargeSums = completedHeats.length
+      ? await this.prisma.heatMaterialCharge.groupBy({
+          by: ['meltingId'],
+          where: { meltingId: { in: completedHeats.map((h) => h.id) } },
+          _sum: { actualQuantity: true },
+        })
+      : [];
+    const inputByMelting = new Map(
+      chargeSums.map((c) => [c.meltingId, c._sum.actualQuantity ?? 0]),
+    );
+
+    // Same for active heats — "current input charged so far" per heat.
+    const activeChargeSums = activeHeats.length
+      ? await this.prisma.heatMaterialCharge.groupBy({
+          by: ['meltingId'],
+          where: { meltingId: { in: activeHeats.map((h) => h.id) } },
+          _sum: { actualQuantity: true },
+        })
+      : [];
+    const activeInputByMelting = new Map(
+      activeChargeSums.map((c) => [c.meltingId, c._sum.actualQuantity ?? 0]),
+    );
+
+    const computedHeats = completedHeats.map((h) => {
+      const materialInput = inputByMelting.get(h.id) ?? null;
+      const output = h.outputWeightTonnes;
+      const materialLoss =
+        materialInput !== null && output !== null
+          ? materialInput - output
+          : null;
+      const yieldPercent =
+        materialInput !== null && materialInput > 0 && output !== null
+          ? (output / materialInput) * 100
+          : null;
+      const cycleDurationMinutes =
+        h.meltingStartTime && h.handoverToRefiningAt
+          ? (h.handoverToRefiningAt.getTime() - h.meltingStartTime.getTime()) /
+            60000
+          : null;
+      return {
+        ...h,
+        materialInput,
+        output,
+        materialLoss,
+        yieldPercent,
+        cycleDurationMinutes,
+      };
+    });
+
+    const yieldedHeats = computedHeats.filter((h) => h.yieldPercent !== null);
+    const averageYieldPercent = yieldedHeats.length
+      ? yieldedHeats.reduce((sum, h) => sum + (h.yieldPercent ?? 0), 0) /
+        yieldedHeats.length
+      : null;
+
+    const timedHeats = computedHeats.filter(
+      (h) => h.cycleDurationMinutes !== null,
+    );
+    const averageCycleDurationMinutes = timedHeats.length
+      ? timedHeats.reduce((sum, h) => sum + (h.cycleDurationMinutes ?? 0), 0) /
+        timedHeats.length
+      : null;
+
+    const totalLossTonnes = computedHeats.reduce(
+      (sum, h) => sum + (h.materialLoss ?? 0),
+      0,
+    );
+
+    // Furnace comparison — grouped in-memory from the already-fetched
+    // bounded completedHeats list (no extra query).
+    const furnacePerformance = furnaces.map((f) => {
+      const heats = computedHeats.filter((h) => h.furnaceRefId === f.id);
+      const heatYields = heats.filter((h) => h.yieldPercent !== null);
+      const heatDurations = heats.filter(
+        (h) => h.cycleDurationMinutes !== null,
+      );
+      return {
+        furnaceId: f.id,
+        code: f.code,
+        name: f.name,
+        heatsCompleted: heats.length,
+        averageYieldPercent: heatYields.length
+          ? heatYields.reduce((s, h) => s + (h.yieldPercent ?? 0), 0) /
+            heatYields.length
+          : null,
+        averageCycleDurationMinutes: heatDurations.length
+          ? heatDurations.reduce(
+              (s, h) => s + (h.cycleDurationMinutes ?? 0),
+              0,
+            ) / heatDurations.length
+          : null,
+        totalMaterialInput: heats.reduce(
+          (s, h) => s + (h.materialInput ?? 0),
+          0,
+        ),
+        totalOutputTonnes: heats.reduce((s, h) => s + (h.output ?? 0), 0),
+      };
+    });
+
+    const activeHeatByFurnace = new Map(
+      activeHeats
+        .filter((h) => h.furnaceRefId)
+        .map((h) => [h.furnaceRefId as string, h]),
+    );
+
+    const furnaceStatus = furnaces.map((f) => {
+      const activeHeat = activeHeatByFurnace.get(f.id) ?? null;
+      const lining = f.linings[0] ?? null;
+      return {
+        id: f.id,
+        code: f.code,
+        name: f.name,
+        status: f.status,
+        activeHeat: activeHeat
+          ? {
+              id: activeHeat.id,
+              heatInProcessNumber: activeHeat.heatInProcessNumber,
+              stage: activeHeat.stage,
+              temperatureCelsius: activeHeat.temperatureCelsius,
+            }
+          : null,
+        lining: lining
+          ? {
+              id: lining.id,
+              installedAt: lining.installedAt,
+              heatsCompleted: lining.heatsCompleted,
+              condition: lining.condition,
+              thicknessRemainingMm: lining.thicknessRemainingMm,
+              status: lining.status,
+            }
+          : null,
+      };
+    });
+
+    const liningStatus = furnaceStatus
+      .filter((f) => f.lining)
+      .map((f) => ({
+        furnaceId: f.id,
+        furnaceCode: f.code,
+        ...f.lining!,
+      }));
+
+    return {
+      period: {
+        range: query.range ?? MeltingDashboardRange.TODAY,
+        from: range.gte,
+        to: range.lte,
+      },
+      kpis: {
+        activeHeats: activeHeatsCount,
+        completedHeats: completedHeatsCount,
+        averageYieldPercent,
+        totalMaterialInput: inputAgg._sum.actualQuantity ?? 0,
+        totalOutputTonnes: outputAgg._sum.outputWeightTonnes ?? 0,
+        averageCycleDurationMinutes,
+      },
+      materialOverview: {
+        // Scoped to the bounded completed-heats list above (heats with both
+        // charge and output data) — may differ slightly from kpis.totalMaterialInput,
+        // which sums ALL charges (including active heats) in range.
+        totalInputTonnes: computedHeats.reduce(
+          (s, h) => s + (h.materialInput ?? 0),
+          0,
+        ),
+        totalOutputTonnes: outputAgg._sum.outputWeightTonnes ?? 0,
+        totalLossTonnes,
+        averageYieldPercent,
+      },
+      furnaceStatus,
+      activeHeats: activeHeats.map((h) => ({
+        id: h.id,
+        heatInProcessNumber: h.heatInProcessNumber,
+        furnace: h.furnace,
+        stage: h.stage,
+        status: h.status,
+        meltingStartTime: h.meltingStartTime,
+        startedAt: h.meltingStartTime ?? h.createdAt,
+        temperatureCelsius: h.temperatureCelsius,
+        materialInput: activeInputByMelting.get(h.id) ?? 0,
+      })),
+      furnacePerformance,
+      liningStatus,
+      recentHeats: computedHeats.map((h) => ({
+        id: h.id,
+        heatInProcessNumber: h.heatInProcessNumber,
+        chargeNumberSnapshot: h.chargeNumberSnapshot,
+        furnace: h.furnace,
+        liningRefId: h.liningRefId,
+        status: h.status,
+        handoverToRefiningAt: h.handoverToRefiningAt,
+        materialInput: h.materialInput,
+        output: h.output,
+        materialLoss: h.materialLoss,
+        yieldPercent: h.yieldPercent,
+        cycleDurationMinutes: h.cycleDurationMinutes,
+      })),
+      recentEvents: recentEvents.map((e) => ({
+        id: e.id,
+        occurredAt: e.occurredAt,
+        eventType: e.eventType,
+        temperatureCelsius: e.temperatureCelsius,
+        quantity: e.quantity,
+        unit: e.unit,
+        notes: e.notes,
+        meltingId: e.melting.id,
+        heatInProcessNumber: e.melting.heatInProcessNumber,
+        recordedBy: e.recordedBy,
+      })),
+    };
   }
 
   // ── Reads ──

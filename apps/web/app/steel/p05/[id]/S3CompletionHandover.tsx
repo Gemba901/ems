@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import {
@@ -24,7 +24,7 @@ import { ContextSummary } from "@/components/steel/p05/ContextSummary";
 import { MeltingProgress } from "@/components/steel/p05/MeltingProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p05/screenMap";
 import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p05/shared";
-import { ShieldCheck, Info, ListChecks, Lightbulb, Lock, Send, CheckCircle2, Loader2 } from "lucide-react";
+import { ShieldCheck, Info, ListChecks, Lightbulb, Lock, Send, CheckCircle2, Loader2, Gauge } from "lucide-react";
 
 // Same authority scope enforced server-side by the melting controller's
 // RELEASE_ROLES guard on /refining-handover and /status.
@@ -325,24 +325,62 @@ function HandoverPanel({
   );
 }
 
-function ClosedState({ melting }: { melting: SteelMelting }) {
+// Efficiency review — stored measurements plus server-computed material
+// input/yield %. Metrics the backend doesn't compute (no business-confirmed
+// formula yet, e.g. energy/tonne) are shown as "Not available" rather than
+// silently omitted or guessed at on the frontend.
+function HeatSummaryPanel({ melting, token }: { melting: SteelMelting; token: string }) {
+  const { data: summary } = useQuery({
+    queryKey: ["heat-summary", melting.id],
+    queryFn: () => MeltingService.getHeatSummary(melting.id, token),
+  });
+
+  if (!summary) return null;
+
   return (
-    <Card className="border-emerald-200">
-      <CardContent className="py-8 text-center space-y-4">
-        <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
-          <CheckCircle2 className="h-7 w-7 text-emerald-600" />
-        </div>
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Handed Over to Refining</h2>
-          <p className="text-sm text-slate-500 mt-1">{melting.heatInProcessNumber} is now closed.</p>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm max-w-xl mx-auto text-left">
-          <Field label="Output weight" value={melting.outputWeightTonnes !== null ? `${melting.outputWeightTonnes} t` : null} />
-          <Field label="Liquid temperature" value={melting.liquidTemperatureCelsius !== null ? `${melting.liquidTemperatureCelsius} °C` : null} />
-          <Field label="Handed over at" value={melting.handoverToRefiningAt ? new Date(melting.handoverToRefiningAt).toLocaleString() : null} />
-        </div>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Gauge className="h-4 w-4 text-slate-500" />
+          Heat Efficiency Summary
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <Field label="Total material input" value={`${summary.totalMaterialInput} (mixed units)`} />
+        <Field label="Total output" value={summary.totalOutputTonnes !== null ? `${summary.totalOutputTonnes} t` : null} />
+        <Field label="Material loss" value={summary.materialLossTonnes !== null ? summary.materialLossTonnes.toFixed(2) : null} />
+        <Field label="Yield %" value={summary.yieldPercent !== null ? `${summary.yieldPercent.toFixed(1)}%` : "Not available"} />
+        <Field label="Cycle duration" value={summary.cycleDurationMinutes !== null ? `${Math.round(summary.cycleDurationMinutes)} min` : null} />
+        <Field label="Material additions" value={summary.materialAdditionsCount} />
+        <Field label="Events logged" value={summary.eventsCount} />
+        <Field label="Energy / tonne" value="Not available — formula not yet defined" />
+        <Field label="Lining heats completed" value={summary.lining ? summary.lining.heatsCompleted : null} />
       </CardContent>
     </Card>
+  );
+}
+
+function ClosedState({ melting, token }: { melting: SteelMelting; token: string }) {
+  return (
+    <div className="space-y-4">
+      <Card className="border-emerald-200">
+        <CardContent className="py-8 text-center space-y-4">
+          <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Handed Over to Refining</h2>
+            <p className="text-sm text-slate-500 mt-1">{melting.heatInProcessNumber} is now closed.</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm max-w-xl mx-auto text-left">
+            <Field label="Output weight" value={melting.outputWeightTonnes !== null ? `${melting.outputWeightTonnes} t` : null} />
+            <Field label="Liquid temperature" value={melting.liquidTemperatureCelsius !== null ? `${melting.liquidTemperatureCelsius} °C` : null} />
+            <Field label="Handed over at" value={melting.handoverToRefiningAt ? new Date(melting.handoverToRefiningAt).toLocaleString() : null} />
+          </div>
+        </CardContent>
+      </Card>
+      <HeatSummaryPanel melting={melting} token={token} />
+    </div>
   );
 }
 
@@ -378,7 +416,7 @@ export function S3CompletionHandover({
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
             {closed ? (
-              <ClosedState melting={melting} />
+              <ClosedState melting={melting} token={token} />
             ) : (
               <>
                 <SubStep

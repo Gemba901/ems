@@ -106,7 +106,17 @@ export interface SteelHeatApproval {
   approvalNumber: string;
   organizationId: string;
   meltingId: string;
-  melting: { id: string; heatInProcessNumber: string; chargeNumberSnapshot: string | null; status: string; stage: string };
+  melting: {
+    id: string;
+    heatInProcessNumber: string;
+    chargeNumberSnapshot: string | null;
+    status: string;
+    stage: string;
+    chargePreparation?: {
+      id: string;
+      plan: { id: string; planNumber: string; grade: string | null } | null;
+    } | null;
+  };
   stage: SteelHeatApprovalStage;
   status: SteelHeatApprovalStatus;
 
@@ -228,6 +238,7 @@ export interface ApproveChemistryTemperaturePayload {
 
 export interface ConfirmHeatNumberPayload {
   heatNumber?: string;
+  heatNumberOverrideReason?: string;
 }
 
 export interface TappingApprovalPayload {

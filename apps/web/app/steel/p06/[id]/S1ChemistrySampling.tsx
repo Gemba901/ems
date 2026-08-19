@@ -21,7 +21,7 @@ import { ScreenSidebar } from "@/components/steel/p06/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p06/ContextSummary";
 import { HeatApprovalProgress } from "@/components/steel/p06/HeatApprovalProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p06/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, subStatus } from "@/components/steel/p06/shared";
+import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p06/shared";
 import { FlaskConical, Info, ListChecks, Lightbulb } from "lucide-react";
 
 const CHEMISTRY_ELEMENTS = ["C", "Mn", "Si", "P", "S", "Cr"];
@@ -128,7 +128,12 @@ function AnalyzeSampleForm({ heatApproval, token, onDone }: { heatApproval: Stee
 }
 
 function CompareChemistryForm({ heatApproval, token, onDone }: { heatApproval: SteelHeatApproval; token: string; onDone: () => void }) {
-  const [grade, setGrade] = useState("");
+  // Prefilled from the P01-A04 grade captured on the production plan this
+  // heat traces back to (melting -> chargePreparation -> plan.grade), so
+  // this doesn't need to be re-typed. Falls back to free entry only when
+  // that chain hasn't produced a grade for this record.
+  const planGrade = heatApproval.melting?.chargePreparation?.plan?.grade ?? "";
+  const [grade, setGrade] = useState(planGrade);
   const [matches, setMatches] = useState(false);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +148,11 @@ function CompareChemistryForm({ heatApproval, token, onDone }: { heatApproval: S
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
       <Field label="Analyzed chemistry" value={formatChemistry(heatApproval.chemistryComposition)} />
-      <Input placeholder="Required grade (optional)" value={grade} onChange={(e) => setGrade(e.target.value)} />
+      {planGrade ? (
+        <Field label="Required grade (from production plan)" value={planGrade} />
+      ) : (
+        <Input placeholder="Required grade (optional)" value={grade} onChange={(e) => setGrade(e.target.value)} />
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={matches} onChange={(e) => setMatches(e.target.checked)} />
         Chemistry matches the required grade
@@ -318,72 +327,62 @@ export function S1ChemistrySampling({
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
-            <SubStepCard code="P06-A01" title="Liquid Steel Sample Taken" status="done">
+            <SubStep
+              code="P06-A01"
+              title="Liquid Steel Sample Taken"
+              status="done"
+              summary={`Sample ${heatApproval.sampleRef ?? "—"}${heatApproval.sampleTakenAt ? ` · ${new Date(heatApproval.sampleTakenAt).toLocaleString()}` : ""}`}
+            >
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <Field label="Sample reference" value={heatApproval.sampleRef} />
                 <Field label="Sampled at" value={heatApproval.sampleTakenAt ? new Date(heatApproval.sampleTakenAt).toLocaleString() : null} />
               </div>
-            </SubStepCard>
+            </SubStep>
 
-            <SubStepCard code="P06-A02" title="Analyze Sample in Lab" status={analyzeStatus}>
-              {analyzeStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Composition" value={formatChemistry(heatApproval.chemistryComposition)} />
-                  <Field label="Lab reference" value={heatApproval.labRef} />
-                </div>
-              ) : analyzeStatus === "active" ? (
-                <AnalyzeSampleForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P06-A02"
+              title="Analyze Sample in Lab"
+              status={analyzeStatus}
+              summary={formatChemistry(heatApproval.chemistryComposition) ?? undefined}
+            >
+              {analyzeStatus === "active" && <AnalyzeSampleForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P06-A03" title="Compare Chemistry with Required Grade" status={compareStatus}>
-              {compareStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Required grade" value={heatApproval.requiredGrade} />
-                  <Field label="Matches grade" value={heatApproval.chemistryMatchesGrade ? "Yes" : "No"} />
-                  <Field label="Deviation notes" value={heatApproval.chemistryDeviationNotes} />
-                </div>
-              ) : compareStatus === "active" ? (
-                <CompareChemistryForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P06-A03"
+              title="Compare Chemistry with Required Grade"
+              status={compareStatus}
+              summary={`Grade: ${heatApproval.requiredGrade ?? "—"} · Matches: ${heatApproval.chemistryMatchesGrade ? "Yes" : "No"}`}
+            >
+              {compareStatus === "active" && <CompareChemistryForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P06-A04" title="Decide Correction Requirement" status={correctionStatus}>
-              {correctionStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Correction required" value={heatApproval.correctionRequired ? "Yes" : "No"} />
-                  <Field label="Reason" value={heatApproval.correctionReason} />
-                </div>
-              ) : correctionStatus === "active" ? (
-                <DecideCorrectionForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P06-A04"
+              title="Decide Correction Requirement"
+              status={correctionStatus}
+              summary={`Correction required: ${heatApproval.correctionRequired ? "Yes" : "No"}`}
+            >
+              {correctionStatus === "active" && <DecideCorrectionForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P06-A05" title="Add Correction Material" status={materialStatus}>
-              {materialStatus === "done" ? (
-                <Field label="Materials" value={heatApproval.correctionMaterials?.length ? `${heatApproval.correctionMaterials.length} item(s)` : "None"} />
-              ) : materialStatus === "active" ? (
-                <CorrectionMaterialForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P06-A05"
+              title="Add Correction Material"
+              status={materialStatus}
+              summary={heatApproval.correctionMaterials?.length ? `${heatApproval.correctionMaterials.length} material(s) added` : "None"}
+            >
+              {materialStatus === "active" && <CorrectionMaterialForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P06-A06" title="Re-test Chemistry" status={retestStatus}>
-              {retestStatus === "done" ? (
-                <Field label="Re-test result" value={formatChemistry(heatApproval.retestChemistryComposition) ?? "Not applicable"} />
-              ) : retestStatus === "active" ? (
-                <RetestChemistryForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P06-A06"
+              title="Re-test Chemistry"
+              status={retestStatus}
+              summary={formatChemistry(heatApproval.retestChemistryComposition) ?? "Not applicable"}
+            >
+              {retestStatus === "active" && <RetestChemistryForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+            </SubStep>
           </div>
           <ScreenSidebar>
             <HeatApprovalProgress heatApproval={heatApproval} />

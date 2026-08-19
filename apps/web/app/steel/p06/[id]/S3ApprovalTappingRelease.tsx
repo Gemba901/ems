@@ -23,7 +23,7 @@ import { ScreenSidebar } from "@/components/steel/p06/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p06/ContextSummary";
 import { HeatApprovalProgress } from "@/components/steel/p06/HeatApprovalProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p06/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, subStatus } from "@/components/steel/p06/shared";
+import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p06/shared";
 import { ShieldCheck, Info, ListChecks, Lightbulb, Lock, Send, CheckCircle2, Loader2 } from "lucide-react";
 
 // Same authority scope enforced server-side by the heat-approval
@@ -129,7 +129,9 @@ function ApproveChemistryTemperatureForm({ heatApproval, token, canAct, onDone }
 }
 
 function ConfirmHeatNumberForm({ heatApproval, token, onDone }: { heatApproval: SteelHeatApproval; token: string; onDone: () => void }) {
-  const [heatNumber, setHeatNumber] = useState(heatApproval.melting?.heatInProcessNumber ?? "");
+  const defaultHeatNumber = heatApproval.melting?.heatInProcessNumber ?? "";
+  const [heatNumber, setHeatNumber] = useState(defaultHeatNumber);
+  const [overrideReason, setOverrideReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -138,12 +140,31 @@ function ConfirmHeatNumberForm({ heatApproval, token, onDone }: { heatApproval: 
     onError: (err: Error) => setError(err.message),
   });
 
+  const isOverride = heatNumber.trim() !== "" && heatNumber.trim() !== defaultHeatNumber;
+  const canSubmit = !isOverride || overrideReason.trim().length > 0;
+
   return (
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
       <p className="text-xs text-slate-400">Confirm the default heat number, or enter a different one.</p>
       <Input placeholder="Heat number" value={heatNumber} onChange={(e) => setHeatNumber(e.target.value)} />
-      <Button size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate({ heatNumber: heatNumber || undefined })}>
+      {isOverride && (
+        <>
+          <p className="text-xs text-amber-600">
+            This differs from the system-generated heat number ({defaultHeatNumber || "none"}) — a justification is required.
+          </p>
+          <Input
+            placeholder="Reason for overriding the heat number (required)"
+            value={overrideReason}
+            onChange={(e) => setOverrideReason(e.target.value)}
+          />
+        </>
+      )}
+      <Button
+        size="sm"
+        disabled={!canSubmit || mutation.isPending}
+        onClick={() => mutation.mutate({ heatNumber: heatNumber || undefined, heatNumberOverrideReason: isOverride ? overrideReason : undefined })}
+      >
         <SaveButton pending={mutation.isPending} label="Confirm heat number" />
       </Button>
     </div>
@@ -326,64 +347,50 @@ export function S3ApprovalTappingRelease({
               <ClosedState heatApproval={heatApproval} />
             ) : (
               <>
-                <SubStepCard code="P06-A09" title="Approve Chemistry & Temperature" status={approveStatus}>
-                  {approveStatus === "done" ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Approved" value={heatApproval.chemistryTemperatureApproved ? "Yes" : "No"} />
-                      <Field label="Notes" value={heatApproval.approvalNotes} />
-                    </div>
-                  ) : approveStatus === "active" ? (
-                    <ApproveChemistryTemperatureForm heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P06-A09"
+                  title="Approve Chemistry & Temperature"
+                  status={approveStatus}
+                  summary={`Approved: ${heatApproval.chemistryTemperatureApproved ? "Yes" : "No"}`}
+                >
+                  {approveStatus === "active" && <ApproveChemistryTemperatureForm heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P06-A10" title="Create or Confirm Heat Number" status={heatNumberStatus}>
-                  {heatNumberStatus === "done" ? (
-                    <Field label="Heat number" value={heatApproval.heatNumber} />
-                  ) : heatNumberStatus === "active" ? (
-                    <ConfirmHeatNumberForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P06-A10"
+                  title="Create or Confirm Heat Number"
+                  status={heatNumberStatus}
+                  summary={heatApproval.heatNumber ? `Heat number ${heatApproval.heatNumber}` : undefined}
+                >
+                  {heatNumberStatus === "active" && <ConfirmHeatNumberForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P06-A11" title="Give Tapping Approval" status={tappingStatus}>
-                  {tappingStatus === "done" ? (
-                    <Field label="Tapping approved" value={heatApproval.tappingApproved ? "Yes" : "No"} />
-                  ) : tappingStatus === "active" ? (
-                    <TappingApprovalForm heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P06-A11"
+                  title="Give Tapping Approval"
+                  status={tappingStatus}
+                  summary={`Tapping approved: ${heatApproval.tappingApproved ? "Yes" : "No"}`}
+                >
+                  {tappingStatus === "active" && <TappingApprovalForm heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P06-A12" title="Tap Liquid Steel into Ladle" status={tapStatus}>
-                  {tapStatus === "done" ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <Field label="Tapped at" value={heatApproval.tapStartTime ? new Date(heatApproval.tapStartTime).toLocaleString() : null} />
-                      <Field label="Operator" value={heatApproval.tapOperator} />
-                    </div>
-                  ) : tapStatus === "active" ? (
-                    <TapToLadleForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P06-A12"
+                  title="Tap Liquid Steel into Ladle"
+                  status={tapStatus}
+                  summary={heatApproval.tapStartTime ? `Tapped ${new Date(heatApproval.tapStartTime).toLocaleString()}` : undefined}
+                >
+                  {tapStatus === "active" && <TapToLadleForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+                </SubStep>
 
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1 px-1">
                     <Send className="h-3.5 w-3.5 text-indigo-500" />
                     <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide">Final Release / Authority Gate</p>
                   </div>
-                  <SubStepCard code="P06-A13" title="Release Approved Heat to Casting" status={releaseStatus}>
-                    {releaseStatus === "active" ? (
-                      <ReleasePanel heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />
-                    ) : (
-                      <LockedNote />
-                    )}
-                  </SubStepCard>
+                  <SubStep code="P06-A13" title="Release Approved Heat to Casting" status={releaseStatus}>
+                    {releaseStatus === "active" && <ReleasePanel heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />}
+                  </SubStep>
                 </div>
               </>
             )}

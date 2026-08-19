@@ -135,6 +135,12 @@ export class ConfirmHeatNumberDto {
   @IsString()
   @IsOptional()
   heatNumber?: string;
+
+  // Required when heatNumber overrides the system-generated default —
+  // follows the same free-form-reason convention as correctionReason.
+  @IsString()
+  @IsOptional()
+  heatNumberOverrideReason?: string;
 }
 
 // P06-A11 — Give tapping approval

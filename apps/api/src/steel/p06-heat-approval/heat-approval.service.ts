@@ -53,6 +53,15 @@ const heatApprovalInclude = {
       chargeNumberSnapshot: true,
       status: true,
       stage: true,
+      // Traceability chain back to the originating P01 production plan,
+      // used to prefill the required grade in P06-A03 instead of asking
+      // for free-text re-entry.
+      chargePreparation: {
+        select: {
+          id: true,
+          plan: { select: { id: true, planNumber: true, grade: true } },
+        },
+      },
     },
   },
   activityLogs: {
@@ -679,8 +688,18 @@ export class HeatApprovalService {
       'A09_APPROVE_CHEMISTRY_TEMPERATURE',
     );
 
-    const heatNumber =
-      dto.heatNumber?.trim() || heatApproval.melting.heatInProcessNumber;
+    const defaultHeatNumber = heatApproval.melting.heatInProcessNumber;
+    const requestedHeatNumber = dto.heatNumber?.trim();
+    const isOverride =
+      !!requestedHeatNumber && requestedHeatNumber !== defaultHeatNumber;
+
+    if (isOverride && !dto.heatNumberOverrideReason?.trim()) {
+      throw new BadRequestException(
+        'A justification is required when overriding the system-generated heat number.',
+      );
+    }
+
+    const heatNumber = requestedHeatNumber || defaultHeatNumber;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -688,9 +707,14 @@ export class HeatApprovalService {
           where: { id },
           data: { heatNumber, stage: 'A10_CONFIRM_HEAT_NUMBER' },
         });
-        await this.logActivity(tx, id, 'A10', employee.id, undefined, {
-          heatNumber,
-        });
+        await this.logActivity(
+          tx,
+          id,
+          'A10',
+          employee.id,
+          isOverride ? dto.heatNumberOverrideReason : undefined,
+          { heatNumber, override: isOverride },
+        );
         return tx.steelHeatApproval.findUnique({
           where: { id: updated.id },
           include: heatApprovalInclude,

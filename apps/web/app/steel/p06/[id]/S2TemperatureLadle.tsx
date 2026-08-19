@@ -18,7 +18,7 @@ import { ScreenSidebar } from "@/components/steel/p06/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p06/ContextSummary";
 import { HeatApprovalProgress } from "@/components/steel/p06/HeatApprovalProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p06/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, subStatus } from "@/components/steel/p06/shared";
+import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p06/shared";
 import { Thermometer, Info, ListChecks, Lightbulb } from "lucide-react";
 
 function Sidebar() {
@@ -146,29 +146,23 @@ export function S2TemperatureLadle({
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
-            <SubStepCard code="P06-A07" title="Check Liquid Steel Temperature" status={tempStatus}>
-              {tempStatus === "done" ? (
-                <Field label="Temperature" value={heatApproval.liquidTemperatureCelsius !== null ? `${heatApproval.liquidTemperatureCelsius} °C` : null} />
-              ) : tempStatus === "active" ? (
-                <TemperatureForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P06-A07"
+              title="Check Liquid Steel Temperature"
+              status={tempStatus}
+              summary={heatApproval.liquidTemperatureCelsius !== null ? `${heatApproval.liquidTemperatureCelsius} °C` : undefined}
+            >
+              {tempStatus === "active" && <TemperatureForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P06-A08" title="Check Ladle Readiness & Lining Condition" status={ladleStatus}>
-              {ladleStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Ladle" value={heatApproval.ladleId} />
-                  <Field label="Lining condition" value={heatApproval.ladleLiningCondition} />
-                  <Field label="Ready" value={heatApproval.ladleReady ? "Yes" : "No"} />
-                </div>
-              ) : ladleStatus === "active" ? (
-                <LadleReadinessForm heatApproval={heatApproval} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P06-A08"
+              title="Check Ladle Readiness & Lining Condition"
+              status={ladleStatus}
+              summary={`Ladle ${heatApproval.ladleId ?? "—"} · Ready: ${heatApproval.ladleReady ? "Yes" : "No"}`}
+            >
+              {ladleStatus === "active" && <LadleReadinessForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
+            </SubStep>
           </div>
           <ScreenSidebar>
             <HeatApprovalProgress heatApproval={heatApproval} />

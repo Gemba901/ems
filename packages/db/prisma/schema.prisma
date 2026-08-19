@@ -156,6 +156,9 @@ model Organization {
   steelChargePreparations SteelChargePreparation[]
   steelMeltings           SteelMelting[]
   steelHeatApprovals      SteelHeatApproval[]
+  activities              Activity[]
+  activityIngestions      ActivityIngestion[]
+  activityIngestionRows   ActivityIngestionRow[]
 }
 
 //specific user
@@ -334,20 +337,20 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  steelPlansCreated          SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
-  steelPlansApproved         SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
-  steelActivityLogs          SteelPlanActivityLog[]
-  steelDepartmentAcks        SteelPlanDepartmentAck[]
-  steelSourcingOrdersCreated SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
-  steelSourcingActivityLogs  SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
-  steelIntakesCreated        SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
-  steelIntakeActivityLogs    SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
-  steelChargePrepsCreated    SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
-  steelChargeActivityLogs    SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
-  steelMeltingsCreated       SteelMelting[]                      @relation("SteelMeltingCreatedBy")
-  steelHeatApprovalsCreated  SteelHeatApproval[]                 @relation("SteelHeatApprovalCreatedBy")
-  steelHeatApprovalActivityLogs SteelHeatApprovalActivityLog[]   @relation("SteelHeatApprovalPerformedBy")
-  steelMeltingActivityLogs   SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
+  steelPlansCreated             SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
+  steelPlansApproved            SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
+  steelActivityLogs             SteelPlanActivityLog[]
+  steelDepartmentAcks           SteelPlanDepartmentAck[]
+  steelSourcingOrdersCreated    SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs     SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
+  steelIntakesCreated           SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
+  steelIntakeActivityLogs       SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
+  steelChargePrepsCreated       SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
+  steelChargeActivityLogs       SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
+  steelMeltingsCreated          SteelMelting[]                      @relation("SteelMeltingCreatedBy")
+  steelHeatApprovalsCreated     SteelHeatApproval[]                 @relation("SteelHeatApprovalCreatedBy")
+  steelHeatApprovalActivityLogs SteelHeatApprovalActivityLog[]      @relation("SteelHeatApprovalPerformedBy")
+  steelMeltingActivityLogs      SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
@@ -1827,30 +1830,30 @@ enum SteelMeltingActivity {
 // approval / refining) once closed (no P06 model exists in this repository
 // yet).
 model SteelMelting {
-  id                     String             @id @default(uuid())
-  heatInProcessNumber    String             @unique
-  organizationId         String
-  createdById            String
-  chargePreparationId    String             @unique
-  stage                  SteelMeltingStage  @default(A01_CONFIRM_FURNACE_AVAILABILITY)
-  status                 SteelMeltingStatus @default(DRAFT)
+  id                  String             @id @default(uuid())
+  heatInProcessNumber String             @unique
+  organizationId      String
+  createdById         String
+  chargePreparationId String             @unique
+  stage               SteelMeltingStage  @default(A01_CONFIRM_FURNACE_AVAILABILITY)
+  status              SteelMeltingStatus @default(DRAFT)
 
   // Snapshot of the parent charge preparation at creation time
-  chargeNumberSnapshot            String?
-  recipeScrapWeightSnapshot       Float?
-  recipeDriWeightSnapshot         Float?
-  recipeAlloyWeightSnapshot       Float?
-  recipeAdditiveWeightSnapshot    Float?
+  chargeNumberSnapshot         String?
+  recipeScrapWeightSnapshot    Float?
+  recipeDriWeightSnapshot      Float?
+  recipeAlloyWeightSnapshot    Float?
+  recipeAdditiveWeightSnapshot Float?
 
   // P05-A01 — Confirm furnace availability
-  furnaceId       String?
-  plannedHeatRef  String?
-  operatorName    String?
-  shift           String?
+  furnaceId      String?
+  plannedHeatRef String?
+  operatorName   String?
+  shift          String?
 
   // P05-A02 — Furnace lining check
-  liningCampaignId    String?
-  liningHeatCount     Int?
+  liningCampaignId      String?
+  liningHeatCount       Int?
   liningVisualCondition String?
 
   // P05-A03 — Furnace systems check
@@ -1869,9 +1872,9 @@ model SteelMelting {
   actualWeightVsRecipeOk Boolean?
 
   // P05-A06 — Load charge
-  loadingTime     DateTime?
+  loadingTime      DateTime?
   loadingEquipment String?
-  chargeSequence  String?
+  chargeSequence   String?
 
   // P05-A07 — Start melting
   meltingStartTime DateTime?
@@ -1880,37 +1883,37 @@ model SteelMelting {
   meltingChargeId  String?
 
   // P05-A08 — Monitor power
-  powerKwh              Float?
-  powerElapsedMinutes   Float?
-  powerTonnage          Float?
-  powerInterruptions    String?
+  powerKwh            Float?
+  powerElapsedMinutes Float?
+  powerTonnage        Float?
+  powerInterruptions  String?
 
   // P05-A09 — Monitor temperature
-  temperatureCelsius       Float?
+  temperatureCelsius        Float?
   temperatureElapsedMinutes Float?
-  temperatureDelayReason   String?
+  temperatureDelayReason    String?
 
   // P05-A10 — Record additions (optional/conditional — zero additions allowed)
   additions Json?
 
   // P05-A11 — Remove slag (optional/conditional — "not applicable" allowed)
-  slagRemovalTime     DateTime?
+  slagRemovalTime      DateTime?
   slagQuantityEstimate Float?
   slagIssueFound       String?
   slagNotApplicable    Boolean?
 
   // P05-A12 — Record melt output
-  outputChargeId       String?
-  outputFurnaceId      String?
-  outputMeltTimeMinutes Float?
-  outputEnergyTotalKwh Float?
+  outputChargeId         String?
+  outputFurnaceId        String?
+  outputMeltTimeMinutes  Float?
+  outputEnergyTotalKwh   Float?
   outputAdditionsSummary String?
-  outputWeightTonnes   Float?
+  outputWeightTonnes     Float?
 
   // P05-A13 — Confirm liquid ready
-  liquidReady            Boolean?
+  liquidReady              Boolean?
   liquidTemperatureCelsius Float?
-  liquidOperatorConfirmed Boolean?
+  liquidOperatorConfirmed  Boolean?
 
   // P05-A14 — Refining handover (irreversible)
   handoverToRefiningAt DateTime?
@@ -1918,9 +1921,9 @@ model SteelMelting {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization      Organization                @relation(fields: [organizationId], references: [id])
-  createdBy         Employee                     @relation("SteelMeltingCreatedBy", fields: [createdById], references: [id])
-  chargePreparation SteelChargePreparation       @relation(fields: [chargePreparationId], references: [id])
+  organization      Organization              @relation(fields: [organizationId], references: [id])
+  createdBy         Employee                  @relation("SteelMeltingCreatedBy", fields: [createdById], references: [id])
+  chargePreparation SteelChargePreparation    @relation(fields: [chargePreparationId], references: [id])
   activityLogs      SteelMeltingActivityLog[]
   heatApproval      SteelHeatApproval?
 
@@ -1931,13 +1934,13 @@ model SteelMelting {
 
 // Audit trail: every activity performed against a melting record is recorded here
 model SteelMeltingActivityLog {
-  id            String                @id @default(uuid())
+  id            String               @id @default(uuid())
   meltingId     String
   activity      SteelMeltingActivity
   performedById String
   notes         String?
   data          Json?
-  createdAt     DateTime              @default(now())
+  createdAt     DateTime             @default(now())
 
   melting     SteelMelting @relation(fields: [meltingId], references: [id], onDelete: Cascade)
   performedBy Employee     @relation("SteelMeltingPerformedBy", fields: [performedById], references: [id])
@@ -2002,16 +2005,16 @@ model SteelHeatApproval {
   status         SteelHeatApprovalStatus @default(DRAFT)
 
   // P06-A01 — Take liquid steel sample
-  sampleRef   String?
+  sampleRef     String?
   sampleTakenAt DateTime?
 
   // P06-A02 — Analyze sample in spectrometer/lab
   chemistryComposition Json?
-  labRef                String?
+  labRef               String?
 
   // P06-A03 — Compare chemistry with required grade
-  requiredGrade          String?
-  chemistryMatchesGrade  Boolean?
+  requiredGrade           String?
+  chemistryMatchesGrade   Boolean?
   chemistryDeviationNotes String?
 
   // P06-A04 — Decide correction requirement
@@ -2019,7 +2022,7 @@ model SteelHeatApproval {
   correctionReason   String?
 
   // P06-A05 — Add alloy, carbon raiser, lime, or correction material (conditional)
-  correctionMaterials    Json?
+  correctionMaterials     Json?
   correctionNotApplicable Boolean?
 
   // P06-A06 — Re-test chemistry if required (conditional). Each time a
@@ -2028,8 +2031,8 @@ model SteelHeatApproval {
   // increments — capped (see heat-approval.service.ts) since repeated
   // correction is itself a cost/delay signal worth surfacing.
   retestChemistryComposition Json?
-  retestNotApplicable         Boolean?
-  correctionAttempts          Int      @default(0)
+  retestNotApplicable        Boolean?
+  correctionAttempts         Int      @default(0)
 
   // P06-A07 — Check liquid steel temperature
   liquidTemperatureCelsius Float?
@@ -2041,7 +2044,7 @@ model SteelHeatApproval {
 
   // P06-A09 — Approve chemistry and temperature
   chemistryTemperatureApproved Boolean?
-  approvalNotes                 String?
+  approvalNotes                String?
 
   // P06-A10 — Create or confirm heat number
   heatNumber String? @unique
@@ -2060,9 +2063,9 @@ model SteelHeatApproval {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization                    @relation(fields: [organizationId], references: [id])
-  createdBy    Employee                         @relation("SteelHeatApprovalCreatedBy", fields: [createdById], references: [id])
-  melting      SteelMelting                     @relation(fields: [meltingId], references: [id])
+  organization Organization                   @relation(fields: [organizationId], references: [id])
+  createdBy    Employee                       @relation("SteelHeatApprovalCreatedBy", fields: [createdById], references: [id])
+  melting      SteelMelting                   @relation(fields: [meltingId], references: [id])
   activityLogs SteelHeatApprovalActivityLog[]
 
   @@index([organizationId])
@@ -2072,13 +2075,13 @@ model SteelHeatApproval {
 
 // Audit trail: every activity performed against a heat-approval record is recorded here
 model SteelHeatApprovalActivityLog {
-  id              String                    @id @default(uuid())
-  heatApprovalId  String
-  activity        SteelHeatApprovalActivity
-  performedById   String
-  notes           String?
-  data            Json?
-  createdAt       DateTime                  @default(now())
+  id             String                    @id @default(uuid())
+  heatApprovalId String
+  activity       SteelHeatApprovalActivity
+  performedById  String
+  notes          String?
+  data           Json?
+  createdAt      DateTime                  @default(now())
 
   heatApproval SteelHeatApproval @relation(fields: [heatApprovalId], references: [id], onDelete: Cascade)
   performedBy  Employee          @relation("SteelHeatApprovalPerformedBy", fields: [performedById], references: [id])

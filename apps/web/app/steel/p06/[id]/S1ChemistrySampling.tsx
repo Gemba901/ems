@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   HeatApprovalService,
   SteelHeatApproval,
@@ -11,6 +11,7 @@ import {
   AddCorrectionMaterialPayload,
   RetestChemistryPayload,
 } from "@/services/steel-heat-approval.service";
+import { ChargePreparationService } from "@/services/steel-charge-preparation.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,29 @@ function composeChemistry(values: Record<string, string>): Record<string, number
 function formatChemistry(composition: Record<string, number> | null) {
   if (!composition || Object.keys(composition).length === 0) return null;
   return Object.entries(composition).map(([el, v]) => `${el} ${v}%`).join(", ");
+}
+
+const OTHER_MATERIAL = "__other__";
+
+// Correction materials aren't backed by a fixed catalog table — P04-A06
+// (charge preparation additives) stores them as free-text history instead.
+// Derive the dropdown options from the distinct itemName values used across
+// this org's past charge preparations, falling back to free text via "Other".
+function useAdditiveCatalog(token: string) {
+  const { data } = useQuery({
+    queryKey: ["steel-additive-catalog"],
+    queryFn: () => ChargePreparationService.getAll(token, { limit: 100 }),
+    staleTime: 5 * 60 * 1000,
+  });
+  return useMemo(() => {
+    const names = new Set<string>();
+    for (const prep of data?.data ?? []) {
+      for (const additive of prep.additivesPrepared ?? []) {
+        if (additive.itemName) names.add(additive.itemName);
+      }
+    }
+    return Array.from(names).sort();
+  }, [data]);
 }
 
 function Sidebar() {
@@ -193,7 +217,9 @@ function DecideCorrectionForm({ heatApproval, token, onDone }: { heatApproval: S
 
 function CorrectionMaterialForm({ heatApproval, token, onDone }: { heatApproval: SteelHeatApproval; token: string; onDone: () => void }) {
   const required = !!heatApproval.correctionRequired;
+  const catalog = useAdditiveCatalog(token);
   const [material, setMaterial] = useState("");
+  const [customMaterial, setCustomMaterial] = useState("");
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState("");
   const [notApplicable, setNotApplicable] = useState(!required);
@@ -205,7 +231,8 @@ function CorrectionMaterialForm({ heatApproval, token, onDone }: { heatApproval:
     onError: (err: Error) => setError(err.message),
   });
 
-  const hasMaterial = !!material && !!qty;
+  const effectiveMaterial = material === OTHER_MATERIAL ? customMaterial : material;
+  const hasMaterial = !!effectiveMaterial && !!qty;
   const canSubmit = required ? hasMaterial : true;
 
   return (
@@ -221,7 +248,22 @@ function CorrectionMaterialForm({ heatApproval, token, onDone }: { heatApproval:
       )}
       {(required || !notApplicable) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <Input placeholder="Material (e.g. FeSi, lime)" value={material} onChange={(e) => setMaterial(e.target.value)} />
+          <div className={material === OTHER_MATERIAL ? "space-y-2" : undefined}>
+            <select
+              className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              value={material}
+              onChange={(e) => setMaterial(e.target.value)}
+            >
+              <option value="">Select material…</option>
+              {catalog.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+              <option value={OTHER_MATERIAL}>Other…</option>
+            </select>
+            {material === OTHER_MATERIAL && (
+              <Input placeholder="Material name" value={customMaterial} onChange={(e) => setCustomMaterial(e.target.value)} />
+            )}
+          </div>
           <Input type="number" step="0.01" placeholder="Quantity" value={qty} onChange={(e) => setQty(e.target.value)} />
           <Input placeholder="Unit (optional)" value={unit} onChange={(e) => setUnit(e.target.value)} />
         </div>
@@ -232,7 +274,7 @@ function CorrectionMaterialForm({ heatApproval, token, onDone }: { heatApproval:
         onClick={() =>
           mutation.mutate({
             correctionNotApplicable: !required && notApplicable ? true : undefined,
-            correctionMaterials: hasMaterial ? [{ material, quantity: Number(qty), unit: unit || undefined }] : undefined,
+            correctionMaterials: hasMaterial ? [{ material: effectiveMaterial, quantity: Number(qty), unit: unit || undefined }] : undefined,
           })
         }
       >

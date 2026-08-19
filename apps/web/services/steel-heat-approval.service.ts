@@ -128,6 +128,7 @@ export interface SteelHeatApproval {
 
   retestChemistryComposition: Record<string, number> | null;
   retestNotApplicable: boolean | null;
+  correctionAttempts: number;
 
   liquidTemperatureCelsius: number | null;
 
@@ -207,6 +208,7 @@ export interface AddCorrectionMaterialPayload {
 export interface RetestChemistryPayload {
   retestNotApplicable?: boolean;
   retestChemistryComposition?: Record<string, number>;
+  retestMatchesGrade?: boolean;
 }
 
 export interface CheckTemperaturePayload {

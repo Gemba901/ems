@@ -237,6 +237,7 @@ function RetestChemistryForm({ heatApproval, token, onDone }: { heatApproval: St
   const required = !!heatApproval.correctionRequired;
   const [values, setValues] = useState<Record<string, string>>({});
   const [notApplicable, setNotApplicable] = useState(!required);
+  const [matchesGrade, setMatchesGrade] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -261,6 +262,17 @@ function RetestChemistryForm({ heatApproval, token, onDone }: { heatApproval: St
         </label>
       )}
       {(required || !notApplicable) && <ChemistryFields values={values} onChange={(el, v) => setValues((prev) => ({ ...prev, [el]: v }))} />}
+      {required && hasComposition && (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={matchesGrade} onChange={(e) => setMatchesGrade(e.target.checked)} />
+          Re-tested chemistry matches the required grade
+        </label>
+      )}
+      {required && hasComposition && !matchesGrade && (
+        <p className="text-xs text-amber-600">
+          Chemistry still doesn&apos;t match — this will loop back to the correction decision step (attempt {heatApproval.correctionAttempts + 1}).
+        </p>
+      )}
       <Button
         size="sm"
         disabled={!canSubmit || mutation.isPending}
@@ -268,6 +280,7 @@ function RetestChemistryForm({ heatApproval, token, onDone }: { heatApproval: St
           mutation.mutate({
             retestNotApplicable: !required && notApplicable ? true : undefined,
             retestChemistryComposition: hasComposition ? composition : undefined,
+            retestMatchesGrade: required && hasComposition ? matchesGrade : undefined,
           })
         }
       >

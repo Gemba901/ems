@@ -20,7 +20,7 @@ import { ScreenSidebar } from "@/components/steel/p05/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p05/ContextSummary";
 import { MeltingProgress } from "@/components/steel/p05/MeltingProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p05/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, subStatus } from "@/components/steel/p05/shared";
+import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p05/shared";
 import { Thermometer, Info, ListChecks, Lightbulb } from "lucide-react";
 
 function Sidebar() {
@@ -198,60 +198,41 @@ export function S2ChargingMelting({
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
-            <SubStepCard code="P05-A06" title="Load Charge into Furnace" status={loadStatus}>
-              {loadStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Loaded at" value={melting.loadingTime ? new Date(melting.loadingTime).toLocaleString() : null} />
-                  <Field label="Equipment" value={melting.loadingEquipment} />
-                  <Field label="Sequence" value={melting.chargeSequence} />
-                </div>
-              ) : loadStatus === "active" ? (
-                <LoadChargeForm melting={melting} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P05-A06"
+              title="Load Charge into Furnace"
+              status={loadStatus}
+              summary={melting.loadingTime ? `Loaded ${new Date(melting.loadingTime).toLocaleString()}` : undefined}
+            >
+              {loadStatus === "active" && <LoadChargeForm melting={melting} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P05-A07" title="Start Melting Operation" status={startStatus}>
-              {startStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Started at" value={melting.meltingStartTime ? new Date(melting.meltingStartTime).toLocaleString() : null} />
-                  <Field label="Operator" value={melting.meltingOperator} />
-                </div>
-              ) : startStatus === "active" ? (
-                <StartMeltingForm melting={melting} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P05-A07"
+              title="Start Melting Operation"
+              status={startStatus}
+              summary={melting.meltingStartTime ? `Started ${new Date(melting.meltingStartTime).toLocaleString()}` : undefined}
+            >
+              {startStatus === "active" && <StartMeltingForm melting={melting} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P05-A08" title="Monitor Power Consumption" status={powerStatus}>
-              {powerStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Power" value={melting.powerKwh !== null ? `${melting.powerKwh} kWh` : null} />
-                  <Field label="Elapsed" value={melting.powerElapsedMinutes !== null ? `${melting.powerElapsedMinutes} min` : null} />
-                  <Field label="Interruptions" value={melting.powerInterruptions} />
-                </div>
-              ) : powerStatus === "active" ? (
-                <PowerForm melting={melting} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P05-A08"
+              title="Monitor Power Consumption"
+              status={powerStatus}
+              summary={melting.powerKwh !== null ? `${melting.powerKwh} kWh` : undefined}
+            >
+              {powerStatus === "active" && <PowerForm melting={melting} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P05-A09" title="Monitor Melting Time & Temperature" status={tempStatus}>
-              {tempStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Temperature" value={melting.temperatureCelsius !== null ? `${melting.temperatureCelsius} °C` : null} />
-                  <Field label="Elapsed" value={melting.temperatureElapsedMinutes !== null ? `${melting.temperatureElapsedMinutes} min` : null} />
-                  <Field label="Delay reason" value={melting.temperatureDelayReason} />
-                </div>
-              ) : tempStatus === "active" ? (
-                <TemperatureForm melting={melting} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P05-A09"
+              title="Monitor Melting Time & Temperature"
+              status={tempStatus}
+              summary={melting.temperatureCelsius !== null ? `${melting.temperatureCelsius} °C` : undefined}
+            >
+              {tempStatus === "active" && <TemperatureForm melting={melting} token={token} onDone={onRefresh} />}
+            </SubStep>
           </div>
           <ScreenSidebar>
             <MeltingProgress melting={melting} />

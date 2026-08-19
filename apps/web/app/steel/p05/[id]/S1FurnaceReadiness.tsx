@@ -20,7 +20,7 @@ import { ScreenSidebar } from "@/components/steel/p05/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p05/ContextSummary";
 import { MeltingProgress } from "@/components/steel/p05/MeltingProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p05/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, subStatus } from "@/components/steel/p05/shared";
+import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p05/shared";
 import { Flame, Info, ListChecks, Lightbulb } from "lucide-react";
 
 function Sidebar() {
@@ -237,70 +237,55 @@ export function S1FurnaceReadiness({
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
-            <SubStepCard code="P05-A01" title="Furnace Availability Confirmed" status="done">
+            <SubStep
+              code="P05-A01"
+              title="Furnace Availability Confirmed"
+              status="done"
+              summary={`Furnace ${melting.furnaceId ?? "—"}${melting.operatorName ? ` · ${melting.operatorName}` : ""}`}
+            >
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Field label="Furnace" value={melting.furnaceId} />
                 <Field label="Planned heat" value={melting.plannedHeatRef} />
                 <Field label="Operator" value={melting.operatorName} />
                 <Field label="Shift" value={melting.shift} />
               </div>
-            </SubStepCard>
+            </SubStep>
 
-            <SubStepCard code="P05-A02" title="Furnace Lining Check" status={liningStatus}>
-              {liningStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Campaign ID" value={melting.liningCampaignId} />
-                  <Field label="Heat count" value={melting.liningHeatCount} />
-                  <Field label="Condition" value={melting.liningVisualCondition} />
-                </div>
-              ) : liningStatus === "active" ? (
-                <LiningCheckForm melting={melting} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P05-A02"
+              title="Furnace Lining Check"
+              status={liningStatus}
+              summary={melting.liningVisualCondition ? `Condition: ${melting.liningVisualCondition}` : undefined}
+            >
+              {liningStatus === "active" && <LiningCheckForm melting={melting} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P05-A03" title="Furnace Systems Check" status={systemsStatus}>
-              {systemsStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Field label="Water" value={melting.waterPressureFlowOk ? "OK" : "Not OK"} />
-                  <Field label="Power" value={melting.powerSystemOk ? "OK" : "Not OK"} />
-                  <Field label="Hydraulic" value={melting.hydraulicSystemOk ? "OK" : "Not OK"} />
-                  <Field label="Alarms" value={melting.alarmsOk ? "OK" : "Not OK"} />
-                </div>
-              ) : systemsStatus === "active" ? (
-                <SystemsCheckForm melting={melting} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P05-A03"
+              title="Furnace Systems Check"
+              status={systemsStatus}
+              summary={melting.alarmsOk !== null ? `Systems ${melting.waterPressureFlowOk && melting.powerSystemOk && melting.hydraulicSystemOk && melting.alarmsOk ? "OK" : "flagged"}` : undefined}
+            >
+              {systemsStatus === "active" && <SystemsCheckForm melting={melting} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P05-A04" title="Previous Heat Readiness" status={previousHeatStatus}>
-              {previousHeatStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Previous heat" value={melting.previousHeatRef} />
-                  <Field label="Slag/cleaning status" value={melting.slagCleaningStatus} />
-                  <Field label="Delay reason" value={melting.readinessDelayReason} />
-                </div>
-              ) : previousHeatStatus === "active" ? (
-                <PreviousHeatForm melting={melting} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P05-A04"
+              title="Previous Heat Readiness"
+              status={previousHeatStatus}
+              summary={melting.slagCleaningStatus ? `Cleaning: ${melting.slagCleaningStatus}` : undefined}
+            >
+              {previousHeatStatus === "active" && <PreviousHeatForm melting={melting} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P05-A05" title="Verify Charge ID & Recipe" status={verifyStatus}>
-              {verifyStatus === "done" ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Field label="Material lot" value={melting.materialLotRef} />
-                  <Field label="Matches recipe" value={melting.actualWeightVsRecipeOk ? "Yes" : "No"} />
-                </div>
-              ) : verifyStatus === "active" ? (
-                <VerifyChargeForm melting={melting} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P05-A05"
+              title="Verify Charge ID & Recipe"
+              status={verifyStatus}
+              summary={melting.actualWeightVsRecipeOk !== null ? `Matches recipe: ${melting.actualWeightVsRecipeOk ? "Yes" : "No"}` : undefined}
+            >
+              {verifyStatus === "active" && <VerifyChargeForm melting={melting} token={token} onDone={onRefresh} />}
+            </SubStep>
           </div>
           <ScreenSidebar>
             <MeltingProgress melting={melting} />

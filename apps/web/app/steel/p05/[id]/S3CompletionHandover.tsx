@@ -23,7 +23,7 @@ import { ScreenSidebar } from "@/components/steel/p05/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p05/ContextSummary";
 import { MeltingProgress } from "@/components/steel/p05/MeltingProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p05/screenMap";
-import { Field, SubStepCard, SaveButton, LockedNote, subStatus } from "@/components/steel/p05/shared";
+import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p05/shared";
 import { ShieldCheck, Info, ListChecks, Lightbulb, Lock, Send, CheckCircle2, Loader2 } from "lucide-react";
 
 // Same authority scope enforced server-side by the melting controller's
@@ -381,69 +381,50 @@ export function S3CompletionHandover({
               <ClosedState melting={melting} />
             ) : (
               <>
-                <SubStepCard code="P05-A10" title="Record Extra Material Additions" status={additionsStatus}>
-                  {additionsStatus === "done" ? (
-                    <Field label="Additions" value={melting.additions?.length ? `${melting.additions.length} item(s)` : "None"} />
-                  ) : additionsStatus === "active" ? (
-                    <AdditionsForm melting={melting} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P05-A10"
+                  title="Record Extra Material Additions"
+                  status={additionsStatus}
+                  summary={melting.additions?.length ? `${melting.additions.length} addition(s)` : "None"}
+                >
+                  {additionsStatus === "active" && <AdditionsForm melting={melting} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P05-A11" title="Remove Slag or Unwanted Material" status={slagStatus}>
-                  {slagStatus === "done" ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <Field label="Applicable" value={melting.slagNotApplicable ? "No" : "Yes"} />
-                      <Field label="Quantity" value={melting.slagQuantityEstimate !== null ? `${melting.slagQuantityEstimate} t` : null} />
-                      <Field label="Issue found" value={melting.slagIssueFound} />
-                    </div>
-                  ) : slagStatus === "active" ? (
-                    <SlagForm melting={melting} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P05-A11"
+                  title="Remove Slag or Unwanted Material"
+                  status={slagStatus}
+                  summary={`Slag removal ${melting.slagNotApplicable ? "not applicable" : "recorded"}`}
+                >
+                  {slagStatus === "active" && <SlagForm melting={melting} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P05-A12" title="Record Melting Output" status={outputStatus}>
-                  {outputStatus === "done" ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <Field label="Output weight" value={melting.outputWeightTonnes !== null ? `${melting.outputWeightTonnes} t` : null} />
-                      <Field label="Melt time" value={melting.outputMeltTimeMinutes !== null ? `${melting.outputMeltTimeMinutes} min` : null} />
-                      <Field label="Total energy" value={melting.outputEnergyTotalKwh !== null ? `${melting.outputEnergyTotalKwh} kWh` : null} />
-                    </div>
-                  ) : outputStatus === "active" ? (
-                    <OutputForm melting={melting} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P05-A12"
+                  title="Record Melting Output"
+                  status={outputStatus}
+                  summary={melting.outputWeightTonnes !== null ? `Output ${melting.outputWeightTonnes} t` : undefined}
+                >
+                  {outputStatus === "active" && <OutputForm melting={melting} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P05-A13" title="Confirm Liquid Steel Ready" status={readyStatus}>
-                  {readyStatus === "done" ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Ready" value={melting.liquidReady ? "Yes" : "No"} />
-                      <Field label="Temperature" value={melting.liquidTemperatureCelsius !== null ? `${melting.liquidTemperatureCelsius} °C` : null} />
-                    </div>
-                  ) : readyStatus === "active" ? (
-                    <ConfirmReadyForm melting={melting} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P05-A13"
+                  title="Confirm Liquid Steel Ready"
+                  status={readyStatus}
+                  summary={melting.liquidReady !== null ? `Ready: ${melting.liquidReady ? "Yes" : "No"}` : undefined}
+                >
+                  {readyStatus === "active" && <ConfirmReadyForm melting={melting} token={token} onDone={onRefresh} />}
+                </SubStep>
 
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1 px-1">
                     <Send className="h-3.5 w-3.5 text-red-500" />
                     <p className="text-xs font-medium text-red-500 uppercase tracking-wide">Final Refining Handover / Authority Gate</p>
                   </div>
-                  <SubStepCard code="P05-A14" title="Handover to Refining/Quality" status={handoverStatus}>
-                    {handoverStatus === "active" ? (
-                      <HandoverPanel melting={melting} token={token} canAct={canAct} onDone={onRefresh} />
-                    ) : (
-                      <LockedNote />
-                    )}
-                  </SubStepCard>
+                  <SubStep code="P05-A14" title="Handover to Refining/Quality" status={handoverStatus}>
+                    {handoverStatus === "active" && <HandoverPanel melting={melting} token={token} canAct={canAct} onDone={onRefresh} />}
+                  </SubStep>
                 </div>
               </>
             )}

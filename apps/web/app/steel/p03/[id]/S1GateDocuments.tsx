@@ -20,7 +20,7 @@ import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
 import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p03/ContextSummary";
 import { IntakeProgress } from "@/components/steel/p03/IntakeProgress";
-import { Field, SubStepCard, SaveButton, LockedNote, SubStepStatus } from "@/components/steel/p03/shared";
+import { Field, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p03/shared";
 import { LogIn, Info, ListChecks, Lightbulb, HelpCircle } from "lucide-react";
 
 function subStatus(active: boolean, done: boolean): SubStepStatus {
@@ -243,7 +243,12 @@ export function S1GateDocuments({
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
-            <SubStepCard code="P03-A01" title="Gate Arrival" status="done">
+            <SubStep
+              code="P03-A01"
+              title="Gate Arrival"
+              status="done"
+              summary={`Vehicle ${intake.vehicleNumber ?? "—"}${intake.arrivalDateTime ? ` · arrived ${new Date(intake.arrivalDateTime).toLocaleString()}` : ""}`}
+            >
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Vehicle / container number" value={intake.vehicleNumber} />
                 <Field label="Driver" value={intake.driverName} />
@@ -259,47 +264,34 @@ export function S1GateDocuments({
                   )}
                 </div>
               </div>
-            </SubStepCard>
+            </SubStep>
 
-            <SubStepCard code="P03-A02" title="Verify Purchase Order & Delivery Documents" status={docsStatus}>
-              {docsStatus === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Verified" value={intake.purchaseOrderVerified ? "Yes" : "No"} />
-                  <Field label="Document reference" value={intake.deliveryDocumentRef} />
-                  <Field label="Notes" value={intake.documentVerificationNotes} />
-                </div>
-              ) : docsStatus === "active" ? (
-                <DocumentsForm intake={intake} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P03-A02"
+              title="Verify Purchase Order & Delivery Documents"
+              status={docsStatus}
+              summary={`Documents ${intake.purchaseOrderVerified ? "verified" : "not verified"}${intake.deliveryDocumentRef ? ` · ${intake.deliveryDocumentRef}` : ""}`}
+            >
+              {docsStatus === "active" && <DocumentsForm intake={intake} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P03-A03" title="Weighbridge — Gross Weight" status={weightStatus}>
-              {weightStatus === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Gross weight" value={intake.grossWeightTonnes ? `${intake.grossWeightTonnes} t` : null} />
-                  <Field label="Weighed at" value={intake.grossWeighedAt ? new Date(intake.grossWeighedAt).toLocaleString() : null} />
-                </div>
-              ) : weightStatus === "active" ? (
-                <GrossWeightForm intake={intake} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P03-A03"
+              title="Weighbridge — Gross Weight"
+              status={weightStatus}
+              summary={intake.grossWeightTonnes ? `Gross weight ${intake.grossWeightTonnes} t` : undefined}
+            >
+              {weightStatus === "active" && <GrossWeightForm intake={intake} token={token} onDone={onRefresh} />}
+            </SubStep>
 
-            <SubStepCard code="P03-A04" title="Safety & Access Check" status={safetyStatus}>
-              {safetyStatus === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Passed" value={intake.safetyCheckPassed ? "Yes" : "No"} />
-                  <Field label="Notes" value={intake.safetyCheckNotes} />
-                </div>
-              ) : safetyStatus === "active" ? (
-                <SafetyCheckForm intake={intake} token={token} onDone={onRefresh} />
-              ) : (
-                <LockedNote />
-              )}
-            </SubStepCard>
+            <SubStep
+              code="P03-A04"
+              title="Safety & Access Check"
+              status={safetyStatus}
+              summary={`Safety check ${intake.safetyCheckPassed ? "passed" : "failed"}`}
+            >
+              {safetyStatus === "active" && <SafetyCheckForm intake={intake} token={token} onDone={onRefresh} />}
+            </SubStep>
           </div>
           <Sidebar intake={intake} />
         </div>

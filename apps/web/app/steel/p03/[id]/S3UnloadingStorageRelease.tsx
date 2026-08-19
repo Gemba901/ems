@@ -24,7 +24,7 @@ import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
 import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p03/ContextSummary";
 import { IntakeProgress } from "@/components/steel/p03/IntakeProgress";
-import { Field, SubStepCard, SaveButton, LockedNote, SubStepStatus } from "@/components/steel/p03/shared";
+import { Field, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p03/shared";
 import {
   PackageCheck, Info, ListChecks, Lightbulb, ShieldCheck, Lock, Check, ArrowRight, HelpCircle, Loader2,
 } from "lucide-react";
@@ -410,55 +410,41 @@ export function S3UnloadingStorageRelease({
               <ReleasedState intake={intake} />
             ) : (
               <>
-                <SubStepCard code="P03-A11" title="Unload Approved Material" status={unloadingStatus}>
-                  {unloadingStatus === "done" ? (
-                    <Field label="Unloaded at" value={intake.unloadedAt ? new Date(intake.unloadedAt).toLocaleString() : null} />
-                  ) : unloadingStatus === "active" ? (
-                    <UnloadingForm intake={intake} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P03-A11"
+                  title="Unload Approved Material"
+                  status={unloadingStatus}
+                  summary={intake.unloadedAt ? `Unloaded ${new Date(intake.unloadedAt).toLocaleString()}` : undefined}
+                >
+                  {unloadingStatus === "active" && <UnloadingForm intake={intake} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P03-A12" title="Tare Weight & Net Weight" status={weightStatus}>
-                  {weightStatus === "done" ? (
-                    <div className="grid grid-cols-3 gap-3">
-                      <Field label="Gross weight" value={intake.grossWeightTonnes ? `${intake.grossWeightTonnes} t` : null} />
-                      <Field label="Tare weight" value={intake.tareWeightTonnes !== null ? `${intake.tareWeightTonnes} t` : null} />
-                      <Field label="Net weight" value={intake.netWeightTonnes !== null ? `${intake.netWeightTonnes} t` : null} />
-                    </div>
-                  ) : weightStatus === "active" ? (
-                    <NetWeightForm intake={intake} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P03-A12"
+                  title="Tare Weight & Net Weight"
+                  status={weightStatus}
+                  summary={intake.netWeightTonnes !== null ? `Net weight ${intake.netWeightTonnes} t` : undefined}
+                >
+                  {weightStatus === "active" && <NetWeightForm intake={intake} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P03-A13" title="Store Material in Yard Location" status={yardStatus}>
-                  {yardStatus === "done" ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Yard location" value={intake.yardLocation} />
-                      <Field label="Stored at" value={intake.storedAt ? new Date(intake.storedAt).toLocaleString() : null} />
-                    </div>
-                  ) : yardStatus === "active" ? (
-                    <YardLocationForm intake={intake} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P03-A13"
+                  title="Store Material in Yard Location"
+                  status={yardStatus}
+                  summary={intake.yardLocation ? `Yard: ${intake.yardLocation}` : undefined}
+                >
+                  {yardStatus === "active" && <YardLocationForm intake={intake} token={token} onDone={onRefresh} />}
+                </SubStep>
 
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1 px-1">
                     <ShieldCheck className="h-3.5 w-3.5 text-red-500" />
                     <p className="text-xs font-medium text-red-500 uppercase tracking-wide">Final Stock Release / Authority Gate</p>
                   </div>
-                  <SubStepCard code="P03-A14" title="Update Stock & Release for Preparation/Use" status={releaseStatus}>
-                    {releaseStatus === "active" ? (
-                      <ReleasePanel intake={intake} token={token} canRelease={canRelease} onDone={onRefresh} />
-                    ) : (
-                      <LockedNote />
-                    )}
-                  </SubStepCard>
+                  <SubStep code="P03-A14" title="Update Stock & Release for Preparation/Use" status={releaseStatus}>
+                    {releaseStatus === "active" && <ReleasePanel intake={intake} token={token} canRelease={canRelease} onDone={onRefresh} />}
+                  </SubStep>
                 </div>
               </>
             )}

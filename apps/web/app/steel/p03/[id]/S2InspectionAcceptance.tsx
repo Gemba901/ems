@@ -25,7 +25,7 @@ import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
 import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p03/ContextSummary";
 import { IntakeProgress } from "@/components/steel/p03/IntakeProgress";
-import { Field, SelectField, SubStepCard, SaveButton, LockedNote, SubStepStatus } from "@/components/steel/p03/shared";
+import { Field, SelectField, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p03/shared";
 import {
   ClipboardCheck, Info, ListChecks, Lightbulb, Gavel, Lock, XCircle, AlertTriangle, HelpCircle,
   ThumbsUp, PauseCircle,
@@ -453,55 +453,38 @@ export function S2InspectionAcceptance({
               <RejectedState intake={intake} />
             ) : (
               <>
-                <SubStepCard code="P03-A05" title="Assign Unloading / Inspection Area" status={areaStatus}>
-                  {areaStatus === "done" ? (
-                    <Field label="Area" value={intake.unloadingArea} />
-                  ) : areaStatus === "active" ? (
-                    <AreaForm intake={intake} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep code="P03-A05" title="Assign Unloading / Inspection Area" status={areaStatus} summary={intake.unloadingArea ? `Area: ${intake.unloadingArea}` : undefined}>
+                  {areaStatus === "active" && <AreaForm intake={intake} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P03-A06–A09" title="Visual, Hazard, Radiation & Certificate Checks" status={inspectionStatus}>
-                  {inspectionStatus === "done" ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Material type" value={intake.materialType?.replace(/_/g, " ")} />
-                      <Field label="Visual inspection" value={intake.visualInspectionNotes} />
-                      <Field label="Hazard / contamination" value={intake.hazardOrContaminationFound ? "Found" : "None"} />
-                      <Field label="Radiation check" value={intake.radiationCheckRequired ? (intake.radiationCheckPassed ? "Passed" : "Failed") : "Not required"} />
-                      <Field label="Grade" value={intake.grade} />
-                      <Field label="Heat number" value={intake.heatNumber} />
-                      <Field label="Certificate ref" value={intake.certificateRef} />
-                    </div>
-                  ) : inspectionStatus === "active" ? (
-                    <InspectionForm intake={intake} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P03-A06–A09"
+                  title="Visual, Hazard, Radiation & Certificate Checks"
+                  status={inspectionStatus}
+                  summary={`${intake.materialType?.replace(/_/g, " ") ?? "Inspected"}${intake.hazardOrContaminationFound ? " · hazard found" : ""}${intake.radiationCheckRequired ? ` · radiation ${intake.radiationCheckPassed ? "passed" : "failed"}` : ""}`}
+                >
+                  {inspectionStatus === "active" && <InspectionForm intake={intake} token={token} onDone={onRefresh} />}
+                </SubStep>
 
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1 px-1">
                     <Gavel className="h-3.5 w-3.5 text-slate-400" />
                     <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Management Acceptance Decision</p>
                   </div>
-                  <SubStepCard code="P03-A10" title="Acceptance Decision" status={decisionStatus}>
-                    {decisionStatus === "done" ? (
-                      <div className="space-y-2">
-                        <Badge className={DECISION_BADGE[intake.acceptanceDecision!]}>{intake.acceptanceDecision}</Badge>
-                        <Field label="Notes / reason" value={intake.decisionNotes} />
-                      </div>
-                    ) : decisionStatus === "active" ? (
+                  <SubStep
+                    code="P03-A10"
+                    title="Acceptance Decision"
+                    status={decisionStatus}
+                    summary={intake.acceptanceDecision ? `Decision: ${intake.acceptanceDecision}` : undefined}
+                  >
+                    {decisionStatus === "active" ? (
                       canDecide ? (
                         <DecisionForm intake={intake} token={token} onDone={onRefresh} />
                       ) : (
                         <AcceptanceLockedCard />
                       )
-                    ) : (
-                      <LockedNote />
-                    )}
-                  </SubStepCard>
+                    ) : null}
+                  </SubStep>
                 </div>
               </>
             )}

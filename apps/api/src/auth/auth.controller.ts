@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Body, Request, Response, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto, VerifyFirstTimeDto, CreatePasswordDto, SelectOrgDto } from './dto/auth.dto';
+import { LoginDto, VerifyFirstTimeDto, CreatePasswordDto, SelectOrgDto, ForgotPasswordDto, ResetPasswordDto, VerifyTempPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 const REFRESH_COOKIE = 'refresh_token';
@@ -81,6 +81,21 @@ export class AuthController {
             createPasswordDto.setupToken,
             createPasswordDto.newPassword,
         );
+    }
+
+    @Post('forgot-password')
+    forgotPassword(@Body() dto: ForgotPasswordDto, @Request() req: any) {
+        return this.authService.forgotPassword(dto.email, req.ip);
+    }
+
+    @Post('reset-password')
+    resetPassword(@Body() dto: ResetPasswordDto, @Request() req: any) {
+        return this.authService.resetPassword(dto.token, dto.newPassword, req.ip);
+    }
+
+    @Post('verify-temp-password')
+    verifyTempPassword(@Body() dto: VerifyTempPasswordDto, @Request() req: any) {
+        return this.authService.verifyTempPassword(dto.tempPassword, req.ip);
     }
 
     @Get('my-org')

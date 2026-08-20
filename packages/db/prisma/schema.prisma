@@ -157,14 +157,15 @@ model User {
   password String?
   name     String
 
-  organizations   UserOrganization[]
-  employees       Employee[]
-  createdVisits   ConsultancyVisit[]
-  visitRequests   VisitRequest[]
-  visitMonthPlans VisitMonthPlan[]
-  calendarBlocks  CalendarBlock[]
-  refreshTokens   RefreshToken[]
-  reviewedLeaves  LeaveRequest[]     @relation("LeaveReviewer")
+  organizations       UserOrganization[]
+  employees           Employee[]
+  createdVisits       ConsultancyVisit[]
+  visitRequests       VisitRequest[]
+  visitMonthPlans     VisitMonthPlan[]
+  calendarBlocks      CalendarBlock[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  reviewedLeaves      LeaveRequest[]       @relation("LeaveReviewer")
 
   createdAt DateTime @default(now())
 }
@@ -176,6 +177,19 @@ model RefreshToken {
   organizationId String
   expiresAt      DateTime
   createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -326,10 +340,11 @@ model Employee {
 }
 
 model Department {
-  id                String @id @default(uuid())
+  id                String  @id @default(uuid())
   name              String
   organizationId    String
-  minLeaveHeadcount Int    @default(1)
+  minLeaveHeadcount Int     @default(1)
+  isPlatformTeam    Boolean @default(false)
 
   employees    Employee[]
   organization Organization @relation(fields: [organizationId], references: [id])

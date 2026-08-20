@@ -23,11 +23,10 @@ import { ScreenSidebar } from "@/components/steel/p05/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p05/ContextSummary";
 import { MeltingProgress } from "@/components/steel/p05/MeltingProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p05/screenMap";
-import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p05/shared";
-import { ShieldCheck, Info, ListChecks, Lightbulb, Lock, Send, CheckCircle2, Loader2, Gauge } from "lucide-react";
+import { Field, SubStep, SaveButton, subStatus, SubStepStatus } from "@/components/steel/p05/shared";
+import { HeatCycleDocument } from "@/components/steel/p05/HeatCycleDocument";
+import { ShieldCheck, Info, ListChecks, Lightbulb, Lock, Send, CheckCircle2, Loader2, Gauge, ClipboardCheck, FileText } from "lucide-react";
 
-// Same authority scope enforced server-side by the melting controller's
-// RELEASE_ROLES guard on /refining-handover and /status.
 const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
 function Sidebar() {
@@ -42,8 +41,8 @@ function Sidebar() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Record any additions and slag removal, log the melt output, confirm the liquid steel is ready, then hand
-            the record over to refining/quality.
+            Record any additions and slag removal, log the melt output, confirm the liquid steel is ready, review the
+            heat cycle, then hand it over to refining/quality.
           </p>
         </CardContent>
       </Card>
@@ -230,8 +229,6 @@ function ConfirmReadyForm({ melting, token, onDone }: { melting: SteelMelting; t
   );
 }
 
-// ── P05-A14 — final authority/terminal gate ──
-
 function HandoverLockedCard() {
   return (
     <Card className="border-amber-200 bg-amber-50/40">
@@ -325,10 +322,10 @@ function HandoverPanel({
   );
 }
 
-// Efficiency review — stored measurements plus server-computed material
-// input/yield %. Metrics the backend doesn't compute (no business-confirmed
-// formula yet, e.g. energy/tonne) are shown as "Not available" rather than
-// silently omitted or guessed at on the frontend.
+// Material balance + cycle performance — stored measurements plus
+// server-computed derived metrics only (getHeatSummary). Metrics the backend
+// doesn't compute (no business-confirmed formula yet, e.g. energy/tonne) are
+// shown as "Not available" rather than silently omitted or guessed at.
 function HeatSummaryPanel({ melting, token }: { melting: SteelMelting; token: string }) {
   const { data: summary } = useQuery({
     queryKey: ["heat-summary", melting.id],
@@ -338,23 +335,71 @@ function HeatSummaryPanel({ melting, token }: { melting: SteelMelting; token: st
   if (!summary) return null;
 
   return (
-    <Card>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Gauge className="h-4 w-4 text-slate-500" />
+            Material Balance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <Field label="Planned input" value={`${summary.totalMaterialInput} (mixed units)`} />
+          <Field label="Actual output" value={summary.totalOutputTonnes !== null ? `${summary.totalOutputTonnes} t` : null} />
+          <Field label="Material loss" value={summary.materialLossTonnes !== null ? summary.materialLossTonnes.toFixed(2) : null} />
+          <Field label="Yield %" value={summary.yieldPercent !== null ? `${summary.yieldPercent.toFixed(1)}%` : "Not available"} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Gauge className="h-4 w-4 text-slate-500" />
+            Cycle Performance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <Field label="Cycle duration" value={summary.cycleDurationMinutes !== null ? `${Math.round(summary.cycleDurationMinutes)} min` : null} />
+          <Field label="Material additions" value={summary.materialAdditionsCount} />
+          <Field label="Events logged" value={summary.eventsCount} />
+          <Field label="Energy / tonne" value="Not available — formula not yet defined" />
+          <Field label="Lining heats completed" value={summary.lining ? summary.lining.heatsCompleted : null} />
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+// Compact readiness rollup so operators see what's outstanding without
+// re-confirming already-completed steps — derived from the same
+// subStatus() the SubStep cards below already use.
+function ReadinessPanel({ items }: { items: { code: string; label: string; status: SubStepStatus }[] }) {
+  const doneCount = items.filter((i) => i.status === "done").length;
+  const ready = doneCount === items.length;
+
+  return (
+    <Card className={ready ? "border-emerald-200" : undefined}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
-          <Gauge className="h-4 w-4 text-slate-500" />
-          Heat Efficiency Summary
+          <ClipboardCheck className={"h-4 w-4 " + (ready ? "text-emerald-600" : "text-slate-500")} />
+          Completion Readiness — {doneCount} of {items.length} complete
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-        <Field label="Total material input" value={`${summary.totalMaterialInput} (mixed units)`} />
-        <Field label="Total output" value={summary.totalOutputTonnes !== null ? `${summary.totalOutputTonnes} t` : null} />
-        <Field label="Material loss" value={summary.materialLossTonnes !== null ? summary.materialLossTonnes.toFixed(2) : null} />
-        <Field label="Yield %" value={summary.yieldPercent !== null ? `${summary.yieldPercent.toFixed(1)}%` : "Not available"} />
-        <Field label="Cycle duration" value={summary.cycleDurationMinutes !== null ? `${Math.round(summary.cycleDurationMinutes)} min` : null} />
-        <Field label="Material additions" value={summary.materialAdditionsCount} />
-        <Field label="Events logged" value={summary.eventsCount} />
-        <Field label="Energy / tonne" value="Not available — formula not yet defined" />
-        <Field label="Lining heats completed" value={summary.lining ? summary.lining.heatsCompleted : null} />
+      <CardContent>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm">
+          {items.map((i) => (
+            <li key={i.code} className="flex items-center gap-2">
+              {i.status === "done" ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+              ) : i.status === "active" ? (
+                <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0 ml-1 mr-1" />
+              ) : (
+                <Lock className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+              )}
+              <span className={i.status === "locked" ? "text-slate-400" : "text-slate-700"}>{i.label}</span>
+            </li>
+          ))}
+        </ul>
+        {!ready && <p className="text-xs text-amber-600 mt-3">Not yet ready for release — complete the outstanding items above.</p>}
       </CardContent>
     </Card>
   );
@@ -380,11 +425,22 @@ function ClosedState({ melting, token }: { melting: SteelMelting; token: string 
         </CardContent>
       </Card>
       <HeatSummaryPanel melting={melting} token={token} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <FileText className="h-4 w-4 text-slate-500" />
+            Heat Cycle Document
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <HeatCycleDocument melting={melting} token={token} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-export function S3CompletionHandover({
+export function ReviewRelease({
   melting, token, onRefresh,
 }: { melting: SteelMelting; token: string; onRefresh: () => void }) {
   const { user } = useAuthStore();
@@ -402,13 +458,21 @@ export function S3CompletionHandover({
   const doneCount = closed ? 5 : statuses.filter((s) => s === "done").length;
   const activeRel = statuses.findIndex((s) => s === "active");
 
+  const readinessItems = [
+    { code: "A10", label: "Additions Recorded", status: additionsStatus },
+    { code: "A11", label: "Slag Removed", status: slagStatus },
+    { code: "A12", label: "Output Recorded", status: outputStatus },
+    { code: "A13", label: "Liquid Steel Ready", status: readyStatus },
+    { code: "A14", label: "Handed Over to Refining", status: handoverStatus },
+  ];
+
   return (
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
           icon={ShieldCheck}
-          title="Melt Completion & Handover"
-          subtitle="Record additions, slag removal, and output, confirm readiness, and hand over to refining."
+          title="Review, Complete & Release"
+          subtitle="Review the heat cycle, record additions, slag removal, and output, confirm readiness, and hand over to refining."
         />
         <WorkflowIndicator steps={SCREEN_TOP_STEPS[2]} doneCount={doneCount} activeIndex={closed ? null : activeRel === -1 ? null : activeRel} />
         <ContextSummary melting={melting} />
@@ -419,6 +483,9 @@ export function S3CompletionHandover({
               <ClosedState melting={melting} token={token} />
             ) : (
               <>
+                <ReadinessPanel items={readinessItems} />
+                <HeatSummaryPanel melting={melting} token={token} />
+
                 <SubStep
                   code="P05-A10"
                   title="Record Extra Material Additions"

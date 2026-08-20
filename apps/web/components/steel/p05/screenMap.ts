@@ -82,3 +82,22 @@ export const SCREEN_TOP_STEPS: SubStep[][] = [
     { code: "A14", label: "Refining Handover" },
   ],
 ];
+
+// Single continuous stepper for the consolidated Heat Input/Operations
+// screen (S1+S2, A01-A09) — same activities as SCREEN_TOP_STEPS[0] and [1]
+// concatenated, just rendered as one 9-step indicator instead of two.
+export const HEAT_OPERATIONS_STEPS: SubStep[] = [...SCREEN_TOP_STEPS[0], ...SCREEN_TOP_STEPS[1]];
+
+// Visual tab grouping for the Heat Input/Operations workspace — purely a
+// presentation grouping of the real A01-A09 activities by operational
+// purpose; does not change stage sequencing or gating (still driven by
+// melting.allowedActions / subStatus() per activity).
+export const HEAT_OPERATIONS_TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "materials", label: "Materials / Charge" },
+  { key: "temperature", label: "Temperature" },
+  { key: "power", label: "Power" },
+  { key: "events", label: "Events" },
+] as const;
+
+export type HeatOperationsTabKey = (typeof HEAT_OPERATIONS_TABS)[number]["key"];

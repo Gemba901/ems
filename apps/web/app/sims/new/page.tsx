@@ -8,6 +8,7 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, SuggestionCategory, uploadSuggestionImage } from "@/services/sims.service";
 import { EmployeeService } from "@/services/employee.service";
+import { CommitteeService } from "@/services/committee.service";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { SpeechToTextButton } from "@/components/ui/SpeechToTextButton";
 import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, Camera, X, Loader2 } from "lucide-react";
@@ -115,13 +116,13 @@ const TITLE_MAX = 200;
 const DESC_MIN  = 20;
 const DESC_MAX  = 2000;
 
-function validate(title: string, description: string, categories: SuggestionCategory[], isPrivileged: boolean, hodId: string) {
+function validate(title: string, description: string, categories: SuggestionCategory[], isPrivileged: boolean, hodId: string, committeeId: string) {
   if (title.trim().length < TITLE_MIN) return `Title must be at least ${TITLE_MIN} characters.`;
   if (title.trim().length > TITLE_MAX) return `Title must be under ${TITLE_MAX} characters.`;
   if (description.trim().length < DESC_MIN) return `Description must be at least ${DESC_MIN} characters.`;
   if (description.trim().length > DESC_MAX) return `Description must be under ${DESC_MAX} characters.`;
   if (categories.length === 0) return "Please select at least one category.";
-  if (isPrivileged && !hodId) return "Please select who this suggestion should go to.";
+  if (isPrivileged && !hodId && !committeeId) return "Please select who this suggestion should go to.";
   return null;
 }
 
@@ -138,6 +139,7 @@ export default function NewSuggestionPage() {
   const [categories, setCategories]   = useState<SuggestionCategory[]>([]);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [hodId, setHodId]             = useState<string>("");
+  const [committeeId, setCommitteeId] = useState<string>("");
   const [error, setError]             = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [successRedirect, setSuccessRedirect] = useState<string | null>(null);
@@ -148,6 +150,12 @@ export default function NewSuggestionPage() {
     enabled: isPrivileged && !!user?.organizationId && !!accessToken,
   });
 
+  const { data: routableCommittees = [] } = useQuery({
+    queryKey: ["committees-routable"],
+    queryFn: () => CommitteeService.listRoutable(accessToken!),
+    enabled: isPrivileged && !!accessToken,
+  });
+
   // Image upload state
   const [imageFile, setImageFile]       = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -156,7 +164,7 @@ export default function NewSuggestionPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const submitMutation = useMutation({
-    mutationFn: async (payload: { title: string; description: string; categories: SuggestionCategory[]; isAnonymous: boolean; imageFile: File | null; hodId?: string }) => {
+    mutationFn: async (payload: { title: string; description: string; categories: SuggestionCategory[]; isAnonymous: boolean; imageFile: File | null; hodId?: string; committeeId?: string }) => {
       let imageUrl: string | undefined;
       if (payload.imageFile) {
         setImageUploading(true);
@@ -164,7 +172,7 @@ export default function NewSuggestionPage() {
         setImageUploading(false);
       }
       return SimsService.submit(
-        { title: payload.title, description: payload.description, categories: payload.categories, isAnonymous: payload.isAnonymous, imageUrl, hodId: payload.hodId },
+        { title: payload.title, description: payload.description, categories: payload.categories, isAnonymous: payload.isAnonymous, imageUrl, hodId: payload.hodId, committeeId: payload.committeeId },
         accessToken!,
       );
     },
@@ -229,7 +237,7 @@ export default function NewSuggestionPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const validationError = validate(title, description, categories, isPrivileged, hodId);
+    const validationError = validate(title, description, categories, isPrivileged, hodId, committeeId);
     if (validationError) { setError(validationError); return; }
     if (!accessToken) return;
 
@@ -241,12 +249,23 @@ export default function NewSuggestionPage() {
       isAnonymous,
       imageFile,
       hodId: isPrivileged && hodId ? hodId : undefined,
+      committeeId: isPrivileged && committeeId ? committeeId : undefined,
     });
+  };
+
+  // "Send To" is a single dropdown covering both destinations — values are prefixed
+  // (hod:/committee:) so one onChange can set whichever target state applies and clear the other.
+  const sendToValue = hodId ? `hod:${hodId}` : committeeId ? `committee:${committeeId}` : "";
+  const handleSendToChange = (value: string) => {
+    setError(null);
+    if (value.startsWith("hod:")) { setHodId(value.slice(4)); setCommitteeId(""); }
+    else if (value.startsWith("committee:")) { setCommitteeId(value.slice(10)); setHodId(""); }
+    else { setHodId(""); setCommitteeId(""); }
   };
 
   const isUnknownSelected = categories.includes("UNKNOWN");
   const isAllSelected     = ALL_QCDSMT.every((c) => categories.includes(c));
-  const canSubmit         = !submitting && categories.length > 0 && title.trim().length >= TITLE_MIN && description.trim().length >= DESC_MIN && (!isPrivileged || !!hodId);
+  const canSubmit         = !submitting && categories.length > 0 && title.trim().length >= TITLE_MIN && description.trim().length >= DESC_MIN && (!isPrivileged || !!hodId || !!committeeId);
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
@@ -283,20 +302,35 @@ export default function NewSuggestionPage() {
                       Send To <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={hodId}
-                      onChange={(e) => { setHodId(e.target.value); setError(null); }}
+                      value={sendToValue}
+                      onChange={(e) => handleSendToChange(e.target.value)}
                       className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all bg-white ${
-                        !hodId
+                        !sendToValue
                           ? "border-slate-200 focus:ring-blue-500/20 focus:border-blue-400 text-slate-400"
                           : "border-slate-200 focus:ring-blue-500/20 focus:border-blue-400 text-slate-900"
                       }`}
                     >
                       <option value="">Select who this goes to…</option>
-                      {departmentHODs.map((h) => (
-                        <option key={h.id} value={h.id}>{h.label}</option>
-                      ))}
+                      {departmentHODs.length > 0 && (
+                        <optgroup label="Departments">
+                          {departmentHODs.map((h) => (
+                            <option key={h.id} value={`hod:${h.id}`}>{h.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {routableCommittees.length > 0 && (
+                        <optgroup label="Committees">
+                          {routableCommittees.map((c) => (
+                            <option key={c.id} value={`committee:${c.id}`}>{c.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
-                    <p className="text-xs text-slate-400 mt-1">Your suggestion will be directed to this person's department for review.</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {committeeId
+                        ? "Your suggestion will be sent straight to this committee for review."
+                        : "Your suggestion will be directed to this person's department for review."}
+                    </p>
                   </div>
                 )}
 

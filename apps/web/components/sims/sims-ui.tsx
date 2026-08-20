@@ -102,16 +102,18 @@ export function KpiCard({ label, value, sub, trend, icon, accent }: {
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
   const trendColor = trend === "up" ? "text-emerald-500" : trend === "down" ? "text-red-500" : "text-slate-400";
   return (
-    <div className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm">
-      <div className="flex items-start justify-between mb-1.5 sm:mb-3">
-        <div className={`h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${accent}`}>
-          <span className="scale-75 sm:scale-100">{icon}</span>
-        </div>
-        {trend && <TrendIcon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${trendColor}`} />}
+    <div className="bg-white border border-slate-100 rounded-xl p-2.5 sm:p-3.5 shadow-sm flex items-center gap-2.5 sm:gap-3">
+      <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center shrink-0 ${accent}`}>
+        <span className="scale-75 sm:scale-100">{icon}</span>
       </div>
-      <p className="text-lg sm:text-2xl font-bold text-slate-900 leading-none">{value}</p>
-      <p className="text-[11px] sm:text-xs font-medium text-slate-500 mt-1 sm:mt-0.5 line-clamp-1">{label}</p>
-      {sub && <p className="hidden sm:block text-[11px] text-slate-400 mt-1">{sub}</p>}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <p className="text-base sm:text-xl font-bold text-slate-900 leading-none">{value}</p>
+          {trend && <TrendIcon className={`h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0 ${trendColor}`} />}
+        </div>
+        <p className="text-[11px] sm:text-xs font-medium text-slate-500 mt-1 truncate">{label}</p>
+        {sub && <p className="hidden sm:block text-[10px] text-slate-400 truncate">{sub}</p>}
+      </div>
     </div>
   );
 }

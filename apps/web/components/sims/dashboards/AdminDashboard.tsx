@@ -1,29 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
-import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService } from "@/services/sims.service";
-import { KpiCard, ChartCard } from "@/components/sims/sims-ui";
-import {
-  Lightbulb, Clock, CheckCircle2, AlertCircle,
-  ClipboardList, BarChart2, Users, Archive, ChevronRight,
-} from "lucide-react";
-import {
-  computeStatusChartData, computeCategoryChartData, StatusDonutChart, CategoryBarChart,
-  RecentActivityTable, TopContributors, DepartmentLeaderboard, StatusCountStrip,
-} from "./shared";
+import { DepartmentsService } from "@/services/departments.service";
+import { SegmentedToggle, OrgOverviewView } from "./shared";
+import { DepartmentBreakdownView } from "./DepartmentBreakdownView";
 
-const QUICK_LINKS = [
-  { label: "Review Queue",     href: "/sims/queue",       icon: ClipboardList, accent: "bg-amber-50",  iconColor: "text-amber-600"  },
-  { label: "Analytics",        href: "/sims/analytics",   icon: BarChart2,     accent: "bg-indigo-50", iconColor: "text-indigo-600" },
-  { label: "Committee Report", href: "/sims/committees",  icon: Users,         accent: "bg-emerald-50",iconColor: "text-emerald-600"},
-  { label: "Closed",           href: "/sims/archived",    icon: Archive,       accent: "bg-slate-100", iconColor: "text-slate-600"  },
-];
+type Scope = "organization" | "department";
 
 export default function AdminDashboard() {
   const { user, accessToken } = useAuthStore();
+  const [scope, setScope] = useState<Scope>("organization");
 
   const { data: allRes, isLoading: loading } = useQuery({
     queryKey: ["sims-all", "dashboard"],
@@ -44,90 +33,49 @@ export default function AdminDashboard() {
     enabled: !!accessToken,
   });
 
-  const kpis = useMemo(() => {
-    const total = suggestions.length;
-    const pending = suggestions.filter((s) =>
-      ["WAITING_FOR_REVIEW", "UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"].includes(s.status),
-    ).length;
-    const approved = suggestions.filter((s) =>
-      s.status === "APPROVED_FOR_IMPLEMENTATION" || s.status === "IMPLEMENTED",
-    ).length;
-    const onHold = suggestions.filter((s) => s.status === "ON_HOLD").length;
-    return { total, pending, approved, onHold };
-  }, [suggestions]);
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments", "dashboard"],
+    queryFn: () => DepartmentsService.getAll(accessToken!),
+    enabled: !!accessToken && scope === "department",
+  });
 
-  const statusData = useMemo(() => computeStatusChartData(suggestions), [suggestions]);
-  const categoryData = useMemo(() => computeCategoryChartData(suggestions), [suggestions]);
+  const { data: summary } = useQuery({
+    queryKey: ["sims-summary"],
+    queryFn: () => SimsService.getSummary(accessToken!),
+    enabled: !!accessToken,
+  });
 
   return (
-    <div className="flex flex-col gap-6 sm:gap-6">
-      {/* KPI row */}
-      <div className="order-1 sm:order-none grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        <KpiCard label="Total" value={loading ? "—" : kpis.total} sub="Org-wide suggestions" icon={<Lightbulb className="h-5 w-5 text-blue-600" />} accent="bg-blue-50" />
-        <KpiCard label="Pending" value={loading ? "—" : kpis.pending} sub={kpis.pending > 0 ? "need attention" : "all clear"} icon={<Clock className="h-5 w-5 text-amber-500" />} accent="bg-amber-50" />
-        <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="Approved / implemented" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
-        <KpiCard label="On Hold" value={loading ? "—" : kpis.onHold} sub={kpis.onHold > 0 ? "paused" : "none"} icon={<AlertCircle className="h-5 w-5 text-orange-500" />} accent="bg-orange-50" />
+    <div className="flex flex-col gap-6 sm:gap-6 pb-8">
+      {/* Scope toggle */}
+      <div className="order-0 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-bold text-slate-800">
+          {scope === "organization" ? "Organization" : "By Department"}
+        </h2>
+        <SegmentedToggle
+          value={scope}
+          onChange={setScope}
+          options={[
+            { value: "organization", label: "Organization" },
+            { value: "department", label: "By Department" },
+          ]}
+        />
       </div>
 
-      {/* Per-status breakdown — desktop only; the KPI row above already covers this at a glance on mobile */}
-      <div className="hidden sm:block sm:order-none">
-        <StatusCountStrip suggestions={suggestions} />
-      </div>
-
-      {/* Recent activity + leaderboards — surfaced right after the KPIs on mobile since this is the actual daily workspace content, not just stats */}
-      <div className="order-2 sm:order-none grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <div className="lg:col-span-2">
-          <RecentActivityTable
-            suggestions={suggestions}
-            showAuthor
-            showDepartment
-            viewAllHref="/sims/all"
-            viewAllLabel="View all"
-            emptyText="No suggestions submitted yet"
-          />
-        </div>
-        <div className="space-y-4">
-          <TopContributors ranked={leaderboard} loading={leaderboardLoading} currentUserId={user?.userId} />
-          <DepartmentLeaderboard ranked={departmentLeaderboard} loading={departmentLeaderboardLoading} />
-        </div>
-      </div>
-
-      {/* Quick links */}
-      <div className="order-3 sm:order-none">
-        <p className="sm:hidden text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">
-          Quick access
-        </p>
-        <div className="flex gap-2.5 overflow-x-auto -mx-5 px-5 pb-1 sm:mx-0 sm:px-0 sm:pb-0 sm:overflow-visible sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
-          {QUICK_LINKS.map((q) => (
-            <Link
-              key={q.label}
-              href={q.href}
-              className="flex items-center gap-2 sm:gap-3 bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-sm hover:shadow-md hover:border-slate-200 transition-all shrink-0 w-[164px] sm:w-auto"
-            >
-              <div className={`h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${q.accent}`}>
-                <q.icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${q.iconColor}`} />
-              </div>
-              <span className="text-xs sm:text-sm font-semibold text-slate-800 flex-1 line-clamp-1">{q.label}</span>
-              <ChevronRight className="hidden sm:block h-4 w-4 text-slate-300 shrink-0" />
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="order-4 sm:order-none">
-        <p className="sm:hidden text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">
-          Insights
-        </p>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartCard title="Status Breakdown" subtitle="Org-wide suggestions by current status">
-            <StatusDonutChart data={statusData} />
-          </ChartCard>
-          <ChartCard title="Category Mix" subtitle="Org-wide suggestions by QCDSMT category">
-            <CategoryBarChart data={categoryData} />
-          </ChartCard>
-        </div>
-      </div>
+      {scope === "organization" ? (
+        <OrgOverviewView
+          suggestions={suggestions}
+          loading={loading}
+          leaderboard={leaderboard}
+          leaderboardLoading={leaderboardLoading}
+          departmentLeaderboard={departmentLeaderboard}
+          departmentLeaderboardLoading={departmentLeaderboardLoading}
+          currentUserId={user?.userId}
+          employeeCount={summary?.organization.employeeCount}
+        />
+      ) : (
+        <DepartmentBreakdownView suggestions={suggestions} loading={loading} departments={departments} />
+      )}
     </div>
   );
 }

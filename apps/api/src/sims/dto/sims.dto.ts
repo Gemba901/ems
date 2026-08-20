@@ -1,9 +1,27 @@
 import {
   IsString, IsNotEmpty, IsEnum, IsOptional, IsBoolean,
-  IsNumber, Min, IsArray, ArrayMinSize,
+  IsNumber, Min, IsArray, ArrayMinSize, ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SuggestionCategory, SuggestionStatus, ImplementationStatus, DecisionType } from 'db';
+
+/** Fields for creating the real Kaizen when decisionType === DAILY_KAIZEN */
+export class KaizenDetailsDto {
+  /** The employee who will own and complete the drafted kaizen; required in the service */
+  @IsString()
+  @IsOptional()
+  kaizenOwnerId?: string;
+
+  /** Omit to fall back to the suggestion's own title */
+  @IsString()
+  @IsOptional()
+  conditionDescription?: string;
+
+  /** Omit to reuse the suggestion's own imageUrl as the condition evidence photo */
+  @IsString()
+  @IsOptional()
+  beforePhotoUrl?: string;
+}
 
 export class CreateSuggestionDto {
   @IsString()
@@ -40,6 +58,15 @@ export class CreateSuggestionDto {
   @IsString()
   @IsOptional()
   hodId?: string;
+
+  /**
+   * HOD / MANAGEMENT / ADMIN may route straight to a steering committee, alongside (not instead
+   * of) the department/HOD target above — mirrors what normally only happens once a department
+   * HOD marks a suggestion SELECTED_FOR_SGA, just done immediately at submission time.
+   */
+  @IsString()
+  @IsOptional()
+  committeeId?: string;
 }
 
 export class ReviewSuggestionDto {
@@ -66,6 +93,12 @@ export class ReviewSuggestionDto {
   /** Shape depends on statusChanged/decisionType — see sims-review-pipeline-timeline.md */
   @IsOptional()
   decisionDetails?: Record<string, any>;
+
+  /** Required when statusChanged === APPROVED_FOR_IMPLEMENTATION && decisionType === DAILY_KAIZEN */
+  @ValidateNested()
+  @Type(() => KaizenDetailsDto)
+  @IsOptional()
+  kaizenDetails?: KaizenDetailsDto;
 }
 
 export class UpdateImplementationDto {

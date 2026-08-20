@@ -17,8 +17,10 @@ import {
   Users,
   List,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
+import { CommitteeService } from "@/services/committee.service";
 
 interface SimsSidebarProps {
   open?: boolean;
@@ -54,7 +56,7 @@ const SIMS_NAV = [
     href: "/sims/queue",
     icon: ClipboardList,
     exact: false,
-    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD],
+    allowedRoles: [Role.HOD],
   },
   {
     name: "Analytics",
@@ -85,14 +87,27 @@ function isActive(pathname: string, href: string, exact: boolean) {
 export function SimsSidebar({ open = false, onClose, collapsed = false, onToggle }: SimsSidebarProps) {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   // On mobile (open=true) always show full sidebar regardless of collapsed state
   const isCollapsed = collapsed && !open;
 
   const userRole = user?.roleLevel;
-  const filteredNav = SIMS_NAV.filter(
-    (item) => userRole && item.allowedRoles.includes(userRole)
-  );
+
+  // A plain employee who sits on a steering committee gets org-wide read access to SIMS
+  // (enforced server-side in getAllSuggestions) — surface "All Suggestions" for them too.
+  const { data: myCommittees = [] } = useQuery({
+    queryKey: ["my-committees", "sidebar"],
+    queryFn: () => CommitteeService.getMyCommittees(accessToken!),
+    enabled: userRole === Role.EMPLOYEE && !!accessToken,
+  });
+  const isCommitteeMember = myCommittees.length > 0;
+
+  const filteredNav = SIMS_NAV.filter((item) => {
+    if (!userRole) return false;
+    if (item.name === "All Suggestions" && userRole === Role.EMPLOYEE) return isCommitteeMember;
+    return item.allowedRoles.includes(userRole);
+  });
 
   return (
     <>

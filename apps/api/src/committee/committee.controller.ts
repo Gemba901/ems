@@ -43,6 +43,16 @@ export class CommitteeController {
   }
 
   /**
+   * GET /committees/routable
+   * Any authenticated org member can see the lightweight committee list — used by the
+   * suggestion form's "Send To" picker so a suggestion can be routed straight to a committee.
+   */
+  @Get('routable')
+  async listRoutable(@CurrentUser() user: { organizationId: string }) {
+    return this.committeeService.listRoutable(user.organizationId);
+  }
+
+  /**
    * GET /committees/designated
    * Returns the single committee SELECTED_FOR_SGA suggestions are forwarded to, or null.
    */

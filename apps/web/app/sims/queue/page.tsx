@@ -80,22 +80,16 @@ function QueueCard({ s, router }: { s: Suggestion; router: ReturnType<typeof use
   );
 }
 
-const ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT] as const;
 const ACTIVE_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"];
 
 export default function QueuePage() {
   const router = useRouter();
   const { accessToken, user } = useAuthStore();
 
-  const isHOD = user?.roleLevel === Role.HOD;
-
   const { data: suggestions = [], isLoading: loading } = useQuery({
     queryKey: ["sims-queue", user?.roleLevel],
     queryFn: async () => {
-      const fetch = ADMIN_ROLES.includes(user!.roleLevel as typeof ADMIN_ROLES[number])
-        ? SimsService.getAll(accessToken!, { limit: 500 }).then((r) => r.data)
-        : SimsService.getQueue(accessToken!, { limit: 500 }).then((r) => r.data);
-      const data = await fetch;
+      const data = await SimsService.getQueue(accessToken!, { limit: 500 }).then((r) => r.data);
       return data.filter((s) => ACTIVE_STATUSES.includes(s.status));
     },
     enabled: !!accessToken && !!user?.roleLevel,
@@ -106,13 +100,13 @@ export default function QueuePage() {
   const selectedForSGA = suggestions.filter((s) => s.status === "SELECTED_FOR_SGA");
 
   return (
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
+    <ProtectedRoute allowedRoles={[Role.HOD]}>
       <div className="px-4 py-4 md:px-8 md:py-6 space-y-5">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{isHOD ? "Department Review Queue" : "Review Queue"}</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Department Review Queue</h1>
             <p className="text-sm text-slate-500 mt-1">
               {loading
                 ? "Loading..."

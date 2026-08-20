@@ -80,6 +80,13 @@ export interface OrgStats {
     suggestionsByCategory: Record<string, number>;
 }
 
+export interface PlatformAdmin {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string;
+}
+
 export interface PaginatedResponse<T> {
     data: T[];
     pagination: { page: number; limit: number; total: number; pages: number };
@@ -169,7 +176,14 @@ export const AdminService = {
         return handleResponse<any>(res);
     },
 
-    async createOrganization(token: string, data: Record<string, string> & { modules?: ModuleType[]; adminFirstName: string; adminLastName: string; adminEmail: string; adminPhone: string }): Promise<any> {
+    async getPlatformAdmins(token: string): Promise<PlatformAdmin[]> {
+        const res = await apiClient(`${API_URL}/organizations/platform-admins`, {
+            headers: authHeaders(token),
+        }, token);
+        return handleResponse<PlatformAdmin[]>(res);
+    },
+
+    async createOrganization(token: string, data: Record<string, string> & { modules?: ModuleType[]; adminFirstName: string; adminLastName: string; adminEmail: string; adminPhone: string; gembaTeamUserIds?: string[] }): Promise<any> {
         const res = await apiClient(`${API_URL}/organizations`, {
             method: "POST",
             headers: authHeaders(token),

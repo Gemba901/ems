@@ -348,6 +348,57 @@ export class OrganizationsService {
         });
     }
 
+    // ── GembaPMS platform team ───────────────────────────────────────────────
+    // Existing users who hold SUPER_ADMIN in any org — candidates for the
+    // GembaPMS platform-team department every client org gets.
+
+    async getPlatformSuperAdmins() {
+        const memberships = await this.prisma.userOrganization.findMany({
+            where: { role: { name: 'SUPER_ADMIN' } },
+            distinct: ['userId'],
+            select: {
+                user: { select: { id: true, name: true, email: true, phone: true } },
+            },
+        });
+        return memberships.map((m) => m.user);
+    }
+
+    private async addGembaTeam(
+        tx: Prisma.TransactionClient,
+        organizationId: string,
+        userIds: string[],
+    ) {
+        if (userIds.length === 0) return;
+
+        const department = await tx.department.create({
+            data: { name: 'GembaPMS', organizationId, isPlatformTeam: true },
+        });
+
+        const superAdminRole = await tx.role.findUniqueOrThrow({ where: { name: 'SUPER_ADMIN' } });
+        const users = await tx.user.findMany({ where: { id: { in: userIds } } });
+
+        for (const user of users) {
+            await tx.userOrganization.upsert({
+                where: { userId_organizationId: { userId: user.id, organizationId } },
+                create: { userId: user.id, organizationId, roleId: superAdminRole.id },
+                update: { roleId: superAdminRole.id },
+            });
+
+            const [firstName, ...rest] = user.name.split(' ');
+            await tx.employee.create({
+                data: {
+                    firstName,
+                    lastName: rest.join(' ') || firstName,
+                    email: user.email,
+                    phone: user.phone,
+                    organizationId,
+                    userId: user.id,
+                    departmentId: department.id,
+                },
+            });
+        }
+    }
+
     // ── Create organization ──────────────────────────────────────────────────
 
     async create(dto: CreateOrganizationDto) {
@@ -362,6 +413,9 @@ export class OrganizationsService {
             where: { email: dto.adminEmail },
         });
         if (existingUser) throw new ConflictException('A user with this email already exists');
+
+        const gembaTeamUserIds =
+            dto.gembaTeamUserIds ?? (await this.getPlatformSuperAdmins()).map((u) => u.id);
 
         return this.prisma.$transaction(async (tx) => {
             const org = await (tx.organization as any).create({
@@ -405,6 +459,8 @@ export class OrganizationsService {
                     userId:         user.id,
                 },
             });
+
+            await this.addGembaTeam(tx, org.id, gembaTeamUserIds);
 
                 await this.cache.del(CACHE_KEYS.PLATFORM_STATS);
             await this.cache.del(CACHE_KEYS.ORG_LIST);

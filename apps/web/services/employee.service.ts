@@ -212,13 +212,12 @@ export const EmployeeService = {
         return handleResponse<{ message: string }>(res);
     },
 
-    async resetPassword(id: string, newPassword: string, token: string): Promise<{ message: string }> {
+    async resetPassword(id: string, token: string): Promise<{ tempPassword: string; expiresInMinutes: number; message: string }> {
         const res = await apiClient(`${API_URL}/employee/${id}/reset-password`, {
             method: "PATCH",
             headers: authHeaders(token),
-            body: JSON.stringify({ newPassword }),
         }, token);
-        return handleResponse<{ message: string }>(res);
+        return handleResponse<{ tempPassword: string; expiresInMinutes: number; message: string }>(res);
     },
 
     async updateAvatar(id: string, avatarUrl: string, token: string): Promise<EmployeeApiResponse> {

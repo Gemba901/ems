@@ -17,6 +17,6 @@ import { ChannelDispatcherService } from './channels/channel-dispatcher.service'
     WhatsappService,
     ChannelDispatcherService,
   ],
-  exports: [NotificationsService],
+  exports: [NotificationsService, EmailService],
 })
 export class NotificationsModule {}

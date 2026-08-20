@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Users2 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
+import { useOrgModules } from "@/hooks/useOrgModules";
+import { CommitteeService } from "@/services/committee.service";
 import { apiClient } from "@/lib/api-client";
 
 function greeting(): string {
@@ -24,7 +28,14 @@ interface DailyQuote {
 
 export default function DashboardHero() {
   const { user, accessToken } = useAuthStore();
+  const { hasModule } = useOrgModules();
   const [dailyQuote, setDailyQuote] = useState<DailyQuote | null>(null);
+
+  const { data: myCommittees = [] } = useQuery({
+    queryKey: ["my-committees"],
+    queryFn: () => CommitteeService.getMyCommittees(accessToken!),
+    enabled: !!accessToken && hasModule("SIMS"),
+  });
 
   const todayShort = new Date().toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric",
@@ -70,6 +81,15 @@ export default function DashboardHero() {
             {user?.jobTitle && (
               <span className="text-xs font-medium bg-white/10 text-slate-300 px-2.5 py-1 rounded-full">
                 {user.jobTitle}
+              </span>
+            )}
+            {myCommittees.length > 0 && (
+              <span
+                title={myCommittees.map((c) => c.name).join(", ")}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-500/30 text-indigo-200 px-2.5 py-1 rounded-full"
+              >
+                <Users2 className="h-3 w-3" />
+                {myCommittees.length === 1 ? myCommittees[0].name : `${myCommittees.length} committees`}
               </span>
             )}
           </div>

@@ -109,9 +109,11 @@ export interface CreateSuggestionPayload {
   imageUrl?: string;
   departmentId?: string;
   hodId?: string;
+  committeeId?: string;
 }
 
 export interface KaizenDetailsPayload {
+  kaizenOwnerId?: string;
   conditionDescription?: string;
   beforePhotoUrl?: string;
 }
@@ -132,8 +134,8 @@ export interface UpdateImplementationPayload {
 }
 
 export interface SuggestionSummary {
-  department: { total: number; byStatus: Record<string, number>; byCategory: Record<string, number> };
-  organization: { total: number; byStatus: Record<string, number>; byCategory: Record<string, number> };
+  department: { total: number; byStatus: Record<string, number>; byCategory: Record<string, number>; employeeCount: number };
+  organization: { total: number; byStatus: Record<string, number>; byCategory: Record<string, number>; employeeCount: number };
 }
 
 function buildQuery(params: Record<string, string | number | undefined>) {
@@ -225,6 +227,16 @@ export const SimsService = {
   async getById(id: string, token: string): Promise<Suggestion> {
     const res = await apiClient(`${API_URL}/sims/${id}`, { headers: authHeaders(token) }, token);
     return handleResponse<Suggestion>(res);
+  },
+
+  // Employees in the suggestion's OWN department — for the responsible-person / kaizen-owner
+  // pickers, correct even when the reviewer (admin/committee) is in a different department.
+  async getReviewCandidates(
+    id: string,
+    token: string,
+  ): Promise<{ id: string; firstName: string; lastName: string; jobTitle: string | null }[]> {
+    const res = await apiClient(`${API_URL}/sims/${id}/review-candidates`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
   },
 
   async review(id: string, data: ReviewPayload, token: string): Promise<SuggestionReview> {

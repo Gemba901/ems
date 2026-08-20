@@ -7,6 +7,11 @@ import { SuggestionCategory, SuggestionStatus, ImplementationStatus, DecisionTyp
 
 /** Fields for creating the real Kaizen when decisionType === DAILY_KAIZEN */
 export class KaizenDetailsDto {
+  /** The employee who will own and complete the drafted kaizen; required in the service */
+  @IsString()
+  @IsOptional()
+  kaizenOwnerId?: string;
+
   /** Omit to fall back to the suggestion's own title */
   @IsString()
   @IsOptional()
@@ -53,6 +58,15 @@ export class CreateSuggestionDto {
   @IsString()
   @IsOptional()
   hodId?: string;
+
+  /**
+   * HOD / MANAGEMENT / ADMIN may route straight to a steering committee, alongside (not instead
+   * of) the department/HOD target above — mirrors what normally only happens once a department
+   * HOD marks a suggestion SELECTED_FOR_SGA, just done immediately at submission time.
+   */
+  @IsString()
+  @IsOptional()
+  committeeId?: string;
 }
 
 export class ReviewSuggestionDto {

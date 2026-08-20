@@ -109,6 +109,32 @@ export class SteelSourcingService {
     }
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates a row in separate steps — two concurrent requests can read the
+  // same count before either writes, producing duplicate numbers. The
+  // number FORMAT is unchanged; this only makes generate-then-create safe
+  // under concurrency by regenerating and retrying on conflict.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generateSourcingNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -163,41 +189,48 @@ export class SteelSourcingService {
         'Sourcing can only start once the production plan has been released (P01-A12).',
       );
     }
-
-    return this.prisma.$transaction(async (tx) => {
-      const sourcingNumber = await this.generateSourcingNumber(
-        tx,
-        organizationId,
+    if (plan.status !== 'RELEASED') {
+      throw new BadRequestException(
+        `This production plan is ${plan.status.replace(/_/g, ' ').toLowerCase()} and is not currently available for sourcing.`,
       );
+    }
 
-      const order = await tx.steelSourcingOrder.create({
-        data: {
-          sourcingNumber,
+    return this.withUniqueRetry('sourcingNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const sourcingNumber = await this.generateSourcingNumber(
+          tx,
           organizationId,
-          planId: dto.planId,
-          createdById: employee.id,
-          stage: 'A01_REQUIREMENT_REVIEWED',
-          status: 'IN_PROGRESS',
-          materialRequirementNotes: dto.materialRequirementNotes,
-          requiredByDate: dto.requiredByDate
-            ? new Date(dto.requiredByDate)
-            : null,
-        },
-      });
+        );
 
-      await this.logActivity(
-        tx,
-        order.id,
-        'A01',
-        employee.id,
-        dto.materialRequirementNotes,
-        { ...dto },
-      );
-      return tx.steelSourcingOrder.findUnique({
-        where: { id: order.id },
-        include: orderInclude,
-      });
-    });
+        const order = await tx.steelSourcingOrder.create({
+          data: {
+            sourcingNumber,
+            organizationId,
+            planId: dto.planId,
+            createdById: employee.id,
+            stage: 'A01_REQUIREMENT_REVIEWED',
+            status: 'IN_PROGRESS',
+            materialRequirementNotes: dto.materialRequirementNotes,
+            requiredByDate: dto.requiredByDate
+              ? new Date(dto.requiredByDate)
+              : null,
+          },
+        });
+
+        await this.logActivity(
+          tx,
+          order.id,
+          'A01',
+          employee.id,
+          dto.materialRequirementNotes,
+          { ...dto },
+        );
+        return tx.steelSourcingOrder.findUnique({
+          where: { id: order.id },
+          include: orderInclude,
+        });
+      }),
+    );
   }
 
   // ── P02-A02 — Identify material type needed ──
@@ -654,17 +687,36 @@ export class SteelSourcingService {
     });
   }
 
-  // Manual override for exceptional cases (e.g. putting an order ON_HOLD or CANCELLED)
+  // Administrative override for exceptional cases (e.g. putting an order
+  // ON_HOLD or CANCELLED outside the normal A01-A12 flow). Restricted to
+  // PO_ROLES at the controller. Deliberately does not re-validate
+  // stage/status transitions the way the staged A01-A12 actions do — that's
+  // the point of an override — but it is transactional and logged like
+  // every other write, so the change is auditable.
   async updateStatus(
     id: string,
     dto: UpdateSteelSourcingStatusDto,
+    userId: string,
     organizationId: string,
   ) {
-    await this.findOrderOrThrow(id, organizationId);
-    return this.prisma.steelSourcingOrder.update({
-      where: { id },
-      data: { status: dto.status },
-      include: orderInclude,
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const order = await this.findOrderOrThrow(id, organizationId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.steelSourcingOrder.update({
+        where: { id },
+        data: { status: dto.status },
+        include: orderInclude,
+      });
+      await this.logActivity(
+        tx,
+        id,
+        'STATUS_OVERRIDE',
+        employee.id,
+        dto.notes,
+        { previousStatus: order.status, newStatus: dto.status },
+      );
+      return updated;
     });
   }
 

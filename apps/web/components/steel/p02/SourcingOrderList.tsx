@@ -166,6 +166,7 @@ export function SourcingOrderList({
                     <Button
                       size="sm"
                       variant="outline"
+                      aria-label="Previous page"
                       disabled={page <= 1}
                       onClick={() => onPageChange(page - 1)}
                     >
@@ -174,6 +175,7 @@ export function SourcingOrderList({
                     <Button
                       size="sm"
                       variant="outline"
+                      aria-label="Next page"
                       disabled={page >= data.pagination.pages}
                       onClick={() => onPageChange(page + 1)}
                     >

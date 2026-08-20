@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { SteelSourcingService } from "@/services/steel-sourcing.service";
-import { Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { S2IdentifyAssess } from "./S2IdentifyAssess";
 import { S3QuoteSelection } from "./S3QuoteSelection";
 import { S4SpecificationPO } from "./S4SpecificationPO";
@@ -34,18 +36,54 @@ export default function SteelSourcingOrderDetailPage() {
   // Same pattern for S4's completion card (shown after A08).
   const [s4Acknowledged, setS4Acknowledged] = useState(false);
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["steel-sourcing-order", params.id],
     queryFn: () => SteelSourcingService.getById(params.id, accessToken!),
     enabled: !!accessToken && !!params.id,
+    retry: (failureCount, err) => {
+      const message = err instanceof Error ? err.message : "";
+      if (/not found|forbidden|no employee profile/i.test(message)) return false;
+      return failureCount < 2;
+    },
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["steel-sourcing-order", params.id] });
 
-  if (isLoading || !order) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (isError || !order) {
+    const message = error instanceof Error ? error.message : "Something went wrong loading this sourcing order.";
+    const isNotFound = /not found/i.test(message);
+    const isForbidden = /forbidden|no employee profile/i.test(message);
+    return (
+      <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4">
+        <Link href="/steel/p02" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+          <ArrowLeft className="h-4 w-4" />
+          Back to sourcing orders
+        </Link>
+        <Card>
+          <CardContent className="p-6 text-center space-y-3">
+            <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto" />
+            <p className="text-sm font-medium text-slate-800">
+              {isNotFound ? "Sourcing order not found." : isForbidden ? "You don't have access to this record." : "Couldn't load this sourcing order."}
+            </p>
+            <p className="text-xs text-slate-400">{message}</p>
+            {!isNotFound && !isForbidden && (
+              <button
+                onClick={() => refetch()}
+                className="text-sm font-medium text-slate-700 hover:text-slate-900 underline"
+              >
+                Retry
+              </button>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }

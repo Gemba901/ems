@@ -201,6 +201,32 @@ export class MaterialIntakeService {
     );
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates a row in separate steps — two concurrent requests can read the
+  // same count before either writes, producing duplicate numbers. The
+  // number FORMAT is unchanged; this only makes generate-then-create safe
+  // under concurrency by regenerating and retrying on conflict.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generateIntakeNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -263,35 +289,40 @@ export class MaterialIntakeService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const intakeNumber = await this.generateIntakeNumber(tx, organizationId);
-
-      const intake = await tx.steelMaterialIntake.create({
-        data: {
-          intakeNumber,
+    return this.withUniqueRetry('intakeNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const intakeNumber = await this.generateIntakeNumber(
+          tx,
           organizationId,
-          sourcingOrderId: dto.sourcingOrderId,
-          createdById: employee.id,
-          stage: 'A01_GATE_ARRIVAL_RECORDED',
-          status: 'IN_PROGRESS',
-          vehicleNumber: dto.vehicleNumber,
-          driverName: dto.driverName,
-          transporterName: dto.transporterName,
-          arrivalDateTime: dto.arrivalDateTime
-            ? new Date(dto.arrivalDateTime)
-            : new Date(),
-          gateEntryRef: dto.gateEntryRef,
-        },
-      });
+        );
 
-      await this.logActivity(tx, intake.id, 'A01', employee.id, undefined, {
-        ...dto,
-      });
-      return tx.steelMaterialIntake.findUnique({
-        where: { id: intake.id },
-        include: intakeInclude,
-      });
-    });
+        const intake = await tx.steelMaterialIntake.create({
+          data: {
+            intakeNumber,
+            organizationId,
+            sourcingOrderId: dto.sourcingOrderId,
+            createdById: employee.id,
+            stage: 'A01_GATE_ARRIVAL_RECORDED',
+            status: 'IN_PROGRESS',
+            vehicleNumber: dto.vehicleNumber,
+            driverName: dto.driverName,
+            transporterName: dto.transporterName,
+            arrivalDateTime: dto.arrivalDateTime
+              ? new Date(dto.arrivalDateTime)
+              : new Date(),
+            gateEntryRef: dto.gateEntryRef,
+          },
+        });
+
+        await this.logActivity(tx, intake.id, 'A01', employee.id, undefined, {
+          ...dto,
+        });
+        return tx.steelMaterialIntake.findUnique({
+          where: { id: intake.id },
+          include: intakeInclude,
+        });
+      }),
+    );
   }
 
   // ── P03-A02 — Verify purchase order and delivery documents ──
@@ -708,16 +739,36 @@ export class MaterialIntakeService {
   }
 
   // Manual override for exceptional cases (e.g. putting an intake ON_HOLD or CANCELLED)
+  // Administrative override for exceptional cases (e.g. putting an intake
+  // ON_HOLD or CANCELLED outside the normal A01-A14 flow). Restricted to
+  // RELEASE_ROLES at the controller. Deliberately does not re-validate
+  // stage/status transitions the way the staged A01-A14 actions do — that's
+  // the point of an override — but it is transactional and logged like
+  // every other write, so the change is auditable.
   async updateStatus(
     id: string,
     dto: UpdateMaterialIntakeStatusDto,
+    userId: string,
     organizationId: string,
   ) {
-    await this.findIntakeOrThrow(id, organizationId);
-    return this.prisma.steelMaterialIntake.update({
-      where: { id },
-      data: { status: dto.status },
-      include: intakeInclude,
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const intake = await this.findIntakeOrThrow(id, organizationId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.steelMaterialIntake.update({
+        where: { id },
+        data: { status: dto.status },
+        include: intakeInclude,
+      });
+      await this.logActivity(
+        tx,
+        id,
+        'STATUS_OVERRIDE',
+        employee.id,
+        dto.notes,
+        { previousStatus: intake.status, newStatus: dto.status },
+      );
+      return updated;
     });
   }
 

@@ -82,7 +82,7 @@ export const STEEL_PROCESSES: SteelProcessMeta[] = [
     description: "Melt the prepared charge and manage the furnace heat process.",
     icon: Flame,
     href: "/steel/p05",
-    live: false,
+    live: true,
     color: { bg: "bg-red-50", text: "text-red-500" , bar: "bg-red-500" },
   },
   {
@@ -92,7 +92,7 @@ export const STEEL_PROCESSES: SteelProcessMeta[] = [
     description: "Review heat results and approve the heat for the next production stage.",
     icon: FlaskConical,
     href: "/steel/p06",
-    live: false,
+    live: true,
     color: { bg: "bg-indigo-50", text: "text-indigo-500" , bar: "bg-indigo-500" },
   },
   {

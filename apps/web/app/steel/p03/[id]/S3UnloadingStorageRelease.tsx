@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
@@ -24,7 +24,7 @@ import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
 import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p03/ContextSummary";
 import { IntakeProgress } from "@/components/steel/p03/IntakeProgress";
-import { Field, SubStepCard, SaveButton, LockedNote, SubStepStatus } from "@/components/steel/p03/shared";
+import { Field, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p03/shared";
 import {
   PackageCheck, Info, ListChecks, Lightbulb, ShieldCheck, Lock, Check, ArrowRight, HelpCircle, Loader2,
 } from "lucide-react";
@@ -226,23 +226,43 @@ function ReleaseLockedCard() {
 }
 
 function ConfirmReleaseModal({
-  onConfirm, onCancel, submitting,
-}: { onConfirm: () => void; onCancel: () => void; submitting: boolean }) {
+  intake, onConfirm, onCancel, submitting,
+}: { intake: SteelMaterialIntake; onConfirm: () => void; onCancel: () => void; submitting: boolean }) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    cancelRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) onCancel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel, submitting]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="release-modal-title"
+        className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4"
+      >
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
             <ShieldCheck className="h-5 w-5 text-red-600" />
           </div>
-          <h2 className="text-base font-bold text-slate-900">Release this material to stock?</h2>
+          <h2 id="release-modal-title" className="text-base font-bold text-slate-900">Release this material to stock?</h2>
+        </div>
+        <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 grid grid-cols-2 gap-2 text-xs">
+          <div><span className="text-slate-400 block">Intake</span>{intake.intakeNumber}</div>
+          <div><span className="text-slate-400 block">Yard location</span>{intake.yardLocation ?? "—"}</div>
         </div>
         <p className="text-sm text-slate-500">
           This is final. The material intake will move to <span className="font-medium text-slate-700">RELEASED</span> and
           cannot be reverted from here.
         </p>
         <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting} ref={cancelRef}>
             Cancel
           </Button>
           <Button type="button" onClick={onConfirm} disabled={submitting} className="gap-2 bg-red-600 hover:bg-red-700">
@@ -289,6 +309,7 @@ function ReleasePanel({
       </Button>
       {confirming && (
         <ConfirmReleaseModal
+          intake={intake}
           submitting={mutation.isPending}
           onCancel={() => setConfirming(false)}
           onConfirm={() => mutation.mutate({ stockReleaseNotes: notes || undefined })}
@@ -389,55 +410,41 @@ export function S3UnloadingStorageRelease({
               <ReleasedState intake={intake} />
             ) : (
               <>
-                <SubStepCard code="P03-A11" title="Unload Approved Material" status={unloadingStatus}>
-                  {unloadingStatus === "done" ? (
-                    <Field label="Unloaded at" value={intake.unloadedAt ? new Date(intake.unloadedAt).toLocaleString() : null} />
-                  ) : unloadingStatus === "active" ? (
-                    <UnloadingForm intake={intake} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P03-A11"
+                  title="Unload Approved Material"
+                  status={unloadingStatus}
+                  summary={intake.unloadedAt ? `Unloaded ${new Date(intake.unloadedAt).toLocaleString()}` : undefined}
+                >
+                  {unloadingStatus === "active" && <UnloadingForm intake={intake} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P03-A12" title="Tare Weight & Net Weight" status={weightStatus}>
-                  {weightStatus === "done" ? (
-                    <div className="grid grid-cols-3 gap-3">
-                      <Field label="Gross weight" value={intake.grossWeightTonnes ? `${intake.grossWeightTonnes} t` : null} />
-                      <Field label="Tare weight" value={intake.tareWeightTonnes !== null ? `${intake.tareWeightTonnes} t` : null} />
-                      <Field label="Net weight" value={intake.netWeightTonnes !== null ? `${intake.netWeightTonnes} t` : null} />
-                    </div>
-                  ) : weightStatus === "active" ? (
-                    <NetWeightForm intake={intake} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P03-A12"
+                  title="Tare Weight & Net Weight"
+                  status={weightStatus}
+                  summary={intake.netWeightTonnes !== null ? `Net weight ${intake.netWeightTonnes} t` : undefined}
+                >
+                  {weightStatus === "active" && <NetWeightForm intake={intake} token={token} onDone={onRefresh} />}
+                </SubStep>
 
-                <SubStepCard code="P03-A13" title="Store Material in Yard Location" status={yardStatus}>
-                  {yardStatus === "done" ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Yard location" value={intake.yardLocation} />
-                      <Field label="Stored at" value={intake.storedAt ? new Date(intake.storedAt).toLocaleString() : null} />
-                    </div>
-                  ) : yardStatus === "active" ? (
-                    <YardLocationForm intake={intake} token={token} onDone={onRefresh} />
-                  ) : (
-                    <LockedNote />
-                  )}
-                </SubStepCard>
+                <SubStep
+                  code="P03-A13"
+                  title="Store Material in Yard Location"
+                  status={yardStatus}
+                  summary={intake.yardLocation ? `Yard: ${intake.yardLocation}` : undefined}
+                >
+                  {yardStatus === "active" && <YardLocationForm intake={intake} token={token} onDone={onRefresh} />}
+                </SubStep>
 
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1 px-1">
                     <ShieldCheck className="h-3.5 w-3.5 text-red-500" />
                     <p className="text-xs font-medium text-red-500 uppercase tracking-wide">Final Stock Release / Authority Gate</p>
                   </div>
-                  <SubStepCard code="P03-A14" title="Update Stock & Release for Preparation/Use" status={releaseStatus}>
-                    {releaseStatus === "active" ? (
-                      <ReleasePanel intake={intake} token={token} canRelease={canRelease} onDone={onRefresh} />
-                    ) : (
-                      <LockedNote />
-                    )}
-                  </SubStepCard>
+                  <SubStep code="P03-A14" title="Update Stock & Release for Preparation/Use" status={releaseStatus}>
+                    {releaseStatus === "active" && <ReleasePanel intake={intake} token={token} canRelease={canRelease} onDone={onRefresh} />}
+                  </SubStep>
                 </div>
               </>
             )}

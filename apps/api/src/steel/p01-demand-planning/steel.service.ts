@@ -104,6 +104,32 @@ export class SteelService {
     }
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates a row in separate steps — two concurrent requests can read the
+  // same count before either writes, producing duplicate numbers. The
+  // number FORMAT is unchanged; this only makes generate-then-create safe
+  // under concurrency by regenerating and retrying on conflict.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generatePlanNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -149,40 +175,49 @@ export class SteelService {
   ) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
-    return this.prisma.$transaction(async (tx) => {
-      const planNumber = await this.generatePlanNumber(tx, organizationId);
+    return this.withUniqueRetry('planNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const planNumber = await this.generatePlanNumber(tx, organizationId);
 
-      const plan = await tx.steelProductionPlan.create({
-        data: {
-          planNumber,
-          organizationId,
-          createdById: employee.id,
-          stage: 'A01_DEMAND_CAPTURED',
-          status: 'IN_PROGRESS',
-          demandSource: dto.demandSource,
-          customerName: dto.customerName,
-          dealerName: dto.dealerName,
-          projectReference: dto.projectReference,
-          salesOrderNumber: dto.salesOrderNumber,
-          forecastReference: dto.forecastReference,
-          stockRequirementReference: dto.stockRequirementReference,
-          expectedDeliveryDate: dto.expectedDeliveryDate
-            ? new Date(dto.expectedDeliveryDate)
-            : null,
-          requestedQuantityTonnes: dto.requestedQuantityTonnes,
-          demandNotes: dto.demandNotes,
-        },
-      });
+        const plan = await tx.steelProductionPlan.create({
+          data: {
+            planNumber,
+            organizationId,
+            createdById: employee.id,
+            stage: 'A01_DEMAND_CAPTURED',
+            status: 'IN_PROGRESS',
+            demandSource: dto.demandSource,
+            customerName: dto.customerName,
+            dealerName: dto.dealerName,
+            projectReference: dto.projectReference,
+            salesOrderNumber: dto.salesOrderNumber,
+            forecastReference: dto.forecastReference,
+            stockRequirementReference: dto.stockRequirementReference,
+            expectedDeliveryDate: dto.expectedDeliveryDate
+              ? new Date(dto.expectedDeliveryDate)
+              : null,
+            requestedQuantityTonnes: dto.requestedQuantityTonnes,
+            demandNotes: dto.demandNotes,
+          },
+        });
 
-      await this.logActivity(tx, plan.id, 'A01', employee.id, dto.demandNotes, {
-        ...dto,
-      });
+        await this.logActivity(
+          tx,
+          plan.id,
+          'A01',
+          employee.id,
+          dto.demandNotes,
+          {
+            ...dto,
+          },
+        );
 
-      return tx.steelProductionPlan.findUnique({
-        where: { id: plan.id },
-        include: planInclude,
-      });
-    });
+        return tx.steelProductionPlan.findUnique({
+          where: { id: plan.id },
+          include: planInclude,
+        });
+      }),
+    );
   }
 
   // ── P01-A02 — Confirm customer and order priority ──
@@ -606,16 +641,39 @@ export class SteelService {
   }
 
   // Manual override for exceptional cases (e.g. putting a plan ON_HOLD or CANCELLED)
+  // Administrative override for exceptional cases (e.g. putting a plan
+  // ON_HOLD or CANCELLED outside the normal A01-A12 flow). Restricted to
+  // RELEASE_ROLES at the controller. Deliberately does not re-validate
+  // stage/status transitions the way the staged A01-A12 actions do — that's
+  // the point of an override — but it is transactional and logged like
+  // every other write, so the change is auditable.
   async updateStatus(
     id: string,
     dto: UpdateSteelPlanStatusDto,
+    userId: string,
     organizationId: string,
   ) {
-    await this.findPlanOrThrow(id, organizationId);
-    return this.prisma.steelProductionPlan.update({
-      where: { id },
-      data: { status: dto.status },
-      include: planInclude,
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const plan = await this.findPlanOrThrow(id, organizationId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.steelProductionPlan.update({
+        where: { id },
+        data: { status: dto.status },
+        include: planInclude,
+      });
+      await this.logActivity(
+        tx,
+        id,
+        'STATUS_OVERRIDE',
+        employee.id,
+        dto.notes,
+        {
+          previousStatus: plan.status,
+          newStatus: dto.status,
+        },
+      );
+      return updated;
     });
   }
 
@@ -655,14 +713,17 @@ export class SteelService {
       end.setHours(23, 59, 59, 999);
       plannedStartDateFilter.lte = end;
     }
-    const hasPlannedStartDateFilter = Object.keys(plannedStartDateFilter).length > 0;
+    const hasPlannedStartDateFilter =
+      Object.keys(plannedStartDateFilter).length > 0;
 
     const where: Prisma.SteelProductionPlanWhereInput = {
       organizationId,
       ...(stage && { stage }),
       ...(status && { status }),
       ...(priority && { priority }),
-      ...(hasPlannedStartDateFilter && { plannedStartDate: plannedStartDateFilter }),
+      ...(hasPlannedStartDateFilter && {
+        plannedStartDate: plannedStartDateFilter,
+      }),
       ...(search && {
         OR: [
           { planNumber: { contains: search, mode: 'insensitive' } },
@@ -694,51 +755,52 @@ export class SteelService {
   }
 
   async getSummary(organizationId: string) {
-    const [byStage, byStatus, byStageStatus, total] = await this.prisma.$transaction([
-      this.prisma.steelProductionPlan.groupBy({
-        by: ['stage'],
-        where: {
-          organizationId,
-        },
-        orderBy: {
-          stage: 'asc',
-        },
-        _count: true,
-      }),
+    const [byStage, byStatus, byStageStatus, total] =
+      await this.prisma.$transaction([
+        this.prisma.steelProductionPlan.groupBy({
+          by: ['stage'],
+          where: {
+            organizationId,
+          },
+          orderBy: {
+            stage: 'asc',
+          },
+          _count: true,
+        }),
 
-      this.prisma.steelProductionPlan.groupBy({
-        by: ['status'],
-        where: {
-          organizationId,
-        },
-        orderBy: {
-          status: 'asc',
-        },
-        _count: true,
-      }),
+        this.prisma.steelProductionPlan.groupBy({
+          by: ['status'],
+          where: {
+            organizationId,
+          },
+          orderBy: {
+            status: 'asc',
+          },
+          _count: true,
+        }),
 
-      // Cross-tab of (stage, status) — read-only, additive. Needed because
-      // byStage and byStatus above are independent single-axis groupings and
-      // cannot be combined client-side to build a mutually-exclusive
-      // workflow-category breakdown (e.g. distinguishing an ON_HOLD plan
-      // from an IN_PROGRESS one at the same stage) without this.
-      this.prisma.steelProductionPlan.groupBy({
-        by: ['stage', 'status'],
-        where: {
-          organizationId,
-        },
-        orderBy: {
-          stage: 'asc',
-        },
-        _count: true,
-      }),
+        // Cross-tab of (stage, status) — read-only, additive. Needed because
+        // byStage and byStatus above are independent single-axis groupings and
+        // cannot be combined client-side to build a mutually-exclusive
+        // workflow-category breakdown (e.g. distinguishing an ON_HOLD plan
+        // from an IN_PROGRESS one at the same stage) without this.
+        this.prisma.steelProductionPlan.groupBy({
+          by: ['stage', 'status'],
+          where: {
+            organizationId,
+          },
+          orderBy: {
+            stage: 'asc',
+          },
+          _count: true,
+        }),
 
-      this.prisma.steelProductionPlan.count({
-        where: {
-          organizationId,
-        },
-      }),
-    ]);
+        this.prisma.steelProductionPlan.count({
+          where: {
+            organizationId,
+          },
+        }),
+      ]);
 
     return {
       total,

@@ -187,6 +187,32 @@ export class ChargePreparationService {
     );
   }
 
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates/updates a row in separate steps — two concurrent requests can
+  // read the same count before either writes, producing duplicate numbers.
+  // The number FORMAT is unchanged; this only makes generate-then-write
+  // safe under concurrency by regenerating and retrying on conflict.
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          (err.meta?.target as string[] | undefined)?.includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
+  }
+
   private async generatePrepNumber(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -261,30 +287,32 @@ export class ChargePreparationService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const prepNumber = await this.generatePrepNumber(tx, organizationId);
+    return this.withUniqueRetry('prepNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const prepNumber = await this.generatePrepNumber(tx, organizationId);
 
-      const prep = await tx.steelChargePreparation.create({
-        data: {
-          prepNumber,
-          organizationId,
-          planId: dto.planId,
-          createdById: employee.id,
-          stage: 'A01_REQUIREMENT_REVIEWED',
-          status: 'IN_PROGRESS',
-          stockAvailabilityConfirmed: dto.stockAvailabilityConfirmed,
-          requirementNotes: dto.requirementNotes,
-        },
-      });
+        const prep = await tx.steelChargePreparation.create({
+          data: {
+            prepNumber,
+            organizationId,
+            planId: dto.planId,
+            createdById: employee.id,
+            stage: 'A01_REQUIREMENT_REVIEWED',
+            status: 'IN_PROGRESS',
+            stockAvailabilityConfirmed: dto.stockAvailabilityConfirmed,
+            requirementNotes: dto.requirementNotes,
+          },
+        });
 
-      await this.logActivity(tx, prep.id, 'A01', employee.id, undefined, {
-        ...dto,
-      });
-      return tx.steelChargePreparation.findUnique({
-        where: { id: prep.id },
-        include: chargePrepInclude,
-      });
-    });
+        await this.logActivity(tx, prep.id, 'A01', employee.id, undefined, {
+          ...dto,
+        });
+        return tx.steelChargePreparation.findUnique({
+          where: { id: prep.id },
+          include: chargePrepInclude,
+        });
+      }),
+    );
   }
 
   // ── P04-A02 — Select raw material lots for preparation ──
@@ -319,35 +347,68 @@ export class ChargePreparationService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.steelChargeMaterialLot.createMany({
-        data: uniqueIds.map((intakeId) => ({
-          chargePreparationId: id,
-          intakeId,
-        })),
-      });
-      const updated = await tx.steelChargePreparation.update({
-        where: { id },
-        data: {
-          lotSelectionNotes: dto.lotSelectionNotes,
-          stage: 'A02_LOTS_SELECTED',
-        },
-      });
-      await this.logActivity(
-        tx,
-        id,
-        'A02',
-        employee.id,
-        dto.lotSelectionNotes,
-        {
-          intakeIds: uniqueIds,
-        },
-      );
-      return tx.steelChargePreparation.findUnique({
-        where: { id: updated.id },
-        include: chargePrepInclude,
-      });
+    // A released intake must not be selectable into more than one charge
+    // preparation — otherwise the same physical material could be counted
+    // twice. This is checked here for a fast, descriptive rejection in the
+    // common case, and is additionally enforced by a unique DB constraint
+    // (SteelChargeMaterialLot.intakeId) so that two concurrent requests
+    // selecting the same lot can't both pass this check and both insert —
+    // the loser hits the constraint and is translated to the same
+    // business-level error below.
+    const alreadyAllocated = await this.prisma.steelChargeMaterialLot.findMany({
+      where: { intakeId: { in: uniqueIds } },
+      include: { intake: { select: { intakeNumber: true } } },
     });
+    if (alreadyAllocated.length > 0) {
+      throw new BadRequestException(
+        `The following lots are already allocated to another charge preparation: ${alreadyAllocated
+          .map((l) => l.intake.intakeNumber)
+          .join(', ')}`,
+      );
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.steelChargeMaterialLot.createMany({
+          data: uniqueIds.map((intakeId) => ({
+            chargePreparationId: id,
+            intakeId,
+          })),
+        });
+        const updated = await tx.steelChargePreparation.update({
+          where: { id },
+          data: {
+            lotSelectionNotes: dto.lotSelectionNotes,
+            stage: 'A02_LOTS_SELECTED',
+          },
+        });
+        await this.logActivity(
+          tx,
+          id,
+          'A02',
+          employee.id,
+          dto.lotSelectionNotes,
+          {
+            intakeIds: uniqueIds,
+          },
+        );
+        return tx.steelChargePreparation.findUnique({
+          where: { id: updated.id },
+          include: chargePrepInclude,
+        });
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        (err.meta?.target as string[] | undefined)?.includes('intakeId')
+      ) {
+        throw new BadRequestException(
+          'One or more of the selected lots were just allocated to another charge preparation. Please refresh and select different lots.',
+        );
+      }
+      throw err;
+    }
   }
 
   // ── P04-A03 — Sort scrap by grade and usability ──
@@ -665,24 +726,29 @@ export class ChargePreparationService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const chargeNumber = await this.generateChargeNumber(tx, organizationId);
-      const updated = await tx.steelChargePreparation.update({
-        where: { id },
-        data: {
+    return this.withUniqueRetry('chargeNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const chargeNumber = await this.generateChargeNumber(
+          tx,
+          organizationId,
+        );
+        const updated = await tx.steelChargePreparation.update({
+          where: { id },
+          data: {
+            chargeNumber,
+            chargeReleasedAt: new Date(),
+            stage: 'A11_CHARGE_RELEASED',
+          },
+        });
+        await this.logActivity(tx, id, 'A11', employee.id, dto.releaseNotes, {
           chargeNumber,
-          chargeReleasedAt: new Date(),
-          stage: 'A11_CHARGE_RELEASED',
-        },
-      });
-      await this.logActivity(tx, id, 'A11', employee.id, dto.releaseNotes, {
-        chargeNumber,
-      });
-      return tx.steelChargePreparation.findUnique({
-        where: { id: updated.id },
-        include: chargePrepInclude,
-      });
-    });
+        });
+        return tx.steelChargePreparation.findUnique({
+          where: { id: updated.id },
+          include: chargePrepInclude,
+        });
+      }),
+    );
   }
 
   // ── P04-A12 — Close preparation handover to furnace ──
@@ -731,16 +797,36 @@ export class ChargePreparationService {
   }
 
   // Manual override for exceptional cases (e.g. putting a charge prep ON_HOLD or CANCELLED)
+  // Administrative override for exceptional cases (e.g. putting a charge
+  // preparation ON_HOLD or CANCELLED outside the normal A01-A12 flow).
+  // Restricted to RELEASE_ROLES at the controller. Deliberately does not
+  // re-validate stage/status transitions the way the staged A01-A12 actions
+  // do — that's the point of an override — but it is transactional and
+  // logged like every other write, so the change is auditable.
   async updateStatus(
     id: string,
     dto: UpdateChargePreparationStatusDto,
+    userId: string,
     organizationId: string,
   ) {
-    await this.findPrepOrThrow(id, organizationId);
-    return this.prisma.steelChargePreparation.update({
-      where: { id },
-      data: { status: dto.status },
-      include: chargePrepInclude,
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const prep = await this.findPrepOrThrow(id, organizationId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.steelChargePreparation.update({
+        where: { id },
+        data: { status: dto.status },
+        include: chargePrepInclude,
+      });
+      await this.logActivity(
+        tx,
+        id,
+        'STATUS_OVERRIDE',
+        employee.id,
+        dto.notes,
+        { previousStatus: prep.status, newStatus: dto.status },
+      );
+      return updated;
     });
   }
 

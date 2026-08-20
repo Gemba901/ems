@@ -24,7 +24,20 @@ import {
   ArrowRight,
   Lock,
   Rocket,
+  ClipboardEdit,
 } from "lucide-react";
+
+function CurrentTaskBanner({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+      <ClipboardEdit className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+      <p className="text-sm text-blue-900">
+        <span className="font-semibold">What to do now: </span>
+        {text}
+      </p>
+    </div>
+  );
+}
 
 const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
@@ -78,7 +91,7 @@ function PlanSummary({ plan }: { plan: SteelProductionPlan }) {
         </div>
 
         {plan.productionSequence && plan.productionSequence.length > 0 && (
-          <div className="mt-4 border border-slate-100 rounded-lg overflow-hidden">
+          <div className="mt-4 border border-slate-100 rounded-lg overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr className="text-left text-xs text-slate-400">
@@ -175,20 +188,28 @@ function DepartmentAcknowledgement({ plan }: { plan: SteelProductionPlan }) {
 }
 
 function ConfirmReleaseModal({
-  onConfirm, onCancel, submitting,
-}: { onConfirm: () => void; onCancel: () => void; submitting: boolean }) {
+  planNumber, onConfirm, onCancel, submitting,
+}: { planNumber: string; onConfirm: () => void; onCancel: () => void; submitting: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-release-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"
+    >
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
             <Rocket className="h-5 w-5 text-blue-600" />
           </div>
-          <h2 className="text-base font-bold text-slate-900">Release this production plan?</h2>
+          <h2 id="confirm-release-title" className="text-base font-bold text-slate-900">
+            Release {planNumber}?
+          </h2>
         </div>
         <p className="text-sm text-slate-500">
-          This is the final approval. The plan will move to <span className="font-medium text-slate-700">RELEASED</span> and
-          cannot be reverted from here.
+          This is the final approval step. Releasing will change this plan&apos;s status to{" "}
+          <span className="font-medium text-slate-700">Released</span> and make it available to Production Sourcing
+          (P02). This action cannot be reverted from this screen.
         </p>
         <div className="flex items-center justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
@@ -258,6 +279,16 @@ function ReleaseApproval({
           </div>
         )}
 
+        {!blocked && (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-3 py-2.5 flex items-start gap-2">
+            <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>
+              <span className="font-semibold">All required department approvals are complete.</span> This plan is
+              ready for final release.
+            </span>
+          </div>
+        )}
+
         <div>
           <label className="text-sm font-medium text-slate-700 block mb-1">
             Release notes <span className="text-slate-400 font-normal">(optional)</span>
@@ -282,6 +313,7 @@ function ReleaseApproval({
 
       {confirming && (
         <ConfirmReleaseModal
+          planNumber={plan.planNumber}
           submitting={mutation.isPending}
           onCancel={() => setConfirming(false)}
           onConfirm={() => mutation.mutate({ releaseNotes: notes || undefined })}
@@ -421,6 +453,9 @@ export function S6PlanRelease({ plan, token, onRefresh }: { plan: SteelProductio
       <SharedWorkflowIndicator doneCount={released ? 6 : 5} activeIndex={released ? null : 5} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4">
+          {!released && (
+            <CurrentTaskBanner text="Review the department acknowledgements below, then release the plan once all approvals are complete." />
+          )}
           <PlanSummary plan={plan} />
           <ReadinessSummary plan={plan} />
           <DepartmentAcknowledgement plan={plan} />

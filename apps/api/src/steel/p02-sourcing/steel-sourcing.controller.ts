@@ -321,6 +321,11 @@ export class SteelSourcingController {
     @Body() dto: UpdateSteelSourcingStatusDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.updateStatus(id, dto, user.organizationId);
+    return this.steelSourcingService.updateStatus(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 }

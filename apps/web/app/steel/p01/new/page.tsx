@@ -43,6 +43,12 @@ import {
 
 const DEMAND_SOURCES: { value: DemandSource; label: string; description: string; icon: typeof ShoppingCart }[] = [
   {
+    value: "INTERNAL_STOCK_PLAN",
+    label: "Internal Stock Plan",
+    description: "Replenishment to maintain internal stock levels.",
+    icon: Warehouse,
+  },
+  {
     value: "CUSTOMER_ORDER",
     label: "Customer Order",
     description: "A confirmed order placed directly by a customer.",
@@ -65,12 +71,6 @@ const DEMAND_SOURCES: { value: DemandSource; label: string; description: string;
     label: "Forecast",
     description: "Anticipated demand based on sales forecasting.",
     icon: TrendingUp,
-  },
-  {
-    value: "INTERNAL_STOCK_PLAN",
-    label: "Internal Stock Plan",
-    description: "Replenishment to maintain internal stock levels.",
-    icon: Warehouse,
   },
 ];
 
@@ -207,7 +207,7 @@ function DemandCaptureForm({ onCreated }: { onCreated: (plan: SteelProductionPla
   const { accessToken } = useAuthStore();
   const { toast } = useToast();
 
-  const [demandSource, setDemandSource] = useState<DemandSource>("CUSTOMER_ORDER");
+  const [demandSource, setDemandSource] = useState<DemandSource>("INTERNAL_STOCK_PLAN");
   const [customerName, setCustomerName] = useState("");
   const [dealerName, setDealerName] = useState("");
   const [projectReference, setProjectReference] = useState("");

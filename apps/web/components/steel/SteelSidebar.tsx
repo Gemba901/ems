@@ -36,15 +36,15 @@ interface SteelSidebarProps {
 
 const PROCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD];
 
-// Steel Processes nav — P01-P04 are live and link to their existing
-// routes; P05-P12 have no backend/pages yet and render disabled.
+// Steel Processes nav — P01-P06 are live and link to their existing
+// routes; P07-P12 have no backend/pages yet and render disabled.
 const STEEL_NAV = [
   { code: "P01", name: "Production Planning", href: "/steel/p01", newHref: "/steel/p01/new", icon: LayoutGrid, live: true, allowedRoles: PROCESS_ROLES },
   { code: "P02", name: "Sourcing & Procurement", href: "/steel/p02", newHref: "/steel/p02/new", icon: Truck, live: true, allowedRoles: PROCESS_ROLES },
   { code: "P03", name: "Receiving & Inspection", href: "/steel/p03", newHref: "/steel/p03/new", icon: PackageSearch, live: true, allowedRoles: PROCESS_ROLES },
   { code: "P04", name: "Charge Preparation", href: "/steel/p04", newHref: "/steel/p04/new", icon: Wrench, live: true, allowedRoles: PROCESS_ROLES },
-  { code: "P05", name: "Melting", href: "/steel/p05", icon: Flame, live: false, allowedRoles: PROCESS_ROLES },
-  { code: "P06", name: "Heat Approval", href: "/steel/p06", icon: FlaskConical, live: false, allowedRoles: PROCESS_ROLES },
+  { code: "P05", name: "Melting", href: "/steel/p05", icon: Flame, live: true, allowedRoles: PROCESS_ROLES },
+  { code: "P06", name: "Heat Approval", href: "/steel/p06", icon: FlaskConical, live: true, allowedRoles: PROCESS_ROLES },
   { code: "P07", name: "Casting", href: "/steel/p07", icon: Box, live: false, allowedRoles: PROCESS_ROLES },
   { code: "P08", name: "Billet Control", href: "/steel/p08", icon: PackageCheck, live: false, allowedRoles: PROCESS_ROLES },
   { code: "P09", name: "Rolling", href: "/steel/p09", icon: Layers, live: false, allowedRoles: PROCESS_ROLES },
@@ -224,8 +224,13 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
           })}
         </nav>
 
-        {/* ── Footer nav ── */}
+        {/* ── Main App section ── */}
         <div className="px-2 pb-2 border-t border-slate-100 pt-2 space-y-0.5">
+          {!isCollapsed && (
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
+              Main App
+            </p>
+          )}
           <Link
             href="/"
             onClick={onClose}

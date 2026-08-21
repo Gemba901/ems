@@ -15,9 +15,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p01/screenMap";
 import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
+import { SubStepCard } from "@/components/steel/p01/shared";
 import {
   Loader2,
   CalendarClock,
@@ -31,7 +34,6 @@ import {
   AlertTriangle,
   ArrowRight,
   Send,
-  ClipboardCheck,
   ClipboardEdit,
 } from "lucide-react";
 
@@ -347,12 +349,12 @@ function ProductionPlanForm({ planId, token, onDone }: { planId: string; token: 
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Production Sequence</CardTitle>
-          <p className="text-sm text-slate-500">One row per production batch — batch number is required.</p>
-        </CardHeader>
-        <CardContent>
+      <SubStepCard code="A10" title="Production Plan & Sequence" status="active">
+        <div className="space-y-5">
+        <div>
+          <p className="text-sm text-slate-500 mb-2">
+            One row per production batch — batch number is required. <span className="text-red-500">*</span>
+          </p>
           <div className="space-y-2">
             {items.map((item, i) => (
               <div key={i} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-2">
@@ -392,42 +394,31 @@ function ProductionPlanForm({ planId, token, onDone }: { planId: string; token: 
               Add batch
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Schedule</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-            <div>
-              <label className="text-sm font-medium text-slate-700 block mb-1">
-                Planned start date <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <Input type="date" value={plannedStartDate} onChange={(e) => setPlannedStartDate(e.target.value)} max={plannedEndDate || undefined} />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 block mb-1">
-                Planned end date <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <Input type="date" value={plannedEndDate} onChange={(e) => setPlannedEndDate(e.target.value)} min={plannedStartDate || undefined} />
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-4">
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-1">
+              Planned start date <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <Input type="date" value={plannedStartDate} onChange={(e) => setPlannedStartDate(e.target.value)} max={plannedEndDate || undefined} />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-1">
+              Planned end date <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <Input type="date" value={plannedEndDate} onChange={(e) => setPlannedEndDate(e.target.value)} min={plannedStartDate || undefined} />
+          </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <div className="border-t border-slate-100 pt-4">
           <label className="text-sm font-medium text-slate-700 block mb-1">
             Plan notes <span className="text-slate-400 font-normal">(optional)</span>
           </label>
           <Input value={planNotes} onChange={(e) => setPlanNotes(e.target.value)} placeholder="Optional" />
-        </CardContent>
-      </Card>
+        </div>
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2">
@@ -478,12 +469,11 @@ function CommunicateForm({ planId, token, onDone }: { planId: string; token: str
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Departments to Notify</CardTitle>
-          <p className="text-sm text-slate-500">Select who needs this production plan.</p>
-        </CardHeader>
-        <CardContent>
+      <SubStepCard code="A11" title="Communicate to Departments" status="active">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            Select who needs this production plan. <span className="text-red-500">*</span>
+          </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {ALL_DEPARTMENTS.map((d) => {
               const isSelected = selected.includes(d);
@@ -506,20 +496,15 @@ function CommunicateForm({ planId, token, onDone }: { planId: string; token: str
               );
             })}
           </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Communication notes <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
-        </CardContent>
-      </Card>
+          <div className="border-t border-slate-100 pt-4">
+            <label className="text-sm font-medium text-slate-700 block mb-1">
+              Communication notes <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
+          </div>
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2">
@@ -578,28 +563,18 @@ function AcknowledgementBoard({
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4 text-purple-600" />
-            Department Acknowledgement
-          </CardTitle>
+      <SubStepCard code="A11" title="Department Acknowledgement" status={allAcked ? "done" : "active"}>
+        <div className="space-y-4">
           <p className="text-sm text-slate-500">
             Communicated on {plan.planCommunicatedAt ? new Date(plan.planCommunicatedAt).toLocaleString() : "—"}
           </p>
-        </CardHeader>
-        <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {plan.departmentAcks.map((ack) => (
               <AckRow key={ack.id} planId={plan.id} ack={ack} token={token} onDone={onDone} />
             ))}
           </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center justify-between gap-4 flex-wrap border-t border-slate-100 pt-4">
             <div>
               <p className="text-sm font-semibold text-slate-900">
                 {ackedCount}/{total} departments acknowledged
@@ -613,18 +588,12 @@ function AcknowledgementBoard({
               {allAcked ? "Ready for Release" : "Awaiting Acknowledgement"}
             </Badge>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SubStepCard>
 
       {allAcked && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-emerald-700">
-              <Check className="h-4 w-4" />
-              S5 Complete
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <SubStepCard code="S5" title="Preparation Complete" status="done">
+          <div className="space-y-3">
             <ul className="text-sm text-slate-600 space-y-1">
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" /> Production plan prepared</li>
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" /> Departments notified</li>
@@ -636,8 +605,8 @@ function AcknowledgementBoard({
             <Button onClick={onContinue} className="gap-2">
               Continue to S6 — Plan Release <ArrowRight className="h-4 w-4" />
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SubStepCard>
       )}
     </div>
   );
@@ -678,8 +647,9 @@ export function S5PlanPreparation({
         title="Plan Preparation & Communication"
         subtitle={`${plan.planNumber} — build the production sequence, schedule the plan and confirm department acknowledgement.`}
         rightContent={<StatusBadge status={plan.status} />}
+        code="P01"
       />
-      <WorkflowIndicator doneCount={4} activeIndex={4} />
+      <WorkflowIndicator steps={SCREENS} doneCount={4} activeIndex={4} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P01")!.color.bar} />
       <ContextSummary plan={plan} />
       {(plan.stage === "A09_CAPACITY_CHECKED") && <FeasibilitySummary plan={plan} />}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">

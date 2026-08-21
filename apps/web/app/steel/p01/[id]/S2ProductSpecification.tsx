@@ -14,9 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p01/screenMap";
 import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
+import { SubStepCard } from "@/components/steel/p01/shared";
 import {
   Loader2,
   Layers,
@@ -275,12 +278,13 @@ function ProductClassificationForm({ planId, token, onDone }: { planId: string; 
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Product Type</CardTitle>
-          <p className="text-sm text-slate-500">What kind of product is this? (required)</p>
-        </CardHeader>
-        <CardContent>
+      <SubStepCard code="A03" title="Classify Product" status="active">
+        <div className="space-y-4">
+        <div>
+          <p className="text-sm font-medium text-slate-700 mb-1">
+            Product Type <span className="text-red-500">*</span>
+          </p>
+          <p className="text-sm text-slate-500 mb-2">What kind of product is this?</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {PRODUCT_TYPES.map((p) => {
               const Icon = p.icon;
@@ -319,34 +323,28 @@ function ProductClassificationForm({ planId, token, onDone }: { planId: string; 
               );
             })}
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Standard & Specification</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-            <div>
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                Standard <span className="text-red-500">*</span>
-              </label>
-              <Input value={productStandard} onChange={(e) => setProductStandard(e.target.value)} placeholder="e.g. IS 1786" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                Customer specification <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <Input
-                value={customerSpecification}
-                onChange={(e) => setCustomerSpecification(e.target.value)}
-                placeholder="Only if the customer specified extra requirements"
-              />
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-4">
+          <div>
+            <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
+              Standard <span className="text-red-500">*</span>
+            </label>
+            <Input value={productStandard} onChange={(e) => setProductStandard(e.target.value)} placeholder="e.g. IS 1786" />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
+              Customer specification <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <Input
+              value={customerSpecification}
+              onChange={(e) => setCustomerSpecification(e.target.value)}
+              placeholder="Only if the customer specified extra requirements"
+            />
+          </div>
+        </div>
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2">
@@ -411,58 +409,38 @@ function SpecificationForm({
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Product</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
-            <div>
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                Grade <span className="text-red-500">*</span>
-              </label>
-              <Input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="e.g. Fe500D" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                Size <span className="text-red-500">*</span>
-              </label>
-              <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="e.g. 12mm" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                Length <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <Input value={length} onChange={(e) => setLength(e.target.value)} placeholder="Optional" />
-            </div>
+      <SubStepCard code="A04" title="Production Specification" status="active">
+        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
+          <div>
+            <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
+              Grade <span className="text-red-500">*</span>
+            </label>
+            <Input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="e.g. Fe500D" />
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Packaging</CardTitle>
-        </CardHeader>
-        <CardContent>
+          <div>
+            <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
+              Size <span className="text-red-500">*</span>
+            </label>
+            <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="e.g. 12mm" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
+              Length <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <Input value={length} onChange={(e) => setLength(e.target.value)} placeholder="Optional" />
+          </div>
           <div>
             <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
               Bundle type <span className="text-slate-400 font-normal">(optional)</span>
             </label>
-            <Input value={bundleType} onChange={(e) => setBundleType(e.target.value)} placeholder="Optional" className="max-w-xs" />
+            <Input value={bundleType} onChange={(e) => setBundleType(e.target.value)} placeholder="Optional" />
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Quantity</CardTitle>
-        </CardHeader>
-        <CardContent>
           <div>
             <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
               Total quantity <span className="text-red-500">*</span>
             </label>
-            <div className="relative max-w-xs">
+            <div className="relative">
               <Input
                 type="number"
                 step="0.01"
@@ -476,14 +454,9 @@ function SpecificationForm({
             </div>
             <p className="text-xs text-slate-400 mt-1">Must be greater than zero.</p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Additional Requirements</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <div className="border-t border-slate-100 pt-4">
           <label className="text-sm font-medium text-slate-700 block mb-1">
             Tolerance / specification notes <span className="text-slate-400 font-normal">(optional)</span>
           </label>
@@ -495,8 +468,9 @@ function SpecificationForm({
             placeholder="Any tolerance or additional specification detail..."
           />
           <p className="text-xs text-slate-400 mt-1 text-right">{toleranceNotes.length}/500</p>
-        </CardContent>
-      </Card>
+        </div>
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2">
@@ -528,8 +502,9 @@ export function S2ProductSpecification({
         title="Product & Specification"
         subtitle={`${plan.planNumber} — define the product standard and finalize the exact production specification.`}
         rightContent={<StatusBadge status={plan.status} />}
+        code="P01"
       />
-      <WorkflowIndicator doneCount={1} activeIndex={1} />
+      <WorkflowIndicator steps={SCREENS} doneCount={1} activeIndex={1} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P01")!.color.bar} />
       <ContextSummary plan={plan} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4">

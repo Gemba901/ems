@@ -7,21 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { QueryErrorState } from "@/components/steel/dashboard/QueryErrorState";
+import { statusBadgeClass } from "@/lib/steelStatusColors";
 import {
   type PaginatedSteelSourcingOrders,
   type SteelSourcingStatus,
   SOURCING_STAGE_LABELS,
 } from "@/services/steel-sourcing.service";
 import { SCREENS, stageToScreenIndex } from "./screenMap";
-
-const STATUS_STYLES: Record<SteelSourcingStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  PO_ISSUED: "bg-indigo-50 text-indigo-700",
-  CLOSED: "bg-emerald-50 text-emerald-700",
-  CANCELLED: "bg-red-50 text-red-700",
-};
 
 const STATUS_TOOLTIPS: Record<SteelSourcingStatus, string> = {
   DRAFT: "Order created but not yet actively progressing.",
@@ -106,7 +98,7 @@ export function SourcingOrderList({
                               <span className="text-xs text-slate-400">PO {order.poNumber}</span>
                             )}
                             <Tooltip>
-                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={STATUS_STYLES[order.status]}>{order.status.replace(/_/g, " ")}</Badge>} />
+                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={statusBadgeClass(order.status)}>{order.status.replace(/_/g, " ")}</Badge>} />
                               <TooltipContent>{STATUS_TOOLTIPS[order.status]}</TooltipContent>
                             </Tooltip>
                           </div>

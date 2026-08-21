@@ -11,8 +11,10 @@ import { SteelSourcingService, CreateSourcingOrderPayload } from "@/services/ste
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScreenHeader } from "@/components/steel/p02/ScreenHeader";
-import { WorkflowIndicator } from "@/components/steel/p02/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p02/screenMap";
 import { ScreenSidebar } from "@/components/steel/p02/ScreenSidebar";
 import {
   Truck,
@@ -263,8 +265,16 @@ export default function NewSteelSourcingOrderPage() {
         icon={Truck}
         title="New Sourcing Order"
         subtitle="Review the material requirement from a released production plan to start sourcing."
+        backHref="/steel/p02"
+        backLabel="Back to Sourcing Orders"
+        code="P02"
       />
-      <WorkflowIndicator doneCount={0} activeIndex={0} />
+      <WorkflowIndicator
+        steps={SCREENS}
+        doneCount={0}
+        activeIndex={0}
+        activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P02")!.color.bar}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <form onSubmit={handleSubmit} className="space-y-4">

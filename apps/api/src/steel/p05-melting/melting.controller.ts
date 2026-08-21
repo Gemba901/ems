@@ -92,6 +92,20 @@ export class MeltingController {
   }
 
   /**
+   * GET /steel/melting/available-charge-preparations
+   * Closed, released charge preparations that do NOT already have a
+   * SteelMelting record — i.e. actually eligible to start a new heat from.
+   * Backs the P05 "New Heat" dropdown; filtering is server-side so a
+   * consumed charge preparation can never appear here.
+   */
+  @Get('available-charge-preparations')
+  getAvailableChargePreparations(@CurrentUser() user: AuthUser) {
+    return this.meltingService.getAvailableChargePreparations(
+      user.organizationId,
+    );
+  }
+
+  /**
    * GET /steel/melting/dashboard
    * P05 management dashboard — KPIs, active heats, furnace/lining status,
    * furnace comparison, recent heat history, and recent events, all

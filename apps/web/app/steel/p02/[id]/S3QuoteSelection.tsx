@@ -15,9 +15,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p02/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p02/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p02/screenMap";
 import { ScreenSidebar } from "@/components/steel/p02/ScreenSidebar";
+import { SubStepCard, Field } from "@/components/steel/p02/shared";
 import {
   Loader2,
   Scale,
@@ -32,16 +35,6 @@ import {
   Users,
   Pencil,
 } from "lucide-react";
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-sm text-slate-800 font-medium">{value}</p>
-    </div>
-  );
-}
 
 // ── Persistent context (top of screen) ───────────────────────────────────────
 
@@ -233,14 +226,11 @@ function QuotationEntryForm({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{hasExisting ? "Revise Quotations" : "Collect Quotations"}</CardTitle>
+    <SubStepCard code="A05" title={hasExisting ? "Revise Quotations" : "Collect Quotations"} status="active">
+      <div className="space-y-4">
         <p className="text-sm text-slate-500">
           Add a row per supplier quote. <span className="font-medium text-slate-600">Saving replaces the entire quotation set</span> — include every supplier you want to compare.
         </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -343,8 +333,8 @@ function QuotationEntryForm({
             {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save ${rows.filter((r) => r.supplierId && r.price > 0).length || ""} Quotation${rows.filter((r) => r.supplierId && r.price > 0).length === 1 ? "" : "s"} →`}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </SubStepCard>
   );
 }
 
@@ -455,27 +445,19 @@ function QuotationComparison({
   const selectedQuotation = order.quotations.find((q) => q.supplierId === selected);
 
   return (
-    <Card>
-      <CardHeader>
+    <SubStepCard code="A06" title="Quote Comparison" status={decided ? "done" : "active"}>
+      <div className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Scale className="h-4 w-4 text-blue-600" />
-              Quote Comparison
-            </CardTitle>
-            <p className="text-sm text-slate-500">
-              {order.quotations.length} quotation{order.quotations.length === 1 ? "" : "s"} collected.
-              {!decided && " Select the winning supplier below."}
-            </p>
-          </div>
+          <p className="text-sm text-slate-500">
+            {order.quotations.length} quotation{order.quotations.length === 1 ? "" : "s"} collected.
+            {!decided && " Select the winning supplier below."}
+          </p>
           {canRevise && !decided && (
             <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={onRevise}>
               <Pencil className="h-3.5 w-3.5" /> Revise quotations
             </Button>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -567,7 +549,7 @@ function QuotationComparison({
             <p className="text-sm text-slate-700">{order.qcdComparisonNotes}</p>
           </div>
         )}
-      </CardContent>
+      </div>
 
       {confirming && (
         <ConfirmSupplierSelectionModal
@@ -578,7 +560,7 @@ function QuotationComparison({
           onConfirm={() => mutation.mutate({ selectedSupplierId: selected, qcdComparisonNotes: notes || undefined })}
         />
       )}
-    </Card>
+    </SubStepCard>
   );
 }
 
@@ -587,14 +569,8 @@ function QuotationComparison({
 function S3CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onContinue: () => void }) {
   const winner = order.quotations.find((q) => q.supplierId === order.selectedSupplierId);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-emerald-700">
-          <Trophy className="h-4 w-4" />
-          Supplier Selected
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <SubStepCard code="S3" title="Supplier Selected" status="done">
+      <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Selected Supplier" value={winner?.supplier?.name} />
           <Field label="Quoted Price" value={winner ? `${winner.price} ${winner.currency}` : null} />
@@ -606,8 +582,8 @@ function S3CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onCo
         <Button onClick={onContinue} className="gap-2">
           Continue to S4 — Specification &amp; Purchase Order <ArrowRight className="h-4 w-4" />
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </SubStepCard>
   );
 }
 
@@ -695,8 +671,16 @@ export function S3QuoteSelection({
         icon={Scale}
         title="Quote Comparison & Selection"
         subtitle="Collect competing quotations and select the winning supplier."
+        backHref="/steel/p02"
+        backLabel="Back to Sourcing Orders"
+        code="P02"
       />
-      <WorkflowIndicator doneCount={allDone ? 3 : 2} activeIndex={allDone ? null : 2} />
+      <WorkflowIndicator
+        steps={SCREENS}
+        doneCount={allDone ? 3 : 2}
+        activeIndex={allDone ? null : 2}
+        activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P02")!.color.bar}
+      />
       <ContextSummary order={order} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">

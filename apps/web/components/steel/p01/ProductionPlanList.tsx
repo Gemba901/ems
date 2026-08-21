@@ -7,18 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   type PaginatedSteelPlans,
-  type SteelPlanOverallStatus,
 } from "@/services/steel.service";
 import { QueryErrorState } from "@/components/steel/dashboard/QueryErrorState";
+import { statusBadgeClass } from "@/lib/steelStatusColors";
 import { SCREENS, stageToScreenIndex } from "./screenMap";
-
-const STATUS_STYLES: Record<SteelPlanOverallStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  RELEASED: "bg-emerald-50 text-emerald-700",
-  CANCELLED: "bg-red-50 text-red-700",
-};
 
 function formatDate(iso: string | null) {
   if (!iso) return null;
@@ -71,7 +63,7 @@ export function ProductionPlanList({ data, isLoading, isError, isFetching, onRet
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-slate-900">{plan.planNumber}</span>
                           <span className="text-[10px] text-slate-400 uppercase tracking-wide">Status</span>
-                          <Badge className={STATUS_STYLES[plan.status]}>{plan.status.replace(/_/g, " ")}</Badge>
+                          <Badge className={statusBadgeClass(plan.status)}>{plan.status.replace(/_/g, " ")}</Badge>
                         </div>
                         <p className="text-xs text-slate-500">
                           {plan.customerName || plan.dealerName || plan.projectReference || "—"}

@@ -13,14 +13,7 @@ import {
   HEAT_APPROVAL_STAGE_LABELS,
 } from "@/services/steel-heat-approval.service";
 import { SCREENS, stageToScreenIndex } from "./screenMap";
-
-const STATUS_STYLES: Record<SteelHeatApprovalStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  CLOSED: "bg-emerald-50 text-emerald-700",
-  CANCELLED: "bg-red-50 text-red-700",
-};
+import { statusBadgeClass } from "@/lib/steelStatusColors";
 
 const STATUS_TOOLTIPS: Record<SteelHeatApprovalStatus, string> = {
   DRAFT: "Heat approval record created but not yet actively progressing.",
@@ -97,7 +90,7 @@ export function HeatApprovalList({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-slate-900">{heatApproval.approvalNumber}</span>
                             <Tooltip>
-                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={STATUS_STYLES[heatApproval.status]}>{heatApproval.status.replace(/_/g, " ")}</Badge>} />
+                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={statusBadgeClass(heatApproval.status)}>{heatApproval.status.replace(/_/g, " ")}</Badge>} />
                               <TooltipContent>{STATUS_TOOLTIPS[heatApproval.status]}</TooltipContent>
                             </Tooltip>
                           </div>

@@ -14,9 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p01/screenMap";
 import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
+import { SubStepCard } from "@/components/steel/p01/shared";
 import {
   Loader2,
   PackageSearch,
@@ -285,11 +288,8 @@ function StockCheckForm({
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Demand vs. Stock</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <SubStepCard code="A05" title="Stock Check" status="active">
+        <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4">
               <p className="text-xs text-slate-400 uppercase tracking-wide">Requested</p>
@@ -311,15 +311,8 @@ function StockCheckForm({
               <p className={"text-xs " + (shortfall !== null && shortfall > 0 ? "text-red-500" : "text-emerald-500")}>tonnes</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Certified Finished Goods Stock</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-4">
             <div>
               <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
                 Certified stock available <span className="text-red-500">*</span>
@@ -348,8 +341,8 @@ function StockCheckForm({
               <Input value={certificateRefs} onChange={(e) => setCertificateRefs(e.target.value)} placeholder="Optional" />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2">
@@ -364,14 +357,8 @@ function StockCheckForm({
 
 function DecisionCompleteCard({ plan, onContinue }: { plan: SteelProductionPlan; onContinue: () => void }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-emerald-700">
-          <Check className="h-4 w-4" />
-          S3 Complete
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <SubStepCard code="A06" title="Fulfilment Decision" status="done">
+      <div className="space-y-4">
         <div>
           <p className="text-xs text-slate-400">Fulfilment decision</p>
           <p className="text-base font-semibold text-slate-900">
@@ -385,8 +372,8 @@ function DecisionCompleteCard({ plan, onContinue }: { plan: SteelProductionPlan;
         <Button onClick={onContinue} className="gap-2">
           Continue to S4 <ArrowRight className="h-4 w-4" />
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </SubStepCard>
   );
 }
 
@@ -434,12 +421,9 @@ function StockDecisionForm({
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Fulfilment Decision</CardTitle>
+      <SubStepCard code="A06" title="Fulfilment Decision" status="active">
+        <div className="space-y-4">
           <p className="text-sm text-slate-500">How should this demand be satisfied?</p>
-        </CardHeader>
-        <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
               type="button"
@@ -505,22 +489,17 @@ function StockDecisionForm({
               </div>
             </button>
           </div>
-        </CardContent>
-      </Card>
 
-      {decision && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <label className="text-sm font-medium text-slate-700 block mb-1">
-              Decision notes <span className="text-slate-400 font-normal">(optional)</span>
-            </label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional context for this decision" />
-          </CardContent>
-        </Card>
-      )}
+          {decision && (
+            <div className="border-t border-slate-100 pt-4">
+              <label className="text-sm font-medium text-slate-700 block mb-1">
+                Decision notes <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional context for this decision" />
+            </div>
+          )}
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending || !decision} className="gap-2">
@@ -578,8 +557,9 @@ export function S3StockFulfilment({
         title="Stock Check & Fulfilment"
         subtitle={`${plan.planNumber} — verify certified finished-goods availability and determine the fulfilment path.`}
         rightContent={<StatusBadge status={plan.status} />}
+        code="P01"
       />
-      <WorkflowIndicator doneCount={2} activeIndex={2} />
+      <WorkflowIndicator steps={SCREENS} doneCount={2} activeIndex={2} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P01")!.color.bar} />
       <ContextSummary plan={plan} requiredQty={requiredQty} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4">

@@ -1,7 +1,8 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Circle, Lock, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CheckCircle2, Circle, Lock, Loader2, Info } from "lucide-react";
 import type { SteelMelting } from "@/services/steel-melting.service";
 
 export type SubStepStatus = "done" | "active" | "locked";
@@ -23,20 +24,43 @@ export function Field({ label, value }: { label: string; value: React.ReactNode 
   );
 }
 
-export function SubStepCard({
-  code, title, status, children,
-}: { code: string; title: string; status: SubStepStatus; children: React.ReactNode }) {
+export function StatusBadge({ status }: { status: SubStepStatus }) {
+  if (status === "done") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+        <CheckCircle2 className="h-3.5 w-3.5" /> Done
+      </span>
+    );
+  }
+  if (status === "active") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+        <Circle className="h-3.5 w-3.5 fill-blue-100" /> In progress
+      </span>
+    );
+  }
   return (
-    <Card className={status === "locked" ? "opacity-60" : ""}>
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">
+      <Lock className="h-3 w-3" /> Locked
+    </span>
+  );
+}
+
+export function SubStepCard({
+  code, title, status, help, children,
+}: { code: string; title: string; status: SubStepStatus; help?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Card className={status === "locked" ? "opacity-70" : ""}>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          {status === "done" && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-          {status === "active" && <Circle className="h-4 w-4 text-blue-500 fill-blue-100" />}
-          {status === "locked" && <Lock className="h-3.5 w-3.5 text-slate-400" />}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle className="text-sm">
             <span className="text-slate-400 font-mono text-xs mr-1.5">{code}</span>
             {title}
           </CardTitle>
+          <div className="flex items-center gap-2">
+            <StatusBadge status={status} />
+            {help}
+          </div>
         </div>
       </CardHeader>
       <CardContent>{children}</CardContent>
@@ -53,41 +77,14 @@ export function LockedNote() {
 }
 
 /**
- * Collapsed 1-line summary row for a completed sub-step. Use instead of a
- * full SubStepCard once a step is done, to avoid a long stack of full cards.
- */
-export function SubStepSummary({ code, title, summary }: { code: string; title: string; summary?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-emerald-100 bg-emerald-50/40">
-      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-      <span className="text-slate-400 font-mono text-xs shrink-0">{code}</span>
-      <span className="text-sm text-slate-700 truncate">{summary ?? title}</span>
-    </div>
-  );
-}
-
-/** Minimal collapsed placeholder row for a locked sub-step. */
-export function SubStepLocked({ code, title }: { code: string; title: string }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-slate-100 opacity-50">
-      <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-      <span className="text-slate-400 font-mono text-xs shrink-0">{code}</span>
-      <span className="text-sm text-slate-400 truncate">{title}</span>
-    </div>
-  );
-}
-
-/**
- * Wraps a sub-step's rendering per status: full card while active, a
- * 1-line summary once done, and a minimal placeholder while locked.
+ * Renders a section as an always-visible card with a status badge next to
+ * its heading (done / in progress / locked). Content is never collapsed.
  */
 export function SubStep({
-  code, title, status, summary, children,
-}: { code: string; title: string; status: SubStepStatus; summary?: React.ReactNode; children: React.ReactNode }) {
-  if (status === "done") return <SubStepSummary code={code} title={title} summary={summary} />;
-  if (status === "locked") return <SubStepLocked code={code} title={title} />;
+  code, title, status, help, children,
+}: { code: string; title: string; status: SubStepStatus; summary?: React.ReactNode; help?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <SubStepCard code={code} title={title} status={status}>
+    <SubStepCard code={code} title={title} status={status} help={help}>
       {children}
     </SubStepCard>
   );
@@ -97,4 +94,44 @@ export function subStatus(active: boolean, done: boolean): SubStepStatus {
   if (done) return "done";
   if (active) return "active";
   return "locked";
+}
+
+export interface HelpSection {
+  heading: string;
+  body: React.ReactNode;
+}
+
+/**
+ * On-demand "ⓘ Help" popover for the active step's title — replaces the
+ * persistent sidebar. Content is relocated from each screen's former
+ * Sidebar() cards, unchanged, not rewritten.
+ */
+export function HelpPopover({ title, sections }: { title: string; sections: HelpSection[] }) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={(triggerProps) => (
+          <button
+            {...triggerProps}
+            type="button"
+            className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+          >
+            <Info className="h-3.5 w-3.5" />
+            Help
+          </button>
+        )}
+      />
+      <PopoverContent>
+        <p className="text-sm font-semibold text-slate-900 mb-2">{title}</p>
+        <div className="space-y-3">
+          {sections.map((s) => (
+            <div key={s.heading}>
+              <p className="text-xs font-semibold text-slate-600 mb-0.5">{s.heading}</p>
+              <div className="text-xs text-slate-500 leading-relaxed">{s.body}</div>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }

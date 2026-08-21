@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p03/ScreenHeader";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { WorkflowIndicator } from "@/components/steel/p03/WorkflowIndicator";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
 import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
@@ -375,6 +375,7 @@ export function S3UnloadingStorageRelease({
       <TooltipProvider>
         <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
           <ScreenHeader
+        code="P03"
             icon={PackageCheck}
             title="Unloading, Storage & Release"
             subtitle="Unload, weigh net, store, and release the material to stock."
@@ -397,6 +398,7 @@ export function S3UnloadingStorageRelease({
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
+        code="P03"
           icon={PackageCheck}
           title="Unloading, Storage & Release"
           subtitle="Unload, weigh net, store, and release the material to stock."

@@ -19,9 +19,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p02/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p02/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p02/screenMap";
 import { ScreenSidebar } from "@/components/steel/p02/ScreenSidebar";
+import { SubStepCard, Field } from "@/components/steel/p02/shared";
 import {
   Loader2,
   Recycle,
@@ -33,9 +36,6 @@ import {
   PackageOpen,
   MoreHorizontal,
   Check,
-  CheckCircle2,
-  Circle,
-  Lock,
   Info,
   ListChecks,
   Lightbulb,
@@ -72,16 +72,6 @@ const APPROVAL_STYLES: Record<SupplierApprovalStatus, string> = {
   SUSPENDED: "bg-orange-50 text-orange-700",
   BLACKLISTED: "bg-red-50 text-red-700",
 };
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-sm text-slate-800 font-medium">{value}</p>
-    </div>
-  );
-}
 
 // ── Persistent context (top of screen) ───────────────────────────────────────
 
@@ -219,43 +209,6 @@ function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A02"
         </CardContent>
       </Card>
     </ScreenSidebar>
-  );
-}
-
-// ── Shared step-section shell ────────────────────────────────────────────────
-
-function StepSection({
-  code, icon: Icon, title, status, children,
-}: { code: string; icon: typeof Box; title: string; status: "done" | "active" | "locked"; children: React.ReactNode }) {
-  return (
-    <Card className={status === "locked" ? "opacity-60" : ""}>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={
-                "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 " +
-                (status === "done"
-                  ? "bg-emerald-100 text-emerald-600"
-                  : status === "active"
-                    ? "bg-blue-100 text-blue-600"
-                    : "bg-slate-100 text-slate-400")
-              }
-            >
-              <Icon className="h-4 w-4" />
-            </div>
-            <CardTitle className="text-sm">
-              <span className="text-slate-400 font-mono text-xs mr-1.5">{code}</span>
-              {title}
-            </CardTitle>
-          </div>
-          {status === "done" && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
-          {status === "active" && <Circle className="h-4 w-4 text-blue-500 fill-blue-100 shrink-0" />}
-          {status === "locked" && <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
   );
 }
 
@@ -743,14 +696,8 @@ function SupplierRiskForm({ id, token, onDone }: { id: string; token: string; on
 function S2CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onContinue: () => void }) {
   const isStock = order.materialSource === "EXISTING_STOCK";
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-emerald-700">
-          <Check className="h-4 w-4" />
-          S2 Complete
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <SubStepCard code="S2" title="Identify & Assess Complete" status="done">
+      <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Material Type" value={order.materialType?.replace(/_/g, " ")} />
           <Field label="Source" value={isStock ? "Existing Stock" : "External Supplier"} />
@@ -773,8 +720,8 @@ function S2CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onCo
         <Button onClick={onContinue} className="gap-2">
           {isStock ? "Continue" : "Continue to S3 — Quote Comparison"} <ArrowRight className="h-4 w-4" />
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </SubStepCard>
   );
 }
 
@@ -833,13 +780,21 @@ export function S2IdentifyAssess({
         icon={ShieldCheck}
         title="Identify & Assess Supplier"
         subtitle="Classify the material type, check the supplier against the approved list, and review supplier risk."
+        backHref="/steel/p02"
+        backLabel="Back to Sourcing Orders"
+        code="P02"
       />
-      <WorkflowIndicator doneCount={1} activeIndex={allDone ? null : 1} />
+      <WorkflowIndicator
+        steps={SCREENS}
+        doneCount={1}
+        activeIndex={allDone ? null : 1}
+        activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P02")!.color.bar}
+      />
       <ContextSummary order={order} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4">
-          <StepSection code="P02-A02" icon={Layers} title="Identify Material Type Needed" status={a02Status}>
+          <SubStepCard code="P02-A02" title="Identify Material Type Needed" status={a02Status}>
             {a02Status === "done" ? (
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Material type" value={order.materialType?.replace(/_/g, " ")} />
@@ -850,9 +805,9 @@ export function S2IdentifyAssess({
             ) : (
               <p className="text-sm text-slate-400">Complete the previous step first.</p>
             )}
-          </StepSection>
+          </SubStepCard>
 
-          <StepSection code="P02-A03" icon={Users} title="Select Material Source" status={a03Status}>
+          <SubStepCard code="P02-A03" title="Select Material Source" status={a03Status}>
             {a03Status === "done" ? (
               isStock ? (
                 <div className="grid grid-cols-2 gap-3">
@@ -876,10 +831,10 @@ export function S2IdentifyAssess({
             ) : (
               <p className="text-sm text-slate-400">Complete the previous step first.</p>
             )}
-          </StepSection>
+          </SubStepCard>
 
           {!isStock && (
-            <StepSection code="P02-A04" icon={ShieldAlert} title="Check Supplier Quality & Rejection History" status={a04Status}>
+            <SubStepCard code="P02-A04" title="Check Supplier Quality & Rejection History" status={a04Status}>
               {a04Status === "done" ? (
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Risk level" value={order.supplierRiskLevel} />
@@ -891,7 +846,7 @@ export function S2IdentifyAssess({
               ) : (
                 <p className="text-sm text-slate-400">Complete the previous step first.</p>
               )}
-            </StepSection>
+            </SubStepCard>
           )}
 
           {allDone && <S2CompleteCard order={order} onContinue={refresh} />}

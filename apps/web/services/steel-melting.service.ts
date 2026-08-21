@@ -12,9 +12,30 @@ function authHeaders(token: string) {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(error.message || `Request failed with status ${res.status}`);
+    const message = error.message || `Request failed with status ${res.status}`;
+    // Tag technical (5xx / no structured message) failures distinctly from
+    // business-rule rejections (4xx, which already carry an operator-facing
+    // message from the DTO/service layer) so the UI can show honest, calm
+    // copy instead of ever surfacing a raw "Internal server error".
+    throw new Error(message, { cause: res.status >= 500 || !error.message ? "technical" : "business" });
   }
   return res.json();
+}
+
+// Never show a raw technical failure (5xx, network error, unexpected shape)
+// to the operator — log it for developers and return calm, actionable copy
+// instead. Business-rule rejections (400/403/404 with a DTO/service message)
+// pass through unchanged since those are already written for the operator.
+export function toOperatorMessage(err: unknown, fallback = "We couldn't complete this action. Please try again or contact production support."): string {
+  if (!(err instanceof Error)) {
+    console.error("[P05] Unexpected error:", err);
+    return fallback;
+  }
+  if (err.cause === "technical") {
+    console.error("[P05] Technical failure:", err.message);
+    return fallback;
+  }
+  return err.message;
 }
 
 export type SteelMeltingStage =
@@ -111,7 +132,7 @@ export interface SteelMelting {
   heatInProcessNumber: string;
   organizationId: string;
   chargePreparationId: string;
-  chargePreparation: { id: string; prepNumber: string; chargeNumber: string | null; status: string };
+  chargePreparation: { id: string; prepNumber: string; chargeNumber: string | null; status: string; actualGrade: string | null };
   stage: SteelMeltingStage;
   status: SteelMeltingStatus;
 
@@ -132,6 +153,7 @@ export interface SteelMelting {
   liningRefId: string | null;
   lining: {
     id: string;
+    code: string | null;
     installedAt: string;
     heatsCompleted: number;
     condition: string | null;
@@ -310,6 +332,18 @@ function buildQuery(params: Record<string, string | number | undefined>) {
   return q ? `?${q}` : "";
 }
 
+// Backs the P05 "New Heat" dropdown — closed, released charge preparations
+// that do NOT already have a SteelMelting record. Filtered server-side (see
+// MeltingService.getAvailableChargePreparations on the API), so this list
+// never needs to be filtered client-side.
+export interface AvailableChargePreparation {
+  id: string;
+  prepNumber: string;
+  chargeNumber: string | null;
+  plannedHeatReference: string | null;
+  chargeReleasedAt: string | null;
+}
+
 export interface CreateMeltingPayload {
   chargePreparationId: string;
   furnaceId?: string;
@@ -324,6 +358,8 @@ export interface FurnaceLiningCheckPayload {
   liningRefId?: string;
   liningHeatCount?: number;
   liningVisualCondition?: string;
+  /** Required by the backend only when re-submitting a step already logged. */
+  reason?: string;
 }
 
 export interface AddHeatMaterialChargePayload {
@@ -351,29 +387,34 @@ export interface FurnaceSystemsCheckPayload {
   powerSystemOk: boolean;
   hydraulicSystemOk: boolean;
   alarmsOk: boolean;
+  reason?: string;
 }
 
 export interface PreviousHeatReadinessPayload {
   previousHeatRef?: string;
   slagCleaningStatus?: string;
   readinessDelayReason?: string;
+  reason?: string;
 }
 
 export interface VerifyChargeRecipePayload {
   materialLotRef?: string;
   actualWeightVsRecipeOk: boolean;
+  reason?: string;
 }
 
 export interface LoadChargePayload {
   loadingTime?: string;
   loadingEquipment?: string;
   chargeSequence?: string;
+  reason?: string;
 }
 
 export interface StartMeltingPayload {
   meltingStartTime?: string;
   meltingFurnaceId?: string;
   meltingOperator?: string;
+  reason?: string;
 }
 
 export interface MonitorPowerPayload {
@@ -381,16 +422,20 @@ export interface MonitorPowerPayload {
   powerElapsedMinutes?: number;
   powerTonnage?: number;
   powerInterruptions?: string;
+  reason?: string;
 }
 
 export interface MonitorTemperaturePayload {
   temperatureCelsius: number;
   temperatureElapsedMinutes?: number;
   temperatureDelayReason?: string;
+  reason?: string;
 }
 
 export interface RecordAdditionsPayload {
   additions?: MeltingAddition[];
+  /** Named editReason — RecordAdditionsDto already uses `reason` per addition item. */
+  editReason?: string;
 }
 
 export interface RemoveSlagPayload {
@@ -398,6 +443,7 @@ export interface RemoveSlagPayload {
   slagRemovalTime?: string;
   slagQuantityEstimate?: number;
   slagIssueFound?: string;
+  reason?: string;
 }
 
 export interface RecordMeltOutputPayload {
@@ -407,12 +453,14 @@ export interface RecordMeltOutputPayload {
   outputEnergyTotalKwh?: number;
   outputAdditionsSummary?: string;
   outputWeightTonnes: number;
+  reason?: string;
 }
 
 export interface ConfirmLiquidReadyPayload {
   liquidReady: boolean;
   liquidTemperatureCelsius?: number;
   liquidOperatorConfirmed: boolean;
+  reason?: string;
 }
 
 export interface RefiningHandoverPayload {
@@ -440,8 +488,10 @@ export interface DashboardFurnaceStatus {
   activeHeat: {
     id: string;
     heatInProcessNumber: string;
+    chargeNumberSnapshot: string | null;
     stage: SteelMeltingStage;
     temperatureCelsius: number | null;
+    meltingStartTime: string | null;
   } | null;
   lining: {
     id: string;
@@ -453,16 +503,36 @@ export interface DashboardFurnaceStatus {
   } | null;
 }
 
+interface DashboardHeatLining {
+  id: string;
+  code: string | null;
+  installedAt: string;
+  heatsCompleted: number;
+}
+
 export interface DashboardActiveHeat {
   id: string;
   heatInProcessNumber: string;
+  chargeNumberSnapshot: string | null;
+  /** Real SteelChargePreparation UUID — links to /steel/p04/{id}. */
+  chargePreparationId: string;
+  grade: string | null;
   furnace: FurnaceRef | null;
   stage: SteelMeltingStage;
   status: SteelMeltingStatus;
   meltingStartTime: string | null;
   startedAt: string;
   temperatureCelsius: number | null;
+  powerKwh: number | null;
+  outputEnergyTotalKwh: number | null;
   materialInput: number;
+  /** Planned charge weight from the P04 recipe snapshot — the only real "target" source. Null when no recipe was captured. */
+  plannedChargeTonnes: number | null;
+  liningRefId: string | null;
+  /** Structured lining master data when liningRefId is set. Null otherwise — fall back to liningCampaignId. */
+  lining: DashboardHeatLining | null;
+  /** Free-text lining campaign snapshot — legacy fallback for heats recorded before FurnaceLining/liningRefId existed. */
+  liningCampaignId: string | null;
 }
 
 export interface DashboardFurnacePerformance {
@@ -480,6 +550,7 @@ export interface DashboardLiningStatus {
   furnaceId: string;
   furnaceCode: string;
   id: string;
+  code: string | null;
   installedAt: string;
   heatsCompleted: number;
   condition: string | null;
@@ -491,15 +562,42 @@ export interface DashboardRecentHeat {
   id: string;
   heatInProcessNumber: string;
   chargeNumberSnapshot: string | null;
+  /** Real SteelChargePreparation UUID — links to /steel/p04/{id}. */
+  chargePreparationId: string;
+  grade: string | null;
   furnace: FurnaceRef | null;
   liningRefId: string | null;
+  /** Structured lining master data when liningRefId is set. Null otherwise — fall back to liningCampaignId. */
+  lining: DashboardHeatLining | null;
+  /** Free-text lining campaign snapshot — legacy fallback for heats recorded before FurnaceLining/liningRefId existed. */
+  liningCampaignId: string | null;
   status: SteelMeltingStatus;
+  meltingStartTime: string | null;
+  /** Same source (SteelMelting.meltingStartTime) as DashboardActiveHeat.startedAt — kept symmetric across both heat states. Null when the heat never captured a start time. */
+  startedAt: string | null;
   handoverToRefiningAt: string | null;
   materialInput: number | null;
   output: number | null;
   materialLoss: number | null;
   yieldPercent: number | null;
   cycleDurationMinutes: number | null;
+  outputMeltTimeMinutes: number | null;
+  /** Planned charge weight from the P04 recipe snapshot — the only real "target" source. Null when no recipe was captured. */
+  plannedChargeTonnes: number | null;
+  /** output - plannedChargeTonnes; null whenever either side is null. */
+  varianceTonnes: number | null;
+}
+
+export interface DashboardReadyCharge {
+  chargePreparationId: string;
+  prepNumber: string;
+  chargeNumber: string | null;
+  grade: string | null;
+  weightTonnes: number | null;
+  plannedChargeTonnes: number | null;
+  furnaceReadinessConfirmed: boolean | null;
+  plannedHeatReference: string | null;
+  chargeReleasedAt: string | null;
 }
 
 export interface DashboardRecentEvent {
@@ -527,6 +625,13 @@ export interface MeltingDashboard {
     totalMaterialInput: number;
     totalOutputTonnes: number;
     averageCycleDurationMinutes: number | null;
+    furnacesRunning: number;
+    furnacesTotal: number;
+    readyChargesCount: number;
+    /** Sum of P04 recipe (planned charge) weights for heats completed in range — the only real target-tonnage source. Null when nothing in range has a recipe snapshot. */
+    plannedChargeTonnes: number | null;
+    /** totalOutputTonnes / plannedChargeTonnes * 100. Null whenever plannedChargeTonnes is null or zero — never render as 0%. */
+    onTargetPercent: number | null;
   };
   materialOverview: {
     totalInputTonnes: number;
@@ -538,6 +643,8 @@ export interface MeltingDashboard {
   activeHeats: DashboardActiveHeat[];
   furnacePerformance: DashboardFurnacePerformance[];
   liningStatus: DashboardLiningStatus[];
+  readyCharges: DashboardReadyCharge[];
+  nextReadyCharge: DashboardReadyCharge | null;
   recentHeats: DashboardRecentHeat[];
   recentEvents: DashboardRecentEvent[];
 }
@@ -565,6 +672,11 @@ export const MeltingService = {
       headers: authHeaders(token),
     }, token);
     return handleResponse<PaginatedMeltings>(res);
+  },
+
+  async getAvailableChargePreparations(token: string): Promise<AvailableChargePreparation[]> {
+    const res = await apiClient(`${API_URL}/steel/melting/available-charge-preparations`, { headers: authHeaders(token) }, token);
+    return handleResponse<AvailableChargePreparation[]>(res);
   },
 
   async getSummary(token: string): Promise<SteelMeltingSummary> {

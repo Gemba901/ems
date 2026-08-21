@@ -10,7 +10,7 @@ import { MeltingService } from "@/services/steel-melting.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScreenHeader } from "@/components/steel/p06/ScreenHeader";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { FlaskConical, Loader2 } from "lucide-react";
 
 export default function NewHeatApprovalPage() {
@@ -69,6 +69,7 @@ function NewHeatApprovalForm() {
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4">
       <ScreenHeader
+        code="P06"
         icon={FlaskConical}
         title="New Heat Approval Record"
         subtitle="Take a liquid steel sample from a heat that has completed refining handover to start chemistry approval."

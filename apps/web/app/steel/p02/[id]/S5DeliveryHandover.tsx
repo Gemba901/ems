@@ -18,9 +18,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p02/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p02/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p02/screenMap";
 import { ScreenSidebar } from "@/components/steel/p02/ScreenSidebar";
+import { SubStepCard, Field } from "@/components/steel/p02/shared";
 import {
   Loader2,
   Truck,
@@ -28,8 +31,6 @@ import {
   Bell,
   ShieldCheck,
   Check,
-  CheckCircle2,
-  Circle,
   Lock,
   Info,
   ListChecks,
@@ -43,16 +44,6 @@ import {
 // PO_ROLES guard on close-handover — kept identical rather than inventing a
 // new list.
 const PO_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-sm text-slate-800 font-medium">{value}</p>
-    </div>
-  );
-}
 
 // ── Persistent context (top of screen) ───────────────────────────────────────
 
@@ -190,43 +181,6 @@ function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A09"
         </CardContent>
       </Card>
     </ScreenSidebar>
-  );
-}
-
-// ── Shared step-section shell ────────────────────────────────────────────────
-
-function StepSection({
-  code, icon: Icon, title, status, children,
-}: { code: string; icon: typeof Truck; title: string; status: "done" | "active" | "locked"; children: React.ReactNode }) {
-  return (
-    <Card className={status === "locked" ? "opacity-60" : ""}>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={
-                "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 " +
-                (status === "done"
-                  ? "bg-emerald-100 text-emerald-600"
-                  : status === "active"
-                    ? "bg-blue-100 text-blue-600"
-                    : "bg-slate-100 text-slate-400")
-              }
-            >
-              <Icon className="h-4 w-4" />
-            </div>
-            <CardTitle className="text-sm">
-              <span className="text-slate-400 font-mono text-xs mr-1.5">{code}</span>
-              {title}
-            </CardTitle>
-          </div>
-          {status === "done" && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
-          {status === "active" && <Circle className="h-4 w-4 text-blue-500 fill-blue-100 shrink-0" />}
-          {status === "locked" && <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
   );
 }
 
@@ -510,27 +464,24 @@ function CloseHandoverPanel({
 
   if (!canClose) {
     return (
-      <Card className="border-amber-200 bg-amber-50/40">
-        <CardContent className="py-6 flex flex-col items-center text-center gap-3">
-          <div className="h-11 w-11 rounded-full bg-amber-100 flex items-center justify-center">
-            <Lock className="h-5 w-5 text-amber-600" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Management approval required to close handover</p>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm">
-              Only Management, Admin, or Super Admin roles can close this sourcing handover. Ask a Management or Admin
-              user to complete this step.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-xl border border-amber-200 bg-amber-50/40 py-6 flex flex-col items-center text-center gap-3">
+        <div className="h-11 w-11 rounded-full bg-amber-100 flex items-center justify-center">
+          <Lock className="h-5 w-5 text-amber-600" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Management approval required to close handover</p>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm">
+            Only Management, Admin, or Super Admin roles can close this sourcing handover. Ask a Management or Admin
+            user to complete this step.
+          </p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-4 pt-6">
-        {error && (
+    <div className="space-y-4">
+      {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <span>{error}</span>
@@ -552,7 +503,6 @@ function CloseHandoverPanel({
             Close Sourcing Handover
           </Button>
         </div>
-      </CardContent>
       {confirming && (
         <ConfirmCloseModal
           submitting={mutation.isPending}
@@ -560,7 +510,7 @@ function CloseHandoverPanel({
           onConfirm={() => mutation.mutate({ handoverNotes: notes || undefined })}
         />
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -577,8 +527,8 @@ function ClosedState({ order }: { order: SteelSourcingOrder }) {
       : null;
 
   return (
-    <Card className="border-emerald-200">
-      <CardContent className="py-8 text-center space-y-4">
+    <SubStepCard code="S5" title="Delivery, Logistics & Handover" status="done">
+      <div className="py-4 text-center space-y-4">
         <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
           <Check className="h-7 w-7 text-emerald-600" />
         </div>
@@ -601,8 +551,8 @@ function ClosedState({ order }: { order: SteelSourcingOrder }) {
             Create Material Intake in P03 <ArrowRight className="h-4 w-4" />
           </Button>
         </Link>
-      </CardContent>
-    </Card>
+      </div>
+    </SubStepCard>
   );
 }
 
@@ -655,8 +605,16 @@ export function S5DeliveryHandover({ order, token }: { order: SteelSourcingOrder
         icon={PackageCheck}
         title="Delivery, Logistics & Handover"
         subtitle="Confirm delivery, prepare logistics where applicable, and hand the order over to Raw Material Intake."
+        backHref="/steel/p02"
+        backLabel="Back to Sourcing Orders"
+        code="P02"
       />
-      <WorkflowIndicator doneCount={closed ? 5 : 4} activeIndex={closed ? null : 4} />
+      <WorkflowIndicator
+        steps={SCREENS}
+        doneCount={closed ? 5 : 4}
+        activeIndex={closed ? null : 4}
+        activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P02")!.color.bar}
+      />
       <ContextSummary order={order} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
@@ -665,7 +623,7 @@ export function S5DeliveryHandover({ order, token }: { order: SteelSourcingOrder
             <ClosedState order={order} />
           ) : (
             <>
-              <StepSection code="P02-A09" icon={Truck} title="Confirm Delivery Schedule With Supplier" status={a09Status}>
+              <SubStepCard code="P02-A09" title="Confirm Delivery Schedule With Supplier" status={a09Status}>
                 {a09Status === "done" ? (
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Dispatch date" value={order.confirmedDispatchDate ? new Date(order.confirmedDispatchDate).toLocaleDateString() : null} />
@@ -677,9 +635,9 @@ export function S5DeliveryHandover({ order, token }: { order: SteelSourcingOrder
                 ) : (
                   <p className="text-sm text-slate-400">Complete the previous step first.</p>
                 )}
-              </StepSection>
+              </SubStepCard>
 
-              <StepSection code="P02-A10" icon={Ship} title="Prepare Import Logistics (If Applicable)" status={a10Status}>
+              <SubStepCard code="P02-A10" title="Prepare Import Logistics (If Applicable)" status={a10Status}>
                 {a10Status === "done" ? (
                   order.billOfLading || order.countryOfOrigin || order.portClearanceStatus ? (
                     <div className="grid grid-cols-2 gap-3">
@@ -695,9 +653,9 @@ export function S5DeliveryHandover({ order, token }: { order: SteelSourcingOrder
                 ) : (
                   <p className="text-sm text-slate-400">Complete the previous step first.</p>
                 )}
-              </StepSection>
+              </SubStepCard>
 
-              <StepSection code="P02-A11" icon={Bell} title="Inform Raw Material Intake Team" status={a11Status}>
+              <SubStepCard code="P02-A11" title="Inform Raw Material Intake Team" status={a11Status}>
                 {a11Status === "done" ? (
                   <div className="flex items-center gap-2">
                     <Badge className="bg-emerald-50 text-emerald-700">P03 Intake Team Informed</Badge>
@@ -708,20 +666,20 @@ export function S5DeliveryHandover({ order, token }: { order: SteelSourcingOrder
                 ) : (
                   <p className="text-sm text-slate-400">Complete the previous step first.</p>
                 )}
-              </StepSection>
+              </SubStepCard>
 
               <div className="relative">
                 <div className="flex items-center gap-2 mb-1 px-1">
                   <ShieldCheck className="h-3.5 w-3.5 text-red-500" />
                   <p className="text-xs font-medium text-red-500 uppercase tracking-wide">Final Closing / Authority Gate</p>
                 </div>
-                <StepSection code="P02-A12" icon={ShieldCheck} title="Close Sourcing Handover to Intake" status={a12Status}>
+                <SubStepCard code="P02-A12" title="Close Sourcing Handover to Intake" status={a12Status}>
                   {a12Status === "active" ? (
                     <CloseHandoverPanel id={order.id} token={token} canClose={canClose} onDone={refresh} />
                   ) : (
                     <p className="text-sm text-slate-400">Complete the previous step first.</p>
                   )}
-                </StepSection>
+                </SubStepCard>
               </div>
             </>
           )}

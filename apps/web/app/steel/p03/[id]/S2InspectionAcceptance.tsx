@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p03/ScreenHeader";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { WorkflowIndicator } from "@/components/steel/p03/WorkflowIndicator";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
 import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
@@ -440,6 +440,7 @@ export function S2InspectionAcceptance({
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
+        code="P03"
           icon={ClipboardCheck}
           title="Inspection & Acceptance"
           subtitle="Inspect the material and record the Management accept/hold/reject decision."

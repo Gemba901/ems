@@ -16,8 +16,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p06/ScreenHeader";
-import { WorkflowIndicator } from "@/components/steel/p06/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
 import { ScreenSidebar } from "@/components/steel/p06/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p06/ContextSummary";
 import { HeatApprovalProgress } from "@/components/steel/p06/HeatApprovalProgress";
@@ -360,11 +361,12 @@ export function S1ChemistrySampling({
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
+        code="P06"
           icon={FlaskConical}
           title="Chemistry Sampling & Correction"
           subtitle="Sample, analyze, compare, and correct the heat's chemistry against the required grade."
         />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[0]} doneCount={doneCount} activeIndex={activeIdx} />
+        <WorkflowIndicator steps={SCREEN_TOP_STEPS[0]} doneCount={doneCount} activeIndex={activeIdx} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P06")?.color.bar} />
         <ContextSummary heatApproval={heatApproval} />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">

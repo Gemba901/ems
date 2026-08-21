@@ -16,9 +16,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p01/screenMap";
 import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
+import { SubStepCard } from "@/components/steel/p01/shared";
 import {
   Loader2,
   Route as RouteIcon,
@@ -40,7 +43,6 @@ import {
   ArrowRight,
   Wrench,
   Users,
-  PackageCheck,
   ClipboardEdit,
 } from "lucide-react";
 
@@ -342,12 +344,11 @@ function RouteForm({ planId, token, onDone }: { planId: string; token: string; o
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Plant Route</CardTitle>
-          <p className="text-sm text-slate-500">Which route will produce this plan? (required)</p>
-        </CardHeader>
-        <CardContent>
+      <SubStepCard code="A07" title="Plant Route" status="active">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            Which route will produce this plan? <span className="text-red-500">*</span>
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {PLANT_ROUTES.map((r) => {
               const Icon = r.icon;
@@ -386,20 +387,15 @@ function RouteForm({ planId, token, onDone }: { planId: string; token: string; o
               );
             })}
           </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Route notes <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional context for this route choice" />
-        </CardContent>
-      </Card>
+          <div className="border-t border-slate-100 pt-4">
+            <label className="text-sm font-medium text-slate-700 block mb-1">
+              Route notes <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional context for this route choice" />
+          </div>
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2">
@@ -457,12 +453,11 @@ function MaterialForm({ planId, token, onDone }: { planId: string; token: string
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Raw Material / Billet Availability</CardTitle>
-          <p className="text-sm text-slate-500">Is the required material on hand? (required)</p>
-        </CardHeader>
-        <CardContent>
+      <SubStepCard code="A08" title="Raw Material / Billet Availability" status="active">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            Is the required material on hand? <span className="text-red-500">*</span>
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {AVAILABILITY_OPTIONS.map((o) => {
               const selected = o.value === availability;
@@ -483,16 +478,9 @@ function MaterialForm({ planId, token, onDone }: { planId: string; token: string
               );
             })}
           </div>
-        </CardContent>
-      </Card>
 
-      {(availability === "PARTIAL" || availability === "NOT_AVAILABLE") && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Shortage Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          {(availability === "PARTIAL" || availability === "NOT_AVAILABLE") && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-4">
               <div>
                 <label className="text-sm font-medium text-slate-700 block mb-1">
                   Shortage notes <span className="text-slate-400 font-normal">(optional)</span>
@@ -506,9 +494,9 @@ function MaterialForm({ planId, token, onDone }: { planId: string; token: string
                 <Input value={purchaseNotes} onChange={(e) => setPurchaseNotes(e.target.value)} placeholder="What needs to be purchased" />
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2">
@@ -562,15 +550,16 @@ function CapacityForm({ planId, token, onDone }: { planId: string; token: string
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <SubStepCard code="A09" title="Operational Capacity" status="active">
+        <div className="space-y-5">
+        <div>
+          <p className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-1">
             <Wrench className="h-4 w-4 text-slate-500" />
             Equipment
-          </CardTitle>
-          <p className="text-sm text-slate-500">Is the equipment available and free of maintenance conflicts? (required)</p>
-        </CardHeader>
-        <CardContent>
+          </p>
+          <p className="text-sm text-slate-500 mb-2">
+            Is the equipment available and free of maintenance conflicts? <span className="text-red-500">*</span>
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {AVAILABILITY_OPTIONS.map((o) => {
               const selected = o.value === equipment;
@@ -597,18 +586,16 @@ function CapacityForm({ planId, token, onDone }: { planId: string; token: string
             </label>
             <Input value={maintenanceNotes} onChange={(e) => setMaintenanceNotes(e.target.value)} placeholder="Optional" />
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <div className="border-t border-slate-100 pt-4">
+          <p className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-1">
             <Users className="h-4 w-4 text-slate-500" />
             Manpower
-          </CardTitle>
-          <p className="text-sm text-slate-500">Is sufficient manpower available? (required)</p>
-        </CardHeader>
-        <CardContent>
+          </p>
+          <p className="text-sm text-slate-500 mb-2">
+            Is sufficient manpower available? <span className="text-red-500">*</span>
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {AVAILABILITY_OPTIONS.map((o) => {
               const selected = o.value === manpower;
@@ -635,8 +622,9 @@ function CapacityForm({ planId, token, onDone }: { planId: string; token: string
             </label>
             <Input value={shiftNotes} onChange={(e) => setShiftNotes(e.target.value)} placeholder="Optional" />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        </div>
+      </SubStepCard>
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2">
@@ -651,14 +639,8 @@ function CapacityForm({ planId, token, onDone }: { planId: string; token: string
 
 function S4CompleteCard({ plan, onContinue }: { plan: SteelProductionPlan; onContinue: () => void }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-emerald-700">
-          <PackageCheck className="h-4 w-4" />
-          S4 Complete
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <SubStepCard code="A07-A09" title="Feasibility & Route" status="done">
+      <div className="space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
           <div>
             <p className="text-xs text-slate-400">Route</p>
@@ -683,8 +665,8 @@ function S4CompleteCard({ plan, onContinue }: { plan: SteelProductionPlan; onCon
         <Button onClick={onContinue} className="gap-2">
           Continue to S5 — Plan Preparation <ArrowRight className="h-4 w-4" />
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </SubStepCard>
   );
 }
 
@@ -725,8 +707,9 @@ export function S4FeasibilityRoute({
         title="Feasibility & Route Planning"
         subtitle={`${plan.planNumber} — confirm the production route, material readiness and operational capacity.`}
         rightContent={<StatusBadge status={plan.status} />}
+        code="P01"
       />
-      <WorkflowIndicator doneCount={3} activeIndex={3} />
+      <WorkflowIndicator steps={SCREENS} doneCount={3} activeIndex={3} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P01")!.color.bar} />
       <ContextSummary plan={plan} />
       <ReadinessChecklist plan={plan} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">

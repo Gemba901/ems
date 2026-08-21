@@ -2,121 +2,137 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import {
   MeltingService,
   SteelMelting,
+  MeltingAddition,
   RecordAdditionsPayload,
   RemoveSlagPayload,
   RecordMeltOutputPayload,
   ConfirmLiquidReadyPayload,
   RefiningHandoverPayload,
+  toOperatorMessage,
 } from "@/services/steel-melting.service";
+import { ListOrdered } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p05/ScreenHeader";
-import { WorkflowIndicator } from "@/components/steel/p05/WorkflowIndicator";
-import { ScreenSidebar } from "@/components/steel/p05/ScreenSidebar";
-import { ContextSummary } from "@/components/steel/p05/ContextSummary";
-import { MeltingProgress } from "@/components/steel/p05/MeltingProgress";
-import { SCREEN_TOP_STEPS } from "@/components/steel/p05/screenMap";
-import { Field, SubStep, SaveButton, subStatus, SubStepStatus } from "@/components/steel/p05/shared";
-import { HeatCycleDocument } from "@/components/steel/p05/HeatCycleDocument";
-import { ShieldCheck, Info, ListChecks, Lightbulb, Lock, Send, CheckCircle2, Loader2, Gauge, ClipboardCheck, FileText } from "lucide-react";
+import { Field, SaveButton, SubStepStatus, HelpSection } from "@/components/steel/p05/shared";
+import { RepeatableRowTable } from "@/components/steel/p05/RepeatableRowTable";
+import { Lock, Send, CheckCircle2, Loader2, Gauge, ClipboardCheck } from "lucide-react";
 
-const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
+export const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
-function Sidebar() {
-  return (
-    <ScreenSidebar>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Record any additions and slag removal, log the melt output, confirm the liquid steel is ready, review the
-            heat cycle, then hand it over to refining/quality.
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            The refining handover completes this melting record. There is no further step after that in this
-            module.
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            <li>If no extra material was added, you can proceed without recording an addition.</li>
-            <li>Only Management, Admin, or Super Admin can hand the record over to refining.</li>
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
-  );
-}
+// Relocated, unchanged, from the former ReviewRelease screen's Sidebar() —
+// shown in the on-demand Help popover for A10-A14 instead of a persistent
+// sidebar column.
+export const REVIEW_RELEASE_HELP: { title: string; sections: HelpSection[] } = {
+  title: "About Review & Release",
+  sections: [
+    {
+      heading: "About this step",
+      body: "Record any additions and slag removal, log the melt output, confirm the liquid steel is ready, review the heat cycle, then hand it over to refining/quality.",
+    },
+    {
+      heading: "What happens next",
+      body: "The refining handover completes this melting record. There is no further step after that in this module.",
+    },
+    {
+      heading: "Tips",
+      body: (
+        <ul className="space-y-1.5 list-disc pl-4">
+          <li>If no extra material was added, you can proceed without recording an addition.</li>
+          <li>Only Management, Admin, or Super Admin can hand the record over to refining.</li>
+        </ul>
+      ),
+    },
+  ],
+};
 
-function AdditionsForm({ melting, token, onDone }: { melting: SteelMelting; token: string; onDone: () => void }) {
-  const [item, setItem] = useState("");
-  const [qty, setQty] = useState("");
-  const [reason, setReason] = useState("");
+// P05-A10 — same repeatable-row-table treatment as material charges
+// (P05-A06) and melt readings (P05-A08+A09), but recordAdditions is a
+// single-shot call that replaces the whole additions array rather than a
+// per-row create endpoint — so RepeatableRowTable's onSubmit here just
+// appends to a local buffer, and a separate "Save" button below persists
+// the buffer in one recordAdditions call. Zero additions stays a valid,
+// explicit choice via that same button.
+export function AdditionsForm({
+  melting,
+  token,
+  onDone,
+  editReason,
+}: {
+  melting: SteelMelting;
+  token: string;
+  onDone: () => void;
+  editReason?: string;
+}) {
+  const [items, setItems] = useState<(MeltingAddition & { rowId: string })[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: (payload: RecordAdditionsPayload) => MeltingService.recordAdditions(melting.id, payload, token),
     onSuccess: onDone,
-    onError: (err: Error) => setError(err.message),
+    onError: (err: unknown) => setError(toOperatorMessage(err)),
   });
 
-  const hasAddition = !!item && !!qty;
-
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {error && <p className="text-xs text-red-600">{error}</p>}
       <p className="text-xs text-slate-400">If nothing needs to be added, save with no items to continue.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <Input placeholder="Item (optional)" value={item} onChange={(e) => setItem(e.target.value)} />
-        <Input type="number" step="0.001" placeholder="Quantity" value={qty} onChange={(e) => setQty(e.target.value)} />
-        <Input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
-      </div>
+
+      <RepeatableRowTable
+        rows={items}
+        rowKey={(i) => i.rowId}
+        emptyLabel="No additions added."
+        columns={[
+          { key: "item", header: "Item", render: (i) => i.itemName },
+          { key: "quantity", header: "Quantity", align: "right", render: (i) => i.quantity },
+          { key: "reason", header: "Reason", render: (i) => i.reason ?? "—" },
+        ]}
+        fields={[
+          { key: "itemName", type: "text", placeholder: "Item" },
+          { key: "quantity", type: "number", step: "0.001", placeholder: "Quantity" },
+          { key: "reason", type: "text", placeholder: "Reason (optional)" },
+        ]}
+        submitLabel="Add addition row"
+        canSubmit={(v) => !!v.itemName && !!v.quantity}
+        onSubmit={(v) => {
+          setItems((prev) => [
+            ...prev,
+            { rowId: `${Date.now()}-${prev.length}`, itemName: v.itemName, quantity: Number(v.quantity), reason: v.reason || undefined },
+          ]);
+        }}
+      />
+
       <Button
         size="sm"
         disabled={mutation.isPending}
         onClick={() =>
           mutation.mutate({
-            additions: hasAddition ? [{ itemName: item, quantity: Number(qty), reason: reason || undefined }] : undefined,
+            additions: items.length > 0 ? items.map(({ rowId: _rowId, ...addition }) => addition) : undefined,
+            editReason,
           })
         }
       >
-        <SaveButton pending={mutation.isPending} label={hasAddition ? "Record addition" : "No additions — continue"} />
+        <SaveButton pending={mutation.isPending} label={items.length > 0 ? "Record additions" : "No additions — continue"} />
       </Button>
     </div>
   );
 }
 
-function SlagForm({ melting, token, onDone }: { melting: SteelMelting; token: string; onDone: () => void }) {
+export function SlagForm({
+  melting,
+  token,
+  onDone,
+  editReason,
+}: {
+  melting: SteelMelting;
+  token: string;
+  onDone: () => void;
+  editReason?: string;
+}) {
   const [notApplicable, setNotApplicable] = useState(false);
   const [qty, setQty] = useState("");
   const [issue, setIssue] = useState("");
@@ -125,7 +141,7 @@ function SlagForm({ melting, token, onDone }: { melting: SteelMelting; token: st
   const mutation = useMutation({
     mutationFn: (payload: RemoveSlagPayload) => MeltingService.removeSlag(melting.id, payload, token),
     onSuccess: onDone,
-    onError: (err: Error) => setError(err.message),
+    onError: (err: unknown) => setError(toOperatorMessage(err)),
   });
 
   return (
@@ -149,6 +165,7 @@ function SlagForm({ melting, token, onDone }: { melting: SteelMelting; token: st
             slagNotApplicable: notApplicable,
             slagQuantityEstimate: !notApplicable && qty ? Number(qty) : undefined,
             slagIssueFound: !notApplicable ? issue || undefined : undefined,
+            reason: editReason,
           })
         }
       >
@@ -158,7 +175,17 @@ function SlagForm({ melting, token, onDone }: { melting: SteelMelting; token: st
   );
 }
 
-function OutputForm({ melting, token, onDone }: { melting: SteelMelting; token: string; onDone: () => void }) {
+export function OutputForm({
+  melting,
+  token,
+  onDone,
+  editReason,
+}: {
+  melting: SteelMelting;
+  token: string;
+  onDone: () => void;
+  editReason?: string;
+}) {
   const [weight, setWeight] = useState("");
   const [meltTime, setMeltTime] = useState("");
   const [energy, setEnergy] = useState("");
@@ -168,7 +195,7 @@ function OutputForm({ melting, token, onDone }: { melting: SteelMelting; token: 
   const mutation = useMutation({
     mutationFn: (payload: RecordMeltOutputPayload) => MeltingService.recordMeltOutput(melting.id, payload, token),
     onSuccess: onDone,
-    onError: (err: Error) => setError(err.message),
+    onError: (err: unknown) => setError(toOperatorMessage(err)),
   });
 
   return (
@@ -189,6 +216,7 @@ function OutputForm({ melting, token, onDone }: { melting: SteelMelting; token: 
             outputMeltTimeMinutes: meltTime ? Number(meltTime) : undefined,
             outputEnergyTotalKwh: energy ? Number(energy) : undefined,
             outputAdditionsSummary: summary || undefined,
+            reason: editReason,
           })
         }
       >
@@ -198,7 +226,17 @@ function OutputForm({ melting, token, onDone }: { melting: SteelMelting; token: 
   );
 }
 
-function ConfirmReadyForm({ melting, token, onDone }: { melting: SteelMelting; token: string; onDone: () => void }) {
+export function ConfirmReadyForm({
+  melting,
+  token,
+  onDone,
+  editReason,
+}: {
+  melting: SteelMelting;
+  token: string;
+  onDone: () => void;
+  editReason?: string;
+}) {
   const [temp, setTemp] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -206,7 +244,7 @@ function ConfirmReadyForm({ melting, token, onDone }: { melting: SteelMelting; t
   const mutation = useMutation({
     mutationFn: (payload: ConfirmLiquidReadyPayload) => MeltingService.confirmLiquidReady(melting.id, payload, token),
     onSuccess: onDone,
-    onError: (err: Error) => setError(err.message),
+    onError: (err: unknown) => setError(toOperatorMessage(err)),
   });
 
   return (
@@ -221,7 +259,14 @@ function ConfirmReadyForm({ melting, token, onDone }: { melting: SteelMelting; t
       <Button
         size="sm"
         disabled={!confirmed || mutation.isPending}
-        onClick={() => mutation.mutate({ liquidReady: confirmed, liquidTemperatureCelsius: temp ? Number(temp) : undefined, liquidOperatorConfirmed: confirmed })}
+        onClick={() =>
+          mutation.mutate({
+            liquidReady: confirmed,
+            liquidTemperatureCelsius: temp ? Number(temp) : undefined,
+            liquidOperatorConfirmed: confirmed,
+            reason: editReason,
+          })
+        }
       >
         <SaveButton pending={mutation.isPending} label="Confirm liquid steel ready" />
       </Button>
@@ -281,7 +326,7 @@ function ConfirmHandoverModal({
   );
 }
 
-function HandoverPanel({
+export function HandoverPanel({
   melting, token, canAct, onDone,
 }: { melting: SteelMelting; token: string; canAct: boolean; onDone: () => void }) {
   const [notes, setNotes] = useState("");
@@ -294,8 +339,8 @@ function HandoverPanel({
       setConfirming(false);
       onDone();
     },
-    onError: (err: Error) => {
-      setError(err.message);
+    onError: (err: unknown) => {
+      setError(toOperatorMessage(err));
       setConfirming(false);
     },
   });
@@ -326,7 +371,7 @@ function HandoverPanel({
 // server-computed derived metrics only (getHeatSummary). Metrics the backend
 // doesn't compute (no business-confirmed formula yet, e.g. energy/tonne) are
 // shown as "Not available" rather than silently omitted or guessed at.
-function HeatSummaryPanel({ melting, token }: { melting: SteelMelting; token: string }) {
+export function HeatSummaryPanel({ melting, token }: { melting: SteelMelting; token: string }) {
   const { data: summary } = useQuery({
     queryKey: ["heat-summary", melting.id],
     queryFn: () => MeltingService.getHeatSummary(melting.id, token),
@@ -369,10 +414,74 @@ function HeatSummaryPanel({ melting, token }: { melting: SteelMelting; token: st
   );
 }
 
+// Full HeatMaterialCharge row log (P05-A06 initial charge through P05-A10
+// additions) — every charge row, not just the aggregate totalMaterialInput
+// figure already shown in Material Balance above. Backed by the existing
+// GET /steel/melting/:id/material-charges endpoint (MeltingService.getMaterialCharges
+// on the API), which already returns the full row list — no new endpoint
+// needed.
+export function MaterialChargeLog({ melting, token }: { melting: SteelMelting; token: string }) {
+  const { data: charges, isLoading } = useQuery({
+    queryKey: ["heat-material-charges", melting.id],
+    queryFn: () => MeltingService.getMaterialCharges(melting.id, token),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <ListOrdered className="h-4 w-4 text-slate-500" />
+          Material Charge Log
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></div>
+        ) : !charges || charges.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-2">No material charge rows recorded for this heat.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-slate-400 border-b border-slate-100">
+                  <th className="font-medium py-1.5 pr-3">#</th>
+                  <th className="font-medium py-1.5 pr-3">Material</th>
+                  <th className="font-medium py-1.5 pr-3">Category</th>
+                  <th className="font-medium py-1.5 pr-3">Grade</th>
+                  <th className="font-medium py-1.5 pr-3">Batch Ref</th>
+                  <th className="font-medium py-1.5 pr-3 text-right">Planned</th>
+                  <th className="font-medium py-1.5 pr-3 text-right">Actual</th>
+                  <th className="font-medium py-1.5 pr-3">Charged At</th>
+                  <th className="font-medium py-1.5 pr-1">Charged By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {charges.map((c) => (
+                  <tr key={c.id} className="border-b border-slate-50 last:border-0">
+                    <td className="py-1.5 pr-3 text-slate-500">{c.sequence}</td>
+                    <td className="py-1.5 pr-3 font-medium text-slate-800">{c.material}</td>
+                    <td className="py-1.5 pr-3 text-slate-600">{c.materialCategory}</td>
+                    <td className="py-1.5 pr-3 text-slate-600">{c.grade ?? "—"}</td>
+                    <td className="py-1.5 pr-3 text-slate-600">{c.batchRef ?? "—"}</td>
+                    <td className="py-1.5 pr-3 text-right text-slate-600">{c.plannedQuantity ?? "—"}</td>
+                    <td className="py-1.5 pr-3 text-right text-slate-700">{c.actualQuantity} {c.unit}</td>
+                    <td className="py-1.5 pr-3 text-slate-500 whitespace-nowrap">{new Date(c.chargedAt).toLocaleString()}</td>
+                    <td className="py-1.5 pr-1 text-slate-500 whitespace-nowrap">{c.chargedBy.firstName} {c.chargedBy.lastName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Compact readiness rollup so operators see what's outstanding without
 // re-confirming already-completed steps — derived from the same
-// subStatus() the SubStep cards below already use.
-function ReadinessPanel({ items }: { items: { code: string; label: string; status: SubStepStatus }[] }) {
+// subStatus() the timeline steps below already use.
+export function ReadinessPanel({ items }: { items: { code: string; label: string; status: SubStepStatus }[] }) {
   const doneCount = items.filter((i) => i.status === "done").length;
   const ready = doneCount === items.length;
 
@@ -402,144 +511,5 @@ function ReadinessPanel({ items }: { items: { code: string; label: string; statu
         {!ready && <p className="text-xs text-amber-600 mt-3">Not yet ready for release — complete the outstanding items above.</p>}
       </CardContent>
     </Card>
-  );
-}
-
-function ClosedState({ melting, token }: { melting: SteelMelting; token: string }) {
-  return (
-    <div className="space-y-4">
-      <Card className="border-emerald-200">
-        <CardContent className="py-8 text-center space-y-4">
-          <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
-            <CheckCircle2 className="h-7 w-7 text-emerald-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Handed Over to Refining</h2>
-            <p className="text-sm text-slate-500 mt-1">{melting.heatInProcessNumber} is now closed.</p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm max-w-xl mx-auto text-left">
-            <Field label="Output weight" value={melting.outputWeightTonnes !== null ? `${melting.outputWeightTonnes} t` : null} />
-            <Field label="Liquid temperature" value={melting.liquidTemperatureCelsius !== null ? `${melting.liquidTemperatureCelsius} °C` : null} />
-            <Field label="Handed over at" value={melting.handoverToRefiningAt ? new Date(melting.handoverToRefiningAt).toLocaleString() : null} />
-          </div>
-        </CardContent>
-      </Card>
-      <HeatSummaryPanel melting={melting} token={token} />
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <FileText className="h-4 w-4 text-slate-500" />
-            Heat Cycle Document
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <HeatCycleDocument melting={melting} token={token} />
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-export function ReviewRelease({
-  melting, token, onRefresh,
-}: { melting: SteelMelting; token: string; onRefresh: () => void }) {
-  const { user } = useAuthStore();
-  const canAct = !!(user?.roleLevel && RELEASE_ROLES.includes(user.roleLevel as Role));
-  const actions = melting.allowedActions ?? [];
-  const closed = melting.status === "CLOSED";
-
-  const additionsStatus = subStatus(actions.includes("RECORD_ADDITIONS"), melting.additions !== null);
-  const slagStatus = subStatus(actions.includes("REMOVE_SLAG"), melting.slagNotApplicable !== null || !!melting.slagRemovalTime);
-  const outputStatus = subStatus(actions.includes("RECORD_OUTPUT"), melting.outputWeightTonnes !== null);
-  const readyStatus = subStatus(actions.includes("CONFIRM_READY"), melting.liquidReady !== null);
-  const handoverStatus = subStatus(actions.includes("REFINING_HANDOVER"), closed);
-
-  const statuses = [additionsStatus, slagStatus, outputStatus, readyStatus, handoverStatus];
-  const doneCount = closed ? 5 : statuses.filter((s) => s === "done").length;
-  const activeRel = statuses.findIndex((s) => s === "active");
-
-  const readinessItems = [
-    { code: "A10", label: "Additions Recorded", status: additionsStatus },
-    { code: "A11", label: "Slag Removed", status: slagStatus },
-    { code: "A12", label: "Output Recorded", status: outputStatus },
-    { code: "A13", label: "Liquid Steel Ready", status: readyStatus },
-    { code: "A14", label: "Handed Over to Refining", status: handoverStatus },
-  ];
-
-  return (
-    <TooltipProvider>
-      <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
-        <ScreenHeader
-          icon={ShieldCheck}
-          title="Review, Complete & Release"
-          subtitle="Review the heat cycle, record additions, slag removal, and output, confirm readiness, and hand over to refining."
-        />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[2]} doneCount={doneCount} activeIndex={closed ? null : activeRel === -1 ? null : activeRel} />
-        <ContextSummary melting={melting} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <div className="space-y-4">
-            {closed ? (
-              <ClosedState melting={melting} token={token} />
-            ) : (
-              <>
-                <ReadinessPanel items={readinessItems} />
-                <HeatSummaryPanel melting={melting} token={token} />
-
-                <SubStep
-                  code="P05-A10"
-                  title="Record Extra Material Additions"
-                  status={additionsStatus}
-                  summary={melting.additions?.length ? `${melting.additions.length} addition(s)` : "None"}
-                >
-                  {additionsStatus === "active" && <AdditionsForm melting={melting} token={token} onDone={onRefresh} />}
-                </SubStep>
-
-                <SubStep
-                  code="P05-A11"
-                  title="Remove Slag or Unwanted Material"
-                  status={slagStatus}
-                  summary={`Slag removal ${melting.slagNotApplicable ? "not applicable" : "recorded"}`}
-                >
-                  {slagStatus === "active" && <SlagForm melting={melting} token={token} onDone={onRefresh} />}
-                </SubStep>
-
-                <SubStep
-                  code="P05-A12"
-                  title="Record Melting Output"
-                  status={outputStatus}
-                  summary={melting.outputWeightTonnes !== null ? `Output ${melting.outputWeightTonnes} t` : undefined}
-                >
-                  {outputStatus === "active" && <OutputForm melting={melting} token={token} onDone={onRefresh} />}
-                </SubStep>
-
-                <SubStep
-                  code="P05-A13"
-                  title="Confirm Liquid Steel Ready"
-                  status={readyStatus}
-                  summary={melting.liquidReady !== null ? `Ready: ${melting.liquidReady ? "Yes" : "No"}` : undefined}
-                >
-                  {readyStatus === "active" && <ConfirmReadyForm melting={melting} token={token} onDone={onRefresh} />}
-                </SubStep>
-
-                <div className="relative">
-                  <div className="flex items-center gap-2 mb-1 px-1">
-                    <Send className="h-3.5 w-3.5 text-red-500" />
-                    <p className="text-xs font-medium text-red-500 uppercase tracking-wide">Final Refining Handover / Authority Gate</p>
-                  </div>
-                  <SubStep code="P05-A14" title="Handover to Refining/Quality" status={handoverStatus}>
-                    {handoverStatus === "active" && <HandoverPanel melting={melting} token={token} canAct={canAct} onDone={onRefresh} />}
-                  </SubStep>
-                </div>
-              </>
-            )}
-          </div>
-          <ScreenSidebar>
-            <MeltingProgress melting={melting} />
-            <Sidebar />
-          </ScreenSidebar>
-        </div>
-      </div>
-    </TooltipProvider>
   );
 }

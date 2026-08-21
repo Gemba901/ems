@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p03/ScreenHeader";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { WorkflowIndicator } from "@/components/steel/p03/WorkflowIndicator";
 import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
@@ -92,6 +92,7 @@ function NewMaterialIntakeForm() {
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
+        code="P03"
           icon={Truck}
           title="New Material Intake"
           subtitle="P03-A01 — Record truck/container arrival at the gate against a sourcing order."

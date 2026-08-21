@@ -2008,6 +2008,11 @@ model FurnaceLining {
   id                   String              @id @default(uuid())
   organizationId       String
   furnaceId            String
+  // Optional human-readable identifier for the lining campaign (e.g. a
+  // physical tag/batch code). Nullable, no uniqueness constraint — existing
+  // linings recorded before this field existed have no code, and none is
+  // enforced going forward either.
+  code                 String?
   installedAt          DateTime
   material             String?
   heatsCompleted       Int                 @default(0)

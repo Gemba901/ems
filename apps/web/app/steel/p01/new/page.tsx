@@ -18,9 +18,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { WorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p01/screenMap";
 import {
   ArrowLeft,
   Loader2,
@@ -699,8 +701,9 @@ function NewPlanS1Content() {
         icon={ClipboardList}
         title="Demand & Priority"
         subtitle="Capture the customer or business requirement and establish its priority."
+        code="P01"
       />
-      <WorkflowIndicator doneCount={0} activeIndex={0} />
+      <WorkflowIndicator steps={SCREENS} doneCount={0} activeIndex={0} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P01")!.color.bar} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4">{body}</div>
         <Sidebar plan={planForSidebar} subStep={subStep} />

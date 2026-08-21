@@ -12,16 +12,8 @@ import {
   type SteelIntakeStatus,
   INTAKE_STAGE_LABELS,
 } from "@/services/material-intake.service";
+import { statusBadgeClass } from "@/lib/steelStatusColors";
 import { SCREENS, stageToScreenIndex } from "./screenMap";
-
-const STATUS_STYLES: Record<SteelIntakeStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  REJECTED: "bg-red-50 text-red-700",
-  RELEASED: "bg-emerald-50 text-emerald-700",
-  CANCELLED: "bg-red-50 text-red-700",
-};
 
 const STATUS_TOOLTIPS: Record<SteelIntakeStatus, string> = {
   DRAFT: "Intake created but not yet actively progressing.",
@@ -103,7 +95,7 @@ export function MaterialIntakeList({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-slate-900">{intake.intakeNumber}</span>
                             <Tooltip>
-                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={STATUS_STYLES[intake.status]}>{intake.status.replace(/_/g, " ")}</Badge>} />
+                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={statusBadgeClass(intake.status)}>{intake.status.replace(/_/g, " ")}</Badge>} />
                               <TooltipContent>{STATUS_TOOLTIPS[intake.status]}</TooltipContent>
                             </Tooltip>
                           </div>

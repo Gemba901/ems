@@ -10,9 +10,12 @@ import { SteelService, SteelProductionPlan, ReleasePlanPayload } from "@/service
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator as SharedWorkflowIndicator } from "@/components/steel/p01/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p01/ScreenHeader";
+import { WorkflowIndicator as SharedWorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p01/screenMap";
 import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
+import { SubStepCard } from "@/components/steel/p01/shared";
 import {
   Loader2,
   ShieldCheck,
@@ -114,31 +117,22 @@ function PlanSummary({ plan }: { plan: SteelProductionPlan }) {
             </table>
           </div>
         )}
-      </CardContent>
-    </Card>
-  );
-}
 
-function ReadinessSummary({ plan }: { plan: SteelProductionPlan }) {
-  const items = [
-    { label: "Stock / Fulfilment Decision", value: plan.stockDecision?.replace(/_/g, " ") ?? "—" },
-    { label: "Material Availability", value: plan.materialAvailability?.replace(/_/g, " ") ?? "—" },
-    { label: "Equipment Availability", value: plan.equipmentAvailability?.replace(/_/g, " ") ?? "—" },
-    { label: "Manpower Availability", value: plan.manpowerAvailability?.replace(/_/g, " ") ?? "—" },
-  ];
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Feasibility & Readiness</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {items.map((it) => (
-            <div key={it.label} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
-              <p className="text-xs text-slate-400">{it.label}</p>
-              <p className="text-sm font-semibold text-slate-800 mt-0.5">{it.value}</p>
-            </div>
-          ))}
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Feasibility & Readiness</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {[
+              { label: "Stock / Fulfilment Decision", value: plan.stockDecision?.replace(/_/g, " ") ?? "—" },
+              { label: "Material Availability", value: plan.materialAvailability?.replace(/_/g, " ") ?? "—" },
+              { label: "Equipment Availability", value: plan.equipmentAvailability?.replace(/_/g, " ") ?? "—" },
+              { label: "Manpower Availability", value: plan.manpowerAvailability?.replace(/_/g, " ") ?? "—" },
+            ].map((it) => (
+              <div key={it.label} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+                <p className="text-xs text-slate-400">{it.label}</p>
+                <p className="text-sm font-semibold text-slate-800 mt-0.5">{it.value}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -252,12 +246,9 @@ function ReleaseApproval({
   const blocked = !allAcked || !canRelease;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Release Approval</CardTitle>
+    <SubStepCard code="A12" title="Release Approval" status="active">
+      <div className="space-y-4">
         <p className="text-sm text-slate-500">Releasing makes this production plan official and available to Production Sourcing (P02).</p>
-      </CardHeader>
-      <CardContent className="space-y-4">
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -309,7 +300,7 @@ function ReleaseApproval({
             Release Production Plan
           </Button>
         </div>
-      </CardContent>
+      </div>
 
       {confirming && (
         <ConfirmReleaseModal
@@ -319,14 +310,14 @@ function ReleaseApproval({
           onConfirm={() => mutation.mutate({ releaseNotes: notes || undefined })}
         />
       )}
-    </Card>
+    </SubStepCard>
   );
 }
 
 function ReleasedState({ plan }: { plan: SteelProductionPlan }) {
   return (
-    <Card>
-      <CardContent className="py-8 text-center space-y-4">
+    <SubStepCard code="A12" title="Release Approval" status="done">
+      <div className="py-4 text-center space-y-4">
         <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
           <Check className="h-7 w-7 text-emerald-600" />
         </div>
@@ -357,8 +348,8 @@ function ReleasedState({ plan }: { plan: SteelProductionPlan }) {
             Continue to P02 Sourcing <ArrowRight className="h-4 w-4" />
           </Button>
         </Link>
-      </CardContent>
-    </Card>
+      </div>
+    </SubStepCard>
   );
 }
 
@@ -449,15 +440,15 @@ export function S6PlanRelease({ plan, token, onRefresh }: { plan: SteelProductio
         title="Release Production Plan"
         subtitle={`${plan.planNumber} — final approval before this plan becomes official.`}
         rightContent={<Badge>{plan.status}</Badge>}
+        code="P01"
       />
-      <SharedWorkflowIndicator doneCount={released ? 6 : 5} activeIndex={released ? null : 5} />
+      <SharedWorkflowIndicator steps={SCREENS} doneCount={released ? 6 : 5} activeIndex={released ? null : 5} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P01")!.color.bar} />
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4">
           {!released && (
             <CurrentTaskBanner text="Review the department acknowledgements below, then release the plan once all approvals are complete." />
           )}
           <PlanSummary plan={plan} />
-          <ReadinessSummary plan={plan} />
           <DepartmentAcknowledgement plan={plan} />
           {released ? <ReleasedState plan={plan} /> : <ReleaseApproval plan={plan} token={token} canRelease={canRelease} onDone={refresh} />}
         </div>

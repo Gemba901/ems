@@ -1,22 +1,16 @@
 "use client";
 
-import { Check, Lock } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProcessProgress, type ProcessProgressStep, type ProcessProgressStepState } from "@/components/steel/ProcessProgress";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
 import type { SteelHeatApproval } from "@/services/steel-heat-approval.service";
 import { HEAT_APPROVAL_STAGE_ORDER } from "@/services/steel-heat-approval.service";
 import { stageToScreenIndex } from "./screenMap";
 
-type StepState = "done" | "active" | "pending" | "blocked";
-
-interface Step {
-  code: string;
-  label: string;
-  state: StepState;
-}
+type StepState = ProcessProgressStepState;
+type Step = ProcessProgressStep;
 
 // Real field/allowedActions checks only — mirrors the same "done" conditions
 // each S1/S2/S3 screen shell already uses for its own SubStepCard statuses.
-// Mirrors components/steel/p05/MeltingProgress.tsx.
 function buildSteps(heatApproval: SteelHeatApproval): Step[] {
   const actions = heatApproval.allowedActions ?? [];
   const screenIdx = stageToScreenIndex(heatApproval.stage);
@@ -59,42 +53,19 @@ function buildSteps(heatApproval: SteelHeatApproval): Step[] {
   ];
 }
 
-const DOT_CLASS: Record<StepState, string> = {
-  done: "bg-emerald-500 text-white",
-  active: "bg-indigo-600 text-white",
-  pending: "bg-slate-100 text-slate-400 ring-1 ring-slate-200",
-  blocked: "bg-red-50 text-red-400 ring-1 ring-red-200",
-};
-
 // Persistent "current screen" checklist — distinct from the top
-// WorkflowIndicator (which shows S1/S2/S3 sub-step labels only).
+// WorkflowIndicator (which shows S1/S2/S3 sub-step labels only). Rendering
+// is delegated to the shared ProcessProgress; all real done/active/pending/
+// blocked calculation stays here in buildSteps(), unchanged.
 export function HeatApprovalProgress({ heatApproval }: { heatApproval: SteelHeatApproval }) {
   const steps = buildSteps(heatApproval);
+  const activeColorBar = STEEL_PROCESSES.find((p) => p.code === "P06")?.color.bar;
+  const statusNote =
+    heatApproval.status === "ON_HOLD"
+      ? "This heat approval record is on hold — no further progress until it resumes."
+      : heatApproval.status === "CANCELLED"
+        ? "This heat approval record was cancelled."
+        : undefined;
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Heat Approval Progress</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-2.5">
-          {steps.map((step) => (
-            <li key={step.code} className="flex items-start gap-2.5">
-              <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 mt-0.5 ${DOT_CLASS[step.state]}`}>
-                {step.state === "done" ? <Check className="h-3 w-3" /> : step.state === "blocked" ? <Lock className="h-2.5 w-2.5" /> : null}
-              </div>
-              <p className={`text-xs font-medium leading-tight ${step.state === "pending" ? "text-slate-400" : step.state === "blocked" ? "text-red-500" : "text-slate-800"}`}>
-                {step.label} <span className="text-slate-400 font-mono">— {step.code}</span>
-              </p>
-            </li>
-          ))}
-        </ul>
-        {(heatApproval.status === "ON_HOLD" || heatApproval.status === "CANCELLED") && (
-          <p className="text-[11px] text-amber-600 mt-3">
-            {heatApproval.status === "ON_HOLD" ? "This heat approval record is on hold — no further progress until it resumes." : "This heat approval record was cancelled."}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
+  return <ProcessProgress title="Heat Approval Progress" steps={steps} activeColorBar={activeColorBar} statusNote={statusNote} />;
 }

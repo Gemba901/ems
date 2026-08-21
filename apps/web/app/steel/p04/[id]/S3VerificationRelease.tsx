@@ -15,13 +15,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p04/ScreenHeader";
-import { WorkflowIndicator } from "@/components/steel/p04/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
 import { ScreenSidebar } from "@/components/steel/p04/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p04/ContextSummary";
 import { ChargeProgress } from "@/components/steel/p04/ChargeProgress";
 import { SCREEN_TOP_STEPS } from "@/components/steel/p04/screenMap";
 import { Field, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p04/shared";
+import Link from "next/link";
 import {
   ShieldCheck, Info, ListChecks, Lightbulb, Lock, Flame, CheckCircle2, HelpCircle, Loader2,
 } from "lucide-react";
@@ -375,6 +377,12 @@ function ClosedState({ prep }: { prep: SteelChargePreparation }) {
           <Field label="Closed At" value={prep.handoverClosedAt ? new Date(prep.handoverClosedAt).toLocaleString() : null} />
           <Field label="Handover Notes" value={prep.handoverNotes} />
         </div>
+        <Link href={`/steel/p05/new?chargePreparationId=${prep.id}`}>
+          <Button className="gap-2">
+            <Flame className="h-4 w-4" />
+            Start Melting
+          </Button>
+        </Link>
       </CardContent>
     </Card>
   );
@@ -402,11 +410,12 @@ export function S3VerificationRelease({
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
+        code="P04"
           icon={ShieldCheck}
           title="Verification & Release"
           subtitle="Verify the material, release the Charge ID, and confirm the furnace handover."
         />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[2]} doneCount={doneCount} activeIndex={activeIdx === -1 ? null : activeIdx} />
+        <WorkflowIndicator steps={SCREEN_TOP_STEPS[2]} doneCount={doneCount} activeIndex={activeIdx === -1 ? null : activeIdx} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P04")?.color.bar} />
         <ContextSummary prep={prep} />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">

@@ -15,16 +15,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p02/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p02/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p02/screenMap";
 import { ScreenSidebar } from "@/components/steel/p02/ScreenSidebar";
+import { SubStepCard, Field } from "@/components/steel/p02/shared";
 import {
   Loader2,
   FileCheck2,
   ShieldCheck,
-  Check,
-  CheckCircle2,
-  Circle,
   Lock,
   Info,
   ListChecks,
@@ -39,16 +39,6 @@ import {
 // Same PO authority scope enforced server-side by the sourcing controller's
 // PO_ROLES guard — kept identical rather than inventing a new list.
 const PO_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-sm text-slate-800 font-medium">{value}</p>
-    </div>
-  );
-}
 
 // ── Persistent context (top of screen) ───────────────────────────────────────
 
@@ -184,41 +174,6 @@ function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A07"
 }
 
 // ── A07 — Specification ──────────────────────────────────────────────────────
-
-function StepSection({
-  code, icon: Icon, title, status, children,
-}: { code: string; icon: typeof FileCheck2; title: string; status: "done" | "active" | "locked"; children: React.ReactNode }) {
-  return (
-    <Card className={status === "locked" ? "opacity-60" : ""}>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={
-                "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 " +
-                (status === "done"
-                  ? "bg-emerald-100 text-emerald-600"
-                  : status === "active"
-                    ? "bg-blue-100 text-blue-600"
-                    : "bg-slate-100 text-slate-400")
-              }
-            >
-              <Icon className="h-4 w-4" />
-            </div>
-            <CardTitle className="text-sm">
-              <span className="text-slate-400 font-mono text-xs mr-1.5">{code}</span>
-              {title}
-            </CardTitle>
-          </div>
-          {status === "done" && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
-          {status === "active" && <Circle className="h-4 w-4 text-blue-500 fill-blue-100 shrink-0" />}
-          {status === "locked" && <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
 
 function SpecificationForm({ id, token, onDone }: { id: string; token: string; onDone: () => void }) {
   const { toast } = useToast();
@@ -477,14 +432,8 @@ function ApprovalLockedCard() {
 
 function S4CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onContinue: () => void }) {
   return (
-    <Card className="border-emerald-200">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-emerald-700">
-          <Check className="h-4 w-4" />
-          Purchase Order Issued
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <SubStepCard code="S4" title="Purchase Order Issued" status="done">
+      <div className="space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="PO Number" value={order.poNumber} />
           <Field label="Quantity" value={order.poQuantity} />
@@ -497,8 +446,8 @@ function S4CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onCo
         <Button onClick={onContinue} className="gap-2">
           Continue to S5 — Delivery &amp; Handover <ArrowRight className="h-4 w-4" />
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </SubStepCard>
   );
 }
 
@@ -542,13 +491,21 @@ export function S4SpecificationPO({
         icon={FileCheck2}
         title="Specification & Purchase Order"
         subtitle="Confirm the technical specification, then issue the purchase order."
+        backHref="/steel/p02"
+        backLabel="Back to Sourcing Orders"
+        code="P02"
       />
-      <WorkflowIndicator doneCount={allDone ? 4 : 3} activeIndex={allDone ? null : 3} />
+      <WorkflowIndicator
+        steps={SCREENS}
+        doneCount={allDone ? 4 : 3}
+        activeIndex={allDone ? null : 3}
+        activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P02")!.color.bar}
+      />
       <ContextSummary order={order} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4">
-          <StepSection code="P02-A07" icon={FileCheck2} title="Confirm Technical Specification & Documents Required" status={a07Status}>
+          <SubStepCard code="P02-A07" title="Confirm Technical Specification & Documents Required" status={a07Status}>
             {a07Status === "done" ? (
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Spec notes" value={order.specificationRequirementNotes} />
@@ -560,14 +517,14 @@ export function S4SpecificationPO({
             ) : (
               <p className="text-sm text-slate-400">Complete the previous step first.</p>
             )}
-          </StepSection>
+          </SubStepCard>
 
           <div className="relative">
             <div className="flex items-center gap-2 mb-1 px-1">
               <Gavel className="h-3.5 w-3.5 text-slate-400" />
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Management Approval &amp; Purchase Commitment</p>
             </div>
-            <StepSection code="P02-A08" icon={ShieldCheck} title="Create Purchase Order" status={a08Status}>
+            <SubStepCard code="P02-A08" title="Create Purchase Order" status={a08Status}>
               {a08Status === "done" ? (
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="PO number" value={order.poNumber} />
@@ -584,7 +541,7 @@ export function S4SpecificationPO({
               ) : (
                 <p className="text-sm text-slate-400">Complete the specification step first.</p>
               )}
-            </StepSection>
+            </SubStepCard>
           </div>
 
           {allDone && <S4CompleteCard order={order} onContinue={refresh} />}

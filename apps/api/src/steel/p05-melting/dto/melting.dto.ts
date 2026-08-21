@@ -62,6 +62,13 @@ export class FurnaceLiningCheckDto {
   @IsString()
   @IsNotEmpty({ message: 'Lining visual condition is required' })
   liningVisualCondition!: string;
+
+  // Required only when re-submitting a stage that already has a logged
+  // activity (i.e. this melting record has moved past A02). See
+  // MeltingService.assertStageTransitionOrReedit.
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A03 — Furnace systems check
@@ -77,6 +84,10 @@ export class FurnaceSystemsCheckDto {
 
   @IsBoolean()
   alarmsOk!: boolean;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A04 — Previous heat readiness
@@ -92,6 +103,10 @@ export class PreviousHeatReadinessDto {
   @IsString()
   @IsOptional()
   readinessDelayReason?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A05 — Verify charge recipe
@@ -102,6 +117,10 @@ export class VerifyChargeRecipeDto {
 
   @IsBoolean()
   actualWeightVsRecipeOk!: boolean;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A06 — Load charge
@@ -117,6 +136,10 @@ export class LoadChargeDto {
   @IsString()
   @IsOptional()
   chargeSequence?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A07 — Start melting
@@ -136,6 +159,10 @@ export class StartMeltingDto {
   @IsString()
   @IsOptional()
   meltingChargeId?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A08 — Monitor power
@@ -161,6 +188,10 @@ export class MonitorPowerDto {
   @IsString()
   @IsOptional()
   powerInterruptions?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A09 — Monitor temperature
@@ -178,6 +209,10 @@ export class MonitorTemperatureDto {
   @IsString()
   @IsOptional()
   temperatureDelayReason?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A10 — Record additions (optional/conditional — zero additions allowed)
@@ -190,6 +225,12 @@ export class RecordAdditionsDto {
     reason?: string;
     approved?: boolean;
   }>;
+
+  // Named editReason (not reason) to avoid clashing with the per-addition
+  // item `reason` field above.
+  @IsString()
+  @IsOptional()
+  editReason?: string;
 }
 
 // P05-A11 — Remove slag (optional/conditional — "not applicable" allowed)
@@ -211,6 +252,10 @@ export class RemoveSlagDto {
   @IsString()
   @IsOptional()
   slagIssueFound?: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A12 — Record melt output
@@ -243,6 +288,10 @@ export class RecordMeltOutputDto {
   @IsNumber()
   @Min(0.001, { message: 'Output weight must be greater than zero' })
   outputWeightTonnes!: number;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A13 — Confirm liquid ready
@@ -257,6 +306,10 @@ export class ConfirmLiquidReadyDto {
 
   @IsBoolean()
   liquidOperatorConfirmed!: boolean;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
 }
 
 // P05-A14 — Refining handover (irreversible)

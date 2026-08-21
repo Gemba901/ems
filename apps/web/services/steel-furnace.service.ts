@@ -23,6 +23,7 @@ export type FurnaceLiningStatus = "ACTIVE" | "RETIRED";
 export interface FurnaceLining {
   id: string;
   furnaceId: string;
+  code: string | null;
   installedAt: string;
   material: string | null;
   heatsCompleted: number;
@@ -62,6 +63,7 @@ export interface UpdateFurnacePayload {
 }
 
 export interface CreateFurnaceLiningPayload {
+  code?: string;
   installedAt?: string;
   material?: string;
   condition?: string;

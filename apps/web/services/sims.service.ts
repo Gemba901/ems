@@ -153,7 +153,10 @@ export async function uploadSuggestionImage(file: File, token: string): Promise<
     body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: "suggestions" }),
   }, token);
   const { uploadUrl, fileUrl } = await handleResponse<{ uploadUrl: string; fileUrl: string }>(presignRes);
-  await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+  const putRes = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+  if (!putRes.ok) {
+    throw new Error(`Failed to upload file to S3: ${putRes.status}`);
+  }
   return fileUrl;
 }
 

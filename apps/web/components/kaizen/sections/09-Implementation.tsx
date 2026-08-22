@@ -8,7 +8,7 @@ import { uploadImage } from "@/services/uploads.service";
 import { SectionLabel } from "@/components/kaizen/kaizen-ui";
 import { KaizenSectionProps } from "./types";
 
-const MAX_PHOTOS = 8;
+const MAX_PHOTOS = 5;
 
 export default function ImplementationSection({ kaizen, access, token, onSaved }: KaizenSectionProps) {
   const [actionTaken, setActionTaken] = useState(kaizen.actionTaken ?? "");

@@ -9,14 +9,16 @@ import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus } from "@
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, XCircle, EyeOff, ChevronRight, Search, X } from "lucide-react";
 
-const RESOLVED_STATUSES: SuggestionStatus[] = ["APPROVED_FOR_IMPLEMENTATION", "REJECTED"];
+const RESOLVED_STATUSES: SuggestionStatus[] = ["APPROVED_FOR_IMPLEMENTATION", "IMPLEMENTED", "REJECTED"];
 
 const STATUS_BADGE: Record<string, string> = {
   APPROVED_FOR_IMPLEMENTATION: "bg-emerald-100 text-emerald-700",
+  IMPLEMENTED:                 "bg-emerald-100 text-emerald-700",
   REJECTED:                    "bg-red-100 text-red-700",
 };
 const STATUS_LABEL: Record<string, string> = {
   APPROVED_FOR_IMPLEMENTATION: "Approved for Implementation",
+  IMPLEMENTED:                 "Implemented",
   REJECTED:                    "Rejected",
 };
 

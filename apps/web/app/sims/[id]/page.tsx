@@ -449,7 +449,7 @@ export default function SuggestionDetailPage() {
                   </span>
                   {suggestion.implementationStatus && (
                     <span className={`text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${IMPLEMENTATION_STATUS_BADGE[suggestion.implementationStatus]}`}>
-                      {IMPLEMENTATION_STATUS_LABELS[suggestion.implementationStatus]}
+                      Progress: {IMPLEMENTATION_STATUS_LABELS[suggestion.implementationStatus]}
                     </span>
                   )}
                   {suggestion.linkedKaizenId && (

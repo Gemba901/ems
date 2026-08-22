@@ -440,6 +440,11 @@ export class KaizenService {
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertEditable(kaizen, employee.id);
 
+        const categories = dto.impacts.map((i) => i.category);
+        if (new Set(categories).size !== categories.length) {
+            throw new BadRequestException('Each QCDSMT category can only be listed once');
+        }
+
         await this.prisma.$transaction(async (tx) => {
             await tx.kaizenQcdsmtImpact.deleteMany({ where: { kaizenId } });
             if (dto.impacts.length) {
@@ -461,6 +466,9 @@ export class KaizenService {
         const wastes = dto.impacts.map((i) => i.waste);
         if (wastes.includes('NOT_APPLICABLE') && wastes.length > 1) {
             throw new BadRequestException('"Not Applicable" cannot be combined with other wastes');
+        }
+        if (new Set(wastes).size !== wastes.length) {
+            throw new BadRequestException('Each waste type can only be listed once');
         }
 
         await this.prisma.$transaction(async (tx) => {

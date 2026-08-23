@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, User, ArrowRight, AlertCircle } from "lucide-react";
-import type { AuthState } from "../../app/(auth)/login/page"; 
+import type { AuthState } from "../../app/(auth)/login/page";
 import { AuthService } from "@/services/auth.service";
-import { useAuthStore } from "@/store/auth.store"; 
+import { useAuthStore } from "@/store/auth.store";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface LoginStepProps {
   data: AuthState;
@@ -87,8 +88,14 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
-          <div className="flex items-center">
+          <div className="flex items-center justify-between">
             <label className="text-[11px] uppercase tracking-wider text-slate-500 font-mono">Password</label>
+            <Link
+              href="/forgot-password"
+              className="text-[11px] text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Forgot password?
+            </Link>
           </div>
           <div className="relative">
             <input

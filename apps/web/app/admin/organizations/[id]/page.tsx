@@ -8,7 +8,7 @@ import { EmployeeService } from "@/services/employee.service";
 import {
     ArrowLeft, Building2, Users, Lightbulb, BarChart2,
     CircleDot, Mail, Phone, MapPin, ChevronDown,
-    EyeOff, Puzzle, Loader2, Filter, KeyRound, ShieldCheck, X, Trash2, ShieldAlert,
+    EyeOff, Puzzle, Loader2, Filter, ShieldCheck, X, Trash2, ShieldAlert,
     Upload,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -118,12 +118,6 @@ export default function OrgDetailPage() {
     const [selectedRoleId, setSelectedRoleId] = useState<number>(6);
     const [savingRole, setSavingRole] = useState(false);
     const [roleError, setRoleError] = useState<string | null>(null);
-
-    // Password reset modal
-    const [pwModal, setPwModal] = useState<{ emp: any } | null>(null);
-    const [newPassword, setNewPassword] = useState("");
-    const [savingPw, setSavingPw] = useState(false);
-    const [pwError, setPwError] = useState<string | null>(null);
 
     // Delete org modal
     const [deleteModal, setDeleteModal] = useState(false);
@@ -259,27 +253,6 @@ export default function OrgDetailPage() {
             setRoleError(e.message || "Failed to update role");
         } finally {
             setSavingRole(false);
-        }
-    };
-
-    const openPwModal = (emp: any) => {
-        setNewPassword("");
-        setPwError(null);
-        setPwModal({ emp });
-    };
-
-    const handlePasswordSave = async () => {
-        if (!accessToken || !pwModal) return;
-        if (newPassword.length < 8) { setPwError("Password must be at least 8 characters"); return; }
-        setSavingPw(true);
-        setPwError(null);
-        try {
-            await EmployeeService.resetPassword(pwModal.emp.id, newPassword, accessToken);
-            setPwModal(null);
-        } catch (e: any) {
-            setPwError(e.message || "Failed to reset password");
-        } finally {
-            setSavingPw(false);
         }
     };
 
@@ -707,13 +680,6 @@ export default function OrgDetailPage() {
                                                     >
                                                         <ShieldCheck className="h-3.5 w-3.5" />
                                                     </button>
-                                                    <button
-                                                        onClick={() => openPwModal(emp)}
-                                                        title="Reset password"
-                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                                    >
-                                                        <KeyRound className="h-3.5 w-3.5" />
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -827,36 +793,6 @@ export default function OrgDetailPage() {
                         >
                             {savingRole ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                             Save Role
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-        )}
-
-        {/* Password reset modal */}
-        {pwModal && (
-            <Modal title={`Reset Password — ${pwModal.emp.firstName} ${pwModal.emp.lastName}`} onClose={() => setPwModal(null)}>
-                <div className="space-y-4">
-                    <p className="text-xs text-slate-500">Set a new temporary password. The employee can change it after logging in.</p>
-                    <input
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => { setNewPassword(e.target.value); setPwError(null); }}
-                        placeholder="New password (min. 8 characters)"
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                    />
-                    {pwError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{pwError}</p>}
-                    <div className="flex justify-end gap-2 pt-1">
-                        <button onClick={() => setPwModal(null)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handlePasswordSave}
-                            disabled={savingPw || newPassword.length < 8}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                            {savingPw ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
-                            Reset Password
                         </button>
                     </div>
                 </div>

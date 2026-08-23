@@ -1,9 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Role } from 'src/common/enum/role.enum';
+import { EmailService } from 'src/notifications/channels/email.service';
 
 export interface JwtPayload {
     userId: string;
@@ -40,16 +44,34 @@ type UserOrganizationMembership = UserOrganizationRelation & {
 };
 
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 @Injectable()
 export class AuthService {
     constructor(
         private prisma: PrismaService,
         private jwtService: JwtService,
+        private config: ConfigService,
+        private emailService: EmailService,
+        @Inject(CACHE_MANAGER) private cache: Cache,
     ) { }
 
     private hashToken(raw: string): string {
         return crypto.createHash('sha256').update(raw).digest('hex');
+    }
+
+    private get webAppUrl(): string {
+        return this.config.get<string>('WEB_APP_URL') || 'http://localhost:3000';
+    }
+
+    // Best-effort in-memory rate limit (per API instance) — the reset token itself is the real
+    // security boundary (256-bit random, hashed at rest); this just blunts spam/brute-force noise.
+    private async checkRateLimit(key: string, max: number, windowMs: number): Promise<void> {
+        const current = (await this.cache.get<number>(key)) ?? 0;
+        if (current >= max) {
+            throw new HttpException('Too many requests. Please try again later.', HttpStatus.TOO_MANY_REQUESTS);
+        }
+        await this.cache.set(key, current + 1, windowMs);
     }
 
     // Kept in sync with COUNTRY_CODES in apps/web/components/auth/IdentifierStep.tsx
@@ -317,7 +339,7 @@ export class AuthService {
         try {
             const decoded = this.jwtService.verify(setupToken);
 
-            if (decoded.purpose !== 'FIRST_TIME_SETUP') {
+            if (decoded.purpose !== 'FIRST_TIME_SETUP' && decoded.purpose !== 'PASSWORD_RESET_SETUP') {
                 throw new UnauthorizedException('Invalid setup token');
             }
 
@@ -336,6 +358,129 @@ export class AuthService {
         } catch (error) {
             throw new UnauthorizedException('Invalid or expired setup token! Please try again.');
         }
+    }
+
+    async forgotPassword(email: string, ip: string) {
+        const normalized = email.trim().toLowerCase();
+
+        await this.checkRateLimit(`pwreset:req:email:${normalized}`, 5, 60 * 60 * 1000);
+        await this.checkRateLimit(`pwreset:req:ip:${ip}`, 20, 60 * 60 * 1000);
+
+        const user = await this.prisma.user.findFirst({ where: { email: normalized } });
+
+        // Always the same response whether or not the account exists, so this endpoint can't be
+        // used to enumerate registered emails.
+        if (user) {
+            const rawToken = crypto.randomBytes(32).toString('hex');
+            const tokenHash = this.hashToken(rawToken);
+            const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+
+            await this.prisma.passwordResetToken.create({
+                data: { tokenHash, userId: user.id, expiresAt },
+            });
+
+            const resetUrl = `${this.webAppUrl}/reset-password?token=${rawToken}`;
+
+            await this.emailService.send({
+                to: user.email!,
+                subject: 'Reset your Gemba PMS password',
+                title: 'Reset your password',
+                message: `We received a request to reset the password for your account, ${user.name}. This link expires in 30 minutes and can only be used once. If you didn't request this, you can safely ignore this email — your password won't change.`,
+                actionUrl: resetUrl,
+                actionLabel: 'Reset Password',
+            });
+        }
+
+        return { message: 'If an account with that email exists, a reset link has been sent to it.' };
+    }
+
+    async resetPassword(rawToken: string, newPassword: string, ip: string) {
+        await this.checkRateLimit(`pwreset:attempt:ip:${ip}`, 10, 15 * 60 * 1000);
+
+        const tokenHash = this.hashToken(rawToken);
+        const stored = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+        if (!stored || stored.usedAt || stored.expiresAt < new Date()) {
+            throw new UnauthorizedException('Invalid or expired reset link. Please request a new one.');
+        }
+
+        const user = await this.prisma.user.findUnique({ where: { id: stored.userId } });
+        if (!user) throw new UnauthorizedException('Account not found');
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await this.prisma.$transaction([
+            this.prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } }),
+            this.prisma.passwordResetToken.update({ where: { tokenHash }, data: { usedAt: new Date() } }),
+            // Kill every existing session — if an attacker was already inside, this locks them out too.
+            this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+        ]);
+
+        if (user.email) {
+            await this.emailService.send({
+                to: user.email,
+                subject: 'Your Gemba PMS password was changed',
+                title: 'Password changed',
+                message: `The password for your account was just changed. If this wasn't you, contact your administrator immediately.`,
+            });
+        }
+
+        return { message: 'Password reset successfully. You can now log in.' };
+    }
+
+    // Alphanumeric, minus visually ambiguous characters (0/O, 1/l/I) — meant to be read aloud or
+    // typed by hand by an admin relaying it to an employee out-of-band.
+    private static readonly TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+
+    private generateReadableSecret(length: number): string {
+        let out = '';
+        for (let i = 0; i < length; i++) {
+            out += AuthService.TEMP_PASSWORD_ALPHABET[crypto.randomInt(AuthService.TEMP_PASSWORD_ALPHABET.length)];
+        }
+        return out;
+    }
+
+    // Admin-driven password recovery: generates a short-lived, single-use password for one
+    // employee. The plaintext is returned once (for the admin to relay out-of-band, e.g. by
+    // phone) and only its hash is stored — same PasswordResetToken table the self-service
+    // email-link flow uses, since both are "a hashed, expiring, single-use secret tied to a user".
+    async generateTempPassword(userId: string) {
+        const rawPassword = this.generateReadableSecret(10);
+        const tokenHash = this.hashToken(rawPassword);
+        const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+
+        // Only the newest temp password for a user should work.
+        await this.prisma.passwordResetToken.deleteMany({ where: { userId, usedAt: null } });
+        await this.prisma.passwordResetToken.create({ data: { tokenHash, userId, expiresAt } });
+
+        return { tempPassword: rawPassword, expiresInMinutes: Math.round(RESET_TOKEN_TTL_MS / 60000) };
+    }
+
+    // Employee-facing redemption of an admin-issued temp password. On success the employee's
+    // real password is cleared and every session killed (so the temp password itself is never a
+    // usable login credential), then a setup token is issued for them to pick a new password.
+    async verifyTempPassword(tempPassword: string, ip: string) {
+        await this.checkRateLimit(`temppwd:attempt:ip:${ip}`, 10, 15 * 60 * 1000);
+
+        const tokenHash = this.hashToken(tempPassword.trim());
+        const stored = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+        if (!stored || stored.usedAt || stored.expiresAt < new Date()) {
+            throw new UnauthorizedException('Invalid or expired temporary password.');
+        }
+
+        await this.prisma.$transaction([
+            this.prisma.passwordResetToken.update({ where: { tokenHash }, data: { usedAt: new Date() } }),
+            this.prisma.user.update({ where: { id: stored.userId }, data: { password: null } }),
+            this.prisma.refreshToken.deleteMany({ where: { userId: stored.userId } }),
+        ]);
+
+        const setupToken = this.jwtService.sign(
+            { userId: stored.userId, purpose: 'PASSWORD_RESET_SETUP' },
+            { expiresIn: '15m' },
+        );
+
+        return { setupToken, message: 'Temporary password verified. Please set a new password.' };
     }
 
     async getMyOrg(organizationId: string) {

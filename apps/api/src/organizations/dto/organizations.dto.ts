@@ -60,6 +60,14 @@ export class CreateOrganizationDto {
     @IsString()
     @IsNotEmpty()
     adminPhone: string;
+
+    // Existing SUPER_ADMIN users to add as employees in the org's GembaPMS
+    // platform-team department. Falls back to all current SUPER_ADMIN users
+    // when omitted.
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    gembaTeamUserIds?: string[];
 }
 
 export class UpdateOrganizationDto {

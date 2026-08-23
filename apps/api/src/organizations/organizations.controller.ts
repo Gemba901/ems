@@ -55,6 +55,18 @@ export class OrganizationsController {
         return this.organizationsService.getPlatformStats();
     }
 
+    // ── GembaPMS platform team ───────────────────────────────────────────────
+    /**
+     * GET /organizations/platform-admins
+     * Existing users holding SUPER_ADMIN in any org — candidates for the
+     * GembaPMS platform-team department added to new organizations.
+     * Declared before /:id to prevent "platform-admins" being captured as a param.
+     */
+    @Get('platform-admins')
+    getPlatformSuperAdmins() {
+        return this.organizationsService.getPlatformSuperAdmins();
+    }
+
     // ── List ─────────────────────────────────────────────────────────────────
     /**
      * GET /organizations?page=1&limit=20

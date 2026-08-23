@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EmployeeService } from './employee.service';
-import { CreateEmployeeDto, UpdateEmployeeDto, UpdateEmployeeRoleDto, ResetPasswordDto, UpdateAvatarDto, PaginationDto } from './dto/employee.dto';
+import { CreateEmployeeDto, UpdateEmployeeDto, UpdateEmployeeRoleDto, UpdateAvatarDto, PaginationDto } from './dto/employee.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -217,15 +217,15 @@ export class EmployeeController {
     return this.employeeService.updateEmployeeRole(id, dto.roleId, user.organizationId);
   }
 
-  // PATCH /employee/:id/reset-password — admin sets a new password for an employee
+  // PATCH /employee/:id/reset-password — admin clears an employee's password; they'll be
+  // prompted to set a new one via the first-time-setup flow on their next login attempt
   @Patch(':id/reset-password')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   async resetPassword(
     @Param('id') id: string,
-    @Body() dto: ResetPasswordDto,
     @CurrentUser() user: { organizationId: string },
   ) {
-    return this.employeeService.resetEmployeePassword(id, dto.newPassword, user.organizationId);
+    return this.employeeService.resetEmployeePassword(id, user.organizationId);
   }
 
   // PATCH /employee/:id/avatar — update avatar URL

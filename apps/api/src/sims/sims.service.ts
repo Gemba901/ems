@@ -94,6 +94,59 @@ export class SimsService {
     return { ...suggestion, employee: null };
   }
 
+  // Shared by reviewSuggestion and the department-colleagues picker: only a department HOD (of
+  // the suggestion's own department), or a member of the committee this suggestion has been
+  // forwarded to, may review — not top management, other HODs, or admins.
+  private async assertCanReview(
+    suggestion: { departmentId: string | null; committeeId: string | null },
+    userId: string,
+    organizationId: string,
+  ) {
+    const reviewer = await this.resolveEmployee(userId, organizationId);
+
+    const userOrgs = await this.prisma.userOrganization.findMany({
+      where: { userId, organizationId },
+      include: { role: true },
+    });
+    const roles = userOrgs.map((uo) => uo.role.name);
+
+    const isDepartmentHOD = roles.includes(Role.HOD) && reviewer.departmentId === suggestion.departmentId;
+
+    let isCommitteeMember = false;
+    if (suggestion.committeeId) {
+      const membership = await this.prisma.steeringCommitteeMember.findUnique({
+        where: { committeeId_employeeId: { committeeId: suggestion.committeeId, employeeId: reviewer.id } },
+      });
+      isCommitteeMember = !!membership;
+    }
+
+    if (!isDepartmentHOD && !isCommitteeMember) {
+      throw new ForbiddenException("Only the department's HOD or the assigned committee can review this suggestion");
+    }
+
+    return { reviewer };
+  }
+
+  // Candidates for the responsible-person / kaizen-owner pickers on the review form — always
+  // scoped to the suggestion's OWN department, not the reviewer's, since a cross-department
+  // admin or committee member's own colleagues would be the wrong department entirely.
+  async getReviewCandidates(id: string, userId: string, organizationId: string) {
+    const suggestion = await this.prisma.suggestion.findUnique({
+      where: { id },
+      select: { departmentId: true, committeeId: true, organizationId: true },
+    });
+    if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
+
+    await this.assertCanReview(suggestion, userId, organizationId);
+    if (!suggestion.departmentId) return [];
+
+    return this.prisma.employee.findMany({
+      where: { departmentId: suggestion.departmentId, organizationId },
+      select: { id: true, firstName: true, lastName: true, jobTitle: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+  }
+
   // Submit new suggestion
 
   async submitSuggestion(dto: CreateSuggestionDto, userId: string, organizationId: string, role: string) {
@@ -138,6 +191,18 @@ export class SimsService {
       targetHodIds = await this.findDepartmentHODs(targetDepartmentId, organizationId);
     }
 
+    // Privileged roles may also route straight to a steering committee — same effect as an
+    // HOD marking the suggestion SELECTED_FOR_SGA, just applied immediately at submission.
+    let targetCommitteeId: string | null = null;
+    if (isPrivileged && dto.committeeId) {
+      const committee = await this.prisma.steeringCommittee.findFirst({
+        where: { id: dto.committeeId, organizationId },
+        select: { id: true },
+      });
+      if (!committee) throw new BadRequestException('Selected committee not found in this organization');
+      targetCommitteeId = committee.id;
+    }
+
     const suggestion = await this.prisma.suggestion.create({
       data: {
         title: dto.title,
@@ -150,6 +215,7 @@ export class SimsService {
         organizationId,
         departmentId: targetDepartmentId,
         hodId: targetHodIds[0] || null,
+        ...(targetCommitteeId && { committeeId: targetCommitteeId, forwardedToCommitteeAt: new Date() }),
       }
     });
 
@@ -190,6 +256,27 @@ export class SimsService {
       }))
     )
 
+    // notify the committee's members when routed straight to a committee at submission
+    if (targetCommitteeId) {
+      const members = await this.prisma.steeringCommitteeMember.findMany({
+        where: { committeeId: targetCommitteeId },
+        select: { employeeId: true },
+      });
+      await this.notifications.createMany(
+        members
+          .filter((m) => m.employeeId !== employee.id)
+          .map((m) => ({
+            employeeId: m.employeeId,
+            type: 'ACTION_REQUIRED' as const,
+            module: 'SIMS',
+            title: 'New suggestion for your committee',
+            message: `A new suggestion "${suggestion.title}" has been routed directly to your committee.`,
+            actionUrl: `/sims/${suggestion.id}`,
+            metadata: { suggestionId: suggestion.id },
+          }))
+      );
+    }
+
     return suggestion;
   }
 
@@ -228,7 +315,26 @@ export class SimsService {
     };
   }
 
-  async getAllSuggestions(organizationId: string, query: QuerySuggestionsDto) {
+  async getAllSuggestions(userId: string, organizationId: string, query: QuerySuggestionsDto) {
+    const userOrgs = await this.prisma.userOrganization.findMany({
+      where: { userId, organizationId },
+      include: { role: true },
+    });
+    const roles = userOrgs.map((uo) => uo.role.name);
+    const isPrivileged = roles.some((r) =>
+      [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD].includes(r as Role),
+    );
+
+    if (!isPrivileged) {
+      const employee = await this.resolveEmployee(userId, organizationId);
+      const membership = await this.prisma.steeringCommitteeMember.findFirst({
+        where: { employeeId: employee.id },
+      });
+      if (!membership) {
+        throw new ForbiddenException('You do not have access to organization-wide suggestions');
+      }
+    }
+
     const { status, category, departmentId, page, limit } = query;
     const skip = (page - 1) * limit;
 
@@ -298,7 +404,11 @@ export class SimsService {
 
     if (roleLevel === Role.EMPLOYEE) {
       const employee = await this.resolveEmployee(userId);
-      if (suggestion.employeeId !== employee.id) throw new ForbiddenException('You can only view your own suggestions');
+      const isResponsibleParty =
+        (suggestion.decisionDetails as Record<string, any> | null)?.responsibleEmployeeId === employee.id;
+      if (suggestion.employeeId !== employee.id && !isResponsibleParty) {
+        throw new ForbiddenException('You can only view your own suggestions');
+      }
       return suggestion;
     }
 
@@ -315,7 +425,7 @@ export class SimsService {
   async getSummary(userId: string, organizationId: string) {
     const employee = await this.resolveEmployee(userId);
 
-    const [deptSuggestions, orgSuggestions] = await Promise.all([
+    const [deptSuggestions, orgSuggestions, deptEmployeeCount, orgEmployeeCount] = await Promise.all([
       employee.departmentId
         ? this.prisma.suggestion.findMany({
           where: { organizationId, departmentId: employee.departmentId },
@@ -325,6 +435,14 @@ export class SimsService {
       this.prisma.suggestion.findMany({
         where: { organizationId },
         select: { status: true, categories: true },
+      }),
+      employee.departmentId
+        ? this.prisma.employee.count({ where: { organizationId, departmentId: employee.departmentId } })
+        : Promise.resolve(0),
+      // Org-level target excludes the GembaPMS platform-team department — Rodgers/Surya
+      // aren't production staff earning an implementation quota.
+      this.prisma.employee.count({
+        where: { organizationId, department: { isPlatformTeam: false } },
       }),
     ]);
 
@@ -339,8 +457,8 @@ export class SimsService {
     };
 
     return {
-      department: summarise(deptSuggestions),
-      organization: summarise(orgSuggestions),
+      department: { ...summarise(deptSuggestions), employeeCount: deptEmployeeCount },
+      organization: { ...summarise(orgSuggestions), employeeCount: orgEmployeeCount },
     };
   }
 
@@ -444,8 +562,8 @@ export class SimsService {
           throw new BadRequestException('decisionType is required when approving for implementation');
         }
         if (decisionType === 'WORKPLACE_CORRECTION') {
-          if (!details.action || !details.responsible || !details.targetDate) {
-            throw new BadRequestException('Workplace correction requires action, responsible and targetDate');
+          if (!details.action || !details.responsibleEmployeeId || !details.targetDate) {
+            throw new BadRequestException('Workplace correction requires action, responsibleEmployeeId and targetDate');
           }
         }
         // DAILY_KAIZEN's requirements (a real Kaizen record) are validated separately in
@@ -453,14 +571,14 @@ export class SimsService {
         break;
       }
       case 'SELECTED_FOR_SGA': {
-        if (!details.problemStatement || !details.teamLeader || !details.target || !details.timeline) {
-          throw new BadRequestException('SGA selection requires problemStatement, teamLeader, target and timeline');
+        if (!details.responsibleEmployeeId) {
+          throw new BadRequestException('SGA selection requires a responsible person');
         }
         break;
       }
       case 'ON_HOLD': {
-        if (!details.reason || !details.reviewDate) {
-          throw new BadRequestException('Putting a suggestion on hold requires a reason and reviewDate');
+        if (!details.reason || !details.responsibleEmployeeId) {
+          throw new BadRequestException('Putting a suggestion on hold requires a reason and a responsible person');
         }
         break;
       }
@@ -475,7 +593,7 @@ export class SimsService {
     }
   }
 
-  // Review (HODs, Admins, and — once forwarded — the designated committee's members)
+  // Review (the department's HOD, and — once forwarded — the designated committee's members)
 
   async reviewSuggestion(
     id: string,
@@ -490,34 +608,10 @@ export class SimsService {
 
     if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
 
-    const reviewer = await this.resolveEmployee(userId, organizationId);
-
-    // Check authorization: Must be an HOD in the same department (or Super Admin/Admin/Management,
-    // or a member of the committee this suggestion has been forwarded to)
-    const userOrgs = await this.prisma.userOrganization.findMany({
-        where: { userId, organizationId },
-        include: { role: true }
-    });
-    const roles = userOrgs.map(uo => uo.role.name);
-
-    const isDepartmentHOD = roles.includes(Role.HOD) && reviewer.departmentId === suggestion.departmentId;
-    const isSuperAdmin = roles.includes(Role.SUPER_ADMIN);
-    const isAdminOrMgmt = roles.some(r => [Role.ADMIN, Role.MANAGEMENT].includes(r as Role));
-
-    let isCommitteeMember = false;
-    if (suggestion.committeeId) {
-      const membership = await this.prisma.steeringCommitteeMember.findUnique({
-        where: { committeeId_employeeId: { committeeId: suggestion.committeeId, employeeId: reviewer.id } },
-      });
-      isCommitteeMember = !!membership;
-    }
-
-    if (!isDepartmentHOD && !isSuperAdmin && !isAdminOrMgmt && !isCommitteeMember) {
-        throw new ForbiddenException('Only a department HOD, admin, or the assigned committee can review this suggestion');
-    }
+    const { reviewer } = await this.assertCanReview(suggestion, userId, organizationId);
 
     // Prevent HOD from reviewing their own suggestion
-    if (suggestion.employeeId === reviewer.id && !isSuperAdmin) {
+    if (suggestion.employeeId === reviewer.id) {
         throw new ForbiddenException('You cannot review your own suggestion');
     }
 
@@ -533,6 +627,29 @@ export class SimsService {
 
     this.validateDecisionPayload(dto.statusChanged, dto.decisionType, dto.decisionDetails, dto.note);
 
+    // Resolve & verify the responsible person chosen for an on-hold, SGA-selected, or
+    // workplace-correction suggestion — they're alerted and granted view access below
+    // (see decisionDetails.responsibleEmployeeId).
+    let responsiblePartyId: string | null = null;
+    if (
+      dto.statusChanged === 'ON_HOLD' ||
+      dto.statusChanged === 'SELECTED_FOR_SGA' ||
+      (dto.statusChanged === 'APPROVED_FOR_IMPLEMENTATION' && dto.decisionType === 'WORKPLACE_CORRECTION')
+    ) {
+      const responsible = await this.prisma.employee.findFirst({
+        where: {
+          id: dto.decisionDetails?.responsibleEmployeeId,
+          organizationId,
+          departmentId: suggestion.departmentId,
+        },
+        select: { id: true },
+      });
+      if (!responsible) {
+        throw new BadRequestException("Responsible person must be an employee in this suggestion's department");
+      }
+      responsiblePartyId = responsible.id;
+    }
+
     // Forward to the org's designated committee the moment a suggestion is selected for SGA
     let forwardCommitteeId: string | null = null;
     if (dto.statusChanged === 'SELECTED_FOR_SGA') {
@@ -543,38 +660,46 @@ export class SimsService {
       forwardCommitteeId = organization?.sgaCommitteeId ?? null;
     }
 
-    // Raise a real Kaizen, owned by the original suggester, the moment a suggestion is
-    // approved for implementation as a Daily Gemba Kaizen (once per suggestion).
+    // Raise a lightweight draft Kaizen the moment a suggestion is approved for implementation
+    // as a Daily Gemba Kaizen (once per suggestion). The reviewer only picks a kaizen owner —
+    // the reason (1.1), reference (1.2) and condition/evidence (1.3) auto-fill from the
+    // suggestion, and the owner completes the rest of the wizard themselves from 1.4 onward,
+    // same as any other draft they'd started from scratch.
     let createdKaizenId: string | null = null;
     if (
       dto.statusChanged === 'APPROVED_FOR_IMPLEMENTATION' &&
       dto.decisionType === 'DAILY_KAIZEN' &&
       !suggestion.linkedKaizenId
     ) {
-      if (!dto.kaizenDetails) {
-        throw new BadRequestException('Kaizen details are required for a Daily Gemba Kaizen decision');
+      if (!dto.kaizenDetails?.kaizenOwnerId) {
+        throw new BadRequestException('A kaizen owner is required to raise a Daily Gemba Kaizen');
       }
-      const beforePhotoUrl = dto.kaizenDetails.beforePhotoUrl || suggestion.imageUrl;
-      if (!beforePhotoUrl) {
-        throw new BadRequestException('A before photo is required to raise a Kaizen from this suggestion');
+      const kaizenOwner = await this.prisma.employee.findFirst({
+        where: {
+          id: dto.kaizenDetails.kaizenOwnerId,
+          organizationId,
+          departmentId: suggestion.departmentId,
+        },
+        select: { id: true },
+      });
+      if (!kaizenOwner) {
+        throw new BadRequestException("Kaizen owner must be an employee in this suggestion's department");
       }
-      const conditionDescription = dto.kaizenDetails.conditionDescription?.trim() || suggestion.title;
-      const now = new Date();
-      const defaultTargetCompletionDate = new Date();
-      defaultTargetCompletionDate.setDate(defaultTargetCompletionDate.getDate() + 30);
 
-      // A HOD already approved the underlying suggestion, so the kaizen skips the
-      // part-7 pre-implementation review gate and starts directly in implementation.
+      const conditionDescription = dto.kaizenDetails.conditionDescription?.trim() || suggestion.title;
+      const beforePhotoUrl = dto.kaizenDetails.beforePhotoUrl || suggestion.imageUrl;
+
+      // The picked owner becomes the kaizen's raiser (employeeId), so they get the same
+      // edit rights over the draft as if they'd started the wizard themselves — no changes
+      // needed to the Kaizen module's own edit-authorization logic.
       const createdKaizen = await this.kaizenService.createKaizenForEmployee(
-        suggestion.employeeId,
+        kaizenOwner.id,
         {
           trigger: KaizenTrigger.EMPLOYEE_SUGGESTION_OR_IDEA,
+          referenceValue: `SIMS Suggestion: "${suggestion.title}"`,
+          referenceApplicability: 'APPLICABLE',
           conditionDescription,
-          title: suggestion.title,
-          startDate: now.toISOString(),
-          targetCompletionDate: defaultTargetCompletionDate.toISOString(),
-          conditionEvidenceUrls: [beforePhotoUrl],
-          status: 'IN_IMPLEMENTATION',
+          conditionEvidenceUrls: beforePhotoUrl ? [beforePhotoUrl] : undefined,
         },
         organizationId,
       );
@@ -622,14 +747,48 @@ export class SimsService {
       metadata: { suggestionId: id, newStatus: dto.statusChanged },
     });
 
-    // notify the suggester that their suggestion became a real Kaizen
+    // alert the responsible person and grant them access to this suggestion
+    if (responsiblePartyId) {
+      const title =
+        dto.statusChanged === 'ON_HOLD' ? 'Suggestion put on hold — action needed' :
+        dto.statusChanged === 'SELECTED_FOR_SGA' ? 'Suggestion selected for SGA — action needed' :
+        'Workplace correction assigned to you — action needed';
+      const message =
+        dto.statusChanged === 'ON_HOLD' ? `Suggestion "${suggestion.title}" has been put on hold and you've been assigned as the responsible person.` :
+        dto.statusChanged === 'SELECTED_FOR_SGA' ? `Suggestion "${suggestion.title}" has been selected for SGA and you've been assigned as the responsible person.` :
+        `Suggestion "${suggestion.title}" requires a workplace correction and you've been assigned as the responsible person.`;
+      await this.notifications.create({
+        employeeId: responsiblePartyId,
+        type: 'ALERT',
+        module: 'SIMS',
+        title,
+        message,
+        actionUrl: `/sims/${id}`,
+        metadata: { suggestionId: id },
+      });
+    }
+
+    // notify the suggester that their suggestion became a real Kaizen — link back to the
+    // suggestion, not the kaizen itself, since the picked owner (not necessarily the
+    // suggester) is the one with edit/view access to it.
     if (createdKaizenId) {
       await this.notifications.create({
         employeeId: suggestion.employeeId,
         type: 'INFO',
-        module: 'KAIZEN',
+        module: 'SIMS',
         title: 'Your suggestion was raised as a Daily Gemba Kaizen',
-        message: `Suggestion "${suggestion.title}" has been raised as a Kaizen for you to work on.`,
+        message: `Suggestion "${suggestion.title}" has been raised as a Daily Gemba Kaizen.`,
+        actionUrl: `/sims/${id}`,
+        metadata: { suggestionId: id, kaizenId: createdKaizenId },
+      });
+
+      // alert the picked kaizen owner — they now need to complete the rest of the wizard
+      await this.notifications.create({
+        employeeId: dto.kaizenDetails!.kaizenOwnerId!,
+        type: 'ALERT',
+        module: 'KAIZEN',
+        title: 'You were assigned a Daily Gemba Kaizen — action needed',
+        message: `A Daily Gemba Kaizen was drafted from suggestion "${suggestion.title}" and you've been assigned as the owner. Please complete the remaining details.`,
         actionUrl: `/kaizen/${createdKaizenId}`,
         metadata: { suggestionId: id, kaizenId: createdKaizenId },
       });
@@ -677,7 +836,7 @@ export class SimsService {
 
     const updater = await this.resolveEmployee(userId, organizationId);
 
-    // Check authorization: Must be an HOD in the same department (or Super Admin/Admin/Management)
+    // Check authorization: must be the HOD of this suggestion's own department
     const userOrgs = await this.prisma.userOrganization.findMany({
       where: { userId, organizationId },
       include: { role: true }
@@ -685,11 +844,9 @@ export class SimsService {
     const roles = userOrgs.map(uo => uo.role.name);
 
     const isDepartmentHOD = roles.includes(Role.HOD) && updater.departmentId === suggestion.departmentId;
-    const isSuperAdmin = roles.includes(Role.SUPER_ADMIN);
-    const isAdminOrMgmt = roles.some(r => [Role.ADMIN, Role.MANAGEMENT].includes(r as Role));
 
-    if (!isDepartmentHOD && !isSuperAdmin && !isAdminOrMgmt) {
-        throw new ForbiddenException('Only a department HOD or admin can update implementation status');
+    if (!isDepartmentHOD) {
+        throw new ForbiddenException("Only the department's HOD can update implementation status");
     }
 
     const updated = await this.prisma.suggestion.update({

@@ -62,30 +62,27 @@ const DECISION_TYPE_LABELS: Record<DecisionType, string> = {
   DAILY_KAIZEN:         "Daily Gemba Kaizen",
 };
 
-type DecisionField = { key: string; label: string; required: boolean; type: "text" | "textarea" | "date" };
+type DecisionField = {
+  key: string;
+  label: string;
+  required: boolean;
+  type: "text" | "textarea" | "date" | "select";
+};
 
 const WORKPLACE_CORRECTION_FIELDS: DecisionField[] = [
-  { key: "action",          label: "Correction Required", required: true,  type: "text" },
-  { key: "responsible",     label: "Responsible Person",  required: true,  type: "text" },
-  { key: "supportRequired", label: "Support Required",    required: false, type: "text" },
-  { key: "targetDate",      label: "Target Date",         required: true,  type: "date" },
+  { key: "action",                label: "Correction Required", required: true,  type: "text" },
+  { key: "responsibleEmployeeId", label: "Responsible Person",  required: true,  type: "select" },
+  { key: "supportRequired",       label: "Support Required",    required: false, type: "text" },
+  { key: "targetDate",            label: "Target Date",         required: true,  type: "date" },
 ];
 
 const SGA_FIELDS: DecisionField[] = [
-  { key: "problemStatement", label: "Problem Statement", required: true,  type: "textarea" },
-  { key: "teamLeader",       label: "Team Leader",       required: true,  type: "text" },
-  { key: "teamMembers",      label: "Team Members",      required: false, type: "text" },
-  { key: "target",           label: "Target",            required: true,  type: "text" },
-  { key: "timeline",         label: "Timeline",          required: true,  type: "text" },
-  { key: "reviewDate",       label: "Review Date",       required: false, type: "date" },
+  { key: "responsibleEmployeeId", label: "Responsible Person", required: true, type: "select" },
 ];
 
 const ON_HOLD_FIELDS: DecisionField[] = [
-  { key: "reason",           label: "Reason",             required: true,  type: "textarea" },
-  { key: "responsible",      label: "Responsible Person", required: false, type: "text" },
-  { key: "supportRequired",  label: "Support Required",   required: false, type: "text" },
-  { key: "reviewDate",       label: "Review Date",        required: true,  type: "date" },
-  { key: "nextAction",       label: "Next Action",        required: false, type: "text" },
+  { key: "reason",                label: "Reason",             required: true, type: "textarea" },
+  { key: "responsibleEmployeeId", label: "Responsible Person", required: true, type: "select" },
 ];
 
 function humanizeKey(key: string) {
@@ -93,11 +90,12 @@ function humanizeKey(key: string) {
 }
 
 function DecisionFieldsForm({
-  fields, values, onChange,
+  fields, values, onChange, optionsByKey,
 }: {
   fields: DecisionField[];
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
+  optionsByKey?: Record<string, { value: string; label: string }[]>;
 }) {
   return (
     <div className="space-y-3">
@@ -114,6 +112,18 @@ function DecisionFieldsForm({
               onChange={(e) => onChange(f.key, e.target.value)}
               className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
             />
+          ) : f.type === "select" ? (
+            <select
+              required={f.required}
+              value={values[f.key] ?? ""}
+              onChange={(e) => onChange(f.key, e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            >
+              <option value="">Select...</option>
+              {(optionsByKey?.[f.key] ?? []).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           ) : (
             <input
               type={f.type}
@@ -260,18 +270,11 @@ export default function SuggestionDetailPage() {
 
   // Daily Gemba Kaizen sub-form (shown when decisionType === "DAILY_KAIZEN")
   const [kaizenCondition, setKaizenCondition]       = useState("");
+  const [kaizenOwnerId, setKaizenOwnerId]           = useState("");
   const [kaizenPhotoFile, setKaizenPhotoFile]       = useState<File | null>(null);
   const [kaizenPhotoPreview, setKaizenPhotoPreview] = useState<string | null>(null);
   const kaizenFileInputRef = useRef<HTMLInputElement>(null);
   const kaizenCameraInputRef = useRef<HTMLInputElement>(null);
-
-  // Implementation Progress panel (WORK_IN_PROGRESS etc — separate from the decision fields above)
-  const [implStatus, setImplStatus]   = useState<ImplementationStatus | "">("");
-  const [implNote, setImplNote]       = useState("");
-
-  // Implementation status update
-  const [showImplUpdate, setShowImplUpdate] = useState(false);
-  const [implUpdateError, setImplUpdateError] = useState<string | null>(null);
 
   const { data: suggestion, isLoading: suggestionLoading, error: suggestionErr } = useQuery({
     queryKey: ["sims-detail", id],
@@ -294,15 +297,30 @@ export default function SuggestionDetailPage() {
   const loading = suggestionLoading;
   const error = suggestionErr ? (suggestionErr as any).message : null;
 
-  const isSuperAdmin = role === Role.SUPER_ADMIN;
-  const isReviewerRole = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
   const isHODOfDept = role === Role.HOD && suggestion?.departmentId === currentUser?.departmentId;
   const isAssignedHOD = suggestion?.hodId === currentUser?.id;
   const isCommitteeMemberForSuggestion =
     !!suggestion?.committeeId && (myCommittees ?? []).some((c) => c.id === suggestion.committeeId);
 
-  const canReview = isReviewerRole || isHODOfDept || isCommitteeMemberForSuggestion;
-  const canUpdateImplementation = isReviewerRole || isHODOfDept || isCommitteeMemberForSuggestion;
+  const canReview = isHODOfDept || isCommitteeMemberForSuggestion;
+
+  // Candidates for the responsible-person / kaizen-owner pickers — always the suggestion's OWN
+  // department, not the reviewer's, so a cross-department admin or committee member sees the
+  // right list instead of their own colleagues.
+  const { data: deptColleagues } = useQuery({
+    queryKey: ["sims-review-candidates", id],
+    queryFn: () => SimsService.getReviewCandidates(id!, accessToken!),
+    enabled: !!accessToken && !!id && canReview,
+  });
+
+  const responsibleOptions = [
+    ...(currentUser && currentUser.departmentId === suggestion?.departmentId
+      ? [{ value: currentUser.id, label: `${currentUser.firstName} ${currentUser.lastName} (You)` }]
+      : []),
+    ...(deptColleagues ?? [])
+      .filter((c) => c.id !== currentUser?.id)
+      .map((c) => ({ value: c.id, label: `${c.firstName} ${c.lastName}` })),
+  ];
 
   const reviewMutation = useMutation({
     mutationFn: (payload: {
@@ -323,26 +341,14 @@ export default function SuggestionDetailPage() {
     onError: (err: any) => setReviewError(err.message),
   });
 
-  const implMutation = useMutation({
-    mutationFn: (payload: { implementationStatus: ImplementationStatus; implementationNote?: string }) =>
-      SimsService.updateImplementation(suggestion!.id, payload, accessToken!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sims-detail", id] });
-      setShowImplUpdate(false);
-      setImplStatus("");
-      setImplNote("");
-    },
-    onError: (err: any) => setImplUpdateError(err.message),
-  });
-
   const reviewing = reviewMutation.isPending;
-  const updatingImpl = implMutation.isPending;
 
   const updateDecisionField = (key: string, value: string) =>
     setDecisionFields((f) => ({ ...f, [key]: value }));
 
   const resetKaizenForm = () => {
     setKaizenCondition("");
+    setKaizenOwnerId("");
     setKaizenPhotoFile(null);
     setKaizenPhotoPreview(null);
     if (kaizenFileInputRef.current) kaizenFileInputRef.current.value = "";
@@ -377,12 +383,16 @@ export default function SuggestionDetailPage() {
     let decisionDetails: Record<string, any> | undefined;
     if (newStatus === "APPROVED_FOR_IMPLEMENTATION" || newStatus === "SELECTED_FOR_SGA" || newStatus === "ON_HOLD") {
       decisionDetails = { ...decisionFields };
+      if (decisionFields.responsibleEmployeeId) {
+        const match = responsibleOptions.find((o) => o.value === decisionFields.responsibleEmployeeId);
+        if (match) decisionDetails.responsibleEmployeeName = match.label;
+      }
     }
 
     let kaizenDetails: KaizenDetailsPayload | undefined;
     if (isDailyKaizen) {
-      if (!kaizenPhotoPreview && !kaizenPhotoFile) {
-        setReviewError("A before photo is required to raise a Kaizen from this suggestion.");
+      if (!kaizenOwnerId) {
+        setReviewError("A kaizen owner is required to raise a Daily Gemba Kaizen.");
         return;
       }
       let beforePhotoUrl: string | undefined;
@@ -394,8 +404,11 @@ export default function SuggestionDetailPage() {
           setReviewError(err.message || "Failed to upload before photo");
           return;
         }
+      } else if (kaizenPhotoPreview) {
+        beforePhotoUrl = kaizenPhotoPreview;
       }
       kaizenDetails = {
+        kaizenOwnerId,
         conditionDescription: kaizenCondition.trim() || undefined,
         beforePhotoUrl,
       };
@@ -407,16 +420,6 @@ export default function SuggestionDetailPage() {
       decisionType: newStatus === "APPROVED_FOR_IMPLEMENTATION" ? (decisionType || undefined) : undefined,
       decisionDetails,
       kaizenDetails,
-    });
-  };
-
-  const handleUpdateImplementation = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!implStatus || !suggestion) return;
-    setImplUpdateError(null);
-    implMutation.mutate({
-      implementationStatus: implStatus as ImplementationStatus,
-      implementationNote: implNote || undefined,
     });
   };
 
@@ -446,7 +449,7 @@ export default function SuggestionDetailPage() {
                   </span>
                   {suggestion.implementationStatus && (
                     <span className={`text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${IMPLEMENTATION_STATUS_BADGE[suggestion.implementationStatus]}`}>
-                      {IMPLEMENTATION_STATUS_LABELS[suggestion.implementationStatus]}
+                      Progress: {IMPLEMENTATION_STATUS_LABELS[suggestion.implementationStatus]}
                     </span>
                   )}
                   {suggestion.linkedKaizenId && (
@@ -528,6 +531,37 @@ export default function SuggestionDetailPage() {
                   </div>
                 </div>
 
+                {suggestion.status === "ON_HOLD" && suggestion.decisionDetails && (
+                  <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle className="h-4 w-4 text-orange-600" />
+                      <h3 className="text-sm font-bold text-orange-900 uppercase tracking-widest">On Hold</h3>
+                    </div>
+                    {suggestion.decisionDetails.reason && (
+                      <p className="text-sm text-orange-800 leading-relaxed whitespace-pre-wrap">
+                        {suggestion.decisionDetails.reason}
+                      </p>
+                    )}
+                    {suggestion.decisionDetails.responsibleEmployeeName && (
+                      <p className="text-xs text-orange-700 mt-3 pt-3 border-t border-orange-200">
+                        Responsible: <span className="font-semibold">{suggestion.decisionDetails.responsibleEmployeeName}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {suggestion.status === "SELECTED_FOR_SGA" && suggestion.decisionDetails?.responsibleEmployeeName && (
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Sparkles className="h-4 w-4 text-indigo-600" />
+                      <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-widest">Selected for SGA</h3>
+                    </div>
+                    <p className="text-xs text-indigo-700 mt-2">
+                      Responsible: <span className="font-semibold">{suggestion.decisionDetails.responsibleEmployeeName}</span>
+                    </p>
+                  </div>
+                )}
+
                 {suggestion.implementationNote && (
                   <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
@@ -573,69 +607,7 @@ export default function SuggestionDetailPage() {
               {/* RIGHT — Actions */}
               <div className="xl:col-span-1 space-y-4">
 
-                {/* ── Implementation Progress (HOD/Admin) ── */}
-                {canUpdateImplementation && suggestion.status === "APPROVED_FOR_IMPLEMENTATION" && (
-                  <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-slate-400" />
-                        <h2 className="text-sm font-bold text-slate-800">Implementation</h2>
-                      </div>
-                      <button 
-                        onClick={() => setShowImplUpdate(!showImplUpdate)}
-                        className="text-blue-600 hover:text-blue-700 text-xs font-semibold flex items-center gap-1"
-                      >
-                        {showImplUpdate ? "Cancel" : "Update Status"}
-                      </button>
-                    </div>
-
-                    {!showImplUpdate ? (
-                      <div className="space-y-3">
-                        {suggestion.implementationStatus ? (
-                          <div className={`text-xs font-bold px-3 py-2 rounded-xl text-center ${IMPLEMENTATION_STATUS_BADGE[suggestion.implementationStatus]}`}>
-                            {IMPLEMENTATION_STATUS_LABELS[suggestion.implementationStatus]}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-400 italic">No implementation updates yet.</p>
-                        )}
-                      </div>
-                    ) : (
-                      <form onSubmit={handleUpdateImplementation} className="space-y-3">
-                        <select
-                          required
-                          value={implStatus}
-                          onChange={(e) => setImplStatus(e.target.value as ImplementationStatus)}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                        >
-                          <option value="">Select status...</option>
-                          {Object.entries(IMPLEMENTATION_STATUS_LABELS).map(([val, label]) => (
-                            <option key={val} value={val}>{label}</option>
-                          ))}
-                        </select>
-                        <textarea
-                          rows={3}
-                          value={implNote}
-                          onChange={(e) => setImplNote(e.target.value)}
-                          placeholder="Implementation notes..."
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
-                        />
-                        {implUpdateError && (
-                          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{implUpdateError}</p>
-                        )}
-                        <button
-                          type="submit"
-                          disabled={updatingImpl || !implStatus}
-                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
-                        >
-                          {updatingImpl ? "Updating..." : "Update Progress"}
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                )}
-
-
-                {/* ── Review Form (HODs and Admins) ── */}
+                {/* ── Review Form (department HOD, or the committee once forwarded) ── */}
                 {canReview && (
                   <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm sticky top-6">
                     <div className="flex items-center gap-2 mb-5">
@@ -723,13 +695,35 @@ export default function SuggestionDetailPage() {
                               </select>
                             </div>
                             {decisionType === "WORKPLACE_CORRECTION" && (
-                              <DecisionFieldsForm fields={WORKPLACE_CORRECTION_FIELDS} values={decisionFields} onChange={updateDecisionField} />
+                              <DecisionFieldsForm
+                                fields={WORKPLACE_CORRECTION_FIELDS}
+                                values={decisionFields}
+                                onChange={updateDecisionField}
+                                optionsByKey={{ responsibleEmployeeId: responsibleOptions }}
+                              />
                             )}
                             {decisionType === "DAILY_KAIZEN" && (
                               <div className="space-y-4">
                                 <p className="text-xs text-slate-500 -mt-1">
-                                  This will raise a real Kaizen, owned by the original submitter, visible in the Daily Gemba Kaizen module.
+                                  This raises a draft Kaizen with the reason, reference and condition pre-filled from this
+                                  suggestion. The kaizen owner you pick will complete the rest of the wizard themselves.
                                 </p>
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                                    Kaizen Owner<span className="text-red-500"> *</span>
+                                  </label>
+                                  <select
+                                    required
+                                    value={kaizenOwnerId}
+                                    onChange={(e) => setKaizenOwnerId(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                  >
+                                    <option value="">Select...</option>
+                                    {responsibleOptions.map((o) => (
+                                      <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
                                 <div>
                                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                                     Condition/Opportunity for Improvement
@@ -743,7 +737,7 @@ export default function SuggestionDetailPage() {
                                 </div>
                                 <div>
                                   <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                    Before Photo<span className="text-red-500"> *</span>
+                                    Before Photo <span className="text-slate-400 font-normal normal-case">(optional)</span>
                                   </label>
                                   {kaizenPhotoPreview ? (
                                     <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
@@ -785,13 +779,23 @@ export default function SuggestionDetailPage() {
 
                         {newStatus === "SELECTED_FOR_SGA" && (
                           <div className="pt-2 border-t border-slate-100">
-                            <DecisionFieldsForm fields={SGA_FIELDS} values={decisionFields} onChange={updateDecisionField} />
+                            <DecisionFieldsForm
+                              fields={SGA_FIELDS}
+                              values={decisionFields}
+                              onChange={updateDecisionField}
+                              optionsByKey={{ responsibleEmployeeId: responsibleOptions }}
+                            />
                           </div>
                         )}
 
                         {newStatus === "ON_HOLD" && (
                           <div className="pt-2 border-t border-slate-100">
-                            <DecisionFieldsForm fields={ON_HOLD_FIELDS} values={decisionFields} onChange={updateDecisionField} />
+                            <DecisionFieldsForm
+                              fields={ON_HOLD_FIELDS}
+                              values={decisionFields}
+                              onChange={updateDecisionField}
+                              optionsByKey={{ responsibleEmployeeId: responsibleOptions }}
+                            />
                           </div>
                         )}
 

@@ -15,7 +15,7 @@ import {
 } from './dto/kaizen.dto';
 import { Role } from 'src/common/enum/role.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { KaizenStatus, KaizenVerificationStage } from 'db';
+import { KaizenStatus, KaizenVerificationStage, KaizenReferenceApplicability } from 'db';
 
 const employeeSelect = {
     id: true,
@@ -156,6 +156,8 @@ export class KaizenService {
             title: string;
             startDate: string;
             targetCompletionDate: string;
+            referenceValue: string;
+            referenceApplicability: KaizenReferenceApplicability;
         }>,
     ) {
         if (!employee.departmentId) {
@@ -166,6 +168,8 @@ export class KaizenService {
             data: {
                 trigger: dto.trigger,
                 triggerOther: dto.triggerOther,
+                referenceValue: overrides?.referenceValue,
+                referenceApplicability: overrides?.referenceApplicability,
                 conditionDescription: overrides?.conditionDescription ?? '',
                 conditionEvidenceUrls: overrides?.conditionEvidenceUrls ?? [],
                 title: overrides?.title,
@@ -182,7 +186,7 @@ export class KaizenService {
         return kaizen;
     }
 
-    // create kaizen on behalf of another employee (e.g. a SIMS suggestion's original submitter)
+    // create kaizen on behalf of another employee (e.g. a SIMS-picked kaizen owner)
     async createKaizenForEmployee(
         employeeId: string,
         dto: CreateKaizenReasonDto & {
@@ -193,6 +197,8 @@ export class KaizenService {
             targetCompletionDate?: string;
             kaizenOwnerId?: string;
             status?: KaizenStatus;
+            referenceValue?: string;
+            referenceApplicability?: KaizenReferenceApplicability;
         },
         organizationId: string,
     ) {
@@ -209,6 +215,8 @@ export class KaizenService {
             title: dto.title,
             startDate: dto.startDate,
             targetCompletionDate: dto.targetCompletionDate,
+            referenceValue: dto.referenceValue,
+            referenceApplicability: dto.referenceApplicability,
         });
     }
 
@@ -432,6 +440,11 @@ export class KaizenService {
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertEditable(kaizen, employee.id);
 
+        const categories = dto.impacts.map((i) => i.category);
+        if (new Set(categories).size !== categories.length) {
+            throw new BadRequestException('Each QCDSMT category can only be listed once');
+        }
+
         await this.prisma.$transaction(async (tx) => {
             await tx.kaizenQcdsmtImpact.deleteMany({ where: { kaizenId } });
             if (dto.impacts.length) {
@@ -453,6 +466,9 @@ export class KaizenService {
         const wastes = dto.impacts.map((i) => i.waste);
         if (wastes.includes('NOT_APPLICABLE') && wastes.length > 1) {
             throw new BadRequestException('"Not Applicable" cannot be combined with other wastes');
+        }
+        if (new Set(wastes).size !== wastes.length) {
+            throw new BadRequestException('Each waste type can only be listed once');
         }
 
         await this.prisma.$transaction(async (tx) => {

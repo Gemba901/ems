@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import * as bcrypt from 'bcrypt';
+import { AuthService } from 'src/auth/auth.service';
 import * as XLSX from 'xlsx';
 import { RoleName } from 'db';
 
@@ -38,7 +38,7 @@ const EMPTY_VALUES = new Set(['', 'no information available', 'not applicable', 
 
 @Injectable()
 export class EmployeeService {
-    constructor (private prisma: PrismaService) {}
+    constructor (private prisma: PrismaService, private authService: AuthService) {}
 
     private normalizePhoneForStorage(raw: string | undefined): string | undefined {
         if (!raw) return undefined;
@@ -436,17 +436,23 @@ export class EmployeeService {
         return { message: `Role updated to ${role.name}` };
     }
 
-    // admin resets an employee's password
-    async resetEmployeePassword(id: string, newPassword: string, organizationId: string) {
+    // admin generates a short-lived, single-use password for an employee to recover their
+    // account — the plaintext is returned here (once) for the admin to relay to the employee
+    // out-of-band; the employee redeems it via the "forgot password" flow (auth/verify-temp-password),
+    // which is what actually clears their real password and kills their sessions.
+    async resetEmployeePassword(id: string, organizationId: string) {
         const employee = await this.prisma.employee.findUnique({ where: { id } });
         if (!employee) throw new BadRequestException('Employee not found');
         if (employee.organizationId !== organizationId) throw new ForbiddenException('Cannot manage employees from another organization');
         if (!employee.userId) throw new BadRequestException('Employee has no linked user account');
 
-        const hashed = await bcrypt.hash(newPassword, 10);
-        await this.prisma.user.update({ where: { id: employee.userId }, data: { password: hashed } });
+        const { tempPassword, expiresInMinutes } = await this.authService.generateTempPassword(employee.userId);
 
-        return { message: 'Password reset successfully' };
+        return {
+            tempPassword,
+            expiresInMinutes,
+            message: `Share this temporary password with the employee directly. It expires in ${expiresInMinutes} minutes and can only be used once.`,
+        };
     }
 
     // update employee avatar URL

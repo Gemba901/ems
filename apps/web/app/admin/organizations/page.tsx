@@ -9,6 +9,7 @@ import {
   OrgStatus,
   ModuleType,
   AVAILABLE_MODULES,
+  PlatformAdmin,
 } from "@/services/admin.service";
 import { uploadImage } from "@/services/uploads.service";
 import {
@@ -26,6 +27,7 @@ import {
   Briefcase,
   ImageIcon,
   Puzzle,
+  Users,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -126,6 +128,27 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedCountry = COUNTRY_CODES.find(c => c.code === adminPhoneCountry) ?? COUNTRY_CODES[0];
 
+  const [selectedGembaIds, setSelectedGembaIds] = useState<string[]>([]);
+  const [gembaTouched, setGembaTouched] = useState(false);
+  const { data: platformAdmins = [] } = useQuery<PlatformAdmin[]>({
+    queryKey: ["platform-admins"],
+    queryFn: () => AdminService.getPlatformAdmins(token),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if (open && platformAdmins.length > 0 && !gembaTouched) {
+      setSelectedGembaIds(platformAdmins.map((u) => u.id));
+    }
+  }, [open, platformAdmins, gembaTouched]);
+
+  function toggleGembaUser(id: string) {
+    setGembaTouched(true);
+    setSelectedGembaIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
   function set(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
     setError(null);
@@ -192,6 +215,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
         adminLastName: string;
         adminEmail: string;
         adminPhone: string;
+        gembaTeamUserIds?: string[];
       } = {
         name: form.name.trim(),
         adminFirstName: adminForm.firstName.trim(),
@@ -206,6 +230,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
       if (form.address) payload.address = form.address.trim();
       if (form.logoUrl) payload.logoUrl = form.logoUrl.trim();
       payload.modules = selectedModules;
+      payload.gembaTeamUserIds = selectedGembaIds;
 
       await AdminService.createOrganization(token, payload);
       onCreated();
@@ -232,6 +257,8 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
     setShowPhonePicker(false);
     setSelectedModules([]);
     setLogoUploading(false);
+    setSelectedGembaIds([]);
+    setGembaTouched(false);
     setError(null);
     onClose();
   }
@@ -517,6 +544,55 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
                 Will be stored as <span className="font-medium text-slate-600">{buildPhone(adminPhoneCountry, adminForm.phone)}</span>
               </p>
             )}
+          </Field>
+
+          {/* Section divider */}
+          <div className="flex items-center gap-3 pt-1">
+            <div className="flex-1 h-px bg-slate-100" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              GembaPMS Team
+            </span>
+            <div className="flex-1 h-px bg-slate-100" />
+          </div>
+          <p className="text-[11px] text-slate-400 -mt-2">
+            These existing platform super-admins will be added as employees in a
+            "GembaPMS" department created automatically for this org.
+          </p>
+
+          <Field label="Members">
+            <div className="space-y-2">
+              {platformAdmins.length === 0 && (
+                <p className="text-xs text-slate-400 italic">No existing super-admin accounts found.</p>
+              )}
+              {platformAdmins.map((admin) => (
+                <label
+                  key={admin.id}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                    selectedGembaIds.includes(admin.id)
+                      ? "border-indigo-500 bg-indigo-50"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedGembaIds.includes(admin.id)}
+                    onChange={() => toggleGembaUser(admin.id)}
+                    className="h-3.5 w-3.5 accent-indigo-600"
+                  />
+                  <Users
+                    className={`h-3.5 w-3.5 shrink-0 ${selectedGembaIds.includes(admin.id) ? "text-indigo-600" : "text-slate-400"}`}
+                  />
+                  <div>
+                    <p
+                      className={`text-xs font-semibold ${selectedGembaIds.includes(admin.id) ? "text-indigo-700" : "text-slate-700"}`}
+                    >
+                      {admin.name}
+                    </p>
+                    <p className="text-[11px] text-slate-400">{admin.email || admin.phone}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
           </Field>
 
           {error && (

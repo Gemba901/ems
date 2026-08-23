@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -12,12 +12,11 @@ import {
 import {
   Download, EyeOff, Lightbulb,
   Filter, Search,
-  LayoutGrid, List, ChevronLeft, ChevronRight,
+  ChevronRight,
   Star,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-const BOARD_PAGE_SIZE = 4;
 const LIST_PAGE_SIZE = 10;
 
 const CATEGORY_CONFIG: Record<SuggestionCategory, { label: string; dot: string; text: string }> = {
@@ -39,16 +38,6 @@ const STATUS_CONFIG: Record<SuggestionStatus, { label: string; dot: string; badg
   IMPLEMENTED:                 { label: "Implemented",        dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   REJECTED:                    { label: "Rejected",          dot: "bg-red-400",     badge: "bg-red-50 text-red-700 border-red-200"             },
 };
-
-const BOARD_COLUMNS: { status: SuggestionStatus; emptyText: string }[] = [
-  { status: "WAITING_FOR_REVIEW",          emptyText: "Nothing waiting for review"  },
-  { status: "UNDER_REVIEW",                emptyText: "No suggestions under review" },
-  { status: "ON_HOLD",                     emptyText: "None on hold"                },
-  { status: "SELECTED_FOR_SGA",            emptyText: "None selected for SGA"       },
-  { status: "APPROVED_FOR_IMPLEMENTATION", emptyText: "No approved suggestions"     },
-  { status: "IMPLEMENTED",                 emptyText: "No implemented suggestions"  },
-  { status: "REJECTED",                    emptyText: "No rejected suggestions"     },
-];
 
 const ALL_STATUSES: SuggestionStatus[] = [
   "WAITING_FOR_REVIEW", "UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA",
@@ -140,146 +129,27 @@ function StatusPill({ status }: { status: SuggestionStatus }) {
   );
 }
 
-function SuggestionCard({
-  suggestion: s,
-  onClick,
-}: {
-  suggestion: Suggestion;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-white border border-slate-200 rounded-xl p-3 hover:shadow-md hover:border-slate-300 transition-all"
-    >
-      <div className="flex items-start justify-between gap-2 mb-0.5">
-        <p className="text-sm font-semibold text-slate-900 leading-snug line-clamp-2 flex-1">{s.title}</p>
-        <PointsBadge status={s.status} />
-      </div>
-
-      {s.categories.length > 0 && (
-        <div className="mt-1.5">
-          <CategoryBadges categories={s.categories} max={3} />
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50">
-        {s.employee ? (
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="h-5 w-5 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[9px] font-bold shrink-0">
-              {s.employee.firstName[0]}{s.employee.lastName[0]}
-            </div>
-            <span className="text-[11px] text-slate-400 truncate">
-              {s.employee.firstName} {s.employee.lastName}
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 text-slate-300">
-            <EyeOff className="h-3 w-3" />
-            <span className="text-[11px] italic text-slate-400">Anonymous</span>
-          </div>
-        )}
-        <span className="text-[11px] text-slate-400 shrink-0 ml-2">{formatDate(s.createdAt)}</span>
-      </div>
-    </button>
-  );
-}
-
-function BoardColumn({
-  status,
-  emptyText,
-  suggestions,
-  loading,
-  onCardClick,
-}: {
-  status: SuggestionStatus;
-  emptyText: string;
-  suggestions: Suggestion[];
-  loading: boolean;
-  onCardClick: (id: string) => void;
-}) {
-  const [page, setPage] = useState(1);
-
-  const items = useMemo(
-    () => suggestions.filter((s) => s.status === status),
-    [suggestions, status],
-  );
-  const totalPages = Math.ceil(items.length / BOARD_PAGE_SIZE);
-  const paginated = items.slice((page - 1) * BOARD_PAGE_SIZE, page * BOARD_PAGE_SIZE);
-  const cfg = STATUS_CONFIG[status];
-
-  return (
-    <div className="flex flex-col w-72 shrink-0 bg-slate-50/70 rounded-xl overflow-hidden border border-slate-200">
-      {/* Column header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 bg-white">
-        <span className={`h-2 w-2 rounded-full shrink-0 ${cfg.dot}`} />
-        <span className="text-sm font-semibold text-slate-700">{cfg.label}</span>
-        <span className="ml-auto text-[11px] font-semibold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full tabular-nums">
-          {loading ? "—" : items.length}
-        </span>
-      </div>
-
-      {/* Cards */}
-      <div className="flex-1 p-1.5 space-y-1.5 min-h-[80px]">
-        {loading && (
-          <div className="flex flex-col gap-1.5 pt-1">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
-            ))}
-          </div>
-        )}
-        {!loading && paginated.length === 0 && (
-          <div className="py-5 text-center">
-            <p className="text-xs text-slate-400">{emptyText}</p>
-          </div>
-        )}
-        {!loading &&
-          paginated.map((s) => (
-            <SuggestionCard
-              key={s.id}
-              suggestion={s}
-              onClick={() => onCardClick(s.id)}
-            />
-          ))}
-      </div>
-
-      {/* Column pagination */}
-      {!loading && totalPages > 1 && (
-        <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 bg-white">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="p-1 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors"
-          >
-            <ChevronLeft className="h-3.5 w-3.5 text-slate-500" />
-          </button>
-          <span className="text-[11px] text-slate-400 tabular-nums">
-            {page} / {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-            className="p-1 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors"
-          >
-            <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function SimsAllSuggestionsPage() {
+  return (
+    <Suspense fallback={<div className="py-14 text-center text-sm text-slate-400">Loading…</div>}>
+      <SimsAllSuggestionsContent />
+    </Suspense>
+  );
+}
+
+function SimsAllSuggestionsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, accessToken } = useAuthStore();
   const role = user?.roleLevel;
 
-  const [view, setView] = useState<"board" | "list">("board");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | "">("");
   const [categoryFilter, setCategoryFilter] = useState<SuggestionCategory | "">("");
   const [listPage, setListPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+
+  const departmentId = searchParams.get("departmentId");
 
   const { data: allSuggestions = [], isLoading: loading, error: queryError } = useQuery({
     queryKey: ["sims-all-browse", role],
@@ -292,15 +162,21 @@ export default function SimsAllSuggestionsPage() {
 
   const error = queryError ? (queryError as Error).message : null;
 
+  const departmentName = useMemo(() => {
+    if (!departmentId) return null;
+    return allSuggestions.find((s) => s.departmentId === departmentId)?.employee?.department?.name ?? "this department";
+  }, [allSuggestions, departmentId]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allSuggestions.filter((s) => {
+      if (departmentId && s.departmentId !== departmentId) return false;
       if (statusFilter && s.status !== statusFilter) return false;
       if (categoryFilter && !s.categories.includes(categoryFilter as SuggestionCategory)) return false;
       if (q && !s.title.toLowerCase().includes(q) && !s.description.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [allSuggestions, statusFilter, categoryFilter, search]);
+  }, [allSuggestions, departmentId, statusFilter, categoryFilter, search]);
 
   const listPaginated = useMemo(
     () => filtered.slice((listPage - 1) * LIST_PAGE_SIZE, listPage * LIST_PAGE_SIZE),
@@ -309,12 +185,17 @@ export default function SimsAllSuggestionsPage() {
   const totalListPages = Math.ceil(filtered.length / LIST_PAGE_SIZE);
 
   const pageTitle = role === Role.HOD ? "Department Suggestions" : "All Suggestions";
-  const isFiltered = !!statusFilter || !!categoryFilter || !!search.trim();
+  const isFiltered = !!statusFilter || !!categoryFilter || !!search.trim() || !!departmentId;
 
-  const handleCardClick = (id: string) => router.push(`/sims/${id}`);
+  const clearFilters = () => {
+    setStatusFilter("");
+    setCategoryFilter("");
+    setSearch("");
+    if (departmentId) router.push("/sims/all");
+  };
 
   return (
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD]}>
+    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
       <div className="mx-5 pt-4 md:pt-6 space-y-5">
 
         {/* Page header */}
@@ -337,34 +218,8 @@ export default function SimsAllSuggestionsPage() {
           </button>
         </div>
 
-        {/* ── Toolbar: view toggle + search + filters ────────────────────────── */}
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-
-          {/* View toggle — hidden on mobile (board layout needs width) */}
-          <div className="hidden sm:flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-            <button
-              onClick={() => setView("board")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                view === "board"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              Board
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                view === "list"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              <List className="h-3.5 w-3.5" />
-              List
-            </button>
-          </div>
+        {/* ── Toolbar: search + filters ────────────────────────────────────────── */}
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-end">
 
           {/* Search + filters */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
@@ -416,7 +271,7 @@ export default function SimsAllSuggestionsPage() {
               </select>
               {isFiltered && (
                 <button
-                  onClick={() => { setStatusFilter(""); setCategoryFilter(""); setSearch(""); }}
+                  onClick={clearFilters}
                   className="text-xs text-blue-600 hover:text-blue-700 font-medium whitespace-nowrap"
                 >
                   Clear filters
@@ -431,6 +286,21 @@ export default function SimsAllSuggestionsPage() {
             )}
           </div>
         </div>
+
+        {departmentId && (
+          <div className="flex items-center gap-2 -mt-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              Department: {departmentName}
+              <button
+                onClick={() => router.push("/sims/all")}
+                className="hover:text-blue-900"
+                aria-label="Clear department filter"
+              >
+                ×
+              </button>
+            </span>
+          </div>
+        )}
 
         {/* ── Mobile: always card list ──────────────────────────────────────── */}
         <div className="sm:hidden space-y-2">
@@ -491,27 +361,8 @@ export default function SimsAllSuggestionsPage() {
           )}
         </div>
 
-        {/* ── Desktop: board view ────────────────────────────────────────────── */}
-        {view === "board" && (
-          <div className="hidden sm:block pb-4">
-            <div className="flex flex-wrap items-start gap-3">
-              {BOARD_COLUMNS.map(({ status, emptyText }) => (
-                <BoardColumn
-                  key={status}
-                  status={status}
-                  emptyText={emptyText}
-                  suggestions={filtered}
-                  loading={loading}
-                  onCardClick={handleCardClick}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* ── Desktop: list view ─────────────────────────────────────────────── */}
-        {view === "list" && (
-          <div className="hidden sm:block bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="hidden sm:block bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50/80 border-b border-slate-100">
@@ -623,7 +474,6 @@ export default function SimsAllSuggestionsPage() {
               </div>
             )}
           </div>
-        )}
 
       </div>
     </ProtectedRoute>

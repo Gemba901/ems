@@ -58,7 +58,7 @@ const STATUS_BADGE: Record<SuggestionStatus, string> = {
 };
 
 const DECISION_TYPE_LABELS: Record<DecisionType, string> = {
-  WORKPLACE_CORRECTION: "Workplace Suggestion & Correction",
+  WORKPLACE_CORRECTION: "Workplace Correction & Maintenance",
   DAILY_KAIZEN:         "Daily Gemba Kaizen",
 };
 

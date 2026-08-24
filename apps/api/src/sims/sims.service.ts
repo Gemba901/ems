@@ -366,7 +366,6 @@ export class SimsService {
     const where: any = {
       organizationId,
       departmentId: employee.departmentId,
-      employeeId: { not: employee.id }, // HODs don't review their own suggestions
       ...(status && { status }),
       ...(category && { categories: { has: category } }),
     };
@@ -609,11 +608,6 @@ export class SimsService {
     if (!suggestion || suggestion.organizationId !== organizationId) throw new NotFoundException('Suggestion not found');
 
     const { reviewer } = await this.assertCanReview(suggestion, userId, organizationId);
-
-    // Prevent HOD from reviewing their own suggestion
-    if (suggestion.employeeId === reviewer.id) {
-        throw new ForbiddenException('You cannot review your own suggestion');
-    }
 
     const allowed = ALLOWED_TRANSITIONS[suggestion.status];
     if (!allowed.includes(dto.statusChanged)) {

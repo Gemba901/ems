@@ -33,11 +33,6 @@ function buildSteps(heatApproval: SteelHeatApproval): Step[] {
       { code: "A04", label: "Correction Decided", state: state(past("A04_DECIDE_CORRECTION"), actions.includes("DECIDE_CORRECTION")) },
       { code: "A05", label: "Correction Material Added", state: state(past("A05_ADD_CORRECTION_MATERIAL"), actions.includes("ADD_CORRECTION_MATERIAL")) },
       { code: "A06", label: "Chemistry Re-tested", state: state(past("A06_RETEST_CHEMISTRY"), actions.includes("RETEST_CHEMISTRY")) },
-    ];
-  }
-
-  if (screenIdx === 1) {
-    return [
       { code: "A07", label: "Temperature Checked", state: state(past("A07_CHECK_TEMPERATURE"), actions.includes("CHECK_TEMPERATURE")) },
       { code: "A08", label: "Ladle Readiness Checked", state: state(past("A08_CHECK_LADLE_READINESS"), actions.includes("CHECK_LADLE_READINESS")) },
     ];

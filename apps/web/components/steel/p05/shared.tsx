@@ -96,6 +96,58 @@ export function subStatus(active: boolean, done: boolean): SubStepStatus {
   return "locked";
 }
 
+/**
+ * Humanizes a SteelMeltingStage enum member (e.g. "A09_MONITOR_TEMPERATURE")
+ * into a short display phase label — a pure display transform of the real
+ * stage value, not a new stage taxonomy. Shared by the P05 dashboard's
+ * FurnaceStatusPanel and the Heat Operations info strip so both read the
+ * same phase name for a given stage.
+ */
+export function stageLabel(stage: string): string {
+  const withoutCode = stage.replace(/^A\d{2}_/, "");
+  return withoutCode
+    .split("_")
+    .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/**
+ * Minimal horizontal tab bar — no accordion, no external tabs dependency
+ * (none is installed; recharts is the only new-ish package already in
+ * package.json). Purely a button-group + content-swap, same pattern as
+ * MeltingSidebarNav but horizontal. Used for read-only, non-gated grouping
+ * only — never for content whose visibility is gated by backend
+ * allowedActions, which must stay driven by explicit status props, not tab
+ * selection.
+ */
+export function SimpleTabs<T extends string>({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: { key: T; label: string }[];
+  active: T;
+  onSelect: (key: T) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={() => onSelect(t.key)}
+          className={
+            "px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors " +
+            (t.key === active ? "border-blue-600 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700")
+          }
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export interface HelpSection {
   heading: string;
   body: React.ReactNode;

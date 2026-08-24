@@ -19,17 +19,17 @@ interface Props {
 }
 
 /**
- * Canonical top-stepper workflow indicator for P01/P02/P04/P06 (the
- * processes still on the S1-S6-multi-page detail model). Replaces 4
- * near-identical per-process copies — the only real difference between
- * them was the active-step color, now a prop instead of hardcoded per
- * copy. Done/active/upcoming is derived purely from doneCount/activeIndex,
+ * Canonical top-stepper workflow indicator for P01/P02/P04/P05/P06. Replaces
+ * several near-identical per-process copies — the only real difference
+ * between them was the active-step color, now a prop instead of hardcoded
+ * per copy. Done/active/upcoming is derived purely from doneCount/activeIndex,
  * same as before; callers still own all stage logic.
  *
- * P05 uses MeltingSidebarNav instead (a different left-nav UX for its
- * single-page detail model) — deliberately not unified into this
- * component, per the steel refactor's explicit rule not to force P05's
- * pattern onto the others or vice versa.
+ * P05's Heat Operations screen (MeltingWorkspaces.tsx) also uses this for
+ * its top stepper, displaying the same 5 sections its former
+ * MeltingSidebarNav (removed) used to render as a vertical list — this
+ * component is display-only, so a separate row of pill buttons below it
+ * drives the actual section navigation.
  */
 export function WorkflowIndicator({ steps, doneCount, activeIndex, activeColorBar }: Props) {
   const activeBg = activeColorBar ?? "bg-blue-600";

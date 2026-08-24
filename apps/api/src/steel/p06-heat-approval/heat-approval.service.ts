@@ -53,6 +53,11 @@ const heatApprovalInclude = {
       chargeNumberSnapshot: true,
       status: true,
       stage: true,
+      furnaceId: true,
+      furnace: { select: { id: true, code: true, name: true } },
+      // Real P05-A13 output weight — used for the "Heat Weight" field on
+      // the P06 Heat Review summary; not previously selected here.
+      outputWeightTonnes: true,
       // Traceability chain back to the originating P01 production plan,
       // used to prefill the required grade in P06-A03 instead of asking
       // for free-text re-entry.
@@ -957,7 +962,17 @@ export class HeatApprovalService {
         where,
         include: {
           createdBy: { select: { id: true, firstName: true, lastName: true } },
-          melting: { select: { id: true, heatInProcessNumber: true } },
+          melting: {
+            select: {
+              id: true,
+              heatInProcessNumber: true,
+              furnaceId: true,
+              furnace: { select: { id: true, code: true, name: true } },
+              chargePreparation: {
+                select: { plan: { select: { grade: true } } },
+              },
+            },
+          },
           _count: { select: { activityLogs: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -974,26 +989,72 @@ export class HeatApprovalService {
   }
 
   async getSummary(organizationId: string) {
-    const [byStage, byStatus, total] = await this.prisma.$transaction([
-      this.prisma.steelHeatApproval.groupBy({
-        by: ['stage'],
-        where: { organizationId },
-        orderBy: { stage: 'asc' },
-        _count: true,
-      }),
-      this.prisma.steelHeatApproval.groupBy({
-        by: ['status'],
-        where: { organizationId },
-        orderBy: { status: 'asc' },
-        _count: true,
-      }),
-      this.prisma.steelHeatApproval.count({ where: { organizationId } }),
-    ]);
+    // "Today" is computed in UTC (no per-org timezone stored) — consistent
+    // with every other UTC createdAt/updatedAt comparison already used
+    // across P01-P06, not a new precision concept.
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
+
+    const [byStage, byStatus, total, approvedToday, rejectedToday, compliant, nonCompliant] =
+      await this.prisma.$transaction([
+        this.prisma.steelHeatApproval.groupBy({
+          by: ['stage'],
+          where: { organizationId },
+          orderBy: { stage: 'asc' },
+          _count: true,
+        }),
+        this.prisma.steelHeatApproval.groupBy({
+          by: ['status'],
+          where: { organizationId },
+          orderBy: { status: 'asc' },
+          _count: true,
+        }),
+        this.prisma.steelHeatApproval.count({ where: { organizationId } }),
+        // "Approved" has no distinct status of its own in this workflow —
+        // A09 (chemistryTemperatureApproved) is the real approval event, and
+        // CLOSED (released to casting) is the terminal state a record
+        // reaches only after that approval. releasedToCastingAt is the real
+        // timestamp used for "today".
+        this.prisma.steelHeatApproval.count({
+          where: {
+            organizationId,
+            status: 'CLOSED',
+            releasedToCastingAt: { gte: startOfToday },
+          },
+        }),
+        // No distinct REJECTED status exists — CANCELLED is the closest real
+        // terminal state to "rejected" (see UpdateHeatApprovalStatusDto).
+        // updatedAt is used since there's no dedicated cancelledAt field.
+        this.prisma.steelHeatApproval.count({
+          where: {
+            organizationId,
+            status: 'CANCELLED',
+            updatedAt: { gte: startOfToday },
+          },
+        }),
+        // Chemistry compliance: real chemistryMatchesGrade boolean set at
+        // A03_COMPARE_CHEMISTRY. Only counted once evaluated (non-null).
+        this.prisma.steelHeatApproval.count({
+          where: { organizationId, chemistryMatchesGrade: true },
+        }),
+        this.prisma.steelHeatApproval.count({
+          where: { organizationId, chemistryMatchesGrade: false },
+        }),
+      ]);
+
+    const evaluated = compliant + nonCompliant;
 
     return {
       total,
       byStage: Object.fromEntries(byStage.map((r) => [r.stage, r._count])),
       byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count])),
+      approvedToday,
+      rejectedToday,
+      chemistryCompliance: {
+        compliant,
+        evaluated,
+        pct: evaluated > 0 ? Math.round((compliant / evaluated) * 1000) / 10 : null,
+      },
     };
   }
 }

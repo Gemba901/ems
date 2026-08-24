@@ -19,6 +19,7 @@ import {
   BadgeCheck,
   Warehouse,
   Headset,
+  Settings,
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -35,6 +36,9 @@ interface SteelSidebarProps {
 }
 
 const PROCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD];
+// Mirrors CONFIG_ADMIN_ROLES on the API — only these roles may administer
+// Steel Configuration master data.
+const CONFIG_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
 // Steel Processes nav — P01-P06 are live and link to their existing
 // routes; P07-P12 have no backend/pages yet and render disabled.
@@ -223,6 +227,30 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
             );
           })}
         </nav>
+
+        {/* ── Configuration (Steel Admin only) ── */}
+        {userRole && CONFIG_ROLES.includes(userRole) && (
+          <div className="px-2 pb-1 border-t border-slate-100 pt-2 space-y-0.5">
+            {!isCollapsed && (
+              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-1">
+                Administration
+              </p>
+            )}
+            <Link
+              href="/steel/config"
+              onClick={onClose}
+              title={isCollapsed ? "Steel Configuration" : undefined}
+              className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
+                isActive(pathname, "/steel/config")
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
+            >
+              <Settings className={`h-4 w-4 shrink-0 ${isActive(pathname, "/steel/config") ? "text-slate-800" : "text-slate-400"}`} />
+              {!isCollapsed && <span className="flex-1 truncate">Configuration</span>}
+            </Link>
+          </div>
+        )}
 
         {/* ── Main App section ── */}
         <div className="px-2 pb-2 border-t border-slate-100 pt-2 space-y-0.5">

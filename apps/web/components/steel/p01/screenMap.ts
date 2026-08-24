@@ -1,10 +1,12 @@
 import type { SteelPlanStage } from "@/services/steel.service";
 
-// Single source of truth for the P01 6-screen workflow (S1-S6), each
-// grouping a contiguous run of the real 12-stage backend state machine.
-// Nothing here changes stage semantics — STAGE_ORDER in steel.service.ts
-// remains authoritative for sequencing; this only maps stages to the
-// screen a user would associate them with.
+// P01's UI is two screens (Create Planning Document, Planning Document) —
+// the create form runs A01-A11 in one submission, so these "screens" are no
+// longer distinct workflow steps a planner clicks through. This grouping is
+// kept only as a stage-distribution taxonomy for the plans list/dashboard
+// (ProductionPlanList, StageOverview), grouping the real 12-stage backend
+// state machine into readable phases. Nothing here changes stage semantics —
+// STAGE_ORDER in steel.service.ts remains authoritative for sequencing.
 export interface ScreenMeta {
   code: string;
   label: string;
@@ -12,16 +14,24 @@ export interface ScreenMeta {
 }
 
 export const SCREENS: ScreenMeta[] = [
-  { code: "S1", label: "Demand & Priority", stages: ["A01_DEMAND_CAPTURED", "A02_PRIORITY_CONFIRMED"] },
-  { code: "S2", label: "Product & Specification", stages: ["A03_PRODUCT_CONFIRMED", "A04_SPEC_CONFIRMED"] },
-  { code: "S3", label: "Stock & Fulfilment", stages: ["A05_STOCK_CHECKED", "A06_STOCK_DECISION_MADE"] },
   {
-    code: "S4",
-    label: "Feasibility & Route Planning",
-    stages: ["A07_ROUTE_SELECTED", "A08_MATERIAL_CHECKED", "A09_CAPACITY_CHECKED"],
+    code: "S1",
+    label: "Demand & Requirement",
+    stages: ["A01_DEMAND_CAPTURED", "A02_PRIORITY_CONFIRMED", "A03_PRODUCT_CONFIRMED", "A04_SPEC_CONFIRMED"],
   },
-  { code: "S5", label: "Plan Preparation & Communication", stages: ["A10_PLAN_DRAFTED", "A11_PLAN_COMMUNICATED"] },
-  { code: "S6", label: "Plan Release", stages: ["A12_PLAN_RELEASED"] },
+  {
+    code: "S2",
+    label: "Fulfilment & Feasibility",
+    stages: [
+      "A05_STOCK_CHECKED",
+      "A06_STOCK_DECISION_MADE",
+      "A07_ROUTE_SELECTED",
+      "A08_MATERIAL_CHECKED",
+      "A09_CAPACITY_CHECKED",
+    ],
+  },
+  { code: "S3", label: "Build Plan", stages: ["A10_PLAN_DRAFTED", "A11_PLAN_COMMUNICATED"] },
+  { code: "S4", label: "Review & Release", stages: ["A12_PLAN_RELEASED"] },
 ];
 
 export const SCREEN_LABELS: string[] = SCREENS.map((s) => s.label);

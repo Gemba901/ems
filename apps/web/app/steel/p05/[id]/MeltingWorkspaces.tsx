@@ -6,9 +6,11 @@ import { Role } from "@/types/role";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MELTING_STAGE_ORDER, type SteelMelting } from "@/services/steel-melting.service";
 import { ContextSummary } from "@/components/steel/p05/ContextSummary";
-import { HeatCycleDocument } from "@/components/steel/p05/HeatCycleDocument";
 import { OperationalMetrics } from "@/components/steel/p05/OperationalMetrics";
-import { MeltingSidebarNav, type SidebarSection } from "@/components/steel/p05/MeltingSidebarNav";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { HeatInfoStrip } from "@/components/steel/p05/HeatInfoStrip";
+import { TemperatureMonitoringCard } from "@/components/steel/p05/TemperatureMonitoringCard";
+import { HeatOperationsTabs } from "@/components/steel/p05/HeatOperationsTabs";
 import { MeltingReviewRelease } from "@/components/steel/p05/MeltingReviewRelease";
 import { SubStep, HelpPopover, Field, subStatus, SubStepStatus } from "@/components/steel/p05/shared";
 import { Button } from "@/components/ui/button";
@@ -23,9 +25,16 @@ import {
   MonitorMeltForm,
 } from "@/components/steel/p05/forms/heat-operations-forms";
 import { RELEASE_ROLES, AdditionsForm, SlagForm, OutputForm, ConfirmReadyForm } from "@/components/steel/p05/forms/review-release-forms";
-import { ShieldCheck, Flame, Gauge, Send, FileText, ChevronRight } from "lucide-react";
+import { ShieldCheck, Flame, Gauge, Send, FileText, ChevronRight, type LucideIcon } from "lucide-react";
 
 type SectionKey = "readiness" | "charging" | "monitor" | "output" | "review";
+
+interface WorkspaceSection {
+  key: SectionKey;
+  label: string;
+  icon: LucideIcon;
+  done: boolean;
+}
 
 function workspaceDone(steps: SubStepStatus[]): boolean {
   return steps.every((s) => s === "done");
@@ -78,7 +87,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
   const outputDone = workspaceDone([slagStatus, outputStatus, readyStatus]);
   const reviewReady = readinessDone && chargingDone && monitorDone && outputDone;
 
-  const sections: SidebarSection[] = [
+  const sections: WorkspaceSection[] = [
     { key: "readiness", label: "Furnace readiness", icon: Flame, done: readinessDone },
     { key: "charging", label: "Charge loading", icon: ShieldCheck, done: chargingDone },
     { key: "monitor", label: "Melting monitor", icon: Gauge, done: monitorDone },
@@ -113,10 +122,45 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-4">
       <ContextSummary melting={melting} />
 
-      <div className="flex gap-6 items-start">
-        <MeltingSidebarNav sections={sections} activeKey={active} onSelect={(k) => setActive(k as SectionKey)} />
+      {/* Top workflow stepper — replaces the former MeltingSidebarNav. Same
+          sections/done/active data as before, just re-skinned as a
+          horizontal stepper (WorkflowIndicator, shared with P01/P02/P04/P06)
+          to match the mockup's Screen 2 layout. WorkflowIndicator itself is
+          display-only (no click handling, matching its existing contract
+          for P01/P02/P04/P06), so the row of pill buttons below it is the
+          actual nav control — same setActive(key) the old sidebar's
+          onSelect called. */}
+      <WorkflowIndicator
+        steps={sections.map((s) => ({ code: s.key, label: s.label }))}
+        doneCount={sections.filter((s) => s.done).length}
+        activeIndex={currentIdx}
+      />
+      <div className="flex flex-wrap gap-1.5">
+        {sections.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setActive(s.key)}
+            className={
+              "px-2.5 py-1 rounded-md text-xs font-medium border transition-colors " +
+              (s.key === active
+                ? "border-blue-300 bg-blue-50 text-blue-800"
+                : "border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700")
+            }
+          >
+            {s.done ? "✓ " : ""}
+            {s.label}
+          </button>
+        ))}
+      </div>
 
-        <div className="flex-1 min-w-0 space-y-4">
+      <HeatInfoStrip melting={melting} />
+
+      {melting.meltingStartTime && <TemperatureMonitoringCard melting={melting} token={token} />}
+
+      <HeatOperationsTabs melting={melting} token={token} />
+
+      <div className="space-y-4">
           {active === "readiness" && (
             <Card className="border-blue-200 shadow-sm">
               <CardHeader>
@@ -312,22 +356,8 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                 }}
                 onDone={onRefresh}
               />
-              {closed && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-sm">
-                      <FileText className="h-4 w-4 text-slate-500" />
-                      Heat Cycle Document
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <HeatCycleDocument melting={melting} token={token} />
-                  </CardContent>
-                </Card>
-              )}
             </>
           )}
-        </div>
       </div>
     </div>
   );

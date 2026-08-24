@@ -15,8 +15,8 @@
 //     department acks and advances the stage
 //   - acknowledgeDepartment: rejects before the plan has been communicated;
 //     rejects a department that wasn't included; success updates the ack
-//   - releasePlan (A12): rejects while any department ack is outstanding;
-//     success sets status RELEASED once all departments have acknowledged
+//   - releasePlan (A12): releases regardless of department ack state —
+//     department acknowledgement is informational only, not a release gate
 //   - updateStatus: administrative override bypasses stage/status validation
 //   - getById / getSummary: shape checks
 import { Test, TestingModule } from '@nestjs/testing';
@@ -35,6 +35,12 @@ import {
 
 interface PrismaMock {
   employee: { findFirst: jest.Mock };
+  customer: { findFirst: jest.Mock };
+  steelProduct: { findFirst: jest.Mock };
+  steelProductSpecification: { findFirst: jest.Mock };
+  steelProductionRoute: { findFirst: jest.Mock };
+  steelProductionRouteStep: { findMany: jest.Mock };
+  steelFinishedGoodsStock: { findMany: jest.Mock };
   steelProductionPlan: {
     create: jest.Mock;
     update: jest.Mock;
@@ -59,6 +65,12 @@ interface PrismaMock {
 function createPrismaMock(): PrismaMock {
   const prisma = {
     employee: { findFirst: jest.fn() },
+    customer: { findFirst: jest.fn() },
+    steelProduct: { findFirst: jest.fn() },
+    steelProductSpecification: { findFirst: jest.fn() },
+    steelProductionRoute: { findFirst: jest.fn() },
+    steelProductionRouteStep: { findMany: jest.fn().mockResolvedValue([]) },
+    steelFinishedGoodsStock: { findMany: jest.fn().mockResolvedValue([]) },
     steelProductionPlan: {
       create: jest.fn(),
       update: jest.fn(),
@@ -153,6 +165,48 @@ describe('SteelService', () => {
         ForbiddenException,
       );
     });
+
+    it('rejects a CUSTOMER_ORDER demand with no customer reference', async () => {
+      await expect(
+        service.createDemand(
+          { demandSource: 'CUSTOMER_ORDER', requestedQuantityTonnes: 10 },
+          USER_ID,
+          ORG_ID,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('derives customerName/dealerName from the selected master-data customer', async () => {
+      prisma.customer.findFirst.mockResolvedValue({
+        id: 'cust-1',
+        organizationId: ORG_ID,
+        name: 'Acme Steel',
+        dealerName: 'Acme Dealer Co',
+      });
+      prisma.steelProductionPlan.count.mockResolvedValue(0);
+      prisma.steelProductionPlan.create.mockResolvedValue({ id: 'plan-1' });
+      prisma.steelProductionPlan.findUnique.mockResolvedValue({ id: 'plan-1' });
+
+      await service.createDemand(
+        {
+          demandSource: 'CUSTOMER_ORDER',
+          customerId: 'cust-1',
+          requestedQuantityTonnes: 10,
+        },
+        USER_ID,
+        ORG_ID,
+      );
+
+      expect(prisma.steelProductionPlan.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            customerId: 'cust-1',
+            customerName: 'Acme Steel',
+            dealerName: 'Acme Dealer Co',
+          }) as unknown,
+        }),
+      );
+    });
   });
 
   // ── Sequential stage transitions (shared assertStage guard) ──
@@ -214,6 +268,7 @@ describe('SteelService', () => {
         id: 'plan-1',
         organizationId: ORG_ID,
         stage: 'A01_DEMAND_CAPTURED',
+        demandSource: 'CUSTOMER_ORDER',
         departmentAcks: [],
       });
       prisma.steelProductionPlan.update.mockResolvedValue({ id: 'plan-1' });
@@ -222,8 +277,11 @@ describe('SteelService', () => {
         stage: 'A02_PRIORITY_CONFIRMED',
       });
 
+      // NORMAL matches the default derived from CUSTOMER_ORDER, so this
+      // exercises the pass-through path without triggering the
+      // override-requires-notes guard.
       const dto: ConfirmSteelPriorityDto = {
-        priority: 'HIGH' as ConfirmSteelPriorityDto['priority'],
+        priority: 'NORMAL' as ConfirmSteelPriorityDto['priority'],
       };
       await service.confirmPriority('plan-1', dto, USER_ID, ORG_ID);
 
@@ -300,6 +358,100 @@ describe('SteelService', () => {
           }) as unknown,
         }),
       );
+    });
+  });
+
+  // ── decideStockOrProduction (P01-A06) — shortfall-based suggestion ──
+  describe('decideStockOrProduction', () => {
+    it('defaults to PRODUCTION_REQUIRED when stock falls short and no decision given', async () => {
+      prisma.steelProductionPlan.findFirst.mockResolvedValue({
+        id: 'plan-1',
+        organizationId: ORG_ID,
+        stage: 'A05_STOCK_CHECKED',
+        requestedQuantityTonnes: 10,
+        certifiedStockAvailableQty: 4,
+        departmentAcks: [],
+      });
+      prisma.steelProductionPlan.update.mockResolvedValue({ id: 'plan-1' });
+      prisma.steelProductionPlan.findUnique.mockResolvedValue({ id: 'plan-1' });
+
+      await service.decideStockOrProduction('plan-1', {}, USER_ID, ORG_ID);
+
+      expect(prisma.steelProductionPlan.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            stockDecision: 'PRODUCTION_REQUIRED',
+          }) as unknown,
+        }),
+      );
+    });
+
+    it('rejects overriding the suggested decision without a note', async () => {
+      prisma.steelProductionPlan.findFirst.mockResolvedValue({
+        id: 'plan-1',
+        organizationId: ORG_ID,
+        stage: 'A05_STOCK_CHECKED',
+        requestedQuantityTonnes: 10,
+        certifiedStockAvailableQty: 4,
+        departmentAcks: [],
+      });
+
+      await expect(
+        service.decideStockOrProduction(
+          'plan-1',
+          { stockDecision: 'DISPATCH_FROM_STOCK' },
+          USER_ID,
+          ORG_ID,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ── selectRoute (P01-A07) — plantRoute derived from master-data route ──
+  describe('selectRoute', () => {
+    it('derives plantRoute from the selected production route', async () => {
+      prisma.steelProductionPlan.findFirst.mockResolvedValue({
+        id: 'plan-1',
+        organizationId: ORG_ID,
+        stage: 'A06_STOCK_DECISION_MADE',
+        departmentAcks: [],
+      });
+      prisma.steelProductionRoute.findFirst.mockResolvedValue({
+        id: 'route-1',
+        organizationId: ORG_ID,
+        plantRoute: 'INTEGRATED_PLANT',
+      });
+      prisma.steelProductionPlan.update.mockResolvedValue({ id: 'plan-1' });
+      prisma.steelProductionPlan.findUnique.mockResolvedValue({ id: 'plan-1' });
+
+      await service.selectRoute(
+        'plan-1',
+        { productionRouteId: 'route-1' },
+        USER_ID,
+        ORG_ID,
+      );
+
+      expect(prisma.steelProductionPlan.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            productionRouteId: 'route-1',
+            plantRoute: 'INTEGRATED_PLANT',
+          }) as unknown,
+        }),
+      );
+    });
+
+    it('rejects when neither productionRouteId nor plantRoute is given', async () => {
+      prisma.steelProductionPlan.findFirst.mockResolvedValue({
+        id: 'plan-1',
+        organizationId: ORG_ID,
+        stage: 'A06_STOCK_DECISION_MADE',
+        departmentAcks: [],
+      });
+
+      await expect(
+        service.selectRoute('plan-1', {}, USER_ID, ORG_ID),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -434,7 +586,7 @@ describe('SteelService', () => {
 
   // ── releasePlan (P01-A12) — terminal gate ──
   describe('releasePlan', () => {
-    it('rejects while any department ack is outstanding', async () => {
+    it('releases the plan even with outstanding department acknowledgements — departments are informational only, not a release gate', async () => {
       prisma.steelProductionPlan.findFirst.mockResolvedValue({
         id: 'plan-1',
         organizationId: ORG_ID,
@@ -444,14 +596,29 @@ describe('SteelService', () => {
           { department: 'QUALITY', acknowledged: false },
         ],
       });
+      prisma.steelProductionPlan.update.mockResolvedValue({ id: 'plan-1' });
+      prisma.steelProductionPlan.findUnique.mockResolvedValue({
+        id: 'plan-1',
+        stage: 'A12_PLAN_RELEASED',
+        status: 'RELEASED',
+      });
 
-      await expect(
-        service.releasePlan('plan-1', {}, USER_ID, ORG_ID),
-      ).rejects.toThrow(BadRequestException);
-      expect(prisma.steelProductionPlan.update).not.toHaveBeenCalled();
+      const result = await service.releasePlan(
+        'plan-1',
+        { releaseNotes: 'Approved' },
+        USER_ID,
+        ORG_ID,
+      );
+
+      expect(prisma.steelProductionPlan.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'RELEASED' }) as unknown,
+        }),
+      );
+      expect(result).toMatchObject({ status: 'RELEASED' });
     });
 
-    it('releases the plan once every department has acknowledged', async () => {
+    it('releases the plan once every department has acknowledged (also unblocked, same as any other ack state)', async () => {
       prisma.steelProductionPlan.findFirst.mockResolvedValue({
         id: 'plan-1',
         organizationId: ORG_ID,

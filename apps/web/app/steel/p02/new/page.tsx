@@ -332,11 +332,11 @@ export default function NewSteelSourcingOrderPage() {
 
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <Link href="/steel/p02">
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950">
                 Cancel
               </Button>
             </Link>
-            <Button type="submit" disabled={mutation.isPending || !planId} className="gap-2">
+            <Button type="submit" disabled={mutation.isPending || !planId} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
               {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Sourcing Order →"}
             </Button>
           </div>

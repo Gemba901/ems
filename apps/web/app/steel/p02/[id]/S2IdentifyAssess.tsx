@@ -292,7 +292,7 @@ function MaterialTypeForm({ id, token, onDone }: { id: string; token: string; on
       </div>
 
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={!materialType || mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={!materialType || mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Material Type →"}
         </Button>
       </div>
@@ -548,7 +548,7 @@ function SupplierCheckForm({ id, token, onDone, onBack }: { id: string; token: s
         <button type="button" onClick={onBack} className="text-xs text-slate-400 hover:text-slate-600">
           ← Change source
         </button>
-        <Button type="submit" disabled={!supplierId || mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={!supplierId || mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Supplier →"}
         </Button>
       </div>
@@ -683,7 +683,7 @@ function SupplierRiskForm({ id, token, onDone }: { id: string; token: string; on
       </div>
 
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={!risk || mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={!risk || mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Risk Review →"}
         </Button>
       </div>
@@ -717,7 +717,7 @@ function S2CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onCo
             Next: <span className="font-medium text-slate-700">S3 — Quote Comparison &amp; Selection</span>
           </div>
         )}
-        <Button onClick={onContinue} className="gap-2">
+        <Button onClick={onContinue} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {isStock ? "Continue" : "Continue to S3 — Quote Comparison"} <ArrowRight className="h-4 w-4" />
         </Button>
       </div>

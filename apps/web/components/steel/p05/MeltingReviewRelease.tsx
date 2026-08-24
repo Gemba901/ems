@@ -1,12 +1,24 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field } from "@/components/steel/p05/shared";
+import { Field, SimpleTabs } from "@/components/steel/p05/shared";
 import { HeatSummaryPanel, ReadinessPanel, HandoverPanel, MaterialChargeLog } from "@/components/steel/p05/forms/review-release-forms";
+import { TemperatureMonitoringCard } from "@/components/steel/p05/TemperatureMonitoringCard";
+import { HeatCycleDocument } from "@/components/steel/p05/HeatCycleDocument";
 import type { SteelMelting } from "@/services/steel-melting.service";
-import { AlertTriangle, Pencil, ClipboardList } from "lucide-react";
+import { AlertTriangle, Pencil, ClipboardList, FlaskConical, Thermometer, TestTube2, FileText, Info } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+
+type ReviewTab = "summary" | "chemistry" | "temperature" | "samples" | "documents";
+
+const REVIEW_TABS: { key: ReviewTab; label: string }[] = [
+  { key: "summary", label: "Heat Cycle Summary" },
+  { key: "chemistry", label: "Chemistry" },
+  { key: "temperature", label: "Temperature" },
+  { key: "samples", label: "Samples & Tests" },
+  { key: "documents", label: "Documents" },
+];
 
 /**
  * Final sidebar state — summary + release, not another input form. "Edit"
@@ -35,6 +47,7 @@ export function MeltingReviewRelease({
 }) {
   const [confirmEdit, setConfirmEdit] = useState<{ sectionKey: string; label: string } | null>(null);
   const [reason, setReason] = useState("");
+  const [tab, setTab] = useState<ReviewTab>("summary");
 
   const weightMismatch = melting.actualWeightVsRecipeOk === false;
   const recipeTotal =
@@ -58,6 +71,10 @@ export function MeltingReviewRelease({
 
   return (
     <div className="space-y-4">
+      <SimpleTabs tabs={REVIEW_TABS} active={tab} onSelect={setTab} />
+
+      {tab === "summary" && (
+      <>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm">
@@ -169,6 +186,114 @@ export function MeltingReviewRelease({
           <HandoverPanel melting={melting} token={token} canAct={canHandover} onDone={onDone} />
         </CardContent>
       </Card>
+      </>
+      )}
+
+      {tab === "chemistry" && <ChemistryTab />}
+      {tab === "temperature" && <TemperatureTab melting={melting} token={token} />}
+      {tab === "samples" && <SamplesTab />}
+      {tab === "documents" && <DocumentsTab melting={melting} token={token} />}
     </div>
+  );
+}
+
+// Chemistry composition (element %, target ranges, deviation) is captured
+// entirely in P06 Heat Approval (SteelHeatApproval.chemistryComposition /
+// chemistryMatchesGrade in steel-heat-approval.service.ts) — melting itself
+// never records element-level chemistry. Rather than fabricate rows or drop
+// the tab, this shows an honest "not tracked here" state that points to
+// where the real data lives.
+function ChemistryTab() {
+  return (
+    <Card>
+      <CardContent className="py-8 flex flex-col items-center text-center gap-2">
+        <FlaskConical className="h-6 w-6 text-slate-300" />
+        <p className="text-sm font-medium text-slate-700">Chemistry composition is not tracked in Melting.</p>
+        <p className="text-xs text-slate-400 max-w-sm">
+          Element-by-element chemistry (actual %, target range, deviation) is captured in P06 Heat Approval once the
+          heat is handed over to refining/quality — it does not exist as melting data.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Real temperature data captured during melting: melting.liquidTemperatureCelsius
+// (the P05-A13 confirmed liquid temperature) plus the same reading trend
+// chart used on the Heat Operations screen (TemperatureMonitoringCard,
+// reused as-is — same component, same "heat-cycle-events" query).
+function TemperatureTab({ melting, token }: { melting: SteelMelting; token: string }) {
+  return (
+    <div className="space-y-4">
+      <TemperatureMonitoringCard melting={melting} token={token} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Thermometer className="h-4 w-4 text-slate-500" />
+            Tap Temperature
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-4 text-sm">
+          <Field
+            label="Liquid Temperature (confirmed at P05-A13)"
+            value={melting.liquidTemperatureCelsius !== null ? `${melting.liquidTemperatureCelsius} °C` : "Not recorded"}
+          />
+          <Field
+            label="Liquid Steel Ready"
+            value={melting.liquidReady === null ? "Not confirmed" : melting.liquidReady ? "Yes" : "No"}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Sample/test tracking (sampleRef, sampleTakenAt, analysis results) also
+// lives entirely in P06 Heat Approval — melting has no sample fields at
+// all. Honest "not available" state, same reasoning as ChemistryTab.
+function SamplesTab() {
+  return (
+    <Card>
+      <CardContent className="py-8 flex flex-col items-center text-center gap-2">
+        <TestTube2 className="h-6 w-6 text-slate-300" />
+        <p className="text-sm font-medium text-slate-700">Samples & tests are not tracked in Melting.</p>
+        <p className="text-xs text-slate-400 max-w-sm">
+          Sample reference, sample time, and analysis results are recorded in P06 Heat Approval, not in this melting
+          record.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// The only real generated document in melting's domain is the Heat Cycle
+// Report workbook (HeatCycleDocument, existing, unchanged) — available once
+// the record is closed. The mockup's Chemistry Report / Temperature Log /
+// Samples Report are P06/other-module artifacts that don't exist here, so
+// they're not listed rather than invented as fake attachment rows.
+function DocumentsTab({ melting, token }: { melting: SteelMelting; token: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <FileText className="h-4 w-4 text-slate-500" />
+          Attached Documents
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {melting.status === "CLOSED" ? (
+          <HeatCycleDocument melting={melting} token={token} />
+        ) : (
+          <p className="text-sm text-slate-400">The Heat Cycle Report becomes available once this heat is released to refining.</p>
+        )}
+        <div className="flex items-start gap-2 text-xs text-slate-400 pt-2 border-t border-slate-100">
+          <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <p>
+            Chemistry/temperature/samples reports are generated in other modules (P06 Heat Approval) once available —
+            melting only produces the Heat Cycle Report above.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

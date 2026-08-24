@@ -241,7 +241,7 @@ function DeliveryScheduleForm({ id, token, onDone }: { id: string; token: string
         <Input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. MH-12-AB-1234 / container ID" />
       </div>
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Delivery Schedule →"}
         </Button>
       </div>
@@ -293,7 +293,7 @@ function LogisticsForm({
           </span>
         </div>
         <div className="flex items-center justify-end">
-          <Button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate({})} className="gap-2">
+          <Button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate({})} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continue — Not Required for This Route →"}
           </Button>
         </div>
@@ -348,7 +348,7 @@ function LogisticsForm({
         </div>
       </div>
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Logistics →"}
         </Button>
       </div>
@@ -397,7 +397,7 @@ function InformIntakeForm({ id, token, onDone }: { id: string; token: string; on
         <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. expected vehicle, special handling" />
       </div>
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Inform Intake Team →"}
         </Button>
       </div>
@@ -429,7 +429,7 @@ function ConfirmCloseModal({
           cannot be reverted from here.
         </p>
         <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting} className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950">
             Cancel
           </Button>
           <Button type="button" onClick={onConfirm} disabled={submitting} className="gap-2 bg-red-600 hover:bg-red-700">
@@ -547,7 +547,7 @@ function ClosedState({ order }: { order: SteelSourcingOrder }) {
           arrives at the gate.
         </div>
         <Link href={`/steel/p03/new?sourcingOrderId=${order.id}`}>
-          <Button className="gap-2">
+          <Button className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             Create Material Intake in P03 <ArrowRight className="h-4 w-4" />
           </Button>
         </Link>

@@ -266,7 +266,7 @@ function SpecificationForm({ id, token, onDone }: { id: string; token: string; o
       </div>
 
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Specification →"}
         </Button>
       </div>
@@ -401,7 +401,7 @@ function PurchaseOrderForm({
       </div>
 
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={!valid || mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={!valid || mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Issue Purchase Order →"}
         </Button>
       </div>
@@ -443,7 +443,7 @@ function S4CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onCo
         <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-500">
           Next: <span className="font-medium text-slate-700">S5 — Delivery, Logistics &amp; Handover</span>
         </div>
-        <Button onClick={onContinue} className="gap-2">
+        <Button onClick={onContinue} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           Continue to S5 — Delivery &amp; Handover <ArrowRight className="h-4 w-4" />
         </Button>
       </div>

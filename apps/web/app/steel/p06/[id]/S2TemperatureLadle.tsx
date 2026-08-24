@@ -8,66 +8,13 @@ import {
   CheckTemperaturePayload,
   CheckLadleReadinessPayload,
 } from "@/services/steel-heat-approval.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/ScreenHeader";
-import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
-import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
-import { ScreenSidebar } from "@/components/steel/p06/ScreenSidebar";
-import { ContextSummary } from "@/components/steel/p06/ContextSummary";
-import { HeatApprovalProgress } from "@/components/steel/p06/HeatApprovalProgress";
-import { SCREEN_TOP_STEPS } from "@/components/steel/p06/screenMap";
 import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p06/shared";
-import { Thermometer, Info, ListChecks, Lightbulb } from "lucide-react";
 
-function Sidebar() {
-  return (
-    <ScreenSidebar>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Confirm the liquid steel temperature and check that the ladle is ready and its lining is in good
-            condition before approval.
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            After the ladle is confirmed ready, the record moves on to chemistry and temperature approval.
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            <li>Do not skip the ladle lining check — it protects both product quality and safety.</li>
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
-  );
-}
+// This module used to render its own full page. It's now consumed as the
+// "Heat Cycle" tab of the Heat Review screen (see HeatReview.tsx) — page
+// chrome moved there; only the real A07-A08 form logic/layout stayed here.
 
 function TemperatureForm({ heatApproval, token, onDone }: { heatApproval: SteelHeatApproval; token: string; onDone: () => void }) {
   const [temp, setTemp] = useState("");
@@ -123,30 +70,24 @@ function LadleReadinessForm({ heatApproval, token, onDone }: { heatApproval: Ste
   );
 }
 
-export function S2TemperatureLadle({
+// Real done/active/locked status for A07-A08 — exported so HeatReview's
+// Summary tab can reuse the same real conditions.
+export function heatCycleTabStatuses(heatApproval: SteelHeatApproval) {
+  const actions = heatApproval.allowedActions ?? [];
+  return {
+    tempStatus: subStatus(actions.includes("CHECK_TEMPERATURE"), heatApproval.liquidTemperatureCelsius !== null),
+    ladleStatus: subStatus(actions.includes("CHECK_LADLE_READINESS"), heatApproval.ladleReady !== null),
+  };
+}
+
+// Heat Cycle tab content for the Heat Review screen — the A07-A08
+// sub-steps (temperature check, ladle readiness), without page chrome.
+export function HeatCycleTab({
   heatApproval, token, onRefresh,
 }: { heatApproval: SteelHeatApproval; token: string; onRefresh: () => void }) {
-  const actions = heatApproval.allowedActions ?? [];
-  const tempStatus = subStatus(actions.includes("CHECK_TEMPERATURE"), heatApproval.liquidTemperatureCelsius !== null);
-  const ladleStatus = subStatus(actions.includes("CHECK_LADLE_READINESS"), heatApproval.ladleReady !== null);
-
-  const statuses = [tempStatus, ladleStatus];
-  const doneCount = statuses.filter((s) => s === "done").length;
-  const activeRel = statuses.findIndex((s) => s === "active");
+  const { tempStatus, ladleStatus } = heatCycleTabStatuses(heatApproval);
 
   return (
-    <TooltipProvider>
-      <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
-        <ScreenHeader
-        code="P06"
-          icon={Thermometer}
-          title="Temperature & Ladle Readiness"
-          subtitle="Check the liquid steel temperature and confirm the ladle is ready before approval."
-        />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[1]} doneCount={doneCount} activeIndex={activeRel === -1 ? null : activeRel} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P06")?.color.bar} />
-        <ContextSummary heatApproval={heatApproval} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
             <SubStep
               code="P06-A07"
@@ -166,12 +107,5 @@ export function S2TemperatureLadle({
               {ladleStatus === "active" && <LadleReadinessForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
             </SubStep>
           </div>
-          <ScreenSidebar>
-            <HeatApprovalProgress heatApproval={heatApproval} />
-            <Sidebar />
-          </ScreenSidebar>
-        </div>
-      </div>
-    </TooltipProvider>
   );
 }

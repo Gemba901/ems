@@ -3,711 +3,726 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { useToast } from "@/contexts/toast.context";
 import {
   SteelService,
+  SteelProductionPlan,
   DemandSource,
   OrderPriority,
-  CreditStatus,
-  CreateSteelDemandPayload,
-  ConfirmPriorityPayload,
-  SteelProductionPlan,
+  AvailabilityStatus,
+  StockDecision,
+  SteelPlanStage,
 } from "@/services/steel.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SteelMasterDataService } from "@/services/steel-master-data.service";
+import { MasterDataCombobox, ComboboxOption } from "@/components/steel/p01/MasterDataCombobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
 import { ScreenHeader } from "@/components/steel/ScreenHeader";
-import { ScreenSidebar } from "@/components/steel/p01/ScreenSidebar";
-import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
-import { SCREENS } from "@/components/steel/p01/screenMap";
-import {
-  ArrowLeft,
-  Loader2,
-  ClipboardList,
-  ShoppingCart,
-  Building2,
-  Briefcase,
-  TrendingUp,
-  Warehouse,
-  Check,
-  Info,
-  ListChecks,
-  Lightbulb,
-  AlertTriangle,
-  Gauge,
-  Zap,
-  Plane,
-  RefreshCw,
-} from "lucide-react";
+import { Loader2, ClipboardList, AlertTriangle } from "lucide-react";
 
-const DEMAND_SOURCES: { value: DemandSource; label: string; description: string; icon: typeof ShoppingCart }[] = [
-  {
-    value: "INTERNAL_STOCK_PLAN",
-    label: "Internal Stock Plan",
-    description: "Replenishment to maintain internal stock levels.",
-    icon: Warehouse,
-  },
-  {
-    value: "CUSTOMER_ORDER",
-    label: "Customer Order",
-    description: "A confirmed order placed directly by a customer.",
-    icon: ShoppingCart,
-  },
-  {
-    value: "DEALER_REQUIREMENT",
-    label: "Dealer Requirement",
-    description: "A requirement raised by a dealer or distributor.",
-    icon: Building2,
-  },
-  {
-    value: "PROJECT_REQUIREMENT",
-    label: "Project Requirement",
-    description: "Material needed for a specific ongoing project.",
-    icon: Briefcase,
-  },
-  {
-    value: "FORECAST",
-    label: "Forecast",
-    description: "Anticipated demand based on sales forecasting.",
-    icon: TrendingUp,
-  },
+// The full backend stage sequence — used only to figure out which A01-A11
+// activities still need to run for a given plan, never to drive screens.
+const STAGE_ORDER: SteelPlanStage[] = [
+  "A01_DEMAND_CAPTURED",
+  "A02_PRIORITY_CONFIRMED",
+  "A03_PRODUCT_CONFIRMED",
+  "A04_SPEC_CONFIRMED",
+  "A05_STOCK_CHECKED",
+  "A06_STOCK_DECISION_MADE",
+  "A07_ROUTE_SELECTED",
+  "A08_MATERIAL_CHECKED",
+  "A09_CAPACITY_CHECKED",
+  "A10_PLAN_DRAFTED",
+  "A11_PLAN_COMMUNICATED",
+  "A12_PLAN_RELEASED",
 ];
 
-// Fields relevant to each demand source — the DTO accepts all of these as
-// optional regardless of source, but only some are meaningful per source.
-const SOURCE_FIELDS: Record<DemandSource, ("customerName" | "dealerName" | "salesOrderNumber" | "projectReference" | "forecastReference" | "stockRequirementReference")[]> = {
-  CUSTOMER_ORDER: ["customerName", "salesOrderNumber"],
-  DEALER_REQUIREMENT: ["dealerName", "salesOrderNumber"],
-  PROJECT_REQUIREMENT: ["projectReference"],
-  FORECAST: ["forecastReference"],
-  INTERNAL_STOCK_PLAN: ["stockRequirementReference"],
+const DEMAND_SOURCES: { value: DemandSource; label: string }[] = [
+  { value: "CUSTOMER_ORDER", label: "Customer Order" },
+  { value: "DEALER_REQUIREMENT", label: "Dealer Order" },
+  { value: "PROJECT_REQUIREMENT", label: "Project" },
+  { value: "FORECAST", label: "Forecast" },
+  { value: "INTERNAL_STOCK_PLAN", label: "Internal Stock Plan" },
+];
+
+const PRIORITY_OPTIONS: { value: OrderPriority; label: string }[] = [
+  { value: "NORMAL", label: "Normal" },
+  { value: "URGENT", label: "Urgent" },
+  { value: "EXPORT", label: "Export" },
+  { value: "PROJECT", label: "Project" },
+  { value: "STOCK_REPLENISHMENT", label: "Stock Replenishment" },
+];
+
+// Mirrors the server-side default in steel.service.ts confirmPriority.
+const DEFAULT_PRIORITY_BY_SOURCE: Record<DemandSource, OrderPriority> = {
+  CUSTOMER_ORDER: "NORMAL",
+  DEALER_REQUIREMENT: "NORMAL",
+  PROJECT_REQUIREMENT: "PROJECT",
+  FORECAST: "NORMAL",
+  INTERNAL_STOCK_PLAN: "STOCK_REPLENISHMENT",
 };
 
-const PRIORITY_OPTIONS: { value: OrderPriority; label: string; description: string; icon: typeof Gauge }[] = [
-  { value: "NORMAL", label: "Normal", description: "Standard processing timeline.", icon: Gauge },
-  { value: "URGENT", label: "Urgent", description: "Needs expedited handling.", icon: Zap },
-  { value: "EXPORT", label: "Export", description: "Bound for export shipment.", icon: Plane },
-  { value: "PROJECT", label: "Project", description: "Tied to a project commitment.", icon: Briefcase },
-  { value: "STOCK_REPLENISHMENT", label: "Stock Replenishment", description: "Internal stock replenishment.", icon: RefreshCw },
+const AVAILABILITY_OPTIONS: { value: AvailabilityStatus; label: string }[] = [
+  { value: "AVAILABLE", label: "Available" },
+  { value: "PARTIAL", label: "Partial" },
+  { value: "NOT_AVAILABLE", label: "Not Available" },
 ];
 
-const CREDIT_STATUS_OPTIONS: { value: CreditStatus; label: string }[] = [
-  { value: "APPROVED", label: "Approved" },
-  { value: "ON_HOLD", label: "On Hold" },
-  { value: "PENDING", label: "Pending" },
-];
-
-function Sidebar({ plan, subStep }: { plan: SteelProductionPlan | null; subStep: "A01" | "A02" }) {
+function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
-    <ScreenSidebar>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            S1 covers P01-A01 (capture the demand) and P01-A02 (confirm priority). Both happen in this one screen —
-            the plan is created first, then its priority is confirmed immediately after.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Plan Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {plan ? (
-            <dl className="text-xs space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Production Plan</dt>
-                <dd className="text-slate-700 font-medium text-right">{plan.planNumber}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Demand Source</dt>
-                <dd className="text-slate-700 font-medium text-right">
-                  {DEMAND_SOURCES.find((d) => d.value === plan.demandSource)?.label ?? plan.demandSource}
-                </dd>
-              </div>
-              {(plan.customerName || plan.dealerName) && (
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-slate-400">Customer/Dealer</dt>
-                  <dd className="text-slate-700 font-medium text-right truncate max-w-[160px]">
-                    {plan.customerName || plan.dealerName}
-                  </dd>
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Requested Quantity</dt>
-                <dd className="text-slate-700 font-medium text-right">{plan.requestedQuantityTonnes} t</dd>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Expected Delivery</dt>
-                <dd className="text-slate-700 font-medium text-right">
-                  {plan.expectedDeliveryDate ? new Date(plan.expectedDeliveryDate).toLocaleDateString() : "—"}
-                </dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="text-xs text-slate-400">The plan summary will appear here once the demand is captured.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            {subStep === "A01"
-              ? "Once the demand is captured, you'll immediately confirm its priority in this same screen."
-              : "Once priority is confirmed, this plan moves to S2 — Product & Specification."}
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            {subStep === "A01" ? (
-              <>
-                <li>Customer name is required for customer orders.</li>
-                <li>Quantity is entered in tonnes and can be refined in later stages.</li>
-              </>
-            ) : (
-              <>
-                <li>Priority affects how this plan is scheduled against others.</li>
-                <li>Credit status and delivery promise are optional but help downstream planning.</li>
-              </>
-            )}
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
+    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1">
+      {children}
+      {required && <span className="text-red-500">*</span>}
+    </label>
   );
 }
 
-// ── A01 — Demand capture ─────────────────────────────────────────────────────
-
-function DemandCaptureForm({ onCreated }: { onCreated: (plan: SteelProductionPlan) => void }) {
-  const { accessToken } = useAuthStore();
-  const { toast } = useToast();
-
-  const [demandSource, setDemandSource] = useState<DemandSource>("INTERNAL_STOCK_PLAN");
-  const [customerName, setCustomerName] = useState("");
-  const [dealerName, setDealerName] = useState("");
-  const [projectReference, setProjectReference] = useState("");
-  const [salesOrderNumber, setSalesOrderNumber] = useState("");
-  const [forecastReference, setForecastReference] = useState("");
-  const [stockRequirementReference, setStockRequirementReference] = useState("");
-  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("");
-  const [requestedQuantityTonnes, setRequestedQuantityTonnes] = useState("");
-  const [demandNotes, setDemandNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const mutation = useMutation({
-    mutationFn: (payload: CreateSteelDemandPayload) => SteelService.create(payload, accessToken!),
-    onSuccess: (plan) => {
-      toast("Demand captured — confirm priority to continue.", "success");
-      onCreated(plan);
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    const qty = Number(requestedQuantityTonnes);
-    if (!qty || qty <= 0) {
-      setError("Please enter a valid requested quantity (tonnes).");
-      return;
-    }
-    if (demandSource === "CUSTOMER_ORDER" && !customerName.trim()) {
-      setError("Customer name is required for a customer order.");
-      return;
-    }
-
-    mutation.mutate({
-      demandSource,
-      customerName: customerName || undefined,
-      dealerName: dealerName || undefined,
-      projectReference: projectReference || undefined,
-      salesOrderNumber: salesOrderNumber || undefined,
-      forecastReference: forecastReference || undefined,
-      stockRequirementReference: stockRequirementReference || undefined,
-      expectedDeliveryDate: expectedDeliveryDate || undefined,
-      requestedQuantityTonnes: qty,
-      demandNotes: demandNotes || undefined,
-    });
-  };
-
-  const visibleFields = SOURCE_FIELDS[demandSource];
-
+function Select({
+  value, onChange, options, className,
+}: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; className?: string }) {
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Demand Source</CardTitle>
-          <p className="text-sm text-slate-500">Where is this requirement coming from?</p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {DEMAND_SOURCES.map((d) => {
-              const Icon = d.icon;
-              const selected = d.value === demandSource;
-              return (
-                <button
-                  key={d.value}
-                  type="button"
-                  onClick={() => setDemandSource(d.value)}
-                  aria-pressed={selected}
-                  className={
-                    "relative flex flex-col items-start gap-2 rounded-xl border px-3 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 " +
-                    (selected
-                      ? "border-blue-300 bg-blue-50 ring-1 ring-blue-200"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm")
-                  }
-                >
-                  {selected && (
-                    <div className="absolute top-2 right-2 h-4.5 w-4.5 rounded-full bg-blue-600 flex items-center justify-center">
-                      <Check className="h-3 w-3 text-white" />
-                    </div>
-                  )}
-                  <div
-                    className={
-                      "h-9 w-9 rounded-lg flex items-center justify-center " +
-                      (selected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")
-                    }
-                  >
-                    <Icon className="h-4.5 w-4.5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{d.label}</p>
-                    <p className="text-xs text-slate-500 leading-snug">{d.description}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {visibleFields.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Demand Details</CardTitle>
-            <p className="text-sm text-slate-500">Reference information for this demand.</p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-              {visibleFields.includes("customerName") && (
-                <div>
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                    Customer name
-                    {demandSource === "CUSTOMER_ORDER" && <span className="text-red-500">*</span>}
-                  </label>
-                  <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g. Acme Steel Traders" />
-                </div>
-              )}
-              {visibleFields.includes("dealerName") && (
-                <div>
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                    Dealer name <span className="text-slate-400 font-normal">(optional)</span>
-                  </label>
-                  <Input value={dealerName} onChange={(e) => setDealerName(e.target.value)} placeholder="Optional" />
-                </div>
-              )}
-              {visibleFields.includes("salesOrderNumber") && (
-                <div>
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                    Sales order number <span className="text-slate-400 font-normal">(optional)</span>
-                  </label>
-                  <Input value={salesOrderNumber} onChange={(e) => setSalesOrderNumber(e.target.value)} placeholder="Optional" />
-                </div>
-              )}
-              {visibleFields.includes("projectReference") && (
-                <div>
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                    Project reference <span className="text-slate-400 font-normal">(optional)</span>
-                  </label>
-                  <Input value={projectReference} onChange={(e) => setProjectReference(e.target.value)} placeholder="Optional" />
-                </div>
-              )}
-              {visibleFields.includes("forecastReference") && (
-                <div>
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                    Forecast reference <span className="text-slate-400 font-normal">(optional)</span>
-                  </label>
-                  <Input value={forecastReference} onChange={(e) => setForecastReference(e.target.value)} placeholder="Optional" />
-                </div>
-              )}
-              {visibleFields.includes("stockRequirementReference") && (
-                <div>
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                    Stock requirement reference <span className="text-slate-400 font-normal">(optional)</span>
-                  </label>
-                  <Input
-                    value={stockRequirementReference}
-                    onChange={(e) => setStockRequirementReference(e.target.value)}
-                    placeholder="Optional"
-                  />
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Production Requirement</CardTitle>
-          <p className="text-sm text-slate-500">When it&apos;s needed and how much.</p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-            <div>
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                Expected delivery date <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <Input type="date" value={expectedDeliveryDate} onChange={(e) => setExpectedDeliveryDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
-                Requested quantity <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={requestedQuantityTonnes}
-                  onChange={(e) => setRequestedQuantityTonnes(e.target.value)}
-                  placeholder="e.g. 25.5"
-                  className="pr-12"
-                />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">tonnes</span>
-              </div>
-              <p className="text-xs text-slate-400 mt-1">Must be greater than zero.</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Additional Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Notes <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <textarea
-            className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm min-h-[80px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring"
-            value={demandNotes}
-            maxLength={500}
-            onChange={(e) => setDemandNotes(e.target.value)}
-            placeholder="Any additional context about this demand..."
-          />
-          <p className="text-xs text-slate-400 mt-1 text-right">{demandNotes.length}/500</p>
-        </CardContent>
-      </Card>
-
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Link href="/steel/p01">
-          <Button type="button" variant="outline">
-            Cancel
-          </Button>
-        </Link>
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
-          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Capture Demand →"}
-        </Button>
-      </div>
-    </form>
+    <select
+      className={"h-8 w-full rounded-md border border-input bg-transparent px-2.5 text-sm " + (className ?? "")}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
   );
 }
 
-// ── A02 — Priority confirmation ──────────────────────────────────────────────
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-input bg-background p-4 space-y-3">
+      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+      {children}
+    </div>
+  );
+}
 
-function PriorityForm({ plan }: { plan: SteelProductionPlan }) {
+function DerivedRow({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value === null || value === undefined || value === "") return null;
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm py-0.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="font-medium text-right">{value}</span>
+    </div>
+  );
+}
+
+// Reference field is a single input whose target backend column depends on
+// demandSource — the planner only ever sees one reference field, never four.
+const REFERENCE_FIELD_BY_SOURCE: Record<
+  DemandSource,
+  { key: "salesOrderNumber" | "projectReference" | "forecastReference" | "stockRequirementReference"; label: string } | null
+> = {
+  CUSTOMER_ORDER: { key: "salesOrderNumber", label: "Order Reference" },
+  DEALER_REQUIREMENT: { key: "salesOrderNumber", label: "Order Reference" },
+  PROJECT_REQUIREMENT: { key: "projectReference", label: "Project Reference" },
+  FORECAST: { key: "forecastReference", label: "Forecast Reference" },
+  INTERNAL_STOCK_PLAN: { key: "stockRequirementReference", label: "Stock Requirement Reference" },
+};
+
+function PlanForm({ plan, token }: { plan: SteelProductionPlan | null; token: string }) {
   const router = useRouter();
-  const { accessToken } = useAuthStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [priority, setPriority] = useState<OrderPriority | "">("");
-  const [creditStatus, setCreditStatus] = useState<CreditStatus | "">("");
-  const [deliveryPromiseDate, setDeliveryPromiseDate] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // ── Demand ──
+  const [demandSource, setDemandSource] = useState<DemandSource>(plan?.demandSource ?? "CUSTOMER_ORDER");
+  const [customer, setCustomer] = useState<ComboboxOption | null>(
+    plan?.customerId ? { value: plan.customerId, label: plan.customerName ?? plan.dealerName ?? "" } : null,
+  );
+  const referenceField = REFERENCE_FIELD_BY_SOURCE[demandSource];
+  const [reference, setReference] = useState(
+    plan?.salesOrderNumber ?? plan?.projectReference ?? plan?.forecastReference ?? plan?.stockRequirementReference ?? "",
+  );
+  const [requiredDate, setRequiredDate] = useState(plan?.expectedDeliveryDate?.slice(0, 10) ?? "");
+  const defaultPriority = DEFAULT_PRIORITY_BY_SOURCE[demandSource];
+  const [priority, setPriority] = useState<OrderPriority>(plan?.priority ?? defaultPriority);
+  const [priorityOverrideNote, setPriorityOverrideNote] = useState("");
+  const [requestedQuantity, setRequestedQuantity] = useState(String(plan?.requestedQuantityTonnes ?? ""));
 
-  const mutation = useMutation({
-    mutationFn: (payload: ConfirmPriorityPayload) => SteelService.confirmPriority(plan.id, payload, accessToken!),
-    onSuccess: () => {
-      toast("Priority confirmed — continuing to Product & Specification.", "success");
-      queryClient.invalidateQueries({ queryKey: ["steel-plan-s1", plan.id] });
-      router.push(`/steel/p01/${plan.id}`);
-    },
-    onError: (err: Error) => setError(err.message),
+  // ── Product requirement ──
+  const [product, setProduct] = useState<ComboboxOption | null>(
+    plan?.productId ? { value: plan.productId, label: plan.productType ?? "" } : null,
+  );
+  const [spec, setSpec] = useState<ComboboxOption | null>(
+    plan?.productSpecificationId ? { value: plan.productSpecificationId, label: [plan.grade, plan.size].filter(Boolean).join(" / ") } : null,
+  );
+  const [specDisplay, setSpecDisplay] = useState<{ grade: string; size: string; standard: string; length: string | null; toleranceNotes: string | null } | null>(
+    plan?.grade
+      ? { grade: plan.grade, size: plan.size ?? "", standard: plan.productStandard ?? "", length: plan.length, toleranceNotes: plan.toleranceNotes }
+      : null,
+  );
+
+  // ── Fulfilment (calculated) ──
+  const requiredQty = Number(requestedQuantity) || 0;
+  const { data: fgStock } = useQuery({
+    queryKey: ["master-fg-stock", spec?.value],
+    queryFn: () => SteelMasterDataService.getFinishedGoodsStock(spec!.value, token),
+    enabled: !!spec,
   });
+  const certifiedQty = fgStock?.certifiedQtyTonnes ?? plan?.certifiedStockAvailableQty ?? null;
+  const shortfall = certifiedQty !== null ? requiredQty - certifiedQty : null;
+  const suggestedDecision: StockDecision = shortfall !== null && shortfall <= 0 ? "DISPATCH_FROM_STOCK" : "PRODUCTION_REQUIRED";
+  const [decision, setDecision] = useState<StockDecision>(plan?.stockDecision ?? suggestedDecision);
+  const [decisionOverrideNote, setDecisionOverrideNote] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // ── Production ──
+  const [route, setRoute] = useState<ComboboxOption | null>(
+    plan?.productionRouteId ? { value: plan.productionRouteId, label: plan.plantRoute ?? "" } : null,
+  );
+  const { data: routeSteps } = useQuery({
+    queryKey: ["master-route-steps", route?.value],
+    queryFn: () => SteelMasterDataService.getRouteSteps(route!.value, token),
+    enabled: !!route,
+  });
+  const [materialAvailability, setMaterialAvailability] = useState<AvailabilityStatus>(plan?.materialAvailability ?? "AVAILABLE");
+  const [equipmentAvailability, setEquipmentAvailability] = useState<AvailabilityStatus>(plan?.equipmentAvailability ?? "AVAILABLE");
+  const [manpowerAvailability, setManpowerAvailability] = useState<AvailabilityStatus>(plan?.manpowerAvailability ?? "AVAILABLE");
+
+  const [saving, setSaving] = useState<"draft" | "create" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<0 | 1>(0);
+
+  const stageAtLeast = (current: SteelPlanStage | undefined, target: SteelPlanStage) =>
+    !!current && STAGE_ORDER.indexOf(current) >= STAGE_ORDER.indexOf(target);
+
+  const handleSaveDraft = async () => {
     setError(null);
-    if (!priority) {
-      setError("Please select a priority.");
+    const qty = Number(requestedQuantity);
+    if (!qty || qty <= 0) {
+      setError("Enter a requested quantity to save a draft.");
       return;
     }
-    mutation.mutate({
-      priority,
-      creditStatus: creditStatus || undefined,
-      deliveryPromiseDate: deliveryPromiseDate || undefined,
-    });
+    setSaving("draft");
+    try {
+      if (plan) {
+        toast("Draft already saved.", "success");
+      } else {
+        await SteelService.create(
+          {
+            demandSource,
+            // Dealer is a distinct Configuration model from Customer — the
+            // selected dealer's id has no meaning as a Customer.customerId,
+            // so a dealer selection is passed through as dealerName (the
+            // existing free-text column) rather than customerId.
+            customerId: demandSource === "DEALER_REQUIREMENT" ? undefined : customer?.value,
+            customerName: demandSource === "DEALER_REQUIREMENT" ? undefined : customer?.label,
+            dealerName: demandSource === "DEALER_REQUIREMENT" ? customer?.label : undefined,
+            salesOrderNumber: referenceField?.key === "salesOrderNumber" ? reference || undefined : undefined,
+            projectReference: referenceField?.key === "projectReference" ? reference || undefined : undefined,
+            forecastReference: referenceField?.key === "forecastReference" ? reference || undefined : undefined,
+            stockRequirementReference: referenceField?.key === "stockRequirementReference" ? reference || undefined : undefined,
+            expectedDeliveryDate: requiredDate || undefined,
+            requestedQuantityTonnes: qty,
+          },
+          token,
+        );
+        toast("Draft saved.", "success");
+      }
+      router.push("/steel/p01");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save draft.");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    const qty = Number(requestedQuantity);
+    if (!qty || qty <= 0) {
+      setError("Requested quantity must be greater than zero.");
+      return;
+    }
+    if (demandSource === "CUSTOMER_ORDER" && !customer) {
+      setError("Select a customer for a customer order. Not listed? Ask a Steel Administrator to add it.");
+      return;
+    }
+    if (demandSource === "DEALER_REQUIREMENT" && !customer) {
+      setError("Select a dealer for a dealer order. Not listed? Ask a Steel Administrator to add it.");
+      return;
+    }
+    if (!product) {
+      setError("Select a product. Not listed? Ask a Steel Administrator to add it under Steel Configuration.");
+      return;
+    }
+    if (!spec) {
+      setError("Select a product specification. Not listed? Ask a Steel Administrator to add it under Steel Configuration.");
+      return;
+    }
+    if (decision !== suggestedDecision && !decisionOverrideNote.trim()) {
+      setError(`Overriding the suggested fulfilment decision (${suggestedDecision.replace(/_/g, " ")}) requires a note.`);
+      return;
+    }
+    if (priority !== defaultPriority && !priorityOverrideNote.trim()) {
+      setError(`Overriding the suggested priority (${defaultPriority.replace(/_/g, " ")}) requires a note.`);
+      return;
+    }
+    if (!route) {
+      setError("Select a production route. Not listed? Ask a Steel Administrator to add it under Steel Configuration.");
+      return;
+    }
+
+    setSaving("create");
+    try {
+      // Resume-safe: each step is skipped if the plan has already passed it,
+      // so re-submitting after a partial failure (or resuming a saved draft)
+      // continues from wherever it left off instead of erroring on
+      // already-completed activities.
+      let current =
+        plan ??
+        (await SteelService.create(
+          {
+            demandSource,
+            // Dealer is a distinct Configuration model from Customer — the
+            // selected dealer's id has no meaning as a Customer.customerId,
+            // so a dealer selection is passed through as dealerName (the
+            // existing free-text column) rather than customerId.
+            customerId: demandSource === "DEALER_REQUIREMENT" ? undefined : customer?.value,
+            customerName: demandSource === "DEALER_REQUIREMENT" ? undefined : customer?.label,
+            dealerName: demandSource === "DEALER_REQUIREMENT" ? customer?.label : undefined,
+            salesOrderNumber: referenceField?.key === "salesOrderNumber" ? reference || undefined : undefined,
+            projectReference: referenceField?.key === "projectReference" ? reference || undefined : undefined,
+            forecastReference: referenceField?.key === "forecastReference" ? reference || undefined : undefined,
+            stockRequirementReference: referenceField?.key === "stockRequirementReference" ? reference || undefined : undefined,
+            expectedDeliveryDate: requiredDate || undefined,
+            requestedQuantityTonnes: qty,
+          },
+          token,
+        ));
+
+      if (!stageAtLeast(current.stage, "A02_PRIORITY_CONFIRMED")) {
+        current = await SteelService.confirmPriority(current.id, { priority, notes: priorityOverrideNote || undefined }, token);
+      }
+      if (!stageAtLeast(current.stage, "A03_PRODUCT_CONFIRMED")) {
+        current = await SteelService.confirmProduct(current.id, { productId: product!.value }, token);
+      }
+      if (!stageAtLeast(current.stage, "A04_SPEC_CONFIRMED")) {
+        current = await SteelService.confirmSpecification(
+          current.id,
+          { productSpecificationId: spec!.value, totalQuantity: qty },
+          token,
+        );
+      }
+      if (!stageAtLeast(current.stage, "A05_STOCK_CHECKED")) {
+        current = await SteelService.checkStock(current.id, {}, token);
+      }
+      if (!stageAtLeast(current.stage, "A06_STOCK_DECISION_MADE")) {
+        current = await SteelService.decideStockOrProduction(
+          current.id,
+          { stockDecision: decision, stockDecisionNotes: decisionOverrideNote || undefined },
+          token,
+        );
+      }
+      if (!stageAtLeast(current.stage, "A07_ROUTE_SELECTED")) {
+        current = await SteelService.selectRoute(current.id, { productionRouteId: route!.value }, token);
+      }
+      if (!stageAtLeast(current.stage, "A08_MATERIAL_CHECKED")) {
+        current = await SteelService.checkMaterial(current.id, { materialAvailability }, token);
+      }
+      if (!stageAtLeast(current.stage, "A09_CAPACITY_CHECKED")) {
+        current = await SteelService.checkCapacity(current.id, { equipmentAvailability, manpowerAvailability }, token);
+      }
+      if (!stageAtLeast(current.stage, "A10_PLAN_DRAFTED")) {
+        current = await SteelService.prepareProductionPlan(
+          current.id,
+          {
+            productionSequence: [{ batch: "1", quantityTonnes: qty, sequenceDate: requiredDate || undefined }],
+            plannedStartDate: requiredDate || undefined,
+            plannedEndDate: requiredDate || undefined,
+          },
+          token,
+        );
+      }
+      if (!stageAtLeast(current.stage, "A11_PLAN_COMMUNICATED")) {
+        current = await SteelService.communicatePlan(current.id, {}, token);
+      }
+
+      toast("Planning document created.", "success");
+      queryClient.invalidateQueries({ queryKey: ["steel-plan", current.id] });
+      router.push(`/steel/p01/${current.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create the planning document.");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const TABS = ["Demand & Product", "Fulfilment & Production"] as const;
+
+  const goNext = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (demandSource === "CUSTOMER_ORDER" && !customer) {
+      setError("Select a customer for a customer order. Not listed? Ask a Steel Administrator to add it.");
+      return;
+    }
+    if (demandSource === "DEALER_REQUIREMENT" && !customer) {
+      setError("Select a dealer for a dealer order. Not listed? Ask a Steel Administrator to add it.");
+      return;
+    }
+    if (!product) {
+      setError("Select a product. Not listed? Ask a Steel Administrator to add it under Steel Configuration.");
+      return;
+    }
+    if (!spec) {
+      setError("Select a product specification. Not listed? Ask a Steel Administrator to add it under Steel Configuration.");
+      return;
+    }
+    const qty = Number(requestedQuantity);
+    if (!qty || qty <= 0) {
+      setError("Requested quantity must be greater than zero.");
+      return;
+    }
+    setTab(1);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+    <form onSubmit={handleCreate} className="rounded-lg border border-input bg-background shadow-sm overflow-hidden">
+      <div className="flex items-center gap-5 px-4 pt-3 border-b border-input">
+        {TABS.map((label, i) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setTab(i as 0 | 1)}
+            className={
+              "pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors " +
+              (tab === i ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-muted-foreground hover:text-foreground")
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Demand Summary</CardTitle>
-          <p className="text-sm text-slate-500">Plan {plan.planNumber}, captured just now.</p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-slate-400">Demand Source</p>
-              <p className="font-medium text-slate-800">{DEMAND_SOURCES.find((d) => d.value === plan.demandSource)?.label}</p>
-            </div>
-            {(plan.customerName || plan.dealerName) && (
-              <div>
-                <p className="text-xs text-slate-400">Customer/Dealer</p>
-                <p className="font-medium text-slate-800">{plan.customerName || plan.dealerName}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-xs text-slate-400">Requested Quantity</p>
-              <p className="font-medium text-slate-800">{plan.requestedQuantityTonnes} t</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Expected Delivery</p>
-              <p className="font-medium text-slate-800">
-                {plan.expectedDeliveryDate ? new Date(plan.expectedDeliveryDate).toLocaleDateString() : "—"}
-              </p>
-            </div>
+      <div className="p-4 space-y-4">
+        {error && (
+          <div className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
-        </CardContent>
-      </Card>
+        )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Priority</CardTitle>
-          <p className="text-sm text-slate-500">How urgent is this order?</p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {PRIORITY_OPTIONS.map((p) => {
-              const Icon = p.icon;
-              const selected = p.value === priority;
-              return (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setPriority(p.value)}
-                  aria-pressed={selected}
-                  className={
-                    "relative flex flex-col items-start gap-2 rounded-xl border px-3 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 " +
-                    (selected
-                      ? "border-blue-300 bg-blue-50 ring-1 ring-blue-200"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm")
+        <div className={tab === 0 ? "space-y-4" : "hidden"}>
+      {/* Demand */}
+      <Section title="Demand">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          <div>
+            <Label required>Demand Source</Label>
+            <Select
+              value={demandSource}
+              onChange={(v) => setDemandSource(v as DemandSource)}
+              options={DEMAND_SOURCES}
+            />
+          </div>
+
+          {(demandSource === "CUSTOMER_ORDER" || demandSource === "DEALER_REQUIREMENT" || demandSource === "PROJECT_REQUIREMENT") && (
+            <div>
+              <Label required={demandSource !== "PROJECT_REQUIREMENT"}>
+                {demandSource === "DEALER_REQUIREMENT" ? "Dealer" : "Customer"}
+              </Label>
+              <MasterDataCombobox
+                value={customer}
+                onChange={setCustomer}
+                queryKey={[demandSource === "DEALER_REQUIREMENT" ? "master-dealers" : "master-customers"]}
+                fetchOptions={async (q) => {
+                  if (demandSource === "DEALER_REQUIREMENT") {
+                    const dealers = await SteelMasterDataService.getDealers(token, q);
+                    return dealers.map((d) => ({ value: d.id, label: d.name, description: d.region ?? undefined }));
                   }
-                >
-                  {selected && (
-                    <div className="absolute top-2 right-2 h-4.5 w-4.5 rounded-full bg-blue-600 flex items-center justify-center">
-                      <Check className="h-3 w-3 text-white" />
-                    </div>
-                  )}
-                  <div
-                    className={
-                      "h-9 w-9 rounded-lg flex items-center justify-center " +
-                      (selected ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")
-                    }
-                  >
-                    <Icon className="h-4.5 w-4.5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{p.label}</p>
-                    <p className="text-xs text-slate-500 leading-snug">{p.description}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Order Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-            <div>
-              <label className="text-sm font-medium text-slate-700 block mb-1">
-                Delivery promise date <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <Input type="date" value={deliveryPromiseDate} onChange={(e) => setDeliveryPromiseDate(e.target.value)} />
+                  const customers = await SteelMasterDataService.getCustomers(token, q);
+                  return customers.map((c) => ({ value: c.id, label: c.name }));
+                }}
+                placeholder={demandSource === "DEALER_REQUIREMENT" ? "Search dealers..." : "Search customers..."}
+              />
+              {!customer && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Not listed? Ask a Steel Administrator to add it under Steel Configuration.
+                </p>
+              )}
             </div>
+          )}
+
+          {referenceField && (
             <div>
-              <label className="text-sm font-medium text-slate-700 block mb-1">
-                Credit status <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <select
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-                value={creditStatus}
-                onChange={(e) => setCreditStatus(e.target.value as CreditStatus)}
-              >
-                <option value="">Select...</option>
-                {CREDIT_STATUS_OPTIONS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+              <Label>{referenceField.label}</Label>
+              <Input className="h-8" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Optional" />
+            </div>
+          )}
+
+          <div>
+            <Label>Required Date</Label>
+            <Input className="h-8" type="date" value={requiredDate} onChange={(e) => setRequiredDate(e.target.value)} />
+          </div>
+
+          <div>
+            <Label>Priority</Label>
+            <Select value={priority} onChange={(v) => setPriority(v as OrderPriority)} options={PRIORITY_OPTIONS} />
+            <p className="text-xs text-muted-foreground mt-1">Suggested: {defaultPriority.replace(/_/g, " ")}</p>
+          </div>
+          {priority !== defaultPriority && (
+            <div>
+              <Label required>Reason for priority override</Label>
+              <Input className="h-8" value={priorityOverrideNote} onChange={(e) => setPriorityOverrideNote(e.target.value)} placeholder="Why does this differ from the suggestion?" />
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {/* Product requirement */}
+      <Section title="Product Requirement">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          <div>
+            <Label required>Product</Label>
+            <MasterDataCombobox
+              value={product}
+              onChange={(opt) => {
+                setProduct(opt);
+                setSpec(null);
+                setSpecDisplay(null);
+              }}
+              queryKey={["master-products"]}
+              fetchOptions={async (q) => {
+                const products = await SteelMasterDataService.getProducts(token, { q });
+                return products.map((p) => ({ value: p.id, label: p.name, description: p.productType.replace(/_/g, " ") }));
+              }}
+              placeholder="Search products..."
+            />
+            {!product && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Not listed? Ask a Steel Administrator to add it under Steel Configuration.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label required>Product Specification</Label>
+            <MasterDataCombobox
+              value={spec}
+              onChange={async (opt) => {
+                setSpec(opt);
+                const specs = await SteelMasterDataService.getProductSpecifications(token, { productId: product?.value });
+                const found = specs.find((s) => s.id === opt.value);
+                if (found) setSpecDisplay({ grade: found.grade, size: found.size, standard: found.standard, length: found.length, toleranceNotes: found.toleranceNotes });
+              }}
+              queryKey={["master-product-specifications", product?.value ?? ""]}
+              fetchOptions={async (q) => {
+                const specs = await SteelMasterDataService.getProductSpecifications(token, { q, productId: product?.value });
+                return specs.map((s) => ({ value: s.id, label: s.displayLabel }));
+              }}
+              placeholder="Search specifications..."
+            />
+            {!spec && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Not listed? Ask a Steel Administrator to add it under Steel Configuration.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label required>Requested Quantity</Label>
+            <div className="relative">
+              <Input
+                className="h-8 pr-14"
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={requestedQuantity}
+                onChange={(e) => setRequestedQuantity(e.target.value)}
+                placeholder="e.g. 120"
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">tonnes</span>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Link href="/steel/p01">
-          <Button type="button" variant="outline">
-            Cancel
+        {specDisplay && (
+          <div className="rounded-md bg-muted/30 border border-input px-3 py-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4">
+            <DerivedRow label="Grade" value={specDisplay.grade} />
+            <DerivedRow label="Size" value={specDisplay.size} />
+            <DerivedRow label="Standard" value={specDisplay.standard} />
+            <DerivedRow label="Length" value={specDisplay.length} />
+          </div>
+        )}
+      </Section>
+        </div>
+
+        <div className={tab === 1 ? "space-y-4" : "hidden"}>
+      {/* Fulfilment */}
+      <Section title="Fulfilment">
+        <div className="rounded-md bg-muted/30 border border-input px-3 py-2 grid grid-cols-3 text-center">
+          <div>
+            <p className="text-xs text-muted-foreground">Requested</p>
+            <p className="text-sm font-semibold">{requiredQty || "—"} t</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Stock Available</p>
+            <p className="text-sm font-semibold">{certifiedQty ?? "—"} t</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">{shortfall !== null && shortfall > 0 ? "Shortfall" : "Surplus"}</p>
+            <p className="text-sm font-semibold">{shortfall !== null ? Math.abs(shortfall) : "—"} t</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          <div>
+            <Label>Fulfilment Decision</Label>
+            <Select
+              value={decision}
+              onChange={(v) => setDecision(v as StockDecision)}
+              options={[
+                { value: "DISPATCH_FROM_STOCK", label: "Dispatch from Stock" },
+                { value: "PRODUCTION_REQUIRED", label: "Production Required" },
+              ]}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Suggested: {suggestedDecision.replace(/_/g, " ")}</p>
+          </div>
+          {decision !== suggestedDecision && (
+            <div>
+              <Label required>Reason for override</Label>
+              <Input className="h-8" value={decisionOverrideNote} onChange={(e) => setDecisionOverrideNote(e.target.value)} placeholder="Why does this differ from the suggestion?" />
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {/* Production */}
+      <Section title="Production">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          <div>
+            <Label required>Production Route</Label>
+            <MasterDataCombobox
+              value={route}
+              onChange={setRoute}
+              queryKey={["master-routes"]}
+              fetchOptions={async (q) => {
+                const routes = await SteelMasterDataService.getRoutes(token, q);
+                return routes.map((r) => ({ value: r.id, label: r.name, description: r.plantRoute.replace(/_/g, " ") }));
+              }}
+              placeholder="Search production routes..."
+            />
+            {!route && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Not listed? Ask a Steel Administrator to add it under Steel Configuration.
+              </p>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-1.5">
+            <Label>Readiness</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              <div>
+                <p className="text-[11px] text-muted-foreground mb-0.5">Material</p>
+                <Select value={materialAvailability} onChange={(v) => setMaterialAvailability(v as AvailabilityStatus)} options={AVAILABILITY_OPTIONS} />
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground mb-0.5">Equipment</p>
+                <Select value={equipmentAvailability} onChange={(v) => setEquipmentAvailability(v as AvailabilityStatus)} options={AVAILABILITY_OPTIONS} />
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground mb-0.5">Manpower</p>
+                <Select value={manpowerAvailability} onChange={(v) => setManpowerAvailability(v as AvailabilityStatus)} options={AVAILABILITY_OPTIONS} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {route && routeSteps && routeSteps.length > 0 && (
+          <div className="rounded-md bg-muted/30 border border-input px-3 py-2">
+            <p className="text-xs text-muted-foreground mb-0.5">Departments</p>
+            <p className="text-sm font-medium">
+              {[...new Set(routeSteps.map((s) => s.department))].map((d) => d.charAt(0) + d.slice(1).toLowerCase()).join(" → ")}
+            </p>
+          </div>
+        )}
+      </Section>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-input bg-muted/20">
+        {tab === 0 ? (
+          <Link href="/steel/p01">
+            <Button type="button" variant="ghost" disabled={!!saving}>
+              Cancel
+            </Button>
+          </Link>
+        ) : (
+          <Button type="button" variant="ghost" disabled={!!saving} onClick={() => setTab(0)}>
+            Back
           </Button>
-        </Link>
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
-          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Priority — Continue to Product & Specification →"}
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!!saving}
+          onClick={handleSaveDraft}
+          className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950"
+        >
+          {saving === "draft" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
         </Button>
+        {tab === 0 ? (
+          <Button type="button" onClick={goNext} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+            Next
+          </Button>
+        ) : (
+          <Button type="submit" disabled={!!saving} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+            {saving === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Planning Document"}
+          </Button>
+        )}
       </div>
     </form>
   );
 }
 
-// ── Page shell — resolves server stage on load/refresh ──────────────────────
-
-function NewPlanS1Content() {
-  const router = useRouter();
+function NewPlanPageInner() {
   const searchParams = useSearchParams();
   const { accessToken } = useAuthStore();
-  const queryClient = useQueryClient();
-
   const planId = searchParams.get("plan");
 
   const planQuery = useQuery({
-    queryKey: ["steel-plan-s1", planId],
+    queryKey: ["steel-plan-edit", planId],
     queryFn: () => SteelService.getById(planId!, accessToken!),
     enabled: !!accessToken && !!planId,
     retry: false,
   });
 
-  const handleCreated = (plan: SteelProductionPlan) => {
-    queryClient.setQueryData(["steel-plan-s1", plan.id], plan);
-    router.replace(`/steel/p01/new?plan=${plan.id}`, { scroll: false });
-  };
-
   let body: React.ReactNode;
-  let subStep: "A01" | "A02" = "A01";
-  let planForSidebar: SteelProductionPlan | null = null;
-
   if (!planId) {
-    body = <DemandCaptureForm onCreated={handleCreated} />;
+    body = <PlanForm plan={null} token={accessToken!} />;
   } else if (planQuery.isLoading) {
     body = (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   } else if (planQuery.isError || !planQuery.data) {
     body = (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-center px-4">
         <AlertTriangle className="h-6 w-6 text-red-500" />
-        <p className="text-sm text-slate-600">
-          {planQuery.error instanceof Error ? planQuery.error.message : "This production plan could not be loaded."}
-        </p>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => planQuery.refetch()} disabled={planQuery.isFetching}>
-            {planQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Retry"}
-          </Button>
-          <Link href="/steel/p01">
-            <Button size="sm" variant="outline" className="gap-1.5">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Production Plans
-            </Button>
-          </Link>
-        </div>
+        <p className="text-sm text-muted-foreground">This planning document could not be loaded.</p>
       </div>
     );
   } else {
-    const plan = planQuery.data;
-    planForSidebar = plan;
-    // Server stage is authoritative. A01 is always complete once the plan
-    // exists; if A02 (priority) is also already confirmed, S1 is finished —
-    // hand off to the existing detail page (S2 onward) instead of re-showing
-    // a completed step.
-    if (plan.stage === "A01_DEMAND_CAPTURED") {
-      subStep = "A02";
-      body = <PriorityForm plan={plan} />;
-    } else {
-      router.replace(`/steel/p01/${plan.id}`);
-      body = (
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-        </div>
-      );
-    }
+    body = <PlanForm key={planQuery.data.id} plan={planQuery.data} token={accessToken!} />;
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
       <ScreenHeader
         icon={ClipboardList}
-        title="Demand & Priority"
-        subtitle="Capture the customer or business requirement and establish its priority."
+        title="Create Production Planning Document"
+        subtitle="Enter the production requirement. Available master data and planning information will be populated automatically."
         code="P01"
       />
-      <WorkflowIndicator steps={SCREENS} doneCount={0} activeIndex={0} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P01")!.color.bar} />
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        <div className="space-y-4">{body}</div>
-        <Sidebar plan={planForSidebar} subStep={subStep} />
-      </div>
+      {body}
     </div>
   );
 }
@@ -717,11 +732,11 @@ export default function NewSteelPlanPage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       }
     >
-      <NewPlanS1Content />
+      <NewPlanPageInner />
     </Suspense>
   );
 }

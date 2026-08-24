@@ -325,11 +325,11 @@ function QuotationEntryForm({
 
         <div className="flex items-center justify-end gap-2">
           {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
+            <Button type="button" variant="outline" onClick={onCancel} className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950">
               Cancel
             </Button>
           )}
-          <Button type="button" disabled={mutation.isPending} onClick={handleSave} className="gap-2">
+          <Button type="button" disabled={mutation.isPending} onClick={handleSave} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save ${rows.filter((r) => r.supplierId && r.price > 0).length || ""} Quotation${rows.filter((r) => r.supplierId && r.price > 0).length === 1 ? "" : "s"} →`}
           </Button>
         </div>
@@ -398,10 +398,10 @@ function ConfirmSupplierSelectionModal({
           </dl>
         )}
         <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting} className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950">
             Cancel
           </Button>
-          <Button type="button" onClick={onConfirm} disabled={submitting} className="gap-2">
+          <Button type="button" onClick={onConfirm} disabled={submitting} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Supplier Selection"}
           </Button>
         </div>
@@ -536,7 +536,7 @@ function QuotationComparison({
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Why this supplier was chosen — quality, cost, delivery reasoning" />
             </div>
             <div className="flex items-center justify-end">
-              <Button type="button" disabled={!selected || mutation.isPending} onClick={handleConfirm} className="gap-2">
+              <Button type="button" disabled={!selected || mutation.isPending} onClick={handleConfirm} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
                 {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Supplier Selection →"}
               </Button>
             </div>
@@ -579,7 +579,7 @@ function S3CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onCo
         <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-500">
           Next: <span className="font-medium text-slate-700">S4 — Specification &amp; Purchase Order</span>
         </div>
-        <Button onClick={onContinue} className="gap-2">
+        <Button onClick={onContinue} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           Continue to S4 — Specification &amp; Purchase Order <ArrowRight className="h-4 w-4" />
         </Button>
       </div>

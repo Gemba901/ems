@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { MeltingService } from "@/services/steel-melting.service";
 import { DashboardFilters, DEFAULT_DASHBOARD_FILTERS } from "@/components/steel/p05/dashboard/DashboardFilters";
 import { DashboardKpiRow } from "@/components/steel/p05/dashboard/DashboardKpiRow";
+import { FurnaceStatusPanel } from "@/components/steel/p05/dashboard/FurnaceStatusPanel";
 import { HeatCycleTracker } from "@/components/steel/p05/dashboard/HeatCycleTracker";
 import { FurnacePerformanceTable } from "@/components/steel/p05/dashboard/FurnacePerformanceTable";
 import { RecentEventsPanel } from "@/components/steel/p05/dashboard/RecentEventsPanel";
@@ -73,6 +74,9 @@ export default function MeltingDashboardPage() {
 
       {/* Section 1 — KPI strip */}
       <DashboardKpiRow {...shared} />
+
+      {/* Section 2 — per-furnace status (mockup's "Furnace Status" row) */}
+      <FurnaceStatusPanel {...shared} />
 
       {/* Main grid — Heat Cycle Tracker dominant (9/12), right sidebar (3/12) */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start">

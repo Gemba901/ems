@@ -94,8 +94,16 @@ export function HeatApprovalList({
                               <TooltipContent>{STATUS_TOOLTIPS[heatApproval.status]}</TooltipContent>
                             </Tooltip>
                           </div>
-                          <p className="text-xs text-slate-500">
-                            Heat {heatApproval.melting?.heatInProcessNumber ?? "—"}
+                          <p className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+                            <span>Heat {heatApproval.melting?.heatInProcessNumber ?? "—"}</span>
+                            {(heatApproval.melting?.furnace?.name ?? heatApproval.melting?.furnaceId) && (
+                              <span className="text-slate-300">·</span>
+                            )}
+                            {heatApproval.melting?.furnace?.name ?? heatApproval.melting?.furnaceId ?? null}
+                            {heatApproval.melting?.chargePreparation?.plan?.grade && (
+                              <span className="text-slate-300">·</span>
+                            )}
+                            {heatApproval.melting?.chargePreparation?.plan?.grade ?? null}
                           </p>
                         </div>
 

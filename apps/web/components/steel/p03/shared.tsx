@@ -1,18 +1,10 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Circle, Lock, Loader2 } from "lucide-react";
-import type { SteelMaterialIntake } from "@/services/material-intake.service";
+import { Badge } from "@/components/ui/badge";
+import { Loader2 } from "lucide-react";
+import type { SteelIntakeStatus, SteelMaterialIntake } from "@/services/material-intake.service";
 
-export type SubStepStatus = "done" | "active" | "locked";
-
-export type StepProps = {
-  intake: SteelMaterialIntake;
-  token: string;
-  onSaved: () => void;
-  onError: (err: unknown) => void;
-};
-
+/** A single labeled read-only value — used for compact inline summaries (e.g. sidebar dl blocks, terminal-state grids). */
 export function Field({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === "") return null;
   return (
@@ -24,13 +16,16 @@ export function Field({ label, value }: { label: string; value: React.ReactNode 
 }
 
 export function SelectField({
-  label, value, onChange, options,
-}: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  label, value, onChange, options, required,
+}: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; required?: boolean }) {
   return (
     <div>
-      <label className="text-sm font-medium text-slate-700 block mb-1">{label}</label>
+      <label className="text-sm font-medium text-slate-700 block mb-1">
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </label>
       <select
-        className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+        className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -41,65 +36,35 @@ export function SelectField({
   );
 }
 
-export function StatusBadge({ status }: { status: SubStepStatus }) {
-  if (status === "done") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-        <CheckCircle2 className="h-3.5 w-3.5" /> Done
-      </span>
-    );
-  }
-  if (status === "active") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
-        <Circle className="h-3.5 w-3.5 fill-blue-100" /> In progress
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">
-      <Lock className="h-3 w-3" /> Locked
-    </span>
-  );
-}
-
-export function SubStepCard({
-  code, title, status, children,
-}: { code: string; title: string; status: SubStepStatus; children: React.ReactNode }) {
-  return (
-    <Card className={status === "locked" ? "opacity-70" : ""}>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="text-sm">
-            <span className="text-slate-400 font-mono text-xs mr-1.5">{code}</span>
-            {title}
-          </CardTitle>
-          <StatusBadge status={status} />
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
-
 export function SaveButton({ pending, label }: { pending: boolean; label: string }) {
   return pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{label}</>;
 }
 
-export function LockedNote() {
-  return <p className="text-sm text-slate-400">Complete the previous step first.</p>;
+// Presentational status a material intake can be in from a user's point of
+// view — a small derived read of (status, acceptanceDecision), not a new
+// backend concept. "Inspection" and "Accepted" both correspond to the real
+// IN_PROGRESS status; splitting them here is display-only.
+const INTAKE_STATUS_BADGE_STYLES: Record<string, string> = {
+  Draft: "bg-muted text-muted-foreground",
+  Inspection: "bg-blue-50 text-blue-700",
+  Accepted: "bg-emerald-50 text-emerald-700",
+  Hold: "bg-amber-50 text-amber-700",
+  Rejected: "bg-red-50 text-red-700",
+  Released: "bg-emerald-50 text-emerald-700",
+  Cancelled: "bg-red-50 text-red-700",
+};
+
+export function intakeStatusLabel(status: SteelIntakeStatus, acceptanceDecision: SteelMaterialIntake["acceptanceDecision"]): string {
+  if (status === "DRAFT") return "Draft";
+  if (status === "ON_HOLD") return "Hold";
+  if (status === "REJECTED") return "Rejected";
+  if (status === "RELEASED") return "Released";
+  if (status === "CANCELLED") return "Cancelled";
+  // IN_PROGRESS
+  return acceptanceDecision === "ACCEPT" ? "Accepted" : "Inspection";
 }
 
-/**
- * Renders a section as an always-visible card with a status badge next to
- * its heading (done / in progress / locked). Content is never collapsed.
- */
-export function SubStep({
-  code, title, status, children,
-}: { code: string; title: string; status: SubStepStatus; summary?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <SubStepCard code={code} title={title} status={status}>
-      {children}
-    </SubStepCard>
-  );
+export function IntakeStatusBadge({ intake }: { intake: SteelMaterialIntake }) {
+  const label = intakeStatusLabel(intake.status, intake.acceptanceDecision);
+  return <Badge className={INTAKE_STATUS_BADGE_STYLES[label] ?? "bg-muted text-muted-foreground"}>{label}</Badge>;
 }

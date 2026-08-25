@@ -8,6 +8,9 @@ import { SteelService, SteelProductionPlan } from "@/services/steel.service";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import {
+  DocSection, DocGrid, DocField, ProcessDocumentLayout, InfoCard, DocumentActions, AuditMeta,
+} from "@/components/steel/shared/document";
 import { Loader2, FileText, AlertTriangle, Check } from "lucide-react";
 
 const STATUS_BADGE_STYLES: Record<string, string> = {
@@ -28,24 +31,6 @@ function StatusBadge({ status }: { status: string }) {
 
 function humanize(v: string | null | undefined) {
   return v ? v.replace(/_/g, " ").replace(/\w\S*/g, (t) => t.charAt(0) + t.slice(1).toLowerCase()) : "—";
-}
-
-function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-input bg-background p-4 space-y-2">
-      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="text-sm">{value ?? "—"}</p>
-    </div>
-  );
 }
 
 function ConfirmReleaseDialog({
@@ -106,7 +91,7 @@ export function PlanningDocument({ plan, token, onRefresh }: { plan: SteelProduc
   const shortfall = certifiedQty !== null ? requiredQty - certifiedQty : null;
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
       <ScreenHeader
         icon={FileText}
         title="Production Planning Document"
@@ -122,101 +107,124 @@ export function PlanningDocument({ plan, token, onRefresh }: { plan: SteelProduc
         </div>
       )}
 
-      <DocSection title="Demand">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
-          <Field label="Demand Source" value={humanize(plan.demandSource)} />
-          <Field label="Customer / Dealer" value={plan.customerName || plan.dealerName} />
-          <Field label="Reference" value={plan.salesOrderNumber || plan.projectReference || plan.forecastReference || plan.stockRequirementReference} />
-          <Field label="Required Date" value={plan.expectedDeliveryDate ? new Date(plan.expectedDeliveryDate).toLocaleDateString() : null} />
-          <Field label="Priority" value={humanize(plan.priority)} />
+      <ProcessDocumentLayout
+        info={
+          <InfoCard
+            whatToDo="Review the production plan generated from the demand, product, and fulfilment details you entered, then release it to make it available to Production Sourcing (P02)."
+            alreadyProvided="Demand, product, fulfilment decision, and production readiness, from the plan you created."
+            beforeYouContinue={["Requested quantity and dates are correct.", "Fulfilment decision (stock vs. production) is appropriate.", "Production route and readiness look right."]}
+          />
+        }
+      >
+        <div className="rounded-lg border border-input bg-background shadow-sm p-4 md:p-6 space-y-5">
+          <DocSection number="01" title="Demand" status="done" first>
+            <DocGrid cols={4}>
+              <DocField label="Demand Source" value={humanize(plan.demandSource)} />
+              <DocField label="Customer / Dealer" value={plan.customerName || plan.dealerName} />
+              <DocField label="Reference" value={plan.salesOrderNumber || plan.projectReference || plan.forecastReference || plan.stockRequirementReference} />
+              <DocField label="Required Date" value={plan.expectedDeliveryDate ? new Date(plan.expectedDeliveryDate).toLocaleDateString() : null} />
+              <DocField label="Priority" value={humanize(plan.priority)} />
+            </DocGrid>
+          </DocSection>
+
+          <DocSection number="02" title="Product" status="done">
+            <DocGrid cols={4}>
+              <DocField label="Product" value={humanize(plan.productType)} />
+              <DocField label="Standard" value={plan.productStandard} />
+              <DocField label="Grade" value={plan.grade} />
+              <DocField label="Size" value={plan.size} />
+              <DocField label="Length" value={plan.length} />
+              <DocField label="Requested Quantity" value={`${requiredQty} t`} />
+            </DocGrid>
+          </DocSection>
+
+          <DocSection number="03" title="Fulfilment" status="done">
+            <DocGrid cols={4}>
+              <DocField label="Requested" value={`${requiredQty} t`} />
+              <DocField label="Stock Available" value={certifiedQty !== null ? `${certifiedQty} t` : null} kind="calculated" source="Certified Stock" />
+              <DocField
+                label={shortfall !== null && shortfall > 0 ? "Shortfall" : "Surplus"}
+                value={shortfall !== null ? `${Math.abs(shortfall)} t` : null}
+                kind="calculated"
+                source="Requested − Available"
+              />
+              <DocField label="Fulfilment Decision" value={humanize(plan.stockDecision)} />
+            </DocGrid>
+          </DocSection>
+
+          <DocSection number="04" title="Production" status="done">
+            <DocGrid cols={4}>
+              <DocField label="Route" value={humanize(plan.plantRoute)} />
+              <DocField label="Material Readiness" value={humanize(plan.materialAvailability)} />
+              <DocField label="Equipment Readiness" value={humanize(plan.equipmentAvailability)} />
+              <DocField label="Manpower Readiness" value={humanize(plan.manpowerAvailability)} />
+            </DocGrid>
+            {departments.length > 0 && (
+              <div className="border-t border-input pt-2 mt-3">
+                <DocField label="Departments" value={departments.map(humanize).join(", ")} kind="calculated" source="Selected Production Route" />
+              </div>
+            )}
+          </DocSection>
+
+          {plan.productionSequence && plan.productionSequence.length > 0 && (
+            <DocSection number="05" title="Production Sequence" status="done">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-muted-foreground border-b border-input">
+                      <th className="py-1 pr-3">#</th>
+                      <th className="py-1 pr-3">Description</th>
+                      <th className="py-1 pr-3">Quantity</th>
+                      <th className="py-1 pr-3">Planned Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plan.productionSequence.map((item, i) => (
+                      <tr key={i} className="border-b border-input/50 last:border-0">
+                        <td className="py-1 pr-3">{item.batch}</td>
+                        <td className="py-1 pr-3">{item.description || "—"}</td>
+                        <td className="py-1 pr-3">{item.quantityTonnes ?? "—"} t</td>
+                        <td className="py-1 pr-3">{item.sequenceDate || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </DocSection>
+          )}
+
+          {released && (
+            <DocSection number="06" title="Release" status="done">
+              <div className="flex items-center gap-2 text-sm text-emerald-700">
+                <Check className="h-4 w-4" />
+                Released {plan.approvedAt ? `on ${new Date(plan.approvedAt).toLocaleString()}` : ""}
+                {plan.approvedBy && ` by ${plan.approvedBy.firstName} ${plan.approvedBy.lastName}`}
+              </div>
+              <Link href="/steel/p02">
+                <Button size="sm" variant="outline" className="mt-1">Continue to P02 Sourcing</Button>
+              </Link>
+              <AuditMeta
+                createdLabel="Created"
+                createdAt={plan.createdAt}
+                updatedLabel="Released"
+                updatedBy={plan.approvedBy ? `${plan.approvedBy.firstName} ${plan.approvedBy.lastName}` : undefined}
+                updatedAt={plan.approvedAt}
+              />
+            </DocSection>
+          )}
+
+          {!released && (
+            <DocumentActions>
+              <Link href={`/steel/p01/new?plan=${plan.id}`}>
+                <Button variant="outline">Edit Plan</Button>
+              </Link>
+              <Button onClick={() => setConfirming(true)}>
+                Release Planning Document
+              </Button>
+            </DocumentActions>
+          )}
         </div>
-      </DocSection>
-
-      <DocSection title="Product">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
-          <Field label="Product" value={humanize(plan.productType)} />
-          <Field label="Standard" value={plan.productStandard} />
-          <Field label="Grade" value={plan.grade} />
-          <Field label="Size" value={plan.size} />
-          <Field label="Length" value={plan.length} />
-          <Field label="Requested Quantity" value={`${requiredQty} t`} />
-        </div>
-      </DocSection>
-
-      <DocSection title="Fulfilment">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
-          <Field label="Requested" value={`${requiredQty} t`} />
-          <Field label="Stock Available" value={certifiedQty !== null ? `${certifiedQty} t` : null} />
-          <Field label={shortfall !== null && shortfall > 0 ? "Shortfall" : "Surplus"} value={shortfall !== null ? `${Math.abs(shortfall)} t` : null} />
-          <Field label="Fulfilment Decision" value={humanize(plan.stockDecision)} />
-        </div>
-      </DocSection>
-
-      <DocSection title="Production">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
-          <Field label="Route" value={humanize(plan.plantRoute)} />
-          <Field label="Material Readiness" value={humanize(plan.materialAvailability)} />
-          <Field label="Equipment Readiness" value={humanize(plan.equipmentAvailability)} />
-          <Field label="Manpower Readiness" value={humanize(plan.manpowerAvailability)} />
-        </div>
-        {departments.length > 0 && (
-          <div className="border-t border-input pt-2 mt-2">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Departments</p>
-            <p className="text-sm">{departments.map(humanize).join(", ")}</p>
-          </div>
-        )}
-      </DocSection>
-
-      {plan.productionSequence && plan.productionSequence.length > 0 && (
-        <DocSection title="Production Sequence">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground border-b border-input">
-                  <th className="py-1 pr-3">#</th>
-                  <th className="py-1 pr-3">Description</th>
-                  <th className="py-1 pr-3">Quantity</th>
-                  <th className="py-1 pr-3">Planned Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plan.productionSequence.map((item, i) => (
-                  <tr key={i} className="border-b border-input/50 last:border-0">
-                    <td className="py-1 pr-3">{item.batch}</td>
-                    <td className="py-1 pr-3">{item.description || "—"}</td>
-                    <td className="py-1 pr-3">{item.quantityTonnes ?? "—"} t</td>
-                    <td className="py-1 pr-3">{item.sequenceDate || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </DocSection>
-      )}
-
-      {released && (
-        <DocSection title="Release">
-          <div className="flex items-center gap-2 text-sm text-emerald-700">
-            <Check className="h-4 w-4" />
-            Released {plan.approvedAt ? `on ${new Date(plan.approvedAt).toLocaleString()}` : ""}
-            {plan.approvedBy && ` by ${plan.approvedBy.firstName} ${plan.approvedBy.lastName}`}
-          </div>
-          <Link href="/steel/p02">
-            <Button size="sm" variant="outline" className="mt-1">Continue to P02 Sourcing</Button>
-          </Link>
-        </DocSection>
-      )}
-
-      {!released && (
-        <div className="flex items-center justify-end gap-2">
-          <Link href={`/steel/p01/new?plan=${plan.id}`}>
-            <Button variant="outline">Edit Plan</Button>
-          </Link>
-          <Button onClick={() => setConfirming(true)}>
-            Release Planning Document
-          </Button>
-        </div>
-      )}
+      </ProcessDocumentLayout>
 
       {confirming && (
         <ConfirmReleaseDialog

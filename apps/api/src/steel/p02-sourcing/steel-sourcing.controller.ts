@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -26,6 +27,8 @@ import {
   QuerySteelSourcingOrdersDto,
   CreateSupplierDto,
   QuerySuppliersDto,
+  UpdateSupplierDto,
+  CreateSteelSourcingAttachmentDto,
 } from './dto/steel-sourcing.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -101,13 +104,85 @@ export class SteelSourcingController {
     @Body() dto: CreateSupplierDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.createSupplier(dto, user.organizationId);
+    return this.steelSourcingService.createSupplier(
+      dto,
+      user.organizationId,
+      user.userId,
+    );
+  }
+
+  /** PATCH /steel/sourcing/suppliers/:id — update a supplier master record. */
+  @Patch('suppliers/:id')
+  async updateSupplier(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupplierDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.updateSupplier(
+      id,
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  /**
+   * GET /steel/sourcing/suppliers/:id/eligible-materials
+   * Materials this supplier is admin-approved to supply (Steel Configuration).
+   */
+  @Get('suppliers/:id/eligible-materials')
+  async getSupplierEligibleMaterials(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.getSupplierEligibleMaterials(
+      id,
+      user.organizationId,
+    );
   }
 
   /** GET /steel/sourcing/:id — full detail for one sourcing order. */
   @Get(':id')
   async getOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.steelSourcingService.getById(id, user.organizationId);
+  }
+
+  /**
+   * POST /steel/sourcing/:id/attachments
+   * Record a document already uploaded to S3 via the generic presigned-url
+   * flow against this sourcing order and stage (e.g. supplier certificates,
+   * quotations, PO/technical docs, delivery/shipping docs).
+   */
+  @Post(':id/attachments')
+  async addAttachment(
+    @Param('id') id: string,
+    @Body() dto: CreateSteelSourcingAttachmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.addAttachment(
+      id,
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  /** GET /steel/sourcing/:id/attachments — list attachments for a sourcing order. */
+  @Get(':id/attachments')
+  async getAttachments(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.steelSourcingService.getAttachments(id, user.organizationId);
+  }
+
+  /** DELETE /steel/sourcing/attachments/:attachmentId */
+  @Delete('attachments/:attachmentId')
+  async deleteAttachment(
+    @Param('attachmentId') attachmentId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.deleteAttachment(
+      attachmentId,
+      user.organizationId,
+    );
   }
 
   /**

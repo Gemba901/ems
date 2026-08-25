@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { WorkflowIndicator } from "@/components/steel/p03/WorkflowIndicator";
 import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
-import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
+import { WORKFLOW_STEPS } from "@/components/steel/p03/screenMap";
 import { Loader2, Truck, HelpCircle, Info, ExternalLink } from "lucide-react";
 
 // Only sourcing orders that have informed the intake team (P02-A11) or closed
@@ -95,9 +95,9 @@ function NewMaterialIntakeForm() {
         code="P03"
           icon={Truck}
           title="New Material Intake"
-          subtitle="P03-A01 — Record truck/container arrival at the gate against a sourcing order."
+          subtitle="Record truck/container arrival at the gate against a sourcing order."
         />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[0]} doneCount={0} activeIndex={0} />
+        <WorkflowIndicator steps={WORKFLOW_STEPS} doneCount={0} activeIndex={0} />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <Card>
@@ -281,7 +281,7 @@ function NewMaterialIntakeForm() {
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2.5">
-                  {SCREEN_TOP_STEPS[0].map((step, i) => (
+                  {WORKFLOW_STEPS.map((step, i) => (
                     <li key={step.code} className="flex items-start gap-2.5">
                       <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 mt-0.5 ${
                         i === 0 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400 ring-1 ring-slate-200"
@@ -292,7 +292,7 @@ function NewMaterialIntakeForm() {
                         <p className={`text-xs font-medium leading-tight ${i === 0 ? "text-slate-800" : "text-slate-400"}`}>
                           {step.label}
                         </p>
-                        <p className="text-[11px] text-slate-400 font-mono">{step.code} — {i === 0 ? "In Progress" : "Pending"}</p>
+                        <p className="text-[11px] text-slate-400">{i === 0 ? "In Progress" : "Pending"}</p>
                       </div>
                     </li>
                   ))}

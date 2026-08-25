@@ -1,5 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import type { ProductType, PlantRoute, SteelDepartment, CreditStatus } from "./steel-master-data.service";
+import type { Supplier, EmployeeRef } from "./steel-sourcing.service";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -99,12 +100,63 @@ export interface ConfigDealer {
   isActive: boolean;
 }
 
+export type SteelMaterialType = "SCRAP" | "DRI" | "BILLET" | "ALLOY" | "ADDITIVE" | "FUEL" | "REFRACTORY" | "PACKING_MATERIAL" | "OTHER";
+export type SteelProcurementType = "LOCAL" | "IMPORT" | "BOTH";
+
 export interface ConfigMaterial {
   id: string;
   code: string;
   name: string;
   unit: string;
   isActive: boolean;
+  category: string | null;
+  materialType: SteelMaterialType | null;
+  procurementType: SteelProcurementType | null;
+  frequentlySourced: boolean;
+  specificationReference: string | null;
+  requiredDocuments: string[];
+  notes: string | null;
+  createdBy?: EmployeeRef | null;
+  updatedBy?: EmployeeRef | null;
+}
+
+export interface ConfigSupplierMaterial {
+  id: string;
+  supplierId: string;
+  materialId: string;
+  isEligible: boolean;
+  specificationReference: string | null;
+  isActive: boolean;
+  // Populated by the backend's `include` — present on every list/create/update
+  // response, listed as optional only so call sites that don't need them
+  // (e.g. a bare create payload echo) aren't forced to fake the relation.
+  supplier?: Supplier;
+  material?: ConfigMaterial;
+  createdBy?: EmployeeRef | null;
+  updatedBy?: EmployeeRef | null;
+}
+
+export interface ConfigQcdCriteria {
+  id: string;
+  name: string;
+  qualityWeight: number;
+  costWeight: number;
+  deliveryWeight: number;
+  isActive: boolean;
+  createdBy?: EmployeeRef | null;
+  updatedBy?: EmployeeRef | null;
+}
+
+export type SteelLookupType = "PAYMENT_TERMS" | "INCOTERM" | "CURRENCY" | "TRANSPORT_MODE" | "DELIVERY_LOCATION" | "DOCUMENT_TYPE";
+
+export interface ConfigLookup {
+  id: string;
+  type: SteelLookupType;
+  code: string;
+  name: string;
+  isActive: boolean;
+  createdBy?: EmployeeRef | null;
+  updatedBy?: EmployeeRef | null;
 }
 
 export interface ImportPreviewRow {
@@ -194,10 +246,48 @@ export const SteelConfigService = {
   // Materials
   listMaterials: (token: string, params: { q?: string; includeInactive?: boolean } = {}) =>
     get<ConfigMaterial[]>(`/steel/config/materials${toQuery({ q: params.q, includeInactive: params.includeInactive ? "true" : undefined })}`, token),
-  createMaterial: (data: { name: string; code: string; unit: string }, token: string) =>
-    post<ConfigMaterial>("/steel/config/materials", data, token),
-  updateMaterial: (id: string, data: Partial<{ name: string; unit: string; isActive: boolean }>, token: string) =>
-    patch<ConfigMaterial>(`/steel/config/materials/${id}`, data, token),
+  createMaterial: (
+    data: {
+      name: string; code: string; unit: string; category?: string; materialType?: SteelMaterialType;
+      procurementType?: SteelProcurementType; frequentlySourced?: boolean; specificationReference?: string;
+      requiredDocuments?: string[]; notes?: string;
+    },
+    token: string,
+  ) => post<ConfigMaterial>("/steel/config/materials", data, token),
+  updateMaterial: (
+    id: string,
+    data: Partial<{
+      name: string; unit: string; isActive: boolean; category: string; materialType: SteelMaterialType;
+      procurementType: SteelProcurementType; frequentlySourced: boolean; specificationReference: string;
+      requiredDocuments: string[]; notes: string;
+    }>,
+    token: string,
+  ) => patch<ConfigMaterial>(`/steel/config/materials/${id}`, data, token),
+
+  // Supplier ↔ Material eligibility (P02-A03)
+  listSupplierMaterials: (token: string, params: { supplierId?: string; materialId?: string } = {}) =>
+    get<ConfigSupplierMaterial[]>(`/steel/config/supplier-materials${toQuery(params)}`, token),
+  createSupplierMaterial: (data: { supplierId: string; materialId: string; isEligible?: boolean; specificationReference?: string }, token: string) =>
+    post<ConfigSupplierMaterial>("/steel/config/supplier-materials", data, token),
+  updateSupplierMaterial: (id: string, data: Partial<{ isEligible: boolean; specificationReference: string; isActive: boolean }>, token: string) =>
+    patch<ConfigSupplierMaterial>(`/steel/config/supplier-materials/${id}`, data, token),
+  deleteSupplierMaterial: (id: string, token: string) => del<{ success: boolean }>(`/steel/config/supplier-materials/${id}`, token),
+
+  // QCD criteria (P02-A06)
+  listQcdCriteria: (token: string, params: { includeInactive?: boolean } = {}) =>
+    get<ConfigQcdCriteria[]>(`/steel/config/qcd-criteria${toQuery({ includeInactive: params.includeInactive ? "true" : undefined })}`, token),
+  createQcdCriteria: (data: { name: string; qualityWeight: number; costWeight: number; deliveryWeight: number }, token: string) =>
+    post<ConfigQcdCriteria>("/steel/config/qcd-criteria", data, token),
+  updateQcdCriteria: (id: string, data: Partial<{ name: string; qualityWeight: number; costWeight: number; deliveryWeight: number; isActive: boolean }>, token: string) =>
+    patch<ConfigQcdCriteria>(`/steel/config/qcd-criteria/${id}`, data, token),
+
+  // Procurement supporting lookups (payment terms, incoterms, currency, transport modes, delivery locations, document types)
+  listLookups: (token: string, params: { type?: SteelLookupType; includeInactive?: boolean } = {}) =>
+    get<ConfigLookup[]>(`/steel/config/lookups${toQuery({ type: params.type, includeInactive: params.includeInactive ? "true" : undefined })}`, token),
+  createLookup: (data: { type: SteelLookupType; code: string; name: string }, token: string) =>
+    post<ConfigLookup>("/steel/config/lookups", data, token),
+  updateLookup: (id: string, data: Partial<{ name: string; isActive: boolean }>, token: string) =>
+    patch<ConfigLookup>(`/steel/config/lookups/${id}`, data, token),
 
   // Import
   async previewImport(entity: ImportEntity, file: File, token: string): Promise<ImportPreviewResult> {

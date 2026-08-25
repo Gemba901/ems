@@ -14,21 +14,21 @@ import {
 } from "@/services/material-intake.service";
 import { SteelMaterialType } from "@/services/steel-sourcing.service";
 import type { SteelSourcingOrder } from "@/services/steel-sourcing.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { WorkflowIndicator } from "@/components/steel/p03/WorkflowIndicator";
-import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
-import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
+import { WORKFLOW_STEPS } from "@/components/steel/p03/screenMap";
 import { ContextSummary } from "@/components/steel/p03/ContextSummary";
 import { IntakeProgress } from "@/components/steel/p03/IntakeProgress";
-import { Field, SelectField, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p03/shared";
+import { SelectField, SaveButton, IntakeStatusBadge } from "@/components/steel/p03/shared";
 import {
-  ClipboardCheck, Info, ListChecks, Lightbulb, Gavel, Lock, XCircle, AlertTriangle, HelpCircle,
-  ThumbsUp, PauseCircle,
+  DocSection, DocGrid, DocField, ProcessDocumentLayout, InfoCard,
+} from "@/components/steel/shared/document";
+import {
+  ClipboardCheck, Gavel, XCircle, AlertTriangle, HelpCircle, ThumbsUp, PauseCircle, Hourglass,
 } from "lucide-react";
 
 // Same authority scope enforced server-side by the material-intake
@@ -40,90 +40,11 @@ const MATERIAL_TYPES: SteelMaterialType[] = [
   "SCRAP", "DRI", "BILLET", "ALLOY", "ADDITIVE", "FUEL", "REFRACTORY", "PACKING_MATERIAL", "OTHER",
 ];
 
-function subStatus(active: boolean, done: boolean): SubStepStatus {
-  if (done) return "done";
-  if (active) return "active";
-  return "locked";
-}
+// ── Unloading / inspection area ──
 
-// ── Sidebar ───────────────────────────────────────────────────────────────
-
-function Sidebar({ intake }: { intake: SteelMaterialIntake }) {
-  return (
-    <ScreenSidebar>
-      <IntakeProgress intake={intake} />
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            S2 covers P03-A05 (assign an unloading/inspection area), P03-A06–A09 (visual, hazard, radiation, and
-            certificate checks — recorded together), and P03-A10 (the Management acceptance decision).
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Gate &amp; Weighing (from S1)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="text-xs space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-slate-400">Gross weight</dt>
-              <dd className="text-slate-700 font-medium text-right">{intake.grossWeightTonnes ? `${intake.grossWeightTonnes} t` : "—"}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-slate-400">Safety check</dt>
-              <dd className="text-slate-700 font-medium text-right">{intake.safetyCheckPassed ? "Passed" : "—"}</dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            An ACCEPT decision moves this intake to S3 — Unloading, Storage &amp; Release. HOLD pauses it for
-            re-decision; REJECT closes it.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            <li>Radiation fields only apply when the check is flagged as required.</li>
-            <li>Grade, heat number, and certificate reference are required only for Billet material.</li>
-            <li>Hazard/contamination is recorded for the record — it doesn&apos;t block progress on its own.</li>
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
-  );
-}
-
-// ── P03-A05 ──
-
-function AreaForm({
-  intake, token, onDone,
-}: { intake: SteelMaterialIntake; token: string; onDone: () => void }) {
+function AreaGroup({
+  intake, token, onDone, done,
+}: { intake: SteelMaterialIntake; token: string; onDone: () => void; done: boolean }) {
   const [area, setArea] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
@@ -131,10 +52,15 @@ function AreaForm({
     onSuccess: onDone,
     onError: (err: Error) => setError(err.message),
   });
+
+  if (done) return <DocGrid cols={2}><DocField label="Unloading / inspection area" value={intake.unloadingArea} /></DocGrid>;
+
   return (
-    <div className="space-y-3">
+    <div className="flex items-end gap-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
-      <Input placeholder="Unloading / inspection area" value={area} onChange={(e) => setArea(e.target.value)} />
+      <div className="w-64">
+        <Input placeholder="Unloading / inspection area" value={area} onChange={(e) => setArea(e.target.value)} />
+      </div>
       <Button size="sm" disabled={!area.trim() || mutation.isPending} onClick={() => mutation.mutate({ unloadingArea: area })}>
         <SaveButton pending={mutation.isPending} label="Assign area" />
       </Button>
@@ -142,11 +68,11 @@ function AreaForm({
   );
 }
 
-// ── P03-A06–A09 (combined) ──
+// ── Visual / hazard / radiation / certificate — combined inspection ──
 
-function InspectionForm({
-  intake, token, onDone,
-}: { intake: SteelMaterialIntake; token: string; onDone: () => void }) {
+function InspectionGroup({
+  intake, token, onDone, done,
+}: { intake: SteelMaterialIntake; token: string; onDone: () => void; done: boolean }) {
   const [materialType, setMaterialType] = useState<SteelMaterialType | "">(intake.sourcingOrder.materialType ?? "");
   const [visualNotes, setVisualNotes] = useState("");
   const [hazardFound, setHazardFound] = useState(false);
@@ -183,16 +109,41 @@ function InspectionForm({
     });
   };
 
+  if (done) {
+    return (
+      <DocGrid cols={3}>
+        <DocField label="Material type" value={intake.materialType?.replace(/_/g, " ")} />
+        <DocField label="Visual inspection notes" value={intake.visualInspectionNotes} />
+        <DocField label="Hazard / contamination" value={intake.hazardOrContaminationFound ? `Yes${intake.hazardNotes ? ` — ${intake.hazardNotes}` : ""}` : "None found"} />
+        {intake.radiationCheckRequired && (
+          <DocField label="Radiation check" value={intake.radiationCheckPassed ? "Passed" : "Failed"} />
+        )}
+        {intake.materialType === "BILLET" && (
+          <>
+            <DocField label="Grade" value={intake.grade} />
+            <DocField label="Heat number" value={intake.heatNumber} />
+            <DocField label="Certificate reference" value={intake.certificateRef} />
+          </>
+        )}
+      </DocGrid>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
-      <SelectField
-        label="Material type"
-        value={materialType}
-        onChange={(v) => setMaterialType(v as SteelMaterialType)}
-        options={MATERIAL_TYPES.map((m) => ({ value: m, label: m.replace(/_/g, " ") }))}
-      />
-      <Input placeholder="Visual inspection notes" value={visualNotes} onChange={(e) => setVisualNotes(e.target.value)} />
+      <div className="grid grid-cols-2 gap-3">
+        <SelectField
+          label="Material type"
+          value={materialType}
+          onChange={(v) => setMaterialType(v as SteelMaterialType)}
+          options={MATERIAL_TYPES.map((m) => ({ value: m, label: m.replace(/_/g, " ") }))}
+        />
+        <div>
+          <label className="text-sm font-medium text-slate-700 block mb-1">Visual inspection notes</label>
+          <Input placeholder="Notes (optional)" value={visualNotes} onChange={(e) => setVisualNotes(e.target.value)} />
+        </div>
+      </div>
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={hazardFound} onChange={(e) => setHazardFound(e.target.checked)} />
@@ -213,24 +164,25 @@ function InspectionForm({
         </Tooltip>
       </div>
       {radiationRequired && (
-        <>
+        <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2.5 space-y-2">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={radiationPassed} onChange={(e) => setRadiationPassed(e.target.checked)} />
             Radiation check passed
           </label>
           {blockedByRadiation && (
-            <p className="text-xs text-amber-600">
-              Material cannot proceed until the required radiation check passes.
-            </p>
+            <p className="text-xs text-amber-600">Material cannot proceed until the required radiation check passes.</p>
           )}
-        </>
+        </div>
       )}
 
       {isBillet && (
-        <div className="grid grid-cols-3 gap-3 pt-1">
-          <Input placeholder="Grade (required)" value={grade} onChange={(e) => setGrade(e.target.value)} />
-          <Input placeholder="Heat number (required)" value={heatNumber} onChange={(e) => setHeatNumber(e.target.value)} />
-          <Input placeholder="Certificate reference (required)" value={certificateRef} onChange={(e) => setCertificateRef(e.target.value)} />
+        <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2.5">
+          <p className="text-xs font-medium text-slate-500 mb-2">Billet — grade, heat number, and certificate reference required</p>
+          <div className="grid grid-cols-3 gap-3">
+            <Input placeholder="Grade (required)" value={grade} onChange={(e) => setGrade(e.target.value)} />
+            <Input placeholder="Heat number (required)" value={heatNumber} onChange={(e) => setHeatNumber(e.target.value)} />
+            <Input placeholder="Certificate reference (required)" value={certificateRef} onChange={(e) => setCertificateRef(e.target.value)} />
+          </div>
         </div>
       )}
 
@@ -241,24 +193,20 @@ function InspectionForm({
   );
 }
 
-// ── P03-A10 — authority gate ──
+// ── Acceptance decision — role-gated ──
 
-function AcceptanceLockedCard() {
+function AwaitingDecisionNote() {
   return (
-    <Card className="border-amber-200 bg-amber-50/40">
-      <CardContent className="py-6 flex flex-col items-center text-center gap-3">
-        <div className="h-11 w-11 rounded-full bg-amber-100 flex items-center justify-center">
-          <Lock className="h-5 w-5 text-amber-600" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-900">Management decision required</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm">
-            Only Management or Admin can accept, hold, or reject this delivery. Ask a Management or Admin user to
-            make the call before it can move forward.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm px-3 py-2.5">
+      <Hourglass className="h-4 w-4 shrink-0 mt-0.5" />
+      <div>
+        <p className="font-medium">Awaiting Management decision</p>
+        <p className="text-xs text-amber-700/90 mt-0.5">
+          Only Management or Admin can accept, hold, or reject this delivery. It will move forward once one of them
+          decides.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -307,9 +255,9 @@ function ConfirmRejectModal({
   );
 }
 
-function DecisionForm({
-  intake, token, onDone,
-}: { intake: SteelMaterialIntake; token: string; onDone: () => void }) {
+function DecisionGroup({
+  intake, token, onDone, canDecide,
+}: { intake: SteelMaterialIntake; token: string; onDone: () => void; canDecide: boolean }) {
   const [decision, setDecision] = useState<MaterialAcceptanceDecision | "">("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -326,6 +274,8 @@ function DecisionForm({
   const valid = decision && (!reasonRequired || notes.trim());
   const submitDecision = () =>
     mutation.mutate({ decision: decision as MaterialAcceptanceDecision, decisionNotes: notes || undefined });
+
+  if (!canDecide) return <AwaitingDecisionNote />;
 
   return (
     <div className="space-y-3">
@@ -410,13 +360,7 @@ function RejectedState({ intake }: { intake: SteelMaterialIntake }) {
   );
 }
 
-const DECISION_BADGE: Record<MaterialAcceptanceDecision, string> = {
-  ACCEPT: "bg-emerald-50 text-emerald-700",
-  HOLD: "bg-amber-50 text-amber-700",
-  REJECT: "bg-red-50 text-red-700",
-};
-
-// ── Screen shell ──────────────────────────────────────────────────────────────
+// ── Screen shell ──────────────────────────────────────────────────────────
 
 export function S2InspectionAcceptance({
   intake, token, onRefresh, sourcingOrder,
@@ -425,73 +369,76 @@ export function S2InspectionAcceptance({
   const canDecide = !!(user?.roleLevel && RELEASE_ROLES.includes(user.roleLevel as Role));
   const actions = intake.allowedActions ?? [];
 
-  const areaStatus = subStatus(actions.includes("ASSIGN_UNLOADING_AREA"), intake.unloadingArea !== null);
-  const inspectionStatus = subStatus(
-    actions.includes("RECORD_INSPECTION"),
-    intake.visualInspectionNotes !== null || intake.materialType !== null || intake.acceptanceDecision !== null,
-  );
+  const areaDone = intake.unloadingArea !== null;
+  const inspectionDone = intake.visualInspectionNotes !== null || intake.materialType !== null || intake.acceptanceDecision !== null;
   const decisionDone = intake.acceptanceDecision !== null && !actions.includes("RECORD_ACCEPTANCE_DECISION");
-  const decisionStatus = subStatus(actions.includes("RECORD_ACCEPTANCE_DECISION"), decisionDone);
-  const stepStatuses: SubStepStatus[] = [areaStatus, inspectionStatus, decisionStatus];
-  const doneCount = stepStatuses.filter((s) => s === "done").length;
-  const activeIdx = intake.status === "REJECTED" ? -1 : stepStatuses.findIndex((s) => s === "active");
+  const screenComplete = decisionDone;
 
   return (
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
-        code="P03"
+          code="P03"
           icon={ClipboardCheck}
-          title="Inspection & Acceptance"
+          title="Material Inspection"
           subtitle="Inspect the material and record the Management accept/hold/reject decision."
+          rightContent={<IntakeStatusBadge intake={intake} />}
         />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[1]} doneCount={doneCount} activeIndex={activeIdx === -1 ? null : activeIdx} />
+        <WorkflowIndicator steps={WORKFLOW_STEPS} doneCount={screenComplete ? 2 : 1} activeIndex={intake.status === "REJECTED" ? null : 1} />
         <ContextSummary intake={intake} sourcingOrder={sourcingOrder} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <div className="space-y-4">
-            {intake.status === "REJECTED" ? (
-              <RejectedState intake={intake} />
-            ) : (
-              <>
-                <SubStep code="P03-A05" title="Assign Unloading / Inspection Area" status={areaStatus} summary={intake.unloadingArea ? `Area: ${intake.unloadingArea}` : undefined}>
-                  {areaStatus === "active" && <AreaForm intake={intake} token={token} onDone={onRefresh} />}
-                </SubStep>
+        <ProcessDocumentLayout
+          info={
+            <div className="space-y-4">
+              <InfoCard
+                whatToDo="Assign an unloading/inspection area, record the visual, hazard, radiation, and certificate checks, then let Management decide whether to accept, hold, or reject the delivery."
+                whatToEnter="The inspection findings, and — if you have decision authority — the accept/hold/reject outcome."
+                beforeYouContinue={[
+                  "Radiation fields only apply when the check is flagged as required.",
+                  "Grade, heat number, and certificate reference are required only for Billet material.",
+                  "Hold and reject both require a reason.",
+                ]}
+              />
+              <IntakeProgress intake={intake} />
+            </div>
+          }
+        >
+          {intake.status === "REJECTED" ? (
+            <RejectedState intake={intake} />
+          ) : (
+            <div className="rounded-lg border border-input bg-background shadow-sm p-4 md:p-6 space-y-5">
+              <DocSection number="01" title="Unloading / Inspection Area" status={areaDone ? "done" : actions.includes("ASSIGN_UNLOADING_AREA") ? "active" : "locked"} first>
+                <AreaGroup intake={intake} token={token} onDone={onRefresh} done={areaDone} />
+              </DocSection>
 
-                <SubStep
-                  code="P03-A06–A09"
-                  title="Visual, Hazard, Radiation & Certificate Checks"
-                  status={inspectionStatus}
-                  summary={`${intake.materialType?.replace(/_/g, " ") ?? "Inspected"}${intake.hazardOrContaminationFound ? " · hazard found" : ""}${intake.radiationCheckRequired ? ` · radiation ${intake.radiationCheckPassed ? "passed" : "failed"}` : ""}`}
-                >
-                  {inspectionStatus === "active" && <InspectionForm intake={intake} token={token} onDone={onRefresh} />}
-                </SubStep>
+              <DocSection
+                number="02"
+                title="Visual, Hazard, Radiation & Certificate Checks"
+                status={inspectionDone ? "done" : actions.includes("RECORD_INSPECTION") ? "active" : "locked"}
+              >
+                <InspectionGroup intake={intake} token={token} onDone={onRefresh} done={inspectionDone} />
+              </DocSection>
 
-                <div className="relative">
-                  <div className="flex items-center gap-2 mb-1 px-1">
-                    <Gavel className="h-3.5 w-3.5 text-slate-400" />
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Management Acceptance Decision</p>
-                  </div>
-                  <SubStep
-                    code="P03-A10"
-                    title="Acceptance Decision"
-                    status={decisionStatus}
-                    summary={intake.acceptanceDecision ? `Decision: ${intake.acceptanceDecision}` : undefined}
-                  >
-                    {decisionStatus === "active" ? (
-                      canDecide ? (
-                        <DecisionForm intake={intake} token={token} onDone={onRefresh} />
-                      ) : (
-                        <AcceptanceLockedCard />
-                      )
-                    ) : null}
-                  </SubStep>
-                </div>
-              </>
-            )}
-          </div>
-          <Sidebar intake={intake} />
-        </div>
+              <DocSection
+                number="03"
+                title="Management Acceptance Decision"
+                status={decisionDone ? "done" : actions.includes("RECORD_ACCEPTANCE_DECISION") ? "active" : "locked"}
+                action={<Gavel className="h-3.5 w-3.5 text-slate-400" />}
+              >
+                {decisionDone ? (
+                  <DocGrid cols={2}>
+                    <DocField label="Decision" value={intake.acceptanceDecision} />
+                    <DocField label="Notes" value={intake.decisionNotes} />
+                  </DocGrid>
+                ) : actions.includes("RECORD_ACCEPTANCE_DECISION") ? (
+                  <DecisionGroup intake={intake} token={token} onDone={onRefresh} canDecide={canDecide} />
+                ) : (
+                  <p className="text-sm text-slate-400">Complete the checks above first.</p>
+                )}
+              </DocSection>
+            </div>
+          )}
+        </ProcessDocumentLayout>
       </div>
     </TooltipProvider>
   );

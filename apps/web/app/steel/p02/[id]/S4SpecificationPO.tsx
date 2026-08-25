@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/contexts/toast.context";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
@@ -11,7 +11,7 @@ import {
   ConfirmSpecPayload,
   CreatePurchaseOrderPayload,
 } from "@/services/steel-sourcing.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SteelConfigService } from "@/services/steel-config.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -19,163 +19,49 @@ import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
 import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
 import { SCREENS } from "@/components/steel/p02/screenMap";
-import { ScreenSidebar } from "@/components/steel/p02/ScreenSidebar";
-import { SubStepCard, Field } from "@/components/steel/p02/shared";
-import {
-  Loader2,
-  FileCheck2,
-  ShieldCheck,
-  Lock,
-  Info,
-  ListChecks,
-  Lightbulb,
-  AlertTriangle,
-  ArrowRight,
-  X,
-  Plus,
-  Gavel,
-} from "lucide-react";
+import { DocSection, DocGrid, DocField, SummaryBlock, StickyActions, ErrorBanner, P02Layout, P02InfoCard } from "@/components/steel/p02/document";
+import { AttachmentPanel } from "@/components/steel/p02/AttachmentPanel";
+import { Loader2, FileCheck2, ArrowRight, X, Plus } from "lucide-react";
 
 // Same PO authority scope enforced server-side by the sourcing controller's
 // PO_ROLES guard — kept identical rather than inventing a new list.
 const PO_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
-// ── Persistent context (top of screen) ───────────────────────────────────────
+// ── Order reference header (always visible, read-only) ──────────────────────
 
-function ContextSummary({ order }: { order: SteelSourcingOrder }) {
+function OrderReferenceHeader({ order }: { order: SteelSourcingOrder }) {
   const winner = order.quotations.find((q) => q.supplierId === order.selectedSupplierId);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sourcing Order Context</CardTitle>
-        <p className="text-sm text-slate-500">From S1–S3 — read only.</p>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 text-sm">
-          <div>
-            <p className="text-xs text-slate-400">Sourcing Order</p>
-            <p className="font-medium text-slate-800">{order.sourcingNumber}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Production Plan</p>
-            <p className="font-medium text-slate-800">{order.plan?.planNumber ?? "—"}</p>
-          </div>
-          {order.plan?.customerName && (
-            <div>
-              <p className="text-xs text-slate-400">Customer</p>
-              <p className="font-medium text-slate-800">{order.plan.customerName}</p>
-            </div>
-          )}
-          <div>
-            <p className="text-xs text-slate-400">Material Type</p>
-            <p className="font-medium text-slate-800">{order.materialType?.replace(/_/g, " ") ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Selected Supplier</p>
-            <p className="font-medium text-slate-800">{winner?.supplier?.name ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Winning Quote</p>
-            <p className="font-medium text-slate-800">{winner ? `${winner.price} ${winner.currency}` : "—"}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <DocGrid cols={4}>
+      <DocField label="Sourcing Order" value={order.sourcingNumber} source="From Production Plan" />
+      <DocField label="Production Plan" value={order.plan?.planNumber} source="From Production Plan" />
+      <DocField label="Selected Supplier" value={winner?.supplier?.name} source="From Sourcing Decision" />
+      <DocField label="Winning Quote" value={winner ? `${winner.price} ${winner.currency}` : null} source="From Sourcing Decision" />
+    </DocGrid>
   );
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────
+// ── A07 — Technical requirements (pulled from Material Master, not retyped) ──
 
-function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A07" | "A08" | "done" }) {
+function ConfiguredRequirements({ order, token }: { order: SteelSourcingOrder; token: string }) {
+  const materialsQuery = useQuery({
+    queryKey: ["steel-config-materials", "active"],
+    queryFn: () => SteelConfigService.listMaterials(token),
+    enabled: !!token,
+  });
+  const matched = materialsQuery.data?.find((m) => m.materialType === order.materialType);
+  if (!matched || (!matched.specificationReference && matched.requiredDocuments.length === 0)) return null;
+
   return (
-    <ScreenSidebar>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            S4 covers P02-A07 (confirm the technical specification and document requirements) and P02-A08 (issue the
-            purchase order). A07 is sourcing preparation; A08 is a Management approval and financial commitment.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Specification</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {order.specificationRequirementNotes || order.certificateRequired !== null || order.documentsRequired.length > 0 ? (
-            <dl className="text-xs space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Certificate Required</dt>
-                <dd className="text-slate-700 font-medium text-right">{order.certificateRequired ? "Yes" : "No"}</dd>
-              </div>
-              {order.documentsRequired.length > 0 && (
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-slate-400">Documents</dt>
-                  <dd className="text-slate-700 font-medium text-right truncate max-w-[160px]">{order.documentsRequired.join(", ")}</dd>
-                </div>
-              )}
-            </dl>
-          ) : (
-            <p className="text-xs text-slate-400">Specification details will appear here once confirmed.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            {subStep === "A07"
-              ? "Once the specification is confirmed, the purchase order can be issued by a Management/Admin role in this same screen."
-              : subStep === "A08"
-                ? "Once the purchase order is issued, this order moves to S5 — Delivery, Logistics & Handover."
-                : "Continue to S5 — Delivery, Logistics & Handover."}
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            {subStep === "A07" ? (
-              <>
-                <li>Certificate and document requirements are optional but should reflect the customer/plan spec.</li>
-                <li>These requirements carry forward to the purchase order and intake steps.</li>
-              </>
-            ) : (
-              <>
-                <li>PO price and quantity don&apos;t have to exactly match the winning quotation — differences are shown, not blocked.</li>
-                <li>Only Management, Admin, or Super Admin can issue the purchase order.</li>
-              </>
-            )}
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
+    <SummaryBlock tone="info">
+      <span className="font-medium">From Material Configuration ({matched.name}):</span>{" "}
+      {matched.specificationReference && <>Specification: {matched.specificationReference}. </>}
+      {matched.requiredDocuments.length > 0 && <>Required documents: {matched.requiredDocuments.join(", ")}.</>}
+    </SummaryBlock>
   );
 }
 
-// ── A07 — Specification ──────────────────────────────────────────────────────
-
-function SpecificationForm({ id, token, onDone }: { id: string; token: string; onDone: () => void }) {
+function SpecificationForm({ id, token, order, onDone }: { id: string; token: string; order: SteelSourcingOrder; onDone: () => void }) {
   const { toast } = useToast();
   const [notes, setNotes] = useState("");
   const [certificateRequired, setCertificateRequired] = useState(true);
@@ -209,26 +95,22 @@ function SpecificationForm({ id, token, onDone }: { id: string; token: string; o
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {error && <ErrorBanner message={error} />}
+      <ConfiguredRequirements order={order} token={token} />
 
       <div>
-        <label className="text-sm font-medium text-slate-700 block mb-1">
-          Specification / grade / standard notes <span className="text-slate-400 font-normal">(optional)</span>
+        <label className="text-xs font-medium text-muted-foreground block mb-1">
+          Specification / grade / standard notes (optional)
         </label>
         <textarea
-          className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm min-h-[80px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring"
+          className="w-full rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm min-h-[80px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring"
           value={notes}
           maxLength={500}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Any grade, standard, or specification detail the supplier must meet"
         />
-        <p className="text-xs text-slate-400 mt-1 text-right">{notes.length}/500</p>
+        <p className="text-xs text-muted-foreground mt-1 text-right">{notes.length}/500</p>
       </div>
 
       <label className="flex items-center gap-2 text-sm">
@@ -237,11 +119,10 @@ function SpecificationForm({ id, token, onDone }: { id: string; token: string; o
       </label>
 
       <div>
-        <label className="text-sm font-medium text-slate-700 block mb-1">
-          Documents required <span className="text-slate-400 font-normal">(optional)</span>
-        </label>
+        <label className="text-xs font-medium text-muted-foreground block mb-1">Documents required (optional)</label>
         <div className="flex gap-2">
           <Input
+            className="h-8"
             value={docInput}
             onChange={(e) => setDocInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addDoc(); } }}
@@ -254,7 +135,7 @@ function SpecificationForm({ id, token, onDone }: { id: string; token: string; o
         {docs.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {docs.map((d) => (
-              <Badge key={d} className="bg-slate-100 text-slate-700 gap-1.5">
+              <Badge key={d} className="bg-muted text-foreground gap-1.5">
                 {d}
                 <button type="button" onClick={() => setDocs((prev) => prev.filter((x) => x !== d))} className="hover:text-red-500">
                   <X className="h-3 w-3" />
@@ -267,25 +148,20 @@ function SpecificationForm({ id, token, onDone }: { id: string; token: string; o
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Specification →"}
+          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continue to Purchase Order →"}
         </Button>
       </div>
     </form>
   );
 }
 
-// ── A08 — Purchase order ─────────────────────────────────────────────────────
+// ── A08 — Purchase order (presented as the actual PO document) ──────────────
 
 function DeltaBadge({ label, delta, unit }: { label: string; delta: number; unit?: string }) {
   if (delta === 0 || Number.isNaN(delta)) return null;
   const positive = delta > 0;
   return (
-    <span
-      className={
-        "text-xs font-medium px-1.5 py-0.5 rounded " +
-        (positive ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700")
-      }
-    >
+    <span className={"text-xs font-medium px-1.5 py-0.5 rounded " + (positive ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700")}>
       {label} {positive ? "+" : ""}{delta}{unit ?? ""} vs. quote
     </span>
   );
@@ -315,6 +191,7 @@ function PurchaseOrderForm({
   const qtyNum = Number(poQuantity);
   const priceNum = Number(poPrice);
   const valid = poNumber.trim() && qtyNum > 0 && priceNum >= 0;
+  const total = valid ? qtyNum * priceNum : null;
 
   const priceDelta = winner && poPrice !== "" ? Math.round((priceNum - winner.price) * 100) / 100 : 0;
   const qtyDelta =
@@ -339,115 +216,113 @@ function PurchaseOrderForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <ErrorBanner message={error} />}
 
       {winner && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
-          <p className="text-xs text-slate-400 mb-1">Winning quotation, for comparison</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            <span className="font-medium text-slate-800">{winner.supplier?.name}</span>
-            <span className="text-slate-600">{winner.price} {winner.currency}</span>
-            {winner.quantityAvailable != null && <span className="text-slate-600">{winner.quantityAvailable} available</span>}
-            {winner.deliveryDate && <span className="text-slate-600">Delivery {new Date(winner.deliveryDate).toLocaleDateString()}</span>}
-            {winner.paymentTerms && <span className="text-slate-600">{winner.paymentTerms}</span>}
-          </div>
-        </div>
+        <SummaryBlock tone="neutral">
+          <span className="font-medium text-foreground">{winner.supplier?.name}</span> quoted {winner.price} {winner.currency}
+          {winner.quantityAvailable != null && ` · ${winner.quantityAvailable} available`}
+          {winner.deliveryDate && ` · Delivery ${new Date(winner.deliveryDate).toLocaleDateString()}`}
+          {winner.paymentTerms && ` · ${winner.paymentTerms}`}
+        </SummaryBlock>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+      <DocGrid>
         <div>
-          <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1">
             PO number <span className="text-red-500">*</span>
           </label>
-          <Input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-0142" />
+          <Input className="h-8" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-0142" />
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Item description <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={poItem} onChange={(e) => setPoItem(e.target.value)} placeholder="Optional" />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Item description (optional)</label>
+          <Input className="h-8" value={poItem} onChange={(e) => setPoItem(e.target.value)} placeholder="Optional" />
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1">
             Quantity <span className="text-red-500">*</span>
           </label>
-          <Input type="number" step="0.01" min="0.01" value={poQuantity} onChange={(e) => setPoQuantity(e.target.value)} placeholder="e.g. 50" />
+          <Input className="h-8" type="number" step="0.01" min="0.01" value={poQuantity} onChange={(e) => setPoQuantity(e.target.value)} placeholder="e.g. 50" />
           {qtyDelta !== 0 && <div className="mt-1"><DeltaBadge label="Qty" delta={qtyDelta} /></div>}
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 flex items-center gap-1 mb-1">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1">
             Price <span className="text-red-500">*</span>
           </label>
-          <Input type="number" step="0.01" min="0" value={poPrice} onChange={(e) => setPoPrice(e.target.value)} placeholder="e.g. 620" />
+          <Input className="h-8" type="number" step="0.01" min="0" value={poPrice} onChange={(e) => setPoPrice(e.target.value)} placeholder="e.g. 620" />
           {priceDelta !== 0 && <div className="mt-1"><DeltaBadge label="Price" delta={priceDelta} /></div>}
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Currency <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={poCurrency} onChange={(e) => setPoCurrency(e.target.value)} placeholder="USD" />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Currency (optional)</label>
+          <Input className="h-8" value={poCurrency} onChange={(e) => setPoCurrency(e.target.value)} placeholder="USD" />
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Delivery terms <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={poDeliveryTerms} onChange={(e) => setPoDeliveryTerms(e.target.value)} placeholder="e.g. FOB, CIF, Ex-works" />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Delivery terms (optional)</label>
+          <Input className="h-8" value={poDeliveryTerms} onChange={(e) => setPoDeliveryTerms(e.target.value)} placeholder="e.g. FOB, CIF, Ex-works" />
         </div>
-      </div>
+      </DocGrid>
+
+      {total !== null && (
+        <div className="flex items-center justify-end border-t border-input pt-2">
+          <p className="text-sm text-muted-foreground mr-2">Total</p>
+          <p className="text-base font-semibold text-foreground">{total.toFixed(2)} {poCurrency || "USD"}</p>
+        </div>
+      )}
 
       <div className="flex items-center justify-end">
         <Button type="submit" disabled={!valid || mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Issue Purchase Order →"}
+          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Release Purchase Order →"}
         </Button>
       </div>
     </form>
   );
 }
 
-function ApprovalLockedCard() {
+function ApprovalLocked() {
   return (
-    <Card className="border-amber-200 bg-amber-50/40">
-      <CardContent className="py-6 flex flex-col items-center text-center gap-3">
-        <div className="h-11 w-11 rounded-full bg-amber-100 flex items-center justify-center">
-          <Lock className="h-5 w-5 text-amber-600" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-900">Purchase order requires Management approval</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm">
-            Only Management, Admin, or Super Admin roles can issue the purchase order for this sourcing order. Ask a
-            Management or Admin user to complete this step, or return once your role has been elevated.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <SummaryBlock tone="warning">
+      <span className="font-medium">Purchase order requires Management approval.</span> Only Management, Admin, or
+      Super Admin roles can issue the purchase order for this sourcing order. Ask a Management or Admin user to
+      complete this step, or return once your role has been elevated.
+    </SummaryBlock>
   );
 }
 
-// ── S4 completion ─────────────────────────────────────────────────────────────
+// ── PO document (once issued) ────────────────────────────────────────────────
 
-function S4CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onContinue: () => void }) {
+function IssuedPurchaseOrder({ order }: { order: SteelSourcingOrder }) {
+  const winner = order.quotations.find((q) => q.supplierId === order.selectedSupplierId);
+  const total = order.poQuantity != null && order.poPrice != null ? order.poQuantity * order.poPrice : null;
+  const releaseLog = [...order.activityLogs].reverse().find((l) => l.activity === "A08");
   return (
-    <SubStepCard code="S4" title="Purchase Order Issued" status="done">
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Field label="PO Number" value={order.poNumber} />
-          <Field label="Quantity" value={order.poQuantity} />
-          <Field label="Price" value={order.poPrice != null ? `${order.poPrice} ${order.poCurrency}` : null} />
-          <Field label="Delivery Terms" value={order.poDeliveryTerms} />
+    <div className="rounded-md border border-input bg-muted/20 p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-input pb-2">
+        <div>
+          <p className="text-xs text-muted-foreground">Purchase Order</p>
+          <p className="text-base font-semibold text-foreground">{order.poNumber}</p>
         </div>
-        <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-500">
-          Next: <span className="font-medium text-slate-700">S5 — Delivery, Logistics &amp; Handover</span>
-        </div>
-        <Button onClick={onContinue} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-          Continue to S5 — Delivery &amp; Handover <ArrowRight className="h-4 w-4" />
-        </Button>
+        <Badge className="bg-emerald-50 text-emerald-700">Issued</Badge>
       </div>
-    </SubStepCard>
+      <DocGrid cols={3}>
+        <DocField label="Supplier" value={winner?.supplier?.name} />
+        <DocField label="Item" value={order.poItem} />
+        <DocField label="Quantity" value={order.poQuantity} />
+        <DocField label="Price" value={order.poPrice != null ? `${order.poPrice} ${order.poCurrency}` : null} />
+        <DocField label="Delivery Terms" value={order.poDeliveryTerms} />
+        <DocField label="Issued" value={order.poCreatedAt ? new Date(order.poCreatedAt).toLocaleDateString() : null} />
+      </DocGrid>
+      {total !== null && (
+        <div className="flex items-center justify-end border-t border-input pt-2">
+          <p className="text-sm text-muted-foreground mr-2">Total</p>
+          <p className="text-base font-semibold text-foreground">{total.toFixed(2)} {order.poCurrency}</p>
+        </div>
+      )}
+      {releaseLog && (
+        <p className="text-xs text-muted-foreground">
+          Released by {releaseLog.performedBy.firstName} {releaseLog.performedBy.lastName} on {new Date(releaseLog.createdAt).toLocaleString()}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -466,11 +341,7 @@ export function S4SpecificationPO({
   };
 
   const statusFor = (stage: SteelSourcingOrder["stage"]): "done" | "active" | "locked" => {
-    const order4: SteelSourcingOrder["stage"][] = [
-      "A06_SUPPLIER_SELECTED",
-      "A07_SPEC_CONFIRMED",
-      "A08_PO_CREATED",
-    ];
+    const order4: SteelSourcingOrder["stage"][] = ["A06_SUPPLIER_SELECTED", "A07_SPEC_CONFIRMED", "A08_PO_CREATED"];
     const currentIdx = order4.indexOf(order.stage);
     const targetIdx = order4.indexOf(stage);
     if (currentIdx >= targetIdx) return "done";
@@ -483,14 +354,12 @@ export function S4SpecificationPO({
   const allDone = order.stage === "A08_PO_CREATED";
   const winner = order.quotations.find((q) => q.supplierId === order.selectedSupplierId);
 
-  const subStep: "A07" | "A08" | "done" = allDone ? "done" : a07Status === "active" ? "A07" : "A08";
-
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
       <ScreenHeader
         icon={FileCheck2}
-        title="Specification & Purchase Order"
-        subtitle="Confirm the technical specification, then issue the purchase order."
+        title="Purchase Order"
+        subtitle="Confirm technical requirements from configuration, then release the purchase order document."
         backHref="/steel/p02"
         backLabel="Back to Sourcing Orders"
         code="P02"
@@ -501,53 +370,59 @@ export function S4SpecificationPO({
         activeIndex={allDone ? null : 3}
         activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P02")!.color.bar}
       />
-      <ContextSummary order={order} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        <div className="space-y-4">
-          <SubStepCard code="P02-A07" title="Confirm Technical Specification & Documents Required" status={a07Status}>
+      <P02Layout
+        info={
+          <P02InfoCard
+            alreadyProvided="Supplier, winning quote, price, and specification defaults, from Sourcing and Material Configuration."
+            whatToEnter="Any missing specification notes, required documents, and the final PO number/quantity/price/terms."
+            beforeYouContinue={["Quantity and price are correct.", "Required documents are identified."]}
+          />
+        }
+      >
+        <div className="rounded-lg border border-input bg-background shadow-sm p-4 md:p-6 space-y-5">
+          <DocSection number="—" title="Purchase Order Reference" first>
+            <OrderReferenceHeader order={order} />
+          </DocSection>
+
+          <DocSection number="07" title="Technical Requirements" status={a07Status}>
             {a07Status === "done" ? (
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Spec notes" value={order.specificationRequirementNotes} />
-                <Field label="Certificate required" value={order.certificateRequired ? "Yes" : "No"} />
-                <Field label="Documents required" value={order.documentsRequired.join(", ")} />
-              </div>
+              <DocGrid cols={3}>
+                <DocField label="Spec notes" value={order.specificationRequirementNotes} />
+                <DocField label="Certificate required" value={order.certificateRequired ? "Yes" : "No"} />
+                <DocField label="Documents required" value={order.documentsRequired.join(", ")} />
+              </DocGrid>
             ) : a07Status === "active" ? (
-              <SpecificationForm id={order.id} token={token} onDone={refresh} />
+              <SpecificationForm id={order.id} token={token} order={order} onDone={refresh} />
             ) : (
-              <p className="text-sm text-slate-400">Complete the previous step first.</p>
+              <p className="text-sm text-muted-foreground">Confirm the technical requirements above to continue.</p>
             )}
-          </SubStepCard>
+            {a07Status === "done" && (
+              <div className="mt-3">
+                <AttachmentPanel sourcingId={order.id} stage="A07_SPEC_CONFIRMED" token={token} label="Technical Documents & Certificates" />
+              </div>
+            )}
+          </DocSection>
 
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-1 px-1">
-              <Gavel className="h-3.5 w-3.5 text-slate-400" />
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Management Approval &amp; Purchase Commitment</p>
-            </div>
-            <SubStepCard code="P02-A08" title="Create Purchase Order" status={a08Status}>
-              {a08Status === "done" ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="PO number" value={order.poNumber} />
-                  <Field label="Quantity" value={order.poQuantity} />
-                  <Field label="Price" value={order.poPrice != null ? `${order.poPrice} ${order.poCurrency}` : null} />
-                  <Field label="Delivery terms" value={order.poDeliveryTerms} />
-                </div>
-              ) : a08Status === "active" ? (
-                canIssuePO ? (
-                  <PurchaseOrderForm id={order.id} token={token} winner={winner} onDone={refresh} />
-                ) : (
-                  <ApprovalLockedCard />
-                )
-              ) : (
-                <p className="text-sm text-slate-400">Complete the specification step first.</p>
-              )}
-            </SubStepCard>
-          </div>
+          <DocSection number="08" title="Purchase Order Document" status={a08Status}>
+            {a08Status === "done" ? (
+              <IssuedPurchaseOrder order={order} />
+            ) : a08Status === "active" ? (
+              canIssuePO ? <PurchaseOrderForm id={order.id} token={token} winner={winner} onDone={refresh} /> : <ApprovalLocked />
+            ) : (
+              <p className="text-sm text-muted-foreground">Confirm the technical requirements above before releasing the PO.</p>
+            )}
+          </DocSection>
 
-          {allDone && <S4CompleteCard order={order} onContinue={refresh} />}
+          {allDone && (
+            <StickyActions>
+              <Button onClick={refresh} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+                Continue to Delivery & Handover <ArrowRight className="h-4 w-4" />
+              </Button>
+            </StickyActions>
+          )}
         </div>
-        <Sidebar order={order} subStep={subStep} />
-      </div>
+      </P02Layout>
     </div>
   );
 }

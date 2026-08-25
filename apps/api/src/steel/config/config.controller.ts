@@ -17,21 +17,28 @@ import { ConfigService } from './config.service';
 import {
   CreateCustomerDto,
   CreateDealerDto,
+  CreateLookupDto,
   CreateMaterialDto,
   CreateProductDto,
   CreateProductSpecificationDto,
   CreateProductionRouteDto,
+  CreateQcdCriteriaDto,
   CreateRouteStepDto,
+  CreateSupplierMaterialDto,
   ImportEntityType,
   ReorderRouteStepsDto,
   UpdateCustomerDto,
   UpdateDealerDto,
+  UpdateLookupDto,
   UpdateMaterialDto,
   UpdateProductDto,
   UpdateProductSpecificationDto,
   UpdateProductionRouteDto,
+  UpdateQcdCriteriaDto,
   UpdateRouteStepDto,
+  UpdateSupplierMaterialDto,
 } from './dto/config.dto';
+import { SteelLookupType } from 'db';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
@@ -274,7 +281,11 @@ export class ConfigController {
     @Body() dto: CreateMaterialDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.configService.createMaterial(user.organizationId, dto);
+    return this.configService.createMaterial(
+      user.organizationId,
+      dto,
+      user.userId,
+    );
   }
 
   @Patch('materials/:id')
@@ -283,7 +294,135 @@ export class ConfigController {
     @Body() dto: UpdateMaterialDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.configService.updateMaterial(id, user.organizationId, dto);
+    return this.configService.updateMaterial(
+      id,
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  // ── Supplier ↔ Material eligibility (P02-A03) ──
+  @Get('supplier-materials')
+  listSupplierMaterials(
+    @Query('supplierId') supplierId: string,
+    @Query('materialId') materialId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.listSupplierMaterials(
+      user.organizationId,
+      supplierId,
+      materialId,
+    );
+  }
+
+  @Post('supplier-materials')
+  createSupplierMaterial(
+    @Body() dto: CreateSupplierMaterialDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.createSupplierMaterial(
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  @Patch('supplier-materials/:id')
+  updateSupplierMaterial(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupplierMaterialDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.updateSupplierMaterial(
+      id,
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  @Delete('supplier-materials/:id')
+  deleteSupplierMaterial(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.deleteSupplierMaterial(id, user.organizationId);
+  }
+
+  // ── QCD criteria (P02-A06) ──
+  @Get('qcd-criteria')
+  listQcdCriteria(
+    @Query('includeInactive') includeInactive: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.listQcdCriteria(
+      user.organizationId,
+      includeInactive,
+    );
+  }
+
+  @Post('qcd-criteria')
+  createQcdCriteria(
+    @Body() dto: CreateQcdCriteriaDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.createQcdCriteria(
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  @Patch('qcd-criteria/:id')
+  updateQcdCriteria(
+    @Param('id') id: string,
+    @Body() dto: UpdateQcdCriteriaDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.updateQcdCriteria(
+      id,
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  // ── Procurement supporting lookups ──
+  @Get('lookups')
+  listLookups(
+    @Query('type') type: SteelLookupType,
+    @Query('includeInactive') includeInactive: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.listLookups(
+      user.organizationId,
+      type,
+      includeInactive,
+    );
+  }
+
+  @Post('lookups')
+  createLookup(@Body() dto: CreateLookupDto, @CurrentUser() user: AuthUser) {
+    return this.configService.createLookup(
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  @Patch('lookups/:id')
+  updateLookup(
+    @Param('id') id: string,
+    @Body() dto: UpdateLookupDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.configService.updateLookup(
+      id,
+      user.organizationId,
+      dto,
+      user.userId,
+    );
   }
 
   // ── Import ──

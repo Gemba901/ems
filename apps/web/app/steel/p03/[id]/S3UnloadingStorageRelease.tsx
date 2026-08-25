@@ -14,19 +14,21 @@ import {
   ReleaseToStockPayload,
 } from "@/services/material-intake.service";
 import type { SteelSourcingOrder } from "@/services/steel-sourcing.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { WorkflowIndicator } from "@/components/steel/p03/WorkflowIndicator";
-import { SCREEN_TOP_STEPS } from "@/components/steel/p03/screenMap";
-import { ScreenSidebar } from "@/components/steel/p03/ScreenSidebar";
+import { WORKFLOW_STEPS } from "@/components/steel/p03/screenMap";
 import { ContextSummary } from "@/components/steel/p03/ContextSummary";
 import { IntakeProgress } from "@/components/steel/p03/IntakeProgress";
-import { Field, SubStep, SaveButton, SubStepStatus } from "@/components/steel/p03/shared";
+import { Field, SaveButton, IntakeStatusBadge } from "@/components/steel/p03/shared";
 import {
-  PackageCheck, Info, ListChecks, Lightbulb, ShieldCheck, Lock, Check, ArrowRight, HelpCircle, Loader2,
+  DocSection, DocGrid, DocField, ProcessDocumentLayout, InfoCard,
+} from "@/components/steel/shared/document";
+import {
+  PackageCheck, ShieldCheck, Check, ArrowRight, HelpCircle, Loader2, Hourglass,
 } from "lucide-react";
 
 // Same authority scope enforced server-side by the material-intake
@@ -34,98 +36,22 @@ import {
 // than inventing a new list.
 const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
-function subStatus(active: boolean, done: boolean): SubStepStatus {
-  if (done) return "done";
-  if (active) return "active";
-  return "locked";
-}
+// ── Unloading confirmation ──
 
-// ── Sidebar ───────────────────────────────────────────────────────────────
-
-function Sidebar({ intake }: { intake: SteelMaterialIntake }) {
-  return (
-    <ScreenSidebar>
-      <IntakeProgress intake={intake} />
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            S3 covers P03-A11 (unload the accepted material), P03-A12 (capture tare weight — we work out the net
-            weight for you), P03-A13 (assign a yard storage location), and P03-A14 (release to stock — the final,
-            Management-approved step).
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Inspection Outcome (from S2)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="text-xs space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-slate-400">Decision</dt>
-              <dd className="text-slate-700 font-medium text-right">{intake.acceptanceDecision ?? "—"}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-slate-400">Gross weight</dt>
-              <dd className="text-slate-700 font-medium text-right">{intake.grossWeightTonnes ? `${intake.grossWeightTonnes} t` : "—"}</dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Releasing to stock is final — it marks this material intake RELEASED. A P04 charge preparation is created
-            separately and attaches this intake as a material lot afterward.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            <li>We work out the net weight for you from the gross and tare weights — you don&apos;t enter it directly.</li>
-            <li>Only Management, Admin, or Super Admin can release material to stock.</li>
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
-  );
-}
-
-// ── P03-A11 ──
-
-function UnloadingForm({
-  intake, token, onDone,
-}: { intake: SteelMaterialIntake; token: string; onDone: () => void }) {
+function UnloadingGroup({
+  intake, token, onDone, done,
+}: { intake: SteelMaterialIntake; token: string; onDone: () => void; done: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
     mutationFn: (payload: RecordUnloadingPayload) => MaterialIntakeService.recordUnloading(intake.id, payload, token),
     onSuccess: onDone,
     onError: (err: Error) => setError(err.message),
   });
+
+  if (done) return <DocGrid cols={2}><DocField label="Unloaded at" value={intake.unloadedAt ? new Date(intake.unloadedAt).toLocaleString() : null} /></DocGrid>;
+
   return (
-    <div className="space-y-3">
+    <div className="flex items-center gap-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
       <p className="text-sm text-slate-600">Confirm the accepted material has been safely unloaded.</p>
       <Button size="sm" disabled={mutation.isPending} onClick={() => mutation.mutate({})}>
@@ -135,11 +61,11 @@ function UnloadingForm({
   );
 }
 
-// ── P03-A12 ──
+// ── Tare weight / net weight preview ──
 
-function NetWeightForm({
-  intake, token, onDone,
-}: { intake: SteelMaterialIntake; token: string; onDone: () => void }) {
+function NetWeightGroup({
+  intake, token, onDone, done,
+}: { intake: SteelMaterialIntake; token: string; onDone: () => void; done: boolean }) {
   const [tare, setTare] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
@@ -152,27 +78,38 @@ function NetWeightForm({
   const valid = tare !== "" && tareNum >= 0 && tareNum <= grossWeight;
   const preview = tare !== "" && tareNum <= grossWeight ? grossWeight - tareNum : null;
 
+  if (done) {
+    return (
+      <DocGrid cols={3}>
+        <DocField label="Gross weight" value={`${intake.grossWeightTonnes} t`} kind="inherited" source="S1 weighbridge" />
+        <DocField label="Tare weight" value={`${intake.tareWeightTonnes} t`} />
+        <DocField label="Net weight" value={`${intake.netWeightTonnes} t`} kind="calculated" source="Gross − Tare" />
+      </DocGrid>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
-      <Field label="Gross weight" value={`${grossWeight} t`} />
-      <div>
-        <div className="flex items-center gap-1.5 mb-1">
-          <label className="text-sm font-medium text-slate-700">Tare weight (tonnes)</label>
-          <Tooltip>
-            <TooltipTrigger render={(p) => <HelpCircle {...p} className="h-3 w-3 text-slate-300" />} />
-            <TooltipContent>We work out the net weight for you once you enter the tare weight.</TooltipContent>
-          </Tooltip>
+      <DocGrid cols={3}>
+        <DocField label="Gross weight" value={`${grossWeight} t`} kind="inherited" source="S1 weighbridge" />
+        <div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <label className="text-sm font-medium text-slate-700">Tare weight (tonnes)</label>
+            <Tooltip>
+              <TooltipTrigger render={(p) => <HelpCircle {...p} className="h-3 w-3 text-slate-300" />} />
+              <TooltipContent>We work out the net weight for you once you enter the tare weight.</TooltipContent>
+            </Tooltip>
+          </div>
+          <Input type="number" step="0.001" value={tare} onChange={(e) => setTare(e.target.value)} />
         </div>
-        <Input type="number" step="0.001" value={tare} onChange={(e) => setTare(e.target.value)} />
-      </div>
+        {preview !== null && <DocField label="Net weight (preview)" value={`${preview.toFixed(3)} t`} kind="calculated" source="Gross − Tare" />}
+      </DocGrid>
       {tare !== "" && tareNum > grossWeight && (
         <p className="text-xs text-red-600">Tare weight cannot exceed gross weight.</p>
       )}
       {preview !== null && (
-        <p className="text-xs text-slate-400">
-          Estimated net weight: {preview.toFixed(3)} t — this will be confirmed when you save.
-        </p>
+        <p className="text-xs text-slate-400">Estimated net weight — confirmed server-side when you save.</p>
       )}
       <Button size="sm" disabled={!valid || mutation.isPending} onClick={() => mutation.mutate({ tareWeightTonnes: Number(tare) })}>
         <SaveButton pending={mutation.isPending} label="Record net weight" />
@@ -181,11 +118,11 @@ function NetWeightForm({
   );
 }
 
-// ── P03-A13 ──
+// ── Yard location ──
 
-function YardLocationForm({
-  intake, token, onDone,
-}: { intake: SteelMaterialIntake; token: string; onDone: () => void }) {
+function YardLocationGroup({
+  intake, token, onDone, done,
+}: { intake: SteelMaterialIntake; token: string; onDone: () => void; done: boolean }) {
   const [location, setLocation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
@@ -193,10 +130,15 @@ function YardLocationForm({
     onSuccess: onDone,
     onError: (err: Error) => setError(err.message),
   });
+
+  if (done) return <DocGrid cols={2}><DocField label="Yard location" value={intake.yardLocation} /></DocGrid>;
+
   return (
-    <div className="space-y-3">
+    <div className="flex items-end gap-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
-      <Input placeholder="Yard location" value={location} onChange={(e) => setLocation(e.target.value)} />
+      <div className="w-64">
+        <Input placeholder="Yard location" value={location} onChange={(e) => setLocation(e.target.value)} />
+      </div>
       <Button size="sm" disabled={!location.trim() || mutation.isPending} onClick={() => mutation.mutate({ yardLocation: location })}>
         <SaveButton pending={mutation.isPending} label="Assign yard location" />
       </Button>
@@ -204,24 +146,19 @@ function YardLocationForm({
   );
 }
 
-// ── P03-A14 — final authority gate ──
+// ── Final release — role-gated, confirm modal ──
 
-function ReleaseLockedCard() {
+function AwaitingReleaseNote() {
   return (
-    <Card className="border-amber-200 bg-amber-50/40">
-      <CardContent className="py-6 flex flex-col items-center text-center gap-3">
-        <div className="h-11 w-11 rounded-full bg-amber-100 flex items-center justify-center">
-          <Lock className="h-5 w-5 text-amber-600" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-900">Management approval required to release stock</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm">
-            Only Management or Admin can release this delivery to stock. Ask a Management or Admin user to complete
-            this step.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm px-3 py-2.5">
+      <Hourglass className="h-4 w-4 shrink-0 mt-0.5" />
+      <div>
+        <p className="font-medium">Awaiting Management approval to release stock</p>
+        <p className="text-xs text-amber-700/90 mt-0.5">
+          Only Management or Admin can release this delivery to stock.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -274,7 +211,7 @@ function ConfirmReleaseModal({
   );
 }
 
-function ReleasePanel({
+function ReleaseGroup({
   intake, token, canRelease, onDone,
 }: { intake: SteelMaterialIntake; token: string; canRelease: boolean; onDone: () => void }) {
   const [notes, setNotes] = useState("");
@@ -293,7 +230,7 @@ function ReleasePanel({
     },
   });
 
-  if (!canRelease) return <ReleaseLockedCard />;
+  if (!canRelease) return <AwaitingReleaseNote />;
 
   return (
     <div className="space-y-3">
@@ -352,7 +289,7 @@ function ReleasedState({ intake }: { intake: SteelMaterialIntake }) {
   );
 }
 
-// ── Screen shell ──────────────────────────────────────────────────────────────
+// ── Screen shell ────────────────────────────────────────────────────────
 
 export function S3UnloadingStorageRelease({
   intake, token, onRefresh, sourcingOrder,
@@ -362,25 +299,22 @@ export function S3UnloadingStorageRelease({
   const actions = intake.allowedActions ?? [];
   const released = intake.status === "RELEASED";
 
-  const unloadingStatus = subStatus(actions.includes("RECORD_UNLOADING"), intake.unloadedAt !== null);
-  const weightStatus = subStatus(actions.includes("RECORD_NET_WEIGHT"), intake.netWeightTonnes !== null);
-  const yardStatus = subStatus(actions.includes("ASSIGN_YARD_LOCATION"), intake.yardLocation !== null);
-  const releaseStatus = subStatus(actions.includes("RELEASE_TO_STOCK"), released);
-  const stepStatuses: SubStepStatus[] = [unloadingStatus, weightStatus, yardStatus, releaseStatus];
-  const doneCount = released ? 4 : stepStatuses.filter((s) => s === "done").length;
-  const activeIdx = released ? -1 : stepStatuses.findIndex((s) => s === "active");
+  const unloadingDone = intake.unloadedAt !== null;
+  const weightDone = intake.netWeightTonnes !== null;
+  const yardDone = intake.yardLocation !== null;
 
   if (intake.acceptanceDecision !== "ACCEPT" && !released) {
     return (
       <TooltipProvider>
         <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
           <ScreenHeader
-        code="P03"
+            code="P03"
             icon={PackageCheck}
-            title="Unloading, Storage & Release"
+            title="Weigh, Store & Release"
             subtitle="Unload, weigh net, store, and release the material to stock."
+            rightContent={<IntakeStatusBadge intake={intake} />}
           />
-          <WorkflowIndicator steps={SCREEN_TOP_STEPS[2]} doneCount={0} activeIndex={null} />
+          <WorkflowIndicator steps={WORKFLOW_STEPS} doneCount={1} activeIndex={null} />
           <ContextSummary intake={intake} sourcingOrder={sourcingOrder} />
           <Card>
             <CardContent className="py-8 text-center">
@@ -398,61 +332,61 @@ export function S3UnloadingStorageRelease({
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
-        code="P03"
+          code="P03"
           icon={PackageCheck}
-          title="Unloading, Storage & Release"
+          title="Weigh, Store & Release"
           subtitle="Unload, weigh net, store, and release the material to stock."
+          rightContent={<IntakeStatusBadge intake={intake} />}
         />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[2]} doneCount={doneCount} activeIndex={activeIdx === -1 ? null : activeIdx} />
+        <WorkflowIndicator steps={WORKFLOW_STEPS} doneCount={released ? 3 : 2} activeIndex={released ? null : 2} />
         <ContextSummary intake={intake} sourcingOrder={sourcingOrder} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <div className="space-y-4">
-            {released ? (
-              <ReleasedState intake={intake} />
-            ) : (
-              <>
-                <SubStep
-                  code="P03-A11"
-                  title="Unload Approved Material"
-                  status={unloadingStatus}
-                  summary={intake.unloadedAt ? `Unloaded ${new Date(intake.unloadedAt).toLocaleString()}` : undefined}
-                >
-                  {unloadingStatus === "active" && <UnloadingForm intake={intake} token={token} onDone={onRefresh} />}
-                </SubStep>
+        <ProcessDocumentLayout
+          info={
+            <div className="space-y-4">
+              <InfoCard
+                whatToDo="Confirm unloading, capture the tare weight (we calculate net weight for you), assign a yard location, and release the material to stock."
+                whatToEnter="Tare weight and yard location. Release is final and Management/Admin-only."
+                beforeYouContinue={[
+                  "We work out the net weight for you from the gross and tare weights — you don't enter it directly.",
+                  "Only Management, Admin, or Super Admin can release material to stock.",
+                ]}
+              />
+              <IntakeProgress intake={intake} />
+            </div>
+          }
+        >
+          {released ? (
+            <ReleasedState intake={intake} />
+          ) : (
+            <div className="rounded-lg border border-input bg-background shadow-sm p-4 md:p-6 space-y-5">
+              <DocSection number="01" title="Unload Approved Material" status={unloadingDone ? "done" : actions.includes("RECORD_UNLOADING") ? "active" : "locked"} first>
+                <UnloadingGroup intake={intake} token={token} onDone={onRefresh} done={unloadingDone} />
+              </DocSection>
 
-                <SubStep
-                  code="P03-A12"
-                  title="Tare Weight & Net Weight"
-                  status={weightStatus}
-                  summary={intake.netWeightTonnes !== null ? `Net weight ${intake.netWeightTonnes} t` : undefined}
-                >
-                  {weightStatus === "active" && <NetWeightForm intake={intake} token={token} onDone={onRefresh} />}
-                </SubStep>
+              <DocSection number="02" title="Tare Weight & Net Weight" status={weightDone ? "done" : actions.includes("RECORD_NET_WEIGHT") ? "active" : "locked"}>
+                <NetWeightGroup intake={intake} token={token} onDone={onRefresh} done={weightDone} />
+              </DocSection>
 
-                <SubStep
-                  code="P03-A13"
-                  title="Store Material in Yard Location"
-                  status={yardStatus}
-                  summary={intake.yardLocation ? `Yard: ${intake.yardLocation}` : undefined}
-                >
-                  {yardStatus === "active" && <YardLocationForm intake={intake} token={token} onDone={onRefresh} />}
-                </SubStep>
+              <DocSection number="03" title="Store Material in Yard Location" status={yardDone ? "done" : actions.includes("ASSIGN_YARD_LOCATION") ? "active" : "locked"}>
+                <YardLocationGroup intake={intake} token={token} onDone={onRefresh} done={yardDone} />
+              </DocSection>
 
-                <div className="relative">
-                  <div className="flex items-center gap-2 mb-1 px-1">
-                    <ShieldCheck className="h-3.5 w-3.5 text-red-500" />
-                    <p className="text-xs font-medium text-red-500 uppercase tracking-wide">Final Stock Release / Authority Gate</p>
-                  </div>
-                  <SubStep code="P03-A14" title="Update Stock & Release for Preparation/Use" status={releaseStatus}>
-                    {releaseStatus === "active" && <ReleasePanel intake={intake} token={token} canRelease={canRelease} onDone={onRefresh} />}
-                  </SubStep>
-                </div>
-              </>
-            )}
-          </div>
-          <Sidebar intake={intake} />
-        </div>
+              <DocSection
+                number="04"
+                title="Release to Stock"
+                status={released ? "done" : actions.includes("RELEASE_TO_STOCK") ? "active" : "locked"}
+                action={<ShieldCheck className="h-3.5 w-3.5 text-red-500" />}
+              >
+                {actions.includes("RELEASE_TO_STOCK") ? (
+                  <ReleaseGroup intake={intake} token={token} canRelease={canRelease} onDone={onRefresh} />
+                ) : (
+                  <p className="text-sm text-slate-400">Complete the steps above first.</p>
+                )}
+              </DocSection>
+            </div>
+          )}
+        </ProcessDocumentLayout>
       </div>
     </TooltipProvider>
   );

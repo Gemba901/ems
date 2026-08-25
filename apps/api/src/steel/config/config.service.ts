@@ -9,33 +9,59 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateCustomerDto,
   CreateDealerDto,
+  CreateLookupDto,
   CreateMaterialDto,
   CreateProductDto,
   CreateProductSpecificationDto,
   CreateProductionRouteDto,
+  CreateQcdCriteriaDto,
   CreateRouteStepDto,
+  CreateSupplierMaterialDto,
   ImportEntityType,
   ReorderRouteStepsDto,
   UpdateCustomerDto,
   UpdateDealerDto,
+  UpdateLookupDto,
   UpdateMaterialDto,
   UpdateProductDto,
   UpdateProductSpecificationDto,
   UpdateProductionRouteDto,
+  UpdateQcdCriteriaDto,
   UpdateRouteStepDto,
+  UpdateSupplierMaterialDto,
 } from './dto/config.dto';
+import { SteelLookupType } from 'db';
 
 /**
  * Admin CRUD over Steel Configuration master data — the write side of
  * MasterDataModule's read-only lookups. Planners never hit this module;
  * only Steel Admin/Management roles do (enforced at the controller).
  */
+// Small select shape reused wherever a config entity's response should carry
+// "who configured / last updated this" without an extra roundtrip.
+const actorInclude = {
+  createdBy: { select: { id: true, firstName: true, lastName: true } },
+  updatedBy: { select: { id: true, firstName: true, lastName: true } },
+};
+
 @Injectable()
 export class ConfigService {
   constructor(private prisma: PrismaService) {}
 
   private searchFilter(includeInactive: string | undefined) {
     return includeInactive === 'true' ? {} : { isActive: true };
+  }
+
+  private async resolveEmployeeId(
+    organizationId: string,
+    userId?: string,
+  ): Promise<string | undefined> {
+    if (!userId) return undefined;
+    const employee = await this.prisma.employee.findFirst({
+      where: { userId, organizationId },
+      select: { id: true },
+    });
+    return employee?.id;
   }
 
   // ── Products ──
@@ -381,11 +407,16 @@ export class ConfigService {
           ],
         }),
       },
+      include: actorInclude,
       orderBy: { name: 'asc' },
     });
   }
 
-  async createMaterial(organizationId: string, dto: CreateMaterialDto) {
+  async createMaterial(
+    organizationId: string,
+    dto: CreateMaterialDto,
+    userId?: string,
+  ) {
     const existing = await this.prisma.steelMaterialMaster.findUnique({
       where: { organizationId_code: { organizationId, code: dto.code } },
     });
@@ -393,8 +424,15 @@ export class ConfigService {
       throw new BadRequestException(
         `Material code "${dto.code}" already exists.`,
       );
+    const employeeId = await this.resolveEmployeeId(organizationId, userId);
     return this.prisma.steelMaterialMaster.create({
-      data: { ...dto, organizationId },
+      data: {
+        ...dto,
+        organizationId,
+        createdById: employeeId,
+        updatedById: employeeId,
+      },
+      include: actorInclude,
     });
   }
 
@@ -402,9 +440,215 @@ export class ConfigService {
     id: string,
     organizationId: string,
     dto: UpdateMaterialDto,
+    userId?: string,
   ) {
     await this.assertOwned('steelMaterialMaster', id, organizationId);
-    return this.prisma.steelMaterialMaster.update({ where: { id }, data: dto });
+    const employeeId = await this.resolveEmployeeId(organizationId, userId);
+    return this.prisma.steelMaterialMaster.update({
+      where: { id },
+      data: { ...dto, ...(employeeId && { updatedById: employeeId }) },
+      include: actorInclude,
+    });
+  }
+
+  // ── Supplier ↔ Material eligibility (P02-A03) ──
+  async listSupplierMaterials(
+    organizationId: string,
+    supplierId?: string,
+    materialId?: string,
+  ) {
+    return this.prisma.steelSupplierMaterial.findMany({
+      where: {
+        organizationId,
+        ...(supplierId && { supplierId }),
+        ...(materialId && { materialId }),
+      },
+      include: { supplier: true, material: true, ...actorInclude },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createSupplierMaterial(
+    organizationId: string,
+    dto: CreateSupplierMaterialDto,
+    userId?: string,
+  ) {
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id: dto.supplierId, organizationId },
+    });
+    if (!supplier) throw new NotFoundException('Supplier not found.');
+    const material = await this.prisma.steelMaterialMaster.findFirst({
+      where: { id: dto.materialId, organizationId },
+    });
+    if (!material) throw new NotFoundException('Material not found.');
+    const existing = await this.prisma.steelSupplierMaterial.findUnique({
+      where: {
+        supplierId_materialId: {
+          supplierId: dto.supplierId,
+          materialId: dto.materialId,
+        },
+      },
+    });
+    if (existing)
+      throw new BadRequestException(
+        'This supplier is already linked to this material.',
+      );
+    const employeeId = await this.resolveEmployeeId(organizationId, userId);
+    return this.prisma.steelSupplierMaterial.create({
+      data: {
+        organizationId,
+        supplierId: dto.supplierId,
+        materialId: dto.materialId,
+        isEligible: dto.isEligible ?? true,
+        specificationReference: dto.specificationReference,
+        createdById: employeeId,
+        updatedById: employeeId,
+      },
+      include: actorInclude,
+    });
+  }
+
+  async updateSupplierMaterial(
+    id: string,
+    organizationId: string,
+    dto: UpdateSupplierMaterialDto,
+    userId?: string,
+  ) {
+    const record = await this.prisma.steelSupplierMaterial.findFirst({
+      where: { id, organizationId },
+    });
+    if (!record) throw new NotFoundException('Record not found.');
+    const employeeId = await this.resolveEmployeeId(organizationId, userId);
+    return this.prisma.steelSupplierMaterial.update({
+      where: { id },
+      data: { ...dto, ...(employeeId && { updatedById: employeeId }) },
+      include: actorInclude,
+    });
+  }
+
+  async deleteSupplierMaterial(id: string, organizationId: string) {
+    const record = await this.prisma.steelSupplierMaterial.findFirst({
+      where: { id, organizationId },
+    });
+    if (!record) throw new NotFoundException('Record not found.');
+    await this.prisma.steelSupplierMaterial.delete({ where: { id } });
+    return { success: true };
+  }
+
+  // ── QCD criteria (P02-A06) ──
+  async listQcdCriteria(organizationId: string, includeInactive?: string) {
+    return this.prisma.steelQcdCriteria.findMany({
+      where: { organizationId, ...this.searchFilter(includeInactive) },
+      include: actorInclude,
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createQcdCriteria(
+    organizationId: string,
+    dto: CreateQcdCriteriaDto,
+    userId?: string,
+  ) {
+    const existing = await this.prisma.steelQcdCriteria.findUnique({
+      where: { organizationId_name: { organizationId, name: dto.name } },
+    });
+    if (existing)
+      throw new BadRequestException(
+        `QCD criteria "${dto.name}" already exists.`,
+      );
+    const employeeId = await this.resolveEmployeeId(organizationId, userId);
+    return this.prisma.steelQcdCriteria.create({
+      data: {
+        ...dto,
+        organizationId,
+        createdById: employeeId,
+        updatedById: employeeId,
+      },
+      include: actorInclude,
+    });
+  }
+
+  async updateQcdCriteria(
+    id: string,
+    organizationId: string,
+    dto: UpdateQcdCriteriaDto,
+    userId?: string,
+  ) {
+    const record = await this.prisma.steelQcdCriteria.findFirst({
+      where: { id, organizationId },
+    });
+    if (!record) throw new NotFoundException('QCD criteria not found.');
+    const employeeId = await this.resolveEmployeeId(organizationId, userId);
+    return this.prisma.steelQcdCriteria.update({
+      where: { id },
+      data: { ...dto, ...(employeeId && { updatedById: employeeId }) },
+      include: actorInclude,
+    });
+  }
+
+  // ── Procurement supporting lookups ──
+  async listLookups(
+    organizationId: string,
+    type?: SteelLookupType,
+    includeInactive?: string,
+  ) {
+    return this.prisma.steelLookup.findMany({
+      where: {
+        organizationId,
+        ...(type && { type }),
+        ...this.searchFilter(includeInactive),
+      },
+      include: actorInclude,
+      orderBy: [{ type: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  async createLookup(
+    organizationId: string,
+    dto: CreateLookupDto,
+    userId?: string,
+  ) {
+    const existing = await this.prisma.steelLookup.findUnique({
+      where: {
+        organizationId_type_code: {
+          organizationId,
+          type: dto.type,
+          code: dto.code,
+        },
+      },
+    });
+    if (existing)
+      throw new BadRequestException(
+        `"${dto.code}" already exists for ${dto.type}.`,
+      );
+    const employeeId = await this.resolveEmployeeId(organizationId, userId);
+    return this.prisma.steelLookup.create({
+      data: {
+        ...dto,
+        organizationId,
+        createdById: employeeId,
+        updatedById: employeeId,
+      },
+      include: actorInclude,
+    });
+  }
+
+  async updateLookup(
+    id: string,
+    organizationId: string,
+    dto: UpdateLookupDto,
+    userId?: string,
+  ) {
+    const record = await this.prisma.steelLookup.findFirst({
+      where: { id, organizationId },
+    });
+    if (!record) throw new NotFoundException('Lookup not found.');
+    const employeeId = await this.resolveEmployeeId(organizationId, userId);
+    return this.prisma.steelLookup.update({
+      where: { id },
+      data: { ...dto, ...(employeeId && { updatedById: employeeId }) },
+      include: actorInclude,
+    });
   }
 
   private async assertOwned(

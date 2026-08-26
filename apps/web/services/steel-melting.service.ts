@@ -158,6 +158,8 @@ export interface SteelMelting {
     heatsCompleted: number;
     condition: string | null;
     status: string;
+    thicknessRemainingMm: number | null;
+    inspectionNotes: string | null;
   } | null;
   liningHeatCount: number | null;
   liningVisualCondition: string | null;
@@ -220,6 +222,21 @@ export interface SteelMelting {
   // Only present on getById — backend's authoritative list of next valid actions.
   allowedActions?: AllowedMeltingAction[];
   _count?: { activityLogs: number; materialCharges?: number; cycleEvents?: number };
+}
+
+export interface DashboardLiningHeat {
+  id: string;
+  heatInProcessNumber: string;
+  chargeNumber: string | null;
+  chargePreparationId: string;
+  tonnesMelted: number | null;
+  date: string | null;
+}
+
+export interface DashboardLiningHistory {
+  liningId: string;
+  totalTonnesMelted: number;
+  heats: DashboardLiningHeat[];
 }
 
 export type HeatChargeMaterialCategory = "SCRAP" | "RAW_METAL" | "ALLOY" | "ADDITIVE" | "OTHER";
@@ -340,7 +357,24 @@ export interface AvailableChargePreparation {
   id: string;
   prepNumber: string;
   chargeNumber: string | null;
+  plan: { id: string; planNumber: string };
+  actualGrade: string | null;
+  actualWeightTonnes: number | null;
+  sortedWeightTonnes: number | null;
+  stagingLocation: string | null;
+  stagedWeightTonnes: number | null;
+  materialLots: Array<{ intake: { id: string; intakeNumber: string; materialType: string | null; grade: string | null; netWeightTonnes: number | null } }>;
+  recipeScrapWeightTonnes: number | null;
+  recipeDriWeightTonnes: number | null;
+  recipeAlloyWeightTonnes: number | null;
+  recipeAdditiveWeightTonnes: number | null;
+  targetChemistry: Record<string, unknown> | null;
+  additivesPrepared: unknown;
+  recipeNotes: string | null;
+  furnaceReadinessConfirmed: boolean | null;
   plannedHeatReference: string | null;
+  handoverNotes: string | null;
+  handoverClosedAt: string | null;
   chargeReleasedAt: string | null;
 }
 
@@ -495,10 +529,13 @@ export interface DashboardFurnaceStatus {
   } | null;
   lining: {
     id: string;
+    code: string | null;
     installedAt: string;
     heatsCompleted: number;
     condition: string | null;
     thicknessRemainingMm: number | null;
+    inspectionNotes: string | null;
+    totalTonnesMelted: number;
     status: string; // FurnaceLining enum: ACTIVE | RETIRED
   } | null;
 }
@@ -555,7 +592,24 @@ export interface DashboardLiningStatus {
   heatsCompleted: number;
   condition: string | null;
   thicknessRemainingMm: number | null;
+  inspectionNotes: string | null;
+  totalTonnesMelted: number;
   status: string;
+}
+
+export interface DashboardLiningHeat {
+  id: string;
+  heatInProcessNumber: string;
+  chargeNumber: string | null;
+  chargePreparationId: string;
+  tonnesMelted: number | null;
+  date: string | null;
+}
+
+export interface DashboardLiningHistory {
+  liningId: string;
+  totalTonnesMelted: number;
+  heats: DashboardLiningHeat[];
 }
 
 export interface DashboardRecentHeat {
@@ -578,6 +632,7 @@ export interface DashboardRecentHeat {
   handoverToRefiningAt: string | null;
   materialInput: number | null;
   output: number | null;
+  outputEnergyTotalKwh: number | null;
   materialLoss: number | null;
   yieldPercent: number | null;
   cycleDurationMinutes: number | null;
@@ -643,6 +698,7 @@ export interface MeltingDashboard {
   activeHeats: DashboardActiveHeat[];
   furnacePerformance: DashboardFurnacePerformance[];
   liningStatus: DashboardLiningStatus[];
+  liningHistory: DashboardLiningHistory[];
   readyCharges: DashboardReadyCharge[];
   nextReadyCharge: DashboardReadyCharge | null;
   recentHeats: DashboardRecentHeat[];

@@ -104,8 +104,8 @@ function NewMeltingForm() {
       <ScreenHeader
         code="P05"
         icon={Flame}
-        title="New Heat"
-        subtitle="Confirm furnace availability and planned heat to start melting a released charge."
+        title="Begin Melting from Released P04 Charge"
+        subtitle="Select a released P04 Charge ID, review its inherited preparation data, then begin melting operations."
         backHref="/steel/p05"
         backLabel="Back to Heats"
       />
@@ -124,7 +124,7 @@ function NewMeltingForm() {
             )}
 
             <div>
-              <label className="text-sm font-medium text-slate-700 block mb-1">Charge preparation</label>
+              <label className="text-sm font-semibold text-slate-700 block mb-1.5">Released P04 Charge</label>
               <select
                 className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
                 value={chargePreparationId}
@@ -135,7 +135,7 @@ function NewMeltingForm() {
                   if (prep?.plannedHeatReference && !plannedHeatRef) setPlannedHeatRef(prep.plannedHeatReference);
                 }}
               >
-                <option value="">{prepsLoading ? "Loading closed charge preparations..." : "Select a closed charge preparation..."}</option>
+                <option value="">{prepsLoading ? "Loading released P04 charges..." : "Select a released Charge ID..."}</option>
                 {preps.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.prepNumber} — Charge {p.chargeNumber}
@@ -151,9 +151,30 @@ function NewMeltingForm() {
             </div>
 
             {selectedPrep && (
-              <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-xs text-slate-400 block">Charge ID</span>{selectedPrep.chargeNumber}</div>
-                <div><span className="text-xs text-slate-400 block">Planned heat reference</span>{selectedPrep.plannedHeatReference ?? "—"}</div>
+              <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 space-y-3 text-sm">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">From P04 · read only</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div><span className="text-xs text-slate-400 block">Charge ID</span><span className="font-semibold text-slate-800">{selectedPrep.chargeNumber}</span></div>
+                  <div><span className="text-xs text-slate-400 block">Preparation</span><span className="font-medium text-slate-800">{selectedPrep.prepNumber}</span></div>
+                  <div><span className="text-xs text-slate-400 block">Production plan</span><span className="font-medium text-slate-800">{selectedPrep.plan.planNumber}</span></div>
+                  <div><span className="text-xs text-slate-400 block">Grade</span><span className="font-medium text-slate-800">{selectedPrep.actualGrade ?? "—"}</span></div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div><span className="text-xs text-slate-400 block">Recipe scrap</span><span className="font-medium text-slate-800">{selectedPrep.recipeScrapWeightTonnes ?? "—"} t</span></div>
+                  <div><span className="text-xs text-slate-400 block">Recipe DRI</span><span className="font-medium text-slate-800">{selectedPrep.recipeDriWeightTonnes ?? "—"} t</span></div>
+                  <div><span className="text-xs text-slate-400 block">Recipe alloy</span><span className="font-medium text-slate-800">{selectedPrep.recipeAlloyWeightTonnes ?? "—"} t</span></div>
+                  <div><span className="text-xs text-slate-400 block">Recipe additives</span><span className="font-medium text-slate-800">{selectedPrep.recipeAdditiveWeightTonnes ?? "—"} t</span></div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div><span className="text-xs text-slate-400 block">Planned weight</span><span className="font-medium text-slate-800">{selectedPrep.recipeScrapWeightTonnes !== null ? `${[selectedPrep.recipeScrapWeightTonnes, selectedPrep.recipeDriWeightTonnes, selectedPrep.recipeAlloyWeightTonnes, selectedPrep.recipeAdditiveWeightTonnes].reduce<number>((sum, value) => sum + (value ?? 0), 0)} t` : "—"}</span></div>
+                  <div><span className="text-xs text-slate-400 block">Actual weight</span><span className="font-medium text-slate-800">{selectedPrep.actualWeightTonnes ?? "—"} t</span></div>
+                  <div><span className="text-xs text-slate-400 block">Staged weight</span><span className="font-medium text-slate-800">{selectedPrep.stagedWeightTonnes ?? "—"} t</span></div>
+                  <div><span className="text-xs text-slate-400 block">Lots</span><span className="font-medium text-slate-800">{selectedPrep.materialLots.length}</span></div>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                  <span>Lots: {selectedPrep.materialLots.map((lot) => lot.intake.intakeNumber).join(", ") || "—"}</span>
+                  <span>Handover: {selectedPrep.handoverClosedAt ? new Date(selectedPrep.handoverClosedAt).toLocaleString() : "—"}</span>
+                </div>
               </div>
             )}
 
@@ -202,7 +223,7 @@ function NewMeltingForm() {
                   Starting heat...
                 </>
               ) : (
-                "Start Heat"
+                "Begin Melting Operations"
               )}
             </Button>
           </form>

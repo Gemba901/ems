@@ -58,9 +58,8 @@ function fmtMinutes(min: number | null): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function fmtEnergyPerTonne(kwh: number | null, tonnes: number | null): string {
+  return kwh !== null && tonnes !== null && tonnes > 0 ? `${(kwh / tonnes).toFixed(0)} kWh/t` : "—";
 }
 
 function fromActive(h: DashboardActiveHeat): Row {
@@ -116,9 +115,20 @@ function fromRecent(h: DashboardRecentHeat): Row {
  * heat with no recipe snapshot shows "—" rather than a fabricated number.
  */
 export function HeatCycleTracker({ data, isLoading, isError, isFetching, onRetry }: Props) {
+  const liningById = new Map((data?.liningStatus ?? []).map((lining) => [lining.id, lining]));
+  const liningHistoryById = new Map((data?.liningHistory ?? []).map((history) => [history.liningId, history]));
   const rows: Row[] = data
-    ? [...data.activeHeats.map(fromActive), ...data.recentHeats.map(fromRecent)].slice(0, MAX_ROWS)
+    ? [...data.activeHeats.map(fromActive), ...data.recentHeats.map(fromRecent)]
+        .sort((a, b) => (b.startedAt ? new Date(b.startedAt).getTime() : 0) - (a.startedAt ? new Date(a.startedAt).getTime() : 0))
+        .slice(0, MAX_ROWS)
     : [];
+
+  const enrichRow = (row: Row): Row & { liningInstallDate: string | null } => {
+    const source = data?.recentHeats.find((heat) => heat.id === row.id) ?? data?.activeHeats.find((heat) => heat.id === row.id);
+    const liningId = source?.liningRefId ?? null;
+    const lining = liningId ? liningById.get(liningId) : undefined;
+    return { ...row, liningInstallDate: lining?.installedAt ?? source?.lining?.installedAt ?? null };
+  };
 
   return (
     <Card>
@@ -129,7 +139,7 @@ export function HeatCycleTracker({ data, isLoading, isError, isFetching, onRetry
         </CardTitle>
         <div className="flex items-center gap-2">
           <Link href="/steel/p05/new">
-            <Button size="sm" className="gap-1.5">Start New Heat</Button>
+            <Button size="sm" className="gap-1.5">Select Released P04 Charge</Button>
           </Link>
           <Link href="/steel/p05/records">
             <Button variant="outline" size="sm">View All Heat Cycles</Button>
@@ -146,23 +156,29 @@ export function HeatCycleTracker({ data, isLoading, isError, isFetching, onRetry
         ) : (
           <div className="overflow-x-auto">
             <div className="overflow-y-auto" style={{ maxHeight: `${VISIBLE_ROWS * 34 + 28}px` }}>
-              <table className="w-full text-xs">
+              <table className="w-full min-w-[1100px] text-xs">
                 <thead className="sticky top-0 bg-white">
                   <tr className="text-left text-slate-400 border-b border-slate-100">
-                    <th className="font-medium py-1.5 pr-3">Heat ID</th>
-                    <th className="font-medium py-1.5 pr-3">Charge ID</th>
+                    <th className="font-medium py-1.5 pr-3">Heat</th>
+                    <th className="font-medium py-1.5 pr-3">Charge</th>
                     <th className="font-medium py-1.5 pr-3">Furnace</th>
-                    <th className="font-medium py-1.5 pr-3">Lining Code</th>
+                    <th className="font-medium py-1.5 pr-3">Lining</th>
+                    <th className="font-medium py-1.5 pr-3 text-right">Melted t</th>
                     <th className="font-medium py-1.5 pr-3 text-right">Cycle Time</th>
-                    <th className="font-medium py-1.5 pr-3">Status</th>
-                    <th className="font-medium py-1.5 pr-3 text-right">Yield %</th>
-                    <th className="font-medium py-1.5 pr-3 text-right">Planned (t)</th>
-                    <th className="font-medium py-1.5 pr-3 text-right">Melted (t)</th>
-                    <th className="font-medium py-1.5 pr-1">Started At</th>
+                    <th className="font-medium py-1.5 pr-3 text-right">Energy/t</th>
+                    <th className="font-medium py-1.5 pr-3 text-right">Lining Heats</th>
+                    <th className="font-medium py-1.5 pr-3 text-right">Lining Tonnes</th>
+                    <th className="font-medium py-1.5 pr-3 text-right">Efficiency</th>
+                    <th className="font-medium py-1.5 pr-1">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {rows.map((baseRow) => {
+                    const r = enrichRow(baseRow);
+                    const source = data?.recentHeats.find((heat) => heat.id === r.id) ?? data?.activeHeats.find((heat) => heat.id === r.id);
+                    const lining = source?.liningRefId ? liningById.get(source.liningRefId) : undefined;
+                    const liningHistory = source?.liningRefId ? liningHistoryById.get(source.liningRefId) : undefined;
+                    return (
                     <tr key={r.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                       <td className="py-1.5 pr-3">
                         <Link href={`/steel/p05/${r.id}`} className="font-medium text-slate-800 hover:underline">
@@ -179,19 +195,23 @@ export function HeatCycleTracker({ data, isLoading, isError, isFetching, onRetry
                         )}
                       </td>
                       <td className="py-1.5 pr-3 text-slate-600">{r.furnaceCode ?? "—"}</td>
-                      <td className="py-1.5 pr-3 text-slate-600">{r.liningCode ?? "—"}</td>
+                      <td className="py-1.5 pr-3 text-slate-600" title={r.liningInstallDate ? `Installed ${new Date(r.liningInstallDate).toLocaleDateString()}` : undefined}>
+                        {r.liningCode ?? "—"}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right text-slate-700">{fmtTonnes(r.outputTonnes)}</td>
                       <td className="py-1.5 pr-3 text-right text-slate-600">{fmtMinutes(r.cycleMinutes)}</td>
-                      <td className="py-1.5 pr-3">
+                      <td className="py-1.5 pr-3 text-right text-slate-600">{fmtEnergyPerTonne(source && "outputEnergyTotalKwh" in source ? source.outputEnergyTotalKwh : null, r.outputTonnes)}</td>
+                      <td className="py-1.5 pr-3 text-right text-slate-600">{source?.lining?.heatsCompleted ?? lining?.heatsCompleted ?? "—"}</td>
+                      <td className="py-1.5 pr-3 text-right text-slate-600">{liningHistory ? `${liningHistory.totalTonnesMelted.toFixed(1)}t` : lining ? `${lining.totalTonnesMelted.toFixed(1)}t` : "—"}</td>
+                      <td className="py-1.5 pr-3 text-right text-slate-700">{r.yieldPercent === null ? "—" : `${r.yieldPercent.toFixed(1)}%`}</td>
+                      <td className="py-1.5 pr-1">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${r.statusTone}`}>
                           {r.statusLabel}
                         </span>
                       </td>
-                      <td className="py-1.5 pr-3 text-right text-slate-700">{r.yieldPercent === null ? "—" : `${r.yieldPercent.toFixed(1)}%`}</td>
-                      <td className="py-1.5 pr-3 text-right text-slate-700">{fmtTonnes(r.plannedTonnes)}</td>
-                      <td className="py-1.5 pr-3 text-right text-slate-700">{fmtTonnes(r.outputTonnes)}</td>
-                      <td className="py-1.5 pr-1 text-slate-500 whitespace-nowrap">{fmtDate(r.startedAt)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

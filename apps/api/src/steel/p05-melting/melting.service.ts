@@ -548,7 +548,9 @@ export class MeltingService {
           previousHeatRef: dto.previousHeatRef,
           slagCleaningStatus: dto.slagCleaningStatus,
           readinessDelayReason: dto.readinessDelayReason,
-          ...(isReedit ? {} : { stage: 'A04_PREVIOUS_HEAT_READINESS' as const }),
+          ...(isReedit
+            ? {}
+            : { stage: 'A04_PREVIOUS_HEAT_READINESS' as const }),
         },
       });
       await this.logActivity(
@@ -1274,6 +1276,7 @@ export class MeltingService {
       outputAgg,
       recentEvents,
       readyCharges,
+      liningHeats,
     ] = await Promise.all([
       this.prisma.steelMelting.count({ where: activeHeatsWhere }),
       this.prisma.steelMelting.count({ where: completedHeatsWhere }),
@@ -1294,11 +1297,22 @@ export class MeltingService {
           furnace: { select: { id: true, code: true, name: true } },
           liningRefId: true,
           liningCampaignId: true,
-          lining: { select: { id: true, code: true, installedAt: true, heatsCompleted: true } },
+          lining: {
+            select: {
+              id: true,
+              code: true,
+              installedAt: true,
+              heatsCompleted: true,
+              condition: true,
+              thicknessRemainingMm: true,
+              inspectionNotes: true,
+            },
+          },
           meltingStartTime: true,
           handoverToRefiningAt: true,
           outputWeightTonnes: true,
           outputMeltTimeMinutes: true,
+          outputEnergyTotalKwh: true,
           recipeScrapWeightSnapshot: true,
           recipeDriWeightSnapshot: true,
           recipeAlloyWeightSnapshot: true,
@@ -1321,7 +1335,17 @@ export class MeltingService {
           furnace: { select: { id: true, code: true, name: true } },
           liningRefId: true,
           liningCampaignId: true,
-          lining: { select: { id: true, code: true, installedAt: true, heatsCompleted: true } },
+          lining: {
+            select: {
+              id: true,
+              code: true,
+              installedAt: true,
+              heatsCompleted: true,
+              condition: true,
+              thicknessRemainingMm: true,
+              inspectionNotes: true,
+            },
+          },
           meltingStartTime: true,
           createdAt: true,
           temperatureCelsius: true,
@@ -1406,7 +1430,28 @@ export class MeltingService {
         orderBy: { chargeReleasedAt: 'desc' },
         take: 10,
       }),
+      this.prisma.steelMelting.findMany({
+        where: {
+          organizationId,
+          status: 'CLOSED',
+          liningRefId: { not: null },
+          outputWeightTonnes: { not: null },
+          ...(query.furnaceId ? { furnaceRefId: query.furnaceId } : {}),
+        },
+        select: {
+          id: true,
+          heatInProcessNumber: true,
+          chargeNumberSnapshot: true,
+          chargePreparationId: true,
+          liningRefId: true,
+          outputWeightTonnes: true,
+          handoverToRefiningAt: true,
+        },
+        orderBy: { outputWeightTonnes: 'asc' },
+      }),
     ]);
+
+    const completedLiningHeats = liningHeats ?? [];
 
     // Per-heat material input for the bounded completed-heats list — one
     // groupBy instead of N queries.
@@ -1564,11 +1609,45 @@ export class MeltingService {
               heatsCompleted: lining.heatsCompleted,
               condition: lining.condition,
               thicknessRemainingMm: lining.thicknessRemainingMm,
+              inspectionNotes: lining.inspectionNotes,
               status: lining.status,
             }
           : null,
       };
     });
+
+    const liningTotals = new Map<string, number>();
+    for (const heat of completedLiningHeats) {
+      if (heat.liningRefId && heat.outputWeightTonnes !== null) {
+        liningTotals.set(
+          heat.liningRefId,
+          (liningTotals.get(heat.liningRefId) ?? 0) + heat.outputWeightTonnes,
+        );
+      }
+    }
+
+    const liningHistory = Array.from(
+      completedLiningHeats.reduce((groups, heat) => {
+        if (!heat.liningRefId) return groups;
+        const group = groups.get(heat.liningRefId) ?? [];
+        group.push({
+          id: heat.id,
+          heatInProcessNumber: heat.heatInProcessNumber,
+          chargeNumber: heat.chargeNumberSnapshot,
+          chargePreparationId: heat.chargePreparationId,
+          tonnesMelted: heat.outputWeightTonnes,
+          date: heat.handoverToRefiningAt,
+        });
+        groups.set(heat.liningRefId, group);
+        return groups;
+      }, new Map<string, Array<{ id: string; heatInProcessNumber: string; chargeNumber: string | null; chargePreparationId: string; tonnesMelted: number | null; date: Date | null }>>()),
+    ).map(([liningId, heats]) => ({
+      liningId,
+      totalTonnesMelted: liningTotals.get(liningId) ?? 0,
+      heats: heats.sort(
+        (a, b) => (a.tonnesMelted ?? 0) - (b.tonnesMelted ?? 0),
+      ),
+    }));
 
     const liningStatus = furnaceStatus
       .filter((f) => f.lining)
@@ -1576,6 +1655,7 @@ export class MeltingService {
         furnaceId: f.id,
         furnaceCode: f.code,
         ...f.lining!,
+        totalTonnesMelted: liningTotals.get(f.lining!.id) ?? 0,
       }));
 
     const furnacesRunning = activeHeatByFurnace.size;
@@ -1697,6 +1777,7 @@ export class MeltingService {
       }),
       furnacePerformance,
       liningStatus,
+      liningHistory,
       readyCharges: readyChargesMapped,
       nextReadyCharge: readyChargesMapped[0] ?? null,
       recentHeats: computedHeats.map((h) => ({
@@ -1726,6 +1807,7 @@ export class MeltingService {
         yieldPercent: h.yieldPercent,
         cycleDurationMinutes: h.cycleDurationMinutes,
         outputMeltTimeMinutes: h.outputMeltTimeMinutes,
+        outputEnergyTotalKwh: h.outputEnergyTotalKwh,
         plannedChargeTonnes: h.plannedChargeTonnes,
         varianceTonnes: h.varianceTonnes,
       })),
@@ -1807,7 +1889,36 @@ export class MeltingService {
         id: true,
         prepNumber: true,
         chargeNumber: true,
+        plan: { select: { id: true, planNumber: true } },
+        actualGrade: true,
+        actualWeightTonnes: true,
+        sortedWeightTonnes: true,
+        stagingLocation: true,
+        stagedWeightTonnes: true,
+        materialLots: {
+          include: {
+            intake: {
+              select: {
+                id: true,
+                intakeNumber: true,
+                materialType: true,
+                grade: true,
+                netWeightTonnes: true,
+              },
+            },
+          },
+        },
+        recipeScrapWeightTonnes: true,
+        recipeDriWeightTonnes: true,
+        recipeAlloyWeightTonnes: true,
+        recipeAdditiveWeightTonnes: true,
+        targetChemistry: true,
+        additivesPrepared: true,
+        recipeNotes: true,
+        furnaceReadinessConfirmed: true,
         plannedHeatReference: true,
+        handoverNotes: true,
+        handoverClosedAt: true,
         chargeReleasedAt: true,
       },
       orderBy: { chargeReleasedAt: 'desc' },

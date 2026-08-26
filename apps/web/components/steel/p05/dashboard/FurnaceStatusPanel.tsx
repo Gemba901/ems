@@ -92,9 +92,11 @@ export function FurnaceStatusPanel({ data, isLoading, isError, isFetching, onRet
                   )}
 
                   {f.lining && (
-                    <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">
-                      Lining: {f.lining.heatsCompleted} heats{f.lining.condition ? ` · ${f.lining.condition}` : ""}
-                    </p>
+                    <div className="pt-1 border-t border-slate-100 space-y-0.5">
+                      <p className="text-[10px] text-slate-400">Lining: <span className="font-medium text-slate-600">{f.lining.code ?? "Uncoded campaign"}</span></p>
+                      <p className="text-[10px] text-slate-400">Installed: {new Date(f.lining.installedAt).toLocaleDateString()} · {f.lining.heatsCompleted} heats</p>
+                      <p className="text-[10px] text-slate-500 font-semibold">{(f.lining.totalTonnesMelted ?? 0).toFixed(1)} t melted under lining</p>
+                    </div>
                   )}
                 </div>
               );

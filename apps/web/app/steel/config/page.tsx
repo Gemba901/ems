@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { ScreenHeader } from "@/components/steel/ScreenHeader";
 
-const MASTER_DATA_SECTIONS = [
+const CONFIGURATION_SECTIONS = [
   { href: "/steel/config/products", icon: Package, title: "Products", description: "Product catalog and product types" },
   { href: "/steel/config/product-specifications", icon: FileText, title: "Product Specifications", description: "Grade, size, standard, length per product" },
   { href: "/steel/config/customers", icon: Users, title: "Customers", description: "Customer master, credit status, delivery location" },
@@ -17,9 +17,6 @@ const MASTER_DATA_SECTIONS = [
   { href: "/steel/config/import", icon: Upload, title: "Import / Export", description: "Bulk-load master data from CSV/Excel" },
 ];
 
-// Everything P02 procurement draws on as controlled master data — grouped
-// separately so it reads as one coherent "who can supply what, and on what
-// terms" area rather than being scattered among general master data.
 const PROCUREMENT_SECTIONS = [
   { href: "/steel/config/materials", icon: Boxes, title: "Materials", description: "Raw-material catalog, classification, and procurement type" },
   { href: "/steel/config/suppliers", icon: Users, title: "Suppliers", description: "Supplier master — approval status, materials supplied, location" },
@@ -28,7 +25,7 @@ const PROCUREMENT_SECTIONS = [
   { href: "/steel/config/procurement-terms", icon: ShoppingCart, title: "Procurement Terms", description: "Payment terms, Incoterms, currency, transport, documents" },
 ];
 
-function SectionGrid({ sections }: { sections: typeof MASTER_DATA_SECTIONS }) {
+function SectionGrid({ sections }: { sections: typeof CONFIGURATION_SECTIONS }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {sections.map((s) => (
@@ -52,6 +49,8 @@ function SectionGrid({ sections }: { sections: typeof MASTER_DATA_SECTIONS }) {
 }
 
 export default function SteelConfigPage() {
+  const sections = [...CONFIGURATION_SECTIONS.slice(0, 6), ...PROCUREMENT_SECTIONS, CONFIGURATION_SECTIONS[6]];
+
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
       <ScreenHeader
@@ -60,15 +59,7 @@ export default function SteelConfigPage() {
         subtitle="Company master data used by Production Planning (P01) and downstream Steel processes."
       />
 
-      <div className="space-y-3">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Master Data</h2>
-        <SectionGrid sections={MASTER_DATA_SECTIONS} />
-      </div>
-
-      <div className="space-y-3">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Procurement (P02)</h2>
-        <SectionGrid sections={PROCUREMENT_SECTIONS} />
-      </div>
+      <SectionGrid sections={sections} />
     </div>
   );
 }

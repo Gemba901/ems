@@ -72,7 +72,7 @@ const AVAILABILITY_OPTIONS: { value: AvailabilityStatus; label: string }[] = [
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
-    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1">
+    <label className="text-sm font-semibold text-slate-700 block mb-1.5">
       {children}
       {required && <span className="text-red-500">*</span>}
     </label>
@@ -84,7 +84,7 @@ function Select({
 }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; className?: string }) {
   return (
     <select
-      className={"h-8 w-full rounded-md border border-input bg-transparent px-2.5 text-sm " + (className ?? "")}
+      className={"h-10 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all " + (className ?? "")}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
@@ -97,19 +97,20 @@ function Select({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-input bg-background p-4 space-y-3">
-      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+    <section className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm space-y-4">
+      <h2 className="text-sm font-semibold text-blue-600 pb-2 border-b border-blue-100">{title}</h2>
       {children}
-    </div>
+    </section>
   );
 }
 
 function DerivedRow({ label, value }: { label: string; value: React.ReactNode }) {
   if (value === null || value === undefined || value === "") return null;
   return (
-    <div className="flex items-center justify-between gap-3 text-sm py-0.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="font-medium text-right">{value}</span>
+    <div className="rounded-lg border border-indigo-200/70 bg-indigo-50/60 px-3 py-2">
+      <span className="block text-[11px] font-semibold uppercase tracking-wider text-indigo-500/90">{label}</span>
+      <span className="block text-sm font-medium text-slate-700">{value}</span>
+      <span className="block text-[10px] mt-0.5 text-indigo-500/90">Read-only · Configuration</span>
     </div>
   );
 }
@@ -188,8 +189,6 @@ function PlanForm({ plan, token }: { plan: SteelProductionPlan | null; token: st
 
   const [saving, setSaving] = useState<"draft" | "create" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<0 | 1>(0);
-
   const stageAtLeast = (current: SteelPlanStage | undefined, target: SteelPlanStage) =>
     !!current && STAGE_ORDER.indexOf(current) >= STAGE_ORDER.indexOf(target);
 
@@ -357,62 +356,16 @@ function PlanForm({ plan, token }: { plan: SteelProductionPlan | null; token: st
     }
   };
 
-  const TABS = ["Demand & Product", "Fulfilment & Production"] as const;
-
-  const goNext = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (demandSource === "CUSTOMER_ORDER" && !customer) {
-      setError("Select a customer for a customer order. Not listed? Ask a Steel Administrator to add it.");
-      return;
-    }
-    if (demandSource === "DEALER_REQUIREMENT" && !customer) {
-      setError("Select a dealer for a dealer order. Not listed? Ask a Steel Administrator to add it.");
-      return;
-    }
-    if (!product) {
-      setError("Select a product. Not listed? Ask a Steel Administrator to add it under Steel Configuration.");
-      return;
-    }
-    if (!spec) {
-      setError("Select a product specification. Not listed? Ask a Steel Administrator to add it under Steel Configuration.");
-      return;
-    }
-    const qty = Number(requestedQuantity);
-    if (!qty || qty <= 0) {
-      setError("Requested quantity must be greater than zero.");
-      return;
-    }
-    setTab(1);
-  };
-
   return (
-    <form onSubmit={handleCreate} className="rounded-lg border border-input bg-background shadow-sm overflow-hidden">
-      <div className="flex items-center gap-5 px-4 pt-3 border-b border-input">
-        {TABS.map((label, i) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => setTab(i as 0 | 1)}
-            className={
-              "pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors " +
-              (tab === i ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-muted-foreground hover:text-foreground")
-            }
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="p-4 space-y-4">
+    <form onSubmit={handleCreate} className="space-y-5">
+      <div className="space-y-5">
         {error && (
-          <div className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
+          <div className="rounded-lg bg-red-50 border border-red-100 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
-        <div className={tab === 0 ? "space-y-4" : "hidden"}>
       {/* Demand */}
       <Section title="Demand">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
@@ -553,10 +506,8 @@ function PlanForm({ plan, token }: { plan: SteelProductionPlan | null; token: st
             <DerivedRow label="Length" value={specDisplay.length} />
           </div>
         )}
-      </Section>
-        </div>
+        </Section>
 
-        <div className={tab === 1 ? "space-y-4" : "hidden"}>
       {/* Fulfilment */}
       <Section title="Fulfilment">
         <div className="rounded-md bg-muted/30 border border-input px-3 py-2 grid grid-cols-3 text-center">
@@ -643,22 +594,15 @@ function PlanForm({ plan, token }: { plan: SteelProductionPlan | null; token: st
             </p>
           </div>
         )}
-      </Section>
-        </div>
+        </Section>
       </div>
 
-      <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-input bg-muted/20">
-        {tab === 0 ? (
-          <Link href="/steel/p01">
-            <Button type="button" variant="ghost" disabled={!!saving}>
-              Cancel
-            </Button>
-          </Link>
-        ) : (
-          <Button type="button" variant="ghost" disabled={!!saving} onClick={() => setTab(0)}>
-            Back
+      <div className="flex flex-wrap items-center justify-end gap-3 bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+        <Link href="/steel/p01">
+          <Button type="button" variant="ghost" disabled={!!saving}>
+            Cancel
           </Button>
-        )}
+        </Link>
         <Button
           type="button"
           variant="outline"
@@ -668,15 +612,9 @@ function PlanForm({ plan, token }: { plan: SteelProductionPlan | null; token: st
         >
           {saving === "draft" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
         </Button>
-        {tab === 0 ? (
-          <Button type="button" onClick={goNext} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-            Next
-          </Button>
-        ) : (
-          <Button type="submit" disabled={!!saving} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-            {saving === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Planning Document"}
-          </Button>
-        )}
+        <Button type="submit" disabled={!!saving} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+          {saving === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Planning Document"}
+        </Button>
       </div>
     </form>
   );

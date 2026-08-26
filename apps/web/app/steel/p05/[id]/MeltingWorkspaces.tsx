@@ -7,13 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MELTING_STAGE_ORDER, type SteelMelting } from "@/services/steel-melting.service";
 import { ContextSummary } from "@/components/steel/p05/ContextSummary";
 import { OperationalMetrics } from "@/components/steel/p05/OperationalMetrics";
-import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
 import { HeatInfoStrip } from "@/components/steel/p05/HeatInfoStrip";
 import { TemperatureMonitoringCard } from "@/components/steel/p05/TemperatureMonitoringCard";
 import { HeatOperationsTabs } from "@/components/steel/p05/HeatOperationsTabs";
 import { MeltingReviewRelease } from "@/components/steel/p05/MeltingReviewRelease";
 import { SubStep, HelpPopover, Field, subStatus, SubStepStatus } from "@/components/steel/p05/shared";
-import { Button } from "@/components/ui/button";
 import {
   OPERATIONS_HELP,
   LiningCheckForm,
@@ -25,16 +23,8 @@ import {
   MonitorMeltForm,
 } from "@/components/steel/p05/forms/heat-operations-forms";
 import { RELEASE_ROLES, AdditionsForm, SlagForm, OutputForm, ConfirmReadyForm } from "@/components/steel/p05/forms/review-release-forms";
-import { ShieldCheck, Flame, Gauge, Send, FileText, ChevronRight, type LucideIcon } from "lucide-react";
 
 type SectionKey = "readiness" | "charging" | "monitor" | "output" | "review";
-
-interface WorkspaceSection {
-  key: SectionKey;
-  label: string;
-  icon: LucideIcon;
-  done: boolean;
-}
 
 function workspaceDone(steps: SubStepStatus[]): boolean {
   return steps.every((s) => s === "done");
@@ -87,72 +77,20 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
   const outputDone = workspaceDone([slagStatus, outputStatus, readyStatus]);
   const reviewReady = readinessDone && chargingDone && monitorDone && outputDone;
 
-  const sections: WorkspaceSection[] = [
-    { key: "readiness", label: "Furnace readiness", icon: Flame, done: readinessDone },
-    { key: "charging", label: "Charge loading", icon: ShieldCheck, done: chargingDone },
-    { key: "monitor", label: "Melting monitor", icon: Gauge, done: monitorDone },
-    { key: "output", label: "Slag and output", icon: Send, done: outputDone },
-    { key: "review", label: "Review & release", icon: FileText, done: closed },
-  ];
-
-  const firstIncomplete = sections.find((s) => !s.done)?.key as SectionKey | undefined;
-  const [active, setActive] = useState<SectionKey>(() => firstIncomplete ?? "review");
-
   // Reason supplied via the Review & Release "reopen" dialog when a section
   // being revisited already has logged activity — threaded into that
   // section's forms so their mutation calls carry it (backend requires it
   // for a re-submission of an already-logged A02-A13 activity, ignores it
   // otherwise). Cleared once that section's edit succeeds.
   const [editReasons, setEditReasons] = useState<Partial<Record<SectionKey, string>>>({});
-  const activeEditReason = editReasons[active];
-  const handleSectionDone = () => {
-    setEditReasons((prev) => ({ ...prev, [active]: undefined }));
+  const handleSectionDone = (section: SectionKey) => {
+    setEditReasons((prev) => ({ ...prev, [section]: undefined }));
     onRefresh();
-  };
-
-  const currentIdx = sections.findIndex((s) => s.key === active);
-  const nextSection = sections[currentIdx + 1];
-
-  const goNext = () => {
-    if (!nextSection) return;
-    setActive(nextSection.key as SectionKey);
   };
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-4">
       <ContextSummary melting={melting} />
-
-      {/* Top workflow stepper — replaces the former MeltingSidebarNav. Same
-          sections/done/active data as before, just re-skinned as a
-          horizontal stepper (WorkflowIndicator, shared with P01/P02/P04/P06)
-          to match the mockup's Screen 2 layout. WorkflowIndicator itself is
-          display-only (no click handling, matching its existing contract
-          for P01/P02/P04/P06), so the row of pill buttons below it is the
-          actual nav control — same setActive(key) the old sidebar's
-          onSelect called. */}
-      <WorkflowIndicator
-        steps={sections.map((s) => ({ code: s.key, label: s.label }))}
-        doneCount={sections.filter((s) => s.done).length}
-        activeIndex={currentIdx}
-      />
-      <div className="flex flex-wrap gap-1.5">
-        {sections.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setActive(s.key)}
-            className={
-              "px-2.5 py-1 rounded-md text-xs font-medium border transition-colors " +
-              (s.key === active
-                ? "border-blue-300 bg-blue-50 text-blue-800"
-                : "border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700")
-            }
-          >
-            {s.done ? "✓ " : ""}
-            {s.label}
-          </button>
-        ))}
-      </div>
 
       <HeatInfoStrip melting={melting} />
 
@@ -161,7 +99,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
       <HeatOperationsTabs melting={melting} token={token} />
 
       <div className="space-y-4">
-          {active === "readiness" && (
+          <section>
             <Card className="border-blue-200 shadow-sm">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
@@ -189,7 +127,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                       : undefined
                   }
                 >
-                  <LiningCheckForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <LiningCheckForm melting={melting} token={token} onDone={() => handleSectionDone("readiness")} editReason={editReasons.readiness} />
                 </SubStep>
                 <SubStep
                   code="P05-A03"
@@ -201,7 +139,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                       : undefined
                   }
                 >
-                  <SystemsCheckForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <SystemsCheckForm melting={melting} token={token} onDone={() => handleSectionDone("readiness")} editReason={editReasons.readiness} />
                 </SubStep>
                 <SubStep
                   code="P05-A04"
@@ -209,14 +147,13 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                   status={previousHeatStatus}
                   summary={melting.slagCleaningStatus ? `Cleaning: ${melting.slagCleaningStatus}` : undefined}
                 >
-                  <PreviousHeatForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <PreviousHeatForm melting={melting} token={token} onDone={() => handleSectionDone("readiness")} editReason={editReasons.readiness} />
                 </SubStep>
-                <SectionFooter nextLabel={nextSection?.label} onNext={goNext} />
               </CardContent>
             </Card>
-          )}
+          </section>
 
-          {active === "charging" && (
+          <section>
             <Card className="border-blue-200 shadow-sm">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
@@ -240,7 +177,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                   status={verifyStatus}
                   summary={melting.actualWeightVsRecipeOk !== null ? `Matches recipe: ${melting.actualWeightVsRecipeOk ? "Yes" : "No"}` : undefined}
                 >
-                  <VerifyChargeForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <VerifyChargeForm melting={melting} token={token} onDone={() => handleSectionDone("charging")} editReason={editReasons.charging} />
                 </SubStep>
                 <SubStep
                   code="P05-A06"
@@ -248,14 +185,13 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                   status={loadStatus}
                   summary={melting.loadingTime ? `Loaded ${new Date(melting.loadingTime).toLocaleString()}` : undefined}
                 >
-                  <LoadChargeForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <LoadChargeForm melting={melting} token={token} onDone={() => handleSectionDone("charging")} editReason={editReasons.charging} />
                 </SubStep>
-                <SectionFooter nextLabel={nextSection?.label} onNext={goNext} />
               </CardContent>
             </Card>
-          )}
+          </section>
 
-          {active === "monitor" && (
+          <section>
             <Card className="border-blue-200 shadow-sm">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
@@ -274,7 +210,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                   status={startStatus}
                   summary={melting.meltingStartTime ? `Started ${new Date(melting.meltingStartTime).toLocaleString()}` : undefined}
                 >
-                  <StartMeltingForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <StartMeltingForm melting={melting} token={token} onDone={() => handleSectionDone("monitor")} editReason={editReasons.monitor} />
                 </SubStep>
                 <SubStep
                   code="P05-A08/A09"
@@ -288,7 +224,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                       : undefined
                   }
                 >
-                  <MonitorMeltForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <MonitorMeltForm melting={melting} token={token} onDone={() => handleSectionDone("monitor")} editReason={editReasons.monitor} />
                 </SubStep>
                 <SubStep
                   code="P05-A10"
@@ -296,14 +232,13 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                   status={additionsStatus}
                   summary={melting.additions?.length ? `${melting.additions.length} addition(s)` : "None"}
                 >
-                  <AdditionsForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <AdditionsForm melting={melting} token={token} onDone={() => handleSectionDone("monitor")} editReason={editReasons.monitor} />
                 </SubStep>
-                <SectionFooter nextLabel={nextSection?.label} onNext={goNext} />
               </CardContent>
             </Card>
-          )}
+          </section>
 
-          {active === "output" && (
+          <section>
             <Card className="border-blue-200 shadow-sm">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
@@ -315,7 +250,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
               </CardHeader>
               <CardContent className="space-y-3 pt-0">
                 <SubStep code="P05-A11" title="Remove Slag or Unwanted Material" status={slagStatus} summary={`Slag removal ${melting.slagNotApplicable ? "not applicable" : "recorded"}`}>
-                  <SlagForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <SlagForm melting={melting} token={token} onDone={() => handleSectionDone("output")} editReason={editReasons.output} />
                 </SubStep>
                 <SubStep
                   code="P05-A12"
@@ -323,7 +258,7 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                   status={outputStatus}
                   summary={melting.outputWeightTonnes !== null ? `Output ${melting.outputWeightTonnes} t` : undefined}
                 >
-                  <OutputForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <OutputForm melting={melting} token={token} onDone={() => handleSectionDone("output")} editReason={editReasons.output} />
                 </SubStep>
                 <SubStep
                   code="P05-A13"
@@ -331,14 +266,13 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                   status={readyStatus}
                   summary={melting.liquidReady !== null ? `Ready: ${melting.liquidReady ? "Yes" : "No"}` : undefined}
                 >
-                  <ConfirmReadyForm melting={melting} token={token} onDone={handleSectionDone} editReason={activeEditReason} />
+                  <ConfirmReadyForm melting={melting} token={token} onDone={() => handleSectionDone("output")} editReason={editReasons.output} />
                 </SubStep>
-                <SectionFooter nextLabel="Review & release" onNext={() => setActive("review")} disabled={!outputDone} />
               </CardContent>
             </Card>
-          )}
+          </section>
 
-          {active === "review" && (
+          <section>
             <>
               {!reviewReady && !closed && (
                 <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm px-3 py-2">
@@ -352,25 +286,13 @@ export function MeltingWorkspaces({ melting, onRefresh }: { melting: SteelMeltin
                 canHandover={canHandover}
                 onEditSection={(k, reason) => {
                   if (reason) setEditReasons((prev) => ({ ...prev, [k as SectionKey]: reason }));
-                  setActive(k as SectionKey);
                 }}
                 onDone={onRefresh}
               />
             </>
-          )}
+          </section>
       </div>
     </div>
   );
 }
 
-function SectionFooter({ nextLabel, onNext, disabled }: { nextLabel?: string; onNext: () => void; disabled?: boolean }) {
-  if (!nextLabel) return null;
-  return (
-    <div className="flex justify-end pt-2 border-t border-slate-100">
-      <Button size="sm" variant="outline" disabled={disabled} onClick={onNext} className="gap-1.5">
-        Next: {nextLabel}
-        <ChevronRight className="h-3.5 w-3.5" />
-      </Button>
-    </div>
-  );
-}

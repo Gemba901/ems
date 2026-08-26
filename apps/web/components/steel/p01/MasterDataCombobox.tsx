@@ -51,7 +51,7 @@ export function MasterDataCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         disabled={disabled}
-        className="flex h-8 w-full items-center justify-between rounded-md border border-input bg-transparent px-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex h-10 w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
       >
         <span className={value ? "text-slate-800 truncate" : "text-slate-400 truncate"}>
           {value ? value.label : placeholder}

@@ -8,12 +8,8 @@ import { useAuthStore } from "@/store/auth.store";
 import { Button } from "@/components/ui/button";
 import { MeltingService } from "@/services/steel-melting.service";
 import { DashboardFilters, DEFAULT_DASHBOARD_FILTERS } from "@/components/steel/p05/dashboard/DashboardFilters";
-import { DashboardKpiRow } from "@/components/steel/p05/dashboard/DashboardKpiRow";
-import { FurnaceStatusPanel } from "@/components/steel/p05/dashboard/FurnaceStatusPanel";
+import { ProductionTargetPanel } from "@/components/steel/p05/dashboard/ProductionTargetPanel";
 import { HeatCycleTracker } from "@/components/steel/p05/dashboard/HeatCycleTracker";
-import { FurnacePerformanceTable } from "@/components/steel/p05/dashboard/FurnacePerformanceTable";
-import { RecentEventsPanel } from "@/components/steel/p05/dashboard/RecentEventsPanel";
-import { LiningPerformancePanel } from "@/components/steel/p05/dashboard/LiningPerformancePanel";
 
 // P05 production-control dashboard — one screen, answers "what's running,
 // what's ready, are we on target, what needs attention" without scrolling
@@ -72,23 +68,8 @@ export default function MeltingDashboardPage() {
         </div>
       </div>
 
-      {/* Section 1 — KPI strip */}
-      <DashboardKpiRow {...shared} />
-
-      {/* Section 2 — per-furnace status (mockup's "Furnace Status" row) */}
-      <FurnaceStatusPanel {...shared} />
-
-      {/* Main grid — Heat Cycle Tracker dominant (9/12), right sidebar (3/12) */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start">
-        <div className="xl:col-span-9">
-          <HeatCycleTracker {...shared} />
-        </div>
-        <div className="xl:col-span-3 space-y-3">
-          <FurnacePerformanceTable {...shared} />
-          <LiningPerformancePanel {...shared} />
-          <RecentEventsPanel {...shared} limit={5} />
-        </div>
-      </div>
+      <ProductionTargetPanel {...shared} />
+      <HeatCycleTracker {...shared} />
     </div>
   );
 }

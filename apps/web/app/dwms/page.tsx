@@ -347,13 +347,23 @@ function HomeContent() {
               })}
             </div>
           </div>
-          <button
-            onClick={() => router.push("/dwms/actions/new?mode=TASK")}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 cursor-pointer select-none sm:w-auto"
-          >
-            <PlusCircle className="h-4 w-4" />
-            <span>Assign a Task</span>
-          </button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => router.push("/dwms/actions/new?mode=ALERT")}
+              className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-4 py-2 text-xs font-bold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 sm:w-auto"
+            >
+              <span>Raise Alert</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/dwms/actions/new?mode=TASK")}
+              className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>Assign a Task</span>
+            </button>
+          </div>
         </div>
 
         {loading ? (

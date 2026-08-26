@@ -42,6 +42,7 @@ import { Role } from "@/types/role";
 import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
 import { LeaveService, LEAVE_TYPE_LABELS } from "@/services/leave.service";
 import { NoticeService, Notice, NoticeType } from "@/services/notice.service";
+import DwmsTodayTasksWidget from "@/app/dwms/components/home/DwmsTodayTasksWidget";
 
 // Module registry
 
@@ -341,6 +342,8 @@ export default function DashboardPage() {
       <DashboardHero />
 
       {accessToken && <RemindersStrip token={accessToken} />}
+
+      {activeModules.includes("DWMS") && <DwmsTodayTasksWidget />}
 
       {/* <DashboardRoleSection /> */}
 

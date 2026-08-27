@@ -93,7 +93,7 @@ function LotSelectionForm({
 
   const { data: released, isLoading } = useQuery({
     queryKey: ["material-intake", "released-lots"],
-    queryFn: () => MaterialIntakeService.getAll(token, { status: "RELEASED", limit: 100 }),
+    queryFn: () => MaterialIntakeService.getAll(token, { status: "RELEASED", availableOnly: true, limit: 100 }),
     enabled: !!token,
   });
 

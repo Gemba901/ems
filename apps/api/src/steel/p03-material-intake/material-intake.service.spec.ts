@@ -583,4 +583,29 @@ describe('MaterialIntakeService', () => {
       );
     });
   });
+
+  describe('available lot listing', () => {
+    it('filters allocated lots when availableOnly is true', async () => {
+      prisma.steelMaterialIntake.findMany.mockResolvedValue([]);
+      prisma.steelMaterialIntake.count.mockResolvedValue(0);
+
+      await service.getAll(ORG_ID, {
+        status: 'RELEASED',
+        availableOnly: 'true',
+        page: 1,
+        limit: 100,
+      });
+
+      expect(prisma.steelMaterialIntake.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          where: expect.objectContaining({
+            organizationId: ORG_ID,
+            status: 'RELEASED',
+            chargeMaterialLots: { none: {} },
+          }),
+        }),
+      );
+    });
+  });
 });

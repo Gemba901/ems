@@ -173,7 +173,7 @@ export interface PaginatedMaterialIntakes {
   pagination: { page: number; limit: number; total: number; pages: number };
 }
 
-function buildQuery(params: Record<string, string | number | undefined>) {
+function buildQuery(params: Record<string, string | number | boolean | undefined>) {
   const q = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== "")
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
@@ -259,7 +259,7 @@ export const MaterialIntakeService = {
 
   async getAll(
     token: string,
-    params: { sourcingOrderId?: string; stage?: SteelIntakeStage; status?: SteelIntakeStatus; search?: string; page?: number; limit?: number },
+    params: { sourcingOrderId?: string; stage?: SteelIntakeStage; status?: SteelIntakeStatus; availableOnly?: boolean; search?: string; page?: number; limit?: number },
   ): Promise<PaginatedMaterialIntakes> {
     const res = await apiClient(`${API_URL}/steel/material-intake${buildQuery(params)}`, {
       headers: authHeaders(token),

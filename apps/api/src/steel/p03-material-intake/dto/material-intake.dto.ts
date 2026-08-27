@@ -8,6 +8,7 @@ import {
   IsDateString,
   IsBoolean,
   IsUUID,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
@@ -191,6 +192,10 @@ export class QueryMaterialIntakesDto {
   @IsEnum(SteelIntakeStatus)
   @IsOptional()
   status?: SteelIntakeStatus;
+
+  @IsIn(['true', 'false'])
+  @IsOptional()
+  availableOnly?: string;
 
   @IsString()
   @IsOptional()

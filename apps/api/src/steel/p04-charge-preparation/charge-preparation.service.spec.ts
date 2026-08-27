@@ -328,6 +328,43 @@ describe('ChargePreparationService', () => {
       );
     });
 
+    it('accepts multiple released lots and submits every selected id', async () => {
+      prisma.steelChargePreparation.findFirst.mockResolvedValue({
+        id: 'cp-1',
+        organizationId: ORG_ID,
+        stage: 'A01_REQUIREMENT_REVIEWED',
+        status: 'IN_PROGRESS',
+      });
+      prisma.steelMaterialIntake.findMany.mockResolvedValue([
+        { id: 'mi-1', intakeNumber: 'MI-2026-00001', status: 'RELEASED' },
+        { id: 'mi-2', intakeNumber: 'MI-2026-00002', status: 'RELEASED' },
+      ]);
+      prisma.steelChargeMaterialLot.findMany.mockResolvedValue([]);
+      prisma.steelChargeMaterialLot.createMany.mockResolvedValue({ count: 2 });
+      prisma.steelChargePreparation.update.mockResolvedValue({ id: 'cp-1' });
+      prisma.steelChargePreparation.findUnique.mockResolvedValue({
+        id: 'cp-1',
+        stage: 'A02_LOTS_SELECTED',
+      });
+
+      await service.selectMaterialLots(
+        'cp-1',
+        {
+          intakeIds: ['mi-1', 'mi-2'],
+          lotSelectionNotes: 'Two lots',
+        } as unknown as SelectMaterialLotsDto,
+        USER_ID,
+        ORG_ID,
+      );
+
+      expect(prisma.steelChargeMaterialLot.createMany).toHaveBeenCalledWith({
+        data: [
+          { chargePreparationId: 'cp-1', intakeId: 'mi-1' },
+          { chargePreparationId: 'cp-1', intakeId: 'mi-2' },
+        ],
+      });
+    });
+
     it('rejects a released lot that is already allocated to another charge preparation', async () => {
       prisma.steelChargePreparation.findFirst.mockResolvedValue({
         id: 'cp-2',

@@ -135,7 +135,7 @@ export function HeatCycleTracker({ data, isLoading, isError, isFetching, onRetry
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-sm">
           <ListChecks className="h-4 w-4 text-slate-500" />
-          Heat Cycle Tracker
+          Heat & Furnace Performance
         </CardTitle>
         <div className="flex items-center gap-2">
           <Link href="/steel/p05/new">

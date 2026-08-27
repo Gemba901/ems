@@ -803,13 +803,22 @@ export class MaterialIntakeService {
   }
 
   async getAll(organizationId: string, query: QueryMaterialIntakesDto) {
-    const { sourcingOrderId, stage, status, search, page, limit } = query;
+    const {
+      sourcingOrderId,
+      stage,
+      status,
+      availableOnly,
+      search,
+      page,
+      limit,
+    } = query;
 
     const where: Prisma.SteelMaterialIntakeWhereInput = {
       organizationId,
       ...(sourcingOrderId && { sourcingOrderId }),
       ...(stage && { stage }),
       ...(status && { status }),
+      ...(availableOnly === 'true' && { chargeMaterialLots: { none: {} } }),
       ...(search && {
         OR: [
           { intakeNumber: { contains: search, mode: 'insensitive' } },

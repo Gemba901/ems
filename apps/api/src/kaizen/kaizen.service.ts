@@ -707,20 +707,23 @@ export class KaizenService {
             throw new BadRequestException('This verification stage is not applicable to this kaizen');
         }
 
+        // The department HOD collects verification decisions from Steering Committee and Finance on their
+        // behalf (those parties don't log in to record their own decision), in addition to their own HOD stage.
+        const isDepartmentHOD = roles.includes(Role.HOD) && verifier.departmentId === kaizen.departmentId;
+
         if (dto.stage === 'HOD') {
-            const isDepartmentHOD = roles.includes(Role.HOD) && verifier.departmentId === kaizen.departmentId;
             if (!isDepartmentHOD && !this.isPrivileged(roles)) {
                 throw new ForbiddenException('Only the department HOD or admin can submit the HOD verification');
             }
         } else if (dto.stage === 'STEERING_COMMITTEE') {
             const isCommitteeMember = await this.isSteeringCommitteeMember(verifier.id, organizationId);
-            if (!isCommitteeMember && !this.isPrivileged(roles)) {
-                throw new ForbiddenException('Only a steering committee member or admin can submit this verification');
+            if (!isCommitteeMember && !isDepartmentHOD && !this.isPrivileged(roles)) {
+                throw new ForbiddenException('Only a steering committee member, the department HOD, or admin can submit this verification');
             }
         } else if (dto.stage === 'FINANCE') {
             const financeHodIds = await this.findFinanceDepartmentHODs(organizationId);
-            if (!financeHodIds.includes(verifier.id) && !this.isPrivileged(roles)) {
-                throw new ForbiddenException('Only the Finance HOD or admin can submit the Finance verification');
+            if (!financeHodIds.includes(verifier.id) && !isDepartmentHOD && !this.isPrivileged(roles)) {
+                throw new ForbiddenException('Only the Finance HOD, the department HOD, or admin can submit the Finance verification');
             }
         }
 
@@ -769,14 +772,19 @@ export class KaizenService {
             return result;
         });
 
+        const closed = updated.status === 'VERIFIED_CLOSED';
         await this.notifications.create({
             employeeId: kaizen.kaizenOwnerId ?? kaizen.employeeId,
             type: dto.decision === 'RETURN' ? 'ACTION_REQUIRED' : 'INFO',
             module: 'KAIZEN',
-            title: `${dto.stage.replace(/_/g, ' ')} verification ${dto.decision === 'RETURN' ? 'returned' : 'recorded'}`,
-            message: dto.remarks ?? `Your kaizen "${kaizen.title}" received a ${dto.stage.toLowerCase()} verification decision.`,
+            title: closed
+                ? 'Kaizen verified and closed'
+                : `${dto.stage.replace(/_/g, ' ')} verification ${dto.decision === 'RETURN' ? 'returned' : 'recorded'}`,
+            message: closed
+                ? `Your kaizen "${kaizen.title}" has passed all verification stages and is now closed.`
+                : (dto.remarks ?? `Your kaizen "${kaizen.title}" received a ${dto.stage.toLowerCase()} verification decision.`),
             actionUrl: `/kaizen/${kaizenId}`,
-            metadata: { kaizenId, stage: dto.stage, decision: dto.decision },
+            metadata: { kaizenId, stage: dto.stage, decision: dto.decision, closed },
         });
 
         return updated;

@@ -82,16 +82,16 @@ const ImplementationPlanSection = forwardRef<KaizenSectionHandle, KaizenSectionP
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
             Estimated cost <span className="text-xs font-normal text-slate-400">(optional)</span>
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 min-w-0">
             <input
               type="number"
               min="0"
               step="0.01"
               value={estimatedCost}
               onChange={(e) => setEstimatedCost(e.target.value)}
-              className="flex-1 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
             />
-            <CurrencySelect value={estimatedCostCurrency} onChange={setEstimatedCostCurrency} />
+            <CurrencySelect value={estimatedCostCurrency} onChange={setEstimatedCostCurrency} className="w-32 shrink-0" />
           </div>
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}

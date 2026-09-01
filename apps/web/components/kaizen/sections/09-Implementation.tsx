@@ -1,16 +1,19 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ImagePlus, Loader2, Save, X } from "lucide-react";
+import { ImagePlus, Loader2, X } from "lucide-react";
 import { KaizenService } from "@/services/kaizen.service";
 import { uploadImage } from "@/services/uploads.service";
 import { SectionLabel } from "@/components/kaizen/kaizen-ui";
-import { KaizenSectionProps } from "./types";
+import { KaizenSectionHandle, KaizenSectionProps } from "./types";
 
 const MAX_PHOTOS = 5;
 
-export default function ImplementationSection({ kaizen, access, token, onSaved }: KaizenSectionProps) {
+const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(function ImplementationSection(
+  { kaizen, access, token, onSaved },
+  ref,
+) {
   const [actionTaken, setActionTaken] = useState(kaizen.actionTaken ?? "");
   const [afterPhotoUrls, setAfterPhotoUrls] = useState<string[]>(kaizen.afterPhotoUrls ?? []);
   const [resultSaving, setResultSaving] = useState(kaizen.resultSaving ?? "");
@@ -65,6 +68,26 @@ export default function ImplementationSection({ kaizen, access, token, onSaved }
     onSuccess: (updated) => onSaved(updated),
     onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
+
+  useImperativeHandle(ref, () => ({
+    save: async () => {
+      if (actionTaken.trim().length < 10) {
+        setError("Describe the action taken in at least 10 characters.");
+        return false;
+      }
+      if (afterPhotoUrls.length === 0) {
+        setError("Attach at least one after photo.");
+        return false;
+      }
+      setError(null);
+      try {
+        await mutation.mutateAsync();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  }));
 
   if (!access.visible) return null;
 
@@ -156,19 +179,14 @@ export default function ImplementationSection({ kaizen, access, token, onSaved }
           />
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-        <button
-          type="button"
-          disabled={mutation.isPending || uploading}
-          onClick={() => {
-            setError(null);
-            mutation.mutate();
-          }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-        >
-          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save
-        </button>
+        {mutation.isPending && (
+          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
+          </p>
+        )}
       </div>
     </div>
   );
-}
+});
+
+export default ImplementationSection;

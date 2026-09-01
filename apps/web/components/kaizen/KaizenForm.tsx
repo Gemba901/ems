@@ -70,6 +70,7 @@ export default function KaizenForm({
   const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [submittingHodReview, setSubmittingHodReview] = useState(false);
+  const [submittingVerification, setSubmittingVerification] = useState(false);
 
   const reasonRef = useRef<KaizenSectionHandle>(null);
   const referenceRef = useRef<KaizenSectionHandle>(null);
@@ -78,6 +79,7 @@ export default function KaizenForm({
   const qcdsmtImpactRef = useRef<KaizenSectionHandle>(null);
   const wasteRef = useRef<KaizenSectionHandle>(null);
   const implementationPlanRef = useRef<KaizenSectionHandle>(null);
+  const implementationRef = useRef<KaizenSectionHandle>(null);
 
   const saveAllSections = async (): Promise<boolean> => {
     const refs = [reasonRef, referenceRef, conditionRef, basicInfoRef, qcdsmtImpactRef, wasteRef, implementationPlanRef];
@@ -129,6 +131,23 @@ export default function KaizenForm({
     onSuccess: (updated) => onSaved(updated),
     onError: (err: any) => setVerificationError(err instanceof Error ? err.message : "Failed to submit"),
   });
+
+  const handleSubmitForVerification = async () => {
+    setVerificationError(null);
+    setSubmittingVerification(true);
+    try {
+      const ok = await implementationRef.current?.save();
+      if (ok === false) {
+        setVerificationError("Please fix the errors in the Implementation section before submitting.");
+        return;
+      }
+      await submitForVerification.mutateAsync();
+    } catch {
+      // handled by the mutation's onError
+    } finally {
+      setSubmittingVerification(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -193,7 +212,7 @@ export default function KaizenForm({
           )}
 
           {gating.implementation.visible ? (
-            <ImplementationSection kaizen={kaizen} access={gating.implementation} token={token} onSaved={onSaved} />
+            <ImplementationSection ref={implementationRef} kaizen={kaizen} access={gating.implementation} token={token} onSaved={onSaved} />
           ) : (
             <LockedSection n={3} label="Implementation" />
           )}
@@ -205,14 +224,11 @@ export default function KaizenForm({
               )}
               <button
                 type="button"
-                disabled={submitForVerification.isPending}
-                onClick={() => {
-                  setVerificationError(null);
-                  submitForVerification.mutate();
-                }}
+                disabled={submittingVerification || submitForVerification.isPending}
+                onClick={handleSubmitForVerification}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
               >
-                {submitForVerification.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {submittingVerification || submitForVerification.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Submit for Verification
               </button>
             </div>

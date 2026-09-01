@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, Loader2, RotateCcw } from "lucide-react";
 import { KaizenService, KaizenVerificationStage } from "@/services/kaizen.service";
 import { CurrencySelect, formatDateTime, SectionLabel, VERIFICATION_DECISION_BADGE, VERIFICATION_DECISION_LABELS, VERIFICATION_STAGE_LABELS } from "@/components/kaizen/kaizen-ui";
-import { canActOnVerificationStage, KaizenAccessContext } from "@/components/kaizen/gating";
+import { canActOnVerificationStage, isDelegatedVerification, KaizenAccessContext } from "@/components/kaizen/gating";
 import { KaizenSectionProps } from "./types";
 
 const STAGES: KaizenVerificationStage[] = ["HOD", "STEERING_COMMITTEE", "FINANCE"];
@@ -24,6 +24,7 @@ function StageCard({ kaizen, stage, ctx, token, onSaved }: {
   const entry = kaizen.verifications.find((v) => v.stage === stage);
   const canAct = canActOnVerificationStage(kaizen, stage, ctx);
   const isFinance = stage === "FINANCE";
+  const isDelegated = canAct && isDelegatedVerification(stage, ctx);
 
   const mutation = useMutation({
     mutationFn: (decision: "VERIFIED" | "RETURN") => {
@@ -73,8 +74,13 @@ function StageCard({ kaizen, stage, ctx, token, onSaved }: {
 
       {canAct && (
         <div className="space-y-2 pt-2 border-t border-slate-100">
+          {isDelegated && (
+            <p className="text-[11px] text-slate-400 italic">
+              Recording on behalf of {VERIFICATION_STAGE_LABELS[stage]}
+            </p>
+          )}
           {isFinance && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 min-w-0">
               <input
                 type="number"
                 min="0"
@@ -82,9 +88,9 @@ function StageCard({ kaizen, stage, ctx, token, onSaved }: {
                 value={benefitAmount}
                 onChange={(e) => setBenefitAmount(e.target.value)}
                 placeholder="Verified benefit amount (optional)"
-                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                className="flex-1 min-w-0 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
               />
-              <CurrencySelect value={benefitCurrency} onChange={setBenefitCurrency} className="text-xs" />
+              <CurrencySelect value={benefitCurrency} onChange={setBenefitCurrency} className="text-xs w-28 shrink-0" />
             </div>
           )}
           <textarea

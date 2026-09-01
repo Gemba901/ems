@@ -80,8 +80,16 @@ export function canActOnVerificationStage(
   const entry = kaizen.verifications.find((v) => v.stage === stage);
   if (!entry || entry.decision !== "PENDING") return false;
   if (stage === "HOD") return ctx.isDeptHOD || ctx.isPrivileged;
-  if (stage === "STEERING_COMMITTEE") return ctx.isCommitteeMember || ctx.isPrivileged;
-  if (stage === "FINANCE") return ctx.isFinanceHOD || ctx.isPrivileged;
+  if (stage === "STEERING_COMMITTEE") return ctx.isCommitteeMember || ctx.isDeptHOD || ctx.isPrivileged;
+  if (stage === "FINANCE") return ctx.isFinanceHOD || ctx.isDeptHOD || ctx.isPrivileged;
+  return false;
+}
+
+/** True when the department HOD is acting on a stage that isn't naturally theirs (delegated collection). */
+export function isDelegatedVerification(stage: KaizenVerificationStage, ctx: KaizenAccessContext): boolean {
+  if (ctx.isPrivileged) return false;
+  if (stage === "STEERING_COMMITTEE") return ctx.isDeptHOD && !ctx.isCommitteeMember;
+  if (stage === "FINANCE") return ctx.isDeptHOD && !ctx.isFinanceHOD;
   return false;
 }
 

@@ -450,6 +450,189 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     };
   }
 
+  private serializeEmployeeDwmsAlert(alert: any) {
+    return {
+      ...alert,
+      createdAt: alert.createdAt.toISOString(),
+      updatedAt: alert.updatedAt?.toISOString?.() ?? alert.updatedAt,
+      resolvedAt: alert.resolvedAt ? alert.resolvedAt.toISOString() : null,
+      raisedBy: alert.raisedBy
+        ? {
+            id: alert.raisedBy.id,
+            name: `${alert.raisedBy.firstName} ${alert.raisedBy.lastName}`.trim(),
+            email: alert.raisedBy.email,
+          }
+        : null,
+      againstUser: alert.againstUser
+        ? {
+            id: alert.againstUser.id,
+            name: `${alert.againstUser.firstName} ${alert.againstUser.lastName}`.trim(),
+            email: alert.againstUser.email,
+          }
+        : null,
+      taskInstance: alert.taskInstance
+        ? {
+            id: alert.taskInstance.id,
+            task: alert.taskInstance.task,
+            owner: alert.taskInstance.owner
+              ? {
+                  id: alert.taskInstance.owner.id,
+                  name: `${alert.taskInstance.owner.firstName} ${alert.taskInstance.owner.lastName}`.trim(),
+                  email: alert.taskInstance.owner.email,
+                  reportingToId: alert.taskInstance.owner.reportingManagerId,
+                }
+              : null,
+          }
+        : null,
+    };
+  }
+
+  async getEmployeeDwmsProfile(user: UserPayload, employeeId: string) {
+    await this.getEmployee(user.userId, user.organizationId);
+    if (!this.canUpdateDwmsPermissions(user.roleLevel)) {
+      throw new ForbiddenException('You are not authorized to view employee DWMS profile');
+    }
+
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, organizationId: user.organizationId },
+      include: { department: true },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+
+    await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
+
+    const alertInclude = {
+      raisedBy: {
+        select: { id: true, firstName: true, lastName: true, email: true },
+      },
+      againstUser: {
+        select: { id: true, firstName: true, lastName: true, email: true },
+      },
+      department: { select: { id: true, name: true } },
+      taskInstance: {
+        select: {
+          id: true,
+          task: { select: { title: true } },
+          owner: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              reportingManagerId: true,
+            },
+          },
+        },
+      },
+    };
+
+    const [taskInstances, currentAlerts, abnormalities, raisedAlerts, roleActivities] =
+      await Promise.all([
+        this.prisma.taskInstance.findMany({
+          where: {
+            ownerId: employeeId,
+            task: { owner: { organizationId: user.organizationId } },
+            status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
+          },
+          include: {
+            task: {
+              include: {
+                owner: true,
+                assignedBy: true,
+                approvedBy: true,
+                activity: true,
+                department: true,
+              },
+            },
+            comments: true,
+            events: true,
+            alerts: { orderBy: { createdAt: 'desc' } },
+          },
+          orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+          take: 25,
+        }),
+        this.prisma.alert.findMany({
+          where: {
+            organizationId: user.organizationId,
+            isAbnormality: false,
+            status: { not: AlertStatus.CLOSED },
+            OR: [
+              { againstUserId: employeeId },
+              { taskInstance: { ownerId: employeeId } },
+            ],
+          },
+          include: alertInclude,
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+        }),
+        this.prisma.alert.findMany({
+          where: {
+            organizationId: user.organizationId,
+            isAbnormality: true,
+            status: { not: AlertStatus.CLOSED },
+            OR: [
+              { raisedById: employeeId },
+              { againstUserId: employeeId },
+              { taskInstance: { ownerId: employeeId } },
+            ],
+          },
+          include: alertInclude,
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+        }),
+        this.prisma.alert.findMany({
+          where: {
+            organizationId: user.organizationId,
+            raisedById: employeeId,
+            isAbnormality: false,
+            status: { not: AlertStatus.CLOSED },
+          },
+          include: alertInclude,
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+        }),
+        this.listEmployeeRoleActivities(user, employeeId),
+      ]);
+
+    return {
+      employee: {
+        id: employee.id,
+        name: `${employee.firstName} ${employee.lastName}`.trim(),
+        email: employee.email,
+        employeeCode: employee.employeeCode,
+        jobTitle: employee.jobTitle,
+        department: employee.department
+          ? { id: employee.department.id, name: employee.department.name }
+          : null,
+      },
+      counts: {
+        currentTasks: taskInstances.length,
+        currentAlerts: currentAlerts.length,
+        abnormalities: abnormalities.length,
+        raisedAlerts: raisedAlerts.length,
+        applicableActivities: roleActivities.count,
+        activeActivities: roleActivities.activities.filter(
+          (item: any) => item.status === 'ACTIVE',
+        ).length,
+      },
+      currentTasks: taskInstances.map((instance) =>
+        this.serializeTaskInstance(instance.task, instance),
+      ),
+      currentAlerts: currentAlerts.map((alert) =>
+        this.serializeEmployeeDwmsAlert(alert),
+      ),
+      abnormalities: abnormalities.map((alert) =>
+        this.serializeEmployeeDwmsAlert(alert),
+      ),
+      raisedAlerts: raisedAlerts.map((alert) =>
+        this.serializeEmployeeDwmsAlert(alert),
+      ),
+      applicableActivities: roleActivities.activities,
+    };
+  }
   async addAlertComment(
     user: UserPayload,
     alertId: string,

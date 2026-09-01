@@ -112,6 +112,9 @@ export interface SteelHeatApproval {
     chargeNumberSnapshot: string | null;
     status: string;
     stage: string;
+    furnaceId?: string | null;
+    furnace?: { id: string; code: string; name: string } | null;
+    outputWeightTonnes?: number | null;
     chargePreparation?: {
       id: string;
       plan: { id: string; planNumber: string; grade: string | null } | null;
@@ -178,6 +181,11 @@ export interface SteelHeatApprovalSummary {
   total: number;
   byStage: Partial<Record<SteelHeatApprovalStage, number>>;
   byStatus: Partial<Record<SteelHeatApprovalStatus, number>>;
+  // Real aggregates, not literal statuses — see heat-approval.service.ts
+  // getSummary() for exactly which fields/timestamps back each of these.
+  approvedToday: number;
+  rejectedToday: number;
+  chemistryCompliance: { compliant: number; evaluated: number; pct: number | null };
 }
 
 function buildQuery(params: Record<string, string | number | undefined>) {

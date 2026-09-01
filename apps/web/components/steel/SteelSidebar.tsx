@@ -19,6 +19,7 @@ import {
   BadgeCheck,
   Warehouse,
   Headset,
+  Settings,
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -35,6 +36,9 @@ interface SteelSidebarProps {
 }
 
 const PROCESS_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD];
+// Mirrors CONFIG_ADMIN_ROLES on the API — only these roles may administer
+// Steel Configuration master data.
+const CONFIG_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
 // Steel Processes nav — P01-P06 are live and link to their existing
 // routes; P07-P12 have no backend/pages yet and render disabled.
@@ -103,7 +107,7 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
 
           {!isCollapsed && (
             <>
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-slate-700 rounded-lg">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-blue-600 rounded-lg">
                 <Factory className="h-4 w-4 text-white" />
               </div>
               <div className="min-w-0 flex flex-col">
@@ -131,7 +135,7 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
             title={isCollapsed ? "Steel Home" : undefined}
             className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
               pathname === "/steel"
-                ? "bg-slate-100 text-slate-900"
+                ? "bg-blue-50 text-blue-700"
                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             } ${isCollapsed ? "h-10 w-10 justify-center" : "h-9 w-full px-3 gap-2"}`}
           >
@@ -150,7 +154,7 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
             }
             onClick={onClose}
             title={isCollapsed ? "New" : undefined}
-            className={`flex items-center bg-slate-800 hover:bg-slate-900 text-white rounded-xl transition-colors ${
+            className={`flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors ${
               isCollapsed ? "h-10 w-10 justify-center" : "h-10 w-full px-3 gap-2"
             }`}
           >
@@ -206,23 +210,47 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
                 title={isCollapsed ? `${item.code} — ${item.name}` : undefined}
                 className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
                   active
-                    ? "bg-slate-100 text-slate-900"
+                    ? "bg-blue-50 text-blue-700"
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                 } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
               >
-                <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-slate-800" : "text-slate-400"}`} />
+                <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-700" : "text-slate-400"}`} />
                 {!isCollapsed && (
                   <>
                     <span className="flex-1 truncate">
                       {item.code} {item.name}
                     </span>
-                    {active && <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
+                    {active && <ChevronRight className="h-3.5 w-3.5 text-blue-400" />}
                   </>
                 )}
               </Link>
             );
           })}
         </nav>
+
+        {/* ── Configuration (Steel Admin only) ── */}
+        {userRole && CONFIG_ROLES.includes(userRole) && (
+          <div className="px-2 pb-1 border-t border-slate-100 pt-2 space-y-0.5">
+            {!isCollapsed && (
+              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-1">
+                Administration
+              </p>
+            )}
+            <Link
+              href="/steel/config"
+              onClick={onClose}
+              title={isCollapsed ? "Steel Configuration" : undefined}
+              className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
+                isActive(pathname, "/steel/config")
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
+            >
+              <Settings className={`h-4 w-4 shrink-0 ${isActive(pathname, "/steel/config") ? "text-blue-700" : "text-slate-400"}`} />
+              {!isCollapsed && <span className="flex-1 truncate">Configuration</span>}
+            </Link>
+          </div>
+        )}
 
         {/* ── Main App section ── */}
         <div className="px-2 pb-2 border-t border-slate-100 pt-2 space-y-0.5">
@@ -235,7 +263,7 @@ export function SteelSidebar({ open = false, onClose, collapsed = false, onToggl
             href="/"
             onClick={onClose}
             title={isCollapsed ? "Main App" : undefined}
-            className={`flex items-center rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-white transition-all duration-150 ${
+            className={`flex items-center rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-all duration-150 ${
               isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
             }`}
           >

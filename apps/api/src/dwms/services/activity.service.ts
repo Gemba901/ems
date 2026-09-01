@@ -3,12 +3,18 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { ActivityStatus, Priority, TaskFrequency } from 'db';
+import {
+  ActivityStatus,
+  EmployeeActivityStatus,
+  Priority,
+  TaskFrequency,
+} from 'db';
 import {
   CreateActivityDto,
   CreateTaskFromActivityDto,
   IngestActivitiesDto,
   UpdateActivityDto,
+  UpdateEmployeeActivityAssignmentDto,
 } from '../dto/dwms.dto';
 import { UserPayload } from './base.service';
 import { DwmsTaskService } from './task.service';
@@ -34,8 +40,6 @@ const ACTIVITY_INCLUDE = {
       jobTitle: true,
     },
   },
-
-
 
   parentActivity: {
     select: {
@@ -141,6 +145,56 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     return ACTIVE_ACTIVITY_STATUS;
   }
 
+  private normalizeJobTitle(jobTitle?: string | null) {
+    const normalized = jobTitle?.trim().replace(/\s+/g, ' ').toLowerCase();
+    return normalized || null;
+  }
+
+  private async linkActivityToJobTitle(
+    organizationId: string,
+    activityId: string,
+    jobTitle?: string | null,
+  ) {
+    const normalizedJobTitle = this.normalizeJobTitle(jobTitle);
+    if (!normalizedJobTitle) return;
+
+    await this.prisma.jobTitleActivity.upsert({
+      where: {
+        organizationId_jobTitle_activityId: {
+          organizationId,
+          jobTitle: normalizedJobTitle,
+          activityId,
+        },
+      },
+      update: {},
+      create: {
+        organizationId,
+        jobTitle: normalizedJobTitle,
+        activityId,
+      },
+    });
+  }
+
+  private serializeEmployeeRoleActivity(
+    item: any,
+    assignmentByActivityId: Map<string, any>,
+  ) {
+    const activity = item.activity ?? item;
+    const assignment = assignmentByActivityId.get(activity.id);
+    return {
+      activity: this.serializeActivity(activity),
+      status: assignment?.status ?? EmployeeActivityStatus.INACTIVE,
+      assignmentId: assignment?.id ?? null,
+      activatedAt:
+        assignment?.activatedAt?.toISOString?.() ??
+        assignment?.activatedAt ??
+        null,
+      deactivatedAt:
+        assignment?.deactivatedAt?.toISOString?.() ??
+        assignment?.deactivatedAt ??
+        null,
+    };
+  }
   private cleanActivityIngestionError(error: any) {
     const raw =
       typeof error?.message === 'string'
@@ -249,7 +303,6 @@ export abstract class DwmsActivityService extends DwmsTaskService {
 
     const employeeFields = [
       ['primaryResponsibleEmployeeId', 'Primary responsible person'],
-
     ] as const;
 
     for (const [field, label] of employeeFields) {
@@ -503,6 +556,11 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         activity.id,
         parentActivityIds,
       );
+      await this.linkActivityToJobTitle(
+        user.organizationId,
+        activity.id,
+        dto.primaryResponsibleDesignation,
+      );
       const createdActivity = await this.prisma.activity.findUnique({
         where: { id: activity.id },
         include: ACTIVITY_INCLUDE,
@@ -697,73 +755,45 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             'Activity ingestion does not support planned one-time rows. Use a recurring frequency: Daily, Weekly, Monthly, Quarterly, or Yearly.',
           );
         }
-
-        const responsibleEmployee = await this.resolveEmployeeByCodeOrId(
-          user.organizationId,
-          row.responsibleEmployeeCode,
-        );
-
         const created = await this.createActivity(user, activityPayload);
         const activityId = created.activity?.id;
         if (!activityId) {
           throw new BadRequestException('Activity could not be created');
         }
 
-        try {
-          const taskResult = (await this.createTaskFromActivity(
-            user,
-            activityId,
-            {
-              assignedToId: responsibleEmployee.id,
-              frequency: activityPayload.frequency,
-              priority: Priority.MEDIUM,
-              isAdhoc: false,
-              acknowledgeOnCreate: true,
-            },
-          )) as { task?: { id?: string } };
-          const taskId = taskResult.task?.id;
-          const resultIndex = results.length;
-          results.push({
-            rowNumber,
-            success: true,
-            activityId,
-            taskId,
-            responsibleEmployeeId: responsibleEmployee.id,
-            message: parentActivityCode
-              ? 'Activity and task created; parent activity pending link'
-              : 'Activity and task created',
-          });
-          const rowRecordIndex = rowRecords.length;
-          rowRecords.push({
-            organizationId: user.organizationId,
-            ingestionId: ingestion.id,
-            rowNumber,
-            status: 'CREATED',
-            activityName,
-            activityCode: created.activity?.code ?? activityCode,
-            responsibleEmployeeCode,
-            message: parentActivityCode
-              ? 'Activity and task created; parent activity pending link'
-              : 'Activity and task created',
-            activityId,
-            taskId,
-          });
-          successfulImports.push({
-            rowNumber,
-            resultIndex,
-            rowRecordIndex,
-            activityId,
-            activityCode: created.activity?.code ?? activityCode,
-            activityName,
-            frequency: activityPayload.frequency,
-            parentActivityCode,
-          });
-        } catch (taskError) {
-          await this.prisma.activity
-            .delete({ where: { id: activityId } })
-            .catch(() => undefined);
-          throw taskError;
-        }
+        const resultIndex = results.length;
+        results.push({
+          rowNumber,
+          success: true,
+          activityId,
+          message: parentActivityCode
+            ? 'Activity imported; parent activity pending link'
+            : 'Activity imported',
+        });
+        const rowRecordIndex = rowRecords.length;
+        rowRecords.push({
+          organizationId: user.organizationId,
+          ingestionId: ingestion.id,
+          rowNumber,
+          status: 'CREATED',
+          activityName,
+          activityCode: created.activity?.code ?? activityCode,
+          responsibleEmployeeCode,
+          message: parentActivityCode
+            ? 'Activity imported; parent activity pending link'
+            : 'Activity imported',
+          activityId,
+        });
+        successfulImports.push({
+          rowNumber,
+          resultIndex,
+          rowRecordIndex,
+          activityId,
+          activityCode: created.activity?.code ?? activityCode,
+          activityName,
+          frequency: activityPayload.frequency,
+          parentActivityCode,
+        });
       } catch (error: any) {
         const message = this.cleanActivityIngestionError(error);
         results.push({ rowNumber, success: false, message });
@@ -814,7 +844,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         })
       : [];
     const existingParentByCode = new Map(
-      existingParents.map((activity) => [activity.code.toLowerCase(), activity]),
+      existingParents.map((activity) => [
+        activity.code.toLowerCase(),
+        activity,
+      ]),
     );
 
     for (const item of successfulImports) {
@@ -843,7 +876,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           parentActivityIds,
         );
 
-        const message = 'Activity, task, and parent activity linked';
+        const message = 'Activity and parent activity linked';
         results[item.resultIndex].message = message;
         rowRecords[item.rowRecordIndex].message = message;
       } catch (error: any) {
@@ -876,12 +909,142 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     });
 
     return {
-      message: `Ingested ${created} of ${results.length} activity rows`,
+      message: `Imported ${created} of ${results.length} activity rows`,
       ingestion: this.serializeActivityIngestion(updatedIngestion),
       count: results.length,
       created,
       failed: results.length - created,
       results,
+    };
+  }
+
+  async listEmployeeRoleActivities(user: UserPayload, employeeId: string) {
+    await this.getEmployee(user.userId, user.organizationId);
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, organizationId: user.organizationId },
+      select: { id: true, jobTitle: true },
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    const jobTitle = this.normalizeJobTitle(employee.jobTitle);
+    if (!jobTitle) {
+      return { jobTitle: null, count: 0, activities: [] };
+    }
+
+    const [roleActivities, assignments] = await Promise.all([
+      this.prisma.jobTitleActivity.findMany({
+        where: { organizationId: user.organizationId, jobTitle },
+        include: { activity: { include: ACTIVITY_INCLUDE } },
+        orderBy: [{ activity: { name: 'asc' } }, { activity: { code: 'asc' } }],
+      }),
+      this.prisma.employeeActivityAssignment.findMany({
+        where: { organizationId: user.organizationId, employeeId },
+      }),
+    ]);
+
+    const assignmentByActivityId = new Map(
+      assignments.map((assignment) => [assignment.activityId, assignment]),
+    );
+    const activities = roleActivities.map((item) =>
+      this.serializeEmployeeRoleActivity(item, assignmentByActivityId),
+    );
+
+    return { jobTitle, count: activities.length, activities };
+  }
+
+  async updateEmployeeActivityAssignment(
+    user: UserPayload,
+    employeeId: string,
+    activityId: string,
+    dto: UpdateEmployeeActivityAssignmentDto,
+  ) {
+    await this.getEmployee(user.userId, user.organizationId);
+    if (!this.canManageActivities(user.roleLevel)) {
+      throw new ForbiddenException(
+        'Only management, admin, HR, HOD, and super admin users can update employee activity status',
+      );
+    }
+
+    const [employee, activity] = await Promise.all([
+      this.prisma.employee.findFirst({
+        where: { id: employeeId, organizationId: user.organizationId },
+        select: { id: true, jobTitle: true },
+      }),
+      this.prisma.activity.findFirst({
+        where: { id: activityId, organizationId: user.organizationId },
+        include: ACTIVITY_INCLUDE,
+      }),
+    ]);
+    if (!employee) throw new NotFoundException('Employee not found');
+    if (!activity) throw new NotFoundException('Activity not found');
+
+    const jobTitle = this.normalizeJobTitle(employee.jobTitle);
+    if (!jobTitle) {
+      throw new BadRequestException('Employee does not have a job title');
+    }
+
+    const roleActivity = await this.prisma.jobTitleActivity.findFirst({
+      where: { organizationId: user.organizationId, jobTitle, activityId },
+      select: { id: true },
+    });
+    if (!roleActivity) {
+      throw new BadRequestException(
+        'Activity is not linked to this employee job title',
+      );
+    }
+
+    const now = new Date();
+    const assignment = await this.prisma.employeeActivityAssignment.upsert({
+      where: { employeeId_activityId: { employeeId, activityId } },
+      update: {
+        status: dto.status,
+        activatedAt:
+          dto.status === EmployeeActivityStatus.ACTIVE ? now : undefined,
+        deactivatedAt:
+          dto.status === EmployeeActivityStatus.INACTIVE ? now : null,
+      },
+      create: {
+        organizationId: user.organizationId,
+        employeeId,
+        activityId,
+        status: dto.status,
+        activatedAt: dto.status === EmployeeActivityStatus.ACTIVE ? now : null,
+        deactivatedAt:
+          dto.status === EmployeeActivityStatus.INACTIVE ? now : null,
+      },
+    });
+
+    if (dto.status === EmployeeActivityStatus.ACTIVE) {
+      const existingTask = await this.prisma.task.findFirst({
+        where: {
+          ownerId: employeeId,
+          activityId,
+          frequency: activity.frequency,
+          isAdhoc: false,
+        },
+        select: { id: true },
+      });
+
+      if (!existingTask) {
+        await this.createTaskFromActivity(user, activityId, {
+          assignedToId: employeeId,
+          frequency: activity.frequency,
+          priority: Priority.MEDIUM,
+          isAdhoc: false,
+          acknowledgeOnCreate: true,
+        });
+      }
+    }
+
+    return {
+      message:
+        dto.status === EmployeeActivityStatus.ACTIVE
+          ? 'Employee activity activated'
+          : 'Employee activity deactivated',
+      item: this.serializeEmployeeRoleActivity(
+        activity,
+        new Map([[activityId, assignment]]),
+      ),
     };
   }
   async updateActivity(
@@ -949,6 +1112,13 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         activityId,
         parentActivityIds,
       );
+      if (dto.primaryResponsibleDesignation !== undefined) {
+        await this.linkActivityToJobTitle(
+          user.organizationId,
+          activityId,
+          dto.primaryResponsibleDesignation,
+        );
+      }
       const activity = await this.prisma.activity.findUnique({
         where: { id: activityId },
         include: ACTIVITY_INCLUDE,
@@ -993,7 +1163,6 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     };
   }
 
-
   async createTaskFromActivity(
     user: UserPayload,
     activityId: string,
@@ -1035,4 +1204,3 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     });
   }
 }
-

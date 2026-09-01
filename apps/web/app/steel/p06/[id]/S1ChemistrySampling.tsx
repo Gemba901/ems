@@ -12,19 +12,15 @@ import {
   RetestChemistryPayload,
 } from "@/services/steel-heat-approval.service";
 import { ChargePreparationService } from "@/services/steel-charge-preparation.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p06/ScreenHeader";
-import { WorkflowIndicator } from "@/components/steel/p06/WorkflowIndicator";
-import { ScreenSidebar } from "@/components/steel/p06/ScreenSidebar";
-import { ContextSummary } from "@/components/steel/p06/ContextSummary";
-import { HeatApprovalProgress } from "@/components/steel/p06/HeatApprovalProgress";
-import { SCREEN_TOP_STEPS } from "@/components/steel/p06/screenMap";
 import { Field, SubStep, SaveButton, subStatus } from "@/components/steel/p06/shared";
-import { FlaskConical, Info, ListChecks, Lightbulb } from "lucide-react";
 
+// This module used to render its own full page (ScreenHeader/
+// WorkflowIndicator/ContextSummary/sidebar). It's now consumed as the
+// "Chemistry" tab of the Heat Review screen (see HeatReview.tsx) — the page
+// chrome moved there, and only the A02-A06 form logic and layout stayed
+// here so the actual mutation/validation code isn't duplicated.
 const CHEMISTRY_ELEMENTS = ["C", "Mn", "Si", "P", "S", "Cr"];
 
 function ChemistryFields({ values, onChange }: { values: Record<string, string>; onChange: (el: string, v: string) => void }) {
@@ -48,7 +44,7 @@ function composeChemistry(values: Record<string, string>): Record<string, number
   return composition;
 }
 
-function formatChemistry(composition: Record<string, number> | null) {
+export function formatChemistry(composition: Record<string, number> | null) {
   if (!composition || Object.keys(composition).length === 0) return null;
   return Object.entries(composition).map(([el, v]) => `${el} ${v}%`).join(", ");
 }
@@ -74,54 +70,6 @@ function useAdditiveCatalog(token: string) {
     }
     return Array.from(names).sort();
   }, [data]);
-}
-
-function Sidebar() {
-  return (
-    <ScreenSidebar>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Take a liquid steel sample, analyze it against the required grade, and correct and re-test chemistry if
-            it doesn&apos;t match.
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Once chemistry is confirmed, the record moves on to temperature and ladle readiness checks.
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            <li>If a correction was needed, chemistry must be re-tested before moving on.</li>
-            <li>Leave an element blank if it wasn&apos;t measured.</li>
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
-  );
 }
 
 function AnalyzeSampleForm({ heatApproval, token, onDone }: { heatApproval: SteelHeatApproval; token: string; onDone: () => void }) {
@@ -341,34 +289,30 @@ function RetestChemistryForm({ heatApproval, token, onDone }: { heatApproval: St
   );
 }
 
-export function S1ChemistrySampling({
+// Real done/active/locked status for each A02-A06 chemistry sub-step —
+// exported so HeatReview's Summary tab ("Chemistry Within Specification" /
+// "Samples & Tests Attached" checks) can reuse the same real conditions
+// instead of re-deriving them.
+export function chemistryTabStatuses(heatApproval: SteelHeatApproval) {
+  const actions = heatApproval.allowedActions ?? [];
+  return {
+    analyzeStatus: subStatus(actions.includes("ANALYZE_SAMPLE"), heatApproval.chemistryComposition !== null),
+    compareStatus: subStatus(actions.includes("COMPARE_CHEMISTRY"), heatApproval.chemistryMatchesGrade !== null),
+    correctionStatus: subStatus(actions.includes("DECIDE_CORRECTION"), heatApproval.correctionRequired !== null),
+    materialStatus: subStatus(actions.includes("ADD_CORRECTION_MATERIAL"), heatApproval.correctionMaterials !== null || heatApproval.correctionNotApplicable !== null),
+    retestStatus: subStatus(actions.includes("RETEST_CHEMISTRY"), heatApproval.retestChemistryComposition !== null || heatApproval.retestNotApplicable !== null),
+  };
+}
+
+// Chemistry tab content for the Heat Review screen — the A01-A06 sub-steps
+// (sample taken through re-test), without any page-level chrome.
+export function ChemistryTab({
   heatApproval, token, onRefresh,
 }: { heatApproval: SteelHeatApproval; token: string; onRefresh: () => void }) {
-  const actions = heatApproval.allowedActions ?? [];
-  const analyzeStatus = subStatus(actions.includes("ANALYZE_SAMPLE"), heatApproval.chemistryComposition !== null);
-  const compareStatus = subStatus(actions.includes("COMPARE_CHEMISTRY"), heatApproval.chemistryMatchesGrade !== null);
-  const correctionStatus = subStatus(actions.includes("DECIDE_CORRECTION"), heatApproval.correctionRequired !== null);
-  const materialStatus = subStatus(actions.includes("ADD_CORRECTION_MATERIAL"), heatApproval.correctionMaterials !== null || heatApproval.correctionNotApplicable !== null);
-  const retestStatus = subStatus(actions.includes("RETEST_CHEMISTRY"), heatApproval.retestChemistryComposition !== null || heatApproval.retestNotApplicable !== null);
-
-  const statuses = [analyzeStatus, compareStatus, correctionStatus, materialStatus, retestStatus];
-  const doneCount = 1 + statuses.filter((s) => s === "done").length;
-  const activeRel = statuses.findIndex((s) => s === "active");
-  const activeIdx = activeRel === -1 ? null : activeRel + 1;
+  const { analyzeStatus, compareStatus, correctionStatus, materialStatus, retestStatus } = chemistryTabStatuses(heatApproval);
 
   return (
-    <TooltipProvider>
-      <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
-        <ScreenHeader
-          icon={FlaskConical}
-          title="Chemistry Sampling & Correction"
-          subtitle="Sample, analyze, compare, and correct the heat's chemistry against the required grade."
-        />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[0]} doneCount={doneCount} activeIndex={activeIdx} />
-        <ContextSummary heatApproval={heatApproval} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <div className="space-y-4">
+        <div className="space-y-4">
             <SubStep
               code="P06-A01"
               title="Liquid Steel Sample Taken"
@@ -425,13 +369,6 @@ export function S1ChemistrySampling({
             >
               {retestStatus === "active" && <RetestChemistryForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
             </SubStep>
-          </div>
-          <ScreenSidebar>
-            <HeatApprovalProgress heatApproval={heatApproval} />
-            <Sidebar />
-          </ScreenSidebar>
         </div>
-      </div>
-    </TooltipProvider>
   );
 }

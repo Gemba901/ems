@@ -10,7 +10,7 @@ import { SteelService } from "@/services/steel.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScreenHeader } from "@/components/steel/p04/ScreenHeader";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
 import { ClipboardList, Loader2 } from "lucide-react";
 
 export default function NewChargePreparationPage() {
@@ -70,6 +70,7 @@ function NewChargePreparationForm() {
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-4">
       <ScreenHeader
+        code="P04"
         icon={ClipboardList}
         title="New Charge Preparation"
         subtitle="Review the production plan and material requirement to start preparing a furnace charge."

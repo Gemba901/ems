@@ -16,7 +16,7 @@ import {
 
 interface PrismaMock {
   employee: { findFirst: jest.Mock };
-  steelChargePreparation: { findFirst: jest.Mock };
+  steelChargePreparation: { findFirst: jest.Mock; findMany: jest.Mock };
   steelMelting: {
     create: jest.Mock;
     update: jest.Mock;
@@ -27,7 +27,7 @@ interface PrismaMock {
     groupBy: jest.Mock;
     aggregate: jest.Mock;
   };
-  steelMeltingActivityLog: { create: jest.Mock };
+  steelMeltingActivityLog: { create: jest.Mock; findFirst: jest.Mock };
   furnace: { findFirst: jest.Mock; findMany: jest.Mock };
   furnaceLining: { findFirst: jest.Mock; update: jest.Mock };
   heatMaterialCharge: {
@@ -51,7 +51,7 @@ interface PrismaMock {
 function createPrismaMock(): PrismaMock {
   const prisma = {
     employee: { findFirst: jest.fn() },
-    steelChargePreparation: { findFirst: jest.fn() },
+    steelChargePreparation: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     steelMelting: {
       create: jest.fn(),
       update: jest.fn(),
@@ -62,7 +62,7 @@ function createPrismaMock(): PrismaMock {
       groupBy: jest.fn(),
       aggregate: jest.fn(),
     },
-    steelMeltingActivityLog: { create: jest.fn() },
+    steelMeltingActivityLog: { create: jest.fn(), findFirst: jest.fn() },
     furnace: { findFirst: jest.fn(), findMany: jest.fn() },
     furnaceLining: { findFirst: jest.fn(), update: jest.fn() },
     heatMaterialCharge: {
@@ -215,18 +215,23 @@ describe('MeltingService', () => {
 
   // ── Sequential stage transitions ──
   describe('stage transitions', () => {
-    it('furnaceLiningCheck rejects when called out of order (before A01)', async () => {
+    it('furnaceLiningCheck rejects when called out of order (before the previous step is done)', async () => {
       prisma.steelMelting.findFirst.mockResolvedValue({
         id: 'melt-1',
         organizationId: ORG_ID,
         status: 'IN_PROGRESS',
-        stage: 'A03_FURNACE_SYSTEMS_CHECK', // already past A01
+        stage: 'A01_CONFIRM_FURNACE_AVAILABILITY',
       });
 
       await expect(
-        service.furnaceLiningCheck(
+        service.furnaceSystemsCheck(
           'melt-1',
-          { liningVisualCondition: 'Good' },
+          {
+            waterPressureFlowOk: true,
+            powerSystemOk: true,
+            hydraulicSystemOk: true,
+            alarmsOk: true,
+          },
           USER_ID,
           ORG_ID,
         ),
@@ -263,12 +268,15 @@ describe('MeltingService', () => {
       );
     });
 
-    it('rejects duplicate execution of a step already completed', async () => {
+    it('rejects re-editing a step already completed when no reason is given', async () => {
       prisma.steelMelting.findFirst.mockResolvedValue({
         id: 'melt-1',
         organizationId: ORG_ID,
         status: 'IN_PROGRESS',
         stage: 'A05_VERIFY_CHARGE_RECIPE', // A02 already done
+      });
+      prisma.steelMeltingActivityLog.findFirst.mockResolvedValue({
+        id: 'log-a02',
       });
 
       await expect(
@@ -278,7 +286,45 @@ describe('MeltingService', () => {
           USER_ID,
           ORG_ID,
         ),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('allows re-editing a step already completed when a reason is given, without moving the stage backward', async () => {
+      prisma.steelMelting.findFirst.mockResolvedValue({
+        id: 'melt-1',
+        organizationId: ORG_ID,
+        status: 'IN_PROGRESS',
+        stage: 'A05_VERIFY_CHARGE_RECIPE', // A02 already done
+      });
+      prisma.steelMeltingActivityLog.findFirst.mockResolvedValue({
+        id: 'log-a02',
+      });
+      prisma.steelMelting.update.mockResolvedValue({ id: 'melt-1' });
+      prisma.steelMelting.findUnique.mockResolvedValue({
+        id: 'melt-1',
+        stage: 'A05_VERIFY_CHARGE_RECIPE',
+      });
+
+      await service.furnaceLiningCheck(
+        'melt-1',
+        { liningVisualCondition: 'Good', reason: 'Corrected condition typo' },
+        USER_ID,
+        ORG_ID,
+      );
+
+      expect(prisma.steelMelting.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ stage: expect.anything() }),
+        }),
+      );
+      expect(prisma.steelMeltingActivityLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            activity: 'A02',
+            notes: 'Corrected condition typo',
+          }),
+        }),
+      );
     });
 
     it('rejects any action on a record that is not found (wrong org or nonexistent)', async () => {
@@ -484,15 +530,18 @@ describe('MeltingService', () => {
       expect(prisma.steelMelting.update).not.toHaveBeenCalled();
     });
 
-    it('still rejects out-of-order execution before validating the safety gate', async () => {
+    it('still rejects re-editing an already-completed step before validating the safety gate, when no reason is given', async () => {
       prisma.steelMelting.findFirst.mockResolvedValue({
         ...baseMelting,
         stage: 'A05_VERIFY_CHARGE_RECIPE', // already past A03
       });
+      prisma.steelMeltingActivityLog.findFirst.mockResolvedValue({
+        id: 'log-a03',
+      });
 
       await expect(
         service.furnaceSystemsCheck('melt-1', allOk, USER_ID, ORG_ID),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('still rejects the check on a terminal (CLOSED) record', async () => {

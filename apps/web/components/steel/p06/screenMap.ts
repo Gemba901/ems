@@ -12,10 +12,15 @@ export interface ScreenMeta {
   stages: SteelHeatApprovalStage[];
 }
 
+// Consolidated to 2 screens (Heat Review, Approval & Tap Authorization) to
+// match the "Heat Approval (P06)" 3-screen mockup concept (dashboard +
+// review + approval), where "activity ≠ screen": each screen groups a
+// contiguous run of the real A01-A13 backend activities as tabs/sections
+// rather than one screen per activity.
 export const SCREENS: ScreenMeta[] = [
   {
     code: "S1",
-    label: "Chemistry Sampling & Correction",
+    label: "Heat Review",
     stages: [
       "A01_TAKE_SAMPLE",
       "A02_ANALYZE_SAMPLE",
@@ -23,16 +28,13 @@ export const SCREENS: ScreenMeta[] = [
       "A04_DECIDE_CORRECTION",
       "A05_ADD_CORRECTION_MATERIAL",
       "A06_RETEST_CHEMISTRY",
+      "A07_CHECK_TEMPERATURE",
+      "A08_CHECK_LADLE_READINESS",
     ],
   },
   {
     code: "S2",
-    label: "Temperature & Ladle Readiness",
-    stages: ["A07_CHECK_TEMPERATURE", "A08_CHECK_LADLE_READINESS"],
-  },
-  {
-    code: "S3",
-    label: "Approval, Tapping & Release",
+    label: "Approval & Tap Authorization",
     stages: [
       "A09_APPROVE_CHEMISTRY_TEMPERATURE",
       "A10_CONFIRM_HEAT_NUMBER",
@@ -70,8 +72,6 @@ export const SCREEN_TOP_STEPS: SubStep[][] = [
     { code: "A04", label: "Correction Decided" },
     { code: "A05", label: "Correction Material" },
     { code: "A06", label: "Re-test Chemistry" },
-  ],
-  [
     { code: "A07", label: "Temperature Check" },
     { code: "A08", label: "Ladle Readiness" },
   ],

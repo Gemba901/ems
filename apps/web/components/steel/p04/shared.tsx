@@ -23,20 +23,40 @@ export function Field({ label, value }: { label: string; value: React.ReactNode 
   );
 }
 
+export function StatusBadge({ status }: { status: SubStepStatus }) {
+  if (status === "done") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+        <CheckCircle2 className="h-3.5 w-3.5" /> Done
+      </span>
+    );
+  }
+  if (status === "active") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+        <Circle className="h-3.5 w-3.5 fill-blue-100" /> In progress
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">
+      <Lock className="h-3 w-3" /> Locked
+    </span>
+  );
+}
+
 export function SubStepCard({
   code, title, status, children,
 }: { code: string; title: string; status: SubStepStatus; children: React.ReactNode }) {
   return (
-    <Card className={status === "locked" ? "opacity-60" : ""}>
+    <Card className={status === "locked" ? "opacity-70" : ""}>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          {status === "done" && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-          {status === "active" && <Circle className="h-4 w-4 text-blue-500 fill-blue-100" />}
-          {status === "locked" && <Lock className="h-3.5 w-3.5 text-slate-400" />}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle className="text-sm">
             <span className="text-slate-400 font-mono text-xs mr-1.5">{code}</span>
             {title}
           </CardTitle>
+          <StatusBadge status={status} />
         </div>
       </CardHeader>
       <CardContent>{children}</CardContent>
@@ -53,39 +73,14 @@ export function LockedNote() {
 }
 
 /**
- * Collapsed 1-line summary row for a completed sub-step. Use instead of a
- * full SubStepCard once a step is done, to avoid a long stack of full cards.
- */
-export function SubStepSummary({ code, title, summary }: { code: string; title: string; summary?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-emerald-100 bg-emerald-50/40">
-      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-      <span className="text-slate-400 font-mono text-xs shrink-0">{code}</span>
-      <span className="text-sm text-slate-700 truncate">{summary ?? title}</span>
-    </div>
-  );
-}
-
-/** Minimal collapsed placeholder row for a locked sub-step. */
-export function SubStepLocked({ code, title }: { code: string; title: string }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-slate-100 opacity-50">
-      <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-      <span className="text-slate-400 font-mono text-xs shrink-0">{code}</span>
-      <span className="text-sm text-slate-400 truncate">{title}</span>
-    </div>
-  );
-}
-
-/**
- * Wraps a sub-step's rendering per status: full card while active, a
- * 1-line summary once done, and a minimal placeholder while locked.
+ * Renders a section as an always-visible card with a status badge next to
+ * its heading (done / in progress / locked). Content is never collapsed —
+ * locked sections are shown at reduced opacity and their inputs remain
+ * disabled by the field-level logic already in each screen.
  */
 export function SubStep({
-  code, title, status, summary, children,
+  code, title, status, children,
 }: { code: string; title: string; status: SubStepStatus; summary?: React.ReactNode; children: React.ReactNode }) {
-  if (status === "done") return <SubStepSummary code={code} title={title} summary={summary} />;
-  if (status === "locked") return <SubStepLocked code={code} title={title} />;
   return (
     <SubStepCard code={code} title={title} status={status}>
       {children}

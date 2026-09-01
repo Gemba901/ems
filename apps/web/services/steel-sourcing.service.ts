@@ -72,7 +72,7 @@ export const SOURCING_STAGE_ORDER: SteelSourcingStage[] = [
   "A12_HANDOVER_CLOSED",
 ];
 
-interface EmployeeRef {
+export interface EmployeeRef {
   id: string;
   firstName: string;
   lastName: string;
@@ -92,7 +92,10 @@ export interface Supplier {
   email: string | null;
   country: string | null;
   isImportSource: boolean;
+  isActive: boolean;
   notes: string | null;
+  createdBy?: EmployeeRef | null;
+  updatedBy?: EmployeeRef | null;
 }
 
 export interface SteelSourcingQuotation {
@@ -105,6 +108,16 @@ export interface SteelSourcingQuotation {
   deliveryDate: string | null;
   paymentTerms: string | null;
   qualityRiskNotes: string | null;
+}
+
+export interface SteelSourcingAttachment {
+  id: string;
+  sourcingId: string;
+  stage: SteelSourcingStage;
+  fileName: string;
+  fileUrl: string;
+  uploadedBy: EmployeeRef | null;
+  createdAt: string;
 }
 
 export interface SteelSourcingActivityLog {
@@ -121,7 +134,11 @@ export interface SteelSourcingOrder {
   sourcingNumber: string;
   organizationId: string;
   planId: string;
-  plan: { id: string; planNumber: string; plantRoute: string | null; customerName: string | null };
+  plan: {
+    id: string; planNumber: string; plantRoute: string | null; customerName: string | null; dealerName: string | null;
+    productType: string | null; grade: string | null; size: string | null; requestedQuantityTonnes: number;
+    expectedDeliveryDate: string | null;
+  };
   stage: SteelSourcingStage;
   status: SteelSourcingStatus;
 
@@ -415,8 +432,8 @@ export const SteelSourcingService = {
     return handleResponse<SteelSourcingOrder>(res);
   },
 
-  async getSuppliers(token: string, params: { materialType?: SteelMaterialType; approvalStatus?: SupplierApprovalStatus; search?: string } = {}): Promise<Supplier[]> {
-    const res = await apiClient(`${API_URL}/steel/sourcing/suppliers${buildQuery(params)}`, {
+  async getSuppliers(token: string, params: { materialType?: SteelMaterialType; approvalStatus?: SupplierApprovalStatus; search?: string; includeInactive?: boolean } = {}): Promise<Supplier[]> {
+    const res = await apiClient(`${API_URL}/steel/sourcing/suppliers${buildQuery({ ...params, includeInactive: params.includeInactive ? "true" : undefined })}`, {
       headers: authHeaders(token),
     }, token);
     return handleResponse<Supplier[]>(res);
@@ -427,5 +444,40 @@ export const SteelSourcingService = {
       method: "POST", headers: authHeaders(token), body: JSON.stringify(data),
     }, token);
     return handleResponse<Supplier>(res);
+  },
+
+  async updateSupplier(id: string, data: Partial<CreateSupplierPayload & { isActive: boolean }>, token: string): Promise<Supplier> {
+    const res = await apiClient(`${API_URL}/steel/sourcing/suppliers/${id}`, {
+      method: "PATCH", headers: authHeaders(token), body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Supplier>(res);
+  },
+
+  async getSupplierEligibleMaterials(id: string, token: string): Promise<Array<{ id: string; materialId: string; material: { id: string; code: string; name: string; unit: string } }>> {
+    const res = await apiClient(`${API_URL}/steel/sourcing/suppliers/${id}/eligible-materials`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async getAttachments(id: string, token: string): Promise<SteelSourcingAttachment[]> {
+    const res = await apiClient(`${API_URL}/steel/sourcing/${id}/attachments`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<SteelSourcingAttachment[]>(res);
+  },
+
+  async addAttachment(id: string, data: { stage: SteelSourcingStage; fileName: string; fileUrl: string }, token: string): Promise<SteelSourcingAttachment> {
+    const res = await apiClient(`${API_URL}/steel/sourcing/${id}/attachments`, {
+      method: "POST", headers: authHeaders(token), body: JSON.stringify(data),
+    }, token);
+    return handleResponse<SteelSourcingAttachment>(res);
+  },
+
+  async deleteAttachment(attachmentId: string, token: string): Promise<{ success: boolean }> {
+    const res = await apiClient(`${API_URL}/steel/sourcing/attachments/${attachmentId}`, {
+      method: "DELETE", headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
   },
 };

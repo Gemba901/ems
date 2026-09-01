@@ -4,7 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SteelPlanStage, SteelPlanActivity, SteelDepartment, Prisma } from 'db';
+import {
+  SteelPlanStage,
+  SteelPlanActivity,
+  SteelDepartment,
+  DemandSource,
+  OrderPriority,
+  Prisma,
+} from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateSteelDemandDto,
@@ -110,6 +117,29 @@ export class SteelService {
   // same count before either writes, producing duplicate numbers. The
   // number FORMAT is unchanged; this only makes generate-then-create safe
   // under concurrency by regenerating and retrying on conflict.
+  // P2002's offending-field list lives at err.meta.target on the legacy
+  // engine, but the Prisma 7 driver-adapter (@prisma/adapter-pg) engine
+  // instead puts it at err.meta.constraint.fields or
+  // err.cause.constraint.fields, leaving meta.target undefined.
+  private uniqueConstraintFields(
+    err: Prisma.PrismaClientKnownRequestError,
+  ): string[] {
+    const meta = err.meta as
+      | { target?: string[]; constraint?: { fields?: string[] } }
+      | undefined;
+    const cause = (
+      err as unknown as {
+        cause?: { constraint?: { fields?: string[] } };
+      }
+    ).cause;
+    return (
+      meta?.target ??
+      meta?.constraint?.fields ??
+      cause?.constraint?.fields ??
+      []
+    );
+  }
+
   private async withUniqueRetry<T>(
     field: string,
     fn: () => Promise<T>,
@@ -122,7 +152,7 @@ export class SteelService {
         const isConflict =
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === 'P2002' &&
-          (err.meta?.target as string[] | undefined)?.includes(field);
+          this.uniqueConstraintFields(err).includes(field);
         if (!isConflict || attempt === maxAttempts) throw err;
       }
     }
@@ -167,6 +197,93 @@ export class SteelService {
     });
   }
 
+  // Required corroborating reference per demand source — if the system can't
+  // look this up itself, the planner must supply it up front rather than
+  // leaving A01 half-filled.
+  private assertDemandSourceReference(dto: CreateSteelDemandDto) {
+    const requireOneOf = (
+      fields: (keyof CreateSteelDemandDto)[],
+      label: string,
+    ) => {
+      if (!fields.some((f) => dto[f])) {
+        throw new BadRequestException(
+          `${label} is required for this demand source`,
+        );
+      }
+    };
+    switch (dto.demandSource) {
+      case 'CUSTOMER_ORDER':
+        requireOneOf(['customerId', 'customerName'], 'Customer');
+        break;
+      case 'DEALER_REQUIREMENT':
+        requireOneOf(['customerId', 'dealerName'], 'Dealer');
+        break;
+      case 'PROJECT_REQUIREMENT':
+        requireOneOf(['projectReference'], 'Project reference');
+        break;
+      case 'FORECAST':
+        requireOneOf(['forecastReference'], 'Forecast reference');
+        break;
+      case 'INTERNAL_STOCK_PLAN':
+        requireOneOf(
+          ['stockRequirementReference'],
+          'Stock requirement reference',
+        );
+        break;
+    }
+  }
+
+  private async resolveCustomer(customerId: string, organizationId: string) {
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, organizationId },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+    return customer;
+  }
+
+  private async resolveProduct(productId: string, organizationId: string) {
+    const product = await this.prisma.steelProduct.findFirst({
+      where: { id: productId, organizationId },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+    return product;
+  }
+
+  private async resolveProductSpecification(
+    productSpecificationId: string,
+    organizationId: string,
+  ) {
+    const spec = await this.prisma.steelProductSpecification.findFirst({
+      where: { id: productSpecificationId, organizationId },
+    });
+    if (!spec) throw new NotFoundException('Product specification not found');
+    return spec;
+  }
+
+  private async resolveRoute(
+    productionRouteId: string,
+    organizationId: string,
+  ) {
+    const route = await this.prisma.steelProductionRoute.findFirst({
+      where: { id: productionRouteId, organizationId },
+    });
+    if (!route) throw new NotFoundException('Production route not found');
+    return route;
+  }
+
+  // Default order priority from demand source — if the system knows it,
+  // it shouldn't ask. Planners may still override, but must say why.
+  private static readonly DEFAULT_PRIORITY: Record<
+    DemandSource,
+    OrderPriority
+  > = {
+    CUSTOMER_ORDER: 'NORMAL',
+    DEALER_REQUIREMENT: 'NORMAL',
+    PROJECT_REQUIREMENT: 'PROJECT',
+    FORECAST: 'NORMAL',
+    INTERNAL_STOCK_PLAN: 'STOCK_REPLENISHMENT',
+  };
+
   // ── P01-A01 — Capture customer enquiry, sales order, forecast, or stock requirement ──
   async createDemand(
     dto: CreateSteelDemandDto,
@@ -174,6 +291,11 @@ export class SteelService {
     organizationId: string,
   ) {
     const employee = await this.resolveEmployee(userId, organizationId);
+    this.assertDemandSourceReference(dto);
+
+    const customer = dto.customerId
+      ? await this.resolveCustomer(dto.customerId, organizationId)
+      : null;
 
     return this.withUniqueRetry('planNumber', () =>
       this.prisma.$transaction(async (tx) => {
@@ -187,8 +309,9 @@ export class SteelService {
             stage: 'A01_DEMAND_CAPTURED',
             status: 'IN_PROGRESS',
             demandSource: dto.demandSource,
-            customerName: dto.customerName,
-            dealerName: dto.dealerName,
+            customerId: dto.customerId,
+            customerName: customer?.name ?? dto.customerName,
+            dealerName: customer?.dealerName ?? dto.dealerName,
             projectReference: dto.projectReference,
             salesOrderNumber: dto.salesOrderNumber,
             forecastReference: dto.forecastReference,
@@ -231,11 +354,19 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A02_PRIORITY_CONFIRMED');
 
+    const defaultPriority = SteelService.DEFAULT_PRIORITY[plan.demandSource];
+    const priority = dto.priority ?? defaultPriority;
+    if (dto.priority && dto.priority !== defaultPriority && !dto.notes) {
+      throw new BadRequestException(
+        `Overriding the default priority (${defaultPriority}) requires a note explaining why`,
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelProductionPlan.update({
         where: { id },
         data: {
-          priority: dto.priority,
+          priority,
           deliveryPromiseDate: dto.deliveryPromiseDate
             ? new Date(dto.deliveryPromiseDate)
             : null,
@@ -243,7 +374,10 @@ export class SteelService {
           stage: 'A02_PRIORITY_CONFIRMED',
         },
       });
-      await this.logActivity(tx, id, 'A02', employee.id, dto.notes, { ...dto });
+      await this.logActivity(tx, id, 'A02', employee.id, dto.notes, {
+        ...dto,
+        priority,
+      });
       return tx.steelProductionPlan.findUnique({
         where: { id: updated.id },
         include: planInclude,
@@ -262,11 +396,20 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A03_PRODUCT_CONFIRMED');
 
+    const product = dto.productId
+      ? await this.resolveProduct(dto.productId, organizationId)
+      : null;
+    const productType = product?.productType ?? dto.productType;
+    if (!productType) {
+      throw new BadRequestException('productId or productType is required');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelProductionPlan.update({
         where: { id },
         data: {
-          productType: dto.productType,
+          productId: dto.productId,
+          productType,
           productStandard: dto.productStandard,
           customerSpecification: dto.customerSpecification,
           stage: 'A03_PRODUCT_CONFIRMED',
@@ -291,16 +434,31 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A04_SPEC_CONFIRMED');
 
+    const spec = dto.productSpecificationId
+      ? await this.resolveProductSpecification(
+          dto.productSpecificationId,
+          organizationId,
+        )
+      : null;
+    const grade = spec?.grade ?? dto.grade;
+    const size = spec?.size ?? dto.size;
+    if (!grade || !size) {
+      throw new BadRequestException(
+        'productSpecificationId, or grade and size, is required',
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelProductionPlan.update({
         where: { id },
         data: {
-          grade: dto.grade,
-          size: dto.size,
-          length: dto.length,
+          productSpecificationId: dto.productSpecificationId,
+          grade,
+          size,
+          length: spec?.length ?? dto.length,
           bundleType: dto.bundleType,
           totalQuantity: dto.totalQuantity,
-          toleranceNotes: dto.toleranceNotes,
+          toleranceNotes: spec?.toleranceNotes ?? dto.toleranceNotes,
           stage: 'A04_SPEC_CONFIRMED',
         },
       });
@@ -325,18 +483,51 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A05_STOCK_CHECKED');
 
+    // Auto-fill from the certified finished-goods stock catalog against the
+    // plan's spec when the caller doesn't explicitly override it.
+    let certifiedStockAvailableQty = dto.certifiedStockAvailableQty;
+    let stockBundleIds = dto.stockBundleIds;
+    let stockHeatNumbers = dto.stockHeatNumbers;
+    let stockCertificateRefs = dto.stockCertificateRefs;
+    if (
+      certifiedStockAvailableQty === undefined &&
+      plan.productSpecificationId
+    ) {
+      const rows = await this.prisma.steelFinishedGoodsStock.findMany({
+        where: {
+          organizationId,
+          productSpecificationId: plan.productSpecificationId,
+        },
+      });
+      certifiedStockAvailableQty = rows.reduce(
+        (sum, r) => sum + r.certifiedQtyTonnes,
+        0,
+      );
+      stockBundleIds = rows.flatMap((r) => r.bundleIds);
+      stockHeatNumbers = rows.flatMap((r) => r.heatNumbers);
+      stockCertificateRefs = rows.flatMap((r) => r.certificateRefs);
+    }
+    if (certifiedStockAvailableQty === undefined) {
+      throw new BadRequestException(
+        'certifiedStockAvailableQty is required when no product specification is set',
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelProductionPlan.update({
         where: { id },
         data: {
-          certifiedStockAvailableQty: dto.certifiedStockAvailableQty,
-          stockBundleIds: dto.stockBundleIds ?? [],
-          stockHeatNumbers: dto.stockHeatNumbers ?? [],
-          stockCertificateRefs: dto.stockCertificateRefs ?? [],
+          certifiedStockAvailableQty,
+          stockBundleIds: stockBundleIds ?? [],
+          stockHeatNumbers: stockHeatNumbers ?? [],
+          stockCertificateRefs: stockCertificateRefs ?? [],
           stage: 'A05_STOCK_CHECKED',
         },
       });
-      await this.logActivity(tx, id, 'A05', employee.id, undefined, { ...dto });
+      await this.logActivity(tx, id, 'A05', employee.id, undefined, {
+        ...dto,
+        certifiedStockAvailableQty,
+      });
       return tx.steelProductionPlan.findUnique({
         where: { id: updated.id },
         include: planInclude,
@@ -355,11 +546,28 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A06_STOCK_DECISION_MADE');
 
+    // Suggest a decision from the stock shortfall so the planner is
+    // confirming/overriding, not deciding from scratch.
+    const shortfall =
+      plan.requestedQuantityTonnes - (plan.certifiedStockAvailableQty ?? 0);
+    const suggestedDecision: 'DISPATCH_FROM_STOCK' | 'PRODUCTION_REQUIRED' =
+      shortfall <= 0 ? 'DISPATCH_FROM_STOCK' : 'PRODUCTION_REQUIRED';
+    const stockDecision = dto.stockDecision ?? suggestedDecision;
+    if (
+      dto.stockDecision &&
+      dto.stockDecision !== suggestedDecision &&
+      !dto.stockDecisionNotes
+    ) {
+      throw new BadRequestException(
+        `Overriding the system-suggested decision (${suggestedDecision}) requires stockDecisionNotes explaining why`,
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelProductionPlan.update({
         where: { id },
         data: {
-          stockDecision: dto.stockDecision,
+          stockDecision,
           stockDecisionNotes: dto.stockDecisionNotes,
           stage: 'A06_STOCK_DECISION_MADE',
         },
@@ -370,7 +578,7 @@ export class SteelService {
         'A06',
         employee.id,
         dto.stockDecisionNotes,
-        { ...dto },
+        { ...dto, stockDecision, suggestedDecision },
       );
       return tx.steelProductionPlan.findUnique({
         where: { id: updated.id },
@@ -390,11 +598,22 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A07_ROUTE_SELECTED');
 
+    const route = dto.productionRouteId
+      ? await this.resolveRoute(dto.productionRouteId, organizationId)
+      : null;
+    const plantRoute = route?.plantRoute ?? dto.plantRoute;
+    if (!plantRoute) {
+      throw new BadRequestException(
+        'productionRouteId or plantRoute is required',
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelProductionPlan.update({
         where: { id },
         data: {
-          plantRoute: dto.plantRoute,
+          productionRouteId: dto.productionRouteId,
+          plantRoute,
           routeNotes: dto.routeNotes,
           stage: 'A07_ROUTE_SELECTED',
         },
@@ -533,13 +752,28 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A11_PLAN_COMMUNICATED');
 
-    if (dto.departments.length === 0) {
+    // Derive the department list from the selected route's steps when not
+    // explicitly given — if the system knows which departments the route
+    // touches, the planner shouldn't have to re-pick them.
+    let departments = dto.departments;
+    if (!departments) {
+      if (!plan.productionRouteId) {
+        throw new BadRequestException(
+          'departments must be provided when no production route is selected',
+        );
+      }
+      const steps = await this.prisma.steelProductionRouteStep.findMany({
+        where: { routeId: plan.productionRouteId },
+      });
+      departments = [...new Set(steps.map((s) => s.department))];
+    }
+    if (departments.length === 0) {
       throw new BadRequestException('At least one department must be notified');
     }
 
     return this.prisma.$transaction(async (tx) => {
       await tx.steelPlanDepartmentAck.createMany({
-        data: dto.departments.map((department) => ({ planId: id, department })),
+        data: departments.map((department) => ({ planId: id, department })),
         skipDuplicates: true,
       });
 
@@ -552,7 +786,7 @@ export class SteelService {
       });
 
       await this.logActivity(tx, id, 'A11', employee.id, dto.notes, {
-        departments: dto.departments,
+        departments,
       });
       return tx.steelProductionPlan.findUnique({
         where: { id: updated.id },
@@ -614,12 +848,11 @@ export class SteelService {
     const plan = await this.findPlanOrThrow(id, organizationId);
     this.assertStage(plan.stage, 'A12_PLAN_RELEASED');
 
-    const outstanding = plan.departmentAcks.filter((a) => !a.acknowledged);
-    if (outstanding.length > 0) {
-      throw new BadRequestException(
-        `Cannot release: ${outstanding.length} department(s) have not yet acknowledged the plan`,
-      );
-    }
+    // Department acknowledgement is informational only for P01 release —
+    // departments are derived planning information (from the selected
+    // Production Route), not an approval gate. acknowledgeDepartment() and
+    // SteelPlanDepartmentAck remain available for any downstream process
+    // that still consults them; only this release-blocking check is removed.
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelProductionPlan.update({

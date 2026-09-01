@@ -23,6 +23,8 @@ import {
   QuerySteelSourcingOrdersDto,
   CreateSupplierDto,
   QuerySuppliersDto,
+  UpdateSupplierDto,
+  CreateSteelSourcingAttachmentDto,
 } from './dto/steel-sourcing.dto';
 
 // The order the 12 sourcing activities must occur in. Mirrors the P01 STAGE_ORDER
@@ -61,6 +63,12 @@ const orderInclude = {
       planNumber: true,
       plantRoute: true,
       customerName: true,
+      dealerName: true,
+      productType: true,
+      grade: true,
+      size: true,
+      requestedQuantityTonnes: true,
+      expectedDeliveryDate: true,
     },
   },
 };
@@ -115,6 +123,29 @@ export class SteelSourcingService {
   // same count before either writes, producing duplicate numbers. The
   // number FORMAT is unchanged; this only makes generate-then-create safe
   // under concurrency by regenerating and retrying on conflict.
+  // P2002's offending-field list lives at err.meta.target on the legacy
+  // engine, but the Prisma 7 driver-adapter (@prisma/adapter-pg) engine
+  // instead puts it at err.meta.constraint.fields or
+  // err.cause.constraint.fields, leaving meta.target undefined.
+  private uniqueConstraintFields(
+    err: Prisma.PrismaClientKnownRequestError,
+  ): string[] {
+    const meta = err.meta as
+      | { target?: string[]; constraint?: { fields?: string[] } }
+      | undefined;
+    const cause = (
+      err as unknown as {
+        cause?: { constraint?: { fields?: string[] } };
+      }
+    ).cause;
+    return (
+      meta?.target ??
+      meta?.constraint?.fields ??
+      cause?.constraint?.fields ??
+      []
+    );
+  }
+
   private async withUniqueRetry<T>(
     field: string,
     fn: () => Promise<T>,
@@ -127,7 +158,7 @@ export class SteelSourcingService {
         const isConflict =
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === 'P2002' &&
-          (err.meta?.target as string[] | undefined)?.includes(field);
+          this.uniqueConstraintFields(err).includes(field);
         if (!isConflict || attempt === maxAttempts) throw err;
       }
     }
@@ -791,7 +822,19 @@ export class SteelSourcingService {
 
   // ── Supplier master (backs P02-A03) ──
 
-  async createSupplier(dto: CreateSupplierDto, organizationId: string) {
+  async createSupplier(
+    dto: CreateSupplierDto,
+    organizationId: string,
+    userId?: string,
+  ) {
+    const actor = userId
+      ? await this.prisma.employee
+          .findFirst({
+            where: { userId, organizationId },
+            select: { id: true },
+          })
+          .catch(() => null)
+      : null;
     return this.prisma.supplier.create({
       data: {
         organizationId,
@@ -807,20 +850,130 @@ export class SteelSourcingService {
         country: dto.country,
         isImportSource: dto.isImportSource ?? false,
         notes: dto.notes,
+        createdById: actor?.id,
+        updatedById: actor?.id,
+      },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        updatedBy: { select: { id: true, firstName: true, lastName: true } },
       },
     });
   }
 
   async getSuppliers(organizationId: string, query: QuerySuppliersDto) {
-    const { materialType, approvalStatus, search } = query;
+    const { materialType, approvalStatus, search, includeInactive } = query;
     return this.prisma.supplier.findMany({
       where: {
         organizationId,
+        ...(includeInactive !== 'true' && { isActive: true }),
         ...(materialType && { materialTypes: { has: materialType } }),
         ...(approvalStatus && { approvalStatus }),
         ...(search && { name: { contains: search, mode: 'insensitive' } }),
       },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        updatedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
       orderBy: { name: 'asc' },
+    });
+  }
+
+  async updateSupplier(
+    id: string,
+    organizationId: string,
+    dto: UpdateSupplierDto,
+    userId?: string,
+  ) {
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id, organizationId },
+    });
+    if (!supplier) throw new NotFoundException('Supplier not found.');
+    const actor = userId
+      ? await this.prisma.employee
+          .findFirst({
+            where: { userId, organizationId },
+            select: { id: true },
+          })
+          .catch(() => null)
+      : null;
+    return this.prisma.supplier.update({
+      where: { id },
+      data: { ...dto, ...(actor && { updatedById: actor.id }) },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        updatedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  // ── Sourcing attachments (documents/certificates against a stage) ──
+
+  async addAttachment(
+    sourcingId: string,
+    organizationId: string,
+    dto: CreateSteelSourcingAttachmentDto,
+    userId?: string,
+  ) {
+    await this.findOrderOrThrow(sourcingId, organizationId);
+    const actor = userId
+      ? await this.prisma.employee
+          .findFirst({
+            where: { userId, organizationId },
+            select: { id: true },
+          })
+          .catch(() => null)
+      : null;
+    return this.prisma.steelSourcingAttachment.create({
+      data: {
+        organizationId,
+        sourcingId,
+        stage: dto.stage,
+        fileName: dto.fileName,
+        fileUrl: dto.fileUrl,
+        uploadedById: actor?.id,
+      },
+      include: {
+        uploadedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  async getAttachments(sourcingId: string, organizationId: string) {
+    await this.findOrderOrThrow(sourcingId, organizationId);
+    return this.prisma.steelSourcingAttachment.findMany({
+      where: { sourcingId, organizationId },
+      include: {
+        uploadedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async deleteAttachment(attachmentId: string, organizationId: string) {
+    const attachment = await this.prisma.steelSourcingAttachment.findFirst({
+      where: { id: attachmentId, organizationId },
+    });
+    if (!attachment) throw new NotFoundException('Attachment not found.');
+    await this.prisma.steelSourcingAttachment.delete({
+      where: { id: attachmentId },
+    });
+    return { success: true };
+  }
+
+  // Materials this supplier is admin-approved to supply, from Steel Configuration
+  // (SteelSupplierMaterial). Backs P02-A03's "which materials can this supplier
+  // provide" check without duplicating eligibility data onto the sourcing order.
+  async getSupplierEligibleMaterials(
+    supplierId: string,
+    organizationId: string,
+  ) {
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, organizationId },
+    });
+    if (!supplier) throw new NotFoundException('Supplier not found.');
+    return this.prisma.steelSupplierMaterial.findMany({
+      where: { supplierId, organizationId, isActive: true, isEligible: true },
+      include: { material: true },
     });
   }
 }

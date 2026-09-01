@@ -12,8 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p04/ScreenHeader";
-import { WorkflowIndicator } from "@/components/steel/p04/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
 import { ScreenSidebar } from "@/components/steel/p04/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p04/ContextSummary";
 import { ChargeProgress } from "@/components/steel/p04/ChargeProgress";
@@ -162,11 +163,12 @@ export function S1RequirementSelection({
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
+        code="P04"
           icon={ClipboardList}
           title="Requirement & Material Selection"
           subtitle="Confirm the production plan and select the released material for this charge."
         />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[0]} doneCount={doneCount} activeIndex={activeIdx} />
+        <WorkflowIndicator steps={SCREEN_TOP_STEPS[0]} doneCount={doneCount} activeIndex={activeIdx} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P04")?.color.bar} />
         <ContextSummary prep={prep} />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">

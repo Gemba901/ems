@@ -14,219 +14,33 @@ import {
   InformIntakePayload,
   CloseHandoverPayload,
 } from "@/services/steel-sourcing.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p02/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p02/ScreenHeader";
-import { ScreenSidebar } from "@/components/steel/p02/ScreenSidebar";
-import {
-  Loader2,
-  Truck,
-  Ship,
-  Bell,
-  ShieldCheck,
-  Check,
-  CheckCircle2,
-  Circle,
-  Lock,
-  Info,
-  ListChecks,
-  Lightbulb,
-  AlertTriangle,
-  ArrowRight,
-  PackageCheck,
-} from "lucide-react";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p02/screenMap";
+import { DocSection, DocGrid, DocField, SummaryBlock, ErrorBanner, P02Layout, P02InfoCard } from "@/components/steel/p02/document";
+import { AttachmentPanel } from "@/components/steel/p02/AttachmentPanel";
+import { Loader2, Ship, Check, ArrowRight, PackageCheck } from "lucide-react";
 
 // Same authority scope enforced server-side by the sourcing controller's
 // PO_ROLES guard on close-handover — kept identical rather than inventing a
 // new list.
 const PO_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-sm text-slate-800 font-medium">{value}</p>
-    </div>
-  );
-}
+// ── Order reference header (always visible, read-only) ──────────────────────
 
-// ── Persistent context (top of screen) ───────────────────────────────────────
-
-function ContextSummary({ order }: { order: SteelSourcingOrder }) {
+function OrderReferenceHeader({ order }: { order: SteelSourcingOrder }) {
   const winner = order.quotations.find((q) => q.supplierId === order.selectedSupplierId);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sourcing Order Context</CardTitle>
-        <p className="text-sm text-slate-500">From S1–S4 — read only.</p>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 text-sm">
-          <div>
-            <p className="text-xs text-slate-400">Sourcing Order</p>
-            <p className="font-medium text-slate-800">{order.sourcingNumber}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Production Plan</p>
-            <p className="font-medium text-slate-800">{order.plan?.planNumber ?? "—"}</p>
-          </div>
-          {order.plan?.customerName && (
-            <div>
-              <p className="text-xs text-slate-400">Customer</p>
-              <p className="font-medium text-slate-800">{order.plan.customerName}</p>
-            </div>
-          )}
-          <div>
-            <p className="text-xs text-slate-400">Material Type</p>
-            <p className="font-medium text-slate-800">{order.materialType?.replace(/_/g, " ") ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Selected Supplier</p>
-            <p className="font-medium text-slate-800">{winner?.supplier?.name ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">PO Number</p>
-            <p className="font-medium text-slate-800">{order.poNumber ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">PO Terms</p>
-            <p className="font-medium text-slate-800">{order.poDeliveryTerms ?? "—"}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Sidebar ───────────────────────────────────────────────────────────────
-
-function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A09" | "A10" | "A11" | "A12" | "done" }) {
-  return (
-    <ScreenSidebar>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            S5 covers delivery confirmation (A09), import logistics where applicable (A10), informing the intake team
-            (A11), and closing the sourcing handover (A12) — the final, Management-approved step.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Delivery</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {order.confirmedDispatchDate || order.confirmedArrivalDate ? (
-            <dl className="text-xs space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Dispatch</dt>
-                <dd className="text-slate-700 font-medium text-right">
-                  {order.confirmedDispatchDate ? new Date(order.confirmedDispatchDate).toLocaleDateString() : "—"}
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Arrival</dt>
-                <dd className="text-slate-700 font-medium text-right">
-                  {order.confirmedArrivalDate ? new Date(order.confirmedArrivalDate).toLocaleDateString() : "—"}
-                </dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="text-xs text-slate-400">Delivery details will appear here once confirmed.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            {subStep === "A09" && "Once delivery is confirmed, logistics (if applicable) or intake notification follows in this same screen."}
-            {subStep === "A10" && "Once logistics is recorded, the intake team can be informed."}
-            {subStep === "A11" && "Once the intake team is informed, a Management/Admin role can close the handover."}
-            {subStep === "A12" && "Closing the handover is final — it marks this sourcing order CLOSED."}
-            {subStep === "done" && "This sourcing order is closed. A P03 material intake can be created separately from P03's own workflow."}
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            {subStep === "A12" ? (
-              <>
-                <li>Only Management, Admin, or Super Admin can close the handover.</li>
-                <li>Closing does not automatically create a P03 material intake record.</li>
-              </>
-            ) : (
-              <>
-                <li>Import logistics fields only apply when the selected supplier is an import source.</li>
-                <li>All fields in this section are optional except where marked.</li>
-              </>
-            )}
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
-  );
-}
-
-// ── Shared step-section shell ────────────────────────────────────────────────
-
-function StepSection({
-  code, icon: Icon, title, status, children,
-}: { code: string; icon: typeof Truck; title: string; status: "done" | "active" | "locked"; children: React.ReactNode }) {
-  return (
-    <Card className={status === "locked" ? "opacity-60" : ""}>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={
-                "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 " +
-                (status === "done"
-                  ? "bg-emerald-100 text-emerald-600"
-                  : status === "active"
-                    ? "bg-blue-100 text-blue-600"
-                    : "bg-slate-100 text-slate-400")
-              }
-            >
-              <Icon className="h-4 w-4" />
-            </div>
-            <CardTitle className="text-sm">
-              <span className="text-slate-400 font-mono text-xs mr-1.5">{code}</span>
-              {title}
-            </CardTitle>
-          </div>
-          {status === "done" && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
-          {status === "active" && <Circle className="h-4 w-4 text-blue-500 fill-blue-100 shrink-0" />}
-          {status === "locked" && <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <DocGrid cols={4}>
+      <DocField label="Sourcing Order" value={order.sourcingNumber} source="From Purchase Order" />
+      <DocField label="Selected Supplier" value={winner?.supplier?.name} source="From Purchase Order" />
+      <DocField label="PO Number" value={order.poNumber} source="From Purchase Order" />
+      <DocField label="PO Terms" value={order.poDeliveryTerms} source="From Purchase Order" />
+    </DocGrid>
   );
 }
 
@@ -259,35 +73,24 @@ function DeliveryScheduleForm({ id, token, onDone }: { id: string; token: string
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {error && <ErrorBanner message={error} />}
+      <DocGrid>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Dispatch date <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input type="date" value={dispatch} onChange={(e) => setDispatch(e.target.value)} />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Dispatch date (optional)</label>
+          <Input className="h-8" type="date" value={dispatch} onChange={(e) => setDispatch(e.target.value)} />
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Expected arrival <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input type="date" value={arrival} onChange={(e) => setArrival(e.target.value)} />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Expected arrival (optional)</label>
+          <Input className="h-8" type="date" value={arrival} onChange={(e) => setArrival(e.target.value)} />
         </div>
-      </div>
+      </DocGrid>
       <div>
-        <label className="text-sm font-medium text-slate-700 block mb-1">
-          Vehicle / container info <span className="text-slate-400 font-normal">(optional)</span>
-        </label>
-        <Input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. MH-12-AB-1234 / container ID" />
+        <label className="text-xs font-medium text-muted-foreground block mb-1">Vehicle / container info (optional)</label>
+        <Input className="h-8" value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. MH-12-AB-1234 / container ID" />
       </div>
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Delivery Schedule →"}
         </Button>
       </div>
@@ -329,72 +132,50 @@ function LogisticsForm({
 
   if (isImport === false) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-sm px-3 py-2.5 flex items-start gap-2">
-          <Info className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
-          <span>
-            The selected supplier is not marked as an import source, so import logistics (bill of lading, country of
-            origin, port clearance) are not required for this order. The workflow still requires this step to be
-            confirmed before continuing.
-          </span>
-        </div>
+      <div className="space-y-3">
+        <SummaryBlock tone="neutral">
+          The selected supplier is not marked as an import source, so import logistics (bill of lading, country of
+          origin, port clearance) are not required for this order. The workflow still requires this step to be
+          confirmed before continuing.
+        </SummaryBlock>
         <div className="flex items-center justify-end">
-          <Button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate({})} className="gap-2">
+          <Button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate({})} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continue — Not Required for This Route →"}
           </Button>
         </div>
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
+        {error && <ErrorBanner message={error} />}
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {error && <ErrorBanner message={error} />}
       {isImport === true && (
-        <div className="rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm px-3 py-2 flex items-start gap-2">
-          <Ship className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>The selected supplier is an import source — import logistics details apply to this order.</span>
-        </div>
+        <SummaryBlock tone="info">
+          The selected supplier is an import source — import logistics details apply to this order.
+        </SummaryBlock>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+      <DocGrid>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Bill of lading <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={bol} onChange={(e) => setBol(e.target.value)} placeholder="Optional" />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Bill of lading (optional)</label>
+          <Input className="h-8" value={bol} onChange={(e) => setBol(e.target.value)} placeholder="Optional" />
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Country of origin <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="Optional" />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Country of origin (optional)</label>
+          <Input className="h-8" value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="Optional" />
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Port clearance status <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={clearance} onChange={(e) => setClearance(e.target.value)} placeholder="Optional" />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Port clearance status (optional)</label>
+          <Input className="h-8" value={clearance} onChange={(e) => setClearance(e.target.value)} placeholder="Optional" />
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Notes <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Notes (optional)</label>
+          <Input className="h-8" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
         </div>
-      </div>
+      </DocGrid>
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
+        <Button type="submit" disabled={mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
           {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Logistics →"}
         </Button>
       </div>
@@ -412,7 +193,7 @@ function InformIntakeForm({ id, token, onDone }: { id: string; token: string; on
   const mutation = useMutation({
     mutationFn: (payload: InformIntakePayload) => SteelSourcingService.informIntakeTeam(id, payload, token),
     onSuccess: () => {
-      toast("P03 intake team informed.", "success");
+      toast("P03 intake visibility updated.", "success");
       onDone();
     },
     onError: (err: Error) => setError(err.message),
@@ -425,26 +206,19 @@ function InformIntakeForm({ id, token, onDone }: { id: string; token: string; on
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
-      <p className="text-sm text-slate-500">
-        Notify the raw material intake (P03) team that this delivery is on its way so gate, weighbridge, yard, and
-        quality staff can prepare to receive it.
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {error && <ErrorBanner message={error} />}
+      <p className="text-sm text-muted-foreground">
+        This makes the delivery visible to Raw Material Intake (P03) so gate, weighbridge, yard, and quality staff
+        can prepare to receive it.
       </p>
       <div>
-        <label className="text-sm font-medium text-slate-700 block mb-1">
-          Notes for the intake team <span className="text-slate-400 font-normal">(optional)</span>
-        </label>
-        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. expected vehicle, special handling" />
+        <label className="text-xs font-medium text-muted-foreground block mb-1">Notes for intake (optional)</label>
+        <Input className="h-8" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. expected vehicle, special handling" />
       </div>
       <div className="flex items-center justify-end">
-        <Button type="submit" disabled={mutation.isPending} className="gap-2">
-          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Inform Intake Team →"}
+        <Button type="submit" disabled={mutation.isPending} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Ready for Intake →"}
         </Button>
       </div>
     </form>
@@ -457,25 +231,15 @@ function ConfirmCloseModal({
   onConfirm, onCancel, submitting,
 }: { onConfirm: () => void; onCancel: () => void; submitting: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-close-handover-title"
-        className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4"
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-            <ShieldCheck className="h-5 w-5 text-red-600" />
-          </div>
-          <h2 id="confirm-close-handover-title" className="text-base font-bold text-slate-900">Close this sourcing handover?</h2>
-        </div>
-        <p className="text-sm text-slate-500">
-          This is final. The sourcing order will move to <span className="font-medium text-slate-700">CLOSED</span> and
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-lg bg-background shadow-xl border border-input p-5 space-y-4">
+        <h2 className="text-sm font-semibold">Close this sourcing handover?</h2>
+        <p className="text-sm text-muted-foreground">
+          This is final. The sourcing order will move to <span className="font-medium text-foreground">CLOSED</span> and
           cannot be reverted from here.
         </p>
         <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting} className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950">
             Cancel
           </Button>
           <Button type="button" onClick={onConfirm} disabled={submitting} className="gap-2 bg-red-600 hover:bg-red-700">
@@ -510,49 +274,29 @@ function CloseHandoverPanel({
 
   if (!canClose) {
     return (
-      <Card className="border-amber-200 bg-amber-50/40">
-        <CardContent className="py-6 flex flex-col items-center text-center gap-3">
-          <div className="h-11 w-11 rounded-full bg-amber-100 flex items-center justify-center">
-            <Lock className="h-5 w-5 text-amber-600" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Management approval required to close handover</p>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm">
-              Only Management, Admin, or Super Admin roles can close this sourcing handover. Ask a Management or Admin
-              user to complete this step.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <SummaryBlock tone="warning">
+        <span className="font-medium">Management approval required to close handover.</span> Only Management, Admin,
+        or Super Admin roles can close this sourcing handover. Ask a Management or Admin user to complete this step.
+      </SummaryBlock>
     );
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-4 pt-6">
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
-        <p className="text-sm text-slate-500">
-          Closing the handover marks this sourcing order <span className="font-medium text-slate-700">CLOSED</span> and
-          ends the sourcing workflow. A P03 material intake is created separately, from P03&apos;s own workflow.
-        </p>
-        <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
-            Handover notes <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional context for this handover" />
-        </div>
-        <div className="flex items-center justify-end">
-          <Button type="button" onClick={() => setConfirming(true)} className="gap-2 bg-red-600 hover:bg-red-700">
-            <ShieldCheck className="h-4 w-4" />
-            Close Sourcing Handover
-          </Button>
-        </div>
-      </CardContent>
+    <div className="space-y-3">
+      {error && <ErrorBanner message={error} />}
+      <p className="text-sm text-muted-foreground">
+        Closing the handover marks this sourcing order <span className="font-medium text-foreground">CLOSED</span> and
+        ends the sourcing workflow. A P03 material intake is created separately, from P03&apos;s own workflow.
+      </p>
+      <div>
+        <label className="text-xs font-medium text-muted-foreground block mb-1">Handover notes (optional)</label>
+        <Input className="h-8" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional context for this handover" />
+      </div>
+      <div className="flex items-center justify-end">
+        <Button type="button" onClick={() => setConfirming(true)} className="gap-2 bg-red-600 hover:bg-red-700">
+          Complete P02 Handover
+        </Button>
+      </div>
       {confirming && (
         <ConfirmCloseModal
           submitting={mutation.isPending}
@@ -560,13 +304,13 @@ function CloseHandoverPanel({
           onConfirm={() => mutation.mutate({ handoverNotes: notes || undefined })}
         />
       )}
-    </Card>
+    </div>
   );
 }
 
-// ── S5 / final closed state ──────────────────────────────────────────────────
+// ── Final handover summary ───────────────────────────────────────────────────
 
-function ClosedState({ order }: { order: SteelSourcingOrder }) {
+function HandoverSummary({ order }: { order: SteelSourcingOrder }) {
   const winner = order.quotations.find((q) => q.supplierId === order.selectedSupplierId);
   const deliveryStatus =
     order.confirmedDispatchDate || order.confirmedArrivalDate
@@ -577,32 +321,27 @@ function ClosedState({ order }: { order: SteelSourcingOrder }) {
       : null;
 
   return (
-    <Card className="border-emerald-200">
-      <CardContent className="py-8 text-center space-y-4">
-        <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
-          <Check className="h-7 w-7 text-emerald-600" />
-        </div>
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Sourcing Order Closed</h2>
-          <p className="text-sm text-slate-500 mt-1">{order.sourcingNumber} is now CLOSED.</p>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm max-w-2xl mx-auto text-left">
-          <Field label="PO Number" value={order.poNumber} />
-          <Field label="Selected Supplier" value={winner?.supplier?.name} />
-          <Field label="Delivery Status" value={deliveryStatus} />
-          <Field label="Handover Notes" value={order.handoverNotes} />
-        </div>
-        <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 text-sm text-slate-600 max-w-md mx-auto">
-          This does not automatically create a P03 material intake record. Create one separately when the delivery
-          arrives at the gate.
-        </div>
-        <Link href={`/steel/p03/new?sourcingOrderId=${order.id}`}>
-          <Button className="gap-2">
-            Create Material Intake in P03 <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
-      </CardContent>
-    </Card>
+    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Check className="h-4 w-4 text-emerald-600" />
+        <p className="text-sm font-semibold text-emerald-900">Sourcing order {order.sourcingNumber} handed over to P03 — Raw Material Intake</p>
+      </div>
+      <DocGrid cols={4}>
+        <DocField label="PO Number" value={order.poNumber} />
+        <DocField label="Selected Supplier" value={winner?.supplier?.name} />
+        <DocField label="Delivery Status" value={deliveryStatus} />
+        <DocField label="Handover Notes" value={order.handoverNotes} />
+      </DocGrid>
+      <p className="text-xs text-emerald-800">
+        This does not automatically create a P03 material intake record. Create one separately when the delivery
+        arrives at the gate.
+      </p>
+      <Link href={`/steel/p03/new?sourcingOrderId=${order.id}`}>
+        <Button className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+          Create Material Intake in P03 <ArrowRight className="h-4 w-4" />
+        </Button>
+      </Link>
+    </div>
   );
 }
 
@@ -639,95 +378,104 @@ export function S5DeliveryHandover({ order, token }: { order: SteelSourcingOrder
   const winner = order.quotations.find((q) => q.supplierId === order.selectedSupplierId);
   const isImport = winner?.supplier ? winner.supplier.isImportSource : null;
 
-  const subStep: "A09" | "A10" | "A11" | "A12" | "done" = closed
-    ? "done"
-    : a09Status === "active"
-      ? "A09"
-      : a10Status === "active"
-        ? "A10"
-        : a11Status === "active"
-          ? "A11"
-          : "A12";
-
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
       <ScreenHeader
         icon={PackageCheck}
-        title="Delivery, Logistics & Handover"
+        title="Delivery & Handover"
         subtitle="Confirm delivery, prepare logistics where applicable, and hand the order over to Raw Material Intake."
+        backHref="/steel/p02"
+        backLabel="Back to Sourcing Orders"
+        code="P02"
       />
-      <WorkflowIndicator doneCount={closed ? 5 : 4} activeIndex={closed ? null : 4} />
-      <ContextSummary order={order} />
+      <WorkflowIndicator
+        steps={SCREENS}
+        doneCount={closed ? 5 : 4}
+        activeIndex={closed ? null : 4}
+        activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P02")!.color.bar}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        <div className="space-y-4">
-          {closed ? (
-            <ClosedState order={order} />
-          ) : (
-            <>
-              <StepSection code="P02-A09" icon={Truck} title="Confirm Delivery Schedule With Supplier" status={a09Status}>
-                {a09Status === "done" ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Dispatch date" value={order.confirmedDispatchDate ? new Date(order.confirmedDispatchDate).toLocaleDateString() : null} />
-                    <Field label="Expected arrival" value={order.confirmedArrivalDate ? new Date(order.confirmedArrivalDate).toLocaleDateString() : null} />
-                    <Field label="Vehicle / container" value={order.vehicleContainerInfo} />
-                  </div>
-                ) : a09Status === "active" ? (
-                  <DeliveryScheduleForm id={order.id} token={token} onDone={refresh} />
+      <P02Layout
+        info={
+          <P02InfoCard
+            alreadyProvided="Supplier, material, PO number, quantity, and required date, from the purchase order."
+            whatToEnter="Actual/confirmed delivery dates, logistics/import details where applicable, and handover notes."
+            beforeYouContinue={["Delivery schedule is confirmed.", "P03 has what it needs for intake."]}
+          />
+        }
+      >
+      <div className="rounded-lg border border-input bg-background shadow-sm p-4 md:p-6 space-y-5">
+        <DocSection number="—" title="Purchase Order Reference" first>
+          <OrderReferenceHeader order={order} />
+        </DocSection>
+
+        {closed ? (
+          <DocSection number="12" title="Handover">
+            <HandoverSummary order={order} />
+          </DocSection>
+        ) : (
+          <>
+            <DocSection number="09" title="Delivery Schedule" status={a09Status}>
+              {a09Status === "done" ? (
+                <DocGrid cols={3}>
+                  <DocField label="Dispatch date" value={order.confirmedDispatchDate ? new Date(order.confirmedDispatchDate).toLocaleDateString() : null} />
+                  <DocField label="Expected arrival" value={order.confirmedArrivalDate ? new Date(order.confirmedArrivalDate).toLocaleDateString() : null} />
+                  <DocField label="Vehicle / container" value={order.vehicleContainerInfo} />
+                </DocGrid>
+              ) : a09Status === "active" ? (
+                <DeliveryScheduleForm id={order.id} token={token} onDone={refresh} />
+              ) : (
+                <p className="text-sm text-muted-foreground">Delivery schedule needed — confirm dispatch/arrival to continue.</p>
+              )}
+            </DocSection>
+
+            <DocSection number="10" title="Logistics" status={a10Status} action={isImport === true ? <Ship className="h-3.5 w-3.5 text-blue-500" /> : undefined}>
+              {a10Status === "done" ? (
+                order.billOfLading || order.countryOfOrigin || order.portClearanceStatus ? (
+                  <DocGrid cols={3}>
+                    <DocField label="Bill of lading" value={order.billOfLading} />
+                    <DocField label="Country of origin" value={order.countryOfOrigin} />
+                    <DocField label="Port clearance" value={order.portClearanceStatus} />
+                  </DocGrid>
                 ) : (
-                  <p className="text-sm text-slate-400">Complete the previous step first.</p>
-                )}
-              </StepSection>
-
-              <StepSection code="P02-A10" icon={Ship} title="Prepare Import Logistics (If Applicable)" status={a10Status}>
-                {a10Status === "done" ? (
-                  order.billOfLading || order.countryOfOrigin || order.portClearanceStatus ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Bill of lading" value={order.billOfLading} />
-                      <Field label="Country of origin" value={order.countryOfOrigin} />
-                      <Field label="Port clearance" value={order.portClearanceStatus} />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400">Not required for this route — step completed.</p>
-                  )
-                ) : a10Status === "active" ? (
-                  <LogisticsForm id={order.id} token={token} isImport={isImport} onDone={refresh} />
-                ) : (
-                  <p className="text-sm text-slate-400">Complete the previous step first.</p>
-                )}
-              </StepSection>
-
-              <StepSection code="P02-A11" icon={Bell} title="Inform Raw Material Intake Team" status={a11Status}>
-                {a11Status === "done" ? (
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-emerald-50 text-emerald-700">P03 Intake Team Informed</Badge>
-                    <Field label="" value={order.intakeInformedAt ? new Date(order.intakeInformedAt).toLocaleString() : null} />
-                  </div>
-                ) : a11Status === "active" ? (
-                  <InformIntakeForm id={order.id} token={token} onDone={refresh} />
-                ) : (
-                  <p className="text-sm text-slate-400">Complete the previous step first.</p>
-                )}
-              </StepSection>
-
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-1 px-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-red-500" />
-                  <p className="text-xs font-medium text-red-500 uppercase tracking-wide">Final Closing / Authority Gate</p>
+                  <p className="text-sm text-muted-foreground">Not required for this route — section completed.</p>
+                )
+              ) : a10Status === "active" ? (
+                <LogisticsForm id={order.id} token={token} isImport={isImport} onDone={refresh} />
+              ) : (
+                <p className="text-sm text-muted-foreground">Confirm the delivery schedule above before logistics.</p>
+              )}
+              {a09Status === "done" && (
+                <div className="mt-3">
+                  <AttachmentPanel sourcingId={order.id} stage="A09_DELIVERY_CONFIRMED" token={token} label="Delivery & Shipping Documents" />
                 </div>
-                <StepSection code="P02-A12" icon={ShieldCheck} title="Close Sourcing Handover to Intake" status={a12Status}>
-                  {a12Status === "active" ? (
-                    <CloseHandoverPanel id={order.id} token={token} canClose={canClose} onDone={refresh} />
-                  ) : (
-                    <p className="text-sm text-slate-400">Complete the previous step first.</p>
-                  )}
-                </StepSection>
-              </div>
-            </>
-          )}
-        </div>
-        <Sidebar order={order} subStep={subStep} />
+              )}
+            </DocSection>
+
+            <DocSection number="11" title="Intake Preparation" status={a11Status}>
+              {a11Status === "done" ? (
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-emerald-50 text-emerald-700">Visible to P03 Intake</Badge>
+                  {order.intakeInformedAt && <span className="text-xs text-muted-foreground">{new Date(order.intakeInformedAt).toLocaleString()}</span>}
+                </div>
+              ) : a11Status === "active" ? (
+                <InformIntakeForm id={order.id} token={token} onDone={refresh} />
+              ) : (
+                <p className="text-sm text-muted-foreground">Logistics required — complete it above before informing intake.</p>
+              )}
+            </DocSection>
+
+            <DocSection number="12" title="Handover" status={a12Status}>
+              {a12Status === "active" ? (
+                <CloseHandoverPanel id={order.id} token={token} canClose={canClose} onDone={refresh} />
+              ) : a12Status !== "done" ? (
+                <p className="text-sm text-muted-foreground">Intake preparation required — confirm it above to continue.</p>
+              ) : null}
+            </DocSection>
+          </>
+        )}
       </div>
+      </P02Layout>
     </div>
   );
 }

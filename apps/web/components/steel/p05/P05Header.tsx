@@ -17,7 +17,7 @@ export function P05Header() {
 
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-xl bg-red-600 flex items-center justify-center shrink-0">
+          <div className="h-11 w-11 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
             <Flame className="h-5 w-5 text-white" />
           </div>
           <div>

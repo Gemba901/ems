@@ -20,6 +20,8 @@ import {
   KeyRound, Copy, Check, AlertCircle,
 } from "lucide-react";
 import { CalendarService, EVENT_COLOR_CONFIG } from "@/services/calendar.service";
+import EmployeeDwmsPanel from "@/app/dwms/components/EmployeeDwmsPanel";
+import { useOrgModules } from "@/hooks/useOrgModules";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -141,7 +143,7 @@ const ROLE_OPTIONS = [
   { id: 5, name: "EMPLOYEE" },
 ];
 
-type Tab = "profile" | "master-data" | "activity";
+type Tab = "profile" | "master-data" | "dwms" | "activity";
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -150,6 +152,7 @@ export default function EmployeeDetailPage() {
   const { accessToken, user: viewer } = useAuthStore();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { hasModule } = useOrgModules();
 
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [form, setForm] = useState<UpdateEmployeeEmsPayload>({});
@@ -171,6 +174,7 @@ export default function EmployeeDetailPage() {
   const viewerRole = viewer?.roleLevel;
   const isAdminOrHr = [Role.ADMIN, Role.SUPER_ADMIN, Role.HR].includes(viewerRole as Role);
   const isAdminOnly = [Role.ADMIN, Role.SUPER_ADMIN].includes(viewerRole as Role);
+  const canUseDwms = hasModule("DWMS");
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -360,6 +364,7 @@ export default function EmployeeDetailPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "master-data", label: "Master Data" },
+    ...(canUseDwms ? [{ id: "dwms" as const, label: "DWMS" }] : []),
     { id: "activity", label: "Activity" },
   ];
 
@@ -933,6 +938,15 @@ export default function EmployeeDetailPage() {
               )}
             </div>
           </div>
+        )}
+
+        {canUseDwms && activeTab === "dwms" && employee && accessToken && id && (
+          <EmployeeDwmsPanel
+            employeeId={id}
+            accessToken={accessToken}
+            jobTitle={employee.jobTitle}
+            canManageActivities={isAdminOrHr}
+          />
         )}
 
         {/* ── Activity tab ──────────────────────────────────────────────── */}

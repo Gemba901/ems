@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/contexts/toast.context";
 import {
@@ -11,175 +12,30 @@ import {
   CollectQuotationsPayload,
   SelectSupplierPayload,
 } from "@/services/steel-sourcing.service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SteelConfigService } from "@/services/steel-config.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { WorkflowIndicator } from "@/components/steel/p02/WorkflowIndicator";
-import { ScreenHeader } from "@/components/steel/p02/ScreenHeader";
-import { ScreenSidebar } from "@/components/steel/p02/ScreenSidebar";
-import {
-  Loader2,
-  Scale,
-  Trophy,
-  Plus,
-  Trash2,
-  Info,
-  ListChecks,
-  Lightbulb,
-  AlertTriangle,
-  ArrowRight,
-  Users,
-  Pencil,
-} from "lucide-react";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
+import { SCREENS } from "@/components/steel/p02/screenMap";
+import { DocSection, DocGrid, DocField, SummaryBlock, StickyActions, ErrorBanner, P02Layout, P02InfoCard } from "@/components/steel/p02/document";
+import { SupplierComparisonTable } from "@/components/steel/p02/supplierTable";
+import { useEligibleSuppliers } from "@/components/steel/p02/useEligibleSuppliers";
+import { AttachmentPanel } from "@/components/steel/p02/AttachmentPanel";
+import { Loader2, Scale, Trophy, Plus, Trash2, AlertTriangle, ArrowRight, Users, Pencil } from "lucide-react";
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
+// ── Order reference header (always visible, read-only) ──────────────────────
+
+function OrderReferenceHeader({ order }: { order: SteelSourcingOrder }) {
   return (
-    <div>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-sm text-slate-800 font-medium">{value}</p>
-    </div>
-  );
-}
-
-// ── Persistent context (top of screen) ───────────────────────────────────────
-
-function ContextSummary({ order }: { order: SteelSourcingOrder }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sourcing Order Context</CardTitle>
-        <p className="text-sm text-slate-500">From S1/S2 — read only.</p>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 text-sm">
-          <div>
-            <p className="text-xs text-slate-400">Sourcing Order</p>
-            <p className="font-medium text-slate-800">{order.sourcingNumber}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Production Plan</p>
-            <p className="font-medium text-slate-800">{order.plan?.planNumber ?? "—"}</p>
-          </div>
-          {order.plan?.customerName && (
-            <div>
-              <p className="text-xs text-slate-400">Customer</p>
-              <p className="font-medium text-slate-800">{order.plan.customerName}</p>
-            </div>
-          )}
-          <div>
-            <p className="text-xs text-slate-400">Material Type</p>
-            <p className="font-medium text-slate-800">{order.materialType?.replace(/_/g, " ") ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Checked Supplier</p>
-            <p className="font-medium text-slate-800">{order.supplier?.name ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400">Supplier Risk</p>
-            <p className="font-medium text-slate-800">{order.supplierRiskLevel ?? "—"}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Sidebar ───────────────────────────────────────────────────────────────
-
-function Sidebar({ order, subStep }: { order: SteelSourcingOrder; subStep: "A05" | "A06" | "done" }) {
-  return (
-    <ScreenSidebar>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            About this step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            S3 covers P02-A05 (collect quotations from candidate suppliers) and P02-A06 (select the winning supplier
-            directly from the comparison). This is the pivotal sourcing decision for the order.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Quotations</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {order.quotations.length > 0 ? (
-            <dl className="text-xs space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Collected</dt>
-                <dd className="text-slate-700 font-medium text-right">{order.quotations.length}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-slate-400">Lowest Price</dt>
-                <dd className="text-slate-700 font-medium text-right">
-                  {order.quotations[0].price} {order.quotations[0].currency}
-                </dd>
-              </div>
-              {order.selectedSupplierId && (
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-slate-400">Selected</dt>
-                  <dd className="text-slate-700 font-medium text-right truncate max-w-[160px]">
-                    {order.quotations.find((q) => q.supplierId === order.selectedSupplierId)?.supplier?.name ?? "—"}
-                  </dd>
-                </div>
-              )}
-            </dl>
-          ) : (
-            <p className="text-xs text-slate-400">Quotations will appear here once collected.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-purple-600" />
-            What happens next
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            {subStep === "A05"
-              ? "Once at least one quotation is saved, you'll select the winning supplier directly from the comparison in this same screen."
-              : subStep === "A06"
-                ? "Once a supplier is selected, this order moves to S4 — Specification & Purchase Order."
-                : "Continue to S4 — Specification & Purchase Order."}
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-xs text-slate-500 space-y-1.5 list-disc pl-4">
-            {subStep === "A05" ? (
-              <>
-                <li>Saving quotations replaces the entire quotation set — include every supplier you want to compare.</li>
-                <li>Quantity, delivery date, payment terms, and quality/risk notes are optional but help comparison.</li>
-              </>
-            ) : (
-              <>
-                <li>Only suppliers with a saved quotation can be selected.</li>
-                <li>QCD comparison notes are optional context for why this supplier was chosen.</li>
-              </>
-            )}
-          </ul>
-        </CardContent>
-      </Card>
-    </ScreenSidebar>
+    <DocGrid cols={4}>
+      <DocField label="Sourcing Order" value={order.sourcingNumber} />
+      <DocField label="Production Plan" value={order.plan?.planNumber} />
+      <DocField label="Material Type" value={order.materialType?.replace(/_/g, " ")} />
+      <DocField label="Checked Supplier" value={order.supplier?.name} />
+    </DocGrid>
   );
 }
 
@@ -233,118 +89,108 @@ function QuotationEntryForm({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{hasExisting ? "Revise Quotations" : "Collect Quotations"}</CardTitle>
-        <p className="text-sm text-slate-500">
-          Add a row per supplier quote. <span className="font-medium text-slate-600">Saving replaces the entire quotation set</span> — include every supplier you want to compare.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Add a row per supplier quote. <span className="font-medium text-foreground">Saving replaces the entire quotation set</span> — include every supplier you want to compare.
+      </p>
+      {error && <ErrorBanner message={error} />}
 
-        <div className="overflow-x-auto -mx-2">
-          <table className="w-full text-sm border-collapse min-w-[820px]">
-            <thead>
-              <tr className="text-left text-xs text-slate-400 border-b border-slate-200">
-                <th className="py-2 px-2 font-medium">Supplier</th>
-                <th className="py-2 px-2 font-medium">Price</th>
-                <th className="py-2 px-2 font-medium">Currency</th>
-                <th className="py-2 px-2 font-medium">Qty Available</th>
-                <th className="py-2 px-2 font-medium">Delivery Date</th>
-                <th className="py-2 px-2 font-medium">Payment Terms</th>
-                <th className="py-2 px-2 font-medium">Quality/Risk Notes</th>
-                <th className="py-2 px-2 font-medium w-8" />
+      <div className="overflow-x-auto -mx-2">
+        <table className="w-full text-sm border-collapse min-w-[820px]">
+          <thead>
+            <tr className="text-left text-xs text-muted-foreground border-b border-input">
+              <th className="py-2 px-2 font-medium">Supplier</th>
+              <th className="py-2 px-2 font-medium">Price</th>
+              <th className="py-2 px-2 font-medium">Currency</th>
+              <th className="py-2 px-2 font-medium">Qty Available</th>
+              <th className="py-2 px-2 font-medium">Delivery Date</th>
+              <th className="py-2 px-2 font-medium">Payment Terms</th>
+              <th className="py-2 px-2 font-medium">Quality/Risk Notes</th>
+              <th className="py-2 px-2 font-medium w-8" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className="border-b border-input/50 last:border-0">
+                <td className="py-2 px-2">
+                  <select
+                    className="h-8 w-full min-w-[160px] rounded-md border border-input bg-transparent px-2 text-sm"
+                    value={row.supplierId}
+                    onChange={(e) => update(i, { supplierId: e.target.value })}
+                  >
+                    <option value="">Supplier...</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="py-2 px-2">
+                  <Input
+                    type="number" step="0.01" min="0" className="h-8 w-24"
+                    value={row.price || ""} onChange={(e) => update(i, { price: Number(e.target.value) })}
+                  />
+                </td>
+                <td className="py-2 px-2">
+                  <Input
+                    className="h-8 w-20" placeholder="USD"
+                    value={row.currency ?? ""} onChange={(e) => update(i, { currency: e.target.value || undefined })}
+                  />
+                </td>
+                <td className="py-2 px-2">
+                  <Input
+                    type="number" step="0.01" className="h-8 w-24"
+                    value={row.quantityAvailable ?? ""} onChange={(e) => update(i, { quantityAvailable: e.target.value ? Number(e.target.value) : undefined })}
+                  />
+                </td>
+                <td className="py-2 px-2">
+                  <Input
+                    type="date" className="h-8 w-36"
+                    value={row.deliveryDate ?? ""} onChange={(e) => update(i, { deliveryDate: e.target.value || undefined })}
+                  />
+                </td>
+                <td className="py-2 px-2">
+                  <Input
+                    className="h-8 w-32" placeholder="Optional"
+                    value={row.paymentTerms ?? ""} onChange={(e) => update(i, { paymentTerms: e.target.value || undefined })}
+                  />
+                </td>
+                <td className="py-2 px-2">
+                  <Input
+                    className="h-8 w-36" placeholder="Optional"
+                    value={row.qualityRiskNotes ?? ""} onChange={(e) => update(i, { qualityRiskNotes: e.target.value || undefined })}
+                  />
+                </td>
+                <td className="py-2 px-2">
+                  <button
+                    type="button"
+                    onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
+                    disabled={rows.length === 1}
+                    className="text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => (
-                <tr key={i} className="border-b border-slate-100 last:border-0">
-                  <td className="py-2 px-2">
-                    <select
-                      className="h-8 w-full min-w-[160px] rounded-lg border border-input bg-transparent px-2 text-sm"
-                      value={row.supplierId}
-                      onChange={(e) => update(i, { supplierId: e.target.value })}
-                    >
-                      <option value="">Supplier...</option>
-                      {suppliers.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="py-2 px-2">
-                    <Input
-                      type="number" step="0.01" min="0" className="w-24"
-                      value={row.price || ""} onChange={(e) => update(i, { price: Number(e.target.value) })}
-                    />
-                  </td>
-                  <td className="py-2 px-2">
-                    <Input
-                      className="w-20" placeholder="USD"
-                      value={row.currency ?? ""} onChange={(e) => update(i, { currency: e.target.value || undefined })}
-                    />
-                  </td>
-                  <td className="py-2 px-2">
-                    <Input
-                      type="number" step="0.01" className="w-24"
-                      value={row.quantityAvailable ?? ""} onChange={(e) => update(i, { quantityAvailable: e.target.value ? Number(e.target.value) : undefined })}
-                    />
-                  </td>
-                  <td className="py-2 px-2">
-                    <Input
-                      type="date" className="w-36"
-                      value={row.deliveryDate ?? ""} onChange={(e) => update(i, { deliveryDate: e.target.value || undefined })}
-                    />
-                  </td>
-                  <td className="py-2 px-2">
-                    <Input
-                      className="w-32" placeholder="Optional"
-                      value={row.paymentTerms ?? ""} onChange={(e) => update(i, { paymentTerms: e.target.value || undefined })}
-                    />
-                  </td>
-                  <td className="py-2 px-2">
-                    <Input
-                      className="w-36" placeholder="Optional"
-                      value={row.qualityRiskNotes ?? ""} onChange={(e) => update(i, { qualityRiskNotes: e.target.value || undefined })}
-                    />
-                  </td>
-                  <td className="py-2 px-2">
-                    <button
-                      type="button"
-                      onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
-                      disabled={rows.length === 1}
-                      className="text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setRows((prev) => [...prev, emptyRow()])}>
-          <Plus className="h-3.5 w-3.5" /> Add quotation row
-        </Button>
+      <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setRows((prev) => [...prev, emptyRow()])}>
+        <Plus className="h-3.5 w-3.5" /> Add quotation row
+      </Button>
 
-        <div className="flex items-center justify-end gap-2">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-          <Button type="button" disabled={mutation.isPending} onClick={handleSave} className="gap-2">
-            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save ${rows.filter((r) => r.supplierId && r.price > 0).length || ""} Quotation${rows.filter((r) => r.supplierId && r.price > 0).length === 1 ? "" : "s"} →`}
+      <div className="flex items-center justify-end gap-2">
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel} className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950">
+            Cancel
           </Button>
-        </div>
-      </CardContent>
-    </Card>
+        )}
+        <Button type="button" disabled={mutation.isPending} onClick={handleSave} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save ${rows.filter((r) => r.supplierId && r.price > 0).length || ""} Quotation${rows.filter((r) => r.supplierId && r.price > 0).length === 1 ? "" : "s"} →`}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -361,63 +207,84 @@ function ConfirmSupplierSelectionModal({
 }) {
   const supplierName = quotation?.supplier?.name ?? "this supplier";
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-supplier-selection-title"
-        className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-4"
-      >
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-lg bg-background shadow-xl border border-input p-5 space-y-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
             <Trophy className="h-5 w-5 text-blue-600" />
           </div>
           <div>
-            <h2 id="confirm-supplier-selection-title" className="text-base font-bold text-slate-900">Confirm supplier selection?</h2>
-            <p className="text-xs text-slate-400">Sourcing order {sourcingNumber}</p>
+            <h2 className="text-sm font-semibold">Confirm supplier selection?</h2>
+            <p className="text-xs text-muted-foreground">Sourcing order {sourcingNumber}</p>
           </div>
         </div>
-        <p className="text-sm text-slate-500">
-          This will select <span className="font-medium text-slate-700">{supplierName}</span> for this sourcing order and
+        <p className="text-sm text-muted-foreground">
+          This will select <span className="font-medium text-foreground">{supplierName}</span> for this sourcing order and
           continue the procurement process. Once confirmed, this decision cannot be changed from here.
         </p>
         {quotation && (
-          <dl className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm grid grid-cols-2 gap-x-3 gap-y-1.5">
-            <div>
-              <dt className="text-xs text-slate-400">Quoted Price</dt>
-              <dd className="font-medium text-slate-800">{quotation.price} {quotation.currency}</dd>
-            </div>
-            {quotation.quantityAvailable != null && (
-              <div>
-                <dt className="text-xs text-slate-400">Qty Available</dt>
-                <dd className="font-medium text-slate-800">{quotation.quantityAvailable}</dd>
-              </div>
-            )}
-            {quotation.deliveryDate && (
-              <div>
-                <dt className="text-xs text-slate-400">Delivery Date</dt>
-                <dd className="font-medium text-slate-800">{new Date(quotation.deliveryDate).toLocaleDateString()}</dd>
-              </div>
-            )}
-            {quotation.paymentTerms && (
-              <div>
-                <dt className="text-xs text-slate-400">Payment Terms</dt>
-                <dd className="font-medium text-slate-800">{quotation.paymentTerms}</dd>
-              </div>
-            )}
-          </dl>
+          <DocGrid>
+            <DocField label="Quoted Price" value={`${quotation.price} ${quotation.currency}`} />
+            <DocField label="Qty Available" value={quotation.quantityAvailable} />
+            <DocField label="Delivery Date" value={quotation.deliveryDate ? new Date(quotation.deliveryDate).toLocaleDateString() : null} />
+            <DocField label="Payment Terms" value={quotation.paymentTerms} />
+          </DocGrid>
         )}
         <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting} className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950">
             Cancel
           </Button>
-          <Button type="button" onClick={onConfirm} disabled={submitting} className="gap-2">
+          <Button type="button" onClick={onConfirm} disabled={submitting} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Supplier Selection"}
           </Button>
         </div>
       </div>
     </div>
   );
+}
+
+// Weighted Quality/Cost/Delivery score per quotation, using the org's configured
+// QCD criteria (SteelQcdCriteria) — never a hard-coded formula. Quality/Delivery
+// come from the supplier's existing scores; Cost is derived from the quoted price
+// (lowest price among the collected quotations scores highest). Returns null
+// scores wherever the underlying data isn't available, rather than inventing one.
+function useQcdScores(order: SteelSourcingOrder, token: string) {
+  const qcdQuery = useQuery({
+    queryKey: ["steel-config-qcd-criteria"],
+    queryFn: () => SteelConfigService.listQcdCriteria(token),
+    enabled: !!token,
+  });
+  const criteria = (qcdQuery.data ?? []).find((c) => c.isActive) ?? null;
+
+  const prices = order.quotations.map((q) => q.price);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+
+  const scores = new Map<string, { quality: number | null; cost: number | null; delivery: number | null; overall: number | null }>();
+  for (const q of order.quotations) {
+    const quality = q.supplier?.qualityScore ?? null;
+    const delivery = q.supplier?.deliveryScore ?? null;
+    const cost = maxPrice === minPrice ? 100 : Math.round(((maxPrice - q.price) / (maxPrice - minPrice)) * 100);
+    let overall: number | null = null;
+    if (criteria) {
+      const parts: { value: number; weight: number }[] = [{ value: cost, weight: criteria.costWeight }];
+      if (quality != null) parts.push({ value: quality, weight: criteria.qualityWeight });
+      if (delivery != null) parts.push({ value: delivery, weight: criteria.deliveryWeight });
+      const totalWeight = parts.reduce((sum, p) => sum + p.weight, 0);
+      overall = totalWeight > 0 ? Math.round(parts.reduce((sum, p) => sum + p.value * p.weight, 0) / totalWeight) : null;
+    }
+    scores.set(q.supplierId, { quality, cost, delivery, overall });
+  }
+
+  const recommended = criteria
+    ? [...scores.entries()].reduce<{ supplierId: string; overall: number } | null>((best, [supplierId, s]) => {
+        if (s.overall == null) return best;
+        if (!best || s.overall > best.overall) return { supplierId, overall: s.overall };
+        return best;
+      }, null)
+    : null;
+
+  return { criteria, scores, recommended, isLoading: qcdQuery.isLoading };
 }
 
 function QuotationComparison({
@@ -429,6 +296,8 @@ function QuotationComparison({
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const decided = order.stage === "A06_SUPPLIER_SELECTED";
+  const { criteria, scores, recommended } = useQcdScores(order, token);
+  const recommendedSupplier = recommended ? order.quotations.find((q) => q.supplierId === recommended.supplierId)?.supplier : null;
 
   const mutation = useMutation({
     mutationFn: (payload: SelectSupplierPayload) => SteelSourcingService.selectSupplier(order.id, payload, token),
@@ -455,119 +324,119 @@ function QuotationComparison({
   const selectedQuotation = order.quotations.find((q) => q.supplierId === selected);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Scale className="h-4 w-4 text-blue-600" />
-              Quote Comparison
-            </CardTitle>
-            <p className="text-sm text-slate-500">
-              {order.quotations.length} quotation{order.quotations.length === 1 ? "" : "s"} collected.
-              {!decided && " Select the winning supplier below."}
-            </p>
-          </div>
-          {canRevise && !decided && (
-            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={onRevise}>
-              <Pencil className="h-3.5 w-3.5" /> Revise quotations
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-sm text-muted-foreground">
+          {order.quotations.length} quotation{order.quotations.length === 1 ? "" : "s"} collected.
+          {!decided && " Select the winning supplier below."}
+        </p>
+        {canRevise && !decided && (
+          <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={onRevise}>
+            <Pencil className="h-3.5 w-3.5" /> Revise quotations
+          </Button>
         )}
+      </div>
+      {error && <ErrorBanner message={error} />}
 
-        <div className="overflow-x-auto -mx-2">
-          <table className="w-full text-sm border-collapse min-w-[760px]">
-            <thead>
-              <tr className="text-left text-xs text-slate-400 border-b border-slate-200">
-                {!decided && <th className="py-2 px-2 font-medium w-10" />}
-                <th className="py-2 px-2 font-medium">Supplier</th>
-                <th className="py-2 px-2 font-medium">Price</th>
-                <th className="py-2 px-2 font-medium">Qty Available</th>
-                <th className="py-2 px-2 font-medium">Delivery Date</th>
-                <th className="py-2 px-2 font-medium">Payment Terms</th>
-                <th className="py-2 px-2 font-medium">Quality/Risk Notes</th>
-                {decided && <th className="py-2 px-2 font-medium" />}
-              </tr>
-            </thead>
-            <tbody>
-              {order.quotations.map((q) => {
-                const isWinner = q.supplierId === order.selectedSupplierId;
-                const isChosenPreConfirm = !decided && q.supplierId === selected;
-                return (
-                  <tr
-                    key={q.id}
-                    onClick={() => !decided && setSelected(q.supplierId)}
-                    className={
-                      "border-b border-slate-100 last:border-0 " +
-                      (!decided ? "cursor-pointer hover:bg-slate-50 " : "") +
-                      (isWinner ? "bg-emerald-50" : isChosenPreConfirm ? "bg-blue-50" : "") +
-                      (decided && !isWinner ? " opacity-50" : "")
-                    }
-                  >
-                    {!decided && (
-                      <td className="py-2.5 px-2">
-                        <input
-                          type="radio"
-                          name="selected-supplier"
-                          checked={selected === q.supplierId}
-                          onChange={() => setSelected(q.supplierId)}
-                        />
-                      </td>
-                    )}
-                    <td className="py-2.5 px-2 font-medium text-slate-900">
-                      <div className="flex items-center gap-1.5">
-                        {q.supplier?.name ?? "—"}
-                        {isWinner && (
-                          <Badge className="bg-emerald-100 text-emerald-700 gap-1">
-                            <Trophy className="h-3 w-3" /> Selected
-                          </Badge>
-                        )}
-                      </div>
+      {!criteria && (
+        <SummaryBlock tone="neutral">
+          No QCD evaluation criteria configured yet — showing price-based comparison only. Configure Quality/Cost/Delivery
+          weights in Steel Configuration to see a weighted overall score.
+        </SummaryBlock>
+      )}
+
+      {criteria && recommendedSupplier && !decided && (
+        <SummaryBlock tone="info">
+          <span className="font-medium">Recommended Supplier:</span> {recommendedSupplier.name} — highest overall QCD score
+          using the configured weights (Quality {criteria.qualityWeight}, Cost {criteria.costWeight}, Delivery {criteria.deliveryWeight}).
+        </SummaryBlock>
+      )}
+
+      <div className="overflow-x-auto -mx-2">
+        <table className="w-full text-sm border-collapse min-w-[760px]">
+          <thead>
+            <tr className="text-left text-xs text-muted-foreground border-b border-input">
+              {!decided && <th className="py-2 px-2 font-medium w-10" />}
+              <th className="py-2 px-2 font-medium">Supplier</th>
+              <th className="py-2 px-2 font-medium">Price</th>
+              <th className="py-2 px-2 font-medium">Qty Available</th>
+              <th className="py-2 px-2 font-medium">Delivery Date</th>
+              {criteria && <th className="py-2 px-2 font-medium text-right">Quality</th>}
+              {criteria && <th className="py-2 px-2 font-medium text-right">Cost</th>}
+              {criteria && <th className="py-2 px-2 font-medium text-right">Delivery</th>}
+              {criteria && <th className="py-2 px-2 font-medium text-right">Overall</th>}
+              {decided && <th className="py-2 px-2 font-medium" />}
+            </tr>
+          </thead>
+          <tbody>
+            {order.quotations.map((q) => {
+              const isWinner = q.supplierId === order.selectedSupplierId;
+              const isChosenPreConfirm = !decided && q.supplierId === selected;
+              const score = scores.get(q.supplierId);
+              return (
+                <tr
+                  key={q.id}
+                  onClick={() => !decided && setSelected(q.supplierId)}
+                  className={
+                    "border-b border-input/50 last:border-0 " +
+                    (!decided ? "cursor-pointer hover:bg-muted/40 " : "") +
+                    (isWinner ? "bg-emerald-50" : isChosenPreConfirm ? "bg-blue-50" : "") +
+                    (decided && !isWinner ? " opacity-50" : "")
+                  }
+                >
+                  {!decided && (
+                    <td className="py-2.5 px-2">
+                      <input
+                        type="radio"
+                        name="selected-supplier"
+                        checked={selected === q.supplierId}
+                        onChange={() => setSelected(q.supplierId)}
+                      />
                     </td>
-                    <td className="py-2.5 px-2 font-semibold text-slate-800">{q.price} {q.currency}</td>
-                    <td className="py-2.5 px-2 text-slate-600">{q.quantityAvailable ?? "—"}</td>
-                    <td className="py-2.5 px-2 text-slate-600">{q.deliveryDate ? new Date(q.deliveryDate).toLocaleDateString() : "—"}</td>
-                    <td className="py-2.5 px-2 text-slate-600">{q.paymentTerms ?? "—"}</td>
-                    <td className="py-2.5 px-2 text-slate-600">{q.qualityRiskNotes ?? "—"}</td>
-                    {decided && <td className="py-2.5 px-2" />}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                  <td className="py-2.5 px-2 font-medium text-foreground">
+                    <div className="flex items-center gap-1.5">
+                      {q.supplier?.name ?? "—"}
+                      {isWinner && (
+                        <Badge className="bg-emerald-100 text-emerald-700 gap-1">
+                          <Trophy className="h-3 w-3" /> Selected
+                        </Badge>
+                      )}
+                      {!decided && recommended?.supplierId === q.supplierId && (
+                        <Badge className="bg-blue-100 text-blue-700">Recommended</Badge>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-2 font-semibold text-foreground">{q.price} {q.currency}</td>
+                  <td className="py-2.5 px-2 text-muted-foreground">{q.quantityAvailable ?? "—"}</td>
+                  <td className="py-2.5 px-2 text-muted-foreground">{q.deliveryDate ? new Date(q.deliveryDate).toLocaleDateString() : "—"}</td>
+                  {criteria && <td className="py-2.5 px-2 text-right text-muted-foreground">{score?.quality ?? "—"}</td>}
+                  {criteria && <td className="py-2.5 px-2 text-right text-muted-foreground">{score?.cost ?? "—"}</td>}
+                  {criteria && <td className="py-2.5 px-2 text-right text-muted-foreground">{score?.delivery ?? "—"}</td>}
+                  {criteria && <td className="py-2.5 px-2 text-right font-semibold text-foreground">{score?.overall ?? "—"}</td>}
+                  {decided && <td className="py-2.5 px-2" />}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-        {!decided && (
-          <div className="space-y-3 pt-1">
-            <div>
-              <label className="text-sm font-medium text-slate-700 block mb-1">
-                QCD comparison notes <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Why this supplier was chosen — quality, cost, delivery reasoning" />
-            </div>
-            <div className="flex items-center justify-end">
-              <Button type="button" disabled={!selected || mutation.isPending} onClick={handleConfirm} className="gap-2">
-                {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Supplier Selection →"}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {decided && order.qcdComparisonNotes && (
+      {!decided && (
+        <div className="space-y-3 pt-1">
           <div>
-            <p className="text-xs text-slate-400">QCD comparison notes</p>
-            <p className="text-sm text-slate-700">{order.qcdComparisonNotes}</p>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Selection Justification (optional)</label>
+            <Input className="h-8" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Why this supplier was chosen — quality, cost, delivery reasoning" />
           </div>
-        )}
-      </CardContent>
+          <div className="flex items-center justify-end">
+            <Button type="button" disabled={!selected || mutation.isPending} onClick={handleConfirm} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+              {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Select Supplier →"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {decided && order.qcdComparisonNotes && <DocField label="Selection justification" value={order.qcdComparisonNotes} />}
 
       {confirming && (
         <ConfirmSupplierSelectionModal
@@ -578,36 +447,7 @@ function QuotationComparison({
           onConfirm={() => mutation.mutate({ selectedSupplierId: selected, qcdComparisonNotes: notes || undefined })}
         />
       )}
-    </Card>
-  );
-}
-
-// ── S3 completion ─────────────────────────────────────────────────────────────
-
-function S3CompleteCard({ order, onContinue }: { order: SteelSourcingOrder; onContinue: () => void }) {
-  const winner = order.quotations.find((q) => q.supplierId === order.selectedSupplierId);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-emerald-700">
-          <Trophy className="h-4 w-4" />
-          Supplier Selected
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Field label="Selected Supplier" value={winner?.supplier?.name} />
-          <Field label="Quoted Price" value={winner ? `${winner.price} ${winner.currency}` : null} />
-          <Field label="QCD Notes" value={order.qcdComparisonNotes} />
-        </div>
-        <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-500">
-          Next: <span className="font-medium text-slate-700">S4 — Specification &amp; Purchase Order</span>
-        </div>
-        <Button onClick={onContinue} className="gap-2">
-          Continue to S4 — Specification &amp; Purchase Order <ArrowRight className="h-4 w-4" />
-        </Button>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 
@@ -621,11 +461,7 @@ export function S3QuoteSelection({
   // does not change server stage, purely local view state.
   const [revising, setRevising] = useState(false);
 
-  const suppliersQuery = useQuery({
-    queryKey: ["suppliers"],
-    queryFn: () => SteelSourcingService.getSuppliers(token),
-    enabled: !!token,
-  });
+  const { isLoading: suppliersLoading, isError: suppliersErrored, usedEligibility, eligibleSuppliers, refetch: refetchSuppliers } = useEligibleSuppliers(order, token);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["steel-sourcing-order", order.id] });
@@ -635,74 +471,141 @@ export function S3QuoteSelection({
 
   const allDone = order.stage === "A06_SUPPLIER_SELECTED";
   const hasQuotations = order.quotations.length > 0;
-  const subStep: "A05" | "A06" | "done" = allDone ? "done" : hasQuotations && !revising ? "A06" : "A05";
 
-  let body: React.ReactNode;
+  const showingEntryForm = !hasQuotations || revising;
 
-  if (suppliersQuery.isLoading) {
-    body = (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+  let eligibleSectionBody: React.ReactNode;
+  let priceSectionBody: React.ReactNode;
+  let comparisonSectionBody: React.ReactNode;
+
+  if (suppliersLoading) {
+    eligibleSectionBody = (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
-  } else if (suppliersQuery.isError) {
-    body = (
-      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+    priceSectionBody = null;
+    comparisonSectionBody = null;
+  } else if (suppliersErrored) {
+    eligibleSectionBody = (
+      <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
         <AlertTriangle className="h-5 w-5 text-red-500" />
-        <p className="text-sm text-slate-600">Suppliers could not be loaded.</p>
-        <Button size="sm" variant="outline" onClick={() => suppliersQuery.refetch()}>
-          Retry
-        </Button>
+        <p className="text-sm text-muted-foreground">Suppliers could not be loaded.</p>
+        <Button size="sm" variant="outline" onClick={refetchSuppliers}>Retry</Button>
       </div>
     );
-  } else if ((suppliersQuery.data ?? []).length === 0 && !hasQuotations) {
-    body = (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-          <Users className="h-5 w-5 text-slate-300" />
-          <p className="text-sm text-slate-600">No suppliers found yet.</p>
-          <p className="text-xs text-slate-400">Add a supplier to the master list before collecting quotations.</p>
-        </CardContent>
-      </Card>
-    );
-  } else if (allDone) {
-    body = (
-      <div className="space-y-4">
-        <QuotationComparison order={order} token={token} onDone={refresh} onRevise={() => setRevising(true)} canRevise={false} />
-        <S3CompleteCard order={order} onContinue={refresh} />
+    priceSectionBody = null;
+    comparisonSectionBody = null;
+  } else if (eligibleSuppliers.length === 0) {
+    eligibleSectionBody = (
+      <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+        <Users className="h-5 w-5 text-muted-foreground/40" />
+        {usedEligibility ? (
+          <>
+            <p className="text-sm font-medium text-foreground">No approved suppliers configured for this material.</p>
+            <p className="text-xs text-muted-foreground">
+              Add or approve a supplier for this material in{" "}
+              <Link href="/steel/config/supplier-eligibility" className="underline font-medium">Configuration</Link> before continuing.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">No suppliers found yet.</p>
+            <p className="text-xs text-muted-foreground">Add a supplier in Steel Configuration before collecting quotations.</p>
+          </>
+        )}
       </div>
     );
-  } else if (hasQuotations && !revising) {
-    body = (
-      <QuotationComparison
-        order={order} token={token} onDone={refresh}
-        onRevise={() => setRevising(true)} canRevise
-      />
-    );
+    priceSectionBody = null;
+    comparisonSectionBody = null;
   } else {
-    body = (
-      <QuotationEntryForm
-        order={order} token={token} suppliers={suppliersQuery.data ?? []}
-        onDone={refresh}
-        onCancel={hasQuotations ? () => setRevising(false) : undefined}
-      />
-    );
+    eligibleSectionBody = <SupplierComparisonTable suppliers={eligibleSuppliers} selectedId="" onSelect={() => undefined} />;
+    if (showingEntryForm) {
+      priceSectionBody = (
+        <QuotationEntryForm
+          order={order} token={token} suppliers={eligibleSuppliers}
+          onDone={refresh}
+          onCancel={hasQuotations ? () => setRevising(false) : undefined}
+        />
+      );
+      comparisonSectionBody = <p className="text-sm text-muted-foreground">Save at least one quotation to see the comparison.</p>;
+    } else {
+      priceSectionBody = (
+        <p className="text-xs text-muted-foreground">
+          {order.quotations.length} quotation{order.quotations.length === 1 ? "" : "s"} on file — see the comparison below.
+        </p>
+      );
+      comparisonSectionBody = allDone ? (
+        <QuotationComparison order={order} token={token} onDone={refresh} onRevise={() => setRevising(true)} canRevise={false} />
+      ) : (
+        <QuotationComparison order={order} token={token} onDone={refresh} onRevise={() => setRevising(true)} canRevise />
+      );
+    }
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
       <ScreenHeader
         icon={Scale}
-        title="Quote Comparison & Selection"
-        subtitle="Collect competing quotations and select the winning supplier."
+        title="Sourcing Decision"
+        subtitle="Collect competing quotations, compare on Quality/Cost/Delivery, and select the winning supplier."
+        backHref="/steel/p02"
+        backLabel="Back to Sourcing Orders"
+        code="P02"
       />
-      <WorkflowIndicator doneCount={allDone ? 3 : 2} activeIndex={allDone ? null : 2} />
-      <ContextSummary order={order} />
+      <WorkflowIndicator
+        steps={SCREENS}
+        doneCount={allDone ? 3 : 2}
+        activeIndex={allDone ? null : 2}
+        activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P02")!.color.bar}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        <div className="space-y-4">{body}</div>
-        <Sidebar order={order} subStep={subStep} />
-      </div>
+      <P02Layout
+        info={
+          <P02InfoCard
+            alreadyProvided="Eligible suppliers and the QCD scoring weights, from Configuration."
+            whatToEnter="Current price, availability, delivery commitment, and quotation reference per supplier, plus your selection justification."
+            beforeYouContinue={["Quotation information is current and accurate.", "Selected supplier is the best justified option."]}
+          />
+        }
+      >
+        <div className="rounded-lg border border-input bg-background shadow-sm p-4 md:p-6 space-y-5">
+          <DocSection number="—" title="Procurement Request" first>
+            <OrderReferenceHeader order={order} />
+          </DocSection>
+
+          <DocSection number="—" title="Eligible Suppliers">
+            {eligibleSectionBody}
+          </DocSection>
+
+          <DocSection number="05" title="Price & Availability" status={hasQuotations && !revising ? "done" : "active"}>
+            {priceSectionBody}
+            <div className="mt-3">
+              <AttachmentPanel sourcingId={order.id} stage="A05_QUOTATIONS_COLLECTED" token={token} label="Quotations & Price Offers" />
+            </div>
+          </DocSection>
+
+          <DocSection number="06" title="QCD Comparison & Selection" status={allDone ? "done" : hasQuotations && !revising ? "active" : "locked"}>
+            {comparisonSectionBody}
+            {allDone && (() => {
+              const log = [...order.activityLogs].reverse().find((l) => l.activity === "A06");
+              return log ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Selected by {log.performedBy.firstName} {log.performedBy.lastName} on {new Date(log.createdAt).toLocaleString()}
+                </p>
+              ) : null;
+            })()}
+          </DocSection>
+
+          {allDone && (
+            <StickyActions>
+              <Button onClick={refresh} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+                Continue to Purchase Order <ArrowRight className="h-4 w-4" />
+              </Button>
+            </StickyActions>
+          )}
+        </div>
+      </P02Layout>
     </div>
   );
 }

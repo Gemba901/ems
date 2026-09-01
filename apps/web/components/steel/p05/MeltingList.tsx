@@ -11,16 +11,10 @@ import {
   type PaginatedMeltings,
   type SteelMeltingStatus,
   MELTING_STAGE_LABELS,
+  MELTING_STAGE_ORDER,
 } from "@/services/steel-melting.service";
 import { SCREENS, stageToScreenIndex } from "./screenMap";
-
-const STATUS_STYLES: Record<SteelMeltingStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  CLOSED: "bg-emerald-50 text-emerald-700",
-  CANCELLED: "bg-red-50 text-red-700",
-};
+import { statusBadgeClass } from "@/lib/steelStatusColors";
 
 const STATUS_TOOLTIPS: Record<SteelMeltingStatus, string> = {
   DRAFT: "Melting record created but not yet actively progressing.",
@@ -83,7 +77,9 @@ export function MeltingList({
                 {data.data.map((melting) => {
                   const screenIdx = stageToScreenIndex(melting.stage);
                   const screen = SCREENS[screenIdx];
-                  const screenProgressPct = Math.round(((screenIdx + 1) / SCREENS.length) * 100);
+                  const activityProgressPct = Math.round(
+                    ((MELTING_STAGE_ORDER.indexOf(melting.stage) + 1) / MELTING_STAGE_ORDER.length) * 100,
+                  );
                   const activityCode = melting.stage.split("_")[0];
 
                   return (
@@ -97,7 +93,7 @@ export function MeltingList({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-slate-900">{melting.heatInProcessNumber}</span>
                             <Tooltip>
-                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={STATUS_STYLES[melting.status]}>{melting.status.replace(/_/g, " ")}</Badge>} />
+                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={statusBadgeClass(melting.status)}>{melting.status.replace(/_/g, " ")}</Badge>} />
                               <TooltipContent>{STATUS_TOOLTIPS[melting.status]}</TooltipContent>
                             </Tooltip>
                           </div>
@@ -107,18 +103,9 @@ export function MeltingList({
                         </div>
 
                         <div className="flex items-center gap-4 text-xs text-slate-500 shrink-0">
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={(triggerProps) => (
-                                <span {...triggerProps} className="flex items-center gap-1 font-medium text-slate-700">
-                                  {activityCode}
-                                </span>
-                              )}
-                            />
-                            <TooltipContent>
-                              {activityCode} — {MELTING_STAGE_LABELS[melting.stage]}. This is the current step; {screen.code} is the screen it belongs to.
-                            </TooltipContent>
-                          </Tooltip>
+                          <span className="font-medium text-slate-700">
+                            {activityCode} — {MELTING_STAGE_LABELS[melting.stage]}
+                          </span>
                           <span className="flex items-center gap-1">
                             <Clock className="h-3.5 w-3.5 text-slate-400" />
                             {formatDate(melting.updatedAt) ?? "—"}
@@ -134,7 +121,7 @@ export function MeltingList({
                           {screen.code}/{SCREENS.length}
                         </span>
                         <div className="h-1.5 flex-1 max-w-[160px] rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full rounded-full bg-red-500" style={{ width: `${screenProgressPct}%` }} />
+                          <div className="h-full rounded-full bg-blue-500" style={{ width: `${activityProgressPct}%` }} />
                         </div>
                         <span className="text-[11px] text-slate-600 font-medium">{screen.label}</span>
                       </div>

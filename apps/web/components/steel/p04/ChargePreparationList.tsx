@@ -12,15 +12,8 @@ import {
   type SteelChargeStatus,
   CHARGE_STAGE_LABELS,
 } from "@/services/steel-charge-preparation.service";
+import { statusBadgeClass } from "@/lib/steelStatusColors";
 import { SCREENS, stageToScreenIndex } from "./screenMap";
-
-const STATUS_STYLES: Record<SteelChargeStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  IN_PROGRESS: "bg-blue-50 text-blue-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  CLOSED: "bg-emerald-50 text-emerald-700",
-  CANCELLED: "bg-red-50 text-red-700",
-};
 
 const STATUS_TOOLTIPS: Record<SteelChargeStatus, string> = {
   DRAFT: "Preparation created but not yet actively progressing.",
@@ -101,7 +94,7 @@ export function ChargePreparationList({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-slate-900">{prep.prepNumber}</span>
                             <Tooltip>
-                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={STATUS_STYLES[prep.status]}>{prep.status.replace(/_/g, " ")}</Badge>} />
+                              <TooltipTrigger render={(triggerProps) => <Badge {...triggerProps} className={statusBadgeClass(prep.status)}>{prep.status.replace(/_/g, " ")}</Badge>} />
                               <TooltipContent>{STATUS_TOOLTIPS[prep.status]}</TooltipContent>
                             </Tooltip>
                             {prep.chargeNumber && <Badge className="bg-slate-100 text-slate-600">{prep.chargeNumber}</Badge>}

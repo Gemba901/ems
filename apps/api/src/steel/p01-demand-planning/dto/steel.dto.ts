@@ -30,6 +30,12 @@ export class CreateSteelDemandDto {
   @IsEnum(DemandSource, { message: 'Invalid demand source' })
   demandSource!: DemandSource;
 
+  // Selected master-data customer. When provided, customerName/dealerName are
+  // derived from the Customer record rather than free-typed.
+  @IsString()
+  @IsOptional()
+  customerId?: string;
+
   @IsString()
   @IsOptional()
   customerName?: string;
@@ -70,8 +76,12 @@ export class CreateSteelDemandDto {
 
 // P01-A02 — Confirm customer and order priority
 export class ConfirmSteelPriorityDto {
+  // Optional: when omitted, the service defaults this from the plan's
+  // demandSource (see steel.service.ts confirmPriority). Overriding the
+  // default to something other than NORMAL requires `notes` explaining why.
   @IsEnum(OrderPriority, { message: 'Invalid priority' })
-  priority!: OrderPriority;
+  @IsOptional()
+  priority?: OrderPriority;
 
   @IsDateString()
   @IsOptional()
@@ -88,12 +98,19 @@ export class ConfirmSteelPriorityDto {
 
 // P01-A03 — Confirm product type and standard required
 export class ConfirmSteelProductDto {
+  // Selected master-data product. When provided, productType is derived from
+  // it and need not be repeated.
+  @IsString()
+  @IsOptional()
+  productId?: string;
+
   @IsEnum(ProductType, { message: 'Invalid product type' })
-  productType!: ProductType;
+  @IsOptional()
+  productType?: ProductType;
 
   @IsString()
-  @IsNotEmpty({ message: 'Product standard is required' })
-  productStandard!: string;
+  @IsOptional()
+  productStandard?: string;
 
   @IsString()
   @IsOptional()
@@ -106,13 +123,19 @@ export class ConfirmSteelProductDto {
 
 // P01-A04 — Confirm grade, size, length, bundle, and quantity
 export class ConfirmSteelSpecificationDto {
+  // Selected master-data specification. When provided, grade/size/length/
+  // toleranceNotes are derived from it rather than free-typed.
   @IsString()
-  @IsNotEmpty({ message: 'Grade is required' })
-  grade!: string;
+  @IsOptional()
+  productSpecificationId?: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Size is required' })
-  size!: string;
+  @IsOptional()
+  grade?: string;
+
+  @IsString()
+  @IsOptional()
+  size?: string;
 
   @IsString()
   @IsOptional()
@@ -134,10 +157,14 @@ export class ConfirmSteelSpecificationDto {
 
 // P01-A05 — Check certified finished goods stock
 export class SteelStockCheckDto {
+  // Optional: when omitted, the service auto-fills this (and the arrays
+  // below) from SteelFinishedGoodsStock against the plan's
+  // productSpecificationId (see steel.service.ts checkStock).
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  certifiedStockAvailableQty!: number;
+  @IsOptional()
+  certifiedStockAvailableQty?: number;
 
   @IsArray()
   @IsString({ each: true })
@@ -157,8 +184,13 @@ export class SteelStockCheckDto {
 
 // P01-A06 — Decide dispatch from stock or production required
 export class SteelStockDecisionDto {
+  // Optional: when omitted, the service defaults this from the shortfall
+  // between certifiedStockAvailableQty and requestedQuantityTonnes (see
+  // steel.service.ts decideStockOrProduction). Overriding that suggestion
+  // requires stockDecisionNotes explaining why.
   @IsEnum(StockDecision, { message: 'Invalid stock decision' })
-  stockDecision!: StockDecision;
+  @IsOptional()
+  stockDecision?: StockDecision;
 
   @IsString()
   @IsOptional()
@@ -167,8 +199,14 @@ export class SteelStockDecisionDto {
 
 // P01-A07 — Select applicable plant route
 export class SelectSteelRouteDto {
+  // Selected master-data route. When provided, plantRoute is derived from it.
+  @IsString()
+  @IsOptional()
+  productionRouteId?: string;
+
   @IsEnum(PlantRoute, { message: 'Invalid plant route' })
-  plantRoute!: PlantRoute;
+  @IsOptional()
+  plantRoute?: PlantRoute;
 
   @IsString()
   @IsOptional()
@@ -254,9 +292,13 @@ export class PrepareSteelProductionPlanDto {
 
 // P01-A11 — Communicate plan to all concerned departments
 export class CommunicateSteelPlanDto {
+  // Optional: when omitted, the service derives the department list from the
+  // plan's selected production route steps (see steel.service.ts
+  // communicatePlan).
   @IsArray()
   @IsEnum(SteelDepartment, { each: true, message: 'Invalid department' })
-  departments!: SteelDepartment[];
+  @IsOptional()
+  departments?: SteelDepartment[];
 
   @IsString()
   @IsOptional()

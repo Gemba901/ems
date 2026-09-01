@@ -115,6 +115,7 @@ export class FurnaceService {
         data: {
           organizationId,
           furnaceId,
+          code: dto.code,
           installedAt: dto.installedAt ? new Date(dto.installedAt) : new Date(),
           material: dto.material,
           condition: dto.condition,

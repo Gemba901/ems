@@ -427,6 +427,7 @@ export class OrganizationsService {
                     email:     dto.email,
                     phone:     dto.phone,
                     address:   dto.address,
+                    ...(dto.timeZone !== undefined && { timeZone: dto.timeZone }),
                     modules:   dto.modules ?? [],
                 },
             });
@@ -505,6 +506,7 @@ export class OrganizationsService {
                 ...(dto.email        !== undefined && { email:        dto.email }),
                 ...(dto.phone        !== undefined && { phone:        dto.phone }),
                 ...(dto.address      !== undefined && { address:      dto.address }),
+                ...(dto.timeZone     !== undefined && { timeZone:     dto.timeZone }),
                 ...(dto.modules      !== undefined && { modules:      dto.modules }),
                 ...(dto.primaryColor !== undefined && { primaryColor: dto.primaryColor }),
             },

@@ -17,17 +17,13 @@ export interface ScreenMeta {
 }
 
 export const SCREENS: ScreenMeta[] = [
-  { code: "S1", label: "New Sourcing Order", stages: ["A01_REQUIREMENT_REVIEWED"] },
-  {
-    code: "S2",
-    label: "Identify & Assess Supplier",
-    stages: ["A02_MATERIAL_TYPE_IDENTIFIED", "A03_SUPPLIER_CHECKED", "A04_SUPPLIER_RISK_REVIEWED"],
-  },
-  { code: "S3", label: "Quote Comparison & Selection", stages: ["A05_QUOTATIONS_COLLECTED", "A06_SUPPLIER_SELECTED"] },
-  { code: "S4", label: "Specification & Purchase Order", stages: ["A07_SPEC_CONFIRMED", "A08_PO_CREATED"] },
+  { code: "S1", label: "Requirement", stages: ["A01_REQUIREMENT_REVIEWED", "A02_MATERIAL_TYPE_IDENTIFIED"] },
+  { code: "S2", label: "Supplier", stages: ["A03_SUPPLIER_CHECKED", "A04_SUPPLIER_RISK_REVIEWED"] },
+  { code: "S3", label: "Sourcing", stages: ["A05_QUOTATIONS_COLLECTED", "A06_SUPPLIER_SELECTED"] },
+  { code: "S4", label: "PO", stages: ["A07_SPEC_CONFIRMED", "A08_PO_CREATED"] },
   {
     code: "S5",
-    label: "Delivery, Logistics & Handover",
+    label: "Handover",
     stages: ["A09_DELIVERY_CONFIRMED", "A10_LOGISTICS_PREPARED", "A11_INTAKE_INFORMED", "A12_HANDOVER_CLOSED"],
   },
 ];

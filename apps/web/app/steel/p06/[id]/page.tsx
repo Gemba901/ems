@@ -9,14 +9,14 @@ import { HeatApprovalService, AllowedHeatApprovalAction } from "@/services/steel
 import { stageToScreenIndex } from "@/components/steel/p06/screenMap";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2, AlertTriangle, Ban } from "lucide-react";
-import { S1ChemistrySampling } from "./S1ChemistrySampling";
-import { S2TemperatureLadle } from "./S2TemperatureLadle";
-import { S3ApprovalTappingRelease } from "./S3ApprovalTappingRelease";
+import { HeatReview } from "./HeatReview";
+import { ApprovalTapAuthorization } from "./S3ApprovalTappingRelease";
 
-// Which of the 3 screens (S1/S2/S3) owns each server-computed allowed
-// action. This is the ONLY stage->screen taxonomy for P06 detail routing —
-// it mirrors components/steel/p06/screenMap.ts's SCREENS grouping exactly,
-// just keyed by action instead of by stage (allowedActions is the backend's
+// Which of the 2 screens (Heat Review / Approval & Tap Authorization) owns
+// each server-computed allowed action. This is the ONLY stage->screen
+// taxonomy for P06 detail routing — it mirrors
+// components/steel/p06/screenMap.ts's SCREENS grouping exactly, just keyed
+// by action instead of by stage (allowedActions is the backend's
 // authoritative "what can happen next", so routing follows it directly
 // rather than re-deriving the same answer from stage/status locally).
 const ACTION_SCREEN: Record<AllowedHeatApprovalAction, number> = {
@@ -25,13 +25,13 @@ const ACTION_SCREEN: Record<AllowedHeatApprovalAction, number> = {
   DECIDE_CORRECTION: 0,
   ADD_CORRECTION_MATERIAL: 0,
   RETEST_CHEMISTRY: 0,
-  CHECK_TEMPERATURE: 1,
-  CHECK_LADLE_READINESS: 1,
-  APPROVE_CHEMISTRY_TEMPERATURE: 2,
-  CONFIRM_HEAT_NUMBER: 2,
-  TAPPING_APPROVAL: 2,
-  TAP_TO_LADLE: 2,
-  RELEASE_TO_CASTING: 2,
+  CHECK_TEMPERATURE: 0,
+  CHECK_LADLE_READINESS: 0,
+  APPROVE_CHEMISTRY_TEMPERATURE: 1,
+  CONFIRM_HEAT_NUMBER: 1,
+  TAPPING_APPROVAL: 1,
+  TAP_TO_LADLE: 1,
+  RELEASE_TO_CASTING: 1,
 };
 
 // A manual CANCELLED override can happen at any stage via the status
@@ -120,16 +120,13 @@ export default function HeatApprovalDetailPage() {
   const actions = heatApproval.allowedActions ?? [];
   // ON_HOLD and CLOSED both return an empty allowedActions[] — in both
   // cases falling back to the stage-based screen is correct: ON_HOLD lands
-  // on whatever screen the record was frozen at, and CLOSED lands on S3,
-  // which renders its own terminal "released to casting" state once
-  // heatApproval.status === "CLOSED".
+  // on whatever screen the record was frozen at, and CLOSED lands on the
+  // Approval & Tap Authorization screen, which renders its own terminal
+  // "released to casting" state once heatApproval.status === "CLOSED".
   const screenIdx = actions.length > 0 ? ACTION_SCREEN[actions[0]] : stageToScreenIndex(heatApproval.stage);
 
   if (screenIdx === 0) {
-    return <S1ChemistrySampling heatApproval={heatApproval} token={accessToken!} onRefresh={refresh} />;
+    return <HeatReview heatApproval={heatApproval} token={accessToken!} onRefresh={refresh} />;
   }
-  if (screenIdx === 1) {
-    return <S2TemperatureLadle heatApproval={heatApproval} token={accessToken!} onRefresh={refresh} />;
-  }
-  return <S3ApprovalTappingRelease heatApproval={heatApproval} token={accessToken!} onRefresh={refresh} />;
+  return <ApprovalTapAuthorization heatApproval={heatApproval} token={accessToken!} onRefresh={refresh} />;
 }

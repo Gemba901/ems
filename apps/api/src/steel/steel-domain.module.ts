@@ -8,6 +8,8 @@ import { HeatApprovalModule } from './p06-heat-approval/heat-approval.module';
 import { TraceabilityModule } from './traceability/traceability.module';
 import { SteelDashboardModule } from './dashboard/dashboard.module';
 import { FurnaceModule } from './furnace/furnace.module';
+import { MasterDataModule } from './master-data/master-data.module';
+import { SteelConfigModule } from './config/config.module';
 
 /**
  * Steel is the parent business domain; P01 (demand & production planning),
@@ -27,6 +29,8 @@ import { FurnaceModule } from './furnace/furnace.module';
     MaterialIntakeModule,
     ChargePreparationModule,
     FurnaceModule,
+    MasterDataModule,
+    SteelConfigModule,
     MeltingModule,
     HeatApprovalModule,
     TraceabilityModule,

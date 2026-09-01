@@ -59,12 +59,19 @@ const STAGE_ORDER: SteelMeltingStage[] = [
 const meltingInclude = {
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   chargePreparation: {
-    select: { id: true, prepNumber: true, chargeNumber: true, status: true },
+    select: {
+      id: true,
+      prepNumber: true,
+      chargeNumber: true,
+      status: true,
+      actualGrade: true,
+    },
   },
   furnace: { select: { id: true, code: true, name: true, status: true } },
   lining: {
     select: {
       id: true,
+      code: true,
       installedAt: true,
       heatsCompleted: true,
       condition: true,
@@ -191,6 +198,43 @@ export class MeltingService {
     );
   }
 
+  // Like assertStageTransition, but for the A02-A13 activities: instead of
+  // unconditionally rejecting a resubmission once the record has moved past
+  // this stage, it allows it as a re-edit — provided a reason is given and
+  // an activity log for this exact activity already exists (so a step that
+  // was genuinely never reached still hits the "not completed yet" error
+  // above, not this path). Returns true when this call is a re-edit, so the
+  // caller can skip writing `stage` backwards and instead just update the
+  // stage's own fields, logging a new history row via `notes` without
+  // touching the original.
+  private async assertStageTransitionOrReedit(
+    meltingId: string,
+    currentStage: SteelMeltingStage,
+    requiredCurrentStage: SteelMeltingStage,
+    activity: SteelMeltingActivity,
+    reason: string | undefined,
+  ): Promise<boolean> {
+    if (currentStage === requiredCurrentStage) return false;
+    const currentIdx = STAGE_ORDER.indexOf(currentStage);
+    const requiredIdx = STAGE_ORDER.indexOf(requiredCurrentStage);
+    if (currentIdx < requiredIdx) {
+      throw new ConflictException(
+        'This step cannot be recorded yet — the previous melting step has not been completed.',
+      );
+    }
+
+    const existingLog = await this.prisma.steelMeltingActivityLog.findFirst({
+      where: { meltingId, activity },
+      select: { id: true },
+    });
+    if (existingLog && (!reason || !reason.trim())) {
+      throw new BadRequestException(
+        'This melting step has already been recorded. Provide a reason to re-edit it.',
+      );
+    }
+    return true;
+  }
+
   // Retries `fn` when it fails on a unique-constraint violation of `field`
   // (Prisma P2002). Needed because number generation reads a count() and
   // creates a row in separate steps — two concurrent requests can read the
@@ -198,6 +242,29 @@ export class MeltingService {
   // number FORMAT is unchanged; this only makes generate-then-create safe
   // under concurrency by regenerating and retrying on conflict. Conflicts
   // on other fields (e.g. chargePreparationId) are rethrown untouched.
+  // P2002's offending-field list lives at err.meta.target on the legacy
+  // engine, but the Prisma 7 driver-adapter (@prisma/adapter-pg) engine
+  // instead puts it at err.meta.constraint.fields or
+  // err.cause.constraint.fields, leaving meta.target undefined.
+  private uniqueConstraintFields(
+    err: Prisma.PrismaClientKnownRequestError,
+  ): string[] {
+    const meta = err.meta as
+      | { target?: string[]; constraint?: { fields?: string[] } }
+      | undefined;
+    const cause = (
+      err as unknown as {
+        cause?: { constraint?: { fields?: string[] } };
+      }
+    ).cause;
+    return (
+      meta?.target ??
+      meta?.constraint?.fields ??
+      cause?.constraint?.fields ??
+      []
+    );
+  }
+
   private async withUniqueRetry<T>(
     field: string,
     fn: () => Promise<T>,
@@ -210,7 +277,7 @@ export class MeltingService {
         const isConflict =
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === 'P2002' &&
-          (err.meta?.target as string[] | undefined)?.includes(field);
+          this.uniqueConstraintFields(err).includes(field);
         if (!isConflict || attempt === maxAttempts) throw err;
       }
     }
@@ -334,9 +401,7 @@ export class MeltingService {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002' &&
-        (err.meta?.target as string[] | undefined)?.includes(
-          'chargePreparationId',
-        )
+        this.uniqueConstraintFields(err).includes('chargePreparationId')
       ) {
         throw new BadRequestException(
           'This charge has already been handed over to melting.',
@@ -356,9 +421,12 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
       melting.stage,
       'A01_CONFIRM_FURNACE_AVAILABILITY',
+      'A02',
+      dto.reason,
     );
 
     if (!dto.liningVisualCondition || !dto.liningVisualCondition.trim()) {
@@ -392,10 +460,10 @@ export class MeltingService {
           liningRefId: dto.liningRefId,
           liningHeatCount: dto.liningHeatCount,
           liningVisualCondition: dto.liningVisualCondition,
-          stage: 'A02_FURNACE_LINING_CHECK',
+          ...(isReedit ? {} : { stage: 'A02_FURNACE_LINING_CHECK' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A02', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A02', employee.id, dto.reason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -415,7 +483,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A02_FURNACE_LINING_CHECK');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A02_FURNACE_LINING_CHECK',
+      'A03',
+      dto.reason,
+    );
 
     if (
       !dto.waterPressureFlowOk ||
@@ -436,10 +510,10 @@ export class MeltingService {
           powerSystemOk: dto.powerSystemOk,
           hydraulicSystemOk: dto.hydraulicSystemOk,
           alarmsOk: dto.alarmsOk,
-          stage: 'A03_FURNACE_SYSTEMS_CHECK',
+          ...(isReedit ? {} : { stage: 'A03_FURNACE_SYSTEMS_CHECK' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A03', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A03', employee.id, dto.reason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -459,7 +533,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A03_FURNACE_SYSTEMS_CHECK');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A03_FURNACE_SYSTEMS_CHECK',
+      'A04',
+      dto.reason,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
@@ -468,7 +548,9 @@ export class MeltingService {
           previousHeatRef: dto.previousHeatRef,
           slagCleaningStatus: dto.slagCleaningStatus,
           readinessDelayReason: dto.readinessDelayReason,
-          stage: 'A04_PREVIOUS_HEAT_READINESS',
+          ...(isReedit
+            ? {}
+            : { stage: 'A04_PREVIOUS_HEAT_READINESS' as const }),
         },
       });
       await this.logActivity(
@@ -476,7 +558,9 @@ export class MeltingService {
         id,
         'A04',
         employee.id,
-        dto.readinessDelayReason,
+        isReedit
+          ? [dto.readinessDelayReason, dto.reason].filter(Boolean).join(' | ')
+          : dto.readinessDelayReason,
         { ...dto },
       );
       return tx.steelMelting.findUnique({
@@ -496,7 +580,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A04_PREVIOUS_HEAT_READINESS');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A04_PREVIOUS_HEAT_READINESS',
+      'A05',
+      dto.reason,
+    );
 
     if (!dto.actualWeightVsRecipeOk) {
       throw new BadRequestException(
@@ -510,10 +600,10 @@ export class MeltingService {
         data: {
           materialLotRef: dto.materialLotRef,
           actualWeightVsRecipeOk: dto.actualWeightVsRecipeOk,
-          stage: 'A05_VERIFY_CHARGE_RECIPE',
+          ...(isReedit ? {} : { stage: 'A05_VERIFY_CHARGE_RECIPE' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A05', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A05', employee.id, dto.reason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -533,7 +623,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A05_VERIFY_CHARGE_RECIPE');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A05_VERIFY_CHARGE_RECIPE',
+      'A06',
+      dto.reason,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
@@ -542,10 +638,10 @@ export class MeltingService {
           loadingTime: dto.loadingTime ? new Date(dto.loadingTime) : new Date(),
           loadingEquipment: dto.loadingEquipment,
           chargeSequence: dto.chargeSequence,
-          stage: 'A06_LOAD_CHARGE',
+          ...(isReedit ? {} : { stage: 'A06_LOAD_CHARGE' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A06', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A06', employee.id, dto.reason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -565,7 +661,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A06_LOAD_CHARGE');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A06_LOAD_CHARGE',
+      'A07',
+      dto.reason,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
@@ -577,10 +679,10 @@ export class MeltingService {
           meltingFurnaceId: dto.meltingFurnaceId,
           meltingOperator: dto.meltingOperator,
           meltingChargeId: melting.chargePreparation.chargeNumber,
-          stage: 'A07_START_MELTING',
+          ...(isReedit ? {} : { stage: 'A07_START_MELTING' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A07', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A07', employee.id, dto.reason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -600,7 +702,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A07_START_MELTING');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A07_START_MELTING',
+      'A08',
+      dto.reason,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
@@ -610,10 +718,10 @@ export class MeltingService {
           powerElapsedMinutes: dto.powerElapsedMinutes,
           powerTonnage: dto.powerTonnage,
           powerInterruptions: dto.powerInterruptions,
-          stage: 'A08_MONITOR_POWER',
+          ...(isReedit ? {} : { stage: 'A08_MONITOR_POWER' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A08', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A08', employee.id, dto.reason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -633,7 +741,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A08_MONITOR_POWER');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A08_MONITOR_POWER',
+      'A09',
+      dto.reason,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
@@ -642,7 +756,7 @@ export class MeltingService {
           temperatureCelsius: dto.temperatureCelsius,
           temperatureElapsedMinutes: dto.temperatureElapsedMinutes,
           temperatureDelayReason: dto.temperatureDelayReason,
-          stage: 'A09_MONITOR_TEMPERATURE',
+          ...(isReedit ? {} : { stage: 'A09_MONITOR_TEMPERATURE' as const }),
         },
       });
       await this.logActivity(
@@ -650,7 +764,9 @@ export class MeltingService {
         id,
         'A09',
         employee.id,
-        dto.temperatureDelayReason,
+        isReedit
+          ? [dto.temperatureDelayReason, dto.reason].filter(Boolean).join(' | ')
+          : dto.temperatureDelayReason,
         { ...dto },
       );
       return tx.steelMelting.findUnique({
@@ -670,7 +786,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A09_MONITOR_TEMPERATURE');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A09_MONITOR_TEMPERATURE',
+      'A10',
+      dto.editReason,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
@@ -679,10 +801,10 @@ export class MeltingService {
           additions: dto.additions
             ? (dto.additions as Prisma.InputJsonValue)
             : Prisma.JsonNull,
-          stage: 'A10_RECORD_ADDITIONS',
+          ...(isReedit ? {} : { stage: 'A10_RECORD_ADDITIONS' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A10', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A10', employee.id, dto.editReason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -702,7 +824,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A10_RECORD_ADDITIONS');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A10_RECORD_ADDITIONS',
+      'A11',
+      dto.reason,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
@@ -714,12 +842,19 @@ export class MeltingService {
             : undefined,
           slagQuantityEstimate: dto.slagQuantityEstimate,
           slagIssueFound: dto.slagIssueFound,
-          stage: 'A11_REMOVE_SLAG',
+          ...(isReedit ? {} : { stage: 'A11_REMOVE_SLAG' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A11', employee.id, dto.slagIssueFound, {
-        ...dto,
-      });
+      await this.logActivity(
+        tx,
+        id,
+        'A11',
+        employee.id,
+        isReedit
+          ? [dto.slagIssueFound, dto.reason].filter(Boolean).join(' | ')
+          : dto.slagIssueFound,
+        { ...dto },
+      );
       return tx.steelMelting.findUnique({
         where: { id: updated.id },
         include: meltingInclude,
@@ -737,7 +872,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A11_REMOVE_SLAG');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A11_REMOVE_SLAG',
+      'A12',
+      dto.reason,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelMelting.update({
@@ -750,10 +891,10 @@ export class MeltingService {
           outputEnergyTotalKwh: dto.outputEnergyTotalKwh,
           outputAdditionsSummary: dto.outputAdditionsSummary,
           outputWeightTonnes: dto.outputWeightTonnes,
-          stage: 'A12_RECORD_MELT_OUTPUT',
+          ...(isReedit ? {} : { stage: 'A12_RECORD_MELT_OUTPUT' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A12', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A12', employee.id, dto.reason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -773,7 +914,13 @@ export class MeltingService {
     const employee = await this.resolveEmployee(userId, organizationId);
     const melting = await this.findMeltingOrThrow(id, organizationId);
     this.assertActive(melting.status);
-    this.assertStageTransition(melting.stage, 'A12_RECORD_MELT_OUTPUT');
+    const isReedit = await this.assertStageTransitionOrReedit(
+      id,
+      melting.stage,
+      'A12_RECORD_MELT_OUTPUT',
+      'A13',
+      dto.reason,
+    );
 
     if (!dto.liquidReady) {
       throw new BadRequestException(
@@ -793,10 +940,10 @@ export class MeltingService {
           liquidReady: dto.liquidReady,
           liquidTemperatureCelsius: dto.liquidTemperatureCelsius,
           liquidOperatorConfirmed: dto.liquidOperatorConfirmed,
-          stage: 'A13_CONFIRM_LIQUID_READY',
+          ...(isReedit ? {} : { stage: 'A13_CONFIRM_LIQUID_READY' as const }),
         },
       });
-      await this.logActivity(tx, id, 'A13', employee.id, undefined, {
+      await this.logActivity(tx, id, 'A13', employee.id, dto.reason, {
         ...dto,
       });
       return tx.steelMelting.findUnique({
@@ -1128,6 +1275,8 @@ export class MeltingService {
       inputAgg,
       outputAgg,
       recentEvents,
+      readyCharges,
+      liningHeats,
     ] = await Promise.all([
       this.prisma.steelMelting.count({ where: activeHeatsWhere }),
       this.prisma.steelMelting.count({ where: completedHeatsWhere }),
@@ -1141,15 +1290,34 @@ export class MeltingService {
           id: true,
           heatInProcessNumber: true,
           chargeNumberSnapshot: true,
+          chargePreparationId: true,
           stage: true,
           status: true,
           furnaceRefId: true,
           furnace: { select: { id: true, code: true, name: true } },
           liningRefId: true,
-          lining: { select: { id: true, heatsCompleted: true } },
+          liningCampaignId: true,
+          lining: {
+            select: {
+              id: true,
+              code: true,
+              installedAt: true,
+              heatsCompleted: true,
+              condition: true,
+              thicknessRemainingMm: true,
+              inspectionNotes: true,
+            },
+          },
           meltingStartTime: true,
           handoverToRefiningAt: true,
           outputWeightTonnes: true,
+          outputMeltTimeMinutes: true,
+          outputEnergyTotalKwh: true,
+          recipeScrapWeightSnapshot: true,
+          recipeDriWeightSnapshot: true,
+          recipeAlloyWeightSnapshot: true,
+          recipeAdditiveWeightSnapshot: true,
+          chargePreparation: { select: { actualGrade: true } },
         },
         orderBy: { handoverToRefiningAt: 'desc' },
         take: 200,
@@ -1159,13 +1327,35 @@ export class MeltingService {
         select: {
           id: true,
           heatInProcessNumber: true,
+          chargeNumberSnapshot: true,
+          chargePreparationId: true,
           stage: true,
           status: true,
           furnaceRefId: true,
           furnace: { select: { id: true, code: true, name: true } },
+          liningRefId: true,
+          liningCampaignId: true,
+          lining: {
+            select: {
+              id: true,
+              code: true,
+              installedAt: true,
+              heatsCompleted: true,
+              condition: true,
+              thicknessRemainingMm: true,
+              inspectionNotes: true,
+            },
+          },
           meltingStartTime: true,
           createdAt: true,
           temperatureCelsius: true,
+          powerKwh: true,
+          outputEnergyTotalKwh: true,
+          recipeScrapWeightSnapshot: true,
+          recipeDriWeightSnapshot: true,
+          recipeAlloyWeightSnapshot: true,
+          recipeAdditiveWeightSnapshot: true,
+          chargePreparation: { select: { actualGrade: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 50,
@@ -1209,7 +1399,59 @@ export class MeltingService {
           recordedBy: { select: { id: true, firstName: true, lastName: true } },
         },
       }),
+      // Charge preparations that are P04-CLOSED with a released charge
+      // number but have no SteelMelting yet — i.e. "ready charge, no heat
+      // started" (P04 CLOSED is NOT a P05 status; it only means the charge
+      // is ready to become a new heat). `melting: null` uses the optional
+      // 1:1 back-relation on SteelChargePreparation, so this can never
+      // include a charge that already has a melting record.
+      this.prisma.steelChargePreparation.findMany({
+        where: {
+          organizationId,
+          status: 'CLOSED',
+          chargeNumber: { not: null },
+          melting: null,
+        },
+        select: {
+          id: true,
+          prepNumber: true,
+          chargeNumber: true,
+          actualGrade: true,
+          actualWeightTonnes: true,
+          sortedWeightTonnes: true,
+          recipeScrapWeightTonnes: true,
+          recipeDriWeightTonnes: true,
+          recipeAlloyWeightTonnes: true,
+          recipeAdditiveWeightTonnes: true,
+          furnaceReadinessConfirmed: true,
+          plannedHeatReference: true,
+          chargeReleasedAt: true,
+        },
+        orderBy: { chargeReleasedAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.steelMelting.findMany({
+        where: {
+          organizationId,
+          status: 'CLOSED',
+          liningRefId: { not: null },
+          outputWeightTonnes: { not: null },
+          ...(query.furnaceId ? { furnaceRefId: query.furnaceId } : {}),
+        },
+        select: {
+          id: true,
+          heatInProcessNumber: true,
+          chargeNumberSnapshot: true,
+          chargePreparationId: true,
+          liningRefId: true,
+          outputWeightTonnes: true,
+          handoverToRefiningAt: true,
+        },
+        orderBy: { outputWeightTonnes: 'asc' },
+      }),
     ]);
+
+    const completedLiningHeats = liningHeats ?? [];
 
     // Per-heat material input for the bounded completed-heats list — one
     // groupBy instead of N queries.
@@ -1252,6 +1494,26 @@ export class MeltingService {
           ? (h.handoverToRefiningAt.getTime() - h.meltingStartTime.getTime()) /
             60000
           : null;
+      // "Target" here is the P04 recipe's planned charge weight (the actual
+      // real number the operator designed this heat around) — there is no
+      // separate business-defined output target anywhere in the schema, so
+      // this is the only honest stand-in. Null (not 0) when no recipe
+      // snapshot was captured, so the frontend can tell "no target" from
+      // "target is zero".
+      const plannedChargeTonnes =
+        h.recipeScrapWeightSnapshot === null &&
+        h.recipeDriWeightSnapshot === null &&
+        h.recipeAlloyWeightSnapshot === null &&
+        h.recipeAdditiveWeightSnapshot === null
+          ? null
+          : (h.recipeScrapWeightSnapshot ?? 0) +
+            (h.recipeDriWeightSnapshot ?? 0) +
+            (h.recipeAlloyWeightSnapshot ?? 0) +
+            (h.recipeAdditiveWeightSnapshot ?? 0);
+      const varianceTonnes =
+        output !== null && plannedChargeTonnes !== null
+          ? output - plannedChargeTonnes
+          : null;
       return {
         ...h,
         materialInput,
@@ -1259,6 +1521,9 @@ export class MeltingService {
         materialLoss,
         yieldPercent,
         cycleDurationMinutes,
+        grade: h.chargePreparation?.actualGrade ?? null,
+        plannedChargeTonnes,
+        varianceTonnes,
       };
     });
 
@@ -1330,22 +1595,59 @@ export class MeltingService {
           ? {
               id: activeHeat.id,
               heatInProcessNumber: activeHeat.heatInProcessNumber,
+              chargeNumberSnapshot: activeHeat.chargeNumberSnapshot,
               stage: activeHeat.stage,
               temperatureCelsius: activeHeat.temperatureCelsius,
+              meltingStartTime: activeHeat.meltingStartTime,
             }
           : null,
         lining: lining
           ? {
               id: lining.id,
+              code: lining.code,
               installedAt: lining.installedAt,
               heatsCompleted: lining.heatsCompleted,
               condition: lining.condition,
               thicknessRemainingMm: lining.thicknessRemainingMm,
+              inspectionNotes: lining.inspectionNotes,
               status: lining.status,
             }
           : null,
       };
     });
+
+    const liningTotals = new Map<string, number>();
+    for (const heat of completedLiningHeats) {
+      if (heat.liningRefId && heat.outputWeightTonnes !== null) {
+        liningTotals.set(
+          heat.liningRefId,
+          (liningTotals.get(heat.liningRefId) ?? 0) + heat.outputWeightTonnes,
+        );
+      }
+    }
+
+    const liningHistory = Array.from(
+      completedLiningHeats.reduce((groups, heat) => {
+        if (!heat.liningRefId) return groups;
+        const group = groups.get(heat.liningRefId) ?? [];
+        group.push({
+          id: heat.id,
+          heatInProcessNumber: heat.heatInProcessNumber,
+          chargeNumber: heat.chargeNumberSnapshot,
+          chargePreparationId: heat.chargePreparationId,
+          tonnesMelted: heat.outputWeightTonnes,
+          date: heat.handoverToRefiningAt,
+        });
+        groups.set(heat.liningRefId, group);
+        return groups;
+      }, new Map<string, Array<{ id: string; heatInProcessNumber: string; chargeNumber: string | null; chargePreparationId: string; tonnesMelted: number | null; date: Date | null }>>()),
+    ).map(([liningId, heats]) => ({
+      liningId,
+      totalTonnesMelted: liningTotals.get(liningId) ?? 0,
+      heats: heats.sort(
+        (a, b) => (a.tonnesMelted ?? 0) - (b.tonnesMelted ?? 0),
+      ),
+    }));
 
     const liningStatus = furnaceStatus
       .filter((f) => f.lining)
@@ -1353,7 +1655,52 @@ export class MeltingService {
         furnaceId: f.id,
         furnaceCode: f.code,
         ...f.lining!,
+        totalTonnesMelted: liningTotals.get(f.lining!.id) ?? 0,
       }));
+
+    const furnacesRunning = activeHeatByFurnace.size;
+
+    // "Target" tonnage for the KPI strip = sum of the P04 recipe (planned
+    // charge) weights for heats completed in range — the same honest
+    // stand-in as plannedChargeTonnes per-heat above, just summed. null when
+    // nothing in range has a recipe snapshot, so the frontend can render
+    // "not set" instead of a misleading 0%.
+    const heatsWithPlan = computedHeats.filter(
+      (h) => h.plannedChargeTonnes !== null,
+    );
+    const plannedChargeTonnesTotal = heatsWithPlan.length
+      ? heatsWithPlan.reduce((s, h) => s + (h.plannedChargeTonnes ?? 0), 0)
+      : null;
+    const onTargetPercent =
+      plannedChargeTonnesTotal !== null && plannedChargeTonnesTotal > 0
+        ? ((outputAgg._sum.outputWeightTonnes ?? 0) /
+            plannedChargeTonnesTotal) *
+          100
+        : null;
+
+    const readyChargesMapped = readyCharges.map((c) => {
+      const plannedChargeTonnes =
+        c.recipeScrapWeightTonnes === null &&
+        c.recipeDriWeightTonnes === null &&
+        c.recipeAlloyWeightTonnes === null &&
+        c.recipeAdditiveWeightTonnes === null
+          ? null
+          : (c.recipeScrapWeightTonnes ?? 0) +
+            (c.recipeDriWeightTonnes ?? 0) +
+            (c.recipeAlloyWeightTonnes ?? 0) +
+            (c.recipeAdditiveWeightTonnes ?? 0);
+      return {
+        chargePreparationId: c.id,
+        prepNumber: c.prepNumber,
+        chargeNumber: c.chargeNumber,
+        grade: c.actualGrade,
+        weightTonnes: c.actualWeightTonnes ?? c.sortedWeightTonnes ?? null,
+        plannedChargeTonnes,
+        furnaceReadinessConfirmed: c.furnaceReadinessConfirmed,
+        plannedHeatReference: c.plannedHeatReference,
+        chargeReleasedAt: c.chargeReleasedAt,
+      };
+    });
 
     return {
       period: {
@@ -1368,6 +1715,14 @@ export class MeltingService {
         totalMaterialInput: inputAgg._sum.actualQuantity ?? 0,
         totalOutputTonnes: outputAgg._sum.outputWeightTonnes ?? 0,
         averageCycleDurationMinutes,
+        furnacesRunning,
+        furnacesTotal: furnaces.length,
+        readyChargesCount: readyCharges.length,
+        // Both null when nothing completed in range has a captured P04
+        // recipe snapshot — there is no other target-tonnage source in the
+        // schema. Never render 0% in that case; render "not available".
+        plannedChargeTonnes: plannedChargeTonnesTotal,
+        onTargetPercent,
       },
       materialOverview: {
         // Scoped to the bounded completed-heats list above (heats with both
@@ -1382,32 +1737,79 @@ export class MeltingService {
         averageYieldPercent,
       },
       furnaceStatus,
-      activeHeats: activeHeats.map((h) => ({
-        id: h.id,
-        heatInProcessNumber: h.heatInProcessNumber,
-        furnace: h.furnace,
-        stage: h.stage,
-        status: h.status,
-        meltingStartTime: h.meltingStartTime,
-        startedAt: h.meltingStartTime ?? h.createdAt,
-        temperatureCelsius: h.temperatureCelsius,
-        materialInput: activeInputByMelting.get(h.id) ?? 0,
-      })),
+      activeHeats: activeHeats.map((h) => {
+        const plannedChargeTonnes =
+          h.recipeScrapWeightSnapshot === null &&
+          h.recipeDriWeightSnapshot === null &&
+          h.recipeAlloyWeightSnapshot === null &&
+          h.recipeAdditiveWeightSnapshot === null
+            ? null
+            : (h.recipeScrapWeightSnapshot ?? 0) +
+              (h.recipeDriWeightSnapshot ?? 0) +
+              (h.recipeAlloyWeightSnapshot ?? 0) +
+              (h.recipeAdditiveWeightSnapshot ?? 0);
+        return {
+          id: h.id,
+          heatInProcessNumber: h.heatInProcessNumber,
+          chargeNumberSnapshot: h.chargeNumberSnapshot,
+          // Real UUID so the frontend can deep-link to the P04 record — not
+          // trustworthy to derive from the snapshot string above.
+          chargePreparationId: h.chargePreparationId,
+          grade: h.chargePreparation?.actualGrade ?? null,
+          furnace: h.furnace,
+          stage: h.stage,
+          status: h.status,
+          meltingStartTime: h.meltingStartTime,
+          startedAt: h.meltingStartTime ?? h.createdAt,
+          temperatureCelsius: h.temperatureCelsius,
+          powerKwh: h.powerKwh,
+          outputEnergyTotalKwh: h.outputEnergyTotalKwh,
+          materialInput: activeInputByMelting.get(h.id) ?? 0,
+          plannedChargeTonnes,
+          // Structured lining master data when linked (P05-A02), falling
+          // back to the free-text campaign ID snapshot otherwise. Present
+          // on both active and completed heats — same shape, same source
+          // fields — so the frontend never has to special-case one state.
+          liningRefId: h.liningRefId,
+          lining: h.lining,
+          liningCampaignId: h.liningCampaignId,
+        };
+      }),
       furnacePerformance,
       liningStatus,
+      liningHistory,
+      readyCharges: readyChargesMapped,
+      nextReadyCharge: readyChargesMapped[0] ?? null,
       recentHeats: computedHeats.map((h) => ({
         id: h.id,
         heatInProcessNumber: h.heatInProcessNumber,
         chargeNumberSnapshot: h.chargeNumberSnapshot,
+        chargePreparationId: h.chargePreparationId,
+        grade: h.grade,
         furnace: h.furnace,
         liningRefId: h.liningRefId,
+        lining: h.lining,
+        liningCampaignId: h.liningCampaignId,
         status: h.status,
+        // meltingStartTime was already selected for completed heats but
+        // previously dropped from this mapped response — active heats got
+        // startedAt, completed heats silently didn't, purely because the two
+        // states go through different map literals below. Both now surface
+        // it (still legitimately null for a heat that never captured a
+        // start time — not omitted from the type, so the frontend can
+        // render an explicit "—" instead of a field that never existed).
+        meltingStartTime: h.meltingStartTime,
+        startedAt: h.meltingStartTime,
         handoverToRefiningAt: h.handoverToRefiningAt,
         materialInput: h.materialInput,
         output: h.output,
         materialLoss: h.materialLoss,
         yieldPercent: h.yieldPercent,
         cycleDurationMinutes: h.cycleDurationMinutes,
+        outputMeltTimeMinutes: h.outputMeltTimeMinutes,
+        outputEnergyTotalKwh: h.outputEnergyTotalKwh,
+        plannedChargeTonnes: h.plannedChargeTonnes,
+        varianceTonnes: h.varianceTonnes,
       })),
       recentEvents: recentEvents.map((e) => ({
         id: e.id,
@@ -1466,6 +1868,62 @@ export class MeltingService {
       data,
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     };
+  }
+
+  // Charge preparations eligible to start a new heat from — P04-CLOSED with
+  // a released charge number and NOT already claimed by a SteelMelting
+  // record. Backs the P05 "New Heat" dropdown. Filtering happens here,
+  // server-side, via the `melting: null` optional 1:1 back-relation on
+  // SteelChargePreparation (chargePreparationId is unique on SteelMelting),
+  // so a charge that already has a heat can never be returned — the
+  // frontend must not need to filter this list itself.
+  async getAvailableChargePreparations(organizationId: string) {
+    return this.prisma.steelChargePreparation.findMany({
+      where: {
+        organizationId,
+        status: 'CLOSED',
+        chargeNumber: { not: null },
+        melting: null,
+      },
+      select: {
+        id: true,
+        prepNumber: true,
+        chargeNumber: true,
+        plan: { select: { id: true, planNumber: true } },
+        actualGrade: true,
+        actualWeightTonnes: true,
+        sortedWeightTonnes: true,
+        stagingLocation: true,
+        stagedWeightTonnes: true,
+        materialLots: {
+          include: {
+            intake: {
+              select: {
+                id: true,
+                intakeNumber: true,
+                materialType: true,
+                grade: true,
+                netWeightTonnes: true,
+              },
+            },
+          },
+        },
+        recipeScrapWeightTonnes: true,
+        recipeDriWeightTonnes: true,
+        recipeAlloyWeightTonnes: true,
+        recipeAdditiveWeightTonnes: true,
+        targetChemistry: true,
+        additivesPrepared: true,
+        recipeNotes: true,
+        furnaceReadinessConfirmed: true,
+        plannedHeatReference: true,
+        handoverNotes: true,
+        handoverClosedAt: true,
+        chargeReleasedAt: true,
+      },
+      orderBy: { chargeReleasedAt: 'desc' },
+      take: 200,
+    });
   }
 
   async getSummary(organizationId: string) {

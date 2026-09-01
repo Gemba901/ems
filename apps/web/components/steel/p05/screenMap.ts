@@ -51,34 +51,3 @@ export function stageToScreenIndex(stage: SteelMeltingStage): number {
 export function stageToScreen(stage: SteelMeltingStage): ScreenMeta {
   return SCREENS[stageToScreenIndex(stage)] ?? SCREENS[0];
 }
-
-export interface SubStep {
-  code: string;
-  label: string;
-}
-
-// Compact sub-step labels for the horizontal stepper shown at the top of
-// each S1/S2/S3 screen — same pattern as P04's SCREEN_TOP_STEPS. Purely a
-// page-level visual affordance; still only ever groups the real A01-A14
-// activities.
-export const SCREEN_TOP_STEPS: SubStep[][] = [
-  [
-    { code: "A01", label: "Furnace Availability" },
-    { code: "A02", label: "Lining Check" },
-    { code: "A03", label: "Systems Check" },
-    { code: "A04", label: "Previous Heat" },
-    { code: "A05", label: "Charge Verification" },
-  ],
-  [
-    { code: "A06", label: "Load Charge" },
-    { code: "A07", label: "Start Melting" },
-    { code: "A08", label: "Power Monitoring" },
-    { code: "A09", label: "Temperature Monitoring" },
-  ],
-  [
-    { code: "A10-A11", label: "Additions & Slag" },
-    { code: "A12", label: "Melt Output" },
-    { code: "A13", label: "Liquid Ready" },
-    { code: "A14", label: "Refining Handover" },
-  ],
-];

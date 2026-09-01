@@ -17,8 +17,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ScreenHeader } from "@/components/steel/p06/ScreenHeader";
-import { WorkflowIndicator } from "@/components/steel/p06/WorkflowIndicator";
+import { ScreenHeader } from "@/components/steel/ScreenHeader";
+import { WorkflowIndicator } from "@/components/steel/WorkflowIndicator";
+import { STEEL_PROCESSES } from "@/components/steel/dashboard/steelProcesses";
 import { ScreenSidebar } from "@/components/steel/p06/ScreenSidebar";
 import { ContextSummary } from "@/components/steel/p06/ContextSummary";
 import { HeatApprovalProgress } from "@/components/steel/p06/HeatApprovalProgress";
@@ -312,7 +313,122 @@ function ClosedState({ heatApproval }: { heatApproval: SteelHeatApproval }) {
   );
 }
 
-export function S3ApprovalTappingRelease({
+// "Approval Summary" checklist card — mirrors the mockup's 5 rows
+// (Chemistry Compliance / Heat Cycle Review / Temperature Verification /
+// Samples & Tests / Overall Decision), each an APPROVED/PENDING pill driven
+// by the real field it represents. Nothing here is a separate stored
+// status — every row reads an existing SteelHeatApproval field.
+function ApprovalSummaryCard({ heatApproval }: { heatApproval: SteelHeatApproval }) {
+  const rows: { label: string; approved: boolean }[] = [
+    { label: "Chemistry Compliance", approved: heatApproval.chemistryMatchesGrade === true },
+    { label: "Heat Cycle Review", approved: heatApproval.liquidTemperatureCelsius !== null && heatApproval.ladleReady === true },
+    { label: "Temperature Verification", approved: heatApproval.liquidTemperatureCelsius !== null },
+    { label: "Samples & Tests", approved: heatApproval.chemistryComposition !== null },
+    { label: "Overall Decision", approved: heatApproval.chemistryTemperatureApproved === true },
+  ];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Approval Summary</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2.5">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between text-sm">
+            <span className="text-slate-600">{row.label}</span>
+            <span
+              className={
+                "inline-flex items-center gap-1 text-xs font-medium rounded-full px-2 py-0.5 border " +
+                (row.approved
+                  ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+                  : "text-slate-400 bg-slate-50 border-slate-200")
+              }
+            >
+              {row.approved ? "APPROVED" : "PENDING"}
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// "Approval Details" card — Approved By / On come from the real A09
+// activity log entry (the only place that event is recorded), not a
+// separate approvedBy/approvedAt field on the record itself.
+function ApprovalDetailsCard({ heatApproval }: { heatApproval: SteelHeatApproval }) {
+  const approvalLog = heatApproval.activityLogs.find((l) => l.activity === "A09");
+  const actions = heatApproval.allowedActions ?? [];
+  const closed = heatApproval.status === "CLOSED";
+  const nextStep = closed
+    ? "Released to casting — complete"
+    : actions.includes("CONFIRM_HEAT_NUMBER")
+      ? "Confirm heat number"
+      : actions.includes("TAPPING_APPROVAL")
+        ? "Tapping authorization"
+        : actions.includes("TAP_TO_LADLE")
+          ? "Tap into ladle"
+          : actions.includes("RELEASE_TO_CASTING")
+            ? "Release to casting"
+            : "Chemistry & temperature approval";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Approval Details</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-3">
+        <Field label="Approved By" value={approvalLog ? `${approvalLog.performedBy.firstName} ${approvalLog.performedBy.lastName}` : "Not yet approved"} />
+        <Field label="Approved On" value={approvalLog ? new Date(approvalLog.createdAt).toLocaleString() : null} />
+        <Field label="Approval Reference" value={heatApproval.approvalNumber} />
+        <Field label="Next Step" value={nextStep} />
+      </CardContent>
+    </Card>
+  );
+}
+
+// "Tap Authorization" card — gated on the real business rule: tapping can
+// only be authorized once chemistry & temperature approval (A09) has
+// actually happened. Before that, allowedActions never contains
+// TAPPING_APPROVAL and this section stays locked rather than showing the
+// happy-path "authorized" state from the mockup unconditionally.
+function TapAuthorizationCard({ heatApproval, token, canAct, onRefresh }: { heatApproval: SteelHeatApproval; token: string; canAct: boolean; onRefresh: () => void }) {
+  const approved = heatApproval.chemistryTemperatureApproved === true;
+  const actions = heatApproval.allowedActions ?? [];
+  const canAuthorizeNow = actions.includes("TAPPING_APPROVAL");
+  const decided = heatApproval.tappingApproved !== null;
+
+  return (
+    <Card className={!approved ? "opacity-70" : ""}>
+      <CardHeader>
+        <CardTitle className="text-sm flex items-center gap-2">
+          {!approved && <Lock className="h-3.5 w-3.5 text-slate-400" />}
+          Tap Authorization
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!approved ? (
+          <p className="text-xs text-slate-400">
+            Becomes available once chemistry & temperature approval (P06-A09) is complete.
+          </p>
+        ) : decided ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Tap Authorized" value={heatApproval.tappingApproved ? "Yes" : "No"} />
+            <Field label="Recorded Temperature" value={heatApproval.liquidTemperatureCelsius !== null ? `${heatApproval.liquidTemperatureCelsius} °C` : null} />
+            <div className="col-span-2">
+              <Field label="Remarks / Approval Notes" value={heatApproval.approvalNotes} />
+            </div>
+          </div>
+        ) : canAuthorizeNow ? (
+          <TappingApprovalForm heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />
+        ) : (
+          <p className="text-xs text-slate-400">Waiting on the heat number to be confirmed (P06-A10) before tapping can be authorized.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ApprovalTapAuthorization({
   heatApproval, token, onRefresh,
 }: { heatApproval: SteelHeatApproval; token: string; onRefresh: () => void }) {
   const { user } = useAuthStore();
@@ -322,24 +438,40 @@ export function S3ApprovalTappingRelease({
 
   const approveStatus = subStatus(actions.includes("APPROVE_CHEMISTRY_TEMPERATURE"), heatApproval.chemistryTemperatureApproved !== null);
   const heatNumberStatus = subStatus(actions.includes("CONFIRM_HEAT_NUMBER"), heatApproval.heatNumber !== null);
-  const tappingStatus = subStatus(actions.includes("TAPPING_APPROVAL"), heatApproval.tappingApproved !== null);
   const tapStatus = subStatus(actions.includes("TAP_TO_LADLE"), heatApproval.tapStartTime !== null);
   const releaseStatus = subStatus(actions.includes("RELEASE_TO_CASTING"), closed);
 
-  const statuses = [approveStatus, heatNumberStatus, tappingStatus, tapStatus, releaseStatus];
-  const doneCount = closed ? 5 : statuses.filter((s) => s === "done").length;
+  const statuses = [approveStatus, heatNumberStatus, tapStatus, releaseStatus];
+  const doneCount = closed ? 4 : statuses.filter((s) => s === "done").length;
   const activeRel = statuses.findIndex((s) => s === "active");
 
   return (
     <TooltipProvider>
       <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
         <ScreenHeader
+          code="P06"
           icon={ShieldCheck}
-          title="Approval, Tapping & Release"
-          subtitle="Approve chemistry and temperature, confirm the heat number, approve and perform tapping, then release to casting."
+          title="Approval & Tap Authorization"
+          subtitle="Approve heat and authorize tapping / downstream handover."
         />
-        <WorkflowIndicator steps={SCREEN_TOP_STEPS[2]} doneCount={doneCount} activeIndex={closed ? null : activeRel === -1 ? null : activeRel} />
+        <WorkflowIndicator steps={SCREEN_TOP_STEPS[1]} doneCount={doneCount} activeIndex={closed ? null : activeRel === -1 ? null : activeRel} activeColorBar={STEEL_PROCESSES.find((p) => p.code === "P06")?.color.bar} />
         <ContextSummary heatApproval={heatApproval} />
+
+        {heatApproval.chemistryTemperatureApproved === true && (
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
+            <div className="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-emerald-700">Heat Approved Successfully</p>
+              <p className="text-xs text-emerald-600">
+                {closed
+                  ? "This heat was approved, tapped, and released to casting."
+                  : "This heat has been approved and tapping can now be authorized."}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="space-y-4">
@@ -356,6 +488,9 @@ export function S3ApprovalTappingRelease({
                   {approveStatus === "active" && <ApproveChemistryTemperatureForm heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />}
                 </SubStep>
 
+                <ApprovalDetailsCard heatApproval={heatApproval} />
+                <ApprovalSummaryCard heatApproval={heatApproval} />
+
                 <SubStep
                   code="P06-A10"
                   title="Create or Confirm Heat Number"
@@ -365,14 +500,7 @@ export function S3ApprovalTappingRelease({
                   {heatNumberStatus === "active" && <ConfirmHeatNumberForm heatApproval={heatApproval} token={token} onDone={onRefresh} />}
                 </SubStep>
 
-                <SubStep
-                  code="P06-A11"
-                  title="Give Tapping Approval"
-                  status={tappingStatus}
-                  summary={`Tapping approved: ${heatApproval.tappingApproved ? "Yes" : "No"}`}
-                >
-                  {tappingStatus === "active" && <TappingApprovalForm heatApproval={heatApproval} token={token} canAct={canAct} onDone={onRefresh} />}
-                </SubStep>
+                <TapAuthorizationCard heatApproval={heatApproval} token={token} canAct={canAct} onRefresh={onRefresh} />
 
                 <SubStep
                   code="P06-A12"

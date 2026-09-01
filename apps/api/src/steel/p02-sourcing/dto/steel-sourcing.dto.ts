@@ -328,6 +328,65 @@ export class CreateSupplierDto {
   notes?: string;
 }
 
+export class UpdateSupplierDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  code?: string;
+
+  @IsArray()
+  @IsEnum(SteelMaterialType, { each: true })
+  @IsOptional()
+  materialTypes?: SteelMaterialType[];
+
+  @IsEnum(SupplierApprovalStatus)
+  @IsOptional()
+  approvalStatus?: SupplierApprovalStatus;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  qualityScore?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  deliveryScore?: number;
+
+  @IsString()
+  @IsOptional()
+  contactPerson?: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @IsString()
+  @IsOptional()
+  email?: string;
+
+  @IsString()
+  @IsOptional()
+  country?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isImportSource?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
+
 export class QuerySuppliersDto {
   @IsEnum(SteelMaterialType)
   @IsOptional()
@@ -340,4 +399,25 @@ export class QuerySuppliersDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  // P02-A03 supplier selection always wants active suppliers only; Configuration-
+  // style admin screens pass this to see the full list including deactivated ones.
+  @IsOptional()
+  includeInactive?: string;
+}
+
+// Records a document already uploaded to S3 (via the generic
+// /uploads/presigned-url flow) against a sourcing order and stage.
+export class CreateSteelSourcingAttachmentDto {
+  @IsEnum(SteelSourcingStage)
+  @IsNotEmpty({ message: 'Stage is required' })
+  stage!: SteelSourcingStage;
+
+  @IsString()
+  @IsNotEmpty({ message: 'File name is required' })
+  fileName!: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'File URL is required' })
+  fileUrl!: string;
 }

@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   AlertStatus,
   AlertType,
+  EmployeeActivityStatus,
   NotificationType,
   Priority,
   Severity,
@@ -18,10 +19,10 @@ import {
 import { getKenyaPublicHolidays } from '../../calendar/kenya-holidays';
 import {
   endOfDayInTimeZone,
+  startOfDayInTimeZone,
   isBeforeUtcDate,
   parseDateOnly,
   parseTaskFrequency,
-  parseTimeZone,
   toIsoDate,
   toUtcDateOnly,
 } from '../utils/taskSchedule';
@@ -49,6 +50,7 @@ type OfficeScheduledTask = {
   dueDate?: Date | null;
   createdAt?: Date;
   ownerId?: string | null;
+  activityId?: string | null;
   owner?: { organizationId?: string | null } | null;
 };
 
@@ -86,6 +88,60 @@ function getUtcMonthDifference(from: Date, to: Date) {
 
 function isSameUtcDayOfMonth(anchor: Date, value: Date) {
   return anchor.getUTCDate() === value.getUTCDate();
+}
+
+function getCompletionWindowStart(
+  frequency: TaskFrequency,
+  scheduledFor: Date,
+  timeZone: string | null,
+): Date | null {
+  const date = toUtcDateOnly(scheduledFor);
+
+  switch (frequency) {
+    case TaskFrequency.DAILY:
+      return startOfDayInTimeZone(date, timeZone);
+    case TaskFrequency.WEEKLY: {
+      const start = new Date(date);
+      const mondayOffset = (start.getUTCDay() + 6) % 7;
+      start.setUTCDate(start.getUTCDate() - mondayOffset);
+      return startOfDayInTimeZone(start, timeZone);
+    }
+    case TaskFrequency.MONTHLY:
+      return startOfDayInTimeZone(
+        new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)),
+        timeZone,
+      );
+    case TaskFrequency.QUARTERLY: {
+      const quarterStartMonth = Math.floor(date.getUTCMonth() / 3) * 3;
+      return startOfDayInTimeZone(
+        new Date(Date.UTC(date.getUTCFullYear(), quarterStartMonth, 1)),
+        timeZone,
+      );
+    }
+    case TaskFrequency.YEARLY:
+      return startOfDayInTimeZone(
+        new Date(Date.UTC(date.getUTCFullYear(), 0, 1)),
+        timeZone,
+      );
+    default:
+      return null;
+  }
+}
+function getCompletionWindowLabel(frequency: TaskFrequency) {
+  switch (frequency) {
+    case TaskFrequency.DAILY:
+      return 'day';
+    case TaskFrequency.WEEKLY:
+      return 'week';
+    case TaskFrequency.MONTHLY:
+      return 'month';
+    case TaskFrequency.QUARTERLY:
+      return 'quarter';
+    case TaskFrequency.YEARLY:
+      return 'year';
+    default:
+      return 'schedule window';
+  }
 }
 
 function isScheduledOccurrenceDate(
@@ -331,7 +387,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       }
 
       if (instance.alerts.length === 0) {
-        await this.prisma.alert.create({
+        const alert = await this.prisma.alert.create({
           data: {
             type: AlertType.DELAY,
             title: `Delay: Task "${instance.task.title}" is overdue`,
@@ -343,6 +399,13 @@ export abstract class DwmsTaskService extends DwmsBaseService {
             againstUserId: instance.ownerId,
             status: AlertStatus.OPEN,
           },
+        });
+
+        await this.raiseRepeatedOverdueAbnormality({
+          organizationId,
+          instance,
+          sourceAlertId: alert.id,
+          raisedById,
         });
 
         await this.notifications.create({
@@ -357,12 +420,111 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     }
   }
 
+  private async raiseRepeatedOverdueAbnormality(params: {
+    organizationId: string;
+    instance: any;
+    sourceAlertId: string;
+    raisedById: string;
+  }) {
+    const { organizationId, instance, sourceAlertId, raisedById } = params;
+
+    const overdueAlertCount = await this.prisma.alert.count({
+      where: {
+        organizationId,
+        type: AlertType.DELAY,
+        isAbnormality: false,
+        againstUserId: instance.ownerId,
+        taskInstance: { taskId: instance.taskId },
+      },
+    });
+
+    if (overdueAlertCount < 3) return;
+
+    const title = `Repeated overdue task: ${instance.task.title}`;
+    const existing = await this.prisma.alert.findFirst({
+      where: {
+        organizationId,
+        type: AlertType.ABNORMAL_SITUATION,
+        isAbnormality: true,
+        title,
+        againstUserId: instance.ownerId,
+        taskInstance: { taskId: instance.taskId },
+      },
+      select: { id: true },
+    });
+
+    if (existing) return;
+
+    const description = [
+      `The task "${instance.task.title}" has generated ${overdueAlertCount} overdue alerts for ${instance.owner.firstName} ${instance.owner.lastName}.`,
+      'This abnormality was created because the same task was not completed on time three times.',
+      `Latest overdue instance date: ${instance.dueAt.toISOString()}.`,
+    ].join('\n');
+
+    const abnormality = await this.prisma.alert.create({
+      data: {
+        type: AlertType.ABNORMAL_SITUATION,
+        title,
+        description,
+        severity: Severity.HIGH,
+        status: AlertStatus.OPEN,
+        organizationId,
+        raisedById,
+        taskInstanceId: instance.id,
+        againstUserId: instance.ownerId,
+        isAbnormality: true,
+        abnormalitySourceAlertId: sourceAlertId,
+      },
+    });
+
+    const notificationTargets = new Set<string>();
+    notificationTargets.add(instance.ownerId);
+    if (instance.task.assignedById) {
+      notificationTargets.add(instance.task.assignedById);
+    }
+
+    await Promise.all(
+      Array.from(notificationTargets).map((employeeId) =>
+        this.notifications.create({
+          employeeId,
+          type: NotificationType.ALERT,
+          module: 'DWMS',
+          title: 'Repeated Overdue Abnormality Created',
+          message: `An abnormality was created because "${instance.task.title}" became overdue three times.`,
+          actionUrl: `/dwms/alerts/${abnormality.id}`,
+        }),
+      ),
+    );
+  }
+  private async canGenerateTaskInstance(task: OfficeScheduledTask) {
+    if (
+      !task.activityId ||
+      !task.ownerId ||
+      !isRecurringTaskFrequency(task.frequency)
+    ) {
+      return true;
+    }
+
+    const assignment = await this.prisma.employeeActivityAssignment.findUnique({
+      where: {
+        employeeId_activityId: {
+          employeeId: task.ownerId,
+          activityId: task.activityId,
+        },
+      },
+      select: { status: true },
+    });
+
+    return assignment?.status === EmployeeActivityStatus.ACTIVE;
+  }
   // Ensure task instance exists for a scheduled date
   async ensureTaskInstance(
     task: any,
     scheduledFor: Date,
     timeZone?: string | null,
   ) {
+    if (!(await this.canGenerateTaskInstance(task))) return null;
+
     const effectiveScheduledFor =
       isPlannedTaskFrequency(task.frequency) && task.dueDate
         ? toUtcDateOnly(task.dueDate)
@@ -618,6 +780,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       title: task.title,
       description: task.description,
       frequency: task.frequency,
+      organizationTimeZone:
+        task.organizationTimeZone ?? task.owner?.organization?.timeZone,
       ownerName,
       assignedByName,
       approvedByName,
@@ -792,7 +956,13 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       instance.task.ownerId === employee.id ||
       instance.task.assignedById === employee.id ||
       instance.task.approvedById === employee.id;
-    const serializedTask = this.serializeTaskInstance(instance.task, instance);
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
+    const serializedTask = {
+      ...this.serializeTaskInstance(instance.task, instance),
+      organizationTimeZone,
+    };
     const visibleTask = hasFullTaskAccess
       ? serializedTask
       : {
@@ -832,7 +1002,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
             this.serializeTaskInstanceComment(comment),
           )
         : [],
-      events: hasFullTaskAccess ? this.serializeTaskInstanceHistory(instance) : [],
+      events: hasFullTaskAccess
+        ? this.serializeTaskInstanceHistory(instance)
+        : [],
       alerts: hasFullTaskAccess
         ? instance.alerts.map((alert) => ({
             id: alert.id,
@@ -841,16 +1013,56 @@ export abstract class DwmsTaskService extends DwmsBaseService {
             status: alert.status,
             severity: alert.severity,
             createdAt: alert.createdAt.toISOString(),
-            resolvedAt: alert.resolvedAt ? alert.resolvedAt.toISOString() : null,
+            resolvedAt: alert.resolvedAt
+              ? alert.resolvedAt.toISOString()
+              : null,
           }))
         : [],
     };
+  }
+  private async getOrganizationTimeZone(organizationId: string) {
+    const organization = await (this.prisma.organization as any).findUnique({
+      where: { id: organizationId },
+      select: { timeZone: true },
+    });
+
+    if (!organization?.timeZone) {
+      throw new BadRequestException('Organization time zone is not configured');
+    }
+
+    return organization.timeZone as string;
+  }
+
+  private async assertTaskCanBeCompletedNow(
+    instance: {
+      frequency: TaskFrequency;
+      scheduledFor: Date;
+      dueAt: Date;
+    },
+    organizationId: string,
+  ) {
+    const timeZone = await this.getOrganizationTimeZone(organizationId);
+    const windowStart = getCompletionWindowStart(
+      instance.frequency,
+      instance.scheduledFor,
+      timeZone,
+    );
+
+    if (!windowStart) return;
+
+    const now = new Date();
+    if (now >= windowStart && now <= instance.dueAt) return;
+
+    const windowLabel = getCompletionWindowLabel(instance.frequency);
+    throw new BadRequestException(
+      `This ${instance.frequency.toLowerCase()} task can only be completed in its scheduled ${windowLabel}, from ${windowStart.toISOString()} until ${instance.dueAt.toISOString()}.`,
+    );
   }
   async getMyDwmsTasks(
     user: UserPayload,
     rawFrequency?: string,
     rawDate?: string,
-    rawTimeZone?: string,
+    rawScope?: string,
   ) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
@@ -861,173 +1073,198 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     }
 
     const referenceDate = parseDateOnly(rawDate) ?? toUtcDateOnly(new Date());
-    const timeZone = parseTimeZone(rawTimeZone);
+    const timeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const scope = rawScope?.trim().toLowerCase() ?? null;
+    if (scope && scope !== 'scheduled' && scope !== 'completed') {
+      throw new BadRequestException('Invalid task scope');
+    }
+
+    const taskInclude = {
+      owner: true,
+      assignedBy: true,
+      department: true,
+      approvedBy: true,
+      activity: {
+        include: {
+          parentActivity: true,
+        },
+      },
+    };
+    const instanceInclude = {
+      task: {
+        include: taskInclude,
+      },
+      comments: {
+        include: {
+          author: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' as const },
+      },
+      events: {
+        include: {
+          actor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' as const },
+      },
+      alerts: { orderBy: { createdAt: 'desc' as const } },
+    };
 
     const tasks = await this.prisma.task.findMany({
       where: {
         ownerId: employee.id,
         ...(frequency ? { frequency } : {}),
       },
-      include: {
-        owner: true,
-        assignedBy: true,
-        department: true,
-        approvedBy: true,
-        activity: {
-          include: {
-            parentActivity: true,
-          },
-        },
-      },
+      include: taskInclude,
       orderBy: [{ createdAt: 'asc' }, { title: 'asc' }],
     });
 
-    const maybeTaskInstances = await Promise.all(
-      tasks.map(async (t) => {
-        const scheduledFor = await this.getOfficeScheduledForTaskDate(
-          t,
-          referenceDate,
-          user.organizationId,
-        );
+    let allTaskInstances: Array<{ task: any; instance: any }>;
 
-        if (!scheduledFor) return null;
+    if (scope === 'scheduled') {
+      const scheduledItems: Array<{ task: any; instance: any }> = [];
+      const seenInstanceIds = new Set<string>();
 
-        const inst = await this.ensureTaskInstance(t, scheduledFor, timeZone);
-        const instance = await this.getTaskInstanceWithComments(inst.id);
-        return { task: t, instance };
-      }),
-    );
-    const taskInstances = maybeTaskInstances.filter(
-      (item): item is { task: any; instance: any } => item !== null,
-    );
-    const currentInstanceIds = new Set(
-      taskInstances.map(({ instance }) => instance.id),
-    );
-    const overdueInstances = await this.prisma.taskInstance.findMany({
-      where: {
-        ownerId: employee.id,
-        status: TaskStatus.OVERDUE,
-        ...(frequency ? { frequency } : {}),
-        id: { notIn: Array.from(currentInstanceIds) },
-      },
-      include: {
-        task: {
-          include: {
-            owner: true,
-            assignedBy: true,
-            department: true,
-            approvedBy: true,
-            activity: {
-              include: {
-                parentActivity: true,
-              },
-            },
-          },
+      await Promise.all(
+        tasks.map(async (t) => {
+          for (
+            let offset = 0;
+            offset < TASK_INSTANCE_GENERATION_DAYS;
+            offset += 1
+          ) {
+            const candidate = new Date(referenceDate);
+            candidate.setUTCDate(referenceDate.getUTCDate() + offset);
+            const scheduledFor = await this.getOfficeScheduledForTaskDate(
+              t,
+              candidate,
+              user.organizationId,
+            );
+
+            if (!scheduledFor) continue;
+
+            const inst = await this.ensureTaskInstance(
+              t,
+              scheduledFor,
+              timeZone,
+            );
+            if (!inst || seenInstanceIds.has(inst.id)) continue;
+
+            seenInstanceIds.add(inst.id);
+            const instance = await this.getTaskInstanceWithComments(inst.id);
+            scheduledItems.push({ task: t, instance });
+          }
+        }),
+      );
+
+      allTaskInstances = scheduledItems.sort(
+        (a, b) =>
+          a.instance.scheduledFor.getTime() -
+            b.instance.scheduledFor.getTime() ||
+          a.instance.dueAt.getTime() - b.instance.dueAt.getTime() ||
+          a.task.title.localeCompare(b.task.title),
+      );
+    } else if (scope === 'completed') {
+      const completedThrough = endOfDayInTimeZone(referenceDate, timeZone);
+      const completedInstances = await this.prisma.taskInstance.findMany({
+        where: {
+          ownerId: employee.id,
+          status: TaskStatus.DONE,
+          completedAt: { lte: completedThrough },
+          ...(frequency ? { frequency } : {}),
         },
-        comments: {
-          include: {
-            author: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        events: {
-          include: {
-            actor: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        alerts: { orderBy: { createdAt: 'desc' } },
-      },
-      orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
-    });
-    const resolvedOverdueInstanceIdsToExclude = new Set([
-      ...currentInstanceIds,
-      ...overdueInstances.map((instance) => instance.id),
-    ]);
-    const resolvedOverdueInstances = await this.prisma.taskInstance.findMany({
-      where: {
-        ownerId: employee.id,
-        status: { in: [TaskStatus.DONE, APPROVAL_PENDING_STATUS] },
-        ...(frequency ? { frequency } : {}),
-        id: { notIn: Array.from(resolvedOverdueInstanceIdsToExclude) },
-        OR: [
-          { events: { some: { type: 'MARKED_OVERDUE' } } },
-          { alerts: { some: { type: AlertType.DELAY } } },
+        include: instanceInclude,
+        orderBy: [
+          { completedAt: 'desc' },
+          { dueAt: 'desc' },
+          { createdAt: 'desc' },
         ],
-      },
-      include: {
-        task: {
-          include: {
-            owner: true,
-            assignedBy: true,
-            department: true,
-            approvedBy: true,
-            activity: {
-              include: {
-                parentActivity: true,
-              },
-            },
-          },
-        },
-        comments: {
-          include: {
-            author: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        events: {
-          include: {
-            actor: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        alerts: { orderBy: { createdAt: 'desc' } },
-      },
-      orderBy: [
-        { completedAt: 'desc' },
-        { dueAt: 'desc' },
-        { createdAt: 'desc' },
-      ],
-    });
-    const allTaskInstances = [
-      ...taskInstances,
-      ...overdueInstances.map((instance) => ({
+      });
+
+      allTaskInstances = completedInstances.map((instance) => ({
         task: instance.task,
         instance,
-      })),
-      ...resolvedOverdueInstances.map((instance) => ({
-        task: instance.task,
-        instance,
-      })),
-    ];
+      }));
+    } else {
+      const maybeTaskInstances = await Promise.all(
+        tasks.map(async (t) => {
+          const scheduledFor = await this.getOfficeScheduledForTaskDate(
+            t,
+            referenceDate,
+            user.organizationId,
+          );
+
+          if (!scheduledFor) return null;
+
+          const inst = await this.ensureTaskInstance(t, scheduledFor, timeZone);
+          if (!inst) return null;
+          const instance = await this.getTaskInstanceWithComments(inst.id);
+          return { task: t, instance };
+        }),
+      );
+      const taskInstances = maybeTaskInstances.filter(
+        (item): item is { task: any; instance: any } => item !== null,
+      );
+      const currentInstanceIds = new Set(
+        taskInstances.map(({ instance }) => instance.id),
+      );
+      const overdueInstances = await this.prisma.taskInstance.findMany({
+        where: {
+          ownerId: employee.id,
+          status: TaskStatus.OVERDUE,
+          ...(frequency ? { frequency } : {}),
+          id: { notIn: Array.from(currentInstanceIds) },
+        },
+        include: instanceInclude,
+        orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+      });
+      const resolvedOverdueInstanceIdsToExclude = new Set([
+        ...currentInstanceIds,
+        ...overdueInstances.map((instance) => instance.id),
+      ]);
+      const resolvedOverdueInstances = await this.prisma.taskInstance.findMany({
+        where: {
+          ownerId: employee.id,
+          status: { in: [TaskStatus.DONE, APPROVAL_PENDING_STATUS] },
+          ...(frequency ? { frequency } : {}),
+          id: { notIn: Array.from(resolvedOverdueInstanceIdsToExclude) },
+          OR: [
+            { events: { some: { type: 'MARKED_OVERDUE' } } },
+            { alerts: { some: { type: AlertType.DELAY } } },
+          ],
+        },
+        include: instanceInclude,
+        orderBy: [
+          { completedAt: 'desc' },
+          { dueAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      });
+
+      allTaskInstances = [
+        ...taskInstances,
+        ...overdueInstances.map((instance) => ({
+          task: instance.task,
+          instance,
+        })),
+        ...resolvedOverdueInstances.map((instance) => ({
+          task: instance.task,
+          instance,
+        })),
+      ];
+    }
 
     const serializedTaskInstances = await Promise.all(
       allTaskInstances.map(async ({ task, instance }) => {
@@ -1037,8 +1274,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         });
         return {
           ...this.serializeTaskInstance(task, instance),
+          organizationTimeZone: timeZone,
           prerequisiteBlocked: unmetParents.length > 0,
-          prerequisiteActivityNames: unmetParents.map((activity) => activity.name),
+          prerequisiteActivityNames: unmetParents.map(
+            (activity) => activity.name,
+          ),
         };
       }),
     );
@@ -1046,21 +1286,18 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     return {
       date: toIsoDate(referenceDate),
       frequency: frequency ?? null,
+      scope: scope ?? null,
       count: allTaskInstances.length,
       tasks: serializedTaskInstances,
     };
   }
 
-  async getMyDwmsTaskSummary(
-    user: UserPayload,
-    rawDate?: string,
-    rawTimeZone?: string,
-  ) {
+  async getMyDwmsTaskSummary(user: UserPayload, rawDate?: string) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
 
     const referenceDate = parseDateOnly(rawDate) ?? toUtcDateOnly(new Date());
-    const timeZone = parseTimeZone(rawTimeZone);
+    const timeZone = await this.getOrganizationTimeZone(user.organizationId);
 
     const tasks = await this.prisma.task.findMany({
       where: { ownerId: employee.id },
@@ -1284,6 +1521,13 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       );
     }
 
+    if (completedStatuses.has(effectiveStatus)) {
+      await this.assertTaskCanBeCompletedNow(
+        existingInstance,
+        user.organizationId,
+      );
+    }
+
     await this.assertParentActivitiesDoneBeforeStatusChange(
       existingInstance,
       effectiveStatus,
@@ -1399,7 +1643,12 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       );
       if (!scheduledFor) continue;
 
-      await this.ensureTaskInstance(task, scheduledFor, timeZone);
+      const instance = await this.ensureTaskInstance(
+        task,
+        scheduledFor,
+        timeZone,
+      );
+      if (!instance) continue;
       createdOrEnsured += 1;
     }
 
@@ -1417,11 +1666,14 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
     let total = 0;
     for (const task of tasks) {
+      const timeZone = await this.getOrganizationTimeZone(
+        task.owner.organizationId,
+      );
       total += await this.generateInstancesForTask(
         task,
         startDate,
         days,
-        null,
+        timeZone,
         task.owner.organizationId,
       );
     }
@@ -1633,6 +1885,28 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       },
     });
 
+    if (activity && isRecurringTaskFrequency(frequency)) {
+      await this.prisma.employeeActivityAssignment.upsert({
+        where: {
+          employeeId_activityId: {
+            employeeId: dto.assignedToId,
+            activityId: activity.id,
+          },
+        },
+        update: {
+          status: EmployeeActivityStatus.ACTIVE,
+          activatedAt: new Date(),
+          deactivatedAt: null,
+        },
+        create: {
+          organizationId: user.organizationId,
+          employeeId: dto.assignedToId,
+          activityId: activity.id,
+          status: EmployeeActivityStatus.ACTIVE,
+          activatedAt: new Date(),
+        },
+      });
+    }
     await this.generateInstancesForTask(
       task,
       toUtcDateOnly(new Date()),
@@ -1719,14 +1993,19 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           },
         },
       },
-      orderBy: [{ dueAt: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
     });
+
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
 
     return {
       count: instances.length,
-      tasks: instances.map((instance) =>
-        this.serializeTaskInstance(instance.task, instance),
-      ),
+      tasks: instances.map((instance) => ({
+        ...this.serializeTaskInstance(instance.task, instance),
+        organizationTimeZone,
+      })),
     };
   }
 
@@ -1795,14 +2074,19 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           },
         },
       },
-      orderBy: [{ dueAt: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
     });
+
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
 
     return {
       count: instances.length,
-      tasks: instances.map((instance) =>
-        this.serializeTaskInstance(instance.task, instance),
-      ),
+      tasks: instances.map((instance) => ({
+        ...this.serializeTaskInstance(instance.task, instance),
+        organizationTimeZone,
+      })),
     };
   }
   async getApprovalPendingTasks(user: UserPayload, status = 'pending') {
@@ -1858,6 +2142,10 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       orderBy: { updatedAt: 'desc' },
     });
 
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
+
     return {
       count: instances.length,
       tasks: instances.map((instance) => {
@@ -1873,6 +2161,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           taskId: task.id,
           status: instance.status,
           completionPercent: instance.completionPercent,
+          organizationTimeZone,
           completionNote:
             instance.completionNote ?? task.completionNote ?? null,
           completionAttachmentUrl:
@@ -2189,7 +2478,13 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (!scheduledFor) {
       throw new NotFoundException('No task instance is scheduled for today');
     }
-    return this.ensureTaskInstance(task, scheduledFor, null);
+    const instance = await this.ensureTaskInstance(task, scheduledFor, null);
+    if (!instance) {
+      throw new NotFoundException(
+        'No active task instance is scheduled for today',
+      );
+    }
+    return instance;
   }
 
   async updateAssignedTaskProgress(
@@ -2396,4 +2691,3 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     return { message: 'Task completed successfully', task, instance: updated };
   }
 }
-

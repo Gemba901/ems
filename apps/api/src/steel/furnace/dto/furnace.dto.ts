@@ -55,6 +55,10 @@ export class QueryFurnacesDto {
 // A new lining campaign for a furnace. Only one ACTIVE lining per furnace is
 // allowed — starting a new campaign implicitly retires the previous one.
 export class CreateFurnaceLiningDto {
+  @IsString()
+  @IsOptional()
+  code?: string;
+
   @IsDateString()
   @IsOptional()
   installedAt?: string;

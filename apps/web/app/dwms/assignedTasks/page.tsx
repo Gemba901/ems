@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import DwmsTabHeader from "../components/DwmsTabHeader";
 import DwmsSearchFilterBar from "../components/DwmsSearchFilterBar";
+import TaskDateSeparator, { getDateSeparatorMeta } from "../components/TaskDateSeparator";
 import { useAuthStore } from "@/store/auth.store";
 import {
   DwmsService,
@@ -34,6 +35,26 @@ function groupFrequencyBasedTasks(tasksToGroup: DwmsAssignedTaskHistoryItem[]) {
   });
 
   return Array.from(grouped.values());
+}
+
+function getAssignedTaskDateValue(
+  task: DwmsAssignedTaskHistoryItem,
+  activeTab: "all" | "overdue" | "completed" | "pending" | "not_acknowledged",
+) {
+  if (activeTab === "completed") {
+    return task.completedAt ?? task.dueAt ?? task.dueDate ?? task.scheduledFor;
+  }
+  return task.dueAt ?? task.dueDate ?? task.scheduledFor ?? task.completedAt;
+}
+
+function getAssignedTaskTimeValue(
+  task: DwmsAssignedTaskHistoryItem,
+  activeTab: "all" | "overdue" | "completed" | "pending" | "not_acknowledged",
+) {
+  const value = getAssignedTaskDateValue(task, activeTab);
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
 }
 export default function AssignedTasksHistoryPage() {
   return (
@@ -337,6 +358,16 @@ function AssignedTasksHistoryContent() {
       });
     }
 
+    result.sort((a, b) => {
+      const direction = historySubTab === "completed" ? -1 : 1;
+      const dateDiff =
+        (getAssignedTaskTimeValue(a, historySubTab) -
+          getAssignedTaskTimeValue(b, historySubTab)) *
+        direction;
+      if (dateDiff !== 0) return dateDiff;
+      return a.title.localeCompare(b.title);
+    });
+
     return result;
   }, [
     assignedToFilter,
@@ -449,7 +480,24 @@ function AssignedTasksHistoryContent() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredTasks.map(renderByMeTaskCard)}
+                {(() => {
+                  let previousDateKey: string | null = null;
+                  return filteredTasks.map((task) => {
+                    const dateMeta = getDateSeparatorMeta(
+                      getAssignedTaskDateValue(task, historySubTab),
+                      task.organizationTimeZone,
+                    );
+                    const showSeparator = !!dateMeta && dateMeta.key !== previousDateKey;
+                    if (dateMeta) previousDateKey = dateMeta.key;
+
+                    return (
+                      <React.Fragment key={task.instanceId ?? task.id}>
+                        {dateMeta && showSeparator && <TaskDateSeparator label={dateMeta.label} />}
+                        {renderByMeTaskCard(task)}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
@@ -458,3 +506,4 @@ function AssignedTasksHistoryContent() {
     </div>
   );
 }
+

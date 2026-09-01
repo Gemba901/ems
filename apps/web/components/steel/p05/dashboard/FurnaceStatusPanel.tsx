@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { Loader2, Flame } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { QueryErrorState } from "@/components/steel/dashboard/QueryErrorState";
-import type { MeltingDashboard, DashboardFurnaceStatus } from "@/services/steel-melting.service";
+import { statusBadgeClass, statusToSemantic } from "@/lib/steelStatusColors";
+import { stageLabel } from "@/components/steel/p05/shared";
+import type { MeltingDashboard } from "@/services/steel-melting.service";
 
 interface Props {
   data?: MeltingDashboard;
@@ -15,79 +15,93 @@ interface Props {
   onRetry?: () => void;
 }
 
-// Furnace.status is the real Prisma enum (READY | MAINTENANCE | DOWN |
-// RETIRED) — no "RUNNING" status exists in the schema, so an active heat is
-// shown as separate, derived information rather than invented as a status.
-const STATUS_STYLES: Record<string, string> = {
-  READY: "bg-emerald-50 text-emerald-700",
-  MAINTENANCE: "bg-amber-50 text-amber-700",
-  DOWN: "bg-red-50 text-red-700",
-  RETIRED: "bg-slate-100 text-slate-500",
-};
-
-function FurnaceRow({ furnace }: { furnace: DashboardFurnaceStatus }) {
-  const content = (
-    <div className="flex flex-col gap-2 rounded-xl border border-slate-100 hover:border-slate-300 hover:shadow-sm px-4 py-3 transition-all">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-semibold text-slate-900 truncate">{furnace.code} — {furnace.name}</p>
-        </div>
-        <Badge className={STATUS_STYLES[furnace.status] ?? "bg-slate-100 text-slate-600"}>{furnace.status}</Badge>
-      </div>
-      {furnace.activeHeat ? (
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div>
-            <span className="text-slate-400 block">Current Heat</span>
-            <span className="font-medium text-slate-700">{furnace.activeHeat.heatInProcessNumber}</span>
-          </div>
-          <div>
-            <span className="text-slate-400 block">Current Temperature</span>
-            <span className="font-medium text-slate-700">{furnace.activeHeat.temperatureCelsius !== null ? `${furnace.activeHeat.temperatureCelsius}°C` : "—"}</span>
-          </div>
-        </div>
-      ) : (
-        <p className="text-xs text-slate-400">No active heat</p>
-      )}
-      {furnace.lining && (
-        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-50">
-          <div>
-            <span className="text-slate-400 block">Lining</span>
-            <span className="font-medium text-slate-700">{furnace.lining.id.slice(0, 8)}</span>
-          </div>
-          <div>
-            <span className="text-slate-400 block">Heats on Lining</span>
-            <span className="font-medium text-slate-700">{furnace.lining.heatsCompleted}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  return furnace.activeHeat ? (
-    <Link href={`/steel/p05/${furnace.activeHeat.id}`}>{content}</Link>
-  ) : (
-    content
-  );
-}
-
+// Per-furnace status cards — mirrors the mockup's "Furnace Status" row
+// (EAF-01 ACTIVE / IDLE / MAINT cards). Backed entirely by
+// MeltingDashboard.furnaceStatus, which the API already returns
+// (furnace code/name/status, its active heat's heat number/stage/temperature,
+// and its current lining) but no dashboard component previously rendered.
+// "Tap Est." and a circular gauge from the mockup are omitted — melting
+// doesn't record a tap-time estimate (that belongs to P06 tapping), and a
+// gauge widget would just be a stylistic wrapper around the same
+// temperatureCelsius value already shown as text, so it's skipped rather
+// than reimplemented for no added information.
 export function FurnaceStatusPanel({ data, isLoading, isError, isFetching, onRetry }: Props) {
+  const furnaces = data?.furnaceStatus ?? [];
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Flame className="h-4 w-4 text-red-500" />
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Flame className="h-4 w-4 text-slate-500" />
           Furnace Status
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2.5">
+      <CardContent>
         {isLoading ? (
-          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+          </div>
         ) : isError ? (
           <QueryErrorState onRetry={onRetry ?? (() => {})} isRetrying={isFetching} message="Could not load furnace status." />
-        ) : !data || data.furnaceStatus.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-6">No furnaces set up yet.</p>
+        ) : furnaces.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">No furnaces configured.</p>
         ) : (
-          data.furnaceStatus.map((f) => <FurnaceRow key={f.id} furnace={f} />)
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+            {furnaces.map((f) => {
+              const displayStatus = f.activeHeat ? "MELTING" : f.status;
+              const semantic = statusToSemantic(displayStatus);
+              return (
+                <div
+                  key={f.id}
+                  className={
+                    "rounded-lg border p-3 space-y-2 " +
+                    (semantic === "ERROR" ? "border-red-200 bg-red-50/30" : semantic === "WARNING" ? "border-amber-200 bg-amber-50/30" : "border-slate-200")
+                  }
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-slate-900">{f.code}</span>
+                    <span className={`text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 ${statusBadgeClass(displayStatus)}`}>
+                      {displayStatus}
+                    </span>
+                  </div>
+
+                  {f.activeHeat ? (
+                    <div className="space-y-1">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Heat</p>
+                        <p className="text-xs font-medium text-slate-800 truncate">{f.activeHeat.heatInProcessNumber}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Phase</p>
+                        <p className="text-xs font-medium text-slate-800">{stageLabel(f.activeHeat.stage)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Current Temp.</p>
+                        <p className="text-xs font-medium text-slate-800">
+                          {f.activeHeat.temperatureCelsius !== null ? `${f.activeHeat.temperatureCelsius} °C` : "Not recorded"}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Status</p>
+                      <p className="text-xs font-medium text-slate-600">
+                        {f.status === "READY" ? "Available" : f.status === "MAINTENANCE" ? "Maintenance" : f.status === "DOWN" ? "Down" : "Retired"}
+                      </p>
+                    </div>
+                  )}
+
+                  {f.lining && (
+                    <div className="pt-1 border-t border-slate-100 space-y-0.5">
+                      <p className="text-[10px] text-slate-400">Lining: <span className="font-medium text-slate-600">{f.lining.code ?? "Uncoded campaign"}</span></p>
+                      <p className="text-[10px] text-slate-400">Installed: {new Date(f.lining.installedAt).toLocaleDateString()} · {f.lining.heatsCompleted} heats</p>
+                      <p className="text-[10px] text-slate-500 font-semibold">{(f.lining.totalTonnesMelted ?? 0).toFixed(1)} t melted under lining</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </CardContent>
     </Card>

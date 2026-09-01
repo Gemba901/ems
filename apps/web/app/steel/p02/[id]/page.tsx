@@ -8,20 +8,21 @@ import { useAuthStore } from "@/store/auth.store";
 import { SteelSourcingService } from "@/services/steel-sourcing.service";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
-import { S2IdentifyAssess } from "./S2IdentifyAssess";
+import { S1Requirement } from "./S1Requirement";
+import { S2SupplierAssessment } from "./S2SupplierAssessment";
 import { S3QuoteSelection } from "./S3QuoteSelection";
 import { S4SpecificationPO } from "./S4SpecificationPO";
 import { S5DeliveryHandover } from "./S5DeliveryHandover";
 
-// Every reachable P02 stage (A01-A12) resolves to one of the S2-S5 screens.
+// Every reachable P02 stage (A01-A12) resolves to one of the S1-S5 screens.
 // This page is purely a router/orchestrator — no workflow UI lives here.
 // Mirrors the pattern established in apps/web/app/steel/p01/[id]/page.tsx.
 //
-// A01 has no separate pending action of its own: the sourcing order is
-// created directly at stage A01_REQUIREMENT_REVIEWED (unlike P01, where A01
-// still needs a follow-up A02 confirmation before the plan is usable), so
-// there's no S1 "resume" screen to route back to here — S2 renders for A01
-// with its own A02 sub-step already active.
+// S1 (Requirement) covers A01-A02: the order is created at A01_REQUIREMENT_REVIEWED
+// and this page shows S1 until material classification (A02) is confirmed, at
+// which point the stage itself advances to A02_MATERIAL_TYPE_IDENTIFIED and the
+// router moves straight to S2 — no acknowledgement flag needed since there's no
+// shared terminal stage between the two screens (unlike S2/S3/S4 below).
 export default function SteelSourcingOrderDetailPage() {
   const params = useParams<{ id: string }>();
   const { accessToken } = useAuthStore();
@@ -95,16 +96,20 @@ export default function SteelSourcingOrderDetailPage() {
   // check below (which assumes a real supplier/PO flow happened).
   const isStockJump = order.materialSource === "EXISTING_STOCK" && order.stage === "A08_PO_CREATED";
 
-  // S2 (P02-A02/A03/A04, or A02/A03 only for the Existing Stock path)
+  // S1 (P02-A01/A02) — no acknowledgement flag needed; see note above.
+  if (order.stage === "A01_REQUIREMENT_REVIEWED") {
+    return <S1Requirement order={order} token={accessToken!} onRefresh={refresh} />;
+  }
+
+  // S2 (P02-A03/A04, or A03 only for the Existing Stock path)
   if (
-    order.stage === "A01_REQUIREMENT_REVIEWED" ||
     order.stage === "A02_MATERIAL_TYPE_IDENTIFIED" ||
     order.stage === "A03_SUPPLIER_CHECKED" ||
     (order.stage === "A04_SUPPLIER_RISK_REVIEWED" && !s2Acknowledged) ||
     (isStockJump && !s2Acknowledged)
   ) {
     return (
-      <S2IdentifyAssess
+      <S2SupplierAssessment
         order={order}
         token={accessToken!}
         onRefresh={() => {

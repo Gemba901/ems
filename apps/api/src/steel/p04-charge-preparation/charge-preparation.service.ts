@@ -193,6 +193,29 @@ export class ChargePreparationService {
   // read the same count before either writes, producing duplicate numbers.
   // The number FORMAT is unchanged; this only makes generate-then-write
   // safe under concurrency by regenerating and retrying on conflict.
+  // P2002's offending-field list lives at err.meta.target on the legacy
+  // engine, but the Prisma 7 driver-adapter (@prisma/adapter-pg) engine
+  // instead puts it at err.meta.constraint.fields or
+  // err.cause.constraint.fields, leaving meta.target undefined.
+  private uniqueConstraintFields(
+    err: Prisma.PrismaClientKnownRequestError,
+  ): string[] {
+    const meta = err.meta as
+      | { target?: string[]; constraint?: { fields?: string[] } }
+      | undefined;
+    const cause = (
+      err as unknown as {
+        cause?: { constraint?: { fields?: string[] } };
+      }
+    ).cause;
+    return (
+      meta?.target ??
+      meta?.constraint?.fields ??
+      cause?.constraint?.fields ??
+      []
+    );
+  }
+
   private async withUniqueRetry<T>(
     field: string,
     fn: () => Promise<T>,
@@ -205,7 +228,7 @@ export class ChargePreparationService {
         const isConflict =
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === 'P2002' &&
-          (err.meta?.target as string[] | undefined)?.includes(field);
+          this.uniqueConstraintFields(err).includes(field);
         if (!isConflict || attempt === maxAttempts) throw err;
       }
     }
@@ -401,7 +424,7 @@ export class ChargePreparationService {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002' &&
-        (err.meta?.target as string[] | undefined)?.includes('intakeId')
+        this.uniqueConstraintFields(err).includes('intakeId')
       ) {
         throw new BadRequestException(
           'One or more of the selected lots were just allocated to another charge preparation. Please refresh and select different lots.',

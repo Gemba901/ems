@@ -44,29 +44,15 @@ export interface SubStep {
   label: string;
 }
 
-// Compact sub-step labels for the horizontal stepper shown at the top of
-// each S1/S2/S3 screen (and on /new, which previews S1's stepper before an
-// intake exists). Deliberately shorter than the sidebar Intake Progress
-// card's labels — this is a page-level visual affordance, not a second
-// stage taxonomy; it still only ever groups the real A01-A14 activities.
-export const SCREEN_TOP_STEPS: SubStep[][] = [
-  [
-    { code: "A01", label: "Gate Arrival" },
-    { code: "A02", label: "Documents" },
-    { code: "A03", label: "Weigh In" },
-    { code: "A04", label: "Safety Check" },
-  ],
-  [
-    { code: "A05", label: "Area Assigned" },
-    { code: "A06-A09", label: "Inspection" },
-    { code: "A10", label: "Acceptance" },
-  ],
-  [
-    { code: "A11", label: "Unloading" },
-    { code: "A12", label: "Net Weight" },
-    { code: "A13", label: "Yard Stored" },
-    { code: "A14", label: "Stock Release" },
-  ],
+// The single 3-step workflow stepper shown at the top of every S1/S2/S3
+// screen (and on /new, which previews it before an intake exists) —
+// Arrival & Verification -> Material Inspection -> Weigh, Store & Release.
+// This mirrors SCREENS above one-for-one; it deliberately does not expose
+// the underlying A01-A14 activity codes as user-facing labels.
+export const WORKFLOW_STEPS: SubStep[] = [
+  { code: "S1", label: "Arrival & Verification" },
+  { code: "S2", label: "Material Inspection" },
+  { code: "S3", label: "Weigh, Store & Release" },
 ];
 
 export function stageToScreenIndex(stage: SteelIntakeStage): number {

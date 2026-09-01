@@ -14,6 +14,7 @@ import {
 } from 'class-validator';
 import {
   ActivityStatus,
+  EmployeeActivityStatus,
   TaskFrequency,
   TaskStatus,
   Priority,
@@ -122,6 +123,12 @@ export class CreateTaskFromActivityDto {
   acknowledgeOnCreate?: boolean;
 }
 
+export class UpdateEmployeeActivityAssignmentDto {
+  @IsNotEmpty()
+  @IsEnum(EmployeeActivityStatus)
+  status!: EmployeeActivityStatus;
+}
+
 export class CreateActivityDto {
   @IsOptional()
   @IsString()
@@ -187,13 +194,6 @@ export class CreateActivityDto {
   @IsOptional()
   @IsString()
   primaryResponsibleEmployeeId?: string;
-
-
-
-
-
-
-
 
   @IsOptional()
   @IsString()
@@ -288,13 +288,6 @@ export class UpdateActivityDto {
   @IsString()
   primaryResponsibleEmployeeId?: string;
 
-
-
-
-
-
-
-
   @IsOptional()
   @IsString()
   evidenceRequired?: string;
@@ -326,9 +319,9 @@ export class UpdateActivityDto {
 export class IngestActivityRowDto {
   activity!: CreateActivityDto;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  responsibleEmployeeCode!: string;
+  responsibleEmployeeCode?: string;
 
   @IsOptional()
   @IsString()
@@ -451,4 +444,3 @@ export class ReassignEscalatedTaskDto {
   @IsString()
   newOwnerId!: string;
 }
-

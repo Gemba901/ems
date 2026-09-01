@@ -183,7 +183,7 @@ export default function DwmsAlertForm({
     <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
       <form
         onSubmit={handleAlertSubmit}
-        className="space-y-6 rounded-2xl border border-border-app bg-white p-6 shadow-sm sm:p-8 lg:col-span-8"
+        className="space-y-6 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-8 lg:col-span-8"
       >
         {message && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
@@ -364,7 +364,7 @@ export default function DwmsAlertForm({
         </div>
       </form>
 
-      <aside className="rounded-2xl border border-border-app bg-white p-6 shadow-sm lg:sticky lg:top-6 lg:col-span-4">
+      <aside className="rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-6 lg:sticky lg:top-6 lg:col-span-4">
         <div className="flex items-center gap-2 border-b border-border-app pb-3">
           <Lightbulb className="h-4 w-4 text-amber-500" />
           <h3 className="text-sm font-bold uppercase tracking-wider text-text-app">

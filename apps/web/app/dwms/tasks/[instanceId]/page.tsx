@@ -34,11 +34,12 @@ import {
   buildActivityChains,
 } from "../../components/ActivityRelationChain";
 
-function formatDateTime(value?: string | null) {
+function formatDateTime(value?: string | null, timeZone?: string | null) {
   if (!value) return "Not available";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not available";
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: timeZone || undefined,
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
@@ -286,9 +287,9 @@ function TaskDetailContent() {
             icon={<CalendarClock className="h-4 w-4 text-blue-600" />}
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <InfoItem label="Scheduled for" value={formatDateTime(task.scheduledFor)} />
-              <InfoItem label="Due at" value={formatDateTime(task.dueAt)} />
-              <InfoItem label="Completed at" value={formatDateTime(task.completedAt)} />
+              <InfoItem label="Scheduled for" value={formatDateTime(task.scheduledFor, task.organizationTimeZone)} />
+              <InfoItem label="Due at" value={formatDateTime(task.dueAt, task.organizationTimeZone)} />
+              <InfoItem label="Completed at" value={formatDateTime(task.completedAt, task.organizationTimeZone)} />
               {task.wasOverdue && (
                 <InfoItem
                   label="Overdue history"
@@ -360,7 +361,7 @@ function TaskDetailContent() {
                           {eventLabel(event)}
                         </h3>
                         <span className="text-xs text-slate-500">
-                          {formatDateTime(event.createdAt)}
+                          {formatDateTime(event.createdAt, task.organizationTimeZone)}
                         </span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">

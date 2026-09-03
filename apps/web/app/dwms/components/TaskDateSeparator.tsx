@@ -1,27 +1,13 @@
+import { getOrganizationDateKey } from "../utils/organizationDate";
+
 type DateSeparatorMeta = {
   key: string;
   label: string;
 };
-
-function getDateKey(value: Date, timeZone?: string | null) {
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timeZone || undefined,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(value);
-    const partMap = new Map(parts.map((part) => [part.type, part.value]));
-    return `${partMap.get("year")}-${partMap.get("month")}-${partMap.get("day")}`;
-  } catch {
-    return null;
-  }
-}
-
 function getRelativeKey(offsetDays: number, timeZone?: string | null) {
   const value = new Date();
   value.setDate(value.getDate() + offsetDays);
-  return getDateKey(value, timeZone);
+  return getOrganizationDateKey(value, timeZone);
 }
 
 export function getDateSeparatorMeta(
@@ -33,7 +19,7 @@ export function getDateSeparatorMeta(
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
 
-  const key = getDateKey(date, timeZone);
+  const key = getOrganizationDateKey(date, timeZone);
   if (!key) return null;
 
   if (key === getRelativeKey(0, timeZone)) {

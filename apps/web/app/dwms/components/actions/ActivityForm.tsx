@@ -9,6 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import {
+  ActivityIngestionAssignmentMode,
   DwmsService,
   getDwmsErrorMessage,
   type CreateActivityPayload,
@@ -355,6 +356,13 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
   ): IngestActivityRowPayload {
     return {
       rowNumber,
+      assignmentMode:
+        (firstValue(row, [
+          "Assignment Mode",
+          "Assign To",
+          "Assignment Scope",
+        ]) as ActivityIngestionAssignmentMode) ||
+        ActivityIngestionAssignmentMode.INDIVIDUAL,
       responsibleEmployeeCode: firstValue(row, [
         "Emp ID",
         "Employee ID",
@@ -446,6 +454,10 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         file.name,
       );
       const failures = result.results.filter((row) => !row.success);
+      const assignedCount = result.results.reduce(
+        (total, row) => total + (row.success ? (row.assignedCount ?? 0) : 0),
+        0,
+      );
       if (failures.length > 0) {
         const failureByRowNumber = new Map(
           failures.map((failure) => [failure.rowNumber, failure.message]),
@@ -489,8 +501,8 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         : "";
       setMessage(
         failures.length > 0
-          ? `Imported ${result.created} activities. ${result.failed} rows failed. ${failureSummary}${skippedSummary}`
-          : `Imported ${result.created} activities successfully.${skippedSummary}`,
+          ? `Imported ${result.created} activities and assigned them to ${assignedCount} users. ${result.failed} rows failed. ${failureSummary}${skippedSummary}`
+          : `Imported ${result.created} activities and assigned them to ${assignedCount} users successfully.${skippedSummary}`,
       );
       onCreated?.();
     } catch (error) {
@@ -710,14 +722,18 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               <p>
                 Department, Sub - Department, Activity Code, Estimated Time,
                 Purpose, Responsible Job Designation, Expected Output, Documents
-                Required, Parent Activity Code, Emp ID.
+                Required, Parent Activity Code, Assignment Mode, Emp ID.
               </p>
             </div>
             <p>
-              Frequency must be DAILY, WEEKLY, MONTHLY, QUARTERLY, or YEARLY.
-              Activity ingestion does not use due dates. Emp ID can also be named
-              Employee ID, Employee Code, Responsible Emp ID, or Responsible
-              Employee Code, and is stored only for import traceability.
+              Assignment Mode must be Individual, All Users, All Management, or
+              All HOD. Leave it blank for Individual. Emp ID is required only for
+              Individual; group modes assign to every matching employee in the
+              organization. Frequency must be DAILY, WEEKLY, MONTHLY, QUARTERLY,
+              or YEARLY. Activity ingestion does not use due dates. Emp ID can
+              also be named Employee ID, Employee Code, Responsible Emp ID, or
+              Responsible Employee Code, and is stored only for import
+              traceability.
             </p>
           </div>
         </aside>

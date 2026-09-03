@@ -12,6 +12,7 @@ import {
   type DwmsAssignedTaskHistoryItem,
 } from "@/services/dwms.service";
 import { Clock, ExternalLink, Paperclip, PlusCircle } from "lucide-react";
+import { formatOrganizationDate, isTodayInOrganizationTimeZone } from "../utils/organizationDate";
 
 const frequencyBasedTaskFrequencies = new Set([
   "DAILY",
@@ -91,16 +92,16 @@ function AssignedTasksHistoryContent() {
     void loadLists();
   }, []);
 
-  const formatTaskDueDate = (dueDateStr: string | null) => {
+  const formatTaskDueDate = (dueDateStr: string | null, timeZone?: string | null) => {
     if (!dueDateStr) return "No due date";
     const dueDate = new Date(dueDateStr);
-    const today = new Date().toDateString();
-    if (dueDate.toDateString() === today) {
+    if (isTodayInOrganizationTimeZone(dueDate, timeZone)) {
       return "Due by Today";
     }
-    const day = dueDate.getDate();
-    const month = dueDate.toLocaleDateString("en-US", { month: "long" });
-    return `${day} ${month}`;
+    return formatOrganizationDate(dueDate, timeZone, {
+      day: "numeric",
+      month: "long",
+    }) ?? "No due date";
   };
 
   const formatAcknowledgedAt = (value?: string | null) => {
@@ -242,7 +243,7 @@ function AssignedTasksHistoryContent() {
               className="h-3.5 w-3.5 text-zinc-400 shrink-0"
               strokeWidth={1.5}
             />
-            <span>{formatTaskDueDate(task.dueDate ?? null)}</span>
+            <span>{formatTaskDueDate(task.dueDate ?? null, task.organizationTimeZone)}</span>
           </div>
         </div>
 

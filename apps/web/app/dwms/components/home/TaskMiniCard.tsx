@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DwmsTaskItem as TaskItem, DwmsTaskStatus as TaskStatus } from '@/services/dwms.service';
 import { ArrowUp, Minus, Repeat, Clock, CheckCircle, ChevronDown } from 'lucide-react';
+import {
+  formatOrganizationDate,
+  isTodayInOrganizationTimeZone,
+} from '../../utils/organizationDate';
 
 type Props = {
   task: TaskItem;
@@ -299,15 +303,15 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
       return null;
     }
 
-    const todayStr = new Date().toDateString();
     let dateText = '';
 
-    if (dueDate.toDateString() === todayStr) {
+    if (isTodayInOrganizationTimeZone(dueDate, getTaskTimeZone(task))) {
       dateText = 'Due by Today';
     } else {
-      const day = dueDate.getDate();
-      const month = dueDate.toLocaleDateString('en-US', { month: 'long' });
-      dateText = `${day} ${month}`;
+      dateText = formatOrganizationDate(dueDate, getTaskTimeZone(task), {
+        day: 'numeric',
+        month: 'long',
+      }) ?? '';
     }
 
     return (

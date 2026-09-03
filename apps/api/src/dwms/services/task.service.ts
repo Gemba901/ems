@@ -19,7 +19,6 @@ import {
 import { getKenyaPublicHolidays } from '../../calendar/kenya-holidays';
 import {
   endOfDayInTimeZone,
-  getCurrentUtcDateInTimeZone,
   startOfDayInTimeZone,
   isBeforeUtcDate,
   parseDateOnly,
@@ -1073,9 +1072,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       throw new BadRequestException('Invalid frequency');
     }
 
+    const referenceDate = parseDateOnly(rawDate) ?? toUtcDateOnly(new Date());
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
-    const referenceDate =
-      parseDateOnly(rawDate) ?? getCurrentUtcDateInTimeZone(timeZone);
     const scope = rawScope?.trim().toLowerCase() ?? null;
     if (scope && scope !== 'scheduled' && scope !== 'completed') {
       throw new BadRequestException('Invalid task scope');
@@ -1298,9 +1296,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
 
+    const referenceDate = parseDateOnly(rawDate) ?? toUtcDateOnly(new Date());
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
-    const referenceDate =
-      parseDateOnly(rawDate) ?? getCurrentUtcDateInTimeZone(timeZone);
 
     const tasks = await this.prisma.task.findMany({
       where: { ownerId: employee.id },
@@ -1659,6 +1656,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
   }
 
   async generateUpcomingTaskInstances(days = TASK_INSTANCE_GENERATION_DAYS) {
+    const startDate = toUtcDateOnly(new Date());
     const tasks = await this.prisma.task.findMany({
       where: {
         status: { notIn: nonOverdueStatusValues },
@@ -1673,7 +1671,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       );
       total += await this.generateInstancesForTask(
         task,
-        getCurrentUtcDateInTimeZone(timeZone),
+        startDate,
         days,
         timeZone,
         task.owner.organizationId,
@@ -1788,11 +1786,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     };
   }
 
-  async createAssignedTask(
-    user: UserPayload,
-    dto: CreateAssignedTaskDto,
-    options: { notifyAssignee?: boolean } = {},
-  ) {
+  async createAssignedTask(user: UserPayload, dto: CreateAssignedTaskDto) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
     if (dto.priority === Priority.LOW) {
@@ -1921,16 +1915,14 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       user.organizationId,
     );
 
-    if (options.notifyAssignee !== false) {
-      await this.notifications.create({
-        employeeId: dto.assignedToId,
-        type: NotificationType.ACTION_REQUIRED,
-        module: 'DWMS',
-        title: 'New Task Assigned',
-        message: `You have been assigned a new task: "${dto.title}".`,
-        actionUrl: '/dwms/tasks',
-      });
-    }
+    await this.notifications.create({
+      employeeId: dto.assignedToId,
+      type: NotificationType.ACTION_REQUIRED,
+      module: 'DWMS',
+      title: 'New Task Assigned',
+      message: `You have been assigned a new task: "${dto.title}".`,
+      actionUrl: '/dwms/tasks',
+    });
 
     return { message: 'Assigned task created', task };
   }
@@ -2473,13 +2465,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
   }
 
   private async getCurrentInstanceForTask(task: any) {
+    const referenceDate = toUtcDateOnly(new Date());
     const organizationId = await this.getTaskOrganizationId(task);
     if (!organizationId) {
       throw new NotFoundException('Task organization not found');
     }
-    const referenceDate = getCurrentUtcDateInTimeZone(
-      await this.getOrganizationTimeZone(organizationId),
-    );
     const scheduledFor = await this.getOfficeScheduledForTaskDate(
       task,
       referenceDate,

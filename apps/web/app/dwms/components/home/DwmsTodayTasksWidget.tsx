@@ -13,6 +13,10 @@ import {
 import TaskMiniCard from "./TaskMiniCard";
 import { uploadImage } from "@/services/uploads.service";
 
+function toDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 type Props = {
   maxItems?: number;
   className?: string;
@@ -58,7 +62,7 @@ export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: P
       setLoading(true);
       setError(null);
       try {
-        const response = await DwmsService.getTodayTasks(accessToken);
+        const response = await DwmsService.getTodayTasks(accessToken, toDateKey(new Date()));
         if (!cancelled) setTasks(response.tasks ?? []);
       } catch (err: unknown) {
         if (!cancelled) {
@@ -77,7 +81,7 @@ export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: P
   }, [accessToken]);
 
   async function reloadTasks(token: string) {
-    const response = await DwmsService.getTodayTasks(token);
+    const response = await DwmsService.getTodayTasks(token, toDateKey(new Date()));
     setTasks(response.tasks ?? []);
   }
 

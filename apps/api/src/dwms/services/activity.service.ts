@@ -7,11 +7,9 @@ import {
   ActivityStatus,
   EmployeeActivityStatus,
   Priority,
-  RoleName,
   TaskFrequency,
 } from 'db';
 import {
-  ActivityIngestionAssignmentMode,
   CreateActivityDto,
   CreateTaskFromActivityDto,
   IngestActivitiesDto,
@@ -470,54 +468,6 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       `Responsible Emp ID "${code}" was not found in this organization`,
     );
   }
-
-  private async resolveActivityIngestionRecipients(
-    organizationId: string,
-    assignmentMode: ActivityIngestionAssignmentMode,
-    responsibleEmployeeCode?: string | null,
-  ) {
-    if (assignmentMode === ActivityIngestionAssignmentMode.INDIVIDUAL) {
-      return [
-        await this.resolveEmployeeByCodeOrId(
-          organizationId,
-          responsibleEmployeeCode ?? '',
-        ),
-      ];
-    }
-
-    const roleName =
-      assignmentMode === ActivityIngestionAssignmentMode.ALL_HOD
-        ? RoleName.HOD
-        : assignmentMode === ActivityIngestionAssignmentMode.ALL_MANAGEMENT
-          ? RoleName.MANAGEMENT
-          : null;
-
-    const recipients = await this.prisma.employee.findMany({
-      where: {
-        organizationId,
-        ...(roleName
-          ? {
-              user: {
-                organizations: {
-                  some: { organizationId, role: { name: roleName } },
-                },
-              },
-            }
-          : {}),
-      },
-      select: { id: true, employeeCode: true },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    if (recipients.length === 0) {
-      throw new BadRequestException(
-        `No employees found for assignment mode "${assignmentMode}"`,
-      );
-    }
-
-    return recipients;
-  }
-
   async listActivities(user: UserPayload, status?: string) {
     await this.getEmployee(user.userId, user.organizationId);
     const activityStatus =
@@ -752,7 +702,6 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       activityId?: string;
       taskId?: string;
       responsibleEmployeeId?: string;
-      assignedCount?: number;
       message: string;
     }> = [];
     const rowRecords: Array<{
@@ -776,7 +725,6 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       activityName: string | null;
       frequency: TaskFrequency;
       parentActivityCode: string | null;
-      assignedCount: number;
     }> = [];
 
     for (let index = 0; index < rows.length; index += 1) {
@@ -784,23 +732,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       const rowNumber = row.rowNumber ?? index + 2;
       const activityName = row.activity?.name ?? null;
       const activityCode = row.activity?.code ?? null;
-      const assignmentMode =
-        row.assignmentMode ?? ActivityIngestionAssignmentMode.INDIVIDUAL;
-      const responsibleEmployeeCode =
-        assignmentMode === ActivityIngestionAssignmentMode.INDIVIDUAL
-          ? (row.responsibleEmployeeCode ?? null)
-          : null;
+      const responsibleEmployeeCode = row.responsibleEmployeeCode ?? null;
       const parentActivityCode = row.parentActivityCode?.trim() || null;
       try {
-        if (
-          !Object.values(ActivityIngestionAssignmentMode).includes(
-            assignmentMode,
-          )
-        ) {
-          throw new BadRequestException(
-            `Assignment Mode must be one of: ${Object.values(ActivityIngestionAssignmentMode).join(', ')}`,
-          );
-        }
         const activityPayload = this.stripActivityPersonReferences(
           row.activity,
         );
@@ -821,87 +755,45 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             'Activity ingestion does not support planned one-time rows. Use a recurring frequency: Daily, Weekly, Monthly, Quarterly, or Yearly.',
           );
         }
-
-        const recipients = await this.resolveActivityIngestionRecipients(
-          user.organizationId,
-          assignmentMode,
-          row.responsibleEmployeeCode,
-        );
-
         const created = await this.createActivity(user, activityPayload);
         const activityId = created.activity?.id;
         if (!activityId) {
           throw new BadRequestException('Activity could not be created');
         }
 
-        try {
-          const taskIds: string[] = [];
-          for (const recipient of recipients) {
-            const taskResult = (await this.createTaskFromActivity(
-              user,
-              activityId,
-              {
-                assignedToId: recipient.id,
-                frequency: activityPayload.frequency,
-                priority: Priority.MEDIUM,
-                isAdhoc: false,
-                acknowledgeOnCreate: true,
-              },
-              { notifyAssignee: false },
-            )) as { task?: { id?: string } };
-            if (taskResult.task?.id) taskIds.push(taskResult.task.id);
-          }
-          const taskId = taskIds[0];
-          const assignedCount = recipients.length;
-          const assignmentMessage = `Activity assigned to ${assignedCount} ${assignedCount === 1 ? 'user' : 'users'}`;
-          const resultIndex = results.length;
-          results.push({
-            rowNumber,
-            success: true,
-            activityId,
-            taskId,
-            responsibleEmployeeId:
-              assignedCount === 1 ? recipients[0]?.id : undefined,
-            assignedCount,
-            message: parentActivityCode
-              ? `${assignmentMessage}; parent activity pending link`
-              : assignmentMessage,
-          });
-          const rowRecordIndex = rowRecords.length;
-          rowRecords.push({
-            organizationId: user.organizationId,
-            ingestionId: ingestion.id,
-            rowNumber,
-            status: 'CREATED',
-            activityName,
-            activityCode: created.activity?.code ?? activityCode,
-            responsibleEmployeeCode,
-            message: parentActivityCode
-              ? `${assignmentMessage}; parent activity pending link`
-              : assignmentMessage,
-            activityId,
-            taskId,
-          });
-          successfulImports.push({
-            rowNumber,
-            resultIndex,
-            rowRecordIndex,
-            activityId,
-            activityCode: created.activity?.code ?? activityCode,
-            activityName,
-            frequency: activityPayload.frequency,
-            parentActivityCode,
-            assignedCount,
-          });
-        } catch (taskError) {
-          await this.prisma.task
-            .deleteMany({ where: { activityId } })
-            .catch(() => undefined);
-          await this.prisma.activity
-            .delete({ where: { id: activityId } })
-            .catch(() => undefined);
-          throw taskError;
-        }
+        const resultIndex = results.length;
+        results.push({
+          rowNumber,
+          success: true,
+          activityId,
+          message: parentActivityCode
+            ? 'Activity imported; parent activity pending link'
+            : 'Activity imported',
+        });
+        const rowRecordIndex = rowRecords.length;
+        rowRecords.push({
+          organizationId: user.organizationId,
+          ingestionId: ingestion.id,
+          rowNumber,
+          status: 'CREATED',
+          activityName,
+          activityCode: created.activity?.code ?? activityCode,
+          responsibleEmployeeCode,
+          message: parentActivityCode
+            ? 'Activity imported; parent activity pending link'
+            : 'Activity imported',
+          activityId,
+        });
+        successfulImports.push({
+          rowNumber,
+          resultIndex,
+          rowRecordIndex,
+          activityId,
+          activityCode: created.activity?.code ?? activityCode,
+          activityName,
+          frequency: activityPayload.frequency,
+          parentActivityCode,
+        });
       } catch (error: any) {
         const message = this.cleanActivityIngestionError(error);
         results.push({ rowNumber, success: false, message });
@@ -984,25 +876,15 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           parentActivityIds,
         );
 
-        const message = `Activity assigned to ${item.assignedCount} ${item.assignedCount === 1 ? 'user' : 'users'} and parent activity linked`;
+        const message = 'Activity and parent activity linked';
         results[item.resultIndex].message = message;
         rowRecords[item.rowRecordIndex].message = message;
       } catch (error: any) {
-        await this.prisma.task
-          .deleteMany({ where: { activityId: item.activityId } })
-          .catch(() => undefined);
-        await this.prisma.activity
-          .delete({ where: { id: item.activityId } })
-          .catch(() => undefined);
         const message = this.cleanActivityIngestionError(error);
         results[item.resultIndex].success = false;
         results[item.resultIndex].message = message;
-        results[item.resultIndex].activityId = undefined;
-        results[item.resultIndex].taskId = undefined;
         rowRecords[item.rowRecordIndex].status = 'FAILED';
         rowRecords[item.rowRecordIndex].message = message;
-        rowRecords[item.rowRecordIndex].activityId = null;
-        rowRecords[item.rowRecordIndex].taskId = null;
       }
     }
 
@@ -1285,7 +1167,6 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     user: UserPayload,
     activityId: string,
     dto: CreateTaskFromActivityDto,
-    options: { notifyAssignee?: boolean } = {},
   ) {
     const activity = await this.prisma.activity.findFirst({
       where: { id: activityId, organizationId: user.organizationId },
@@ -1306,24 +1187,20 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     const frequency = dto.frequency ?? activity.frequency;
     assertSupportedActivityFrequency(frequency);
 
-    return this.createAssignedTask(
-      user,
-      {
-        activityId: activity.id,
-        title: activity.name,
-        description: activity.workMethod ?? activity.purpose ?? undefined,
-        assignedToId,
-        dueDate: dto.dueDate,
-        priority: dto.priority ?? Priority.MEDIUM,
-        frequency,
-        approvedById: dto.approvedById ?? undefined,
-        backupOwnerId: dto.backupOwnerId ?? undefined,
-        requiresCompletionDocument: !!activity.evidenceRequired?.trim(),
-        completionDocumentName: activity.evidenceRequired?.trim() || undefined,
-        isAdhoc: dto.isAdhoc,
-        acknowledgeOnCreate: dto.acknowledgeOnCreate,
-      },
-      options,
-    );
+    return this.createAssignedTask(user, {
+      activityId: activity.id,
+      title: activity.name,
+      description: activity.workMethod ?? activity.purpose ?? undefined,
+      assignedToId,
+      dueDate: dto.dueDate,
+      priority: dto.priority ?? Priority.MEDIUM,
+      frequency,
+      approvedById: dto.approvedById ?? undefined,
+      backupOwnerId: dto.backupOwnerId ?? undefined,
+      requiresCompletionDocument: !!activity.evidenceRequired?.trim(),
+      completionDocumentName: activity.evidenceRequired?.trim() || undefined,
+      isAdhoc: dto.isAdhoc,
+      acknowledgeOnCreate: dto.acknowledgeOnCreate,
+    });
   }
 }

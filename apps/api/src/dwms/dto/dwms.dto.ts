@@ -316,19 +316,8 @@ export class UpdateActivityDto {
   parentActivityId?: string;
 }
 
-export enum ActivityIngestionAssignmentMode {
-  INDIVIDUAL = 'Individual',
-  ALL_USERS = 'All Users',
-  ALL_MANAGEMENT = 'All Management',
-  ALL_HOD = 'All HOD',
-}
-
 export class IngestActivityRowDto {
   activity!: CreateActivityDto;
-
-  @IsOptional()
-  @IsEnum(ActivityIngestionAssignmentMode)
-  assignmentMode?: ActivityIngestionAssignmentMode;
 
   @IsOptional()
   @IsString()

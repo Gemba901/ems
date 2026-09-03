@@ -119,10 +119,12 @@ export default function TaskDashboard() {
     setLoading(true);
     setError(null);
     try {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const token = useAuthStore.getState().accessToken ?? "";
       const [scheduledRes, completedRes] = await Promise.all([
-        DwmsService.getTodayTasks(token, undefined, "scheduled"),
-        DwmsService.getTodayTasks(token, undefined, "completed"),
+        DwmsService.getTodayTasks(token, today, "scheduled"),
+        DwmsService.getTodayTasks(token, today, "completed"),
       ]);
       setTasks(scheduledRes?.tasks ?? []);
       setCompletedHistoryTasks(completedRes?.tasks ?? []);

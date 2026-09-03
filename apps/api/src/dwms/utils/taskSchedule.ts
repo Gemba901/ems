@@ -44,29 +44,6 @@ export function toUtcDateOnly(value: Date): Date {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
 }
 
-export function getCurrentUtcDateInTimeZone(timeZone: string | null): Date {
-  if (!timeZone) return toUtcDateOnly(new Date());
-
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(new Date());
-    const partMap = new Map(parts.map((part) => [part.type, part.value]));
-    return new Date(
-      Date.UTC(
-        Number(partMap.get('year')),
-        Number(partMap.get('month')) - 1,
-        Number(partMap.get('day')),
-      ),
-    );
-  } catch {
-    return toUtcDateOnly(new Date());
-  }
-}
-
 export function endOfUtcDay(value: Date): Date {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate(), 23, 59, 59, 999));
 }

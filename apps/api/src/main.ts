@@ -1,16 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { ExpressAdapter } from '@nestjs/platform-express';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import cookieParser from 'cookie-parser';
-import express, { json } from 'express';
 
 async function bootstrap() {
-  const server = express();
-  server.post('/dwms/activities/ingest', json({ limit: '2mb' }));
-
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+  const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
 
   const allowedOrigins = process.env.CORS_ORIGINS

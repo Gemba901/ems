@@ -21,6 +21,7 @@ import {
 } from "@/services/dwms.service";
 import { LeaveService } from "@/services/leave.service";
 import { useAuthStore } from "@/store/auth.store";
+import { getOrganizationTodayKey } from "../../utils/organizationDate";
 import { Role } from "@/types/role";
 import DwmsSelectDropdown from "../../components/DwmsSelectDropdown";
 
@@ -289,6 +290,9 @@ function getHolidayName(dateKey: string) {
 export default function CreateTaskAction() {
   const router = useRouter();
   const { accessToken, user } = useAuthStore();
+  const organizationToday = getOrganizationTodayKey(
+    user?.organizationTimeZone,
+  );
   const [title, setTitle] = useState("");
   const [creationMode, setCreationMode] =
     useState<TaskCreationMode>("ACTIVITY");
@@ -300,10 +304,10 @@ export default function CreateTaskAction() {
   const [approverCandidates, setApproverCandidates] = useState<
     DwmsEmployeeOption[]
   >([]);
-  const [dueDate, setDueDate] = useState(toDateKey(new Date()));
+  const [dueDate, setDueDate] = useState(organizationToday);
   const [isDueDateCalendarOpen, setIsDueDateCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() =>
-    startOfMonth(new Date()),
+    startOfMonth(new Date(`${organizationToday}T00:00:00`)),
   );
   const [workingDays, setWorkingDays] =
     useState<number[]>(DEFAULT_WORKING_DAYS);
@@ -335,7 +339,7 @@ export default function CreateTaskAction() {
     (activity) => activity.id === activityId,
   );
   const workingDaySet = useMemo(() => new Set(workingDays), [workingDays]);
-  const todayDateStr = toDateKey(new Date());
+  const todayDateStr = organizationToday;
   const calendarCells = useMemo(
     () => getCalendarCells(calendarMonth),
     [calendarMonth],
@@ -693,7 +697,7 @@ export default function CreateTaskAction() {
       setBackupOwnerId("");
       setRequiresCompletionDocument(false);
       setCompletionDocumentName("");
-      setDueDate(toDateKey(new Date()));
+      setDueDate(organizationToday);
       setPriority("MEDIUM");
       setFrequency("PLANNED");
       setMessage("Task assigned successfully!");

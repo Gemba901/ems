@@ -96,8 +96,17 @@ export class DwmsController {
     @Query('frequency') frequency?: string,
     @Query('date') date?: string,
     @Query('scope') scope?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.dwmsService.getMyDwmsTasks(user, frequency, date, scope);
+    return this.dwmsService.getMyDwmsTasks(
+      user,
+      frequency,
+      date,
+      scope,
+      page,
+      limit,
+    );
   }
 
   @Get('myDwms/tasks/summary')

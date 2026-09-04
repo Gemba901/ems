@@ -14,6 +14,8 @@ import {
 } from "@/services/dwms.service";
 import { uploadImage } from "@/services/uploads.service";
 
+const COMPLETED_PAGE_SIZE = 20;
+
 const frequencyBasedTaskFrequencies = new Set([
   "DAILY",
   "WEEKLY",
@@ -56,6 +58,13 @@ export default function TaskDashboard() {
   // Tasks and loading state
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [completedHistoryTasks, setCompletedHistoryTasks] = useState<TaskItem[]>([]);
+  const [completedPage, setCompletedPage] = useState(1);
+  const [completedPagination, setCompletedPagination] = useState({
+    page: 1,
+    limit: COMPLETED_PAGE_SIZE,
+    total: 0,
+    pages: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completionTask, setCompletionTask] = useState<{
@@ -119,15 +128,27 @@ export default function TaskDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const token = useAuthStore.getState().accessToken ?? "";
       const [scheduledRes, completedRes] = await Promise.all([
-        DwmsService.getTodayTasks(token, today, "scheduled"),
-        DwmsService.getTodayTasks(token, today, "completed"),
+        DwmsService.getTodayTasks(token, undefined, "scheduled"),
+        DwmsService.getTodayTasks(
+          token,
+          undefined,
+          "completed",
+          completedPage,
+          COMPLETED_PAGE_SIZE,
+        ),
       ]);
       setTasks(scheduledRes?.tasks ?? []);
       setCompletedHistoryTasks(completedRes?.tasks ?? []);
+      setCompletedPagination(
+        completedRes?.pagination ?? {
+          page: completedPage,
+          limit: COMPLETED_PAGE_SIZE,
+          total: completedRes?.tasks?.length ?? 0,
+          pages: completedRes?.tasks?.length ? 1 : 0,
+        },
+      );
     } catch (fetchError) {
       const message =
         fetchError instanceof Error
@@ -139,7 +160,7 @@ export default function TaskDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [completedPage]);
 
   useEffect(() => {
     void loadTasks();
@@ -316,7 +337,7 @@ export default function TaskDashboard() {
   const tabCounts = useMemo(() => {
     const all = tasks.length;
     const overdue = overdueTasks.length;
-    const completed = completedTasks.length;
+    const completed = completedPagination.total;
     const notAcknowledged = notAcknowledgedTasks.length;
     const pending = pendingTasks.length;
     const approvalPending = approvalPendingTasks.length;
@@ -324,7 +345,7 @@ export default function TaskDashboard() {
   }, [
     tasks,
     overdueTasks,
-    completedTasks,
+    completedPagination.total,
     notAcknowledgedTasks,
     pendingTasks,
     approvalPendingTasks,
@@ -416,7 +437,10 @@ export default function TaskDashboard() {
           {/* Title Zone & Filter Pills */}
           <TaskHeader
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={(tab) => {
+              setActiveTab(tab);
+              if (tab !== "COMPLETED") setCompletedPage(1);
+            }}
             counts={tabCounts}
           />
 
@@ -608,6 +632,7 @@ export default function TaskDashboard() {
                 const dateMeta = getDateSeparatorMeta(
                   getDashboardTaskDateValue(t, activeTab),
                   t.organizationTimeZone,
+                  activeTab !== "COMPLETED" && activeTab !== "OVERDUE",
                 );
                 const showSeparator = !!dateMeta && dateMeta.key !== previousDateKey;
                 if (dateMeta) previousDateKey = dateMeta.key;
@@ -628,6 +653,38 @@ export default function TaskDashboard() {
             })()}
           </div>
         )}
+        {!loading &&
+          activeTab === "COMPLETED" &&
+          completedPagination.pages > 1 && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+              <span>
+                Page {completedPagination.page} of {completedPagination.pages} ·{" "}
+                {completedPagination.total} completed tasks
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCompletedPage((page) => Math.max(1, page - 1))}
+                  disabled={completedPagination.page <= 1}
+                  className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCompletedPage((page) =>
+                      Math.min(completedPagination.pages, page + 1),
+                    )
+                  }
+                  disabled={completedPagination.page >= completedPagination.pages}
+                  className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
       </main>
 
       {completionTask && (

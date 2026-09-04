@@ -10,7 +10,13 @@ import {
 } from 'db';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { toUtcDateOnly } from './utils/taskSchedule';
+import { getCurrentUtcDateInTimeZone } from './utils/taskSchedule';
+import {
+  isUniqueConstraintError,
+  repeatedOverdueAbnormalityKey,
+  taskDelayAlertKey,
+  taskInstanceDelayAlertKey,
+} from './utils/alertDeduplication';
 
 const MANAGEMENT_ROLE_NAMES: RoleName[] = [
   RoleName.SUPER_ADMIN,
@@ -51,7 +57,14 @@ export class DwmsEscalationService {
 
   private async processOrganization(organizationId: string, config: any) {
     const now = new Date();
-    const today = toUtcDateOnly(now);
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { timeZone: true },
+    });
+    if (!organization?.timeZone) {
+      throw new Error('Organization time zone is not configured');
+    }
+    const today = getCurrentUtcDateInTimeZone(organization.timeZone);
     const unacknowledgedCutoff = new Date(
       now.getTime() - config.escalateUnacknowledgedMins * 60_000,
     );
@@ -108,7 +121,7 @@ export class DwmsEscalationService {
     const overdueInstances = await this.prisma.taskInstance.findMany({
       where: {
         owner: { organizationId },
-        dueAt: { lt: today },
+        dueAt: { lt: now },
         status: { notIn: NON_OVERDUE_TASK_STATUSES },
       },
       include: {
@@ -232,22 +245,30 @@ export class DwmsEscalationService {
         .filter(Boolean)
         .join('\n');
 
-      const abnormality = await this.prisma.alert.create({
-        data: {
-          type: AlertType.ABNORMAL_SITUATION,
-          title,
-          description,
-          severity: alert.severity,
-          status: AlertStatus.OPEN,
-          organizationId,
-          raisedById: alert.raisedById,
-          taskInstanceId: alert.taskInstanceId,
-          departmentId: alert.departmentId,
-          againstUserId: alert.againstUserId ?? alert.taskInstance?.ownerId ?? null,
-          isAbnormality: true,
-          abnormalitySourceAlertId: alert.id,
-        },
-      });
+      let abnormality: { id: string };
+      try {
+        abnormality = await this.prisma.alert.create({
+          data: {
+            type: AlertType.ABNORMAL_SITUATION,
+            title,
+            description,
+            severity: alert.severity,
+            status: AlertStatus.OPEN,
+            organizationId,
+            raisedById: alert.raisedById,
+            taskInstanceId: alert.taskInstanceId,
+            departmentId: alert.departmentId,
+            againstUserId:
+              alert.againstUserId ?? alert.taskInstance?.ownerId ?? null,
+            isAbnormality: true,
+            abnormalitySourceAlertId: alert.id,
+          },
+          select: { id: true },
+        });
+      } catch (error) {
+        if (isUniqueConstraintError(error)) continue;
+        throw error;
+      }
 
       const notificationTargets = new Set<string>();
       notificationTargets.add(alert.raisedById);
@@ -315,18 +336,26 @@ export class DwmsEscalationService {
         ? `Task "${task.title}" assigned to ${task.owner.firstName} ${task.owner.lastName} is overdue.`
         : `Task "${task.title}" assigned to ${task.owner.firstName} ${task.owner.lastName} has not been acknowledged within ${config.escalateUnacknowledgedMins} minutes.`;
 
-    const alert = await this.prisma.alert.create({
-      data: {
-        type: AlertType.DELAY,
-        title,
-        description,
-        severity: Severity.HIGH,
-        status: AlertStatus.OPEN,
-        organizationId,
-        raisedById,
-        againstUserId: task.ownerId,
-      },
-    });
+    let alert: { id: string };
+    try {
+      alert = await this.prisma.alert.create({
+        data: {
+          type: AlertType.DELAY,
+          title,
+          description,
+          severity: Severity.HIGH,
+          status: AlertStatus.OPEN,
+          organizationId,
+          raisedById,
+          againstUserId: task.ownerId,
+          deduplicationKey: taskDelayAlertKey(task.id, reason),
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) return;
+      throw error;
+    }
 
     for (const contactId of notificationTargets) {
       await this.notifications.create({
@@ -372,19 +401,27 @@ export class DwmsEscalationService {
     const raisedById = instance.task.assignedById ?? instance.ownerId;
     const description = `Task instance for "${instance.task.title}" assigned to ${instance.owner.firstName} ${instance.owner.lastName} is overdue.`;
 
-    const alert = await this.prisma.alert.create({
-      data: {
-        type: AlertType.DELAY,
-        title,
-        description,
-        severity: Severity.HIGH,
-        status: AlertStatus.OPEN,
-        organizationId,
-        raisedById,
-        taskInstanceId: instance.id,
-        againstUserId: instance.ownerId,
-      },
-    });
+    let alert: { id: string };
+    try {
+      alert = await this.prisma.alert.create({
+        data: {
+          type: AlertType.DELAY,
+          title,
+          description,
+          severity: Severity.HIGH,
+          status: AlertStatus.OPEN,
+          organizationId,
+          raisedById,
+          taskInstanceId: instance.id,
+          againstUserId: instance.ownerId,
+          deduplicationKey: taskInstanceDelayAlertKey(instance),
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) return;
+      throw error;
+    }
     await this.raiseRepeatedOverdueAbnormality({
       organizationId,
       instance,
@@ -453,21 +490,32 @@ export class DwmsEscalationService {
       `Latest overdue instance date: ${instance.dueAt.toISOString()}.`,
     ].join('\n');
 
-    const abnormality = await this.prisma.alert.create({
-      data: {
-        type: AlertType.ABNORMAL_SITUATION,
-        title,
-        description,
-        severity: Severity.HIGH,
-        status: AlertStatus.OPEN,
-        organizationId,
-        raisedById,
-        taskInstanceId: instance.id,
-        againstUserId: instance.ownerId,
-        isAbnormality: true,
-        abnormalitySourceAlertId: sourceAlertId,
-      },
-    });
+    let abnormality: { id: string };
+    try {
+      abnormality = await this.prisma.alert.create({
+        data: {
+          type: AlertType.ABNORMAL_SITUATION,
+          title,
+          description,
+          severity: Severity.HIGH,
+          status: AlertStatus.OPEN,
+          organizationId,
+          raisedById,
+          taskInstanceId: instance.id,
+          againstUserId: instance.ownerId,
+          isAbnormality: true,
+          abnormalitySourceAlertId: sourceAlertId,
+          deduplicationKey: repeatedOverdueAbnormalityKey(
+            instance.taskId,
+            instance.ownerId,
+          ),
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) return;
+      throw error;
+    }
 
     notificationTargets.add(instance.ownerId);
 

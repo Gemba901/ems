@@ -114,7 +114,7 @@ export const AuthService = {
         }).catch(() => {});
     },
 
-    async getMyOrg(token: string): Promise<{ id: string; name: string; status: string; modules: string[]; logoUrl: string | null; primaryColor: string | null }> {
+    async getMyOrg(token: string): Promise<{ id: string; name: string; status: string; modules: string[]; logoUrl: string | null; primaryColor: string | null; timeZone: string }> {
         const res = await fetch(`${API_URL}/auth/my-org`, {
             credentials: "include",
             headers: { Authorization: `Bearer ${token}` },

@@ -19,7 +19,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment }: 
     <div className="space-y-6">
       {/* 1. Department Heatmap */}
       <div className="grid grid-cols-1 gap-6">
-        <div className="rounded-3xl border border-border-app bg-panel-app p-5 shadow-sm backdrop-blur-md">
+        <div className="rounded-3xl border border-border-app bg-white p-5 shadow-sm">
           <h3 className="font-semibold text-text-app mb-2">Department Heatmap</h3>
           <p className="text-xs text-muted-app mb-4">Click to inspect specific department insights</p>
           
@@ -34,7 +34,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment }: 
                 <div
                   key={d.id}
                   onClick={() => onSelectDepartment(d.id)}
-                  className="group cursor-pointer flex flex-col gap-2 p-3.5 rounded-xl border border-border-app bg-panel-app hover:bg-panel-app/80 transition"
+                  className="group cursor-pointer flex flex-col gap-2 rounded-xl border border-border-app bg-white p-3.5 transition hover:bg-slate-50"
                 >
                   <div className="flex justify-between items-center text-xs font-semibold">
                     <span className="group-hover:text-accent-app transition">{d.name}</span>
@@ -56,7 +56,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment }: 
       {/* 2. Leaderboard (Full Width) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Scoreboard List */}
-        <div className="lg:col-span-3 rounded-3xl border border-border-app bg-panel-app p-5 shadow-sm backdrop-blur-md">
+        <div className="lg:col-span-3 rounded-3xl border border-border-app bg-white p-5 shadow-sm">
           <h3 className="font-semibold text-text-app pb-3 border-b border-border-app">
             Scoreboard & Leaderboard
           </h3>
@@ -67,7 +67,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment }: 
               </div>
             ) : (
               overviewData.employeeScoreboard?.map((e, index) => (
-                <div key={e.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl bg-panel-app border border-border-app gap-4">
+                <div key={e.id} className="flex flex-col gap-4 rounded-2xl border border-border-app bg-white p-3.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                       index === 0 ? 'bg-yellow-500 text-zinc-50 shadow-sm' :

@@ -37,11 +37,12 @@ const statusTone: Record<string, string> = {
   CLOSED: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
-function formatDateTime(value?: string | null) {
+function formatDateTime(value?: string | null, timeZone?: string | null) {
   if (!value) return "Not available";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not available";
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: timeZone || "UTC",
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
@@ -60,6 +61,9 @@ export default function AlertDetailRoute() {
 }
 
 function AlertDetailPage() {
+  const organizationTimeZone = useAuthStore(
+    (state) => state.user?.organizationTimeZone,
+  );
   const params = useParams<{ alertId: string }>();
   const router = useRouter();
   const alertId = params?.alertId;
@@ -174,8 +178,8 @@ function AlertDetailPage() {
               <CalendarClock className="h-4 w-4" />
               Created
             </div>
-            <p className="mt-1">{formatDateTime(alert.createdAt)}</p>
-            {alert.resolvedAt && <p className="mt-2">Closed: {formatDateTime(alert.resolvedAt)}</p>}
+            <p className="mt-1">{formatDateTime(alert.createdAt, organizationTimeZone)}</p>
+            {alert.resolvedAt && <p className="mt-2">Closed: {formatDateTime(alert.resolvedAt, organizationTimeZone)}</p>}
           </div>
         </div>
       </section>
@@ -209,7 +213,7 @@ function AlertDetailPage() {
               No history events have been recorded yet.
             </p>
           ) : (
-            detail.comments.map((item) => <CommentItem key={item.id} comment={item} />)
+            detail.comments.map((item) => <CommentItem key={item.id} comment={item} timeZone={organizationTimeZone} />)
           )}
         </div>
 
@@ -265,9 +269,9 @@ function AlertDetailPage() {
 
       {(detail.sourceAlert || (detail.abnormalities?.length ?? 0) > 0) && (
         <Panel title="Abnormality Context" icon={<Clock3 className="h-4 w-4 text-rose-600" />}>
-          {detail.sourceAlert && <RelatedAlert title="Source Alert" alert={detail.sourceAlert} />}
+          {detail.sourceAlert && <RelatedAlert title="Source Alert" alert={detail.sourceAlert} timeZone={organizationTimeZone} />}
           {(detail.abnormalities ?? []).filter(Boolean).map((item) => (
-            <RelatedAlert key={item?.id} title="Created Abnormality" alert={item} />
+            <RelatedAlert key={item?.id} title="Created Abnormality" alert={item} timeZone={organizationTimeZone} />
           ))}
         </Panel>
       )}    </div>
@@ -330,18 +334,18 @@ function NoteBlock({ title, body }: { title: string; body: string }) {
   );
 }
 
-function RelatedAlert({ title, alert }: { title: string; alert?: Partial<DwmsAlertItem> | null }) {
+function RelatedAlert({ title, alert, timeZone }: { title: string; alert?: Partial<DwmsAlertItem> | null; timeZone?: string | null }) {
   if (!alert?.id) return null;
   return (
     <Link href={`/dwms/alerts/${alert.id}`} className="block rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-blue-200 hover:bg-blue-50/40">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
       <p className="mt-1 text-sm font-semibold text-slate-900">{alert.title}</p>
-      <p className="mt-1 text-xs text-slate-500">{label(String(alert.status))} - {formatDateTime(alert.createdAt)}</p>
+      <p className="mt-1 text-xs text-slate-500">{label(String(alert.status))} - {formatDateTime(alert.createdAt, timeZone)}</p>
     </Link>
   );
 }
 
-function CommentItem({ comment }: { comment: DwmsAlertComment }) {
+function CommentItem({ comment, timeZone }: { comment: DwmsAlertComment; timeZone?: string | null }) {
   const [title, ...rest] = comment.comment.split(": ");
   const body = rest.join(": ");
 
@@ -354,7 +358,7 @@ function CommentItem({ comment }: { comment: DwmsAlertComment }) {
             {body ? title : "Comment added"}
           </h3>
           <span className="text-xs text-slate-500">
-            {formatDateTime(comment.createdAt)}
+            {formatDateTime(comment.createdAt, timeZone)}
           </span>
         </div>
         <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs text-slate-500">

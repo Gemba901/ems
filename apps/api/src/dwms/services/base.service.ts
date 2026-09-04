@@ -3,6 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { EscalationContactRule, TaskPermissionRole, TaskStatus } from 'db';
 import { TASK_ROLE_VALUES } from '../dto/dwmsSettings.dto';
+import { parseTimeZone } from '../utils/taskSchedule';
 
 export class UserPayload {
   userId!: string;
@@ -44,6 +45,20 @@ export abstract class DwmsBaseService {
         'Employee profile not found in this organization',
       );
     return employee;
+  }
+
+  protected async getOrganizationTimeZone(organizationId: string) {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { timeZone: true },
+    });
+
+    const timeZone = parseTimeZone(organization?.timeZone);
+    if (!timeZone) {
+      throw new BadRequestException('Organization time zone is not configured');
+    }
+
+    return timeZone;
   }
 
   protected normalizeAckWindowFallback(

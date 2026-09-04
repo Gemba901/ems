@@ -17,7 +17,7 @@ export default function DepartmentDashboard({ departmentData }: DepartmentDashbo
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Scoreboard List (Main - Full Width) */}
-      <div className="lg:col-span-3 rounded-3xl border border-border-app bg-panel-app p-5 shadow-sm backdrop-blur-md">
+      <div className="lg:col-span-3 rounded-3xl border border-border-app bg-white p-5 shadow-sm">
         <h3 className="font-semibold text-text-app pb-3 border-b border-border-app">
           {departmentData.departmentName} Performance Scoreboard
         </h3>
@@ -28,7 +28,7 @@ export default function DepartmentDashboard({ departmentData }: DepartmentDashbo
             </div>
           ) : (
             departmentData.employeeScoreboard?.map((e, index) => (
-              <div key={e.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-panel-app border border-border-app gap-4">
+              <div key={e.id} className="flex flex-col gap-4 rounded-2xl border border-border-app bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-bg-app text-muted-app shrink-0">
                     {index + 1}

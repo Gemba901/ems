@@ -487,6 +487,19 @@ export interface DwmsTaskItem {
   task?: { title: string };
 }
 
+export interface DwmsTaskListResponse {
+  date?: string;
+  organizationTimeZone?: string;
+  tasks?: DwmsTaskItem[];
+  count?: number;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
 export interface DwmsAssignedTaskListResponse {
   tasks?: DwmsAssignedTaskHistoryItem[];
 }
@@ -728,9 +741,17 @@ export interface CreateActivityPayload {
 
 export interface IngestActivityRowPayload {
   rowNumber?: number;
+  assignmentMode?: ActivityIngestionAssignmentMode;
   responsibleEmployeeCode?: string;
   parentActivityCode?: string | null;
   activity: CreateActivityPayload;
+}
+
+export enum ActivityIngestionAssignmentMode {
+  INDIVIDUAL = "Individual",
+  ALL_USERS = "All Users",
+  ALL_MANAGEMENT = "All Management",
+  ALL_HOD = "All HOD",
 }
 
 export interface DwmsActivityIngestionSummary {
@@ -770,6 +791,7 @@ export interface IngestActivitiesResponse {
     activityId?: string;
     taskId?: string;
     responsibleEmployeeId?: string;
+    assignedCount?: number;
     message: string;
   }>;
 }
@@ -1269,10 +1291,15 @@ export const DwmsService = {
 
   async getTodayTasks(
     token: string,
-    date: string,
+    date?: string,
     scope?: "scheduled" | "completed",
-  ): Promise<{ tasks?: DwmsTaskItem[] }> {
-    return getJson(`/dwms/myDwms/tasks${buildQuery({ date, scope })}`, token);
+    page?: number,
+    limit?: number,
+  ): Promise<DwmsTaskListResponse> {
+    return getJson(
+      `/dwms/myDwms/tasks${buildQuery({ date, scope, page, limit })}`,
+      token,
+    );
   },
 
   async getTaskInstanceDetail(

@@ -105,6 +105,7 @@ function AlertsPage() {
 
   function formatDate(val: string) {
     return new Intl.DateTimeFormat("en-US", {
+      timeZone: user?.organizationTimeZone || "UTC",
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(val));

@@ -16,6 +16,7 @@ import {
   buildActivityChains,
   getChildActivities,
 } from "../../components/ActivityRelationChain";
+import { formatOrganizationDateKey } from "../../utils/organizationDate";
 
 export default function ActivityDetailPage() {
   return (
@@ -239,10 +240,7 @@ function personLabel(person?: { name?: string | null; email?: string | null } | 
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, {
+  return formatOrganizationDateKey(value, {
     year: "numeric",
     month: "short",
     day: "numeric",

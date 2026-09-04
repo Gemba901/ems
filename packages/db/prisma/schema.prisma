@@ -2776,6 +2776,7 @@ model Alert {
   againstUserId            String?
   isAbnormality            Boolean                    @default(false)
   abnormalitySourceAlertId String?                    @unique
+  deduplicationKey         String?                    @unique
   closureApprovalStatus    AlertClosureApprovalStatus @default(NONE)
   closureApproverId        String?
   closureRequestedById     String?

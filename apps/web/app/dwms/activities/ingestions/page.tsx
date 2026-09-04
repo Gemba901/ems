@@ -11,11 +11,12 @@ import {
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 
-function formatDateTime(value?: string | null) {
+function formatDateTime(value?: string | null, timeZone?: string | null) {
   if (!value) return "Not available";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not available";
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: timeZone || "UTC",
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
@@ -36,7 +37,7 @@ export default function ActivityIngestionsPage() {
 }
 
 function ActivityIngestionsContent() {
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const [ingestions, setIngestions] = useState<DwmsActivityIngestionSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -139,7 +140,7 @@ function ActivityIngestionsContent() {
                         {ingestion.status}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-slate-600">{formatDateTime(ingestion.createdAt)}</td>
+                    <td className="px-5 py-4 text-slate-600">{formatDateTime(ingestion.createdAt, user?.organizationTimeZone)}</td>
                     <td className="px-5 py-4 text-right">
                       <Link
                         href={`/dwms/activities/ingestions/${ingestion.id}`}

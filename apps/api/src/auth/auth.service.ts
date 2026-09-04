@@ -17,6 +17,7 @@ export interface JwtPayload {
     phone: string;
     organizationName: string;
     organizationUrl: string | null;
+    organizationTimeZone: string;
     roleLevel: Role;
     isAdminOrg: boolean;
     jobTitle: string | null;
@@ -26,7 +27,7 @@ export interface JwtPayload {
 type UserOrganizationRelation = {
     organizationId: string;
     roleId: number;
-    organization: { name: string; logoUrl: string | null; isAdminOrg: boolean };
+    organization: { name: string; logoUrl: string | null; isAdminOrg: boolean; timeZone: string };
     role: { name: string };
 };
 
@@ -123,7 +124,7 @@ export class AuthService {
 
     private async buildJwt(
         user: { id: string; email: string | null; phone: string; name: string },
-        membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null; isAdminOrg: boolean } },
+        membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null; isAdminOrg: boolean; timeZone: string } },
     ) {
         const employee = await this.prisma.employee.findFirst({
             where: { userId: user.id, organizationId: membership.organizationId },
@@ -139,6 +140,7 @@ export class AuthService {
             phone: user.phone,
             organizationName: membership.organization.name,
             organizationUrl: membership.organization.logoUrl,
+            organizationTimeZone: membership.organization.timeZone,
             isAdminOrg: membership.organization.isAdminOrg,
             jobTitle: employee?.jobTitle ?? null,
             departmentId: employee?.departmentId ?? null,
@@ -486,7 +488,7 @@ export class AuthService {
     async getMyOrg(organizationId: string) {
         return this.prisma.organization.findUnique({
             where: { id: organizationId },
-            select: { id: true, name: true, status: true, modules: true, logoUrl: true, primaryColor: true, isAdminOrg: true },
+            select: { id: true, name: true, status: true, modules: true, logoUrl: true, primaryColor: true, isAdminOrg: true, timeZone: true },
         });
     }
 }

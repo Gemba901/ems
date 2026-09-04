@@ -21,6 +21,10 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import {
+  formatOrganizationDate,
+  formatOrganizationDateKey,
+} from "../utils/organizationDate";
 
 type ActionCardProps =
   | {
@@ -75,14 +79,11 @@ function label(value?: string | null) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function formatDate(value?: string | null, withTime = true) {
-  if (!value) return "Not set";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not set";
-  return new Intl.DateTimeFormat("en-US", {
+function formatDate(value?: string | null, withTime = true, timeZone?: string | null) {
+  return formatOrganizationDate(value, timeZone, {
     dateStyle: "medium",
     ...(withTime ? { timeStyle: "short" as const } : {}),
-  }).format(date);
+  }) ?? "Not set";
 }
 
 function DetailRow({
@@ -160,6 +161,7 @@ function TaskDetails({
   onCommentAdded?: () => void | Promise<void>;
 }) {
   const token = useAuthStore((state) => state.accessToken);
+  const timeZone = task.organizationTimeZone;
   const [comment, setComment] = useState("");
   const [savingComment, setSavingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
@@ -219,21 +221,21 @@ function TaskDetails({
         <DetailRow label="Department" value={task.department?.name} />
         <DetailRow
           label="Scheduled For"
-          value={formatDate(task.scheduledFor, false)}
+          value={formatOrganizationDateKey(task.scheduledFor, { dateStyle: "medium" }) ?? "Not set"}
         />
-        <DetailRow label="Due At" value={formatDate(task.dueAt)} />
+        <DetailRow label="Due At" value={formatDate(task.dueAt, true, timeZone)} />
         <DetailRow
           label="Acknowledged"
           value={
             task.acknowledgedAt
-              ? formatDate(task.acknowledgedAt)
+              ? formatDate(task.acknowledgedAt, true, timeZone)
               : "Not acknowledged"
           }
         />
         <DetailRow
           label="Completed"
           value={
-            task.completedAt ? formatDate(task.completedAt) : "Not completed"
+            task.completedAt ? formatDate(task.completedAt, true, timeZone) : "Not completed"
           }
         />
       </div>
@@ -296,7 +298,7 @@ function TaskDetails({
                   <span className="font-semibold text-slate-700">
                     {item.author?.name || "Unknown user"}
                   </span>
-                  <span>{formatDate(item.createdAt)}</span>
+                  <span>{formatDate(item.createdAt, true, timeZone)}</span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                   {item.comment}
@@ -338,6 +340,7 @@ function TaskDetails({
 }
 
 function ApprovalTaskDetails({ task }: { task: DwmsAssignedTaskHistoryItem }) {
+  const timeZone = task.organizationTimeZone;
   const priority = task.priority === "LOW" ? "MEDIUM" : task.priority;
   const status = String(task.status || "APPROVAL_PENDING") as DwmsTaskStatus;
 
@@ -378,12 +381,12 @@ function ApprovalTaskDetails({ task }: { task: DwmsAssignedTaskHistoryItem }) {
           label="Approver"
           value={task.approvedBy?.name || "Not set"}
         />
-        <DetailRow label="Due Date" value={formatDate(task.dueDate)} />
+        <DetailRow label="Due Date" value={formatDate(task.dueDate, true, timeZone)} />
         <DetailRow
           label="Acknowledged"
           value={
             task.acknowledgedAt
-              ? formatDate(task.acknowledgedAt)
+              ? formatDate(task.acknowledgedAt, true, timeZone)
               : "Not acknowledged"
           }
         />
@@ -424,6 +427,7 @@ function ApprovalTaskDetails({ task }: { task: DwmsAssignedTaskHistoryItem }) {
   );
 }
 function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
+  const timeZone = useAuthStore((state) => state.user?.organizationTimeZone);
   const normalizedSeverity =
     alert.severity === "LOW" ? "MEDIUM" : alert.severity;
   return (
@@ -463,7 +467,7 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
               : "Not set"
           }
         />
-        <DetailRow label="Created At" value={formatDate(alert.createdAt)} />
+        <DetailRow label="Created At" value={formatDate(alert.createdAt, true, timeZone)} />
         <DetailRow
           label="Against Person"
           value={
@@ -491,7 +495,7 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
         <DetailRow
           label="Resolved At"
           value={
-            alert.resolvedAt ? formatDate(alert.resolvedAt) : "Not resolved"
+            alert.resolvedAt ? formatDate(alert.resolvedAt, true, timeZone) : "Not resolved"
           }
         />
       </div>
@@ -515,7 +519,7 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <CalendarClock className="h-4 w-4 text-slate-500" />
-          <span>{formatDate(alert.createdAt, false)}</span>
+          <span>{formatDate(alert.createdAt, false, timeZone)}</span>
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <AlertTriangle className="h-4 w-4 text-slate-500" />

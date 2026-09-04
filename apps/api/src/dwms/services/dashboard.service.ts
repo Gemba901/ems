@@ -1,6 +1,13 @@
 ﻿import { NotFoundException } from '@nestjs/common';
 import { AlertStatus, TaskStatus } from 'db';
-import { endOfUtcDay, toIsoDate, toUtcDateOnly } from '../utils/taskSchedule';
+import {
+  addUtcDays,
+  endOfDayInTimeZone,
+  getOrganizationDateRange,
+  startOfDayInTimeZone,
+  toIsoDate,
+} from '../utils/taskSchedule';
+import { calculateDoneTaskMetrics } from '../utils/taskMetrics';
 import {
   completedStatuses,
   nonOverdueStatusValues,
@@ -12,8 +19,8 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
   // Dashboard calculations
   async getOverviewStats(user: UserPayload, rawDays?: string) {
     await this.getEmployee(user.userId, user.organizationId);
-    await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
     const days = this.normalizeDashboardDays(rawDays);
+    const timeZone = await this.getOrganizationTimeZone(user.organizationId);
 
     const members = await this.prisma.employee.findMany({
       where: { organizationId: user.organizationId },
@@ -24,6 +31,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const summary = await this.getPerformanceMetrics(
       userIds,
       user.organizationId,
+      timeZone,
       undefined,
       days,
     );
@@ -31,6 +39,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       'overview',
       null,
       user.organizationId,
+      timeZone,
       days,
     );
 
@@ -47,6 +56,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         const metrics = await this.getPerformanceMetrics(
           departmentMembers.map((member) => member.id),
           user.organizationId,
+          timeZone,
           department.id,
           days,
         );
@@ -64,6 +74,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         const metrics = await this.getPerformanceMetrics(
           [member.id],
           user.organizationId,
+          timeZone,
           undefined,
           days,
         );
@@ -95,8 +106,8 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     rawDays?: string,
   ) {
     await this.getEmployee(user.userId, user.organizationId);
-    await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
     const days = this.normalizeDashboardDays(rawDays);
+    const timeZone = await this.getOrganizationTimeZone(user.organizationId);
 
     const members = await this.prisma.employee.findMany({
       where: { departmentId: deptId, organizationId: user.organizationId },
@@ -107,6 +118,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const summary = await this.getPerformanceMetrics(
       userIds,
       user.organizationId,
+      timeZone,
       deptId,
       days,
     );
@@ -114,6 +126,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       'department',
       deptId,
       user.organizationId,
+      timeZone,
       days,
     );
     const department = await this.prisma.department.findFirst({
@@ -123,6 +136,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const employeeScoreboard = await this.getEmployeeScoreboard(
       userIds,
       user.organizationId,
+      timeZone,
       days,
     );
 
@@ -140,8 +154,8 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     rawDays?: string,
   ) {
     await this.getEmployee(user.userId, user.organizationId);
-    await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
     const days = this.normalizeDashboardDays(rawDays);
+    const timeZone = await this.getOrganizationTimeZone(user.organizationId);
 
     const employee = await this.prisma.employee.findFirst({
       where: {
@@ -158,6 +172,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const summary = await this.getPerformanceMetrics(
       [resolvedEmployeeId],
       user.organizationId,
+      timeZone,
       undefined,
       days,
     );
@@ -165,6 +180,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       'employee',
       resolvedEmployeeId,
       user.organizationId,
+      timeZone,
       days,
     );
     const reportees = await this.listReporteesRecursive(resolvedEmployeeId);
@@ -174,6 +190,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const reporteesPerformance = await this.getEmployeeScoreboard(
       reporteeIds,
       user.organizationId,
+      timeZone,
       days,
     );
 
@@ -194,6 +211,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
   private async getEmployeeScoreboard(
     userIds: string[],
     orgId: string,
+    timeZone: string,
     days = 7,
   ) {
     const employees = await this.prisma.employee.findMany({
@@ -207,6 +225,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         const metrics = await this.getPerformanceMetrics(
           [employee.id],
           orgId,
+          timeZone,
           undefined,
           days,
         );
@@ -231,18 +250,18 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
   private async getPerformanceMetrics(
     userIds: string[],
     orgId: string,
+    timeZone: string,
     departmentId?: string,
     days = 7,
   ) {
     const now = new Date();
-    const rangeEnd = endOfUtcDay(toUtcDateOnly(now));
-    const rangeStart = toUtcDateOnly(now);
-    rangeStart.setUTCDate(rangeStart.getUTCDate() - days + 1);
+    const { scheduleStart, scheduleEnd, instantStart, instantEnd } =
+      getOrganizationDateRange(now, timeZone, days);
 
     const rangeInstances = await this.prisma.taskInstance.findMany({
       where: {
         ownerId: { in: userIds },
-        scheduledFor: { gte: rangeStart, lte: rangeEnd },
+        scheduledFor: { gte: scheduleStart, lte: scheduleEnd },
       },
     });
 
@@ -250,10 +269,10 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       where: {
         ownerId: { in: userIds },
         OR: [
-          { dueDate: { gte: rangeStart, lte: rangeEnd } },
-          { dueDate: null, createdAt: { gte: rangeStart, lte: rangeEnd } },
+          { dueDate: { gte: scheduleStart, lte: scheduleEnd } },
+          { dueDate: null, createdAt: { gte: instantStart, lte: instantEnd } },
           {
-            dueDate: { lt: rangeStart },
+            dueDate: { lt: scheduleStart },
             status: { notIn: nonOverdueStatusValues },
           },
         ],
@@ -272,24 +291,10 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const taskOnlyRows = rangeTasks.filter(
       (task) => !instanceTaskIds.has(task.id),
     );
-    const totalTasksCount = rangeInstances.length + taskOnlyRows.length;
-    const completedInstancesCount = rangeInstances.filter(
-      (inst) =>
-        inst.status === TaskStatus.DONE ||
-        inst.status === TaskStatus.NOT_APPLICABLE,
-    ).length;
-    const completedTaskOnlyCount = taskOnlyRows.filter((task) =>
-      completedStatuses.has(task.status),
-    ).length;
-
-    const tasksPerformedTodayPercent =
-      totalTasksCount > 0
-        ? Math.round(
-            ((completedInstancesCount + completedTaskOnlyCount) /
-              totalTasksCount) *
-              100,
-          )
-        : 100;
+    const completionMetrics = calculateDoneTaskMetrics(rangeInstances);
+    const totalTasksCount = completionMetrics.total;
+    const completedInstancesCount = completionMetrics.completed;
+    const tasksPerformedTodayPercent = completionMetrics.percentage;
     const overdueInstances = rangeInstances.filter(
       (inst) => !completedStatuses.has(inst.status) && inst.dueAt < now,
     ).length;
@@ -325,7 +330,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       where: {
         ownerId: { in: userIds },
         acknowledgedAt: { not: null },
-        createdAt: { gte: rangeStart, lte: rangeEnd },
+        createdAt: { gte: instantStart, lte: instantEnd },
       },
       select: {
         createdAt: true,
@@ -352,7 +357,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       where: {
         ownerId: { in: userIds },
         status: { in: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
-        completedAt: { not: null, gte: rangeStart, lte: rangeEnd },
+        completedAt: { not: null, gte: instantStart, lte: instantEnd },
       },
       include: {
         task: { select: { acknowledgedAt: true } },
@@ -387,10 +392,10 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     return {
       completionRate: tasksPerformedTodayPercent,
       totalTasks: totalTasksCount,
-      completedTasks: completedInstancesCount + completedTaskOnlyCount,
+      completedTasks: completedInstancesCount,
       overdueTasks,
       overdueCount: overdueTasks,
-      completedCount: completedInstancesCount + completedTaskOnlyCount,
+      completedCount: completedInstancesCount,
       tasksPerformedTodayPercent,
       openAlertsCount,
       avgAcknowledgeTimeMin,
@@ -402,12 +407,17 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     entityType: 'employee' | 'department' | 'overview',
     entityId: string | null,
     orgId: string,
+    timeZone: string,
     daysCount: number,
   ) {
     const now = new Date();
-    const rangeEnd = endOfUtcDay(toUtcDateOnly(now));
-    const rangeStart = toUtcDateOnly(now);
-    rangeStart.setUTCDate(rangeStart.getUTCDate() - daysCount + 1);
+    const dateRange = getOrganizationDateRange(now, timeZone, daysCount);
+    const { scheduleStart, scheduleEnd, instantStart, instantEnd } = dateRange;
+    const trendDaysCount =
+      Math.round(
+        (scheduleEnd.getTime() - scheduleStart.getTime()) /
+          (24 * 60 * 60 * 1000),
+      ) + 1;
 
     let userIds: string[] = [];
     if (entityType === 'employee') {
@@ -429,7 +439,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const allInstances = await this.prisma.taskInstance.findMany({
       where: {
         ownerId: { in: userIds },
-        scheduledFor: { gte: rangeStart, lte: rangeEnd },
+        scheduledFor: { gte: scheduleStart, lte: scheduleEnd },
       },
       include: {
         task: { select: { acknowledgedAt: true } },
@@ -438,21 +448,21 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
 
     let alertsWhere: any = {
       organizationId: orgId,
-      createdAt: { lte: rangeEnd },
-      OR: [{ resolvedAt: null }, { resolvedAt: { gte: rangeStart } }],
+      createdAt: { lte: instantEnd },
+      OR: [{ resolvedAt: null }, { resolvedAt: { gte: instantStart } }],
     };
 
     if (entityType === 'employee') {
       alertsWhere.OR = [
         {
           againstUserId: entityId!,
-          createdAt: { lte: rangeEnd },
-          OR: [{ resolvedAt: null }, { resolvedAt: { gte: rangeStart } }],
+          createdAt: { lte: instantEnd },
+          OR: [{ resolvedAt: null }, { resolvedAt: { gte: instantStart } }],
         },
         {
           taskInstance: { ownerId: entityId! },
-          createdAt: { lte: rangeEnd },
-          OR: [{ resolvedAt: null }, { resolvedAt: { gte: rangeStart } }],
+          createdAt: { lte: instantEnd },
+          OR: [{ resolvedAt: null }, { resolvedAt: { gte: instantStart } }],
         },
       ];
     } else if (entityType === 'department') {
@@ -471,10 +481,10 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       where: {
         ownerId: { in: userIds },
         OR: [
-          { createdAt: { gte: rangeStart, lte: rangeEnd } },
-          { dueDate: { gte: rangeStart, lte: rangeEnd } },
+          { createdAt: { gte: instantStart, lte: instantEnd } },
+          { dueDate: { gte: scheduleStart, lte: scheduleEnd } },
           {
-            dueDate: { lt: rangeStart },
+            dueDate: { lt: scheduleStart },
             status: { notIn: nonOverdueStatusValues },
           },
         ],
@@ -512,40 +522,24 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       avgCloseTimeMin: number;
     }> = [];
 
-    for (let i = daysCount - 1; i >= 0; i--) {
-      const start = toUtcDateOnly(now);
-      start.setUTCDate(start.getUTCDate() - i);
-      const end = endOfUtcDay(start);
-      const label = start.toLocaleString('en-US', {
+    for (let i = trendDaysCount - 1; i >= 0; i--) {
+      const scheduleDay = addUtcDays(scheduleEnd, -i);
+      const dayStart = startOfDayInTimeZone(scheduleDay, timeZone);
+      const dayEnd = endOfDayInTimeZone(scheduleDay, timeZone);
+      const label = scheduleDay.toLocaleString('en-US', {
+        timeZone: 'UTC',
         month: 'short',
         day: 'numeric',
       });
-      const date = toIsoDate(start);
+      const date = toIsoDate(scheduleDay);
 
       const dayInsts = allInstances.filter(
-        (inst) => inst.scheduledFor >= start && inst.scheduledFor <= end,
+        (inst) => inst.scheduledFor.getTime() === scheduleDay.getTime(),
       );
-      const dayInstanceTaskIds = new Set(dayInsts.map((inst) => inst.taskId));
-      const dayTasks = allTasks.filter((task) => {
-        if (dayInstanceTaskIds.has(task.id)) return false;
-        if (task.dueDate) {
-          return (
-            task.dueDate <= end &&
-            (task.dueDate >= start || !completedStatuses.has(task.status))
-          );
-        }
-        return task.createdAt >= start && task.createdAt <= end;
-      });
-      const totalInsts = dayInsts.length + dayTasks.length;
-      const completedInsts =
-        dayInsts.filter(
-          (inst) =>
-            inst.status === TaskStatus.DONE ||
-            inst.status === TaskStatus.NOT_APPLICABLE,
-        ).length +
-        dayTasks.filter((task) => completedStatuses.has(task.status)).length;
-      const tasksVal =
-        totalInsts > 0 ? Math.round((completedInsts / totalInsts) * 100) : 100;
+      const completionMetrics = calculateDoneTaskMetrics(dayInsts);
+      const totalInsts = completionMetrics.total;
+      const completedInsts = completionMetrics.completed;
+      const tasksVal = completionMetrics.percentage;
       tasksPerformedToday.push({
         date,
         label,
@@ -557,15 +551,15 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
 
       const activeAlerts = allAlerts.filter(
         (a) =>
-          a.createdAt <= end &&
-          (a.resolvedAt === null || a.resolvedAt >= start),
+          a.createdAt <= dayEnd &&
+          (a.resolvedAt === null || a.resolvedAt >= dayStart),
       );
       openAlerts.push({ date, label, value: activeAlerts.length });
 
       const monthTasks = allTasks.filter(
         (t) =>
-          t.createdAt >= start &&
-          t.createdAt <= end &&
+          t.createdAt >= dayStart &&
+          t.createdAt <= dayEnd &&
           t.acknowledgedAt !== null,
       );
       let ackVal = 0;
@@ -591,14 +585,14 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       const monthCompletedInsts = allInstances.filter(
         (inst) =>
           inst.completedAt !== null &&
-          inst.completedAt >= start &&
-          inst.completedAt <= end,
+          inst.completedAt >= dayStart &&
+          inst.completedAt <= dayEnd,
       );
       const monthCompletedTasks = allTasks.filter(
         (task) =>
           completedStatuses.has(task.status) &&
-          task.updatedAt >= start &&
-          task.updatedAt <= end,
+          task.updatedAt >= dayStart &&
+          task.updatedAt <= dayEnd,
       );
       const closeDurations = [
         ...monthCompletedInsts.map((curr) => {

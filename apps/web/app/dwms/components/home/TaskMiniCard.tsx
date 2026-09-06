@@ -110,7 +110,7 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
   const wasOverdue = !!task.wasOverdue && !isOverdue;
   const isPrerequisiteBlocked = !!task.prerequisiteBlocked;
   const statusLockReason = getStatusLockReason(task);
-  const isStatusLockedBySchedule = !!statusLockReason;
+  const isStatusLockedBySchedule = !!statusLockReason && !isOverdue;
   const prerequisiteLabel = task.prerequisiteActivityNames?.length
     ? `Locked until ${task.prerequisiteActivityNames.join(', ')} is done`
     : 'Locked until prerequisite activity is done';
@@ -167,7 +167,7 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
       LESS_THAN_50: 99,
       NOT_APPLICABLE: 99,
     };
-    if (task.status === 'OVERDUE') {
+    if (isOverdue) {
       return ['DONE'];
     }
     const allOptions: TaskStatus[] = ['PENDING', 'IN_PROGRESS', 'PARTLY_DONE', 'DONE'];
@@ -403,6 +403,11 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
         {/* Left indicators */}
         <div className="flex flex-wrap items-center gap-5">
           {renderPriority()}
+          {isOverdue && (
+            <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700">
+              Overdue
+            </span>
+          )}
           {wasOverdue && (
             <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
               Was Overdue

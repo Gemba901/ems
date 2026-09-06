@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   AlertStatus,
   AlertType,
+  ModuleType,
   NotificationType,
   RoleName,
   Severity,
@@ -18,41 +19,85 @@ import {
   taskInstanceDelayAlertKey,
 } from './utils/alertDeduplication';
 
-const MANAGEMENT_ROLE_NAMES: RoleName[] = [
-  RoleName.SUPER_ADMIN,
-  RoleName.ADMIN,
-  RoleName.MANAGEMENT,
-  RoleName.HR,
-];
-const APPROVAL_PENDING_STATUS = 'APPROVAL_PENDING' as TaskStatus;
-const NON_OVERDUE_TASK_STATUSES = [
-  TaskStatus.DONE,
-  TaskStatus.NOT_APPLICABLE,
-  APPROVAL_PENDING_STATUS,
-];
+const NON_OVERDUE_TASK_STATUSES = [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE];
 
 @Injectable()
-export class DwmsEscalationService {
+export class DwmsEscalationService implements OnApplicationBootstrap {
   private readonly logger = new Logger(DwmsEscalationService.name);
+  private escalationRun: Promise<void> | null = null;
 
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
   ) {}
 
-  @Cron('0 * * * *', { timeZone: 'GMT' })
-  async checkEscalations() {
-    const configs = await this.prisma.dwmsPermissionConfig.findMany();
+  onApplicationBootstrap() {
+    // A deployment can happen after the top of the hour. Run once on startup so
+    // overdue work is not left waiting until the next cron tick (or indefinitely
+    // when a host restarts frequently around the scheduled minute).
+    void this.checkEscalations('startup');
+  }
 
-    for (const config of configs) {
+  @Cron(CronExpression.EVERY_HOUR, { timeZone: 'GMT' })
+  async checkEscalations(trigger: 'startup' | 'cron' = 'cron') {
+    if (this.escalationRun) {
+      this.logger.warn(
+        `Skipped ${trigger} DWMS escalation check because a run is already active`,
+      );
+      return this.escalationRun;
+    }
+
+    const run = this.runEscalationCheck(trigger)
+      .catch((error) => {
+        this.logger.error(
+          `DWMS ${trigger} escalation check failed before organization processing: ${(error as Error)?.message ?? error}`,
+        );
+      })
+      .finally(() => {
+        if (this.escalationRun === run) this.escalationRun = null;
+      });
+    this.escalationRun = run;
+    return run;
+  }
+
+  private async runEscalationCheck(trigger: 'startup' | 'cron') {
+    const startedAt = Date.now();
+    const organizations = await this.prisma.organization.findMany({
+      where: { modules: { has: ModuleType.DWMS } },
+      select: {
+        id: true,
+        dwmsPermissionConfig: true,
+      },
+    });
+    let processed = 0;
+    let failed = 0;
+
+    this.logger.log(
+      `Starting ${trigger} DWMS escalation check for ${organizations.length} organizations`,
+    );
+
+    for (const organization of organizations) {
       try {
-        await this.processOrganization(config.organizationId, config);
+        const config =
+          organization.dwmsPermissionConfig ??
+          (await this.prisma.dwmsPermissionConfig.upsert({
+            where: { organizationId: organization.id },
+            create: { organizationId: organization.id },
+            update: {},
+          }));
+        await this.processOrganization(organization.id, config);
+        processed += 1;
       } catch (error) {
+        failed += 1;
         this.logger.warn(
-          `Failed to process DWMS escalations for ${config.organizationId}: ${(error as Error)?.message ?? error}`,
+          `Failed to process DWMS escalations for ${organization.id}: ${(error as Error)?.message ?? error}`,
         );
       }
     }
+
+    this.logger.log(
+      `Finished ${trigger} DWMS escalation check: ${processed} processed, ${failed} failed, ${Date.now() - startedAt}ms`,
+    );
   }
 
   private async processOrganization(organizationId: string, config: any) {
@@ -240,7 +285,9 @@ export class DwmsEscalationService {
         `Alert "${alert.title}" has not been worked upon for ${ageMins} minutes.`,
         `Configured abnormality window for ${alert.severity} severity is ${windowMins} minutes.`,
         linkedTaskTitle ? `Linked task: ${linkedTaskTitle}.` : null,
-        alert.description ? `Original alert details: ${alert.description}` : null,
+        alert.description
+          ? `Original alert details: ${alert.description}`
+          : null,
       ]
         .filter(Boolean)
         .join('\n');
@@ -308,12 +355,15 @@ export class DwmsEscalationService {
         ? `Overdue task: ${task.title}`
         : `Unacknowledged task: ${task.title}`;
 
-    const contactIds = await this.resolveContactIds(
-      config,
-      organizationId,
-      task.owner,
-      task.assignedById,
-    );
+    const contactIds =
+      reason === 'unacknowledged'
+        ? await this.resolveContactIds(
+            config,
+            organizationId,
+            task.owner,
+            task.assignedById,
+          )
+        : [];
 
     const existing = await this.prisma.alert.findFirst({
       where: {
@@ -325,8 +375,13 @@ export class DwmsEscalationService {
       select: { id: true },
     });
 
-    const notificationTargets = new Set(contactIds);
-    notificationTargets.add(task.ownerId);
+    // Overdue notifications are personal: only the task owner should receive
+    // them. Escalation contacts remain applicable to unacknowledged ad-hoc
+    // tasks, which is a separate workflow.
+    const notificationTargets = new Set<string>([task.ownerId]);
+    if (reason === 'unacknowledged') {
+      contactIds.forEach((contactId) => notificationTargets.add(contactId));
+    }
 
     if (existing) return;
 
@@ -364,7 +419,8 @@ export class DwmsEscalationService {
         module: 'DWMS',
         title,
         message: description,
-        actionUrl: contactId === task.ownerId ? `/dwms/alerts/${alert.id}` : undefined,
+        actionUrl:
+          contactId === task.ownerId ? `/dwms/alerts/${alert.id}` : undefined,
       });
     }
   }
@@ -374,15 +430,8 @@ export class DwmsEscalationService {
     config: any;
     instance: any;
   }) {
-    const { organizationId, config, instance } = params;
+    const { organizationId, instance } = params;
     const title = `Overdue task instance: ${instance.task.title}`;
-
-    const contactIds = await this.resolveContactIds(
-      config,
-      organizationId,
-      instance.owner,
-      instance.task.assignedById,
-    );
 
     const existing = await this.prisma.alert.findFirst({
       where: {
@@ -393,8 +442,10 @@ export class DwmsEscalationService {
       select: { id: true },
     });
 
-    const notificationTargets = new Set(contactIds);
-    notificationTargets.add(instance.ownerId);
+    // A recurring overdue occurrence must notify only its owner. In
+    // particular, the employee who imported or created the shared activity is
+    // not an escalation recipient for every assignee's occurrence.
+    const notificationTargets = new Set<string>([instance.ownerId]);
 
     if (existing) return;
 
@@ -437,7 +488,10 @@ export class DwmsEscalationService {
         module: 'DWMS',
         title,
         message: description,
-        actionUrl: contactId === instance.ownerId ? `/dwms/alerts/${alert.id}` : undefined,
+        actionUrl:
+          contactId === instance.ownerId
+            ? `/dwms/alerts/${alert.id}`
+            : undefined,
       });
     }
   }
@@ -634,24 +688,8 @@ export class DwmsEscalationService {
       return [owner.reportingManagerId];
     }
 
-    const assigner = await this.prisma.employee.findFirst({
-      where: {
-        organizationId,
-        user: {
-          organizations: {
-            some: {
-              organizationId,
-              role: {
-                name: { in: Array.from(MANAGEMENT_ROLE_NAMES) },
-              },
-            },
-          },
-        },
-      },
-      select: { id: true },
-    });
-
-    return assigner?.id ? [assigner.id] : owner.id ? [owner.id] : [];
+    // Never route an unrelated employee's notification to an arbitrary
+    // Management/Admin/HR user. Callers already include the task owner.
+    return owner.id ? [owner.id] : [];
   }
 }
-

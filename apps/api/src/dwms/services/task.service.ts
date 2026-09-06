@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
+  AlertClosureApprovalStatus,
   AlertStatus,
   AlertType,
   EmployeeActivityStatus,
@@ -370,11 +371,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     return assignment?.status === EmployeeActivityStatus.ACTIVE;
   }
   // Ensure task instance exists for a scheduled date
-  async ensureTaskInstance(
-    task: any,
-    scheduledFor: Date,
-    timeZone: string,
-  ) {
+  async ensureTaskInstance(task: any, scheduledFor: Date, timeZone: string) {
     if (!(await this.canGenerateTaskInstance(task))) return null;
 
     const effectiveScheduledFor =
@@ -526,19 +523,71 @@ export abstract class DwmsTaskService extends DwmsBaseService {
   private async closeDelayAlertsForCompletedInstance(
     taskInstanceId: string,
     closureNote: string,
+    closureApproverId: string,
   ) {
     await this.prisma.alert.updateMany({
       where: {
         taskInstanceId,
         type: AlertType.DELAY,
-        status: { in: [AlertStatus.OPEN, AlertStatus.IN_PROGRESS] },
+        OR: [
+          { deduplicationKey: { not: null } },
+          { title: { startsWith: 'Overdue task instance:' } },
+        ],
+        status: {
+          in: [
+            AlertStatus.OPEN,
+            AlertStatus.IN_PROGRESS,
+            AlertStatus.ESCALATED,
+          ],
+        },
       },
       data: {
         status: AlertStatus.CLOSED,
         resolvedAt: new Date(),
         closureNote,
+        closureApproverId,
+        closureApprovalStatus: AlertClosureApprovalStatus.APPROVED,
       },
     });
+  }
+
+  private isInstanceOverdue(instance: { dueAt: Date; status: TaskStatus }) {
+    return (
+      instance.dueAt.getTime() < Date.now() &&
+      !completedStatuses.has(instance.status)
+    );
+  }
+
+  private resolveCompletionApprovalRecipientId(params: {
+    task: { approvedById?: string | null; assignedById?: string | null };
+    ownerReportingManagerId?: string | null;
+    isOverdue: boolean;
+  }) {
+    const { task, ownerReportingManagerId, isOverdue } = params;
+    if (!isOverdue) return task.approvedById ?? null;
+
+    return (
+      task.approvedById ?? task.assignedById ?? ownerReportingManagerId ?? null
+    );
+  }
+
+  private approvalAccessWhere(employeeId: string) {
+    const overdue = { lt: new Date() };
+    return [
+      { task: { approvedById: employeeId } },
+      {
+        dueAt: overdue,
+        task: { approvedById: null, assignedById: employeeId },
+      },
+      {
+        dueAt: overdue,
+        task: {
+          approvedById: null,
+          assignedById: null,
+          owner: { reportingManagerId: employeeId },
+        },
+      },
+    ];
   }
   private serializeTaskInstanceComment(comment: any) {
     return {
@@ -620,6 +669,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const events = this.serializeTaskInstanceHistory(instance);
     const wasOverdue =
       instance.status === TaskStatus.OVERDUE ||
+      (!!instance.completedAt &&
+        instance.completedAt.getTime() > instance.dueAt.getTime()) ||
       events.some((event: any) => event.type === 'MARKED_OVERDUE') ||
       (instance.alerts ?? []).some(
         (alert: any) => alert.type === AlertType.DELAY,
@@ -684,7 +735,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       wasOverdue,
       isOverdue:
         instance.dueAt.getTime() < Date.now() &&
-        !nonOverdueStatuses.has(instance.status),
+        (!nonOverdueStatuses.has(instance.status) ||
+          instance.status === APPROVAL_PENDING_STATUS),
       taskCreatedAt: task.createdAt.toISOString(),
       taskUpdatedAt: task.updatedAt.toISOString(),
       instanceCreatedAt: instance.createdAt.toISOString(),
@@ -916,7 +968,16 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const referenceDate =
       parseDateOnly(rawDate) ?? getCurrentUtcDateInTimeZone(timeZone);
     const scope = rawScope?.trim().toLowerCase() ?? null;
-    if (scope && scope !== 'scheduled' && scope !== 'completed') {
+    if (
+      scope &&
+      ![
+        'scheduled',
+        'future',
+        'overdue',
+        'approval_pending',
+        'completed',
+      ].includes(scope)
+    ) {
       throw new BadRequestException('Invalid task scope');
     }
     const parsedPage = Number(rawPage ?? 1);
@@ -956,6 +1017,21 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     let allTaskInstances: Array<{ task: any; instance: any }>;
     let total = 0;
 
+    const terminalStatusExclusions = [
+      TaskStatus.DONE,
+      TaskStatus.NOT_APPLICABLE,
+      APPROVAL_PENDING_STATUS,
+    ];
+    const futureStatusExclusions = [
+      ...terminalStatusExclusions,
+      TaskStatus.OVERDUE,
+    ];
+    const pagedScope =
+      scope === 'future' ||
+      scope === 'overdue' ||
+      scope === 'approval_pending' ||
+      scope === 'completed';
+
     if (scope === 'scheduled') {
       const scheduledThrough = new Date(referenceDate);
       scheduledThrough.setUTCDate(
@@ -979,6 +1055,80 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         instance,
       }));
       total = instances.length;
+    } else if (scope === 'future') {
+      const futureWhere = {
+        ownerId: employee.id,
+        scheduledFor: { gte: referenceDate },
+        dueAt: { gte: new Date() },
+        status: { notIn: futureStatusExclusions },
+        ...(frequency ? { frequency } : {}),
+      };
+      const [instances, futureTotal] = await Promise.all([
+        this.prisma.taskInstance.findMany({
+          where: futureWhere,
+          include: instanceListInclude,
+          orderBy: [
+            { scheduledFor: 'asc' },
+            { dueAt: 'asc' },
+            { createdAt: 'asc' },
+          ],
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prisma.taskInstance.count({ where: futureWhere }),
+      ]);
+      allTaskInstances = instances.map((instance) => ({
+        task: instance.task,
+        instance,
+      }));
+      total = futureTotal;
+    } else if (scope === 'overdue') {
+      const overdueWhere = {
+        ownerId: employee.id,
+        dueAt: { lt: new Date() },
+        status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
+        ...(frequency ? { frequency } : {}),
+      };
+      const [instances, overdueTotal] = await Promise.all([
+        this.prisma.taskInstance.findMany({
+          where: overdueWhere,
+          include: instanceListInclude,
+          orderBy: [{ dueAt: 'desc' }, { createdAt: 'desc' }],
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prisma.taskInstance.count({ where: overdueWhere }),
+      ]);
+      allTaskInstances = instances.map((instance) => ({
+        task: instance.task,
+        instance,
+      }));
+      total = overdueTotal;
+    } else if (scope === 'approval_pending') {
+      const approvalPendingWhere = {
+        ownerId: employee.id,
+        status: APPROVAL_PENDING_STATUS,
+        ...(frequency ? { frequency } : {}),
+      };
+      const [instances, approvalPendingTotal] = await Promise.all([
+        this.prisma.taskInstance.findMany({
+          where: approvalPendingWhere,
+          include: instanceListInclude,
+          orderBy: [
+            { completedAt: 'desc' },
+            { dueAt: 'desc' },
+            { createdAt: 'desc' },
+          ],
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prisma.taskInstance.count({ where: approvalPendingWhere }),
+      ]);
+      allTaskInstances = instances.map((instance) => ({
+        task: instance.task,
+        instance,
+      }));
+      total = approvalPendingTotal;
     } else if (scope === 'completed') {
       const completedThrough = endOfDayInTimeZone(referenceDate, timeZone);
       const completedWhere = {
@@ -1097,11 +1247,10 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       count: total,
       tasks: serializedTaskInstances,
       pagination: {
-        page: scope === 'completed' ? page : 1,
-        limit: scope === 'completed' ? limit : total,
+        page: pagedScope ? page : 1,
+        limit: pagedScope ? limit : total,
         total,
-        pages:
-          scope === 'completed' ? Math.ceil(total / limit) : total > 0 ? 1 : 0,
+        pages: pagedScope ? Math.ceil(total / limit) : total > 0 ? 1 : 0,
       },
     };
   }
@@ -1113,43 +1262,61 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const referenceDate =
       parseDateOnly(rawDate) ?? getCurrentUtcDateInTimeZone(timeZone);
 
-    const [currentInstances, upcomingTaskIds] = await Promise.all([
-      this.prisma.taskInstance.findMany({
-        where: { ownerId: employee.id, scheduledFor: referenceDate },
-        select: { status: true, dueAt: true },
-      }),
-      this.prisma.taskInstance.findMany({
-        where: {
-          ownerId: employee.id,
-          scheduledFor: { gt: referenceDate },
-          status: { notIn: nonOverdueStatusValues },
-        },
-        distinct: ['taskId'],
-        select: { taskId: true },
-      }),
-    ]);
-
     const now = new Date();
-    const done = currentInstances.filter(
-      (inst) => inst.status === TaskStatus.DONE,
-    ).length;
-    const pending = currentInstances.filter(
-      (inst) =>
-        !completedStatuses.has(inst.status) && inst.dueAt >= now,
-    ).length;
-    const overdue = currentInstances.filter(
-      (inst) =>
-        !completedStatuses.has(inst.status) && inst.dueAt < now,
-    ).length;
-    const upcoming = upcomingTaskIds.length;
+    const terminalStatusExclusions = [
+      TaskStatus.DONE,
+      TaskStatus.NOT_APPLICABLE,
+      APPROVAL_PENDING_STATUS,
+    ];
+    const futureStatusExclusions = [
+      ...terminalStatusExclusions,
+      TaskStatus.OVERDUE,
+    ];
+    const futureWhere = {
+      ownerId: employee.id,
+      scheduledFor: { gte: referenceDate },
+      dueAt: { gte: now },
+      status: { notIn: futureStatusExclusions },
+    };
+    const [all, overdue, approvalPending, completed, notAcknowledged, pending] =
+      await Promise.all([
+        this.prisma.taskInstance.count({ where: futureWhere }),
+        this.prisma.taskInstance.count({
+          where: {
+            ownerId: employee.id,
+            dueAt: { lt: now },
+            status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
+          },
+        }),
+        this.prisma.taskInstance.count({
+          where: { ownerId: employee.id, status: APPROVAL_PENDING_STATUS },
+        }),
+        this.prisma.taskInstance.count({
+          where: { ownerId: employee.id, status: TaskStatus.DONE },
+        }),
+        this.prisma.taskInstance.count({
+          where: { ...futureWhere, task: { acknowledgedAt: null } },
+        }),
+        this.prisma.taskInstance.count({
+          where: { ...futureWhere, task: { acknowledgedAt: { not: null } } },
+        }),
+      ]);
 
     return {
       date: toIsoDate(referenceDate),
-      total: currentInstances.length,
-      done,
+      total: all,
+      done: completed,
       pending,
       overdue,
-      upcoming,
+      upcoming: all,
+      tabs: {
+        all,
+        overdue,
+        approvalPending,
+        completed,
+        notAcknowledged,
+        pending,
+      },
     };
   }
 
@@ -1211,6 +1378,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         title: true,
         frequency: true,
         approvedById: true,
+        assignedById: true,
         requiresCompletionDocument: true,
         completionDocumentName: true,
         approvedBy: {
@@ -1261,8 +1429,14 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       }
     }
 
+    const isOverdue = this.isInstanceOverdue(existingInstance);
+    const approvalRecipientId = this.resolveCompletionApprovalRecipientId({
+      task,
+      ownerReportingManagerId: employee.reportingManagerId,
+      isOverdue,
+    });
     const effectiveStatus =
-      status === TaskStatus.DONE && task.approvedById
+      status === TaskStatus.DONE && approvalRecipientId
         ? APPROVAL_PENDING_STATUS
         : status;
 
@@ -1276,7 +1450,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       );
     }
 
-    if (completedStatuses.has(effectiveStatus)) {
+    if (completedStatuses.has(effectiveStatus) && !isOverdue) {
       await this.assertTaskCanBeCompletedNow(
         existingInstance,
         user.organizationId,
@@ -1338,13 +1512,14 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (effectiveStatus === TaskStatus.DONE) {
       await this.closeDelayAlertsForCompletedInstance(
         updatedInstance.id,
-        'Overdue task was completed after its due date.',
+        'System closed: The linked overdue task was completed.',
+        employee.id,
       );
     }
 
-    if (effectiveStatus === APPROVAL_PENDING_STATUS && task.approvedById) {
+    if (effectiveStatus === APPROVAL_PENDING_STATUS && approvalRecipientId) {
       await this.notifications.create({
-        employeeId: task.approvedById,
+        employeeId: approvalRecipientId,
         type: NotificationType.ACTION_REQUIRED,
         module: 'DWMS',
         title: 'Task Approval Pending',
@@ -1543,7 +1718,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
   async createAssignedTask(
     user: UserPayload,
     dto: CreateAssignedTaskDto,
-    options: { notifyAssignee?: boolean } = {},
+    options: { notifyAssignee?: boolean; systemGenerated?: boolean } = {},
   ) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
@@ -1603,7 +1778,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
     const ownerName =
       `${ownerEmployee.firstName} ${ownerEmployee.lastName}`.trim();
-    const assignedByName = `${employee.firstName} ${employee.lastName}`.trim();
+    const assignedByName = options.systemGenerated
+      ? null
+      : `${employee.firstName} ${employee.lastName}`.trim();
 
     const isDailyOrWeekly =
       frequency === TaskFrequency.DAILY || frequency === TaskFrequency.WEEKLY;
@@ -1621,7 +1798,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         title: dto.title,
         description: dto.description ?? null,
         ownerId: dto.assignedToId,
-        assignedById: employee.id,
+        assignedById: options.systemGenerated ? null : employee.id,
         ownerName,
         assignedByName,
         frequency,
@@ -1851,18 +2028,19 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     const normalizedStatus =
       status === 'approved' || status === 'rejected' ? status : 'pending';
+    const approvalAccess = this.approvalAccessWhere(employee.id);
     const instanceWhere =
       normalizedStatus === 'approved'
-        ? { status: TaskStatus.DONE, task: { approvedById: employee.id } }
+        ? { status: TaskStatus.DONE, OR: approvalAccess }
         : normalizedStatus === 'rejected'
           ? {
-              status: TaskStatus.PENDING,
-              task: { approvedById: employee.id },
+              status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] },
+              OR: approvalAccess,
               events: { some: { type: 'DISAPPROVED' } },
             }
           : {
               status: APPROVAL_PENDING_STATUS,
-              task: { approvedById: employee.id },
+              OR: approvalAccess,
             };
 
     const instances = await this.prisma.taskInstance.findMany({
@@ -1980,7 +2158,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       where: {
         id: instanceId,
         status: APPROVAL_PENDING_STATUS,
-        task: { approvedById: employee.id },
+        OR: this.approvalAccessWhere(employee.id),
       },
       include: {
         task: {
@@ -2032,7 +2210,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
     await this.closeDelayAlertsForCompletedInstance(
       instance.id,
-      'Overdue task was approved after completion.',
+      `System closed: The linked overdue task was completed and approved by ${employee.firstName} ${employee.lastName}.`,
+      employee.id,
     );
 
     const task = instance.task;
@@ -2073,7 +2252,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       where: {
         id: instanceId,
         status: APPROVAL_PENDING_STATUS,
-        task: { approvedById: employee.id },
+        OR: this.approvalAccessWhere(employee.id),
       },
       include: {
         task: {
@@ -2098,7 +2277,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const updated = await this.prisma.taskInstance.update({
       where: { id: instance.id },
       data: {
-        status: TaskStatus.PENDING,
+        status: TaskStatus.IN_PROGRESS,
         completionPercent: 0,
         completedAt: null,
         completionNote: null,
@@ -2237,7 +2416,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (!scheduledFor) {
       throw new NotFoundException('No task instance is scheduled for today');
     }
-    const instance = await this.ensureTaskInstance(task, scheduledFor, timeZone);
+    const instance = await this.ensureTaskInstance(
+      task,
+      scheduledFor,
+      timeZone,
+    );
     if (!instance) {
       throw new NotFoundException(
         'No active task instance is scheduled for today',
@@ -2277,8 +2460,14 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         break;
     }
 
+    const isOverdue = this.isInstanceOverdue(instance);
+    const approvalRecipientId = this.resolveCompletionApprovalRecipientId({
+      task,
+      ownerReportingManagerId: employee.reportingManagerId,
+      isOverdue,
+    });
     const effectiveStatus =
-      dto.status === TaskStatus.DONE && task.approvedById
+      dto.status === TaskStatus.DONE && approvalRecipientId
         ? APPROVAL_PENDING_STATUS
         : dto.status;
 
@@ -2346,13 +2535,14 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (effectiveStatus === TaskStatus.DONE) {
       await this.closeDelayAlertsForCompletedInstance(
         updated.id,
-        'Overdue assigned task was completed after its due date.',
+        'System closed: The linked overdue task was completed.',
+        employee.id,
       );
     }
 
-    if (effectiveStatus === APPROVAL_PENDING_STATUS && task.approvedById) {
+    if (effectiveStatus === APPROVAL_PENDING_STATUS && approvalRecipientId) {
       await this.notifications.create({
-        employeeId: task.approvedById,
+        employeeId: approvalRecipientId,
         type: NotificationType.ACTION_REQUIRED,
         module: 'DWMS',
         title: 'Task Approval Pending',
@@ -2376,7 +2566,13 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     );
     const task = instance.task;
 
-    const effectiveStatus = task.approvedById
+    const isOverdue = this.isInstanceOverdue(instance);
+    const approvalRecipientId = this.resolveCompletionApprovalRecipientId({
+      task,
+      ownerReportingManagerId: employee.reportingManagerId,
+      isOverdue,
+    });
+    const effectiveStatus = approvalRecipientId
       ? APPROVAL_PENDING_STATUS
       : TaskStatus.DONE;
 
@@ -2423,13 +2619,14 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (effectiveStatus === TaskStatus.DONE) {
       await this.closeDelayAlertsForCompletedInstance(
         updated.id,
-        'Overdue assigned task was completed after its due date.',
+        'System closed: The linked overdue task was completed.',
+        employee.id,
       );
     }
 
-    if (effectiveStatus === APPROVAL_PENDING_STATUS && task.approvedById) {
+    if (effectiveStatus === APPROVAL_PENDING_STATUS && approvalRecipientId) {
       await this.notifications.create({
-        employeeId: task.approvedById,
+        employeeId: approvalRecipientId,
         type: NotificationType.ACTION_REQUIRED,
         module: 'DWMS',
         title: 'Task Approval Pending',

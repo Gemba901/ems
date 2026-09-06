@@ -747,6 +747,24 @@ export interface IngestActivityRowPayload {
   activity: CreateActivityPayload;
 }
 
+export type DwmsTaskListScope =
+  | "scheduled"
+  | "future"
+  | "overdue"
+  | "approval_pending"
+  | "completed";
+
+export interface DwmsTaskSummaryResponse {
+  tabs?: {
+    all: number;
+    overdue: number;
+    approvalPending: number;
+    completed: number;
+    notAcknowledged: number;
+    pending: number;
+  };
+}
+
 export enum ActivityIngestionAssignmentMode {
   INDIVIDUAL = "Individual",
   ALL_USERS = "All Users",
@@ -1292,7 +1310,7 @@ export const DwmsService = {
   async getTodayTasks(
     token: string,
     date?: string,
-    scope?: "scheduled" | "completed",
+    scope?: DwmsTaskListScope,
     page?: number,
     limit?: number,
   ): Promise<DwmsTaskListResponse> {
@@ -1300,6 +1318,10 @@ export const DwmsService = {
       `/dwms/myDwms/tasks${buildQuery({ date, scope, page, limit })}`,
       token,
     );
+  },
+
+  async getMyDwmsTaskSummary(token: string): Promise<DwmsTaskSummaryResponse> {
+    return getJson("/dwms/myDwms/tasks/summary", token);
   },
 
   async getTaskInstanceDetail(

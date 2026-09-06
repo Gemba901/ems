@@ -1,6 +1,12 @@
 "use client";
 
-import React, { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -155,12 +161,19 @@ function AlertDetailPage() {
           Alerts
         </button>
         <div className="flex flex-wrap gap-2">
-          <Badge className={severityTone[String(alert.severity)]}>{label(String(alert.severity))}</Badge>
-          <Badge className={statusTone[String(alert.status)]}>{label(String(alert.status))}</Badge>
-          {alert.isAbnormality && <Badge className="border-rose-200 bg-rose-50 text-rose-700">Abnormality</Badge>}
+          <Badge className={severityTone[String(alert.severity)]}>
+            {label(String(alert.severity))}
+          </Badge>
+          <Badge className={statusTone[String(alert.status)]}>
+            {label(String(alert.status))}
+          </Badge>
+          {alert.isAbnormality && (
+            <Badge className="border-rose-200 bg-rose-50 text-rose-700">
+              Abnormality
+            </Badge>
+          )}
         </div>
       </div>
-
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
@@ -169,33 +182,49 @@ function AlertDetailPage() {
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alert #{alert.id.slice(0, 8)}</p>
-            <h1 className="mt-2 text-2xl font-bold text-slate-950">{alert.title}</h1>
-            <p className="mt-3 max-w-4xl whitespace-pre-wrap text-sm leading-6 text-slate-600">{alert.description}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Alert #{alert.id.slice(0, 8)}
+            </p>
+            <h1 className="mt-2 text-2xl font-bold text-slate-950">
+              {alert.title}
+            </h1>
+            <p className="mt-3 max-w-4xl whitespace-pre-wrap text-sm leading-6 text-slate-600">
+              {alert.description}
+            </p>
           </div>
           <div className="min-w-52 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
             <div className="flex items-center gap-2 font-semibold text-slate-800">
               <CalendarClock className="h-4 w-4" />
               Created
             </div>
-            <p className="mt-1">{formatDateTime(alert.createdAt, organizationTimeZone)}</p>
-            {alert.resolvedAt && <p className="mt-2">Closed: {formatDateTime(alert.resolvedAt, organizationTimeZone)}</p>}
+            <p className="mt-1">
+              {formatDateTime(alert.createdAt, organizationTimeZone)}
+            </p>
+            {alert.resolvedAt && (
+              <p className="mt-2">
+                Closed: {formatDateTime(alert.resolvedAt, organizationTimeZone)}
+              </p>
+            )}
           </div>
         </div>
       </section>
-
-      <Panel title="Alert Information" icon={<AlertTriangle className="h-4 w-4 text-blue-600" />}>
+      <Panel
+        title="Alert Information"
+        icon={<AlertTriangle className="h-4 w-4 text-blue-600" />}
+      >
         <div className="grid gap-3 sm:grid-cols-2">
           <InfoItem label="Type" value={label(alert.type)} />
           <InfoItem label="Status" value={label(alert.status)} />
           <InfoItem label="Severity" value={label(String(alert.severity))} />
-          <InfoItem label="Raised by" value={alert.raisedBy?.name ?? "System"} />
+          <InfoItem
+            label="Raised by"
+            value={alert.raisedBy?.name ?? "System"}
+          />
           {linkedRows.map((row) => (
             <InfoItem key={row.label} label={row.label} value={row.value} />
           ))}
         </div>
       </Panel>
-
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -213,7 +242,13 @@ function AlertDetailPage() {
               No history events have been recorded yet.
             </p>
           ) : (
-            detail.comments.map((item) => <CommentItem key={item.id} comment={item} timeZone={organizationTimeZone} />)
+            detail.comments.map((item) => (
+              <CommentItem
+                key={item.id}
+                comment={item}
+                timeZone={organizationTimeZone}
+              />
+            ))
           )}
         </div>
 
@@ -260,21 +295,52 @@ function AlertDetailPage() {
           )}
         </div>
       </section>
-
-      {alert.correctiveAction && (
-        <Panel title="Resolution" icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />}>
-          <NoteBlock title="Corrective Action" body={alert.correctiveAction} />
+      {(alert.correctiveAction || alert.closureNote) && (
+        <Panel
+          title="Resolution"
+          icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+        >
+          <div className="space-y-3">
+            {alert.correctiveAction && (
+              <NoteBlock
+                title="Corrective Action"
+                body={alert.correctiveAction}
+              />
+            )}
+            {alert.closureNote && (
+              <NoteBlock
+                title={
+                  alert.type === "DELAY" ? "System Closure" : "Closure Note"
+                }
+                body={alert.closureNote}
+              />
+            )}
+          </div>
         </Panel>
       )}
-
       {(detail.sourceAlert || (detail.abnormalities?.length ?? 0) > 0) && (
-        <Panel title="Abnormality Context" icon={<Clock3 className="h-4 w-4 text-rose-600" />}>
-          {detail.sourceAlert && <RelatedAlert title="Source Alert" alert={detail.sourceAlert} timeZone={organizationTimeZone} />}
+        <Panel
+          title="Abnormality Context"
+          icon={<Clock3 className="h-4 w-4 text-rose-600" />}
+        >
+          {detail.sourceAlert && (
+            <RelatedAlert
+              title="Source Alert"
+              alert={detail.sourceAlert}
+              timeZone={organizationTimeZone}
+            />
+          )}
           {(detail.abnormalities ?? []).filter(Boolean).map((item) => (
-            <RelatedAlert key={item?.id} title="Created Abnormality" alert={item} timeZone={organizationTimeZone} />
+            <RelatedAlert
+              key={item?.id}
+              title="Created Abnormality"
+              alert={item}
+              timeZone={organizationTimeZone}
+            />
           ))}
         </Panel>
-      )}    </div>
+      )}{" "}
+    </div>
   );
 }
 
@@ -291,7 +357,10 @@ function buildLinkedRows(alert?: DwmsAlertItem | null) {
     rows.push({
       label: "Linked task",
       value: (
-        <Link className="font-semibold text-blue-700 hover:underline" href={`/dwms/tasks/${alert.taskInstance.id}`}>
+        <Link
+          className="font-semibold text-blue-700 hover:underline"
+          href={`/dwms/tasks/${alert.taskInstance.id}`}
+        >
           {alert.taskInstance.task.title}
         </Link>
       ),
@@ -300,11 +369,31 @@ function buildLinkedRows(alert?: DwmsAlertItem | null) {
   return rows;
 }
 
-function Badge({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <span className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${className ?? ""}`}>{children}</span>;
+function Badge({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${className ?? ""}`}
+    >
+      {children}
+    </span>
+  );
 }
 
-function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+function Panel({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
@@ -319,7 +408,9 @@ function Panel({ title, icon, children }: { title: string; icon: React.ReactNode
 function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
       <div className="mt-1 text-sm font-medium text-slate-900">{value}</div>
     </div>
   );
@@ -329,23 +420,47 @@ function NoteBlock({ title, body }: { title: string; body: string }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
       <p className="text-xs font-semibold text-slate-700">{title}</p>
-      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-600">{body}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+        {body}
+      </p>
     </div>
   );
 }
 
-function RelatedAlert({ title, alert, timeZone }: { title: string; alert?: Partial<DwmsAlertItem> | null; timeZone?: string | null }) {
+function RelatedAlert({
+  title,
+  alert,
+  timeZone,
+}: {
+  title: string;
+  alert?: Partial<DwmsAlertItem> | null;
+  timeZone?: string | null;
+}) {
   if (!alert?.id) return null;
   return (
-    <Link href={`/dwms/alerts/${alert.id}`} className="block rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-blue-200 hover:bg-blue-50/40">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+    <Link
+      href={`/dwms/alerts/${alert.id}`}
+      className="block rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-blue-200 hover:bg-blue-50/40"
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {title}
+      </p>
       <p className="mt-1 text-sm font-semibold text-slate-900">{alert.title}</p>
-      <p className="mt-1 text-xs text-slate-500">{label(String(alert.status))} - {formatDateTime(alert.createdAt, timeZone)}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        {label(String(alert.status))} -{" "}
+        {formatDateTime(alert.createdAt, timeZone)}
+      </p>
     </Link>
   );
 }
 
-function CommentItem({ comment, timeZone }: { comment: DwmsAlertComment; timeZone?: string | null }) {
+function CommentItem({
+  comment,
+  timeZone,
+}: {
+  comment: DwmsAlertComment;
+  timeZone?: string | null;
+}) {
   const [title, ...rest] = comment.comment.split(": ");
   const body = rest.join(": ");
 
@@ -372,14 +487,3 @@ function CommentItem({ comment, timeZone }: { comment: DwmsAlertComment; timeZon
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-

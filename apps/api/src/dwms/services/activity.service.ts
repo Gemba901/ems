@@ -855,7 +855,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
                 isAdhoc: false,
                 acknowledgeOnCreate: true,
               },
-              { notifyAssignee: false },
+              { notifyAssignee: false, systemGenerated: true },
             )) as { task?: { id?: string } };
             if (taskResult.task?.id) taskIds.push(taskResult.task.id);
           }
@@ -1152,13 +1152,18 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       });
 
       if (!existingTask) {
-        await this.createTaskFromActivity(user, activityId, {
-          assignedToId: employeeId,
-          frequency: activity.frequency,
-          priority: Priority.MEDIUM,
-          isAdhoc: false,
-          acknowledgeOnCreate: true,
-        });
+        await this.createTaskFromActivity(
+          user,
+          activityId,
+          {
+            assignedToId: employeeId,
+            frequency: activity.frequency,
+            priority: Priority.MEDIUM,
+            isAdhoc: false,
+            acknowledgeOnCreate: true,
+          },
+          { systemGenerated: true },
+        );
       }
     }
 
@@ -1296,7 +1301,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     user: UserPayload,
     activityId: string,
     dto: CreateTaskFromActivityDto,
-    options: { notifyAssignee?: boolean } = {},
+    options: { notifyAssignee?: boolean; systemGenerated?: boolean } = {},
   ) {
     const activity = await this.prisma.activity.findFirst({
       where: { id: activityId, organizationId: user.organizationId },

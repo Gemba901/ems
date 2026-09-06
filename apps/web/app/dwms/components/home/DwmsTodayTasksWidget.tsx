@@ -163,6 +163,7 @@ export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: P
   }
   const visibleTasks = useMemo(() => {
     return [...tasks]
+      .filter((task) => task.status !== "DONE")
       .sort((a, b) => {
         const dueA = new Date(a.dueAt).getTime();
         const dueB = new Date(b.dueAt).getTime();

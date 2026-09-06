@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import TaskHeader, { TaskSubTabType } from "./TaskHeader";
@@ -14,7 +20,7 @@ import {
 } from "@/services/dwms.service";
 import { uploadImage } from "@/services/uploads.service";
 
-const COMPLETED_PAGE_SIZE = 20;
+const TASK_PAGE_SIZE = 20;
 
 const frequencyBasedTaskFrequencies = new Set([
   "DAILY",
@@ -27,7 +33,6 @@ const frequencyBasedTaskFrequencies = new Set([
 function isFrequencyBasedTask(task: TaskItem) {
   return frequencyBasedTaskFrequencies.has(String(task.frequency ?? ""));
 }
-
 
 function getDashboardTaskDateValue(task: TaskItem, activeTab: TaskSubTabType) {
   if (activeTab === "COMPLETED") {
@@ -51,19 +56,25 @@ function groupFrequencyBasedTasks(tasksToGroup: TaskItem[]) {
   return Array.from(grouped.values());
 }
 
-
 export default function TaskDashboard() {
   const router = useRouter();
 
   // Tasks and loading state
   const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [completedHistoryTasks, setCompletedHistoryTasks] = useState<TaskItem[]>([]);
-  const [completedPage, setCompletedPage] = useState(1);
-  const [completedPagination, setCompletedPagination] = useState({
+  const [taskPage, setTaskPage] = useState(1);
+  const [taskPagination, setTaskPagination] = useState({
     page: 1,
-    limit: COMPLETED_PAGE_SIZE,
+    limit: TASK_PAGE_SIZE,
     total: 0,
     pages: 0,
+  });
+  const [tabCounts, setTabCounts] = useState({
+    all: 0,
+    overdue: 0,
+    notAcknowledged: 0,
+    pending: 0,
+    approvalPending: 0,
+    completed: 0,
   });
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -104,13 +115,13 @@ export default function TaskDashboard() {
   // Derive unique list of assigners for the assigned-by filter
   const uniqueAssignees = useMemo(() => {
     const map = new Map<string, string>();
-    [...tasks, ...completedHistoryTasks].forEach((t) => {
+    tasks.forEach((t) => {
       if (t.assignedBy) {
         map.set(t.assignedBy.id, t.assignedBy.name);
       }
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [tasks, completedHistoryTasks]);
+  }, [tasks]);
 
   // Status mapping for toggling checkboxes
   const statusCompletion: Record<TaskStatus, number> = {
@@ -129,26 +140,34 @@ export default function TaskDashboard() {
     setError(null);
     try {
       const token = useAuthStore.getState().accessToken ?? "";
-      const [scheduledRes, completedRes] = await Promise.all([
-        DwmsService.getTodayTasks(token, undefined, "scheduled"),
+      const scope =
+        activeTab === "OVERDUE"
+          ? "overdue"
+          : activeTab === "APPROVAL_PENDING"
+            ? "approval_pending"
+            : activeTab === "COMPLETED"
+              ? "completed"
+              : "future";
+      const [taskResponse, summary] = await Promise.all([
         DwmsService.getTodayTasks(
           token,
           undefined,
-          "completed",
-          completedPage,
-          COMPLETED_PAGE_SIZE,
+          scope,
+          taskPage,
+          TASK_PAGE_SIZE,
         ),
+        DwmsService.getMyDwmsTaskSummary(token),
       ]);
-      setTasks(scheduledRes?.tasks ?? []);
-      setCompletedHistoryTasks(completedRes?.tasks ?? []);
-      setCompletedPagination(
-        completedRes?.pagination ?? {
-          page: completedPage,
-          limit: COMPLETED_PAGE_SIZE,
-          total: completedRes?.tasks?.length ?? 0,
-          pages: completedRes?.tasks?.length ? 1 : 0,
+      setTasks(taskResponse?.tasks ?? []);
+      setTaskPagination(
+        taskResponse?.pagination ?? {
+          page: taskPage,
+          limit: TASK_PAGE_SIZE,
+          total: taskResponse?.tasks?.length ?? 0,
+          pages: taskResponse?.tasks?.length ? 1 : 0,
         },
       );
+      if (summary.tabs) setTabCounts(summary.tabs);
     } catch (fetchError) {
       const message =
         fetchError instanceof Error
@@ -156,11 +175,10 @@ export default function TaskDashboard() {
           : "Failed to load tasks";
       setError(message);
       setTasks([]);
-      setCompletedHistoryTasks([]);
     } finally {
       setLoading(false);
     }
-  }, [completedPage]);
+  }, [activeTab, taskPage]);
 
   useEffect(() => {
     void loadTasks();
@@ -295,14 +313,14 @@ export default function TaskDashboard() {
       tasks.filter(
         (t) =>
           t.status !== "DONE" &&
-          t.status !== "APPROVAL_PENDING" &&
+          t.status !== "NOT_APPLICABLE" &&
           (t.isOverdue || t.status === "OVERDUE"),
       ),
     [tasks],
   );
   const completedTasks = useMemo(
-    () => completedHistoryTasks.filter((t) => t.status === "DONE"),
-    [completedHistoryTasks],
+    () => tasks.filter((t) => t.status === "DONE"),
+    [tasks],
   );
   const approvalPendingTasks = useMemo(
     () => tasks.filter((t) => t.status === "APPROVAL_PENDING"),
@@ -332,24 +350,6 @@ export default function TaskDashboard() {
       ),
     [tasks],
   );
-
-  // Counts for the subtabs
-  const tabCounts = useMemo(() => {
-    const all = tasks.length;
-    const overdue = overdueTasks.length;
-    const completed = completedPagination.total;
-    const notAcknowledged = notAcknowledgedTasks.length;
-    const pending = pendingTasks.length;
-    const approvalPending = approvalPendingTasks.length;
-    return { all, overdue, completed, notAcknowledged, pending, approvalPending };
-  }, [
-    tasks,
-    overdueTasks,
-    completedPagination.total,
-    notAcknowledgedTasks,
-    pendingTasks,
-    approvalPendingTasks,
-  ]);
 
   // Filter & Sort Logic
   const filteredTasks = useMemo(() => {
@@ -402,7 +402,7 @@ export default function TaskDashboard() {
       timeValue(task.dueAt ?? task.scheduledFor ?? task.completedAt);
 
     result.sort((a, b) => {
-      if (activeTab === "COMPLETED") {
+      if (activeTab === "COMPLETED" || activeTab === "APPROVAL_PENDING") {
         return completedTime(b) - completedTime(a);
       }
       if (activeTab === "OVERDUE") {
@@ -428,7 +428,6 @@ export default function TaskDashboard() {
     assigneeFilter,
   ]);
 
-
   return (
     <div className="relative pb-12">
       <main className="mx-auto max-w-none px-4 pb-8 sm:px-6 lg:px-8 flex flex-col gap-6 pt-0">
@@ -439,7 +438,7 @@ export default function TaskDashboard() {
             activeTab={activeTab}
             setActiveTab={(tab) => {
               setActiveTab(tab);
-              if (tab !== "COMPLETED") setCompletedPage(1);
+              setTaskPage(1);
             }}
             counts={tabCounts}
           />
@@ -634,18 +633,23 @@ export default function TaskDashboard() {
                   t.organizationTimeZone,
                   activeTab !== "COMPLETED" && activeTab !== "OVERDUE",
                 );
-                const showSeparator = !!dateMeta && dateMeta.key !== previousDateKey;
+                const showSeparator =
+                  !!dateMeta && dateMeta.key !== previousDateKey;
                 if (dateMeta) previousDateKey = dateMeta.key;
 
                 return (
                   <React.Fragment key={itemKey}>
-                    {dateMeta && showSeparator && <TaskDateSeparator label={dateMeta.label} />}
+                    {dateMeta && showSeparator && (
+                      <TaskDateSeparator label={dateMeta.label} />
+                    )}
                     <TaskMiniCard
                       task={t}
                       onClick={() => router.push(`/dwms/tasks/${t.instanceId}`)}
                       onStatusChange={handleStatusChange}
                       onAcknowledgement={handleAcknowledgement}
-                      saving={savingId === t.instanceId || savingId === t.taskId}
+                      saving={
+                        savingId === t.instanceId || savingId === t.taskId
+                      }
                     />
                   </React.Fragment>
                 );
@@ -653,38 +657,36 @@ export default function TaskDashboard() {
             })()}
           </div>
         )}
-        {!loading &&
-          activeTab === "COMPLETED" &&
-          completedPagination.pages > 1 && (
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
-              <span>
-                Page {completedPagination.page} of {completedPagination.pages} ·{" "}
-                {completedPagination.total} completed tasks
-              </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCompletedPage((page) => Math.max(1, page - 1))}
-                  disabled={completedPagination.page <= 1}
-                  className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCompletedPage((page) =>
-                      Math.min(completedPagination.pages, page + 1),
-                    )
-                  }
-                  disabled={completedPagination.page >= completedPagination.pages}
-                  className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
+        {!loading && taskPagination.pages > 1 && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+            <span>
+              Page {taskPagination.page} of {taskPagination.pages} ·{" "}
+              {taskPagination.total} tasks
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTaskPage((page) => Math.max(1, page - 1))}
+                disabled={taskPagination.page <= 1}
+                className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setTaskPage((page) =>
+                    Math.min(taskPagination.pages, page + 1),
+                  )
+                }
+                disabled={taskPagination.page >= taskPagination.pages}
+                className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
-          )}
+          </div>
+        )}
       </main>
 
       {completionTask && (
@@ -789,4 +791,3 @@ export default function TaskDashboard() {
     </div>
   );
 }
-

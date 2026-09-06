@@ -45,7 +45,11 @@ function isTaskScheduledInWindow(task: TaskItem, start: string, end: string) {
 }
 
 function isHomeVisibleTask(task: TaskItem) {
-  return !task.isOverdue && task.status !== "OVERDUE";
+  return (
+    !task.isOverdue &&
+    task.status !== "OVERDUE" &&
+    task.status !== "DONE"
+  );
 }
 
 function getHomeTaskDateValue(task: TaskItem) {

@@ -300,9 +300,9 @@ function ApprovalTasksContent() {
                 <article
                   key={`alert:${alert.id}`}
                   onClick={() => router.push(`/dwms/alerts/${alert.id}`)}
-                  className="cursor-pointer rounded-2xl border border-border-app bg-white p-5 shadow-sm transition hover:border-cyan-200 hover:shadow-md"
+                  className="cursor-pointer rounded-2xl border border-border-app bg-white p-4 transition hover:border-slate-300 hover:shadow-md"
                 >
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${getPriorityBadgeColor(String(severity))}`}>
@@ -371,9 +371,9 @@ function ApprovalTasksContent() {
                 <article
                   key={`task:${task.id}`}
                   onClick={() => router.push(`/dwms/tasks/${task.instanceId ?? task.id}`)}
-                  className="cursor-pointer rounded-2xl border border-border-app bg-white p-5 shadow-sm transition hover:border-emerald-200 hover:shadow-md"
+                  className="cursor-pointer rounded-2xl border border-border-app bg-white p-4 transition hover:border-slate-300 hover:shadow-md"
                 >
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${getPriorityBadgeColor(priority)}`}>

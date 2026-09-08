@@ -323,7 +323,7 @@ function AlertsPage() {
                 <div
                   key={alert.id}
                   onClick={() => router.push(`/dwms/alerts/${alert.id}`)}
-                  className="group relative cursor-pointer rounded-2xl border border-border-app bg-white p-5 shadow-sm transition hover:border-accent-app/40 hover:shadow-md"
+                  className="group relative cursor-pointer rounded-2xl border border-border-app bg-white p-4 transition hover:border-slate-300 hover:shadow-md"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-app pb-3">
                     <div className="flex flex-wrap items-center gap-2">
@@ -388,7 +388,7 @@ function AlertsPage() {
                   </div>
 
                   {alert.correctiveAction && (
-                    <div className="mt-4 rounded-r-lg border-l-2 border-accent-app bg-white p-3">
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-accent-app">
                         Corrective Action Taken
                       </p>

@@ -2,16 +2,20 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import DwmsTabHeader from "../components/DwmsTabHeader";
 import DwmsSearchFilterBar from "../components/DwmsSearchFilterBar";
-import TaskDateSeparator, { getDateSeparatorMeta } from "../components/TaskDateSeparator";
+import TaskDateSeparator, {
+  getDateSeparatorMeta,
+} from "../components/TaskDateSeparator";
 import { useAuthStore } from "@/store/auth.store";
 import {
   DwmsService,
+  getDwmsErrorMessage,
   type DwmsAssignedTaskHistoryItem,
 } from "@/services/dwms.service";
-import { Clock, ExternalLink, Paperclip, PlusCircle } from "lucide-react";
+import { Clock, Paperclip, PlusCircle, Repeat } from "lucide-react";
 import {
   formatOrganizationDate,
   isTodayInOrganizationTimeZone,
@@ -71,7 +75,8 @@ export default function AssignedTasksHistoryPage() {
 function AssignedTasksHistoryContent() {
   const router = useRouter();
   const [byMeTasks, setByMeTasks] = useState<DwmsAssignedTaskHistoryItem[]>([]);
-  const [loadingLists, setLoadingLists] = useState(false);
+  const [loadingLists, setLoadingLists] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [historySubTab, setHistorySubTab] = useState<
     "all" | "overdue" | "completed" | "pending" | "not_acknowledged"
   >("all");
@@ -80,12 +85,15 @@ function AssignedTasksHistoryContent() {
 
   async function loadLists() {
     setLoadingLists(true);
+    setLoadError(null);
     try {
       const token = useAuthStore.getState().accessToken ?? "";
       const byme = await DwmsService.getAssignedTasksByMe(token);
       setByMeTasks(byme?.tasks ?? []);
-    } catch {
-      // ignore
+    } catch (error) {
+      setLoadError(
+        getDwmsErrorMessage(error, "Unable to load assigned tasks."),
+      );
     } finally {
       setLoadingLists(false);
     }
@@ -102,12 +110,13 @@ function AssignedTasksHistoryContent() {
     if (!dueDateStr) return "No due date";
     const dueDate = new Date(dueDateStr);
     if (isTodayInOrganizationTimeZone(dueDate, timeZone)) {
-      return "Due by Today";
+      return "Due today";
     }
     return (
       formatOrganizationDate(dueDate, timeZone, {
         day: "numeric",
-        month: "long",
+        month: "short",
+        year: "numeric",
       }) ?? "No due date"
     );
   };
@@ -129,35 +138,17 @@ function AssignedTasksHistoryContent() {
     });
   };
 
-  const getPriorityBadgeColor = (p: string) => {
-    switch (p) {
-      case "CRITICAL":
-        return "bg-rose-500/10 text-rose-400 border border-rose-500/20";
-      case "HIGH":
-        return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
-      case "MEDIUM":
-        return "bg-blue-500/10 text-blue-400 border border-blue-500/20";
-      default:
-        return "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20";
-    }
+  const getStatusBadgeColor = (status: string) => {
+    if (status === "DONE") return "bg-emerald-50 text-emerald-700";
+    if (status === "OVERDUE") return "bg-rose-50 text-rose-700";
+    if (status === "APPROVAL_PENDING") return "bg-indigo-50 text-indigo-700";
+    return "bg-slate-100 text-slate-700";
   };
-
-  const getStatusBadgeColor = (s: string) => {
-    switch (s) {
-      case "DONE":
-        return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-      case "APPROVAL_PENDING":
-        return "bg-cyan-500/10 text-cyan-500 border border-cyan-500/20";
-      case "IN_PROGRESS":
-        return "bg-sky-500/10 text-sky-400 border border-sky-500/20";
-      case "PENDING":
-        return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
-      case "OVERDUE":
-        return "bg-rose-500/10 text-rose-400 border border-rose-500/20";
-      default:
-        return "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20";
-    }
-  };
+  const formatLabel = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/_/g, " ")
+      .replace(/^./, (letter) => letter.toUpperCase());
 
   const assignedToOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -178,127 +169,104 @@ function AssignedTasksHistoryContent() {
   };
 
   const renderByMeTaskCard = (task: DwmsAssignedTaskHistoryItem) => {
-    const initials = task.ownerName
-      ? task.ownerName
-          .split(" ")
-          .map((n: string) => n[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase()
-      : "U";
+    const ownerName = task.ownerName || task.owner?.name || "Unknown assignee";
     const priority =
       task.priority === "LOW" ? "MEDIUM" : (task.priority ?? "MEDIUM");
-    const acknowledgedAtLabel = !isFrequencyBasedTask(task)
-      ? formatAcknowledgedAt(task.acknowledgedAt, task.organizationTimeZone)
-      : null;
-    const showWasOverdue = !!task.wasOverdue && task.status !== "OVERDUE";
-
+    const acknowledgedAtLabel = formatAcknowledgedAt(
+      task.acknowledgedAt,
+      task.organizationTimeZone,
+    );
+    const completedOrSubmitted =
+      task.status === "DONE" || task.status === "APPROVAL_PENDING";
     return (
-      <div
-        key={task.id}
-        role="button"
-        tabIndex={0}
+      <article
         onClick={() => openTaskDetails(task)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            openTaskDetails(task);
-          }
-        }}
-        className="rounded-2xl border border-border-app bg-white p-5 shadow-sm space-y-4 hover:border-accent-app/30 transition duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        className="min-w-0 cursor-pointer space-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 transition-colors hover:bg-slate-50/50"
       >
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${getPriorityBadgeColor(priority)}`}
-              >
-                {priority}
-              </span>
-              <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${getStatusBadgeColor(task.status)}`}
-              >
-                {task.status.replace(/_/g, " ")}
-              </span>
-              {showWasOverdue && (
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700">
-                  WAS OVERDUE
-                </span>
-              )}
-            </div>
-            <h4 className="text-base font-semibold text-text-app">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <Link
+              href={`/dwms/tasks/${task.instanceId ?? task.id}`}
+              onClick={(event) => event.stopPropagation()}
+              className="block break-words text-sm font-medium text-slate-900 hover:underline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            >
               {task.title}
-            </h4>
-            {task.description && (
-              <p className="text-sm text-muted-app font-light leading-relaxed">
-                {task.description}
-              </p>
+            </Link>
+            <p
+              title={
+                acknowledgedAtLabel
+                  ? `Acknowledged ${acknowledgedAtLabel}`
+                  : undefined
+              }
+              className={`mt-0.5 text-xs ${task.acknowledgedAt ? "text-emerald-700" : "text-slate-500"}`}
+            >
+              {task.acknowledgedAt ? "Acknowledged" : "Not acknowledged"}
+            </p>
+          </div>
+          <span
+            className={`shrink-0 rounded-lg px-2 py-1 text-xs font-medium ${getStatusBadgeColor(task.status)}`}
+          >
+            {formatLabel(task.status)}
+          </span>
+        </div>
+        {task.description && (
+          <p className="line-clamp-1 break-words text-xs text-slate-500">
+            {task.description}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-slate-500">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="break-words text-slate-700" title="Assigned to">
+              {ownerName}
+            </span>
+            <span
+              className={
+                priority === "CRITICAL" ? "text-rose-700" : "text-slate-500"
+              }
+            >
+              {formatLabel(priority)} priority
+            </span>
+            {task.frequency && (
+              <span className="inline-flex items-center gap-1">
+                <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
+                {task.frequency === "PLANNED"
+                  ? "Once"
+                  : formatLabel(task.frequency)}
+              </span>
+            )}
+            {task.wasOverdue && task.status !== "OVERDUE" && (
+              <span className="text-amber-700">Was overdue</span>
             )}
           </div>
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+            {formatTaskDueDate(
+              task.dueAt ?? task.dueDate ?? null,
+              task.organizationTimeZone,
+            )}
+          </span>
         </div>
-
-        <div className="border-t border-border-app pt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-app">
-          <div className="flex items-center gap-2">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-50 text-[9px] font-bold text-blue-700 border border-blue-200">
-              {initials}
-            </span>
-            <span>
-              Assigned to:{" "}
-              <strong className="text-text-app font-semibold">
-                {task.ownerName || "Unknown"}
-              </strong>
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Clock
-              className="h-3.5 w-3.5 text-zinc-400 shrink-0"
-              strokeWidth={1.5}
-            />
-            <span>
-              {formatTaskDueDate(
-                task.dueDate ?? null,
-                task.organizationTimeZone,
-              )}
-            </span>
-          </div>
-        </div>
-
-        {acknowledgedAtLabel && (
-          <div className="border-t border-border-app pt-2.5 text-[11px] text-muted-app">
-            <span>Acknowledged: </span>
-            <span className="text-text-app">{acknowledgedAtLabel}</span>
-          </div>
+        {completedOrSubmitted && task.completionNote && (
+          <p className="line-clamp-1 break-words text-xs text-slate-500">
+            <span className="font-medium">Completion note: </span>
+            {task.completionNote}
+          </p>
         )}
-
-        {(task.status === "DONE" || task.status === "APPROVAL_PENDING") &&
-          task.completionNote && (
-            <div className="border-t border-border-app pt-3 text-xs">
-              <span className="text-muted-app">Completion note:</span>
-              <p className="mt-1 text-emerald-400 font-light italic bg-emerald-500/5 border border-emerald-500/10 p-2.5 rounded-xl">
-                &quot;{task.completionNote}&quot;
-              </p>
-            </div>
-          )}
-
-        {(task.status === "DONE" || task.status === "APPROVAL_PENDING") &&
-          task.completionAttachmentUrl && (
-            <div className="border-t border-border-app pt-3 text-xs">
-              <a
-                href={task.completionAttachmentUrl}
-                onClick={(event) => event.stopPropagation()}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 font-semibold text-blue-700 transition hover:border-blue-200 hover:bg-blue-100"
-              >
-                <Paperclip className="h-3.5 w-3.5" />
-                <span>
-                  {task.completionAttachmentName || "View completion file"}
-                </span>
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </div>
-          )}
-      </div>
+        {completedOrSubmitted && task.completionAttachmentUrl && (
+          <a
+            href={task.completionAttachmentUrl}
+            onClick={(event) => event.stopPropagation()}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex max-w-full items-center gap-1.5 rounded text-xs font-medium text-indigo-700 hover:underline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          >
+            <Paperclip className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">
+              {task.completionAttachmentName || "View completion file"}
+            </span>
+          </a>
+        )}
+      </article>
     );
   };
 
@@ -398,7 +366,7 @@ function AssignedTasksHistoryContent() {
   ]);
 
   return (
-    <div className="mx-auto max-w-none px-4 pt-8 sm:px-6 lg:px-8 space-y-6 pb-8">
+    <div className="w-full px-4 pt-8 sm:px-6 lg:px-8 space-y-6 pb-8">
       <DwmsTabHeader
         activeTab={historySubTab}
         onTabChange={setHistorySubTab}
@@ -437,7 +405,7 @@ function AssignedTasksHistoryContent() {
       />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="w-full lg:max-w-4xl">
+        <div className="min-w-0 flex-1">
           <DwmsSearchFilterBar
             searchValue={searchTerm}
             onSearchChange={setSearchTerm}
@@ -449,7 +417,7 @@ function AssignedTasksHistoryContent() {
                 onChange: setAssignedToFilter,
                 ariaLabel: "Assigned to filter",
                 options: [
-                  { value: "ALL", label: "ALL" },
+                  { value: "ALL", label: "All assignees" },
                   ...assignedToOptions.map((option) => ({
                     value: option.id,
                     label: option.name,
@@ -461,8 +429,8 @@ function AssignedTasksHistoryContent() {
         </div>
 
         <button
-          onClick={() => router.push("/dwms/actions/new")}
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white px-4 transition cursor-pointer select-none shadow-sm self-start lg:self-auto"
+          onClick={() => router.push("/dwms/actions/new?mode=TASK")}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-transparent bg-[#52618a] hover:bg-[#445174] text-xs font-bold text-white px-4 transition cursor-pointer select-none shadow-sm w-full shrink-0 sm:w-auto self-start lg:self-auto"
         >
           <PlusCircle className="h-4 w-4" />
           <span>Assign a Task</span>
@@ -472,17 +440,31 @@ function AssignedTasksHistoryContent() {
       {/* Lists Content */}
       <div className="w-full space-y-6">
         {loadingLists ? (
-          <div className="rounded-2xl border border-dashed border-border-app bg-white py-24 text-center text-sm text-muted-app">
+          <div className="rounded-2xl border border-dashed border-border-app bg-white py-12 text-center text-sm text-muted-app">
             Loading tasks list...
           </div>
+        ) : loadError ? (
+          <div
+            role="alert"
+            className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600"
+          >
+            <p>{loadError}</p>
+            <button
+              type="button"
+              onClick={() => void loadLists()}
+              className="mt-2 rounded-lg border border-slate-200 px-3 py-2 font-medium text-indigo-700 hover:bg-indigo-50"
+            >
+              Try again
+            </button>
+          </div>
         ) : byMeTasks.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border-app bg-white py-24 text-center text-sm text-muted-app">
+          <div className="rounded-2xl border border-dashed border-border-app bg-white py-12 text-center text-sm text-muted-app">
             You have not assigned any tasks yet.
           </div>
         ) : (
           <div className="space-y-6">
             {filteredTasks.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border-app bg-white py-20 text-center text-sm text-muted-app">
+              <div className="rounded-2xl border border-dashed border-border-app bg-white py-12 text-center text-sm text-muted-app">
                 {searchTerm || assignedToFilter !== "ALL"
                   ? "No tasks match your search or assigned-to filter."
                   : historySubTab === "all"
@@ -496,7 +478,7 @@ function AssignedTasksHistoryContent() {
                           : "No unacknowledged tasks."}
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                 {(() => {
                   let previousDateKey: string | null = null;
                   return filteredTasks.map((task) => {
@@ -504,12 +486,15 @@ function AssignedTasksHistoryContent() {
                       getAssignedTaskDateValue(task, historySubTab),
                       task.organizationTimeZone,
                     );
-                    const showSeparator = !!dateMeta && dateMeta.key !== previousDateKey;
+                    const showSeparator =
+                      !!dateMeta && dateMeta.key !== previousDateKey;
                     if (dateMeta) previousDateKey = dateMeta.key;
 
                     return (
                       <React.Fragment key={task.instanceId ?? task.id}>
-                        {dateMeta && showSeparator && <TaskDateSeparator label={dateMeta.label} />}
+                        {dateMeta && showSeparator && (
+                          <TaskDateSeparator label={dateMeta.label} />
+                        )}
                         {renderByMeTaskCard(task)}
                       </React.Fragment>
                     );
@@ -523,4 +508,3 @@ function AssignedTasksHistoryContent() {
     </div>
   );
 }
-

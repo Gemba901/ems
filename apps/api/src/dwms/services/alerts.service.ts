@@ -331,6 +331,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
           organizationId: user.organizationId,
           OR: [
             { raisedById: employee.id },
+            { recipientEmployeeIds: { has: employee.id } },
             { againstUserId: employee.id },
             { taskInstance: { ownerId: employee.id } },
             employee.departmentId
@@ -352,6 +353,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
           organizationId: user.organizationId,
           OR: [
             { raisedById: employee.id },
+            { recipientEmployeeIds: { has: employee.id } },
             { againstUserId: employee.id },
             { taskInstance: { ownerId: employee.id } },
           ],

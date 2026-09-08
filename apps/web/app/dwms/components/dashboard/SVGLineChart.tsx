@@ -49,7 +49,7 @@ export default function SVGLineChart({
   const maxScale = ySuffix.trim() === '%' ? 100 : (maxValInData > 0 ? Math.ceil(maxValInData * 1.2) : 10);
 
   const pointsCount = trendData.length;
-  const getX = (index: number) => paddingLeft + (index * (chartWidth / Math.max(1, pointsCount - 1)));
+  const getX = (index: number) => pointsCount === 1 ? paddingLeft + chartWidth / 2 : paddingLeft + (index * (chartWidth / (pointsCount - 1)));
   const getY = (val: number) => {
     const v = Math.max(0, Math.min(maxScale, val));
     return paddingTop + chartHeight - (v / maxScale) * chartHeight;
@@ -183,8 +183,8 @@ export default function SVGLineChart({
                 cy={y}
                 r="5.5"
                 className={`transition-all duration-150 pointer-events-none ${
-                  hoveredIdx === i
-                    ? 'fill-blue-500 stroke-zinc-50 stroke-2 scale-125'
+                  hoveredIdx === i || pointsCount === 1
+                    ? 'fill-blue-500 stroke-zinc-50 stroke-2'
                     : 'fill-blue-500 opacity-0'
                 }`}
               />

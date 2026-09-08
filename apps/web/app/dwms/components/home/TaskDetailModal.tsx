@@ -123,7 +123,7 @@ export default function TaskDetailModal({
         </div>
 
         {task.completionAttachmentUrl && (
-          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-700">
               Completion file
             </p>

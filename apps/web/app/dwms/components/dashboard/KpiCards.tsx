@@ -1,90 +1,82 @@
-import React from 'react';
-import RadialProgress from './RadialProgress';
-import type { DwmsDashboardMetrics } from '@/services/dwms.service';
+import type { DwmsDashboardMetrics } from "@/services/dwms.service";
 
 type KpiCardsProps = {
   stats: DwmsDashboardMetrics;
-  activeTab: 'overview' | 'department' | 'employee';
+  activeTab: "overview" | "department" | "employee";
   periodLabel: string;
 };
 
 function formatDuration(minutes: number | undefined) {
-  if (minutes === undefined || minutes === null || isNaN(minutes)) return '0 min';
-  if (minutes >= 60) {
-    return `${(minutes / 60).toFixed(1)} hrs`;
-  }
-  return `${Math.round(minutes)} min`;
+  if (minutes == null || !Number.isFinite(minutes)) return "—";
+  return minutes >= 60
+    ? `${(minutes / 60).toFixed(1)} hrs`
+    : `${Math.round(minutes)} min`;
 }
 
 export default function KpiCards({ stats, periodLabel }: KpiCardsProps) {
-  const tasksPerformedTodayPercent = stats.tasksPerformedTodayPercent ?? stats.completionRate ?? 100;
-  const completedTasks = stats.completedTasks ?? stats.completedCount ?? 0;
-  const totalTasks = stats.totalTasks ?? 0;
-  const avgAcknowledgeTimeMin = stats.avgAcknowledgeTimeMin ?? 0;
-  const overdueTasks = stats.overdueTasks ?? 0;
-  const avgCloseTimeMin = stats.avgCloseTimeMin ?? 0;
-
+  const completed = stats.completedTasks ?? stats.completedCount;
+  const total = stats.totalTasks;
+  const rate = stats.tasksPerformedTodayPercent ?? stats.completionRate;
+  const remaining =
+    total != null && completed != null
+      ? Math.max(0, total - completed)
+      : undefined;
+  const cards = [
+    {
+      label: "Scheduled tasks",
+      value: total,
+      detail: "In the selected period",
+    },
+    { label: "Completed", value: completed, detail: "Recorded as completed" },
+    {
+      label: "Not completed",
+      value: remaining,
+      detail: "Includes work awaiting approval",
+    },
+    {
+      label: "Overdue",
+      value: stats.overdueTasks ?? stats.overdueCount,
+      detail: "Past due and still open",
+    },
+    {
+      label: "Open alerts",
+      value: stats.openAlertsCount ?? stats.openAlerts,
+      detail: "Unresolved alerts",
+    },
+    {
+      label: "Completion rate",
+      value:
+        total === 0 || !Number.isFinite(rate) ? "—" : `${Math.round(rate)}%`,
+      detail: "Completed / scheduled tasks",
+    },
+    {
+      label: "Avg. acknowledgement",
+      value: formatDuration(stats.avgAcknowledgeTimeMin),
+      detail: "From assignment",
+    },
+    {
+      label: "Avg. completion",
+      value: formatDuration(stats.avgCloseTimeMin),
+      detail: "From acknowledgement or creation",
+    },
+  ];
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {/* 1. Tasks performed for the selected range */}
-      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
-        <div className="min-w-0 space-y-1">
-          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">{periodLabel}</p>
-          <h3 className="text-2xl font-bold tracking-tight text-text-app">
-            {tasksPerformedTodayPercent}%
-          </h3>
-          <p className="text-[10px] text-muted-app">{completedTasks} of {totalTasks} scheduled tasks done</p>
+    <section
+      aria-label={periodLabel}
+      className="grid grid-cols-2 gap-3 lg:grid-cols-4 2xl:grid-cols-8"
+    >
+      {cards.map((card) => (
+        <div
+          key={card.label}
+          className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3"
+        >
+          <p className="text-xs font-medium text-slate-500">{card.label}</p>
+          <p className="my-1 text-2xl font-semibold tabular-nums text-slate-900">
+            {card.value ?? "—"}
+          </p>
+          <p className="text-xs leading-4 text-slate-500">{card.detail}</p>
         </div>
-        <RadialProgress percent={tasksPerformedTodayPercent} size={56} />
-      </div>
-
-      {/* 3. Time Taken to Acknowledge a Task */}
-      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
-        <div className="min-w-0 space-y-1">
-          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">Avg Acknowledge Time</p>
-          <h3 className="text-2xl font-bold tracking-tight text-text-app">
-            {formatDuration(avgAcknowledgeTimeMin)}
-          </h3>
-          <p className="text-[10px] text-muted-app">From assignment to start</p>
-        </div>
-        <div className="p-3 rounded-2xl bg-blue-150/40 dark:bg-blue-950/40 text-accent-app">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-          </svg>
-        </div>
-      </div>
-
-      {/* 3. Number of Overdue Tasks */}
-      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
-        <div className="min-w-0 space-y-1">
-          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">Overdue Tasks</p>
-          <h3 className="text-2xl font-bold tracking-tight text-text-app">
-            {overdueTasks}
-          </h3>
-          <p className="text-[10px] text-muted-app">Past due and still open</p>
-        </div>
-        <div className="p-3 rounded-2xl bg-rose-50 text-rose-600">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v5m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-          </svg>
-        </div>
-      </div>
-
-      {/* 4. Average Time to Complete a Task */}
-      <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
-        <div className="min-w-0 space-y-1">
-          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">Avg Completion Time</p>
-          <h3 className="text-2xl font-bold tracking-tight text-text-app">
-            {formatDuration(avgCloseTimeMin)}
-          </h3>
-          <p className="text-[10px] text-muted-app">From start to completion</p>
-        </div>
-        <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" />
-          </svg>
-        </div>
-      </div>
-    </div>
+      ))}
+    </section>
   );
 }

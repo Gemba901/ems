@@ -1,23 +1,29 @@
 "use client";
 
-import React from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
+  PanelLeft,
   Home,
   ClipboardList,
-  AlertTriangle,
-  LayoutGrid,
-  ArrowLeft,
-  Plus,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ChevronRight,
   Send,
+  ClipboardCheck,
+  AlertTriangle,
+  BarChart3,
   BookOpenCheck,
   Settings2,
-  ClipboardCheck,
+  Plus,
+  BellPlus,
+  ArrowLeft,
+  type LucideIcon,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 
 interface SidebarProps {
@@ -26,71 +32,49 @@ interface SidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
 }
+const managementRoles = new Set(["MANAGEMENT", "SUPER_ADMIN", "ADMIN", "HR"]);
 
-const DWMS_NAV = [
-  {
-    name: "Home",
-    href: "/dwms",
-    icon: Home,
-    exact: true,
-  },
-  {
-    name: "Tasks",
-    href: "/dwms/tasks",
-    icon: ClipboardList,
-    exact: false,
-  },
-  {
-    name: "Assigned by me",
-    href: "/dwms/assignedTasks",
-    icon: Send,
-    exact: true,
-  },
-  {
-    name: "Approvals",
-    href: "/dwms/approvalTasks",
-    icon: ClipboardCheck,
-    exact: true,
-  },
-  {
-    name: "Alerts",
-    href: "/dwms/alerts",
-    icon: AlertTriangle,
-    exact: false,
-  },
-  {
-    name: "Dashboard",
-    href: "/dwms/dashboard",
-    icon: LayoutGrid,
-    exact: false,
-  },
-];
+const navigationIcons: Record<string, LucideIcon> = {
+  "/dwms": Home,
+  "/dwms/tasks": ClipboardList,
+  "/dwms/assignedTasks": Send,
+  "/dwms/approvalTasks": ClipboardCheck,
+  "/dwms/alerts": AlertTriangle,
+  "/dwms/dashboard": BarChart3,
+  "/dwms/activities": BookOpenCheck,
+  "/dwms/settings": Settings2,
+};
 
-const SETTINGS_ALLOWED_ROLES = new Set([
-  "MANAGEMENT",
-  "SUPER_ADMIN",
-  "ADMIN",
-  "HR",
-]);
-const ACTIVITY_MANAGEMENT_ALLOWED_ROLES = new Set([
-  "MANAGEMENT",
-  "SUPER_ADMIN",
-  "ADMIN",
-  "HR",
-  "HOD",
-]);
-const MANAGEMENT_NAV_ITEMS = [
-  {
-    name: "Activities",
-    href: "/dwms/activities",
-    icon: BookOpenCheck,
-    exact: false,
-  },
-];
-
-function isActive(pathname: string, href: string, exact: boolean) {
-  if (exact) return pathname === href;
-  return pathname === href || pathname.startsWith(href + "/");
+function RailLink({
+  href,
+  label,
+  icon: Icon,
+  active = false,
+  primary = false,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  active?: boolean;
+  primary?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<Link href={href} />}
+        aria-label={label}
+        aria-current={active ? "page" : undefined}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${primary ? "bg-[#52618a] text-white hover:bg-[#445174]" : active ? "bg-indigo-50 text-indigo-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}
+      >
+        <Icon
+          className="h-[18px] w-[18px]"
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function Sidebar({
@@ -101,151 +85,240 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
-  const roleLevel = String(user?.roleLevel ?? "").toUpperCase();
-  const canAccessSettings = SETTINGS_ALLOWED_ROLES.has(roleLevel);
-  const canAccessActivityManagement =
-    ACTIVITY_MANAGEMENT_ALLOWED_ROLES.has(roleLevel);
-  const navItems = [
-    ...DWMS_NAV,
-    ...(canAccessActivityManagement ? MANAGEMENT_NAV_ITEMS : []),
-    ...(canAccessSettings
-      ? [
-          {
-            name: "Settings",
-            href: "/dwms/settings",
-            icon: Settings2,
-            exact: false,
-          },
-        ]
-      : []),
+  const panel = useRef<HTMLElement>(null);
+  const openButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const toggleDesktop = () => {
+    onToggle?.();
+    requestAnimationFrame(() => {
+      (collapsed ? closeButton : openButton).current?.focus();
+    });
+  };
+  const role = String(user?.roleLevel ?? "").toUpperCase();
+  const groups = [
+    {
+      name: "Your work",
+      items: [
+        ["Today", "/dwms"],
+        ["My tasks", "/dwms/tasks"],
+        ["Assigned by me", "/dwms/assignedTasks"],
+        ["Approvals", "/dwms/approvalTasks"],
+        ["Alerts", "/dwms/alerts"],
+      ],
+    },
+    {
+      name: "Manage",
+      items: [
+        ["Reports", "/dwms/dashboard"],
+        ...(managementRoles.has(role) || role === "HOD"
+          ? [["Activities", "/dwms/activities"]]
+          : []),
+        ...(managementRoles.has(role) ? [["Settings", "/dwms/settings"]] : []),
+      ],
+    },
   ];
 
-  // On mobile (open=true) always show full sidebar regardless of collapsed state
-  const isCollapsed = collapsed && !open;
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const links = () =>
+      Array.from(
+        panel.current?.querySelectorAll<HTMLElement>("a[href], button") ?? [],
+      );
+    links()[0]?.focus();
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose?.();
+      if (event.key !== "Tab") return;
+      const elements = links().filter(
+        (element) => element.getClientRects().length,
+      );
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) onClose?.();
+    };
+    desktop.addEventListener("change", closeOnDesktop);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      desktop.removeEventListener("change", closeOnDesktop);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKey);
+      previous?.focus();
+    };
+  }, [open, onClose]);
 
   return (
     <>
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/30 lg:hidden"
           onClick={onClose}
         />
       )}
-
-      <aside
-        className={`
-          fixed z-50 top-0 left-0 h-dvh flex flex-col bg-white border-r border-slate-200
-          transition-all duration-300 ease-in-out overflow-hidden w-64
-          ${open ? "translate-x-0" : "-translate-x-full"}
-          lg:translate-x-0
-          ${collapsed ? "lg:w-16" : "lg:w-64"}
-        `}
-      >
-        {/* ── Header: toggle + brand ── */}
-        <div
-          className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${isCollapsed ? "justify-center" : "px-4 gap-3"}`}
-        >
-          {/* Collapse toggle — desktop only */}
-          <button
-            onClick={onToggle}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden lg:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </button>
-
-          {!isCollapsed && (
-            <div className="min-w-0 flex flex-col">
-              <span className="text-sm font-bold text-slate-900 truncate leading-tight">
-                Daily Work Mgmt
-              </span>
-              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">
-                DWMS
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ── Create Action CTA ── */}
-        <div
-          className={`px-2 pt-3 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}
-        >
-          <Link
-            href="/dwms/actions/new"
-            onClick={onClose}
-            title={isCollapsed ? "Create Action" : undefined}
-            className={`flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors cursor-pointer ${
-              isCollapsed
-                ? "h-10 w-10 justify-center"
-                : "h-10 w-full px-3 gap-2"
-            }`}
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            {!isCollapsed && (
-              <span className="text-sm font-medium">Create Action</span>
-            )}
-          </Link>
-        </div>
-
-        {/* ── Navigation ── */}
-        <nav className="flex-1 px-2 py-2 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
-          {!isCollapsed && (
-            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
-              Platform
-            </p>
-          )}
-          {navItems.map((item) => {
-            const active = isActive(pathname, item.href, item.exact);
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={onClose}
-                title={isCollapsed ? item.name : undefined}
-                className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-                  active
-                    ? "bg-blue-50 text-blue-600"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
+      {collapsed && (
+        <TooltipProvider>
+          <div className="fixed inset-y-0 left-0 z-30 hidden w-12 flex-col items-center border-r border-slate-200 bg-white lg:flex">
+            <div className="flex h-14 shrink-0 items-center">
+              <button
+                ref={openButton}
+                type="button"
+                onClick={toggleDesktop}
+                aria-label="Open sidebar"
+                title="Open sidebar"
+                aria-expanded={false}
+                aria-controls="dwms-sidebar"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
               >
-                <item.icon
-                  className={`h-4 w-4 shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`}
+                <PanelLeft
+                  className="h-4 w-4"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
                 />
-                {!isCollapsed && (
-                  <>
-                    <span className="flex-1">{item.name}</span>
-                    {active && (
-                      <ChevronRight className="h-3.5 w-3.5 text-blue-400" />
-                    )}
-                  </>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* ── Footer nav ── */}
-        <div className="px-2 pb-2 border-t border-slate-100 pt-2 space-y-0.5">
-          {/* Back to main app */}
+              </button>
+            </div>
+            <div className="space-y-1 pb-3">
+              <RailLink
+                href="/dwms/actions/new?mode=TASK"
+                label="Assign task"
+                icon={Plus}
+                primary
+              />
+              <RailLink
+                href="/dwms/actions/new?mode=ALERT"
+                label="Raise alert"
+                icon={BellPlus}
+              />
+            </div>
+            <nav
+              aria-label="Daily work shortcuts"
+              className="min-h-0 w-full flex-1 overflow-y-auto px-1 pb-2"
+            >
+              {groups.map((group, index) => (
+                <div
+                  key={group.name}
+                  role="group"
+                  aria-label={group.name}
+                  className={`space-y-1 ${index ? "mt-3 border-t border-slate-200 pt-3" : ""}`}
+                >
+                  {group.items.map(([label, href]) => (
+                    <RailLink
+                      key={href}
+                      href={href}
+                      label={label}
+                      icon={navigationIcons[href]}
+                      active={
+                        pathname === href ||
+                        (href !== "/dwms" && pathname.startsWith(href + "/"))
+                      }
+                    />
+                  ))}
+                </div>
+              ))}
+            </nav>
+            <div className="shrink-0 border-t border-slate-200 py-2">
+              <RailLink href="/" label="Back to Gemba" icon={ArrowLeft} />
+            </div>
+          </div>
+        </TooltipProvider>
+      )}
+      <aside
+        id="dwms-sidebar"
+        ref={panel}
+        aria-label="Daily work navigation"
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white ${open ? "visible translate-x-0" : "invisible -translate-x-full"} ${collapsed ? "lg:invisible lg:-translate-x-full" : "lg:visible lg:translate-x-0"}`}
+      >
+        <div className="flex h-14 shrink-0 border-b border-slate-100 items-center justify-between px-5">
           <Link
-            href="/"
+            href="/dwms"
             onClick={onClose}
-            title={isCollapsed ? "Main App" : undefined}
-            className={`flex items-center rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-white transition-all duration-150 cursor-pointer ${
-              isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
-            }`}
+            className="min-w-0 truncate text-sm font-bold tracking-tight text-slate-900"
           >
-            <ArrowLeft className="h-4 w-4 shrink-0" />
-            {!isCollapsed && <span className="flex-1">Main App</span>}
+            Daily Work Management
+          </Link>
+          <button
+            ref={closeButton}
+            type="button"
+            onClick={toggleDesktop}
+            aria-label="Close sidebar"
+            title="Close sidebar"
+            aria-expanded={true}
+            aria-controls="dwms-sidebar"
+            className="ml-2 hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 lg:flex"
+          >
+            <PanelLeft
+              className="h-4 w-4"
+              strokeWidth={1.5}
+              aria-hidden="true"
+            />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded px-2 py-2 text-sm text-slate-600 hover:bg-slate-100 lg:hidden"
+          >
+            Close
+          </button>
+        </div>
+        <div className="space-y-1 px-3 pb-5 pt-3">
+          <Link
+            href="/dwms/actions/new?mode=TASK"
+            onClick={onClose}
+            className="flex min-h-10 items-center justify-center rounded-xl bg-[#52618a] px-3 text-sm font-medium text-white hover:bg-[#445174]"
+          >
+            Assign task
+          </Link>
+          <Link
+            href="/dwms/actions/new?mode=ALERT"
+            onClick={onClose}
+            className="flex min-h-10 items-center justify-center rounded-xl px-3 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+          >
+            Raise alert
           </Link>
         </div>
+        <nav className="min-h-0 flex-1 space-y-7 overflow-y-auto px-3 pb-6">
+          {groups.map((group) => (
+            <div key={group.name}>
+              <p className="mx-3 mb-2 border-b border-slate-200 pb-2 text-xs font-medium text-slate-400">
+                {group.name}
+              </p>
+              {group.items.map(([label, href]) => {
+                const active =
+                  pathname === href ||
+                  (href !== "/dwms" && pathname.startsWith(href + "/"));
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onClose}
+                    aria-current={active ? "page" : undefined}
+                    className={`my-0.5 flex min-h-11 items-center rounded-xl px-3 text-sm transition-colors ${active ? "bg-indigo-50 font-medium text-indigo-800" : "font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <Link
+          href="/"
+          onClick={onClose}
+          className="border-t border-slate-200 px-6 py-4 text-sm text-slate-500 hover:text-slate-900"
+        >
+          Back to Gemba
+        </Link>
       </aside>
     </>
   );
 }
-
-export default Sidebar;

@@ -305,7 +305,7 @@ function DwmsSettingsContent() {
   if (isForbidden) {
     return (
       <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-12">
-        <div className="max-w-lg rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <div className="w-full rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <Shield className="mx-auto h-10 w-10 text-slate-400" />
           <h1 className="mt-4 text-2xl font-bold text-slate-900">Settings restricted</h1>
           <p className="mt-2 text-sm text-slate-500">

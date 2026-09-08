@@ -17,7 +17,7 @@ export default function DepartmentDashboard({ departmentData }: DepartmentDashbo
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Scoreboard List (Main - Full Width) */}
-      <div className="lg:col-span-3 rounded-3xl border border-border-app bg-white p-5 shadow-sm">
+      <div className="lg:col-span-3 min-w-0 rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="font-semibold text-text-app pb-3 border-b border-border-app">
           {departmentData.departmentName} Performance Scoreboard
         </h3>

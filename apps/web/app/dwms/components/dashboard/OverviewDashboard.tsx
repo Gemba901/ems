@@ -19,7 +19,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment }: 
     <div className="space-y-6">
       {/* 1. Department Heatmap */}
       <div className="grid grid-cols-1 gap-6">
-        <div className="rounded-3xl border border-border-app bg-white p-5 shadow-sm">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="font-semibold text-text-app mb-2">Department Heatmap</h3>
           <p className="text-xs text-muted-app mb-4">Click to inspect specific department insights</p>
           
@@ -56,7 +56,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment }: 
       {/* 2. Leaderboard (Full Width) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Scoreboard List */}
-        <div className="lg:col-span-3 rounded-3xl border border-border-app bg-white p-5 shadow-sm">
+        <div className="lg:col-span-3 min-w-0 rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="font-semibold text-text-app pb-3 border-b border-border-app">
             Scoreboard & Leaderboard
           </h3>

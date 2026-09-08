@@ -2680,6 +2680,7 @@ model Task {
   ownerName                  String?
   assignedByName             String?
   approvedById               String?
+  overdueAlertToEmployeeIds   String[] @default([])
   overdueAlertTo             OverdueAlertTo         @default(ASSIGNER)
   backupOwnerId              String?
   activity                   Activity?              @relation(fields: [activityId], references: [id], onDelete: SetNull)
@@ -2760,6 +2761,7 @@ model TaskInstanceEvent {
 }
 
 model Alert {
+  recipientEmployeeIds String[] @default([])
   id                       String                     @id @default(uuid())
   type                     AlertType
   title                    String

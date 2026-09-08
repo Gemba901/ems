@@ -620,7 +620,7 @@ export default function TaskDashboard() {
             {activeTab === "COMPLETED" && "No completed tasks."}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {(() => {
               let previousDateKey: string | null = null;
               return filteredTasks.map((t) => {

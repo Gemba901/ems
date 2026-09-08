@@ -1,4 +1,7 @@
 import {
+  Matches,
+  IsDateString,
+  Max,
   IsNotEmpty,
   IsString,
   IsOptional,
@@ -29,6 +32,7 @@ export class CreateAssignedTaskDto {
 
   @IsNotEmpty()
   @IsString()
+  @Matches(/\S/, { message: 'Task title must not be blank' })
   title!: string;
 
   @IsOptional()
@@ -40,7 +44,7 @@ export class CreateAssignedTaskDto {
   assignedToId!: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateString({ strict: true })
   dueDate?: string;
 
   @IsOptional()
@@ -364,7 +368,9 @@ export class UpdateProgressDto {
   completionNote?: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(0)
+  @Max(100)
   completionPercent?: number;
 
   @IsOptional()

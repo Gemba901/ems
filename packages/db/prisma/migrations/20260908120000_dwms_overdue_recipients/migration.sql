@@ -1,0 +1,2 @@
+ALTER TABLE "Task" ADD COLUMN "overdueAlertToEmployeeIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "Alert" ADD COLUMN "recipientEmployeeIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

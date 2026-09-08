@@ -258,7 +258,7 @@ function TaskDetails({
       </section>
 
       {task.completionAttachmentUrl && (
-        <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+        <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-700">
             Completion File
           </p>
@@ -393,7 +393,7 @@ function ApprovalTaskDetails({ task }: { task: DwmsAssignedTaskHistoryItem }) {
       </div>
 
       {task.completionNote && (
-        <section className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+        <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
             <CheckCircle2 className="h-4 w-4" />
             Completion Note
@@ -405,7 +405,7 @@ function ApprovalTaskDetails({ task }: { task: DwmsAssignedTaskHistoryItem }) {
       )}
 
       {task.completionAttachmentUrl && (
-        <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+        <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-700">
             Completion File
           </p>
@@ -501,7 +501,7 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
       </div>
 
       {alert.correctiveAction && (
-        <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+        <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-blue-800">
             <Clock className="h-4 w-4" />
             Corrective Action Taken

@@ -186,7 +186,7 @@ function TaskDetailContent() {
   }, [detail?.relatedTaskInstances, task]);
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full  flex-col gap-5 px-4 py-8 sm:px-6 lg:px-8">
       <button
         type="button"
         onClick={() => router.back()}
@@ -233,13 +233,13 @@ function TaskDetailContent() {
                     {task.title}
                   </h1>
                   {task.description && (
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                    <p className="mt-2  text-sm leading-6 text-slate-600">
                       {task.description}
                     </p>
                   )}
                 </div>
               </div>
-              <div className="w-full max-w-xs space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="w-full lg:w-72 lg:shrink-0 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Progress</span>
                   <span className="font-semibold text-slate-800">

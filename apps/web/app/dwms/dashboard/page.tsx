@@ -377,7 +377,7 @@ function DashboardPage() {
             <>
               {/* 1. Visual Charts Row (Completion Trend & Acknowledgement Time) */}
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <span className="text-xs font-semibold text-muted-app">Graph range:</span>
+                <span className="text-xs font-semibold text-muted-app">Period:</span>
                 <div className="inline-flex rounded-xl border border-border-app bg-white p-1 shadow-sm">
                   {graphRangeOptions.map((option) => (
                     <button
@@ -386,7 +386,7 @@ function DashboardPage() {
                       onClick={() => setGraphRange(option.value)}
                       className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                         graphRange === option.value
-                          ? 'bg-blue-600 text-white shadow-sm'
+                          ? 'bg-[#52618a] text-white'
                           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                       }`}
                     >
@@ -396,9 +396,17 @@ function DashboardPage() {
                 </div>
               </div>
 
+              {/* 2. KPI Cards */}
+              {stats && (
+                <KpiCards
+                  stats={stats}
+                  activeTab={activeTab === 'team' ? 'employee' : activeTab}
+                  periodLabel={selectedGraphRange.metricLabel}
+                />
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Completion Trend Chart */}
-                <div className="rounded-3xl border border-border-app bg-white p-5 shadow-sm">
+                <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between border-b border-border-app pb-3 mb-4">
                     <div>
                       <h3 className="font-semibold text-text-app">Completion Trend</h3>
@@ -420,7 +428,7 @@ function DashboardPage() {
                 </div>
 
                 {/* Acknowledgement Time Chart */}
-                <div className="rounded-3xl border border-border-app bg-white p-5 shadow-sm">
+                <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between border-b border-border-app pb-3 mb-4">
                     <div>
                       <h3 className="font-semibold text-text-app">Avg Acknowledge Time</h3>
@@ -442,14 +450,7 @@ function DashboardPage() {
                 </div>
               </div>
 
-              {/* 2. KPI Cards */}
-              {stats && (
-                <KpiCards
-                  stats={stats}
-                  activeTab={activeTab === 'team' ? 'employee' : activeTab}
-                  periodLabel={selectedGraphRange.metricLabel}
-                />
-              )}
+
             </>
           )}
 

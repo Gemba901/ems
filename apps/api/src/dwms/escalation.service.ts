@@ -1,3 +1,4 @@
+import { filterAlertRecipients } from './utils/alertRecipients';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
@@ -185,6 +186,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
             id: true,
             title: true,
             assignedById: true,
+            overdueAlertToEmployeeIds: true,
             assignedBy: {
               select: {
                 id: true,
@@ -375,13 +377,15 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
       select: { id: true },
     });
 
-    // Overdue notifications are personal: only the task owner should receive
-    // them. Escalation contacts remain applicable to unacknowledged ad-hoc
-    // tasks, which is a separate workflow.
-    const notificationTargets = new Set<string>([task.ownerId]);
-    if (reason === 'unacknowledged') {
-      contactIds.forEach((contactId) => notificationTargets.add(contactId));
-    }
+    // Preserve owner-only defaults; additional recipients require explicit selection.
+    const notificationTargets = new Set<string>(
+      await filterAlertRecipients(this.prisma, organizationId, [
+        task.ownerId,
+        ...(reason === 'unacknowledged'
+          ? contactIds
+          : (task.overdueAlertToEmployeeIds ?? [])),
+      ]),
+    );
 
     if (existing) return;
 
@@ -403,6 +407,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
           organizationId,
           raisedById,
           againstUserId: task.ownerId,
+          recipientEmployeeIds: [...notificationTargets],
           deduplicationKey: taskDelayAlertKey(task.id, reason),
         },
         select: { id: true },
@@ -419,8 +424,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
         module: 'DWMS',
         title,
         message: description,
-        actionUrl:
-          contactId === task.ownerId ? `/dwms/alerts/${alert.id}` : undefined,
+        actionUrl: `/dwms/alerts/${alert.id}`,
       });
     }
   }
@@ -442,10 +446,12 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
       select: { id: true },
     });
 
-    // A recurring overdue occurrence must notify only its owner. In
-    // particular, the employee who imported or created the shared activity is
-    // not an escalation recipient for every assignee's occurrence.
-    const notificationTargets = new Set<string>([instance.ownerId]);
+    const notificationTargets = new Set<string>(
+      await filterAlertRecipients(this.prisma, organizationId, [
+        instance.ownerId,
+        ...(instance.task.overdueAlertToEmployeeIds ?? []),
+      ]),
+    );
 
     if (existing) return;
 
@@ -465,6 +471,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
           raisedById,
           taskInstanceId: instance.id,
           againstUserId: instance.ownerId,
+          recipientEmployeeIds: [...notificationTargets],
           deduplicationKey: taskInstanceDelayAlertKey(instance),
         },
         select: { id: true },
@@ -488,10 +495,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
         module: 'DWMS',
         title,
         message: description,
-        actionUrl:
-          contactId === instance.ownerId
-            ? `/dwms/alerts/${alert.id}`
-            : undefined,
+        actionUrl: `/dwms/alerts/${alert.id}`,
       });
     }
   }
@@ -558,6 +562,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
           taskInstanceId: instance.id,
           againstUserId: instance.ownerId,
           isAbnormality: true,
+          recipientEmployeeIds: [...notificationTargets],
           abnormalitySourceAlertId: sourceAlertId,
           deduplicationKey: repeatedOverdueAbnormalityKey(
             instance.taskId,

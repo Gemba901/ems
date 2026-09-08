@@ -123,7 +123,7 @@ function AlertDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-5xl items-center justify-center px-6 py-10 text-sm text-muted-app">
+      <div className="mx-auto flex min-h-[60vh] w-full items-center justify-center px-6 py-10 text-sm text-muted-app">
         Loading alert details...
       </div>
     );
@@ -131,7 +131,7 @@ function AlertDetailPage() {
 
   if (error && !alert) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-10">
+      <div className="mx-auto w-full px-6 py-10">
         <button
           type="button"
           onClick={() => router.push("/dwms/alerts")}
@@ -150,7 +150,7 @@ function AlertDetailPage() {
   if (!alert) return null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full  flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
@@ -188,7 +188,7 @@ function AlertDetailPage() {
             <h1 className="mt-2 text-2xl font-bold text-slate-950">
               {alert.title}
             </h1>
-            <p className="mt-3 max-w-4xl whitespace-pre-wrap text-sm leading-6 text-slate-600">
+            <p className="mt-3  whitespace-pre-wrap text-sm leading-6 text-slate-600">
               {alert.description}
             </p>
           </div>

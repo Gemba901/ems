@@ -9,7 +9,9 @@ const allowedTaskFrequencies = new Set<TaskFrequency>([
   TaskFrequency.PLANNED,
 ]);
 
-export function parseTaskFrequency(value: string | null | undefined): TaskFrequency | null {
+export function parseTaskFrequency(
+  value: string | null | undefined,
+): TaskFrequency | null {
   if (!value) {
     return null;
   }
@@ -33,7 +35,12 @@ export function parseDateOnly(value: string | null | undefined): Date | null {
   const day = Number(match[3]);
   const date = new Date(Date.UTC(year, month, day));
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month ||
+    date.getUTCDate() !== day
+  ) {
     return null;
   }
 
@@ -41,7 +48,9 @@ export function parseDateOnly(value: string | null | undefined): Date | null {
 }
 
 export function toUtcDateOnly(value: Date): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+  return new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
+  );
 }
 
 export function getUtcDateInTimeZone(value: Date, timeZone: string): Date {
@@ -127,41 +136,43 @@ function getTimeZoneOffsetMs(value: Date, timeZone: string): number {
 }
 
 export function startOfDayInTimeZone(value: Date, timeZone: string): Date {
-    const localStartAsUtc = Date.UTC(
-      value.getUTCFullYear(),
-      value.getUTCMonth(),
-      value.getUTCDate(),
-      0,
-      0,
-      0,
-      0,
-    );
-    const firstPass = new Date(
-      localStartAsUtc - getTimeZoneOffsetMs(new Date(localStartAsUtc), timeZone),
-    );
-    const offset = getTimeZoneOffsetMs(firstPass, timeZone);
-    return new Date(localStartAsUtc - offset);
+  const localStartAsUtc = Date.UTC(
+    value.getUTCFullYear(),
+    value.getUTCMonth(),
+    value.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  const firstPass = new Date(
+    localStartAsUtc - getTimeZoneOffsetMs(new Date(localStartAsUtc), timeZone),
+  );
+  const offset = getTimeZoneOffsetMs(firstPass, timeZone);
+  return new Date(localStartAsUtc - offset);
 }
 
 export function endOfDayInTimeZone(value: Date, timeZone: string): Date {
-    const localEndAsUtc = Date.UTC(
-      value.getUTCFullYear(),
-      value.getUTCMonth(),
-      value.getUTCDate(),
-      23,
-      59,
-      59,
-      999,
-    );
-    const firstPass = new Date(
-      localEndAsUtc - getTimeZoneOffsetMs(new Date(localEndAsUtc), timeZone),
-    );
-    const offset = getTimeZoneOffsetMs(firstPass, timeZone);
-    return new Date(localEndAsUtc - offset);
+  const localEndAsUtc = Date.UTC(
+    value.getUTCFullYear(),
+    value.getUTCMonth(),
+    value.getUTCDate(),
+    23,
+    59,
+    59,
+    999,
+  );
+  const firstPass = new Date(
+    localEndAsUtc - getTimeZoneOffsetMs(new Date(localEndAsUtc), timeZone),
+  );
+  const offset = getTimeZoneOffsetMs(firstPass, timeZone);
+  return new Date(localEndAsUtc - offset);
 }
 
-
-export function addFrequencyInterval(value: Date, frequency: TaskFrequency): Date {
+export function addFrequencyInterval(
+  value: Date,
+  frequency: TaskFrequency,
+): Date {
   const next = new Date(value);
 
   switch (frequency) {
@@ -171,15 +182,36 @@ export function addFrequencyInterval(value: Date, frequency: TaskFrequency): Dat
     case TaskFrequency.WEEKLY:
       next.setUTCDate(next.getUTCDate() + 7);
       break;
-    case TaskFrequency.MONTHLY:
+    case TaskFrequency.MONTHLY: {
+      const day = next.getUTCDate();
+      next.setUTCDate(1);
       next.setUTCMonth(next.getUTCMonth() + 1);
+      const lastDay = new Date(
+        Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0),
+      ).getUTCDate();
+      next.setUTCDate(Math.min(day, lastDay));
       break;
-    case TaskFrequency.QUARTERLY:
+    }
+    case TaskFrequency.QUARTERLY: {
+      const day = next.getUTCDate();
+      next.setUTCDate(1);
       next.setUTCMonth(next.getUTCMonth() + 3);
+      const lastDay = new Date(
+        Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0),
+      ).getUTCDate();
+      next.setUTCDate(Math.min(day, lastDay));
       break;
-    case TaskFrequency.YEARLY:
-      next.setUTCFullYear(next.getUTCFullYear() + 1);
+    }
+    case TaskFrequency.YEARLY: {
+      const day = next.getUTCDate();
+      next.setUTCDate(1);
+      next.setUTCMonth(next.getUTCMonth() + 12);
+      const lastDay = new Date(
+        Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0),
+      ).getUTCDate();
+      next.setUTCDate(Math.min(day, lastDay));
       break;
+    }
     default:
       next.setUTCDate(next.getUTCDate() + 1);
       break;

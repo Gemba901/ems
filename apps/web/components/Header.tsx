@@ -70,6 +70,16 @@ const PAGE_TITLES: Record<string, string> = {
   "/sims/settings": "SIMS Settings",
   "/calendar": "Calendar",
   "/department": "My Department",
+  "/dwms": "Daily Work",
+  "/dwms/tasks": "My Tasks",
+  "/dwms/assignedTasks": "Assigned by Me",
+  "/dwms/approvalTasks": "Approvals",
+  "/dwms/alerts": "Alerts",
+  "/dwms/dashboard": "Reports",
+  "/dwms/activities": "Activities",
+  "/dwms/activities/ingestions": "Activity Import History",
+  "/dwms/actions/new": "New Work",
+  "/dwms/settings": "DWMS Settings",
   "/leave": "Leave Management",
   "/leave/apply": "Apply for Leave",
   "/leave/calendar": "Company Leave Calendar",
@@ -84,6 +94,9 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/operations/employees/")) return "Employee Profile";
   if (pathname.startsWith("/ems/employees/")) return "Employee Details";
   if (pathname.startsWith("/leave/employees/")) return "Employee Leave Profile";
+  if (pathname.startsWith("/dwms/alerts/")) return "Alert Details";
+  if (pathname.startsWith("/dwms/activities/ingestions/")) return "Activity Import Details";
+  if (pathname.startsWith("/dwms/")) return "Daily Work";
   if (pathname.startsWith("/sims/")) return "Suggestions";
   if (pathname.startsWith("/tickets/")) return "Ticket Details";
   if (pathname.startsWith("/admin/organizations/")) return "Organization";

@@ -66,8 +66,8 @@ export function getDateSeparatorMeta(
 
 export default function TaskDateSeparator({ label }: { label: string }) {
   return (
-    <div className="flex justify-center py-1">
-      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500 shadow-sm">
+    <div className="col-span-full border-b border-slate-200 py-2">
+      <span className="text-xs font-medium text-slate-500">
         {label}
       </span>
     </div>

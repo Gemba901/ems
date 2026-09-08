@@ -1,16 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  BookOpenCheck,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Lightbulb,
-  PencilLine,
-  Send,
-} from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   DwmsService,
   getDwmsErrorMessage,
@@ -25,146 +17,10 @@ import { getOrganizationTodayKey } from "../../utils/organizationDate";
 import { Role } from "@/types/role";
 import DwmsSelectDropdown from "../../components/DwmsSelectDropdown";
 
-type FieldType =
-  | "general"
-  | "activity"
-  | "title"
-  | "description"
-  | "assignTo"
-  | "frequency"
-  | "dueDate"
-  | "priority"
-  | "approvedBy"
-  | "overdueAlertTo"
-  | "backupOwner"
-  | "completionDocument";
-
-type FieldTips = {
-  title: string;
-  tips: string;
-  example: string;
-};
-
-const TIPS_DATA: Record<FieldType, FieldTips> = {
-  general: {
-    title: "How to create an effective task",
-    tips:
-      "Every task should answer five questions:\n\n" +
-      "- What needs to be done?\n" +
-      "- Why is it needed?\n" +
-      "- Who is responsible?\n" +
-      "- When should it be completed?\n" +
-      "- How will someone know it is finished?\n" +
-      "If any of these are missing, the assignee may need clarification before starting.",
-    example:
-      "Checklist:\n" +
-      "- Use a clear action verb\n" +
-      "- Mention the exact system, equipment, or document\n" +
-      "- Explain what success looks like\n" +
-      "- Set a realistic deadline\n" +
-      "- Add any references or links if required",
-  },
-  activity: {
-    title: "Choosing an activity",
-    tips: "Use an activity when the work is already defined as a standard organization practice. The task created from it becomes the actual execution record assigned to a person.",
-    example:
-      "Select the activity for a standard inspection, audit, checklist, review, or routine process. The task fields can still be adjusted before assigning.",
-  },
-  title: {
-    title: "Writing a clear task title",
-    tips: "A title should describe one specific action. Avoid broad or vague words like 'Check', 'Work', or 'Update' unless you mention what is being checked or updated.",
-    example:
-      "Good:\n" +
-      "- Verify fire extinguisher inspection records\n" +
-      "- Approve June payroll before bank submission\n" +
-      "- Replace damaged safety sign in Warehouse A\n\n" +
-      "Avoid:\n" +
-      "- Inspection\n" +
-      "- Payroll\n" +
-      "- Safety work",
-  },
-  description: {
-    title: "Writing detailed instructions",
-    tips: "Write enough information so another employee can complete the task without asking questions. Include the location, process, documents to use, and what should be recorded after completion.",
-    example:
-      "Inspect all emergency exit lights on the second floor. Replace any faulty units immediately. Record the inspection date and any replacements in the Maintenance Register. Upload photos if repairs were performed.",
-  },
-  assignTo: {
-    title: "Choosing the right assignee",
-    tips: "Assign the task to the person who is responsible for completing it, not just someone who is available. If multiple people are involved, assign ownership to one person and mention others in the description if needed.",
-    example:
-      "Examples:\n" +
-      "- Quality inspection -> Quality Engineer\n" +
-      "- Network maintenance -> Network Administrator\n" +
-      "- Vendor payment approval -> Finance Manager\n" +
-      "- Safety audit -> Safety Officer",
-  },
-  frequency: {
-    title: "Choosing the recurrence",
-    tips: "Select how often the task should repeat based on the actual business process. Avoid creating recurring tasks for work that only happens occasionally.",
-    example:
-      "One Time:\n" +
-      "- Install new CCTV cameras\n\n" +
-      "Daily:\n" +
-      "- Verify production line startup checklist\n\n" +
-      "Weekly:\n" +
-      "- Review inventory discrepancies\n\n" +
-      "Monthly:\n" +
-      "- Inspect fire safety equipment",
-  },
-  dueDate: {
-    title: "Setting the deadline",
-    tips: "Choose a deadline that gives enough time to complete the work before it affects other activities. If later tasks depend on this one, set the deadline before those activities begin.",
-    example:
-      "Examples:\n" +
-      "- Submit payroll approval by the 28th before salary processing.\n" +
-      "- Complete equipment inspection before the production shift starts.\n" +
-      "- Finish vendor verification before issuing the purchase order.",
-  },
-  priority: {
-    title: "Selecting the priority",
-    tips: "Priority should reflect business impact, not personal urgency. Reserve higher priorities for work that affects safety, production, customers, compliance, or critical operations.",
-    example:
-      "Critical:\n" +
-      "- Production line stopped\n" +
-      "- Fire alarm malfunction\n\n" +
-      "High:\n" +
-      "- Security vulnerability before release\n" +
-      "- Customer audit preparation\n\n" +
-      "Medium:\n" +
-      "- Weekly inventory reconciliation\n" +
-      "- Team performance report",
-  },
-  approvedBy: {
-    title: "Choosing an Approver",
-    tips: "Select the team member who needs to approve the task upon completion. This is optional. If left blank, task completions will not require approval.",
-    example:
-      "Choose a Senior Engineer or Quality Lead to verify critical server migrations or safety audits before closing them.",
-  },
-  overdueAlertTo: {
-    title: "Overdue Alert Target",
-    tips: "Specify who should get an automatic notification and alert if this task becomes Overdue. You can choose 'Me' (the Assigner) or the direct managers of the assignee in the department hierarchy.",
-    example:
-      "- Me (Assigner): For direct individual requests\n- Managers of assigned Person: For team compliance and workflow audits",
-  },
-  backupOwner: {
-    title: "Choosing a Backup Owner",
-    tips: "Select a backup team member who will be responsible for executing this task if the primary owner goes on leave. This is optional and only applies to Daily or Weekly recurring tasks.",
-    example:
-      "Select another shift engineer from the same department to ensure continuous checklist compliance during leave.",
-  },
-  completionDocument: {
-    title: "Completion document",
-    tips: "Turn this on when the assignee must upload a document, photo, report, or other file before the task can be completed.",
-    example:
-      "Use this for signed checklists, inspection photos, approval PDFs, register extracts, or compliance proof.",
-  },
-};
-
 type TaskCreationMode = "ACTIVITY" | "SIMPLE";
 
 const FREQUENCY_OPTIONS: Array<{ val: DwmsFrequency; label: string }> = [
-  { val: "PLANNED", label: "One Time (Planned)" },
+  { val: "PLANNED", label: "Once" },
   { val: "DAILY", label: "Daily" },
   { val: "WEEKLY", label: "Weekly" },
   { val: "MONTHLY", label: "Monthly" },
@@ -290,12 +146,9 @@ function getHolidayName(dateKey: string) {
 export default function CreateTaskAction() {
   const router = useRouter();
   const { accessToken, user } = useAuthStore();
-  const organizationToday = getOrganizationTodayKey(
-    user?.organizationTimeZone,
-  );
+  const organizationToday = getOrganizationTodayKey(user?.organizationTimeZone);
   const [title, setTitle] = useState("");
-  const [creationMode, setCreationMode] =
-    useState<TaskCreationMode>("ACTIVITY");
+  const [creationMode, setCreationMode] = useState<TaskCreationMode>("SIMPLE");
   const [activities, setActivities] = useState<DwmsActivityItem[]>([]);
   const [activityId, setActivityId] = useState("");
   const [description, setDescription] = useState("");
@@ -314,6 +167,7 @@ export default function CreateTaskAction() {
   const [priority, setPriority] = useState<DwmsPriority>("MEDIUM");
   const [frequency, setFrequency] = useState<DwmsFrequency>("PLANNED");
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const [approvedById, setApprovedById] = useState("");
@@ -327,7 +181,6 @@ export default function CreateTaskAction() {
   const [requiresCompletionDocument, setRequiresCompletionDocument] =
     useState(false);
   const [completionDocumentName, setCompletionDocumentName] = useState("");
-  const [focusedField, setFocusedField] = useState<FieldType>("general");
   const canAssignToAnyone = user
     ? [Role.SUPER_ADMIN, Role.ADMIN, Role.HR, Role.MANAGEMENT].includes(
         user.roleLevel,
@@ -335,9 +188,6 @@ export default function CreateTaskAction() {
     : false;
 
   const selectedUser = users.find((u) => u.id === assignedToId);
-  const selectedActivity = activities.find(
-    (activity) => activity.id === activityId,
-  );
   const workingDaySet = useMemo(() => new Set(workingDays), [workingDays]);
   const todayDateStr = organizationToday;
   const calendarCells = useMemo(
@@ -431,8 +281,14 @@ export default function CreateTaskAction() {
         if (mounted) {
           setUsers(Array.isArray(res) ? res : (res ?? []));
         }
-      } catch {
-        // ignore
+      } catch (error) {
+        if (mounted)
+          setMessage(
+            getDwmsErrorMessage(
+              error,
+              "Unable to load team members. Please reload and try again.",
+            ),
+          );
       }
     })();
 
@@ -500,8 +356,12 @@ export default function CreateTaskAction() {
     };
   }, [accessToken]);
 
-  useEffect(() => {
-    if (creationMode !== "ACTIVITY" || !selectedActivity) return;
+  function handleActivityChange(nextId: string) {
+    setActivityId(nextId);
+    const selectedActivity = activities.find(
+      (activity) => activity.id === nextId,
+    );
+    if (!selectedActivity) return;
 
     setTitle(selectedActivity.name);
     setDescription(
@@ -513,7 +373,7 @@ export default function CreateTaskAction() {
     setAssignedToId(selectedActivity.primaryResponsibleEmployeeId ?? "");
     setRequiresCompletionDocument(!!selectedActivity.evidenceRequired?.trim());
     setCompletionDocumentName(selectedActivity.evidenceRequired?.trim() ?? "");
-  }, [creationMode, selectedActivity]);
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -607,19 +467,29 @@ export default function CreateTaskAction() {
     };
   }, [accessToken, assignedToId, selectedUser?.name]);
 
-  useEffect(() => {
-    if (backupOwnerId && !users.some((user) => user.id === backupOwnerId)) {
-      setBackupOwnerId("");
-    }
-  }, [users, backupOwnerId]);
+  const validBackupOwnerId = users.some((user) => user.id === backupOwnerId)
+    ? backupOwnerId
+    : "";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submittingRef.current) return;
     setLoading(true);
     setMessage(null);
 
     if (!assignedToId) {
       setMessage("Please select a team member to assign the task to.");
+      setLoading(false);
+      return;
+    }
+
+    if (creationMode === "SIMPLE" && !title.trim()) {
+      setMessage("Please enter a task title.");
+      setLoading(false);
+      return;
+    }
+    if (creationMode === "ACTIVITY" && !activityId) {
+      setMessage("Please select an activity to create this task from.");
       setLoading(false);
       return;
     }
@@ -647,15 +517,10 @@ export default function CreateTaskAction() {
       }
     }
 
+    submittingRef.current = true;
     try {
       const token = useAuthStore.getState().accessToken ?? "";
       if (creationMode === "ACTIVITY") {
-        if (!activityId) {
-          setMessage("Please select an activity to create this task from.");
-          setLoading(false);
-          return;
-        }
-
         await DwmsService.createTaskFromActivity(token, activityId, {
           assignedToId,
           dueDate: isPlanned ? dueDate : undefined,
@@ -663,12 +528,12 @@ export default function CreateTaskAction() {
           frequency,
           approvedById: approvedById || undefined,
           backupOwnerId: isDailyOrWeekly
-            ? backupOwnerId || undefined
+            ? validBackupOwnerId || undefined
             : undefined,
         });
       } else {
         await DwmsService.createAssignedTask(token, {
-          title,
+          title: title.trim(),
           description,
           assignedToId,
           dueDate: isPlanned ? dueDate : undefined,
@@ -680,7 +545,7 @@ export default function CreateTaskAction() {
               ? overdueAlertRecipientIds
               : undefined,
           backupOwnerId: isDailyOrWeekly
-            ? backupOwnerId || undefined
+            ? validBackupOwnerId || undefined
             : undefined,
           requiresCompletionDocument,
           completionDocumentName: requiresCompletionDocument
@@ -702,12 +567,10 @@ export default function CreateTaskAction() {
       setFrequency("PLANNED");
       setMessage("Task assigned successfully!");
 
-      setTimeout(() => {
-        router.push("/dwms/assignedTasks");
-      }, 1500);
+      router.push("/dwms/assignedTasks");
     } catch (err: unknown) {
       setMessage(getDwmsErrorMessage(err, "Failed to create assigned task"));
-    } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
@@ -716,7 +579,7 @@ export default function CreateTaskAction() {
     <div className="w-full space-y-6 pb-8 transition-all duration-200">
       {message && (
         <div
-          className={`rounded-xl border p-4 text-xs ${
+          className={`rounded-md border p-4 text-xs ${
             message.includes("successfully")
               ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400"
               : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-400"
@@ -726,44 +589,41 @@ export default function CreateTaskAction() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-        <div className="w-full rounded-2xl border border-border-app bg-white p-4 shadow-sm dark:bg-zinc-900 sm:p-8 lg:col-span-8">
+      <div className="w-full">
+        <div className="w-full rounded-lg border border-border-app bg-white p-4 dark:bg-zinc-900 sm:p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
-                Task Creation Type
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                Task source
               </label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setCreationMode("ACTIVITY")}
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                  aria-pressed={creationMode === "ACTIVITY"}
+                  className={`flex items-center gap-3 rounded-md border px-4 py-3 text-left text-sm font-semibold transition ${
                     creationMode === "ACTIVITY"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      ? "border-indigo-500 bg-indigo-50 text-indigo-700"
                       : "border-zinc-200 bg-white text-slate-600 hover:bg-zinc-50"
                   }`}
                 >
-                  <BookOpenCheck
-                    className="h-4 w-4 shrink-0"
-                    strokeWidth={1.5}
-                  />
                   <span>Create from activity</span>
                 </button>
                 <button
                   type="button"
+                  aria-pressed={creationMode === "SIMPLE"}
                   onClick={() => {
                     setCreationMode("SIMPLE");
                     setActivityId("");
                     setRequiresCompletionDocument(false);
                     setCompletionDocumentName("");
                   }}
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                  className={`flex items-center gap-3 rounded-md border px-4 py-3 text-left text-sm font-semibold transition ${
                     creationMode === "SIMPLE"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      ? "border-indigo-500 bg-indigo-50 text-indigo-700"
                       : "border-zinc-200 bg-white text-slate-600 hover:bg-zinc-50"
                   }`}
                 >
-                  <PencilLine className="h-4 w-4 shrink-0" strokeWidth={1.5} />
                   <span>Simple task</span>
                 </button>
               </div>
@@ -771,63 +631,57 @@ export default function CreateTaskAction() {
 
             {creationMode === "ACTIVITY" && (
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Activity <span className="ml-0.5 text-red-500">*</span>
                 </label>
                 <DwmsSelectDropdown
                   value={activityId}
                   options={activityOptions}
-                  onChange={setActivityId}
-                  onFocus={() => setFocusedField("activity")}
+                  onChange={handleActivityChange}
                   placeholder="Choose a standard activity..."
                   searchEnabled
                   emptyMessage="No activities found."
-                  triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-900/60"
+                  triggerClassName="h-auto rounded-md border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-zinc-800 dark:bg-zinc-900/60"
                 />
               </div>
             )}
 
             <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Title <span className="ml-0.5 text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                placeholder="Task title (e.g. Audit server logs)"
+                placeholder="e.g. Inspect the packing line"
                 value={title}
-                onFocus={() => setFocusedField("title")}
-                onBlur={() => setFocusedField("general")}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Description (optional)
               </label>
               <textarea
-                placeholder="Task description details or execution checklists..."
+                placeholder="Add instructions or a checklist"
                 value={description}
-                onFocus={() => setFocusedField("description")}
-                onBlur={() => setFocusedField("general")}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
-                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                className="w-full resize-none rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
-                <label className="mb-0.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
-                  Assign To <span className="ml-0.5 text-red-500">*</span>
+                <label className="mb-0.5 block text-sm font-medium text-slate-700">
+                  Assign to <span className="ml-0.5 text-red-500">*</span>
                 </label>
                 <DwmsSelectDropdown
                   value={assignedToId}
                   options={employeeOptions}
                   onChange={setAssignedToId}
-                  onFocus={() => setFocusedField("assignTo")}
                   placeholder="Choose a team member..."
                   variant="employee"
                   emptyMessage="No matching team members found."
@@ -835,7 +689,7 @@ export default function CreateTaskAction() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Frequency <span className="ml-0.5 text-red-500">*</span>
                 </label>
                 <DwmsSelectDropdown
@@ -845,9 +699,8 @@ export default function CreateTaskAction() {
                     label: option.label,
                   }))}
                   onChange={(value) => setFrequency(value as DwmsFrequency)}
-                  onFocus={() => setFocusedField("frequency")}
                   placeholder="Select frequency"
-                  triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                  triggerClassName="h-auto rounded-md border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                 />
               </div>
             </div>
@@ -855,16 +708,15 @@ export default function CreateTaskAction() {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               {frequency === "PLANNED" ? (
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
-                    Due Date <span className="ml-0.5 text-red-500">*</span>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Due date <span className="ml-0.5 text-red-500">*</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => {
-                      setFocusedField("dueDate");
                       setIsDueDateCalendarOpen((open) => !open);
                     }}
-                    className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-text-app shadow-sm outline-none transition hover:bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                    className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-text-app outline-none transition hover:bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                   >
                     <span>{dueDate}</span>
                     <ChevronDown
@@ -880,11 +732,7 @@ export default function CreateTaskAction() {
                     </p>
                   )}
                   {isDueDateCalendarOpen && (
-                    <div
-                      className="mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
-                      onFocus={() => setFocusedField("dueDate")}
-                      onBlur={() => setFocusedField("general")}
-                    >
+                    <div className="mt-2 rounded-md border border-slate-200 bg-white p-3">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <button
                           type="button"
@@ -966,20 +814,20 @@ export default function CreateTaskAction() {
                 </div>
               ) : (
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
                     Schedule Target
                   </label>
                   <input
                     type="text"
                     disabled
                     value="Runs on automated schedule"
-                    className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold italic text-muted-app/60 shadow-sm outline-none"
+                    className="w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold italic text-muted-app/60 outline-none"
                   />
                 </div>
               )}
 
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Priority <span className="ml-0.5 text-red-500">*</span>
                 </label>
                 <DwmsSelectDropdown
@@ -989,23 +837,21 @@ export default function CreateTaskAction() {
                     label: option.label,
                   }))}
                   onChange={(value) => setPriority(value as DwmsPriority)}
-                  onFocus={() => setFocusedField("priority")}
                   placeholder="Select priority"
-                  triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                  triggerClassName="h-auto rounded-md border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Approver
                 </label>
                 <DwmsSelectDropdown
                   value={approvedById}
                   options={approverOptions}
                   onChange={setApprovedById}
-                  onFocus={() => setFocusedField("approvedBy")}
                   placeholder="None (No approval required)"
                   variant="employee"
                   allowClear
@@ -1015,16 +861,14 @@ export default function CreateTaskAction() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
-                  Overdue Alert Recipient{" "}
-                  <span className="ml-0.5 text-red-500">*</span>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  Notify when overdue (optional)
                 </label>
                 <DwmsSelectDropdown
                   mode="multiple"
                   value={overdueAlertRecipientIds}
                   options={overdueAlertRecipientOptions}
                   onChange={setOverdueAlertRecipientIds}
-                  onFocus={() => setFocusedField("overdueAlertTo")}
                   placeholder="Choose team members..."
                   variant="employee"
                   emptyMessage="No matching recipients found."
@@ -1032,7 +876,7 @@ export default function CreateTaskAction() {
               </div>
             </div>
             <label
-              className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm transition ${
+              className={`flex items-start gap-3 rounded-md border px-4 py-3 text-sm transition ${
                 creationMode === "ACTIVITY"
                   ? "border-slate-200 bg-slate-50 text-slate-500"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -1042,8 +886,6 @@ export default function CreateTaskAction() {
                 type="checkbox"
                 checked={requiresCompletionDocument}
                 disabled={creationMode === "ACTIVITY"}
-                onFocus={() => setFocusedField("completionDocument")}
-                onBlur={() => setFocusedField("general")}
                 onChange={(event) => {
                   const checked = event.target.checked;
                   setRequiresCompletionDocument(checked);
@@ -1052,7 +894,7 @@ export default function CreateTaskAction() {
                 className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
               <span>
-                <span className="block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <span className="block text-sm font-medium text-slate-700">
                   Document required for completion
                 </span>
                 <span className="mt-1 block text-xs leading-5 text-slate-500">
@@ -1065,20 +907,18 @@ export default function CreateTaskAction() {
 
             {requiresCompletionDocument && creationMode === "SIMPLE" && (
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Document Name <span className="ml-0.5 text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={completionDocumentName}
-                  onFocus={() => setFocusedField("completionDocument")}
-                  onBlur={() => setFocusedField("general")}
                   onChange={(event) =>
                     setCompletionDocumentName(event.target.value)
                   }
                   placeholder="e.g. Signed inspection checklist"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                  className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                 />
               </div>
             )}
@@ -1086,37 +926,11 @@ export default function CreateTaskAction() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-2 flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-4 text-sm font-semibold text-text-app shadow-sm transition hover:bg-slate-50"
+              className="mt-2 flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-md border border-slate-200 bg-[#52618a] py-3 text-sm font-medium text-white transition hover:bg-[#445174] disabled:opacity-50"
             >
-              <Send
-                className="h-4 w-4 shrink-0 text-muted-app"
-                strokeWidth={1.5}
-              />
               <span>{loading ? "Assigning..." : "Assign task"}</span>
             </button>
           </form>
-        </div>
-
-        <div className="w-full rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-6 lg:sticky lg:top-6 lg:col-span-4">
-          <div className="flex items-center gap-2 border-b border-border-app pb-3">
-            <Lightbulb className="h-4 w-4 shrink-0 text-amber-500" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text-app">
-              {TIPS_DATA[focusedField].title}
-            </h2>
-          </div>
-
-          <p className="mt-5 whitespace-pre-line text-sm leading-6 text-slate-600">
-            {TIPS_DATA[focusedField].tips}
-          </p>
-
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Example / Suggestion
-            </span>
-            <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
-              {TIPS_DATA[focusedField].example}
-            </p>
-          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,10 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { resolveTaskProgress } from '../utils/taskProgress';
+import { rethrowTaskConflict } from '../utils/taskConflict';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   AlertClosureApprovalStatus,
   AlertStatus,
@@ -189,6 +195,18 @@ function isScheduledOccurrenceDate(
 }
 
 export abstract class DwmsTaskService extends DwmsBaseService {
+  abstract listReportees(
+    user: UserPayload,
+  ): Promise<{ users: { id: string }[] }>;
+  abstract listApproverCandidates(
+    user: UserPayload,
+    assignedToId: string,
+  ): Promise<{ users: { id: string }[] }>;
+  abstract listOverdueAlertCandidates(
+    user: UserPayload,
+    assignedToId: string,
+  ): Promise<{ users: { id: string }[] }>;
+
   private getHolidayName(dateKey: string) {
     return getKenyaPublicHolidays(Number(dateKey.slice(0, 4))).find(
       (h) => h.date === dateKey,
@@ -965,6 +983,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     }
 
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
+    if (rawDate && !parseDateOnly(rawDate)) {
+      throw new BadRequestException('Invalid date');
+    }
     const referenceDate =
       parseDateOnly(rawDate) ?? getCurrentUtcDateInTimeZone(timeZone);
     const scope = rawScope?.trim().toLowerCase() ?? null;
@@ -1259,6 +1280,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
+    if (rawDate && !parseDateOnly(rawDate)) {
+      throw new BadRequestException('Invalid date');
+    }
     const referenceDate =
       parseDateOnly(rawDate) ?? getCurrentUtcDateInTimeZone(timeZone);
 
@@ -1342,35 +1366,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       throw new NotFoundException('Task instance not found');
     }
 
-    const statusOrder: Record<TaskStatus, number> = {
-      PENDING: 0,
-      OVERDUE: 1,
-      IN_PROGRESS: 1,
-      PARTLY_DONE: 2,
-      DONE: 3,
-      APPROVAL_PENDING: 4,
-      LESS_THAN_50: 99,
-      NOT_APPLICABLE: 99,
-    };
-
-    const currentOrder = statusOrder[existingInstance.status] ?? 0;
-    const newOrder = statusOrder[status] ?? 0;
-
-    if (
-      existingInstance.status === TaskStatus.DONE ||
-      existingInstance.status === TaskStatus.APPROVAL_PENDING
-    ) {
-      throw new BadRequestException(
-        'Approved or completed tasks cannot be modified',
-      );
-    }
-
-    if (newOrder < currentOrder) {
-      throw new BadRequestException(
-        `Cannot transition back from ${existingInstance.status} to ${status}`,
-      );
-    }
-
     const task = await this.prisma.task.findUnique({
       where: { id: existingInstance.taskId },
       select: {
@@ -1404,30 +1399,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       throw new NotFoundException('Task not found');
     }
 
-    let resolvedCompletionPercent = 0;
-    if (status === TaskStatus.IN_PROGRESS) {
-      resolvedCompletionPercent = 20;
-    } else if (typeof completionPercent === 'number') {
-      resolvedCompletionPercent = Math.min(
-        100,
-        Math.max(0, Math.trunc(completionPercent)),
-      );
-    } else {
-      switch (status) {
-        case TaskStatus.DONE:
-          resolvedCompletionPercent = 100;
-          break;
-        case TaskStatus.PARTLY_DONE:
-          resolvedCompletionPercent = 50;
-          break;
-        case TaskStatus.LESS_THAN_50:
-          resolvedCompletionPercent = 10;
-          break;
-        default:
-          resolvedCompletionPercent = 0;
-          break;
-      }
-    }
+    const resolvedCompletionPercent = resolveTaskProgress(
+      existingInstance.status,
+      status,
+      completionPercent,
+    );
 
     const isOverdue = this.isInstanceOverdue(existingInstance);
     const approvalRecipientId = this.resolveCompletionApprovalRecipientId({
@@ -1477,23 +1453,29 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         'Completion document is required for this task',
       );
     }
-    const updatedInstance = await this.prisma.taskInstance.update({
-      where: { id: existingInstance.id },
-      data: {
-        status: effectiveStatus,
-        completionPercent: resolvedCompletionPercent,
-        completionNote: shouldCaptureAttachment
-          ? (dto.completionNote ?? null)
-          : existingInstance.completionNote,
-        completionAttachmentUrl: shouldCaptureAttachment
-          ? (dto.completionAttachmentUrl ?? null)
-          : existingInstance.completionAttachmentUrl,
-        completionAttachmentName: shouldCaptureAttachment
-          ? (dto.completionAttachmentName ?? null)
-          : existingInstance.completionAttachmentName,
-        completedAt,
-      },
-    });
+    const updatedInstance = await this.prisma.taskInstance
+      .update({
+        where: {
+          id: existingInstance.id,
+          status: existingInstance.status,
+          updatedAt: existingInstance.updatedAt,
+        },
+        data: {
+          status: effectiveStatus,
+          completionPercent: resolvedCompletionPercent,
+          completionNote: shouldCaptureAttachment
+            ? (dto.completionNote ?? null)
+            : existingInstance.completionNote,
+          completionAttachmentUrl: shouldCaptureAttachment
+            ? (dto.completionAttachmentUrl ?? null)
+            : existingInstance.completionAttachmentUrl,
+          completionAttachmentName: shouldCaptureAttachment
+            ? (dto.completionAttachmentName ?? null)
+            : existingInstance.completionAttachmentName,
+          completedAt,
+        },
+      })
+      .catch(rethrowTaskConflict);
 
     await this.recordTaskInstanceEvent({
       taskInstanceId: updatedInstance.id,
@@ -1722,6 +1704,9 @@ export abstract class DwmsTaskService extends DwmsBaseService {
   ) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
+    const title = dto.title?.trim();
+    if (!title) throw new BadRequestException('Task title is required');
+
     if (dto.priority === Priority.LOW) {
       throw new BadRequestException('DWMS tasks cannot have low priority');
     }
@@ -1764,6 +1749,52 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       throw new BadRequestException('Assignee not found');
     }
 
+    const { users: assignees } = options.systemGenerated
+      ? { users: [{ id: dto.assignedToId }] }
+      : await this.listReportees(user);
+    if (!assignees.some((candidate) => candidate.id === dto.assignedToId)) {
+      throw new ForbiddenException('You cannot assign tasks to this employee');
+    }
+
+    if (dto.approvedById) {
+      await this.validateDwmsEmployee(
+        dto.approvedById,
+        user.organizationId,
+        'Approver must belong to the current organization',
+      );
+      const { users: approvers } = await this.listApproverCandidates(
+        user,
+        dto.assignedToId,
+      );
+      if (!approvers.some((candidate) => candidate.id === dto.approvedById)) {
+        throw new BadRequestException(
+          'Select an eligible approver for this assignee',
+        );
+      }
+    }
+
+    const overdueAlertToEmployeeIds = await this.normalizeEmployeeIds(
+      dto.overdueAlertToEmployeeIds,
+      user.organizationId,
+      'Overdue alert recipients',
+      10,
+    );
+    if (overdueAlertToEmployeeIds.length) {
+      const { users: recipients } = await this.listOverdueAlertCandidates(
+        user,
+        dto.assignedToId,
+      );
+      if (
+        overdueAlertToEmployeeIds.some(
+          (id) => !recipients.some((candidate) => candidate.id === id),
+        )
+      ) {
+        throw new BadRequestException(
+          'Select eligible overdue alert recipients for this assignee',
+        );
+      }
+    }
+
     const activity = dto.activityId
       ? await this.prisma.activity.findFirst({
           where: { id: dto.activityId, organizationId: user.organizationId },
@@ -1785,6 +1816,18 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const isDailyOrWeekly =
       frequency === TaskFrequency.DAILY || frequency === TaskFrequency.WEEKLY;
     const backupOwnerId = isDailyOrWeekly ? (dto.backupOwnerId ?? null) : null;
+    if (backupOwnerId) {
+      await this.validateDwmsEmployee(
+        backupOwnerId,
+        user.organizationId,
+        'Backup owner must belong to the current organization',
+      );
+      if (!assignees.some((candidate) => candidate.id === backupOwnerId)) {
+        throw new ForbiddenException(
+          'You cannot assign tasks to this backup owner',
+        );
+      }
+    }
     const requiresCompletionDocument = dto.requiresCompletionDocument ?? false;
     const completionDocumentName = dto.completionDocumentName?.trim() ?? '';
 
@@ -1795,7 +1838,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     }
     const task = await this.prisma.task.create({
       data: {
-        title: dto.title,
+        title,
         description: dto.description ?? null,
         ownerId: dto.assignedToId,
         assignedById: options.systemGenerated ? null : employee.id,
@@ -1808,6 +1851,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         acknowledgedAt: dto.acknowledgeOnCreate ? new Date() : null,
         approvedById: dto.approvedById ?? null,
         overdueAlertTo: dto.overdueAlertTo ?? 'ASSIGNER',
+        overdueAlertToEmployeeIds,
         backupOwnerId,
         activityId: activity?.id ?? null,
         requiresCompletionDocument,
@@ -2180,14 +2224,20 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       throw new BadRequestException('Approval comment is required');
     }
 
-    const updated = await this.prisma.taskInstance.update({
-      where: { id: instance.id },
-      data: {
-        status: TaskStatus.DONE,
-        completionPercent: 100,
-        completedAt: new Date(),
-      },
-    });
+    const updated = await this.prisma.taskInstance
+      .update({
+        where: {
+          id: instance.id,
+          status: instance.status,
+          updatedAt: instance.updatedAt,
+        },
+        data: {
+          status: TaskStatus.DONE,
+          completionPercent: 100,
+          completedAt: new Date(),
+        },
+      })
+      .catch(rethrowTaskConflict);
 
     if (approvalComment) {
       await this.prisma.taskInstanceComment.create({
@@ -2274,17 +2324,23 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       throw new BadRequestException('Rejection comment is required');
     }
 
-    const updated = await this.prisma.taskInstance.update({
-      where: { id: instance.id },
-      data: {
-        status: TaskStatus.IN_PROGRESS,
-        completionPercent: 0,
-        completedAt: null,
-        completionNote: null,
-        completionAttachmentUrl: null,
-        completionAttachmentName: null,
-      },
-    });
+    const updated = await this.prisma.taskInstance
+      .update({
+        where: {
+          id: instance.id,
+          status: instance.status,
+          updatedAt: instance.updatedAt,
+        },
+        data: {
+          status: TaskStatus.IN_PROGRESS,
+          completionPercent: 0,
+          completedAt: null,
+          completionNote: null,
+          completionAttachmentUrl: null,
+          completionAttachmentName: null,
+        },
+      })
+      .catch(rethrowTaskConflict);
 
     if (rejectionComment) {
       await this.prisma.taskInstanceComment.create({
@@ -2378,10 +2434,12 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       return { message: 'Task already acknowledged', task, instance };
     }
 
-    const updatedTask = await this.prisma.task.update({
-      where: { id: task.id },
-      data: { acknowledgedAt: new Date() },
-    });
+    const updatedTask = await this.prisma.task
+      .update({
+        where: { id: task.id, status: task.status, updatedAt: task.updatedAt },
+        data: { acknowledgedAt: new Date() },
+      })
+      .catch(rethrowTaskConflict);
 
     if (task.assignedById) {
       await this.notifications.create({
@@ -2441,24 +2499,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     );
     const task = instance.task;
 
-    let resolvedCompletionPercent = 0;
-    switch (dto.status) {
-      case TaskStatus.DONE:
-        resolvedCompletionPercent = 100;
-        break;
-      case TaskStatus.PARTLY_DONE:
-        resolvedCompletionPercent = 50;
-        break;
-      case TaskStatus.LESS_THAN_50:
-        resolvedCompletionPercent = 10;
-        break;
-      case TaskStatus.IN_PROGRESS:
-        resolvedCompletionPercent = 0;
-        break;
-      default:
-        resolvedCompletionPercent = 0;
-        break;
-    }
+    const resolvedCompletionPercent = resolveTaskProgress(
+      instance.status,
+      dto.status,
+      dto.completionPercent,
+    );
 
     const isOverdue = this.isInstanceOverdue(instance);
     const approvalRecipientId = this.resolveCompletionApprovalRecipientId({
@@ -2500,23 +2545,31 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       );
     }
 
-    const updated = await this.prisma.taskInstance.update({
-      where: { id: instance.id },
-      data: {
-        status: effectiveStatus,
-        completionPercent: resolvedCompletionPercent,
-        completionNote: shouldCaptureAttachment
-          ? (dto.completionNote ?? null)
-          : instance.completionNote,
-        completionAttachmentUrl: shouldCaptureAttachment
-          ? (dto.completionAttachmentUrl ?? null)
-          : instance.completionAttachmentUrl,
-        completionAttachmentName: shouldCaptureAttachment
-          ? (dto.completionAttachmentName ?? null)
-          : instance.completionAttachmentName,
-        completedAt: completedStatuses.has(effectiveStatus) ? new Date() : null,
-      },
-    });
+    const updated = await this.prisma.taskInstance
+      .update({
+        where: {
+          id: instance.id,
+          status: instance.status,
+          updatedAt: instance.updatedAt,
+        },
+        data: {
+          status: effectiveStatus,
+          completionPercent: resolvedCompletionPercent,
+          completionNote: shouldCaptureAttachment
+            ? (dto.completionNote ?? null)
+            : instance.completionNote,
+          completionAttachmentUrl: shouldCaptureAttachment
+            ? (dto.completionAttachmentUrl ?? null)
+            : instance.completionAttachmentUrl,
+          completionAttachmentName: shouldCaptureAttachment
+            ? (dto.completionAttachmentName ?? null)
+            : instance.completionAttachmentName,
+          completedAt: completedStatuses.has(effectiveStatus)
+            ? new Date()
+            : null,
+        },
+      })
+      .catch(rethrowTaskConflict);
 
     await this.recordTaskInstanceEvent({
       taskInstanceId: instance.id,
@@ -2566,6 +2619,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     );
     const task = instance.task;
 
+    resolveTaskProgress(instance.status, TaskStatus.DONE);
+
     const isOverdue = this.isInstanceOverdue(instance);
     const approvalRecipientId = this.resolveCompletionApprovalRecipientId({
       task,
@@ -2590,17 +2645,25 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       );
     }
 
-    const updated = await this.prisma.taskInstance.update({
-      where: { id: instance.id },
-      data: {
-        status: effectiveStatus,
-        completionPercent: 100,
-        completionNote: dto.completionNote ?? null,
-        completionAttachmentUrl: dto.completionAttachmentUrl ?? null,
-        completionAttachmentName: dto.completionAttachmentName ?? null,
-        completedAt: completedStatuses.has(effectiveStatus) ? new Date() : null,
-      },
-    });
+    const updated = await this.prisma.taskInstance
+      .update({
+        where: {
+          id: instance.id,
+          status: instance.status,
+          updatedAt: instance.updatedAt,
+        },
+        data: {
+          status: effectiveStatus,
+          completionPercent: 100,
+          completionNote: dto.completionNote ?? null,
+          completionAttachmentUrl: dto.completionAttachmentUrl ?? null,
+          completionAttachmentName: dto.completionAttachmentName ?? null,
+          completedAt: completedStatuses.has(effectiveStatus)
+            ? new Date()
+            : null,
+        },
+      })
+      .catch(rethrowTaskConflict);
 
     await this.recordTaskInstanceEvent({
       taskInstanceId: instance.id,

@@ -13,39 +13,43 @@ import {
   type DwmsTaskStatus as TaskStatus,
 } from "@/services/dwms.service";
 import { uploadImage } from "@/services/uploads.service";
-import { AlertTriangle, PlusCircle, TrendingUp } from "lucide-react";
+import { addDaysToDateKey } from "./utils/organizationDate";
+import {
+  AlertTriangle,
+  Minus,
+  PlusCircle,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
 type HomeTaskView = "TODAY" | "WEEK" | "MONTH";
 
-function toDateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function startOfLocalDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function getTaskWindow(view: HomeTaskView) {
-  const start = startOfLocalDay(new Date());
+function getTaskWindow(view: HomeTaskView, start: string) {
   const days = view === "TODAY" ? 1 : view === "WEEK" ? 7 : 30;
-  const end = addDays(start, days);
+  const end = addDaysToDateKey(start, days) ?? start;
   return { start, end, days };
 }
 
-function isTaskDueInWindow(task: TaskItem, start: Date, end: Date) {
-  const dueAt = new Date(task.dueAt);
-  if (Number.isNaN(dueAt.getTime())) return false;
-  return dueAt >= start && dueAt < end;
+function getPreviousTaskWindow(view: HomeTaskView, currentStart: string) {
+  const current = getTaskWindow(view, currentStart);
+  const daysAgo = view === "TODAY" ? 7 : current.days;
+  const start = addDaysToDateKey(current.start, -daysAgo) ?? current.start;
+  const end = addDaysToDateKey(start, current.days) ?? start;
+  return { start, end };
+}
+
+function isTaskScheduledInWindow(task: TaskItem, start: string, end: string) {
+  const scheduledDateKey = task.scheduledFor?.slice(0, 10);
+  if (!scheduledDateKey) return false;
+  return scheduledDateKey >= start && scheduledDateKey < end;
 }
 
 function isHomeVisibleTask(task: TaskItem) {
-  return !task.isOverdue && task.status !== "OVERDUE";
+  return (
+    !task.isOverdue &&
+    task.status !== "OVERDUE" &&
+    task.status !== "DONE"
+  );
 }
 
 function getHomeTaskDateValue(task: TaskItem) {
@@ -63,6 +67,7 @@ function HomeContent() {
   const router = useRouter();
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [previousTasks, setPreviousTasks] = useState<TaskItem[]>([]);
   const [taskView, setTaskView] = useState<HomeTaskView>("TODAY");
   const [activeAlertsCount, setActiveAlertsCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -83,22 +88,44 @@ function HomeContent() {
     setError(null);
     try {
       const token = useAuthStore.getState().accessToken ?? "";
-      const { start, end, days } = getTaskWindow(view);
-      const dateKeys = Array.from({ length: days }, (_, index) => toDateKey(addDays(start, index)));
-      const taskResponses = await Promise.all(dateKeys.map((date) => DwmsService.getTodayTasks(token, date)));
+      const [taskResponse, alertsRes] = await Promise.all([
+        DwmsService.getTodayTasks(token, undefined, "scheduled"),
+        DwmsService.getOpenAlertCount(token),
+      ]);
+      if (!taskResponse?.date) {
+        throw new Error("The server did not provide the organization date");
+      }
+      const { start, end } = getTaskWindow(view, taskResponse.date);
+      const previousWindow = getPreviousTaskWindow(view, taskResponse.date);
+      const previousTaskResponse = await DwmsService.getTodayTasks(
+        token,
+        previousWindow.start,
+        "scheduled",
+      );
       const byInstanceId = new Map<string, TaskItem>();
+      const previousByInstanceId = new Map<string, TaskItem>();
 
-      taskResponses.forEach((response) => {
-        (response?.tasks ?? []).forEach((task) => {
-          if (isTaskDueInWindow(task, start, end) && isHomeVisibleTask(task)) {
-            byInstanceId.set(task.instanceId, task);
-          }
-        });
+      (taskResponse?.tasks ?? []).forEach((task) => {
+        if (isTaskScheduledInWindow(task, start, end) && isHomeVisibleTask(task)) {
+          byInstanceId.set(task.instanceId, task);
+        }
+      });
+
+      (previousTaskResponse?.tasks ?? []).forEach((task) => {
+        if (
+          isTaskScheduledInWindow(
+            task,
+            previousWindow.start,
+            previousWindow.end,
+          ) &&
+          isHomeVisibleTask(task)
+        ) {
+          previousByInstanceId.set(task.instanceId, task);
+        }
       });
 
       setTasks(Array.from(byInstanceId.values()));
-
-      const alertsRes = await DwmsService.getOpenAlertCount(token);
+      setPreviousTasks(Array.from(previousByInstanceId.values()));
       setActiveAlertsCount(Number(alertsRes?.count ?? 0));
     } catch (err: unknown) {
       setError(getDwmsErrorMessage(err, "Failed to load home page data"));
@@ -133,8 +160,52 @@ function HomeContent() {
     const done = visibleTasks.filter((t) => t.status === "DONE").length;
     const remaining = total - done;
     const productivity = total > 0 ? Math.round((done / total) * 100) : 100;
-    return { total, done, remaining, productivity };
-  }, [visibleTasks]);
+    const previousTotal = previousTasks.length;
+    const previousDone = previousTasks.filter(
+      (task) => task.status === "DONE",
+    ).length;
+    const previousProductivity =
+      previousTotal > 0 ? Math.round((previousDone / previousTotal) * 100) : null;
+    const productivityChange =
+      total === 0 || previousProductivity === null
+        ? null
+        : productivity - previousProductivity;
+
+    return { total, done, remaining, productivity, productivityChange };
+  }, [previousTasks, visibleTasks]);
+
+  const productivityTrend = useMemo(() => {
+    const change = stats.productivityChange;
+    const comparisonLabel =
+      taskView === "MONTH" ? "vs previous 30 days" : "vs last week";
+
+    if (change === null) {
+      return {
+        Icon: Minus,
+        label: "No prior data",
+        className: "text-muted-app",
+      };
+    }
+    if (change > 0) {
+      return {
+        Icon: TrendingUp,
+        label: `+${change}% ${comparisonLabel}`,
+        className: "text-emerald-500",
+      };
+    }
+    if (change < 0) {
+      return {
+        Icon: TrendingDown,
+        label: `${change}% ${comparisonLabel}`,
+        className: "text-rose-500",
+      };
+    }
+    return {
+      Icon: Minus,
+      label: `No change ${comparisonLabel}`,
+      className: "text-muted-app",
+    };
+  }, [stats.productivityChange, taskView]);
 
   const statusCompletion: Record<TaskStatus, number> = {
     PENDING: 0,
@@ -307,8 +378,14 @@ function HomeContent() {
             </h3>
           </div>
           <div>
-            <p className="text-xs text-emerald-500 font-medium mb-2.5 flex items-center gap-0.5">
-              <TrendingUp className="h-3.5 w-3.5" /> +6% vs last week
+            <p
+              className={`text-xs font-medium mb-2.5 flex items-center gap-1 ${productivityTrend.className}`}
+            >
+              <productivityTrend.Icon
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0"
+              />
+              {productivityTrend.label}
             </p>
             <div className="w-full bg-purple-500/10 h-1 rounded-full overflow-hidden">
               <div
@@ -347,13 +424,23 @@ function HomeContent() {
               })}
             </div>
           </div>
-          <button
-            onClick={() => router.push("/dwms/actions/new?mode=TASK")}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 cursor-pointer select-none sm:w-auto"
-          >
-            <PlusCircle className="h-4 w-4" />
-            <span>Assign a Task</span>
-          </button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => router.push("/dwms/actions/new?mode=ALERT")}
+              className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-4 py-2 text-xs font-bold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 sm:w-auto"
+            >
+              <span>Raise Alert</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/dwms/actions/new?mode=TASK")}
+              className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>Assign a Task</span>
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -372,6 +459,7 @@ function HomeContent() {
                 const dateMeta = getDateSeparatorMeta(
                   getHomeTaskDateValue(task),
                   task.organizationTimeZone,
+                  true,
                 );
                 const showSeparator = !!dateMeta && dateMeta.key !== previousDateKey;
                 if (dateMeta) previousDateKey = dateMeta.key;

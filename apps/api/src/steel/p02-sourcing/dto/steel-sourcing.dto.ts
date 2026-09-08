@@ -17,6 +17,7 @@ import {
   SupplierRiskLevel,
   SteelSourcingStage,
   SteelSourcingStatus,
+  SteelSourcingMaterialSource,
 } from 'db';
 
 // P02-A01 — Review material requirement from production plan
@@ -46,18 +47,28 @@ export class IdentifySteelMaterialTypeDto {
   materialTypeNotes?: string;
 }
 
-// P02-A03 — Check approved supplier list
-export class CheckSteelSupplierDto {
+// P02-A03 — Select material source: existing stock or an external supplier.
+// Supplier fields are required only when source === EXTERNAL_SUPPLIER
+// (validated in the service, since they're conditional on `source`).
+export class SelectMaterialSourceDto {
+  @IsEnum(SteelSourcingMaterialSource, { message: 'Invalid material source' })
+  source!: SteelSourcingMaterialSource;
+
   @IsUUID()
-  @IsNotEmpty({ message: 'A supplier must be selected' })
-  supplierId!: string;
+  @IsOptional()
+  supplierId?: string;
 
   @IsBoolean()
-  supplierApprovalConfirmed!: boolean;
+  @IsOptional()
+  supplierApprovalConfirmed?: boolean;
 
   @IsString()
   @IsOptional()
   supplierCheckNotes?: string;
+
+  @IsString()
+  @IsOptional()
+  stockFulfillmentNotes?: string;
 }
 
 // P02-A04 — Check supplier quality and rejection history
@@ -317,6 +328,65 @@ export class CreateSupplierDto {
   notes?: string;
 }
 
+export class UpdateSupplierDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  code?: string;
+
+  @IsArray()
+  @IsEnum(SteelMaterialType, { each: true })
+  @IsOptional()
+  materialTypes?: SteelMaterialType[];
+
+  @IsEnum(SupplierApprovalStatus)
+  @IsOptional()
+  approvalStatus?: SupplierApprovalStatus;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  qualityScore?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  deliveryScore?: number;
+
+  @IsString()
+  @IsOptional()
+  contactPerson?: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @IsString()
+  @IsOptional()
+  email?: string;
+
+  @IsString()
+  @IsOptional()
+  country?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isImportSource?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
+
 export class QuerySuppliersDto {
   @IsEnum(SteelMaterialType)
   @IsOptional()
@@ -329,4 +399,25 @@ export class QuerySuppliersDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  // P02-A03 supplier selection always wants active suppliers only; Configuration-
+  // style admin screens pass this to see the full list including deactivated ones.
+  @IsOptional()
+  includeInactive?: string;
+}
+
+// Records a document already uploaded to S3 (via the generic
+// /uploads/presigned-url flow) against a sourcing order and stage.
+export class CreateSteelSourcingAttachmentDto {
+  @IsEnum(SteelSourcingStage)
+  @IsNotEmpty({ message: 'Stage is required' })
+  stage!: SteelSourcingStage;
+
+  @IsString()
+  @IsNotEmpty({ message: 'File name is required' })
+  fileName!: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'File URL is required' })
+  fileUrl!: string;
 }

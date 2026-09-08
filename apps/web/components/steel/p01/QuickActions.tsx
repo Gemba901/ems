@@ -8,7 +8,7 @@ import { QueryErrorState } from "@/components/steel/dashboard/QueryErrorState";
 import { useAuthStore } from "@/store/auth.store";
 import { useToast } from "@/contexts/toast.context";
 import { SteelService, STAGE_LABELS, type SteelPlanSummary } from "@/services/steel.service";
-import type { P01FiltersState } from "./P01Filters";
+import type { P01FiltersState } from "@/app/steel/p01/page";
 
 interface Props {
   summary?: SteelPlanSummary;

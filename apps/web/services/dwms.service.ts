@@ -487,6 +487,19 @@ export interface DwmsTaskItem {
   task?: { title: string };
 }
 
+export interface DwmsTaskListResponse {
+  date?: string;
+  organizationTimeZone?: string;
+  tasks?: DwmsTaskItem[];
+  count?: number;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
 export interface DwmsAssignedTaskListResponse {
   tasks?: DwmsAssignedTaskHistoryItem[];
 }
@@ -728,9 +741,35 @@ export interface CreateActivityPayload {
 
 export interface IngestActivityRowPayload {
   rowNumber?: number;
+  assignmentMode?: ActivityIngestionAssignmentMode;
   responsibleEmployeeCode?: string;
   parentActivityCode?: string | null;
   activity: CreateActivityPayload;
+}
+
+export type DwmsTaskListScope =
+  | "scheduled"
+  | "future"
+  | "overdue"
+  | "approval_pending"
+  | "completed";
+
+export interface DwmsTaskSummaryResponse {
+  tabs?: {
+    all: number;
+    overdue: number;
+    approvalPending: number;
+    completed: number;
+    notAcknowledged: number;
+    pending: number;
+  };
+}
+
+export enum ActivityIngestionAssignmentMode {
+  INDIVIDUAL = "Individual",
+  ALL_USERS = "All Users",
+  ALL_MANAGEMENT = "All Management",
+  ALL_HOD = "All HOD",
 }
 
 export interface DwmsActivityIngestionSummary {
@@ -770,6 +809,7 @@ export interface IngestActivitiesResponse {
     activityId?: string;
     taskId?: string;
     responsibleEmployeeId?: string;
+    assignedCount?: number;
     message: string;
   }>;
 }
@@ -1269,10 +1309,19 @@ export const DwmsService = {
 
   async getTodayTasks(
     token: string,
-    date: string,
-    scope?: "scheduled" | "completed",
-  ): Promise<{ tasks?: DwmsTaskItem[] }> {
-    return getJson(`/dwms/myDwms/tasks${buildQuery({ date, scope })}`, token);
+    date?: string,
+    scope?: DwmsTaskListScope,
+    page?: number,
+    limit?: number,
+  ): Promise<DwmsTaskListResponse> {
+    return getJson(
+      `/dwms/myDwms/tasks${buildQuery({ date, scope, page, limit })}`,
+      token,
+    );
+  },
+
+  async getMyDwmsTaskSummary(token: string): Promise<DwmsTaskSummaryResponse> {
+    return getJson("/dwms/myDwms/tasks/summary", token);
   },
 
   async getTaskInstanceDetail(

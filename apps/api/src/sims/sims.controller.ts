@@ -71,24 +71,27 @@ export class SimsController {
 
   /**
    * GET /sims
-   * Admin, Management, and HR view all suggestions org-wide with optional filters.
+   * Admin, Management, HR, and HOD (for the org-wide dashboard toggle) view all
+   * suggestions org-wide with optional filters. HODs can only view — reviewing
+   * a suggestion outside their own department is still rejected in the service.
+   * Steering committee members (even as plain employees) also get this org-wide read
+   * access; enforced in the service since committee membership isn't a RoleName.
    */
   @Get()
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR)
   async getAll(
     @Query() query: QuerySuggestionsDto,
-    @CurrentUser() user: { organizationId: string },
+    @CurrentUser() user: { userId: string; organizationId: string },
   ) {
-    return this.simsService.getAllSuggestions(user.organizationId, query);
+    return this.simsService.getAllSuggestions(user.userId, user.organizationId, query);
   }
 
   /**
    * GET /sims/queue
    * Returns suggestions assigned to the caller for review (as HOD).
-   * Available to HODs.
+   * Available to HODs only — admins/management get org/department visibility via GET /sims.
    */
   @Get('queue')
-  @Roles(Role.HOD, Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT)
+  @Roles(Role.HOD)
   async getQueue(
     @Query() query: QuerySuggestionsDto,
     @CurrentUser() user: { userId: string; organizationId: string },
@@ -142,8 +145,23 @@ export class SimsController {
   }
 
   /**
+   * GET /sims/:id/review-candidates
+   * Employees in the suggestion's OWN department — for the responsible-person / kaizen-owner
+   * pickers on the review form. Scoped to the suggestion, not the caller, so a cross-department
+   * admin or committee member sees the right department's employees.
+   */
+  @Get(':id/review-candidates')
+  async getReviewCandidates(
+    @Param('id') id: string,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.simsService.getReviewCandidates(id, user.userId, user.organizationId);
+  }
+
+  /**
    * PATCH /sims/:id/review
-   * HODs and Admin/Management can review.
+   * Only the department's assigned HOD (or, once forwarded, the designated
+   * committee's members) can review — enforced in the service.
    */
   @Patch(':id/review')
   async review(
@@ -157,7 +175,7 @@ export class SimsController {
   /**
    * PATCH /sims/:id/implementation
    * Update implementation progress.
-   * HOD and Admin/Management only (enforced in service).
+   * Only the department's assigned HOD (enforced in service).
    */
   @Patch(':id/implementation')
   async updateImplementation(

@@ -12,6 +12,7 @@ interface User {
     organizationId: string | null;
     organizationName: string;
     organizationUrl: string | null;
+    organizationTimeZone: string;
     roleId: string;
     roleLevel: Role;
     isAdminOrg: boolean;

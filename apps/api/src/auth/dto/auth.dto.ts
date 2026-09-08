@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, MinLength, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, IsOptional, IsEmail } from 'class-validator';
 import { Expose } from 'class-transformer';
 
 // define expected payload and its validation rules
@@ -45,6 +45,32 @@ export class LoginDto {
     @IsNotEmpty({ message: 'Password is required' })
     @MinLength(6, { message: 'Password must be at least 6 characters' })
     password!: string;
+}
+
+export class ForgotPasswordDto {
+    @Expose()
+    @IsEmail({}, { message: 'Please enter a valid email address' })
+    email!: string;
+}
+
+export class ResetPasswordDto {
+    @Expose()
+    @IsString()
+    @IsNotEmpty({ message: 'Reset token is required' })
+    token!: string;
+
+    @Expose()
+    @IsString()
+    @IsNotEmpty({ message: 'New password is required' })
+    @MinLength(6, { message: 'Password must be at least 6 characters' })
+    newPassword!: string;
+}
+
+export class VerifyTempPasswordDto {
+    @Expose()
+    @IsString()
+    @IsNotEmpty({ message: 'Temporary password is required' })
+    tempPassword!: string;
 }
 
 export class SelectOrgDto {

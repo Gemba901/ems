@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { DwmsDashboardTrendPoint } from '@/services/dwms.service';
+import { formatOrganizationDateKey } from '../../utils/organizationDate';
 
 type SVGLineChartProps = {
   trendData: DwmsDashboardTrendPoint[];
@@ -135,8 +136,8 @@ export default function SVGLineChart({
           
           let label = '';
           if (d.date) {
-            const dateObj = new Date(d.date);
-            label = `${dateObj.getDate()}/${dateObj.getMonth() + 1}`;
+            const [year, month, day] = d.date.slice(0, 10).split('-');
+            label = year && month && day ? `${Number(day)}/${Number(month)}` : d.date;
           } else {
             label = d.label ?? '';
           }
@@ -195,7 +196,7 @@ export default function SVGLineChart({
       {/* Tooltip */}
       {hoveredIdx !== null && trendData[hoveredIdx] && (
         <div
-          className="absolute z-10 bg-panel-app text-text-app p-2 rounded-xl text-xs shadow-xl border border-border-app backdrop-blur-md transition-all duration-150 pointer-events-none"
+          className="pointer-events-none absolute z-10 rounded-xl border border-border-app bg-white p-2 text-xs text-text-app shadow-xl transition-all duration-150"
           style={{
             left: `${(getX(hoveredIdx) / width) * 100}%`,
             top: `${(getY(getValue(trendData[hoveredIdx])) / height) * 100 - 16}%`,
@@ -204,7 +205,7 @@ export default function SVGLineChart({
         >
           <div className="font-medium text-[10px] text-muted-app mb-0.5">
             {trendData[hoveredIdx].date ? (
-              new Date(trendData[hoveredIdx].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              formatOrganizationDateKey(trendData[hoveredIdx].date, { month: 'short', day: 'numeric' })
             ) : (
               trendData[hoveredIdx].label
             )}

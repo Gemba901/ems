@@ -71,6 +71,13 @@ export const CommitteeService = {
     return handleResponse<SteeringCommittee[]>(res);
   },
 
+  async listRoutable(token: string): Promise<MyCommittee[]> {
+    const res = await apiClient(`${API_URL}/committees/routable`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<MyCommittee[]>(res);
+  },
+
   async create(data: CreateCommitteePayload, token: string): Promise<SteeringCommittee> {
     const res = await apiClient(`${API_URL}/committees`, {
       method: "POST",

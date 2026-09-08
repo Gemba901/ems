@@ -135,6 +135,7 @@ export interface SteelProductionPlan {
   status: SteelPlanOverallStatus;
 
   demandSource: DemandSource;
+  customerId: string | null;
   customerName: string | null;
   dealerName: string | null;
   projectReference: string | null;
@@ -149,10 +150,12 @@ export interface SteelProductionPlan {
   deliveryPromiseDate: string | null;
   creditStatus: CreditStatus | null;
 
+  productId: string | null;
   productType: ProductType | null;
   productStandard: string | null;
   customerSpecification: string | null;
 
+  productSpecificationId: string | null;
   grade: string | null;
   size: string | null;
   length: string | null;
@@ -168,6 +171,7 @@ export interface SteelProductionPlan {
   stockDecision: StockDecision | null;
   stockDecisionNotes: string | null;
 
+  productionRouteId: string | null;
   plantRoute: PlantRoute | null;
   routeNotes: string | null;
 
@@ -221,6 +225,7 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
 
 export interface CreateSteelDemandPayload {
   demandSource: DemandSource;
+  customerId?: string;
   customerName?: string;
   dealerName?: string;
   projectReference?: string;
@@ -233,22 +238,24 @@ export interface CreateSteelDemandPayload {
 }
 
 export interface ConfirmPriorityPayload {
-  priority: OrderPriority;
+  priority?: OrderPriority;
   deliveryPromiseDate?: string;
   creditStatus?: CreditStatus;
   notes?: string;
 }
 
 export interface ConfirmProductPayload {
-  productType: ProductType;
-  productStandard: string;
+  productId?: string;
+  productType?: ProductType;
+  productStandard?: string;
   customerSpecification?: string;
   notes?: string;
 }
 
 export interface ConfirmSpecificationPayload {
-  grade: string;
-  size: string;
+  productSpecificationId?: string;
+  grade?: string;
+  size?: string;
   length?: string;
   bundleType?: string;
   totalQuantity: number;
@@ -256,19 +263,20 @@ export interface ConfirmSpecificationPayload {
 }
 
 export interface StockCheckPayload {
-  certifiedStockAvailableQty: number;
+  certifiedStockAvailableQty?: number;
   stockBundleIds?: string[];
   stockHeatNumbers?: string[];
   stockCertificateRefs?: string[];
 }
 
 export interface StockDecisionPayload {
-  stockDecision: StockDecision;
+  stockDecision?: StockDecision;
   stockDecisionNotes?: string;
 }
 
 export interface SelectRoutePayload {
-  plantRoute: PlantRoute;
+  productionRouteId?: string;
+  plantRoute?: PlantRoute;
   routeNotes?: string;
 }
 
@@ -293,7 +301,7 @@ export interface PrepareProductionPlanPayload {
 }
 
 export interface CommunicatePlanPayload {
-  departments: SteelDepartment[];
+  departments?: SteelDepartment[];
   notes?: string;
 }
 

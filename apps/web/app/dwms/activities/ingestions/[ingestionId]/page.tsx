@@ -27,11 +27,12 @@ const STATUS_OPTIONS = [
   { value: "CREATED", label: "Created" },
 ];
 
-function formatDateTime(value?: string | null) {
+function formatDateTime(value?: string | null, timeZone?: string | null) {
   if (!value) return "Not available";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not available";
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: timeZone || "UTC",
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
@@ -48,7 +49,7 @@ export default function ActivityIngestionDetailPage() {
 function ActivityIngestionDetailContent() {
   const params = useParams<{ ingestionId: string }>();
   const ingestionId = params.ingestionId;
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const [ingestion, setIngestion] =
     useState<DwmsActivityIngestionSummary | null>(null);
   const [rows, setRows] = useState<DwmsActivityIngestionRow[]>([]);
@@ -124,7 +125,7 @@ function ActivityIngestionDetailContent() {
               {ingestion?.fileName ?? "Activity ingestion"}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Uploaded {formatDateTime(ingestion?.createdAt)} by{" "}
+              Uploaded {formatDateTime(ingestion?.createdAt, user?.organizationTimeZone)} by{" "}
               {ingestion?.uploadedBy?.name ?? "Unknown"}
             </p>
           </div>

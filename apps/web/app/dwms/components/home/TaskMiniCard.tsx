@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DwmsTaskItem as TaskItem, DwmsTaskStatus as TaskStatus } from '@/services/dwms.service';
 import { ArrowUp, Minus, Repeat, Clock, CheckCircle, ChevronDown } from 'lucide-react';
+import {
+  formatOrganizationDate,
+  formatOrganizationDateKey,
+  getOrganizationTodayKey,
+  startOfOrganizationDay,
+} from '../../utils/organizationDate';
 
 type Props = {
   task: TaskItem;
@@ -12,49 +18,6 @@ type Props = {
 
 function toUtcDateOnly(value: Date) {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
-}
-
-function getTimeZoneOffsetMs(value: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(value);
-
-  const partMap = new Map(parts.map((part) => [part.type, part.value]));
-  const zonedAsUtc = Date.UTC(
-    Number(partMap.get('year')),
-    Number(partMap.get('month')) - 1,
-    Number(partMap.get('day')),
-    Number(partMap.get('hour')),
-    Number(partMap.get('minute')),
-    Number(partMap.get('second')),
-    value.getUTCMilliseconds(),
-  );
-
-  return zonedAsUtc - value.getTime();
-}
-
-function startOfDayInTimeZone(value: Date, timeZone: string): Date {
-  const localStartAsUtc = Date.UTC(
-    value.getUTCFullYear(),
-    value.getUTCMonth(),
-    value.getUTCDate(),
-    0,
-    0,
-    0,
-    0,
-  );
-  const firstPass = new Date(
-    localStartAsUtc - getTimeZoneOffsetMs(new Date(localStartAsUtc), timeZone),
-  );
-  const offset = getTimeZoneOffsetMs(firstPass, timeZone);
-  return new Date(localStartAsUtc - offset);
 }
 
 function getTaskTimeZone(task: TaskItem) {
@@ -69,27 +32,27 @@ function getCompletionWindowStart(task: TaskItem): Date | null {
   const timeZone = getTaskTimeZone(task);
   switch (task.frequency) {
     case 'DAILY':
-      return startOfDayInTimeZone(date, timeZone);
+      return startOfOrganizationDay(date, timeZone);
     case 'WEEKLY': {
       const start = new Date(date);
       const mondayOffset = (start.getUTCDay() + 6) % 7;
       start.setUTCDate(start.getUTCDate() - mondayOffset);
-      return startOfDayInTimeZone(start, timeZone);
+      return startOfOrganizationDay(start, timeZone);
     }
     case 'MONTHLY':
-      return startOfDayInTimeZone(
+      return startOfOrganizationDay(
         new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)),
         timeZone,
       );
     case 'QUARTERLY': {
       const quarterStartMonth = Math.floor(date.getUTCMonth() / 3) * 3;
-      return startOfDayInTimeZone(
+      return startOfOrganizationDay(
         new Date(Date.UTC(date.getUTCFullYear(), quarterStartMonth, 1)),
         timeZone,
       );
     }
     case 'YEARLY':
-      return startOfDayInTimeZone(
+      return startOfOrganizationDay(
         new Date(Date.UTC(date.getUTCFullYear(), 0, 1)),
         timeZone,
       );
@@ -116,12 +79,11 @@ function getCompletionWindowLabel(frequency: TaskItem['frequency']) {
 }
 
 function formatWindowDate(value: Date, timeZone: string) {
-  return value.toLocaleDateString('en-US', {
+  return formatOrganizationDate(value, timeZone, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-    timeZone,
-  });
+  }) ?? '';
 }
 
 function getStatusLockReason(task: TaskItem) {
@@ -148,7 +110,7 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
   const wasOverdue = !!task.wasOverdue && !isOverdue;
   const isPrerequisiteBlocked = !!task.prerequisiteBlocked;
   const statusLockReason = getStatusLockReason(task);
-  const isStatusLockedBySchedule = !!statusLockReason;
+  const isStatusLockedBySchedule = !!statusLockReason && !isOverdue;
   const prerequisiteLabel = task.prerequisiteActivityNames?.length
     ? `Locked until ${task.prerequisiteActivityNames.join(', ')} is done`
     : 'Locked until prerequisite activity is done';
@@ -205,7 +167,7 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
       LESS_THAN_50: 99,
       NOT_APPLICABLE: 99,
     };
-    if (task.status === 'OVERDUE') {
+    if (isOverdue) {
       return ['DONE'];
     }
     const allOptions: TaskStatus[] = ['PENDING', 'IN_PROGRESS', 'PARTLY_DONE', 'DONE'];
@@ -293,21 +255,25 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
 
   // Due date element matching mockup with extra light stroke, color-free SVG icon
   const renderDueDate = () => {
-    const dueDate = new Date(task.dueAt);
+    // The dashboard groups task instances by their scheduled organization day.
+    // Use that same date for the card label; `dueAt` is an end-of-day instant and
+    // can otherwise render as the following date when legacy data used UTC EOD.
+    const scheduledDateKey = (task.scheduledFor ?? task.dueAt).slice(0, 10);
+    const dueDate = new Date(`${scheduledDateKey}T00:00:00.000Z`);
 
     if (isNaN(dueDate.getTime())) {
       return null;
     }
 
-    const todayStr = new Date().toDateString();
     let dateText = '';
 
-    if (dueDate.toDateString() === todayStr) {
+    if (scheduledDateKey === getOrganizationTodayKey(getTaskTimeZone(task))) {
       dateText = 'Due by Today';
     } else {
-      const day = dueDate.getDate();
-      const month = dueDate.toLocaleDateString('en-US', { month: 'long' });
-      dateText = `${day} ${month}`;
+      dateText = formatOrganizationDateKey(scheduledDateKey, {
+        day: 'numeric',
+        month: 'long',
+      }) ?? '';
     }
 
     return (
@@ -437,6 +403,11 @@ export default function TaskMiniCard({ task, onClick, onStatusChange, onAcknowle
         {/* Left indicators */}
         <div className="flex flex-wrap items-center gap-5">
           {renderPriority()}
+          {isOverdue && (
+            <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700">
+              Overdue
+            </span>
+          )}
           {wasOverdue && (
             <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
               Was Overdue

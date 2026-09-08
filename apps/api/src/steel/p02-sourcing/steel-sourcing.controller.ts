@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -12,7 +13,7 @@ import { SteelSourcingService } from './steel-sourcing.service';
 import {
   CreateSteelSourcingOrderDto,
   IdentifySteelMaterialTypeDto,
-  CheckSteelSupplierDto,
+  SelectMaterialSourceDto,
   ReviewSteelSupplierRiskDto,
   CollectSteelQuotationsDto,
   SelectSteelSupplierDto,
@@ -26,6 +27,8 @@ import {
   QuerySteelSourcingOrdersDto,
   CreateSupplierDto,
   QuerySuppliersDto,
+  UpdateSupplierDto,
+  CreateSteelSourcingAttachmentDto,
 } from './dto/steel-sourcing.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -101,13 +104,85 @@ export class SteelSourcingController {
     @Body() dto: CreateSupplierDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.createSupplier(dto, user.organizationId);
+    return this.steelSourcingService.createSupplier(
+      dto,
+      user.organizationId,
+      user.userId,
+    );
+  }
+
+  /** PATCH /steel/sourcing/suppliers/:id — update a supplier master record. */
+  @Patch('suppliers/:id')
+  async updateSupplier(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupplierDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.updateSupplier(
+      id,
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  /**
+   * GET /steel/sourcing/suppliers/:id/eligible-materials
+   * Materials this supplier is admin-approved to supply (Steel Configuration).
+   */
+  @Get('suppliers/:id/eligible-materials')
+  async getSupplierEligibleMaterials(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.getSupplierEligibleMaterials(
+      id,
+      user.organizationId,
+    );
   }
 
   /** GET /steel/sourcing/:id — full detail for one sourcing order. */
   @Get(':id')
   async getOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.steelSourcingService.getById(id, user.organizationId);
+  }
+
+  /**
+   * POST /steel/sourcing/:id/attachments
+   * Record a document already uploaded to S3 via the generic presigned-url
+   * flow against this sourcing order and stage (e.g. supplier certificates,
+   * quotations, PO/technical docs, delivery/shipping docs).
+   */
+  @Post(':id/attachments')
+  async addAttachment(
+    @Param('id') id: string,
+    @Body() dto: CreateSteelSourcingAttachmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.addAttachment(
+      id,
+      user.organizationId,
+      dto,
+      user.userId,
+    );
+  }
+
+  /** GET /steel/sourcing/:id/attachments — list attachments for a sourcing order. */
+  @Get(':id/attachments')
+  async getAttachments(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.steelSourcingService.getAttachments(id, user.organizationId);
+  }
+
+  /** DELETE /steel/sourcing/attachments/:attachmentId */
+  @Delete('attachments/:attachmentId')
+  async deleteAttachment(
+    @Param('attachmentId') attachmentId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.steelSourcingService.deleteAttachment(
+      attachmentId,
+      user.organizationId,
+    );
   }
 
   /**
@@ -129,16 +204,16 @@ export class SteelSourcingController {
   }
 
   /**
-   * PATCH /steel/sourcing/:id/supplier-check
-   * P02-A03 — Check approved supplier list.
+   * PATCH /steel/sourcing/:id/material-source
+   * P02-A03 — Select material source (existing stock or external supplier).
    */
-  @Patch(':id/supplier-check')
-  async checkSupplier(
+  @Patch(':id/material-source')
+  async selectMaterialSource(
     @Param('id') id: string,
-    @Body() dto: CheckSteelSupplierDto,
+    @Body() dto: SelectMaterialSourceDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.checkSupplier(
+    return this.steelSourcingService.selectMaterialSource(
       id,
       dto,
       user.userId,
@@ -321,6 +396,11 @@ export class SteelSourcingController {
     @Body() dto: UpdateSteelSourcingStatusDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelSourcingService.updateStatus(id, dto, user.organizationId);
+    return this.steelSourcingService.updateStatus(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 }

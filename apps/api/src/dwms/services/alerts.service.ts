@@ -188,8 +188,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     const role = this.getDwmsRole(user.roleLevel);
     const now = new Date();
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 7);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const assignableUsers = await this.listReportees(user);
 
     let departments: any[] = [];
@@ -502,7 +501,6 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       throw new NotFoundException('Employee not found');
     }
 
-    await this.checkAndRaiseDelayedTaskAlerts(user.organizationId);
 
     const alertInclude = {
       raisedBy: {

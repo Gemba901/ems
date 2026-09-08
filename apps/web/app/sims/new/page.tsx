@@ -8,6 +8,7 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, SuggestionCategory, uploadSuggestionImage } from "@/services/sims.service";
 import { EmployeeService } from "@/services/employee.service";
+import { CommitteeService } from "@/services/committee.service";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { SpeechToTextButton } from "@/components/ui/SpeechToTextButton";
 import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, Camera, X, Loader2 } from "lucide-react";
@@ -115,13 +116,13 @@ const TITLE_MAX = 200;
 const DESC_MIN  = 20;
 const DESC_MAX  = 2000;
 
-function validate(title: string, description: string, categories: SuggestionCategory[], isPrivileged: boolean, departmentId: string) {
+function validate(title: string, description: string, categories: SuggestionCategory[], isPrivileged: boolean, hodId: string, committeeId: string) {
   if (title.trim().length < TITLE_MIN) return `Title must be at least ${TITLE_MIN} characters.`;
   if (title.trim().length > TITLE_MAX) return `Title must be under ${TITLE_MAX} characters.`;
   if (description.trim().length < DESC_MIN) return `Description must be at least ${DESC_MIN} characters.`;
   if (description.trim().length > DESC_MAX) return `Description must be under ${DESC_MAX} characters.`;
   if (categories.length === 0) return "Please select at least one category.";
-  if (isPrivileged && !departmentId) return "Please select a department for this suggestion.";
+  if (isPrivileged && !hodId && !committeeId) return "Please select who this suggestion should go to.";
   return null;
 }
 
@@ -137,15 +138,22 @@ export default function NewSuggestionPage() {
   const [description, setDescription] = useState("");
   const [categories, setCategories]   = useState<SuggestionCategory[]>([]);
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [departmentId, setDepartmentId] = useState<string>("");
+  const [hodId, setHodId]             = useState<string>("");
+  const [committeeId, setCommitteeId] = useState<string>("");
   const [error, setError]             = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [successRedirect, setSuccessRedirect] = useState<string | null>(null);
 
-  const { data: departments = [] } = useQuery({
-    queryKey: ["departments", user?.organizationId],
-    queryFn: () => EmployeeService.getDepartments(user!.organizationId!, accessToken!),
+  const { data: departmentHODs = [] } = useQuery({
+    queryKey: ["department-hods", user?.organizationId],
+    queryFn: () => EmployeeService.getDepartmentHODs(user!.organizationId!, accessToken!),
     enabled: isPrivileged && !!user?.organizationId && !!accessToken,
+  });
+
+  const { data: routableCommittees = [] } = useQuery({
+    queryKey: ["committees-routable"],
+    queryFn: () => CommitteeService.listRoutable(accessToken!),
+    enabled: isPrivileged && !!accessToken,
   });
 
   // Image upload state
@@ -156,7 +164,7 @@ export default function NewSuggestionPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const submitMutation = useMutation({
-    mutationFn: async (payload: { title: string; description: string; categories: SuggestionCategory[]; isAnonymous: boolean; imageFile: File | null; departmentId?: string }) => {
+    mutationFn: async (payload: { title: string; description: string; categories: SuggestionCategory[]; isAnonymous: boolean; imageFile: File | null; hodId?: string; committeeId?: string }) => {
       let imageUrl: string | undefined;
       if (payload.imageFile) {
         setImageUploading(true);
@@ -164,7 +172,7 @@ export default function NewSuggestionPage() {
         setImageUploading(false);
       }
       return SimsService.submit(
-        { title: payload.title, description: payload.description, categories: payload.categories, isAnonymous: payload.isAnonymous, imageUrl, departmentId: payload.departmentId },
+        { title: payload.title, description: payload.description, categories: payload.categories, isAnonymous: payload.isAnonymous, imageUrl, hodId: payload.hodId, committeeId: payload.committeeId },
         accessToken!,
       );
     },
@@ -229,7 +237,7 @@ export default function NewSuggestionPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const validationError = validate(title, description, categories, isPrivileged, departmentId);
+    const validationError = validate(title, description, categories, isPrivileged, hodId, committeeId);
     if (validationError) { setError(validationError); return; }
     if (!accessToken) return;
 
@@ -240,13 +248,24 @@ export default function NewSuggestionPage() {
       categories,
       isAnonymous,
       imageFile,
-      departmentId: isPrivileged && departmentId ? departmentId : undefined,
+      hodId: isPrivileged && hodId ? hodId : undefined,
+      committeeId: isPrivileged && committeeId ? committeeId : undefined,
     });
+  };
+
+  // "Send To" is a single dropdown covering both destinations — values are prefixed
+  // (hod:/committee:) so one onChange can set whichever target state applies and clear the other.
+  const sendToValue = hodId ? `hod:${hodId}` : committeeId ? `committee:${committeeId}` : "";
+  const handleSendToChange = (value: string) => {
+    setError(null);
+    if (value.startsWith("hod:")) { setHodId(value.slice(4)); setCommitteeId(""); }
+    else if (value.startsWith("committee:")) { setCommitteeId(value.slice(10)); setHodId(""); }
+    else { setHodId(""); setCommitteeId(""); }
   };
 
   const isUnknownSelected = categories.includes("UNKNOWN");
   const isAllSelected     = ALL_QCDSMT.every((c) => categories.includes(c));
-  const canSubmit         = !submitting && categories.length > 0 && title.trim().length >= TITLE_MIN && description.trim().length >= DESC_MIN && (!isPrivileged || !!departmentId);
+  const canSubmit         = !submitting && categories.length > 0 && title.trim().length >= TITLE_MIN && description.trim().length >= DESC_MIN && (!isPrivileged || !!hodId || !!committeeId);
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
@@ -256,7 +275,7 @@ export default function NewSuggestionPage() {
           onClose={() => router.push(successRedirect)}
         />
       )}
-      <div className="px-4 py-4 md:px-8 md:py-6 max-w-7xl mx-auto">
+      <div className="px-4 py-4 md:px-8 md:py-6">
 
         <Link href="/sims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back to Suggestions
@@ -267,8 +286,8 @@ export default function NewSuggestionPage() {
           {/* LEFT , Form */}
           <div className="xl:col-span-2">
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-slate-900">New Suggestion</h1>
-              <p className="text-sm text-slate-500 mt-1">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">New Suggestion</h1>
+              <p className="hidden sm:block text-sm text-slate-500 mt-1">
                 Help us evolve. Submit your ideas across our QCDSMT pillars, every voice matters.
               </p>
             </div>
@@ -276,27 +295,42 @@ export default function NewSuggestionPage() {
             <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
               <form onSubmit={handleSubmit} className="space-y-6">
 
-                {/* Department picker — only for HOD / Management / Admin */}
+                {/* HOD picker — only for HOD / Management / Admin */}
                 {isPrivileged && (
                   <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-                      Target Department <span className="text-red-500">*</span>
+                      Send To <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={departmentId}
-                      onChange={(e) => { setDepartmentId(e.target.value); setError(null); }}
+                      value={sendToValue}
+                      onChange={(e) => handleSendToChange(e.target.value)}
                       className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all bg-white ${
-                        !departmentId
+                        !sendToValue
                           ? "border-slate-200 focus:ring-blue-500/20 focus:border-blue-400 text-slate-400"
                           : "border-slate-200 focus:ring-blue-500/20 focus:border-blue-400 text-slate-900"
                       }`}
                     >
-                      <option value="">Select a department…</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
+                      <option value="">Select who this goes to…</option>
+                      {departmentHODs.length > 0 && (
+                        <optgroup label="Departments">
+                          {departmentHODs.map((h) => (
+                            <option key={h.id} value={`hod:${h.id}`}>{h.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {routableCommittees.length > 0 && (
+                        <optgroup label="Committees">
+                          {routableCommittees.map((c) => (
+                            <option key={c.id} value={`committee:${c.id}`}>{c.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
-                    <p className="text-xs text-slate-400 mt-1">Your suggestion will be directed to this department for review.</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {committeeId
+                        ? "Your suggestion will be sent straight to this committee for review."
+                        : "Your suggestion will be directed to this person's department for review."}
+                    </p>
                   </div>
                 )}
 

@@ -1,39 +1,31 @@
+import {
+  addDaysToDateKey,
+  formatOrganizationDateKey,
+  getOrganizationDateKey,
+  getOrganizationTodayKey,
+} from "../utils/organizationDate";
+
 type DateSeparatorMeta = {
   key: string;
   label: string;
 };
-
-function getDateKey(value: Date, timeZone?: string | null) {
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timeZone || undefined,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(value);
-    const partMap = new Map(parts.map((part) => [part.type, part.value]));
-    return `${partMap.get("year")}-${partMap.get("month")}-${partMap.get("day")}`;
-  } catch {
-    return null;
-  }
-}
-
 function getRelativeKey(offsetDays: number, timeZone?: string | null) {
-  const value = new Date();
-  value.setDate(value.getDate() + offsetDays);
-  return getDateKey(value, timeZone);
+  return addDaysToDateKey(getOrganizationTodayKey(timeZone), offsetDays);
 }
 
 export function getDateSeparatorMeta(
   value?: string | null,
   timeZone?: string | null,
+  dateOnly = false,
 ): DateSeparatorMeta | null {
   if (!value) return null;
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
 
-  const key = getDateKey(date, timeZone);
+  const key = dateOnly
+    ? value.slice(0, 10)
+    : getOrganizationDateKey(date, timeZone);
   if (!key) return null;
 
   if (key === getRelativeKey(0, timeZone)) {
@@ -52,8 +44,15 @@ export function getDateSeparatorMeta(
   try {
     return {
       key,
-      label: new Intl.DateTimeFormat("en-US", {
-        timeZone: timeZone || undefined,
+      label: dateOnly
+        ? (formatOrganizationDateKey(key, {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            ...(showYear ? { year: "numeric" } : {}),
+          }) ?? key)
+        : new Intl.DateTimeFormat("en-US", {
+        timeZone: timeZone || "UTC",
         weekday: "short",
         day: "numeric",
         month: "short",
@@ -67,12 +66,10 @@ export function getDateSeparatorMeta(
 
 export default function TaskDateSeparator({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 py-1">
-      <div className="h-px flex-1 bg-slate-200" />
-      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500 shadow-sm">
+    <div className="flex justify-center py-1">
+      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500 shadow-sm">
         {label}
       </span>
-      <div className="h-px flex-1 bg-slate-200" />
     </div>
   );
 }

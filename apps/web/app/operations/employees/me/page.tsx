@@ -89,7 +89,7 @@ export default function MyProfilePage() {
   const role = employee.user?.organizations?.[0]?.role?.name ?? authUser?.roleLevel ?? "—";
   const department = employee.department?.name ?? "—";
   const phone = employee.phone ?? employee.user?.phone ?? null;
-  const staffId = `EMP-${employee.id.slice(0, 5).toUpperCase()}`;
+  const staffId = employee.employeeCode ?? "—";
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">

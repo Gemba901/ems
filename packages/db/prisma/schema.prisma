@@ -128,21 +128,21 @@ model Organization {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  userOrganizations     UserOrganization[]
-  employees             Employee[]
-  departments           Department[]
-  suggestions           Suggestion[]
-  committees            SteeringCommittee[]
-  consultancyVisits     ConsultancyVisit[]
-  visitRequests         VisitRequest[]
-  visitMonthPlans       VisitMonthPlan[]
-  leaveRequests         LeaveRequest[]
-  leavePolicies         LeavePolicy[]
-  leaveSettings         LeaveSettings?
-  dwmsPermissionConfig  DwmsPermissionConfig?
-  calendarEvents        CalendarEvent[]
-  notices               Notice[]
-  alerts                Alert[]
+  userOrganizations    UserOrganization[]
+  employees            Employee[]
+  departments          Department[]
+  suggestions          Suggestion[]
+  committees           SteeringCommittee[]
+  consultancyVisits    ConsultancyVisit[]
+  visitRequests        VisitRequest[]
+  visitMonthPlans      VisitMonthPlan[]
+  leaveRequests        LeaveRequest[]
+  leavePolicies        LeavePolicy[]
+  leaveSettings        LeaveSettings?
+  dwmsPermissionConfig DwmsPermissionConfig?
+  calendarEvents       CalendarEvent[]
+  notices              Notice[]
+  alerts               Alert[]
   tickets              Tickets[]
   kaizens              Kaizen[]
 
@@ -150,16 +150,33 @@ model Organization {
   sgaCommitteeId String?
   sgaCommittee   SteeringCommittee? @relation("OrgSgaCommittee", fields: [sgaCommitteeId], references: [id], onDelete: SetNull)
 
-  steelProductionPlans    SteelProductionPlan[]
-  steelSourcingOrders     SteelSourcingOrder[]
-  suppliers               Supplier[]
-  steelMaterialIntakes    SteelMaterialIntake[]
-  steelChargePreparations SteelChargePreparation[]
-  activities            Activity[]
+  steelProductionPlans       SteelProductionPlan[]
+  steelSourcingOrders        SteelSourcingOrder[]
+  suppliers                  Supplier[]
+  steelMaterialIntakes       SteelMaterialIntake[]
+  steelChargePreparations    SteelChargePreparation[]
+  steelMeltings              SteelMelting[]
+  steelHeatApprovals         SteelHeatApproval[]
+  furnaces                   Furnace[]
+  furnaceLinings             FurnaceLining[]
+  heatMaterialCharges        HeatMaterialCharge[]
+  heatCycleEvents            HeatCycleEvent[]
+  activities                 Activity[]
   jobTitleActivities    JobTitleActivity[]
   employeeActivityAssignments EmployeeActivityAssignment[]
-  activityIngestions    ActivityIngestion[]
-  activityIngestionRows ActivityIngestionRow[]
+  activityIngestions         ActivityIngestion[]
+  activityIngestionRows      ActivityIngestionRow[]
+  customers                  Customer[]
+  dealers                    Dealer[]
+  steelLookups               SteelLookup[]
+  steelSupplierMaterials     SteelSupplierMaterial[]
+  steelQcdCriteria           SteelQcdCriteria[]
+  stockFulfilmentItems       StockFulfilmentItem[]
+  steelProducts              SteelProduct[]
+  steelProductSpecifications SteelProductSpecification[]
+  steelProductionRoutes      SteelProductionRoute[]
+  steelMaterialMasters       SteelMaterialMaster[]
+  steelFinishedGoodsStocks   SteelFinishedGoodsStock[]
 }
 
 //specific user
@@ -170,14 +187,15 @@ model User {
   password String?
   name     String
 
-  organizations   UserOrganization[]
-  employees       Employee[]
-  createdVisits   ConsultancyVisit[]
-  visitRequests   VisitRequest[]
-  visitMonthPlans VisitMonthPlan[]
-  calendarBlocks  CalendarBlock[]
-  refreshTokens   RefreshToken[]
-  reviewedLeaves  LeaveRequest[]     @relation("LeaveReviewer")
+  organizations       UserOrganization[]
+  employees           Employee[]
+  createdVisits       ConsultancyVisit[]
+  visitRequests       VisitRequest[]
+  visitMonthPlans     VisitMonthPlan[]
+  calendarBlocks      CalendarBlock[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  reviewedLeaves      LeaveRequest[]       @relation("LeaveReviewer")
 
   createdAt DateTime @default(now())
 }
@@ -189,6 +207,19 @@ model RefreshToken {
   organizationId String
   expiresAt      DateTime
   createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -251,6 +282,7 @@ model Employee {
   dateOfBirth  DateTime?
   nationalId   String?
   nationality  String?
+  plantBranch  String?
 
   // EMS: Work Allocation group
   employmentStatus   EmploymentStatus @default(ACTIVE)
@@ -295,66 +327,88 @@ model Employee {
   hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)
   hrManagedEmployees Employee[] @relation("HRRecordOwner")
 
-  department                Department?               @relation(fields: [departmentId], references: [id])
-  organization              Organization              @relation(fields: [organizationId], references: [id])
-  user                      User?                     @relation(fields: [userId], references: [id])
-  suggestions               Suggestion[]              @relation("EmployeeSuggestions")
-  hodSuggestions            Suggestion[]              @relation("HODSuggestions")
-  suggestionReviews         SuggestionReview[]
-  committeeMembers          SteeringCommitteeMember[]
-  notifications             Notification[]
-  visitAttendances          VisitAttendee[]
-  leaveRequests             LeaveRequest[]
-  leaveBalances             LeaveBalance[]
-  handoverForLeaves         LeaveRequest[]                   @relation("LeaveHandover")
-  handoverForLeaves2        LeaveRequest[]                   @relation("LeaveHandover2")
-  createdCalendarEvents     CalendarEvent[]                  @relation("CalendarEventCreator")
-  receivedInvitations       EventInvitation[]                @relation("ReceivedInvitations")
-  eventParticipations       EventParticipant[]               @relation("EventParticipations")
-  oooBlocks                 CalendarBlock[]
-  calendarFilters           CalendarFilter[]
-  assignedTasks             Task[]                           @relation("TaskAssignedBy")
-  tasks                     Task[]                           @relation("TaskOwner")
-  tasksToApprove            Task[]                           @relation("TaskApprovedBy")
-  backupTasks               Task[]                           @relation("TaskBackupOwner")
-  taskInstances             TaskInstance[]
-  taskInstanceComments      TaskInstanceComment[]
-  taskInstanceEvents        TaskInstanceEvent[]
+  department            Department?               @relation(fields: [departmentId], references: [id])
+  organization          Organization              @relation(fields: [organizationId], references: [id])
+  user                  User?                     @relation(fields: [userId], references: [id])
+  suggestions           Suggestion[]              @relation("EmployeeSuggestions")
+  hodSuggestions        Suggestion[]              @relation("HODSuggestions")
+  suggestionReviews     SuggestionReview[]
+  committeeMembers      SteeringCommitteeMember[]
+  notifications         Notification[]
+  visitAttendances      VisitAttendee[]
+  leaveRequests         LeaveRequest[]
+  leaveBalances         LeaveBalance[]
+  handoverForLeaves     LeaveRequest[]            @relation("LeaveHandover")
+  handoverForLeaves2    LeaveRequest[]            @relation("LeaveHandover2")
+  createdCalendarEvents CalendarEvent[]           @relation("CalendarEventCreator")
+  receivedInvitations   EventInvitation[]         @relation("ReceivedInvitations")
+  eventParticipations   EventParticipant[]        @relation("EventParticipations")
+  oooBlocks             CalendarBlock[]
+  calendarFilters       CalendarFilter[]
+  assignedTasks         Task[]                    @relation("TaskAssignedBy")
+  tasks                 Task[]                    @relation("TaskOwner")
+  tasksToApprove        Task[]                    @relation("TaskApprovedBy")
+  backupTasks           Task[]                    @relation("TaskBackupOwner")
+  taskInstances         TaskInstance[]
+  taskInstanceComments  TaskInstanceComment[]
+  taskInstanceEvents    TaskInstanceEvent[]
   activityAssignments       EmployeeActivityAssignment[]
-  activityIngestions        ActivityIngestion[]       @relation("ActivityIngestionUploader")
-  primaryActivities         Activity[]                @relation("ActivityPrimaryResponsible")
-  alertsRaised              Alert[]                          @relation("AlertsRaised")
-  alertsAgainst             Alert[]                          @relation("AlertsAgainst")
+  activityIngestions    ActivityIngestion[]       @relation("ActivityIngestionUploader")
+  primaryActivities     Activity[]                @relation("ActivityPrimaryResponsible")
+  alertsRaised          Alert[]                   @relation("AlertsRaised")
+  alertsAgainst         Alert[]                   @relation("AlertsAgainst")
   ticketsRaised         Tickets[]                 @relation("ticketsRaisedBy")
   ticketUpdates         TicketUpdate[]
   kaizensRaised         Kaizen[]                  @relation("KaizenRaisedBy")
-  kaizensVerified       Kaizen[]                  @relation("KaizenVerifiedBy")
+  kaizensOwned          Kaizen[]                  @relation("KaizenOwner")
+  kaizenHodPreReviews   Kaizen[]                  @relation("KaizenHodPreReviewBy")
+  kaizenTeamMemberships Kaizen[]                  @relation("KaizenTeamMembers")
   kaizenReviews         KaizenReview[]
-  alertComments             AlertComment[]
+  kaizenVerifications   KaizenVerification[]      @relation("KaizenVerificationBy")
+  alertComments         AlertComment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  steelPlansCreated          SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
-  steelPlansApproved         SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
-  steelActivityLogs          SteelPlanActivityLog[]
-  steelDepartmentAcks        SteelPlanDepartmentAck[]
-  steelSourcingOrdersCreated SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
-  steelSourcingActivityLogs  SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
-  steelIntakesCreated        SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
-  steelIntakeActivityLogs    SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
-  steelChargePrepsCreated    SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
-  steelChargeActivityLogs    SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
+  steelPlansCreated             SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
+  steelPlansApproved            SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
+  steelActivityLogs             SteelPlanActivityLog[]
+  steelDepartmentAcks           SteelPlanDepartmentAck[]
+  steelSourcingOrdersCreated    SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs     SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
+  steelSourcingAttachmentsUploaded SteelSourcingAttachment[]        @relation("SteelSourcingAttachmentUploadedBy")
+  steelSuppliersCreated         Supplier[]                          @relation("SupplierCreatedBy")
+  steelSuppliersUpdated         Supplier[]                          @relation("SupplierUpdatedBy")
+  steelMaterialMastersCreated   SteelMaterialMaster[]                @relation("SteelMaterialMasterCreatedBy")
+  steelMaterialMastersUpdated   SteelMaterialMaster[]                @relation("SteelMaterialMasterUpdatedBy")
+  steelSupplierMaterialsCreated SteelSupplierMaterial[]              @relation("SteelSupplierMaterialCreatedBy")
+  steelSupplierMaterialsUpdated SteelSupplierMaterial[]              @relation("SteelSupplierMaterialUpdatedBy")
+  steelQcdCriteriaCreated       SteelQcdCriteria[]                   @relation("SteelQcdCriteriaCreatedBy")
+  steelQcdCriteriaUpdated       SteelQcdCriteria[]                   @relation("SteelQcdCriteriaUpdatedBy")
+  steelLookupsCreated           SteelLookup[]                        @relation("SteelLookupCreatedBy")
+  steelLookupsUpdated           SteelLookup[]                        @relation("SteelLookupUpdatedBy")
+  steelIntakesCreated           SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
+  steelIntakeActivityLogs       SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
+  steelChargePrepsCreated       SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
+  steelChargeActivityLogs       SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
+  steelMeltingsCreated          SteelMelting[]                      @relation("SteelMeltingCreatedBy")
+  steelHeatApprovalsCreated     SteelHeatApproval[]                 @relation("SteelHeatApprovalCreatedBy")
+  steelHeatApprovalActivityLogs SteelHeatApprovalActivityLog[]      @relation("SteelHeatApprovalPerformedBy")
+  steelMeltingActivityLogs      SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
+  heatMaterialChargesRecorded   HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
+  heatCycleEventsRecorded       HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
+  @@unique([employeeCode, organizationId])
 }
 
 model Department {
-  id                String @id @default(uuid())
+  id                String  @id @default(uuid())
   name              String
   organizationId    String
-  minLeaveHeadcount Int    @default(1)
+  minLeaveHeadcount Int     @default(1)
+  isPlatformTeam    Boolean @default(false)
 
   employees    Employee[]
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -1109,6 +1163,7 @@ enum SteelPlanActivity {
   A10
   A11
   A12
+  STATUS_OVERRIDE
 }
 
 // Departments that must acknowledge the released plan (P01-A11)
@@ -1122,6 +1177,204 @@ enum SteelDepartment {
   MAINTENANCE
   STORES
   DISPATCH
+}
+
+// ── Steel P01 master data ─────────────────────────────────────────────────
+
+// Pre-existing master table (applied to staging ahead of this schema; introspected
+// and reconciled here). Covers both customer and dealer records — `dealerName` is
+// populated for dealer-sourced demand instead of a separate dealer table.
+model Customer {
+  id                      String        @id @default(uuid())
+  organizationId          String
+  name                    String
+  dealerName              String?
+  contactPerson           String?
+  phone                   String?
+  email                   String?
+  creditStatus            CreditStatus?
+  defaultDeliveryLocation String?
+  isActive                Boolean       @default(true)
+  notes                   String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id])
+  plans        SteelProductionPlan[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+// Steel Configuration master data — admin-defined dealer records used by P01
+// demand capture for dealer-sourced orders. Distinct from Customer.dealerName
+// (legacy free text on older plans) but not backfilled onto existing plans.
+model Dealer {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  code           String
+  region         String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+// Pre-existing table (applied to staging ahead of this schema; introspected and
+// reconciled here). Per-plan record of the certified stock items pulled in at
+// P01-A05, as opposed to SteelFinishedGoodsStock which is the master catalog of
+// certified stock available to search against.
+model StockFulfilmentItem {
+  id             String   @id @default(uuid())
+  organizationId String
+  planId         String
+  material       String?
+  bundleId       String?
+  heatNumber     String?
+  certificateRef String?
+  quantityTonnes Float?
+  unit           String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  plan         SteelProductionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([planId])
+}
+
+model SteelProduct {
+  id             String      @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  productType    ProductType
+  isActive       Boolean     @default(true)
+
+  organization   Organization                @relation(fields: [organizationId], references: [id])
+  specifications SteelProductSpecification[]
+  plans          SteelProductionPlan[]
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model SteelProductSpecification {
+  id             String   @id @default(uuid())
+  organizationId String
+  productId      String
+  code           String
+  standard       String
+  grade          String
+  size           String
+  length         String?
+  toleranceNotes String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization              @relation(fields: [organizationId], references: [id])
+  product      SteelProduct              @relation(fields: [productId], references: [id])
+  plans        SteelProductionPlan[]
+  fgStock      SteelFinishedGoodsStock[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([productId])
+}
+
+model SteelProductionRoute {
+  id             String     @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  plantRoute     PlantRoute
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization               @relation(fields: [organizationId], references: [id])
+  steps        SteelProductionRouteStep[]
+  plans        SteelProductionPlan[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model SteelProductionRouteStep {
+  id          String          @id @default(uuid())
+  routeId     String
+  sequence    Int
+  processName String
+  department  SteelDepartment
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  route SteelProductionRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, sequence])
+  @@index([routeId])
+}
+
+model SteelMaterialMaster {
+  id             String   @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  unit           String
+  isActive       Boolean  @default(true)
+
+  // Steel Configuration — procurement master-data fields (P02 data foundation).
+  // materialType reuses the P02 enum so a material can be filtered by the same
+  // classification P02-A02 records against the sourcing order.
+  category          String?
+  materialType      SteelMaterialType?
+  procurementType   SteelProcurementType?
+  frequentlySourced Boolean               @default(false)
+  specificationReference String?
+  requiredDocuments String[]              @default([])
+  notes             String?
+  createdById       String?
+  updatedById       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization              @relation(fields: [organizationId], references: [id])
+  eligibleSuppliers SteelSupplierMaterial[]
+  createdBy    Employee?                 @relation("SteelMaterialMasterCreatedBy", fields: [createdById], references: [id])
+  updatedBy    Employee?                 @relation("SteelMaterialMasterUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+// Certified finished-goods stock available against a product specification,
+// consulted read-only by P01-A05 to auto-fill stock availability.
+model SteelFinishedGoodsStock {
+  id                     String   @id @default(uuid())
+  organizationId         String
+  productSpecificationId String
+  certifiedQtyTonnes     Float
+  bundleIds              String[] @default([])
+  heatNumbers            String[] @default([])
+  certificateRefs        String[] @default([])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  organization         Organization              @relation(fields: [organizationId], references: [id])
+  productSpecification SteelProductSpecification @relation(fields: [productSpecificationId], references: [id])
+
+  @@index([organizationId])
+  @@index([productSpecificationId])
 }
 
 // One record per customer demand / production plan, carried through P01-A01 -> P01-A12.
@@ -1150,6 +1403,94 @@ enum SupplierRiskLevel {
   HIGH
 }
 
+// Steel Configuration — procurement master-data (P02 data foundation)
+enum SteelProcurementType {
+  LOCAL
+  IMPORT
+  BOTH
+}
+
+enum SteelLookupType {
+  PAYMENT_TERMS
+  INCOTERM
+  CURRENCY
+  TRANSPORT_MODE
+  DELIVERY_LOCATION
+  DOCUMENT_TYPE
+}
+
+// Generic configurable lookup lists for procurement supporting data (P02-A08/A09/A10)
+// that don't warrant a dedicated table each — admin-defined, never hard-coded.
+model SteelLookup {
+  id             String          @id @default(uuid())
+  organizationId String
+  type           SteelLookupType
+  code           String
+  name           String
+  isActive       Boolean         @default(true)
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    Employee?    @relation("SteelLookupCreatedBy", fields: [createdById], references: [id])
+  updatedBy    Employee?    @relation("SteelLookupUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([organizationId, type, code])
+  @@index([organizationId, type])
+}
+
+// Supplier ↔ Material eligibility (P02-A03: "which approved suppliers can supply
+// this material?"). Distinct from Supplier.materialTypes (coarse category match) —
+// this is a specific, admin-curated per-material approval.
+model SteelSupplierMaterial {
+  id             String   @id @default(uuid())
+  organizationId String
+  supplierId     String
+  materialId     String
+  isEligible     Boolean  @default(true)
+  specificationReference String?
+  isActive       Boolean  @default(true)
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  material     SteelMaterialMaster @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  createdBy    Employee?           @relation("SteelSupplierMaterialCreatedBy", fields: [createdById], references: [id])
+  updatedBy    Employee?           @relation("SteelSupplierMaterialUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([supplierId, materialId])
+  @@index([organizationId])
+  @@index([materialId])
+}
+
+// Configurable QCD (Quality/Cost/Delivery) weighting used by P02-A06 to compare
+// supplier quotations. Weights are admin-defined, never hard-coded scoring logic.
+model SteelQcdCriteria {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  qualityWeight  Float
+  costWeight     Float
+  deliveryWeight Float
+  isActive       Boolean  @default(true)
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    Employee?    @relation("SteelQcdCriteriaCreatedBy", fields: [createdById], references: [id])
+  updatedBy    Employee?    @relation("SteelQcdCriteriaUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
 enum SteelSourcingStage {
   A01_REQUIREMENT_REVIEWED
   A02_MATERIAL_TYPE_IDENTIFIED
@@ -1163,6 +1504,12 @@ enum SteelSourcingStage {
   A10_LOGISTICS_PREPARED
   A11_INTAKE_INFORMED
   A12_HANDOVER_CLOSED
+}
+
+// P02-A03 — how a sourcing requirement's material will be fulfilled
+enum SteelSourcingMaterialSource {
+  EXISTING_STOCK
+  EXTERNAL_SUPPLIER
 }
 
 enum SteelSourcingStatus {
@@ -1188,6 +1535,7 @@ enum SteelSourcingActivity {
   A10
   A11
   A12
+  STATUS_OVERRIDE
 }
 
 // Tracks how far the intake has progressed through P03-A01..A14
@@ -1240,6 +1588,7 @@ enum SteelIntakeActivity {
   A12
   A13
   A14
+  STATUS_OVERRIDE
 }
 
 // Approved supplier master — checked at P02-A03/A04, referenced by every sourcing order.
@@ -1258,14 +1607,20 @@ model Supplier {
   email          String?
   country        String?
   isImportSource Boolean                @default(false)
+  isActive       Boolean                @default(true)
   notes          String?
+  createdById    String?
+  updatedById    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization   Organization             @relation(fields: [organizationId], references: [id])
-  sourcingOrders SteelSourcingOrder[]
-  quotations     SteelSourcingQuotation[]
+  organization    Organization             @relation(fields: [organizationId], references: [id])
+  sourcingOrders  SteelSourcingOrder[]
+  quotations      SteelSourcingQuotation[]
+  eligibleMaterials SteelSupplierMaterial[]
+  createdBy       Employee?                @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  updatedBy       Employee?                @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -1291,10 +1646,16 @@ model SteelSourcingOrder {
   materialType      SteelMaterialType?
   materialTypeNotes String?
 
-  // P02-A03 — Check approved supplier list
+  // P02-A03 — Select material source: fulfilled from existing stock, or
+  // purchased from an external supplier. Supplier fields only apply to the
+  // EXTERNAL_SUPPLIER path; stockFulfillmentNotes only to EXISTING_STOCK.
+  // Real stock quantity/location lookup is not modeled yet — this only
+  // records the fulfillment decision itself.
+  materialSource            SteelSourcingMaterialSource?
   supplierId                String?
   supplierApprovalConfirmed Boolean?
   supplierCheckNotes        String?
+  stockFulfillmentNotes     String?
 
   // P02-A04 — Check supplier quality and rejection history
   supplierRiskLevel     SupplierRiskLevel?
@@ -1350,6 +1711,7 @@ model SteelSourcingOrder {
   supplier        Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   quotations      SteelSourcingQuotation[]
   activityLogs    SteelSourcingActivityLog[]
+  attachments     SteelSourcingAttachment[]
   materialIntakes SteelMaterialIntake[]
 
   @@index([organizationId])
@@ -1393,6 +1755,27 @@ model SteelSourcingActivityLog {
   @@index([sourcingId])
 }
 
+// Supporting documents/certificates attached to a sourcing order at a given
+// stage (e.g. supplier qualification docs, quotations, PO/technical certs,
+// delivery/shipping docs). Files themselves live in S3 via the existing
+// generic presigned-upload flow; this model only records the resulting URL.
+model SteelSourcingAttachment {
+  id             String             @id @default(uuid())
+  organizationId String
+  sourcingId     String
+  stage          SteelSourcingStage
+  fileName       String
+  fileUrl        String
+  uploadedById   String?
+  createdAt      DateTime           @default(now())
+
+  order      SteelSourcingOrder @relation(fields: [sourcingId], references: [id], onDelete: Cascade)
+  uploadedBy Employee?          @relation("SteelSourcingAttachmentUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([sourcingId])
+  @@index([organizationId])
+}
+
 model SteelProductionPlan {
   id             String                 @id @default(uuid())
   planNumber     String                 @unique
@@ -1403,6 +1786,7 @@ model SteelProductionPlan {
 
   // P01-A01 — Capture customer enquiry, sales order, forecast, or stock requirement
   demandSource              DemandSource
+  customerId                String?
   customerName              String?
   dealerName                String?
   projectReference          String?
@@ -1419,17 +1803,19 @@ model SteelProductionPlan {
   creditStatus        CreditStatus?
 
   // P01-A03 — Confirm product type and standard required
+  productId             String?
   productType           ProductType?
   productStandard       String?
   customerSpecification String?
 
   // P01-A04 — Confirm grade, size, length, bundle, and quantity
-  grade          String?
-  size           String?
-  length         String?
-  bundleType     String?
-  totalQuantity  Float?
-  toleranceNotes String?
+  productSpecificationId String?
+  grade                  String?
+  size                   String?
+  length                 String?
+  bundleType             String?
+  totalQuantity          Float?
+  toleranceNotes         String?
 
   // P01-A05 — Check certified finished goods stock
   certifiedStockAvailableQty Float?
@@ -1442,8 +1828,9 @@ model SteelProductionPlan {
   stockDecisionNotes String?
 
   // P01-A07 — Select applicable plant route
-  plantRoute PlantRoute?
-  routeNotes String?
+  productionRouteId String?
+  plantRoute        PlantRoute?
+  routeNotes        String?
 
   // P01-A08 — Check raw material or billet availability
   materialAvailability     AvailabilityStatus?
@@ -1473,17 +1860,23 @@ model SteelProductionPlan {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization       Organization             @relation(fields: [organizationId], references: [id])
-  createdBy          Employee                 @relation("SteelPlanCreatedBy", fields: [createdById], references: [id])
-  approvedBy         Employee?                @relation("SteelPlanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
-  activityLogs       SteelPlanActivityLog[]
-  departmentAcks     SteelPlanDepartmentAck[]
-  sourcingOrders     SteelSourcingOrder[]
-  chargePreparations SteelChargePreparation[]
+  organization         Organization               @relation(fields: [organizationId], references: [id])
+  createdBy            Employee                   @relation("SteelPlanCreatedBy", fields: [createdById], references: [id])
+  approvedBy           Employee?                  @relation("SteelPlanApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  activityLogs         SteelPlanActivityLog[]
+  departmentAcks       SteelPlanDepartmentAck[]
+  sourcingOrders       SteelSourcingOrder[]
+  chargePreparations   SteelChargePreparation[]
+  customer             Customer?                  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  product              SteelProduct?              @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productSpecification SteelProductSpecification? @relation(fields: [productSpecificationId], references: [id], onDelete: SetNull)
+  productionRoute      SteelProductionRoute?      @relation(fields: [productionRouteId], references: [id], onDelete: SetNull)
+  stockFulfilmentItems StockFulfilmentItem[]
 
   @@index([organizationId])
   @@index([organizationId, stage])
   @@index([organizationId, status])
+  @@index([customerId])
 }
 
 // Audit trail: every activity performed against a plan is recorded here
@@ -1663,6 +2056,7 @@ enum SteelChargeActivity {
   A10
   A11
   A12
+  STATUS_OVERRIDE
 }
 
 // One record per furnace charge prepared against a released production plan,
@@ -1749,6 +2143,7 @@ model SteelChargePreparation {
   createdBy    Employee                            @relation("SteelChargePrepCreatedBy", fields: [createdById], references: [id])
   materialLots SteelChargeMaterialLot[]
   activityLogs SteelChargePreparationActivityLog[]
+  melting      SteelMelting?
 
   @@index([organizationId])
   @@index([organizationId, stage])
@@ -1769,8 +2164,8 @@ model SteelChargeMaterialLot {
   intake            SteelMaterialIntake    @relation(fields: [intakeId], references: [id])
 
   @@unique([chargePreparationId, intakeId])
+  @@unique([intakeId])
   @@index([chargePreparationId])
-  @@index([intakeId])
 }
 
 // Audit trail: every activity performed against a charge preparation is recorded here
@@ -1787,6 +2182,477 @@ model SteelChargePreparationActivityLog {
   performedBy       Employee               @relation("SteelChargePrepPerformedBy", fields: [performedById], references: [id])
 
   @@index([chargePreparationId])
+}
+
+// ── Steel Manufacturing: Process 5 — Melting (P05-A01..A14) ─────────────
+// Hands off from P04 (Charge Preparation) once a charge has been closed and
+// handed over to the furnace. Hands off conceptually to P06 (Heat Approval)
+// once refining handover (P05-A14) closes this record — no P06 model/code
+// exists yet in this repository.
+
+// Tracks how far the melting record has progressed through P05-A01..A14
+enum SteelMeltingStage {
+  A01_CONFIRM_FURNACE_AVAILABILITY
+  A02_FURNACE_LINING_CHECK
+  A03_FURNACE_SYSTEMS_CHECK
+  A04_PREVIOUS_HEAT_READINESS
+  A05_VERIFY_CHARGE_RECIPE
+  A06_LOAD_CHARGE
+  A07_START_MELTING
+  A08_MONITOR_POWER
+  A09_MONITOR_TEMPERATURE
+  A10_RECORD_ADDITIONS
+  A11_REMOVE_SLAG
+  A12_RECORD_MELT_OUTPUT
+  A13_CONFIRM_LIQUID_READY
+  A14_HANDOVER_TO_REFINING
+}
+
+enum SteelMeltingStatus {
+  DRAFT
+  IN_PROGRESS
+  ON_HOLD
+  CLOSED
+  CANCELLED
+}
+
+// Identifies each of the 14 melting activities for the audit trail
+enum SteelMeltingActivity {
+  A01
+  A02
+  A03
+  A04
+  A05
+  A06
+  A07
+  A08
+  A09
+  A10
+  A11
+  A12
+  A13
+  A14
+  STATUS_OVERRIDE
+}
+
+// One record per furnace heat, created against a closed P04 charge
+// preparation, carried through P05-A01 -> P05-A14. Hands off to P06 (heat
+// approval / refining) once closed (no P06 model exists in this repository
+// yet).
+model SteelMelting {
+  id                  String             @id @default(uuid())
+  heatInProcessNumber String             @unique
+  organizationId      String
+  createdById         String
+  chargePreparationId String             @unique
+  stage               SteelMeltingStage  @default(A01_CONFIRM_FURNACE_AVAILABILITY)
+  status              SteelMeltingStatus @default(DRAFT)
+
+  // Snapshot of the parent charge preparation at creation time
+  chargeNumberSnapshot         String?
+  recipeScrapWeightSnapshot    Float?
+  recipeDriWeightSnapshot      Float?
+  recipeAlloyWeightSnapshot    Float?
+  recipeAdditiveWeightSnapshot Float?
+
+  // P05-A01 — Confirm furnace availability
+  furnaceId      String?
+  plannedHeatRef String?
+  operatorName   String?
+  shift          String?
+
+  // Optional structured furnace/lining selection (master data), alongside the
+  // free-text furnaceId/liningCampaignId fields above which are kept for
+  // backward compatibility with records created before Furnace/FurnaceLining
+  // existed. New heats should prefer furnaceRefId/liningRefId.
+  furnaceRefId String?
+  liningRefId  String?
+
+  // P05-A02 — Furnace lining check
+  liningCampaignId      String?
+  liningHeatCount       Int?
+  liningVisualCondition String?
+
+  // P05-A03 — Furnace systems check
+  waterPressureFlowOk Boolean?
+  powerSystemOk       Boolean?
+  hydraulicSystemOk   Boolean?
+  alarmsOk            Boolean?
+
+  // P05-A04 — Previous heat readiness
+  previousHeatRef      String?
+  slagCleaningStatus   String?
+  readinessDelayReason String?
+
+  // P05-A05 — Verify charge recipe
+  materialLotRef         String?
+  actualWeightVsRecipeOk Boolean?
+
+  // P05-A06 — Load charge
+  loadingTime      DateTime?
+  loadingEquipment String?
+  chargeSequence   String?
+
+  // P05-A07 — Start melting
+  meltingStartTime DateTime?
+  meltingFurnaceId String?
+  meltingOperator  String?
+  meltingChargeId  String?
+
+  // P05-A08 — Monitor power
+  powerKwh            Float?
+  powerElapsedMinutes Float?
+  powerTonnage        Float?
+  powerInterruptions  String?
+
+  // P05-A09 — Monitor temperature
+  temperatureCelsius        Float?
+  temperatureElapsedMinutes Float?
+  temperatureDelayReason    String?
+
+  // P05-A10 — Record additions (optional/conditional — zero additions allowed)
+  additions Json?
+
+  // P05-A11 — Remove slag (optional/conditional — "not applicable" allowed)
+  slagRemovalTime      DateTime?
+  slagQuantityEstimate Float?
+  slagIssueFound       String?
+  slagNotApplicable    Boolean?
+
+  // P05-A12 — Record melt output
+  outputChargeId         String?
+  outputFurnaceId        String?
+  outputMeltTimeMinutes  Float?
+  outputEnergyTotalKwh   Float?
+  outputAdditionsSummary String?
+  outputWeightTonnes     Float?
+
+  // P05-A13 — Confirm liquid ready
+  liquidReady              Boolean?
+  liquidTemperatureCelsius Float?
+  liquidOperatorConfirmed  Boolean?
+
+  // P05-A14 — Refining handover (irreversible)
+  handoverToRefiningAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization      Organization              @relation(fields: [organizationId], references: [id])
+  createdBy         Employee                  @relation("SteelMeltingCreatedBy", fields: [createdById], references: [id])
+  chargePreparation SteelChargePreparation    @relation(fields: [chargePreparationId], references: [id])
+  furnace           Furnace?                  @relation(fields: [furnaceRefId], references: [id])
+  lining            FurnaceLining?            @relation(fields: [liningRefId], references: [id])
+  activityLogs      SteelMeltingActivityLog[]
+  materialCharges   HeatMaterialCharge[]
+  cycleEvents       HeatCycleEvent[]
+  heatApproval      SteelHeatApproval?
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([organizationId, status])
+  @@index([furnaceRefId])
+  @@index([liningRefId])
+}
+
+// Audit trail: every activity performed against a melting record is recorded here
+model SteelMeltingActivityLog {
+  id            String               @id @default(uuid())
+  meltingId     String
+  activity      SteelMeltingActivity
+  performedById String
+  notes         String?
+  data          Json?
+  createdAt     DateTime             @default(now())
+
+  melting     SteelMelting @relation(fields: [meltingId], references: [id], onDelete: Cascade)
+  performedBy Employee     @relation("SteelMeltingPerformedBy", fields: [performedById], references: [id])
+
+  @@index([meltingId])
+}
+
+enum FurnaceStatus {
+  READY
+  MAINTENANCE
+  DOWN
+  RETIRED
+}
+
+// Master data: a physical furnace. Selectable on P05-A01/A02 in place of the
+// earlier free-text furnaceId fields on SteelMelting (kept there for
+// backward compatibility with records created before this model existed).
+model Furnace {
+  id             String        @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  status         FurnaceStatus @default(READY)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  linings      FurnaceLining[]
+  meltings     SteelMelting[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+enum FurnaceLiningStatus {
+  ACTIVE
+  RETIRED
+}
+
+// A lining campaign installed on a furnace at a point in time and reused
+// across multiple heats until relined. heatsCompleted/condition are raw
+// measurements — lining "efficiency" is not computed here since no formula
+// for it is defined by the business yet.
+model FurnaceLining {
+  id                   String              @id @default(uuid())
+  organizationId       String
+  furnaceId            String
+  // Optional human-readable identifier for the lining campaign (e.g. a
+  // physical tag/batch code). Nullable, no uniqueness constraint — existing
+  // linings recorded before this field existed have no code, and none is
+  // enforced going forward either.
+  code                 String?
+  installedAt          DateTime
+  material             String?
+  heatsCompleted       Int                 @default(0)
+  condition            String?
+  thicknessRemainingMm Float?
+  inspectionNotes      String?
+  status               FurnaceLiningStatus @default(ACTIVE)
+  retiredAt            DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  furnace      Furnace        @relation(fields: [furnaceId], references: [id])
+  meltings     SteelMelting[]
+
+  @@index([organizationId])
+  @@index([furnaceId])
+}
+
+enum HeatChargeMaterialCategory {
+  SCRAP
+  RAW_METAL
+  ALLOY
+  ADDITIVE
+  OTHER
+}
+
+// One row per material charged into a heat, from initial charging (P05-A06)
+// through mid-heat additions (P05-A10). Supports multiple materials per
+// heat, unlike the aggregate recipe-weight snapshot already on SteelMelting.
+model HeatMaterialCharge {
+  id               String                     @id @default(uuid())
+  organizationId   String
+  meltingId        String
+  sequence         Int
+  material         String
+  materialCategory HeatChargeMaterialCategory
+  grade            String?
+  batchRef         String?
+  plannedQuantity  Float?
+  actualQuantity   Float
+  unit             String
+  chargedAt        DateTime                   @default(now())
+  chargedById      String
+  createdAt        DateTime                   @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  melting      SteelMelting @relation(fields: [meltingId], references: [id], onDelete: Cascade)
+  chargedBy    Employee     @relation("HeatMaterialChargeChargedBy", fields: [chargedById], references: [id])
+
+  @@index([organizationId])
+  @@index([meltingId])
+}
+
+enum HeatCycleEventType {
+  HEAT_STARTED
+  FURNACE_CHARGING
+  HEATING_STARTED
+  TEMPERATURE_READING
+  MATERIAL_ADDITION
+  ADJUSTMENT
+  ALARM
+  DELAY
+  OPERATOR_INTERVENTION
+  TARGET_TEMPERATURE_REACHED
+  TAPPING_STARTED
+  TAPPING_COMPLETED
+  HEAT_COMPLETED
+  OTHER
+}
+
+// Chronological operational event log for a heat cycle — temperature
+// readings, alarms, delays, interventions, additions. Distinct from
+// SteelMeltingActivityLog, which audits stage-transition actions rather than
+// free-form events occurring within a stage.
+model HeatCycleEvent {
+  id                 String             @id @default(uuid())
+  organizationId     String
+  meltingId          String
+  eventType          HeatCycleEventType
+  occurredAt         DateTime           @default(now())
+  temperatureCelsius Float?
+  quantity           Float?
+  unit               String?
+  recordedById       String
+  notes              String?
+  createdAt          DateTime           @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  melting      SteelMelting @relation(fields: [meltingId], references: [id], onDelete: Cascade)
+  recordedBy   Employee     @relation("HeatCycleEventRecordedBy", fields: [recordedById], references: [id])
+
+  @@index([organizationId])
+  @@index([meltingId])
+  @@index([meltingId, occurredAt])
+}
+
+enum SteelHeatApprovalStage {
+  A01_TAKE_SAMPLE
+  A02_ANALYZE_SAMPLE
+  A03_COMPARE_CHEMISTRY
+  A04_DECIDE_CORRECTION
+  A05_ADD_CORRECTION_MATERIAL
+  A06_RETEST_CHEMISTRY
+  A07_CHECK_TEMPERATURE
+  A08_CHECK_LADLE_READINESS
+  A09_APPROVE_CHEMISTRY_TEMPERATURE
+  A10_CONFIRM_HEAT_NUMBER
+  A11_TAPPING_APPROVAL
+  A12_TAP_TO_LADLE
+  A13_RELEASE_TO_CASTING
+}
+
+enum SteelHeatApprovalStatus {
+  DRAFT
+  IN_PROGRESS
+  ON_HOLD
+  CLOSED
+  CANCELLED
+}
+
+// Identifies each of the 13 heat-approval activities for the audit trail
+enum SteelHeatApprovalActivity {
+  A01
+  A02
+  A03
+  A04
+  A05
+  A06
+  A07
+  A08
+  A09
+  A10
+  A11
+  A12
+  A13
+  STATUS_OVERRIDE
+}
+
+// One record per heat, created against a P05 melting record that has been
+// handed over to refining (A14_HANDOVER_TO_REFINING / CLOSED). Carries the
+// heat through chemistry sampling, correction, approval, tapping, and
+// release to casting (P06-A01 -> P06-A13). Hands off to P07 (casting) once
+// closed (no P07 model exists in this repository yet).
+model SteelHeatApproval {
+  id             String                  @id @default(uuid())
+  approvalNumber String                  @unique
+  organizationId String
+  createdById    String
+  meltingId      String                  @unique
+  stage          SteelHeatApprovalStage  @default(A01_TAKE_SAMPLE)
+  status         SteelHeatApprovalStatus @default(DRAFT)
+
+  // P06-A01 — Take liquid steel sample
+  sampleRef     String?
+  sampleTakenAt DateTime?
+
+  // P06-A02 — Analyze sample in spectrometer/lab
+  chemistryComposition Json?
+  labRef               String?
+
+  // P06-A03 — Compare chemistry with required grade
+  requiredGrade           String?
+  chemistryMatchesGrade   Boolean?
+  chemistryDeviationNotes String?
+
+  // P06-A04 — Decide correction requirement
+  correctionRequired Boolean?
+  correctionReason   String?
+
+  // P06-A05 — Add alloy, carbon raiser, lime, or correction material (conditional)
+  correctionMaterials     Json?
+  correctionNotApplicable Boolean?
+
+  // P06-A06 — Re-test chemistry if required (conditional). Each time a
+  // re-test still doesn't match the required grade, the record loops back
+  // to A04_DECIDE_CORRECTION for another correction pass and this counter
+  // increments — capped (see heat-approval.service.ts) since repeated
+  // correction is itself a cost/delay signal worth surfacing.
+  retestChemistryComposition Json?
+  retestNotApplicable        Boolean?
+  correctionAttempts         Int      @default(0)
+
+  // P06-A07 — Check liquid steel temperature
+  liquidTemperatureCelsius Float?
+
+  // P06-A08 — Check ladle readiness and lining condition
+  ladleId              String?
+  ladleLiningCondition String?
+  ladleReady           Boolean?
+
+  // P06-A09 — Approve chemistry and temperature
+  chemistryTemperatureApproved Boolean?
+  approvalNotes                String?
+
+  // P06-A10 — Create or confirm heat number
+  heatNumber String? @unique
+
+  // P06-A11 — Give tapping approval
+  tappingApproved Boolean?
+
+  // P06-A12 — Tap liquid steel into ladle
+  tapStartTime DateTime?
+  tapEndTime   DateTime?
+  tapOperator  String?
+
+  // P06-A13 — Release approved heat to casting (irreversible)
+  releasedToCastingAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization                   @relation(fields: [organizationId], references: [id])
+  createdBy    Employee                       @relation("SteelHeatApprovalCreatedBy", fields: [createdById], references: [id])
+  melting      SteelMelting                   @relation(fields: [meltingId], references: [id])
+  activityLogs SteelHeatApprovalActivityLog[]
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([organizationId, status])
+}
+
+// Audit trail: every activity performed against a heat-approval record is recorded here
+model SteelHeatApprovalActivityLog {
+  id             String                    @id @default(uuid())
+  heatApprovalId String
+  activity       SteelHeatApprovalActivity
+  performedById  String
+  notes          String?
+  data           Json?
+  createdAt      DateTime                  @default(now())
+
+  heatApproval SteelHeatApproval @relation(fields: [heatApprovalId], references: [id], onDelete: Cascade)
+  performedBy  Employee          @relation("SteelHeatApprovalPerformedBy", fields: [performedById], references: [id])
+
+  @@index([heatApprovalId])
 }
 
 model Task {
@@ -1910,6 +2776,7 @@ model Alert {
   againstUserId            String?
   isAbnormality            Boolean                    @default(false)
   abnormalitySourceAlertId String?                    @unique
+  deduplicationKey         String?                    @unique
   closureApprovalStatus    AlertClosureApprovalStatus @default(NONE)
   closureApproverId        String?
   closureRequestedById     String?
@@ -2082,11 +2949,89 @@ model DwmsPermissionConfig {
 
 enum KaizenStatus {
   DRAFT
-  IN_PROGRESS
-  SUBMITTED_FOR_VERIFICATION
-  VERIFIED_CLOSED
-  FURTHER_IMPROVEMENT_REQUIRED
+  PENDING_HOD_PRE_REVIEW
+  RETURNED_FOR_REVISION
+  REJECTED
   MOVED_TO_SGA
+  IN_IMPLEMENTATION
+  PENDING_VERIFICATION
+  RETURNED_FOR_REWORK
+  VERIFIED_CLOSED
+}
+
+enum KaizenTrigger {
+  PROBLEM_NOTICED
+  IMPROVEMENT_OPPORTUNITY_NOTICED
+  ALERT_ACTION_REQUIRED
+  ABNORMALITY_ACTION_REQUIRED
+  EMPLOYEE_SUGGESTION_OR_IDEA
+  AUDIT_OBSERVATION
+  GEMBA_WALK_OBSERVATION
+  CUSTOMER_COMPLAINT_OR_FEEDBACK
+  MANAGEMENT_INSTRUCTION_OR_FEEDBACK
+  REPEAT_PROBLEM
+  OTHER
+}
+
+enum KaizenReferenceApplicability {
+  APPLICABLE
+  NOT_APPLICABLE
+  REFERENCE_NOT_FOUND
+}
+
+enum KaizenQcdsmtCategory {
+  QUALITY
+  COST
+  DELIVERY
+  SAFETY
+  MORALE
+  TECHNOLOGY
+}
+
+enum KaizenUnit {
+  SECONDS
+  HOURS
+  MINUTES
+  PIECES
+  KILOGRAMS
+  TONNES
+  METRES
+  LITRES
+  PERCENTAGE
+  CURRENCY
+  OTHER
+}
+
+enum KaizenWaste {
+  TRANSPORTATION
+  INVENTORY
+  MOTION
+  WAITING
+  OVERPRODUCTION
+  OVERPROCESSING
+  DEFECTS
+  NOT_APPLICABLE
+}
+
+enum KaizenHodPreReviewDecision {
+  PENDING
+  APPROVE
+  RETURN
+  REJECT
+  MOVE_TO_SGA
+}
+
+enum KaizenVerificationStage {
+  HOD
+  STEERING_COMMITTEE
+  FINANCE
+}
+
+enum KaizenVerificationDecision {
+  PENDING
+  VERIFIED
+  RETURN
+  NOT_APPLICABLE
 }
 
 model Kaizen {
@@ -2096,36 +3041,119 @@ model Kaizen {
   departmentId   String
   status         KaizenStatus @default(DRAFT)
 
-  problem                String
-  beforePhotoUrl         String
-  improvementDescription String?
-  afterPhotoUrl          String?
-  benefitAchieved        String?
+  // Part 1: reason
+  title        String?
+  trigger      KaizenTrigger?
+  triggerOther String?
 
-  teamMembers     String?
-  benefitCategory String?
-  beforeValue     String?
-  afterValue      String?
-  costSaving      String?
-  comments        String?
+  // Part 2: related reference
+  referenceValue         String?
+  referenceApplicability KaizenReferenceApplicability?
 
-  verifiedById        String?
-  verificationComment String?
-  standardUpdated     Boolean?
-  linkedSgaId         String?
+  // Part 3: condition or opportunity
+  conditionDescription  String
+  conditionEvidenceUrls String[] @default([])
+
+  // Part 4: basic daily kaizen information
+  startDate            DateTime?
+  targetCompletionDate DateTime?
+  kaizenOwnerId        String?
+
+  // Part 7: required material and estimated cost
+  requiredMaterials     String?
+  estimatedCost         Decimal? @db.Decimal(14, 2)
+  estimatedCostCurrency String?
+
+  // Part 8: HOD review before implementation
+  hodPreReviewDecision KaizenHodPreReviewDecision @default(PENDING)
+  hodPreReviewRemarks  String?
+  hodPreReviewById     String?
+  hodPreReviewAt       DateTime?
+
+  // Part 9: implementation and evidence
+  actionTaken    String?
+  afterPhotoUrls String[] @default([])
+  resultSaving   String?
+
+  linkedSgaId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization     Organization   @relation(fields: [organizationId], references: [id])
-  employee         Employee       @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
-  department       Department?    @relation(fields: [departmentId], references: [id])
-  verifiedBy       Employee?      @relation("KaizenVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  organization     Organization         @relation(fields: [organizationId], references: [id])
+  employee         Employee             @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
+  department       Department?          @relation(fields: [departmentId], references: [id])
+  kaizenOwner      Employee?            @relation("KaizenOwner", fields: [kaizenOwnerId], references: [id], onDelete: SetNull)
+  hodPreReviewBy   Employee?            @relation("KaizenHodPreReviewBy", fields: [hodPreReviewById], references: [id], onDelete: SetNull)
+  teamMembers      Employee[]           @relation("KaizenTeamMembers")
   reviews          KaizenReview[]
+  qcdsmtImpacts    KaizenQcdsmtImpact[]
+  wasteImpacts     KaizenWasteImpact[]
+  verifications    KaizenVerification[]
   sourceSuggestion Suggestion?
 
   @@index([organizationId, status])
   @@index([employeeId, createdAt])
+  @@index([kaizenOwnerId])
+  @@index([departmentId, status])
+}
+
+model KaizenQcdsmtImpact {
+  id             String               @id @default(uuid())
+  kaizenId       String
+  category       KaizenQcdsmtCategory
+  whatIsMeasured String
+  beforeValue    String?
+  afterValue     String?
+  unit           KaizenUnit
+  otherUnitLabel String?
+  currency       String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  kaizen Kaizen @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
+
+  @@unique([kaizenId, category])
+  @@index([kaizenId])
+}
+
+model KaizenWasteImpact {
+  id             String      @id @default(uuid())
+  kaizenId       String
+  waste          KaizenWaste
+  whatIsMeasured String
+  beforeValue    String?
+  afterValue     String?
+  unit           KaizenUnit
+  otherUnitLabel String?
+  currency       String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  kaizen Kaizen @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
+
+  @@unique([kaizenId, waste])
+  @@index([kaizenId])
+}
+
+model KaizenVerification {
+  id                      String                     @id @default(uuid())
+  kaizenId                String
+  stage                   KaizenVerificationStage
+  decision                KaizenVerificationDecision @default(PENDING)
+  remarks                 String?
+  verifiedBenefitAmount   Decimal?                   @db.Decimal(14, 2)
+  verifiedBenefitCurrency String?
+  verifiedById            String?
+  verifiedAt              DateTime?
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+
+  kaizen     Kaizen    @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
+  verifiedBy Employee? @relation("KaizenVerificationBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([kaizenId, stage])
+  @@index([kaizenId])
 }
 
 model KaizenReview {

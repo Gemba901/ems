@@ -44,10 +44,48 @@ export function toUtcDateOnly(value: Date): Date {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
 }
 
-export function endOfUtcDay(value: Date): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate(), 23, 59, 59, 999));
+export function getUtcDateInTimeZone(value: Date, timeZone: string): Date {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const partMap = new Map(parts.map((part) => [part.type, part.value]));
+  return new Date(
+    Date.UTC(
+      Number(partMap.get('year')),
+      Number(partMap.get('month')) - 1,
+      Number(partMap.get('day')),
+    ),
+  );
 }
 
+export function getCurrentUtcDateInTimeZone(timeZone: string): Date {
+  return getUtcDateInTimeZone(new Date(), timeZone);
+}
+
+export function addUtcDays(value: Date, days: number): Date {
+  const result = toUtcDateOnly(value);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+export function getOrganizationDateRange(
+  value: Date,
+  timeZone: string,
+  days: number,
+) {
+  const scheduleEnd = getUtcDateInTimeZone(value, timeZone);
+  const scheduleStart = addUtcDays(scheduleEnd, -Math.max(0, days - 1));
+
+  return {
+    scheduleStart,
+    scheduleEnd,
+    instantStart: startOfDayInTimeZone(scheduleStart, timeZone),
+    instantEnd: endOfDayInTimeZone(scheduleEnd, timeZone),
+  };
+}
 
 export function parseTimeZone(value: string | null | undefined): string | null {
   if (!value) {
@@ -88,12 +126,7 @@ function getTimeZoneOffsetMs(value: Date, timeZone: string): number {
   return zonedAsUtc - value.getTime();
 }
 
-export function startOfDayInTimeZone(value: Date, timeZone: string | null): Date {
-  if (!timeZone) {
-    return toUtcDateOnly(value);
-  }
-
-  try {
+export function startOfDayInTimeZone(value: Date, timeZone: string): Date {
     const localStartAsUtc = Date.UTC(
       value.getUTCFullYear(),
       value.getUTCMonth(),
@@ -108,17 +141,9 @@ export function startOfDayInTimeZone(value: Date, timeZone: string | null): Date
     );
     const offset = getTimeZoneOffsetMs(firstPass, timeZone);
     return new Date(localStartAsUtc - offset);
-  } catch {
-    return toUtcDateOnly(value);
-  }
 }
 
-export function endOfDayInTimeZone(value: Date, timeZone: string | null): Date {
-  if (!timeZone) {
-    return endOfUtcDay(value);
-  }
-
-  try {
+export function endOfDayInTimeZone(value: Date, timeZone: string): Date {
     const localEndAsUtc = Date.UTC(
       value.getUTCFullYear(),
       value.getUTCMonth(),
@@ -133,13 +158,6 @@ export function endOfDayInTimeZone(value: Date, timeZone: string | null): Date {
     );
     const offset = getTimeZoneOffsetMs(firstPass, timeZone);
     return new Date(localEndAsUtc - offset);
-  } catch {
-    return endOfUtcDay(value);
-  }
-}
-
-export function isBeforeUtcDate(value: Date, reference: Date): boolean {
-  return toUtcDateOnly(value).getTime() < toUtcDateOnly(reference).getTime();
 }
 
 

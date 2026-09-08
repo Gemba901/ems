@@ -16,7 +16,7 @@ interface Props {
   onRetry?: () => void;
 }
 
-// A fixed 6-color palette assigned in S1-S6 order — purely presentational,
+// A fixed color palette assigned in S1-S4 order — purely presentational,
 // not derived from any backend data.
 const SCREEN_COLORS = ["#2563eb", "#f97316", "#0ea5e9", "#9333ea", "#eab308", "#10b981"];
 const SCREEN_DOT_CLASSES = ["bg-blue-600", "bg-orange-500", "bg-sky-500", "bg-purple-600", "bg-yellow-500", "bg-emerald-500"];
@@ -51,7 +51,7 @@ export function StageOverview({ summary, isLoading, isError, isFetching, onRetry
   }
 
   // Counts derived from the real per-stage summary (summary.byStage),
-  // grouped into the same S1-S6 screens the workflow itself uses — the
+  // grouped into the same S1-S4 screens the workflow itself uses — the
   // canonical mapping lives once in screenMap.ts, not duplicated here.
   const counts = SCREENS.map((screen, i) => ({
     code: screen.code,
@@ -115,7 +115,7 @@ export function StageOverview({ summary, isLoading, isError, isFetching, onRetry
           )}
         </div>
 
-        {/* S1-S6 workflow screen list */}
+        {/* S1-S4 workflow screen list */}
         <div className="space-y-0.5">
           {counts.map((cat) => {
             const isActive = activeKey === cat.code;

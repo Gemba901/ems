@@ -5,6 +5,7 @@ import type { DwmsDashboardMetrics } from '@/services/dwms.service';
 type KpiCardsProps = {
   stats: DwmsDashboardMetrics;
   activeTab: 'overview' | 'department' | 'employee';
+  periodLabel: string;
 };
 
 function formatDuration(minutes: number | undefined) {
@@ -15,22 +16,24 @@ function formatDuration(minutes: number | undefined) {
   return `${Math.round(minutes)} min`;
 }
 
-export default function KpiCards({ stats }: KpiCardsProps) {
+export default function KpiCards({ stats, periodLabel }: KpiCardsProps) {
   const tasksPerformedTodayPercent = stats.tasksPerformedTodayPercent ?? stats.completionRate ?? 100;
+  const completedTasks = stats.completedTasks ?? stats.completedCount ?? 0;
+  const totalTasks = stats.totalTasks ?? 0;
   const avgAcknowledgeTimeMin = stats.avgAcknowledgeTimeMin ?? 0;
   const overdueTasks = stats.overdueTasks ?? 0;
   const avgCloseTimeMin = stats.avgCloseTimeMin ?? 0;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {/* 1. Tasks Performed Today */}
+      {/* 1. Tasks performed for the selected range */}
       <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:gap-4 sm:rounded-3xl sm:p-6">
         <div className="min-w-0 space-y-1">
-          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">Tasks Performed Today</p>
+          <p className="break-words text-[11px] font-semibold uppercase tracking-wide text-muted-app sm:text-xs">{periodLabel}</p>
           <h3 className="text-2xl font-bold tracking-tight text-text-app">
             {tasksPerformedTodayPercent}%
           </h3>
-          <p className="text-[10px] text-muted-app">Completed scheduled tasks</p>
+          <p className="text-[10px] text-muted-app">{completedTasks} of {totalTasks} scheduled tasks done</p>
         </div>
         <RadialProgress percent={tasksPerformedTodayPercent} size={56} />
       </div>

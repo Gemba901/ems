@@ -54,6 +54,16 @@ export class CommitteeService {
     });
   }
 
+  // Lightweight list for the "route this suggestion to a committee" picker — any authenticated
+  // org member may see committee names/types to route to, without the full member roster.
+  async listRoutable(organizationId: string) {
+    return this.prisma.steeringCommittee.findMany({
+      where: { organizationId },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, type: true },
+    });
+  }
+
   async getCommittee(id: string, organizationId: string) {
     const committee = await this.prisma.steeringCommittee.findUnique({
       where: { id },

@@ -16,14 +16,15 @@ type TabKey = "mine" | "department" | "verification";
 const PAGE_SIZE = 10;
 
 function KaizenRow({ k, showOwner }: { k: Kaizen; showOwner?: boolean }) {
+  const title = k.title || k.conditionDescription;
   return (
     <Link
       href={`/kaizen/${k.id}`}
       className="flex items-center gap-3 px-4 py-3 sm:px-6 hover:bg-slate-50 transition-colors"
     >
-      <Thumbnail src={k.beforePhotoUrl} alt={k.problem} />
+      <Thumbnail src={k.conditionEvidenceUrls[0]} alt={title} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900 truncate">{k.problem}</p>
+        <p className="text-sm font-semibold text-slate-900 truncate">{title}</p>
         <p className="text-xs text-slate-500 mt-1">
           {showOwner && `${k.employee.firstName} ${k.employee.lastName} · `}
           {k.department?.name ?? "No department"} · {formatDate(k.createdAt)}
@@ -64,9 +65,7 @@ export default function KaizenOverviewPage() {
 
   const role = user?.roleLevel;
   const isPrivileged = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
-  const isHOD = role === Role.HOD;
   const canSeeDepartment = !!user?.departmentId;
-  const canVerify = isHOD || isPrivileged;
 
   const { data: mine = [], isLoading: mineLoading } = useQuery({
     queryKey: ["kaizen-my"],
@@ -80,28 +79,21 @@ export default function KaizenOverviewPage() {
     enabled: !!accessToken && !!user?.departmentId && !isPrivileged,
   });
 
-  const { data: orgWide = [], isLoading: orgLoading } = useQuery({
-    queryKey: ["kaizen-all"],
-    queryFn: () => KaizenService.getAll(accessToken!),
-    enabled: !!accessToken && isPrivileged,
-  });
-
   const { data: departments = [] } = useQuery({
     queryKey: ["departments", user?.organizationId],
     queryFn: () => EmployeeService.getDepartments(user!.organizationId!, accessToken!),
     enabled: !!accessToken && !!user?.organizationId && isPrivileged,
   });
 
-  const verificationScope = isPrivileged ? orgWide : department;
-  const verificationScopeLoading = isPrivileged ? orgLoading : departmentLoading;
-  const pendingVerification = useMemo(
-    () => verificationScope.filter((k) => k.status === "SUBMITTED_FOR_VERIFICATION"),
-    [verificationScope],
-  );
+  const { data: pendingVerification = [], isLoading: pendingVerificationLoading } = useQuery({
+    queryKey: ["kaizen-pending-verification"],
+    queryFn: () => KaizenService.getPendingVerification(accessToken!),
+    enabled: !!accessToken,
+  });
 
   const now = new Date();
-  const inProgressCount = mine.filter((k) => k.status === "IN_PROGRESS").length;
-  const pendingMyVerificationCount = mine.filter((k) => k.status === "SUBMITTED_FOR_VERIFICATION").length;
+  const inImplementationCount = mine.filter((k) => k.status === "IN_IMPLEMENTATION").length;
+  const pendingMyVerificationCount = pendingVerification.length;
   const verifiedThisMonthCount = mine.filter(
     (k) => k.status === "VERIFIED_CLOSED" &&
       new Date(k.updatedAt).getMonth() === now.getMonth() &&
@@ -111,22 +103,22 @@ export default function KaizenOverviewPage() {
   const TABS: { key: TabKey; label: string; visible: boolean }[] = [
     { key: "mine", label: "My Kaizens", visible: true },
     { key: "department", label: "My Department", visible: canSeeDepartment && !isPrivileged },
-    { key: "verification", label: "Pending My Verification", visible: canVerify },
+    { key: "verification", label: "Pending My Review", visible: true },
   ];
 
   const showDepartmentFilter = tab === "verification" && isPrivileged;
 
   const activeList = tab === "mine" ? mine : tab === "department" ? department : pendingVerification;
-  const activeLoading = tab === "mine" ? mineLoading : tab === "department" ? departmentLoading : verificationScopeLoading;
+  const activeLoading = tab === "mine" ? mineLoading : tab === "department" ? departmentLoading : pendingVerificationLoading;
   const emptyText = tab === "mine"
     ? "No kaizens yet. Raise your first one."
     : tab === "department"
     ? "No kaizens in your department yet."
-    : "Nothing awaiting your verification.";
+    : "Nothing awaiting your review.";
 
   const filtered = useMemo(() => {
     return activeList.filter((k) => {
-      if (search && !k.problem.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !(k.title || k.conditionDescription).toLowerCase().includes(search.toLowerCase())) return false;
       if (statusFilter !== "ALL" && k.status !== statusFilter) return false;
       if (showDepartmentFilter && departmentFilter !== "ALL" && k.department?.id !== departmentFilter) return false;
       return true;
@@ -166,8 +158,8 @@ export default function KaizenOverviewPage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KpiCard label="My Kaizens" value={mine.length} icon={<Lightbulb className="h-4 w-4 text-blue-600" />} accent="bg-blue-50" />
-          <KpiCard label="In Progress" value={inProgressCount} icon={<Loader2 className="h-4 w-4 text-amber-600" />} accent="bg-amber-50" />
-          <KpiCard label="Pending Verification" value={pendingMyVerificationCount} icon={<ShieldCheck className="h-4 w-4 text-purple-600" />} accent="bg-purple-50" />
+          <KpiCard label="In Implementation" value={inImplementationCount} icon={<Loader2 className="h-4 w-4 text-amber-600" />} accent="bg-amber-50" />
+          <KpiCard label="Pending My Review" value={pendingMyVerificationCount} icon={<ShieldCheck className="h-4 w-4 text-purple-600" />} accent="bg-purple-50" />
           <KpiCard label="Verified This Month" value={verifiedThisMonthCount} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" />
         </div>
 
@@ -194,7 +186,7 @@ export default function KaizenOverviewPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by problem..."
+              placeholder="Search by title..."
               className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
             />
           </div>

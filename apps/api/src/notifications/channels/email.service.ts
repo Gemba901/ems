@@ -99,6 +99,15 @@ export class EmailService {
             this.logger.log(`Email sent to ${to}: "${subject}"`);
         } catch (err) {
             this.logger.error(`Failed to send email to ${to}: ${(err as Error).message}`);
+
+            // Outside production, surface the content (and any action link) directly in the
+            // console so local/staging testing isn't blocked on SES identity verification.
+            if (process.env.NODE_ENV !== 'production') {
+                this.logger.warn(
+                    `[DEV FALLBACK] Email to ${to} not delivered — content below:\n` +
+                    `Subject: ${subject}\n${text}`,
+                );
+            }
         }
     }
 }

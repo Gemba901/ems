@@ -9,7 +9,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateSteelSourcingOrderDto,
   IdentifySteelMaterialTypeDto,
-  CheckSteelSupplierDto,
+  SelectMaterialSourceDto,
   ReviewSteelSupplierRiskDto,
   CollectSteelQuotationsDto,
   SelectSteelSupplierDto,
@@ -23,6 +23,8 @@ import {
   QuerySteelSourcingOrdersDto,
   CreateSupplierDto,
   QuerySuppliersDto,
+  UpdateSupplierDto,
+  CreateSteelSourcingAttachmentDto,
 } from './dto/steel-sourcing.dto';
 
 // The order the 12 sourcing activities must occur in. Mirrors the P01 STAGE_ORDER
@@ -61,6 +63,12 @@ const orderInclude = {
       planNumber: true,
       plantRoute: true,
       customerName: true,
+      dealerName: true,
+      productType: true,
+      grade: true,
+      size: true,
+      requestedQuantityTonnes: true,
+      expectedDeliveryDate: true,
     },
   },
 };
@@ -107,6 +115,55 @@ export class SteelSourcingService {
         'This sourcing step has already been completed and the order has moved on.',
       );
     }
+  }
+
+  // Retries `fn` when it fails on a unique-constraint violation of `field`
+  // (Prisma P2002). Needed because number generation reads a count() and
+  // creates a row in separate steps — two concurrent requests can read the
+  // same count before either writes, producing duplicate numbers. The
+  // number FORMAT is unchanged; this only makes generate-then-create safe
+  // under concurrency by regenerating and retrying on conflict.
+  // P2002's offending-field list lives at err.meta.target on the legacy
+  // engine, but the Prisma 7 driver-adapter (@prisma/adapter-pg) engine
+  // instead puts it at err.meta.constraint.fields or
+  // err.cause.constraint.fields, leaving meta.target undefined.
+  private uniqueConstraintFields(
+    err: Prisma.PrismaClientKnownRequestError,
+  ): string[] {
+    const meta = err.meta as
+      | { target?: string[]; constraint?: { fields?: string[] } }
+      | undefined;
+    const cause = (
+      err as unknown as {
+        cause?: { constraint?: { fields?: string[] } };
+      }
+    ).cause;
+    return (
+      meta?.target ??
+      meta?.constraint?.fields ??
+      cause?.constraint?.fields ??
+      []
+    );
+  }
+
+  private async withUniqueRetry<T>(
+    field: string,
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const isConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          this.uniqueConstraintFields(err).includes(field);
+        if (!isConflict || attempt === maxAttempts) throw err;
+      }
+    }
+    /* istanbul ignore next — loop always returns or throws above */
+    throw new Error('withUniqueRetry: exhausted attempts');
   }
 
   private async generateSourcingNumber(
@@ -163,41 +220,48 @@ export class SteelSourcingService {
         'Sourcing can only start once the production plan has been released (P01-A12).',
       );
     }
-
-    return this.prisma.$transaction(async (tx) => {
-      const sourcingNumber = await this.generateSourcingNumber(
-        tx,
-        organizationId,
+    if (plan.status !== 'RELEASED') {
+      throw new BadRequestException(
+        `This production plan is ${plan.status.replace(/_/g, ' ').toLowerCase()} and is not currently available for sourcing.`,
       );
+    }
 
-      const order = await tx.steelSourcingOrder.create({
-        data: {
-          sourcingNumber,
+    return this.withUniqueRetry('sourcingNumber', () =>
+      this.prisma.$transaction(async (tx) => {
+        const sourcingNumber = await this.generateSourcingNumber(
+          tx,
           organizationId,
-          planId: dto.planId,
-          createdById: employee.id,
-          stage: 'A01_REQUIREMENT_REVIEWED',
-          status: 'IN_PROGRESS',
-          materialRequirementNotes: dto.materialRequirementNotes,
-          requiredByDate: dto.requiredByDate
-            ? new Date(dto.requiredByDate)
-            : null,
-        },
-      });
+        );
 
-      await this.logActivity(
-        tx,
-        order.id,
-        'A01',
-        employee.id,
-        dto.materialRequirementNotes,
-        { ...dto },
-      );
-      return tx.steelSourcingOrder.findUnique({
-        where: { id: order.id },
-        include: orderInclude,
-      });
-    });
+        const order = await tx.steelSourcingOrder.create({
+          data: {
+            sourcingNumber,
+            organizationId,
+            planId: dto.planId,
+            createdById: employee.id,
+            stage: 'A01_REQUIREMENT_REVIEWED',
+            status: 'IN_PROGRESS',
+            materialRequirementNotes: dto.materialRequirementNotes,
+            requiredByDate: dto.requiredByDate
+              ? new Date(dto.requiredByDate)
+              : null,
+          },
+        });
+
+        await this.logActivity(
+          tx,
+          order.id,
+          'A01',
+          employee.id,
+          dto.materialRequirementNotes,
+          { ...dto },
+        );
+        return tx.steelSourcingOrder.findUnique({
+          where: { id: order.id },
+          include: orderInclude,
+        });
+      }),
+    );
   }
 
   // ── P02-A02 — Identify material type needed ──
@@ -235,10 +299,24 @@ export class SteelSourcingService {
     });
   }
 
-  // ── P02-A03 — Check approved supplier list ──
-  async checkSupplier(
+  // ── P02-A03 — Select material source (existing stock or external supplier) ──
+  //
+  // EXTERNAL_SUPPLIER preserves the original supplier-check behavior exactly
+  // and continues through A04-A12 unchanged.
+  //
+  // EXISTING_STOCK has no supplier to check, so supplier assessment, quote
+  // comparison, supplier selection, specification, and PO creation
+  // (A04-A08) don't apply — the order advances directly to A08_PO_CREATED
+  // (the last purchasing-specific stage) so A09 onward — delivery/logistics
+  // scheduling for physically moving the stock, and intake/handover — still
+  // apply to both paths. This does NOT verify real stock availability or
+  // reserve any quantity: no stock/inventory model exists in the schema yet,
+  // so only the fulfillment-source decision itself is recorded. A genuine
+  // "how much is available, where" check requires that model to be added
+  // first — see the P03 final report / project notes for this limitation.
+  async selectMaterialSource(
     id: string,
-    dto: CheckSteelSupplierDto,
+    dto: SelectMaterialSourceDto,
     userId: string,
     organizationId: string,
   ) {
@@ -246,27 +324,56 @@ export class SteelSourcingService {
     const order = await this.findOrderOrThrow(id, organizationId);
     this.assertStage(order.stage, 'A03_SUPPLIER_CHECKED');
 
-    const supplier = await this.prisma.supplier.findFirst({
-      where: { id: dto.supplierId, organizationId },
-    });
-    if (!supplier) throw new NotFoundException('Supplier not found');
-    if (
-      dto.supplierApprovalConfirmed &&
-      supplier.approvalStatus !== 'APPROVED'
-    ) {
-      throw new BadRequestException(
-        `Supplier is not on the approved list (status: ${supplier.approvalStatus}). Approve the supplier first or select a different one.`,
-      );
+    if (dto.source === 'EXTERNAL_SUPPLIER') {
+      if (!dto.supplierId) {
+        throw new BadRequestException('A supplier must be selected');
+      }
+      const supplier = await this.prisma.supplier.findFirst({
+        where: { id: dto.supplierId, organizationId },
+      });
+      if (!supplier) throw new NotFoundException('Supplier not found');
+      if (
+        dto.supplierApprovalConfirmed &&
+        supplier.approvalStatus !== 'APPROVED'
+      ) {
+        throw new BadRequestException(
+          `Supplier is not on the approved list (status: ${supplier.approvalStatus}). Approve the supplier first or select a different one.`,
+        );
+      }
+
+      return this.prisma.$transaction(async (tx) => {
+        const updated = await tx.steelSourcingOrder.update({
+          where: { id },
+          data: {
+            materialSource: 'EXTERNAL_SUPPLIER',
+            supplierId: dto.supplierId,
+            supplierApprovalConfirmed: dto.supplierApprovalConfirmed,
+            supplierCheckNotes: dto.supplierCheckNotes,
+            stage: 'A03_SUPPLIER_CHECKED',
+          },
+        });
+        await this.logActivity(
+          tx,
+          id,
+          'A03',
+          employee.id,
+          dto.supplierCheckNotes,
+          { ...dto },
+        );
+        return tx.steelSourcingOrder.findUnique({
+          where: { id: updated.id },
+          include: orderInclude,
+        });
+      });
     }
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.steelSourcingOrder.update({
         where: { id },
         data: {
-          supplierId: dto.supplierId,
-          supplierApprovalConfirmed: dto.supplierApprovalConfirmed,
-          supplierCheckNotes: dto.supplierCheckNotes,
-          stage: 'A03_SUPPLIER_CHECKED',
+          materialSource: 'EXISTING_STOCK',
+          stockFulfillmentNotes: dto.stockFulfillmentNotes,
+          stage: 'A08_PO_CREATED',
         },
       });
       await this.logActivity(
@@ -274,8 +381,9 @@ export class SteelSourcingService {
         id,
         'A03',
         employee.id,
-        dto.supplierCheckNotes,
-        { ...dto },
+        dto.stockFulfillmentNotes ??
+          'Fulfilled from existing stock — supplier assessment, quote comparison, and PO creation were skipped.',
+        { source: 'EXISTING_STOCK' },
       );
       return tx.steelSourcingOrder.findUnique({
         where: { id: updated.id },
@@ -610,17 +718,36 @@ export class SteelSourcingService {
     });
   }
 
-  // Manual override for exceptional cases (e.g. putting an order ON_HOLD or CANCELLED)
+  // Administrative override for exceptional cases (e.g. putting an order
+  // ON_HOLD or CANCELLED outside the normal A01-A12 flow). Restricted to
+  // PO_ROLES at the controller. Deliberately does not re-validate
+  // stage/status transitions the way the staged A01-A12 actions do — that's
+  // the point of an override — but it is transactional and logged like
+  // every other write, so the change is auditable.
   async updateStatus(
     id: string,
     dto: UpdateSteelSourcingStatusDto,
+    userId: string,
     organizationId: string,
   ) {
-    await this.findOrderOrThrow(id, organizationId);
-    return this.prisma.steelSourcingOrder.update({
-      where: { id },
-      data: { status: dto.status },
-      include: orderInclude,
+    const employee = await this.resolveEmployee(userId, organizationId);
+    const order = await this.findOrderOrThrow(id, organizationId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.steelSourcingOrder.update({
+        where: { id },
+        data: { status: dto.status },
+        include: orderInclude,
+      });
+      await this.logActivity(
+        tx,
+        id,
+        'STATUS_OVERRIDE',
+        employee.id,
+        dto.notes,
+        { previousStatus: order.status, newStatus: dto.status },
+      );
+      return updated;
     });
   }
 
@@ -695,7 +822,19 @@ export class SteelSourcingService {
 
   // ── Supplier master (backs P02-A03) ──
 
-  async createSupplier(dto: CreateSupplierDto, organizationId: string) {
+  async createSupplier(
+    dto: CreateSupplierDto,
+    organizationId: string,
+    userId?: string,
+  ) {
+    const actor = userId
+      ? await this.prisma.employee
+          .findFirst({
+            where: { userId, organizationId },
+            select: { id: true },
+          })
+          .catch(() => null)
+      : null;
     return this.prisma.supplier.create({
       data: {
         organizationId,
@@ -711,20 +850,130 @@ export class SteelSourcingService {
         country: dto.country,
         isImportSource: dto.isImportSource ?? false,
         notes: dto.notes,
+        createdById: actor?.id,
+        updatedById: actor?.id,
+      },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        updatedBy: { select: { id: true, firstName: true, lastName: true } },
       },
     });
   }
 
   async getSuppliers(organizationId: string, query: QuerySuppliersDto) {
-    const { materialType, approvalStatus, search } = query;
+    const { materialType, approvalStatus, search, includeInactive } = query;
     return this.prisma.supplier.findMany({
       where: {
         organizationId,
+        ...(includeInactive !== 'true' && { isActive: true }),
         ...(materialType && { materialTypes: { has: materialType } }),
         ...(approvalStatus && { approvalStatus }),
         ...(search && { name: { contains: search, mode: 'insensitive' } }),
       },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        updatedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
       orderBy: { name: 'asc' },
+    });
+  }
+
+  async updateSupplier(
+    id: string,
+    organizationId: string,
+    dto: UpdateSupplierDto,
+    userId?: string,
+  ) {
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id, organizationId },
+    });
+    if (!supplier) throw new NotFoundException('Supplier not found.');
+    const actor = userId
+      ? await this.prisma.employee
+          .findFirst({
+            where: { userId, organizationId },
+            select: { id: true },
+          })
+          .catch(() => null)
+      : null;
+    return this.prisma.supplier.update({
+      where: { id },
+      data: { ...dto, ...(actor && { updatedById: actor.id }) },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        updatedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  // ── Sourcing attachments (documents/certificates against a stage) ──
+
+  async addAttachment(
+    sourcingId: string,
+    organizationId: string,
+    dto: CreateSteelSourcingAttachmentDto,
+    userId?: string,
+  ) {
+    await this.findOrderOrThrow(sourcingId, organizationId);
+    const actor = userId
+      ? await this.prisma.employee
+          .findFirst({
+            where: { userId, organizationId },
+            select: { id: true },
+          })
+          .catch(() => null)
+      : null;
+    return this.prisma.steelSourcingAttachment.create({
+      data: {
+        organizationId,
+        sourcingId,
+        stage: dto.stage,
+        fileName: dto.fileName,
+        fileUrl: dto.fileUrl,
+        uploadedById: actor?.id,
+      },
+      include: {
+        uploadedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  async getAttachments(sourcingId: string, organizationId: string) {
+    await this.findOrderOrThrow(sourcingId, organizationId);
+    return this.prisma.steelSourcingAttachment.findMany({
+      where: { sourcingId, organizationId },
+      include: {
+        uploadedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async deleteAttachment(attachmentId: string, organizationId: string) {
+    const attachment = await this.prisma.steelSourcingAttachment.findFirst({
+      where: { id: attachmentId, organizationId },
+    });
+    if (!attachment) throw new NotFoundException('Attachment not found.');
+    await this.prisma.steelSourcingAttachment.delete({
+      where: { id: attachmentId },
+    });
+    return { success: true };
+  }
+
+  // Materials this supplier is admin-approved to supply, from Steel Configuration
+  // (SteelSupplierMaterial). Backs P02-A03's "which materials can this supplier
+  // provide" check without duplicating eligibility data onto the sourcing order.
+  async getSupplierEligibleMaterials(
+    supplierId: string,
+    organizationId: string,
+  ) {
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, organizationId },
+    });
+    if (!supplier) throw new NotFoundException('Supplier not found.');
+    return this.prisma.steelSupplierMaterial.findMany({
+      where: { supplierId, organizationId, isActive: true, isEligible: true },
+      include: { material: true },
     });
   }
 }

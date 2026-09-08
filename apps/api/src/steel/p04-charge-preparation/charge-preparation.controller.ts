@@ -307,6 +307,7 @@ export class ChargePreparationController {
     return this.chargePreparationService.updateStatus(
       id,
       dto,
+      user.userId,
       user.organizationId,
     );
   }

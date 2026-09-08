@@ -17,9 +17,11 @@ import {
   ClipboardList, User, Briefcase, FileText, Phone, TrendingUp,
   CalendarCheck, CalendarX, Clock, ChevronLeft, ChevronRight,
   Camera, Pencil, Lock, Building2, Users, Shield,
+  KeyRound, Copy, Check, AlertCircle,
 } from "lucide-react";
 import { CalendarService, EVENT_COLOR_CONFIG } from "@/services/calendar.service";
 import EmployeeDwmsPanel from "@/app/dwms/components/EmployeeDwmsPanel";
+import { useOrgModules } from "@/hooks/useOrgModules";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -150,6 +152,7 @@ export default function EmployeeDetailPage() {
   const { accessToken, user: viewer } = useAuthStore();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { hasModule } = useOrgModules();
 
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [form, setForm] = useState<UpdateEmployeeEmsPayload>({});
@@ -164,10 +167,14 @@ export default function EmployeeDetailPage() {
   const [editingDept, setEditingDept] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState<number>(5);
   const [selectedDeptId, setSelectedDeptId] = useState<string>("");
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetResult, setResetResult] = useState<{ tempPassword: string; expiresInMinutes: number } | null>(null);
+  const [resetCopied, setResetCopied] = useState(false);
 
   const viewerRole = viewer?.roleLevel;
   const isAdminOrHr = [Role.ADMIN, Role.SUPER_ADMIN, Role.HR].includes(viewerRole as Role);
   const isAdminOnly = [Role.ADMIN, Role.SUPER_ADMIN].includes(viewerRole as Role);
+  const canUseDwms = hasModule("DWMS");
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -229,6 +236,7 @@ export default function EmployeeDetailPage() {
       employmentType: employee.employmentType ?? undefined,
       jobTitle: employee.jobTitle ?? "",
       dateJoined: employee.dateJoined ? employee.dateJoined.split("T")[0] : "",
+      plantBranch: employee.plantBranch ?? "",
       workStation: employee.workStation ?? "",
       section: employee.section ?? "",
       subSection: employee.subSection ?? "",
@@ -323,6 +331,27 @@ export default function EmployeeDetailPage() {
     },
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: () => EmployeeService.resetPassword(id!, accessToken!),
+    onSuccess: (data) => {
+      setResetResult({ tempPassword: data.tempPassword, expiresInMinutes: data.expiresInMinutes });
+    },
+  });
+
+  const closeResetModal = () => {
+    setShowResetModal(false);
+    setResetResult(null);
+    setResetCopied(false);
+    resetPasswordMutation.reset();
+  };
+
+  const copyTempPassword = () => {
+    if (!resetResult) return;
+    navigator.clipboard.writeText(resetResult.tempPassword);
+    setResetCopied(true);
+    setTimeout(() => setResetCopied(false), 2000);
+  };
+
   const saving = saveMutation.isPending;
   const saveError = saveMutation.error ? (saveMutation.error as any).message : null;
   const loading = emsLoading || empLoading;
@@ -335,7 +364,7 @@ export default function EmployeeDetailPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "master-data", label: "Master Data" },
-    { id: "dwms", label: "DWMS" },
+    ...(canUseDwms ? [{ id: "dwms" as const, label: "DWMS" }] : []),
     { id: "activity", label: "Activity" },
   ];
 
@@ -631,6 +660,17 @@ export default function EmployeeDetailPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Password reset */}
+                  {isAdminOnly && empRaw?.userId && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <button
+                        onClick={() => setShowResetModal(true)}
+                        className="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors">
+                        <KeyRound className="h-3.5 w-3.5" /> Reset Password
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -757,6 +797,9 @@ export default function EmployeeDetailPage() {
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Department">
                   <input className={readonlyCls} value={employee.department?.name ?? "—"} readOnly />
+                </Field>
+                <Field label="Plant / Branch">
+                  <input className={inputCls} value={form.plantBranch ?? ""} onChange={(e) => set("plantBranch", e.target.value)} placeholder="e.g. Head Office, ROTO" />
                 </Field>
                 <Field label="Employment Status">
                   <select className={selectCls} value={form.employmentStatus ?? ""} onChange={(e) => set("employmentStatus", e.target.value || undefined)}>
@@ -897,7 +940,7 @@ export default function EmployeeDetailPage() {
           </div>
         )}
 
-        {activeTab === "dwms" && employee && accessToken && id && (
+        {canUseDwms && activeTab === "dwms" && employee && accessToken && id && (
           <EmployeeDwmsPanel
             employeeId={id}
             accessToken={accessToken}
@@ -1018,6 +1061,65 @@ export default function EmployeeDetailPage() {
                   {avatarMutation.isPending ? "Saving…" : "Save"}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Reset password modal ──────────────────────────────────────── */}
+        {showResetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+              <h3 className="text-sm font-bold text-slate-900 mb-1">Reset Password — {fullName}</h3>
+
+              {resetResult ? (
+                <div className="space-y-4 mt-3">
+                  <p className="text-xs text-slate-500">
+                    Share this temporary password with {employee?.firstName} directly (call, chat, in person).
+                    It expires in {resetResult.expiresInMinutes} minutes and can only be used once. They&apos;ll enter it
+                    on the &quot;Forgot password&quot; page to set their own new password.
+                  </p>
+                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                    <code className="text-sm font-mono font-semibold text-slate-900 tracking-wide">{resetResult.tempPassword}</code>
+                    <button onClick={copyTempPassword}
+                      className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors shrink-0">
+                      {resetCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      {resetCopied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <button onClick={closeResetModal}
+                      className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 mt-3">
+                  <p className="text-xs text-slate-500">
+                    This generates a short-lived temporary password for {employee?.firstName}. Their current
+                    password stays valid until they redeem it. You&apos;ll see it here once, to share with them yourself.
+                  </p>
+                  {resetPasswordMutation.error && (
+                    <p className="flex items-center gap-1.5 text-xs text-red-600">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      {(resetPasswordMutation.error as any).message}
+                    </p>
+                  )}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button onClick={closeResetModal}
+                      className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-xl border border-slate-200 transition-colors">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => resetPasswordMutation.mutate()}
+                      disabled={resetPasswordMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                      {resetPasswordMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+                      Generate Password
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -73,13 +73,6 @@ export class UpdateEmployeeRoleDto {
 }
 
 // DTO for admin password reset
-export class ResetPasswordDto {
-  @Expose()
-  @IsString()
-  @IsNotEmpty({ message: 'New password is required' })
-  newPassword!: string;
-}
-
 // DTO for updating avatar
 export class UpdateAvatarDto {
   @Expose()

@@ -19,29 +19,29 @@ import DepartmentDashboard from '../components/dashboard/DepartmentDashboard';
 import EmployeeDashboard from '../components/dashboard/EmployeeDashboard';
 import DwmsTabHeader from '../components/DwmsTabHeader';
 import DwmsSelectDropdown from '../components/DwmsSelectDropdown';
+import { addDaysToDateKey } from '../utils/organizationDate';
 
 type GraphRange = '7d' | '1m' | '3m';
 
-const graphRangeOptions: Array<{ value: GraphRange; label: string; days: number }> = [
-  { value: '7d', label: '7 days', days: 7 },
-  { value: '1m', label: '1 Month', days: 30 },
-  { value: '3m', label: '3 Month', days: 90 },
+const graphRangeOptions: Array<{ value: GraphRange; label: string; days: number; metricLabel: string }> = [
+  { value: '7d', label: 'Last 7 days', days: 7, metricLabel: 'Tasks Performed Last 7 Days' },
+  { value: '1m', label: 'Last 30 days', days: 30, metricLabel: 'Tasks Performed Last 30 Days' },
+  { value: '3m', label: 'Last 90 days', days: 90, metricLabel: 'Tasks Performed Last 90 Days' },
 ];
 
 function filterTrendByRange(trendData: DwmsDashboardTrendPoint[], days: number) {
   if (!trendData || trendData.length === 0) return [];
 
   const pointsWithDates = trendData
-    .map((point) => ({ point, date: point?.date ? new Date(point.date) : null }))
-    .filter(({ date }) => date && !isNaN(date.getTime()));
+    .map((point) => ({ point, date: point?.date?.slice(0, 10) ?? null }))
+    .filter(({ date }) => !!date && /^\d{4}-\d{2}-\d{2}$/.test(date));
 
   if (pointsWithDates.length === trendData.length) {
     const latestDate = pointsWithDates.reduce(
       (latest, { date }) => (date && date > latest ? date : latest),
-      pointsWithDates[0].date as Date
+      pointsWithDates[0].date as string,
     );
-    const startDate = new Date(latestDate);
-    startDate.setDate(startDate.getDate() - days + 1);
+    const startDate = addDaysToDateKey(latestDate, -days + 1) ?? latestDate;
 
     return pointsWithDates
       .filter(({ date }) => date && date >= startDate && date <= latestDate)
@@ -319,7 +319,7 @@ function DashboardPage() {
                     options={departmentsList.map((dept) => ({ value: dept.id, label: dept.name }))}
                     onChange={setSelectedDeptId}
                     placeholder="Select department"
-                    triggerClassName="h-10 rounded-xl border-border-app bg-panel-app px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-accent-app"
+                    triggerClassName="h-10 rounded-xl border-border-app bg-white px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-accent-app"
                   />
                 </div>
               </div>
@@ -345,7 +345,7 @@ function DashboardPage() {
                     }}
                     placeholder="Show all reportees"
                     searchEnabled
-                    triggerClassName="h-10 rounded-xl border-border-app bg-panel-app px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-accent-app"
+                    triggerClassName="h-10 rounded-xl border-border-app bg-white px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-accent-app"
                   />
                 </div>
               </div>
@@ -362,7 +362,7 @@ function DashboardPage() {
       )}
 
       {loading ? (
-        <div className="rounded-3xl border border-dashed border-border-app bg-white px-5 py-32 text-center text-sm text-muted-app backdrop-blur-xl">
+        <div className="rounded-3xl border border-dashed border-border-app bg-white px-5 py-32 text-center text-sm text-muted-app">
           <svg className="animate-spin h-8 w-8 text-accent-app mx-auto mb-3" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -403,7 +403,7 @@ function DashboardPage() {
                     <div>
                       <h3 className="font-semibold text-text-app">Completion Trend</h3>
                       <p className="text-xs text-muted-app">
-                        {selectedGraphRange.days}-day task compliance timeline
+                        {selectedGraphRange.days}-day task completion timeline
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-app font-semibold">
@@ -443,7 +443,13 @@ function DashboardPage() {
               </div>
 
               {/* 2. KPI Cards */}
-              {stats && <KpiCards stats={stats} activeTab={activeTab === 'team' ? 'employee' : activeTab} />}
+              {stats && (
+                <KpiCards
+                  stats={stats}
+                  activeTab={activeTab === 'team' ? 'employee' : activeTab}
+                  periodLabel={selectedGraphRange.metricLabel}
+                />
+              )}
             </>
           )}
 

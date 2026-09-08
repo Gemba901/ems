@@ -7,30 +7,20 @@ import { SuggestionCategory, SuggestionStatus, ImplementationStatus, DecisionTyp
 
 /** Fields for creating the real Kaizen when decisionType === DAILY_KAIZEN */
 export class KaizenDetailsDto {
+  /** The employee who will own and complete the drafted kaizen; required in the service */
   @IsString()
   @IsOptional()
-  problem?: string;
+  kaizenOwnerId?: string;
 
-  /** Omit to reuse the suggestion's own imageUrl as the before photo */
+  /** Omit to fall back to the suggestion's own title */
+  @IsString()
+  @IsOptional()
+  conditionDescription?: string;
+
+  /** Omit to reuse the suggestion's own imageUrl as the condition evidence photo */
   @IsString()
   @IsOptional()
   beforePhotoUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  teamMembers?: string;
-
-  @IsString()
-  @IsOptional()
-  benefitCategory?: string;
-
-  @IsString()
-  @IsOptional()
-  comments?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  startImprovement?: boolean;
 }
 
 export class CreateSuggestionDto {
@@ -59,6 +49,24 @@ export class CreateSuggestionDto {
   @IsString()
   @IsOptional()
   departmentId?: string;
+
+  /**
+   * HOD / MANAGEMENT / ADMIN may target a specific HOD directly (preferred over departmentId —
+   * department names aren't plant-scoped, so a generic name like "Production" can map to several
+   * HODs). When set, the suggestion's department is derived from this HOD's own department.
+   */
+  @IsString()
+  @IsOptional()
+  hodId?: string;
+
+  /**
+   * HOD / MANAGEMENT / ADMIN may route straight to a steering committee, alongside (not instead
+   * of) the department/HOD target above — mirrors what normally only happens once a department
+   * HOD marks a suggestion SELECTED_FOR_SGA, just done immediately at submission time.
+   */
+  @IsString()
+  @IsOptional()
+  committeeId?: string;
 }
 
 export class ReviewSuggestionDto {

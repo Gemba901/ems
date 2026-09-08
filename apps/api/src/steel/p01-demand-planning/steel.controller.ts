@@ -331,6 +331,11 @@ export class SteelController {
     @Body() dto: UpdateSteelPlanStatusDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.steelService.updateStatus(id, dto, user.organizationId);
+    return this.steelService.updateStatus(
+      id,
+      dto,
+      user.userId,
+      user.organizationId,
+    );
   }
 }

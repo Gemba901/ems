@@ -6,11 +6,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { JwtStrategy } from './jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
     PrismaModule,
     PassportModule,
+    NotificationsModule,
     // use registerAsync to inject ConfigService for dynamic JWT configuration
     JwtModule.registerAsync({
       imports: [ConfigModule],

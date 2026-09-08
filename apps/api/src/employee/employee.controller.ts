@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EmployeeService } from './employee.service';
-import { CreateEmployeeDto, UpdateEmployeeDto, UpdateEmployeeRoleDto, ResetPasswordDto, UpdateAvatarDto, PaginationDto } from './dto/employee.dto';
+import { CreateEmployeeDto, UpdateEmployeeDto, UpdateEmployeeRoleDto, UpdateAvatarDto, PaginationDto } from './dto/employee.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -68,11 +68,24 @@ export class EmployeeController {
     return this.employeeService.getMyEmployeeProfile(user.userId, user.organizationId);
   }
 
+  // GET /employee/me/colleagues — department colleagues of the logged-in user (for team-member pickers)
+  @Get('me/colleagues')
+  async getMyColleagues(@CurrentUser() user: { userId: string; organizationId: string }) {
+    return this.employeeService.getMyColleagues(user.userId, user.organizationId);
+  }
+
   // GET /employee/organization/:orgId/departments
   @Get('organization/:orgId/departments')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR)
   async getDepartments(@Param('orgId') orgId: string) {
     return this.employeeService.getDepartmentsByOrganization(orgId);
+  }
+
+  // GET /employee/organization/:orgId/department-hods — HODs for the suggestion routing picker
+  @Get('organization/:orgId/department-hods')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR)
+  async getDepartmentHODs(@Param('orgId') orgId: string) {
+    return this.employeeService.getDepartmentHODs(orgId);
   }
 
   /**
@@ -204,15 +217,15 @@ export class EmployeeController {
     return this.employeeService.updateEmployeeRole(id, dto.roleId, user.organizationId);
   }
 
-  // PATCH /employee/:id/reset-password — admin sets a new password for an employee
+  // PATCH /employee/:id/reset-password — admin clears an employee's password; they'll be
+  // prompted to set a new one via the first-time-setup flow on their next login attempt
   @Patch(':id/reset-password')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   async resetPassword(
     @Param('id') id: string,
-    @Body() dto: ResetPasswordDto,
     @CurrentUser() user: { organizationId: string },
   ) {
-    return this.employeeService.resetEmployeePassword(id, dto.newPassword, user.organizationId);
+    return this.employeeService.resetEmployeePassword(id, user.organizationId);
   }
 
   // PATCH /employee/:id/avatar — update avatar URL

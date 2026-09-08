@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import * as bcrypt from 'bcrypt';
+import { AuthService } from 'src/auth/auth.service';
 import * as XLSX from 'xlsx';
 import { RoleName } from 'db';
 
@@ -15,6 +15,7 @@ type EmployeeImportRow = {
     personalEmail?: string;
     phone?: string;
     department?: string;
+    plantBranch?: string;
     section?: string;
     workStation?: string;
     jobTitle?: string;
@@ -37,7 +38,7 @@ const EMPTY_VALUES = new Set(['', 'no information available', 'not applicable', 
 
 @Injectable()
 export class EmployeeService {
-    constructor (private prisma: PrismaService) {}
+    constructor (private prisma: PrismaService, private authService: AuthService) {}
 
     private normalizePhoneForStorage(raw: string | undefined): string | undefined {
         if (!raw) return undefined;
@@ -133,6 +134,49 @@ export class EmployeeService {
         });
     }
 
+    // Every HOD in the org, for the suggestion routing dropdown. Departments aren't
+    // plant-scoped, so a generic department name (e.g. "Production") can have several
+    // HODs — one per plant/branch. Listing HODs individually (name + plant + department +
+    // designation) lets the picker disambiguate which one a suggestion should go to.
+    async getDepartmentHODs(organizationId: string) {
+        const hods = await this.prisma.employee.findMany({
+            where: {
+                organizationId,
+                departmentId: { not: null },
+                user: {
+                    organizations: {
+                        some: { organizationId, role: { name: RoleName.HOD } },
+                    },
+                },
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                jobTitle: true,
+                plantBranch: true,
+                department: { select: { id: true, name: true } },
+            },
+            orderBy: [{ department: { name: 'asc' } }, { firstName: 'asc' }],
+        });
+
+        return hods
+            .filter((h) => h.department)
+            .map((h) => ({
+                id: h.id,
+                name: `${h.firstName} ${h.lastName}`,
+                plantBranch: h.plantBranch,
+                jobTitle: h.jobTitle,
+                department: h.department!,
+                label: [
+                    `${h.firstName} ${h.lastName}`,
+                    h.plantBranch,
+                    h.department!.name,
+                    h.jobTitle,
+                ].filter(Boolean).join(' - '),
+            }));
+    }
+
     // get the employee record that belongs to the logged-in user within their current org
     async getMyEmployeeProfile(userId: string, organizationId: string) {
         const employee = await this.prisma.employee.findFirst({
@@ -151,6 +195,26 @@ export class EmployeeService {
         });
         if (!employee) throw new BadRequestException('Employee profile not found for this user');
         return employee;
+    }
+
+    // get the logged-in user's department colleagues (for team-member pickers)
+    async getMyColleagues(userId: string, organizationId: string) {
+        const me = await this.prisma.employee.findFirst({
+            where: { userId, organizationId },
+            select: { id: true, departmentId: true },
+        });
+        if (!me) throw new BadRequestException('Employee profile not found for this user');
+        if (!me.departmentId) return [];
+
+        return this.prisma.employee.findMany({
+            where: {
+                departmentId: me.departmentId,
+                organizationId,
+                id: { not: me.id },
+            },
+            select: { id: true, firstName: true, lastName: true, jobTitle: true },
+            orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        });
     }
 
     // get employee details by id
@@ -372,17 +436,23 @@ export class EmployeeService {
         return { message: `Role updated to ${role.name}` };
     }
 
-    // admin resets an employee's password
-    async resetEmployeePassword(id: string, newPassword: string, organizationId: string) {
+    // admin generates a short-lived, single-use password for an employee to recover their
+    // account — the plaintext is returned here (once) for the admin to relay to the employee
+    // out-of-band; the employee redeems it via the "forgot password" flow (auth/verify-temp-password),
+    // which is what actually clears their real password and kills their sessions.
+    async resetEmployeePassword(id: string, organizationId: string) {
         const employee = await this.prisma.employee.findUnique({ where: { id } });
         if (!employee) throw new BadRequestException('Employee not found');
         if (employee.organizationId !== organizationId) throw new ForbiddenException('Cannot manage employees from another organization');
         if (!employee.userId) throw new BadRequestException('Employee has no linked user account');
 
-        const hashed = await bcrypt.hash(newPassword, 10);
-        await this.prisma.user.update({ where: { id: employee.userId }, data: { password: hashed } });
+        const { tempPassword, expiresInMinutes } = await this.authService.generateTempPassword(employee.userId);
 
-        return { message: 'Password reset successfully' };
+        return {
+            tempPassword,
+            expiresInMinutes,
+            message: `Share this temporary password with the employee directly. It expires in ${expiresInMinutes} minutes and can only be used once.`,
+        };
     }
 
     // update employee avatar URL
@@ -537,6 +607,7 @@ export class EmployeeService {
                 employmentType: this.toEmploymentType(row.employmentType) as any,
                 jobTitle: row.jobTitle ?? null,
                 dateJoined: row.dateJoined ?? null,
+                plantBranch: row.plantBranch ?? null,
                 workStation: row.workStation ?? row.section ?? null,
                 jobDescription: row.jobDescription ?? null,
                 homeAddress: row.homeAddress ?? null,
@@ -621,7 +692,7 @@ export class EmployeeService {
 
             const names = this.resolveNames(firstName, middleName, lastName, fullName);
             const email = companyEmail || personalEmail || undefined;
-            const roleName = this.toImportRoleName(this.cleanString(this.valueAt(source, headerMap, ['role', 'access level'])));
+            const roleName = this.toImportRoleName(this.cleanString(this.valueAt(source, headerMap, ['role', 'access level', 'bees access level'])));
 
             if (!names.firstName || !names.lastName) {
                 issues.push({ row: rowNumber, message: 'First name and last name are required' });
@@ -639,9 +710,10 @@ export class EmployeeService {
                 personalEmail,
                 phone,
                 department: this.cleanString(this.valueAt(source, headerMap, ['department', 'employees department location', 'employees department', 'employee s current department', 'current department'])),
+                plantBranch: this.cleanString(this.valueAt(source, headerMap, ['plant branch name or code', 'company plant branch name or code', 'plant branch'])),
                 section: this.cleanString(this.valueAt(source, headerMap, ['section area', 'sub section line'])),
                 workStation: this.cleanString(this.valueAt(source, headerMap, ['work location'])),
-                jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation'])),
+                jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation', 'employee s job designation'])),
                 gender: this.cleanString(this.valueAt(source, headerMap, ['gender'])),
                 dateOfBirth: this.toDate(this.valueAt(source, headerMap, ['date of birth'])),
                 nationalId: this.cleanString(this.valueAt(source, headerMap, ['national id passport no', 'national id'])),
@@ -788,6 +860,8 @@ export class EmployeeService {
         const map: Record<string, RoleName> = {
             admin: RoleName.ADMIN,
             administrator: RoleName.ADMIN,
+            'admin it': RoleName.ADMIN,
+            'admin coordinator': RoleName.ADMIN,
             management: RoleName.MANAGEMENT,
             manager: RoleName.MANAGEMENT,
             hr: RoleName.HR,

@@ -15,6 +15,8 @@ import {
   type DwmsAlertItem,
   type DwmsTaskItem,
 } from "@/services/dwms.service";
+import { useAuthStore } from "@/store/auth.store";
+import { formatOrganizationDate } from "../utils/organizationDate";
 
 type EmployeeDwmsPanelProps = {
   employeeId: string;
@@ -23,13 +25,13 @@ type EmployeeDwmsPanelProps = {
   canManageActivities: boolean;
 };
 
-function formatDate(iso: string | null | undefined) {
+function formatDate(iso: string | null | undefined, timeZone?: string | null) {
   if (!iso) return "-";
-  return new Date(iso).toLocaleDateString("en-GB", {
+  return formatOrganizationDate(iso, timeZone, {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  });
+  }) ?? "-";
 }
 
 function CardHeader({
@@ -57,7 +59,7 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   return <div className="p-4 text-sm text-slate-500 sm:p-5">{children}</div>;
 }
 
-function TaskList({ tasks }: { tasks?: DwmsTaskItem[] }) {
+function TaskList({ tasks, timeZone }: { tasks?: DwmsTaskItem[]; timeZone?: string | null }) {
   return (
     <div className="divide-y divide-slate-100">
       {tasks?.length ? (
@@ -69,7 +71,7 @@ function TaskList({ tasks }: { tasks?: DwmsTaskItem[] }) {
                   {task.title}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Due {formatDate(task.dueAt)} - {task.frequency}
+                  Due {formatDate(task.dueAt, task.organizationTimeZone || timeZone)} - {task.frequency}
                 </p>
               </div>
               <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
@@ -137,6 +139,9 @@ export default function EmployeeDwmsPanel({
   canManageActivities,
 }: EmployeeDwmsPanelProps) {
   const queryClient = useQueryClient();
+  const organizationTimeZone = useAuthStore(
+    (state) => state.user?.organizationTimeZone,
+  );
 
   const { data: dwmsProfile, isLoading: dwmsProfileLoading } = useQuery({
     queryKey: ["dwms-employee-profile", employeeId],
@@ -228,7 +233,7 @@ export default function EmployeeDwmsPanel({
                 iconColor="text-indigo-500"
                 iconBg="bg-indigo-50"
               />
-              <TaskList tasks={dwmsProfile?.currentTasks} />
+              <TaskList tasks={dwmsProfile?.currentTasks} timeZone={organizationTimeZone} />
             </div>
 
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
@@ -243,7 +248,7 @@ export default function EmployeeDwmsPanel({
                 emptyMessage="No current alerts assigned to this employee."
                 tone="rose"
                 meta={(alert) =>
-                  `${alert.severity} - ${formatDate(alert.createdAt)}`
+                  `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
                 }
               />
             </div>
@@ -260,7 +265,7 @@ export default function EmployeeDwmsPanel({
                 emptyMessage="No open abnormalities for this employee."
                 tone="amber"
                 meta={(alert) =>
-                  `${alert.severity} - ${formatDate(alert.createdAt)}`
+                  `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
                 }
               />
             </div>
@@ -281,7 +286,7 @@ export default function EmployeeDwmsPanel({
                     alert.againstUser?.name ??
                     alert.taskInstance?.owner?.name ??
                     "General"
-                  } - ${formatDate(alert.createdAt)}`
+                  } - ${formatDate(alert.createdAt, organizationTimeZone)}`
                 }
               />
             </div>

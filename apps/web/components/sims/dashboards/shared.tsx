@@ -1,17 +1,22 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Star, Trophy, ShieldCheck, ChevronRight, Lightbulb, EyeOff } from "lucide-react";
+import {
+  Star, Trophy, ShieldCheck, ChevronRight, Lightbulb, EyeOff,
+  Clock, CheckCircle2, AlertCircle,
+} from "lucide-react";
 import { Suggestion, SuggestionStatus, SuggestionCategory } from "@/services/sims.service";
 import {
   CATEGORY_LABELS, STATUS_LABELS, STATUS_DOTS, CATEGORY_COLORS, STATUS_COLORS,
-  CHART_TOOLTIP_STYLE, StatusPill, CategoryPill, neutralPillClass,
+  CHART_TOOLTIP_STYLE, StatusPill, CategoryPill, neutralPillClass, KpiCard, ChartCard,
 } from "@/components/sims/sims-ui";
+import { TargetDial } from "@/components/sims/TargetDial";
 
 // ─── Status / category chart data + charts ─────────────────────────────────
 
@@ -450,6 +455,139 @@ export function DepartmentLeaderboard({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Scope toggle (org-wide vs. department-wise dashboards) ────────────────
+
+export function SegmentedToggle<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 bg-slate-100 rounded-xl p-1">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+            value === opt.value
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Org/department overview — shared by AdminDashboard and HodDashboard's
+// "Organization" toggle. Read-only: no review affordances, since flipping
+// the view never grants review rights outside one's own department. ──────
+
+export function OrgOverviewView({
+  suggestions,
+  loading,
+  leaderboard,
+  leaderboardLoading,
+  departmentLeaderboard,
+  departmentLeaderboardLoading,
+  currentUserId,
+  totalLabel = "Total",
+  totalSub = "Org-wide suggestions",
+  recentActivityHref = "/sims/all",
+  emptyText = "No suggestions submitted yet",
+  employeeCount,
+}: {
+  suggestions: Suggestion[];
+  loading: boolean;
+  leaderboard: RankedEntry[];
+  leaderboardLoading: boolean;
+  departmentLeaderboard: DepartmentRankedEntry[];
+  departmentLeaderboardLoading: boolean;
+  currentUserId: string | undefined;
+  totalLabel?: string;
+  totalSub?: string;
+  recentActivityHref?: string;
+  emptyText?: string;
+  employeeCount?: number;
+}) {
+  const kpis = useMemo(() => {
+    const total = suggestions.length;
+    const pending = suggestions.filter((s) =>
+      ["WAITING_FOR_REVIEW", "UNDER_REVIEW", "ON_HOLD", "SELECTED_FOR_SGA"].includes(s.status),
+    ).length;
+    const approved = suggestions.filter((s) =>
+      s.status === "APPROVED_FOR_IMPLEMENTATION" || s.status === "IMPLEMENTED",
+    ).length;
+    const onHold = suggestions.filter((s) => s.status === "ON_HOLD").length;
+    const implemented = suggestions.filter((s) => s.status === "IMPLEMENTED").length;
+    return { total, pending, approved, onHold, implemented };
+  }, [suggestions]);
+
+  const statusData = useMemo(() => computeStatusChartData(suggestions), [suggestions]);
+  const categoryData = useMemo(() => computeCategoryChartData(suggestions), [suggestions]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* KPI row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <KpiCard label={totalLabel} value={loading ? "—" : kpis.total} sub={totalSub} icon={<Lightbulb className="h-5 w-5 text-blue-600" />} accent="bg-blue-50" />
+        <KpiCard label="Pending" value={loading ? "—" : kpis.pending} icon={<Clock className="h-5 w-5 text-amber-500" />} accent="bg-amber-50" />
+        <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="Approved / implemented" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
+        <KpiCard label="On Hold" value={loading ? "—" : kpis.onHold} sub={kpis.onHold > 0 ? "paused" : "none"} icon={<AlertCircle className="h-5 w-5 text-orange-500" />} accent="bg-orange-50" />
+      </div>
+
+      {/* Per-status breakdown */}
+      <StatusCountStrip suggestions={suggestions} />
+
+      {/* Recent activity + leaderboards */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div className="lg:col-span-2">
+          <RecentActivityTable
+            suggestions={suggestions}
+            showAuthor
+            showDepartment
+            viewAllHref={recentActivityHref}
+            viewAllLabel="View all"
+            emptyText={emptyText}
+          />
+        </div>
+        <div className="space-y-4">
+          <TopContributors ranked={leaderboard} loading={leaderboardLoading} currentUserId={currentUserId} />
+          <DepartmentLeaderboard ranked={departmentLeaderboard} loading={departmentLeaderboardLoading} />
+        </div>
+      </div>
+
+      {/* Target dial + charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {employeeCount !== undefined && (
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex items-center justify-center">
+            <TargetDial
+              implemented={kpis.implemented}
+              target={employeeCount * 4}
+              title="Implementation target (4 per employee)"
+            />
+          </div>
+        )}
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-6 ${employeeCount !== undefined ? "lg:col-span-2" : "lg:col-span-3"}`}>
+          <ChartCard title="Status Breakdown" subtitle="By current status">
+            <StatusDonutChart data={statusData} />
+          </ChartCard>
+          <ChartCard title="Category Mix" subtitle="By QCDSMT category">
+            <CategoryBarChart data={categoryData} />
+          </ChartCard>
+        </div>
+      </div>
     </div>
   );
 }

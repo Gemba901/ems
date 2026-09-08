@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -39,6 +40,7 @@ function AdminSidebar({ open, onClose, collapsed, onToggle }: AdminSidebarProps)
     const pathname  = usePathname();
     const router    = useRouter();
     const { user, logout } = useAuthStore();
+    const queryClient = useQueryClient();
 
     const initials = user?.name
         ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -47,6 +49,7 @@ function AdminSidebar({ open, onClose, collapsed, onToggle }: AdminSidebarProps)
     const handleLogout = async () => {
         await AuthService.logout();
         logout();
+        queryClient.clear();
         router.replace("/login");
     };
 

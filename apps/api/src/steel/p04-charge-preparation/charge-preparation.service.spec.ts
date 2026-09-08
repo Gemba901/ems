@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from 'db';
 import { ChargePreparationService } from './charge-preparation.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
@@ -27,7 +28,7 @@ interface PrismaMock {
     findMany: jest.Mock;
     count: jest.Mock;
   };
-  steelChargeMaterialLot: { createMany: jest.Mock };
+  steelChargeMaterialLot: { createMany: jest.Mock; findMany: jest.Mock };
   steelChargePreparationActivityLog: { create: jest.Mock };
   $transaction: jest.Mock;
 }
@@ -48,7 +49,7 @@ function createPrismaMock(): PrismaMock {
       findMany: jest.fn(),
       count: jest.fn(),
     },
-    steelChargeMaterialLot: { createMany: jest.fn() },
+    steelChargeMaterialLot: { createMany: jest.fn(), findMany: jest.fn() },
     steelChargePreparationActivityLog: { create: jest.fn() },
   } as PrismaMock;
   prisma.$transaction = jest.fn(async (arg: unknown) => {
@@ -306,6 +307,7 @@ describe('ChargePreparationService', () => {
       prisma.steelMaterialIntake.findMany.mockResolvedValue([
         { id: 'mi-1', intakeNumber: 'MI-2026-00001', status: 'RELEASED' },
       ]);
+      prisma.steelChargeMaterialLot.findMany.mockResolvedValue([]);
       prisma.steelChargeMaterialLot.createMany.mockResolvedValue({ count: 1 });
       prisma.steelChargePreparation.update.mockResolvedValue({ id: 'cp-1' });
       prisma.steelChargePreparation.findUnique.mockResolvedValue({
@@ -324,6 +326,100 @@ describe('ChargePreparationService', () => {
       expect(result).toEqual(
         expect.objectContaining({ stage: 'A02_LOTS_SELECTED' }),
       );
+    });
+
+    it('rejects a released lot that is already allocated to another charge preparation', async () => {
+      prisma.steelChargePreparation.findFirst.mockResolvedValue({
+        id: 'cp-2',
+        organizationId: ORG_ID,
+        stage: 'A01_REQUIREMENT_REVIEWED',
+        status: 'IN_PROGRESS',
+      });
+      prisma.steelMaterialIntake.findMany.mockResolvedValue([
+        { id: 'mi-1', intakeNumber: 'MI-2026-00001', status: 'RELEASED' },
+      ]);
+      prisma.steelChargeMaterialLot.findMany.mockResolvedValue([
+        {
+          chargePreparationId: 'cp-1',
+          intakeId: 'mi-1',
+          intake: { intakeNumber: 'MI-2026-00001' },
+        },
+      ]);
+
+      await expect(
+        service.selectMaterialLots(
+          'cp-2',
+          { intakeIds: ['mi-1'] } as unknown as SelectMaterialLotsDto,
+          USER_ID,
+          ORG_ID,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.steelChargeMaterialLot.createMany).not.toHaveBeenCalled();
+    });
+
+    it('allows a different released lot that is not allocated elsewhere', async () => {
+      prisma.steelChargePreparation.findFirst.mockResolvedValue({
+        id: 'cp-2',
+        organizationId: ORG_ID,
+        stage: 'A01_REQUIREMENT_REVIEWED',
+        status: 'IN_PROGRESS',
+      });
+      prisma.steelMaterialIntake.findMany.mockResolvedValue([
+        { id: 'mi-2', intakeNumber: 'MI-2026-00002', status: 'RELEASED' },
+      ]);
+      prisma.steelChargeMaterialLot.findMany.mockResolvedValue([]);
+      prisma.steelChargeMaterialLot.createMany.mockResolvedValue({ count: 1 });
+      prisma.steelChargePreparation.update.mockResolvedValue({ id: 'cp-2' });
+      prisma.steelChargePreparation.findUnique.mockResolvedValue({
+        id: 'cp-2',
+        stage: 'A02_LOTS_SELECTED',
+      });
+
+      const result = await service.selectMaterialLots(
+        'cp-2',
+        { intakeIds: ['mi-2'] } as unknown as SelectMaterialLotsDto,
+        USER_ID,
+        ORG_ID,
+      );
+
+      expect(prisma.steelChargeMaterialLot.createMany).toHaveBeenCalled();
+      expect(result).toEqual(
+        expect.objectContaining({ stage: 'A02_LOTS_SELECTED' }),
+      );
+    });
+
+    it('rejects cleanly when a concurrent request allocates the same lot first (DB unique constraint)', async () => {
+      // Simulates the race: the pre-check passes (findMany returns []) because
+      // another request's transaction hasn't committed yet, but the DB unique
+      // constraint on intakeId catches the collision at insert time.
+      prisma.steelChargePreparation.findFirst.mockResolvedValue({
+        id: 'cp-3',
+        organizationId: ORG_ID,
+        stage: 'A01_REQUIREMENT_REVIEWED',
+        status: 'IN_PROGRESS',
+      });
+      prisma.steelMaterialIntake.findMany.mockResolvedValue([
+        { id: 'mi-1', intakeNumber: 'MI-2026-00001', status: 'RELEASED' },
+      ]);
+      prisma.steelChargeMaterialLot.findMany.mockResolvedValue([]);
+      const p2002 = Object.assign(
+        new Error('Unique constraint failed on the fields: (`intakeId`)'),
+        { code: 'P2002', meta: { target: ['intakeId'] } },
+      );
+      Object.setPrototypeOf(
+        p2002,
+        Prisma.PrismaClientKnownRequestError.prototype,
+      );
+      prisma.steelChargeMaterialLot.createMany.mockRejectedValue(p2002);
+
+      await expect(
+        service.selectMaterialLots(
+          'cp-3',
+          { intakeIds: ['mi-1'] } as unknown as SelectMaterialLotsDto,
+          USER_ID,
+          ORG_ID,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -507,6 +603,28 @@ describe('ChargePreparationService', () => {
       expect(result).toEqual(
         expect.objectContaining({ stage: 'A12_HANDOVER_CLOSED' }),
       );
+    });
+
+    it('rejects a second furnace handover attempt on an already-CLOSED record', async () => {
+      prisma.steelChargePreparation.findFirst.mockResolvedValue({
+        id: 'cp-1',
+        organizationId: ORG_ID,
+        stage: 'A12_HANDOVER_CLOSED',
+        status: 'CLOSED',
+        chargeNumber: 'CH-2026-00001',
+      });
+
+      await expect(
+        service.closeFurnaceHandover(
+          'cp-1',
+          {
+            furnaceReadinessConfirmed: true,
+          } as unknown as CloseFurnaceHandoverDto,
+          USER_ID,
+          ORG_ID,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.steelChargePreparation.update).not.toHaveBeenCalled();
     });
   });
 });

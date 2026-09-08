@@ -49,6 +49,7 @@ export class UpdateEmployeeEmsDto {
   @IsEnum(EmploymentTypeDto) @IsOptional() employmentType?: EmploymentTypeDto;
   @IsString() @IsOptional() jobTitle?: string;
   @IsDateString() @IsOptional() dateJoined?: string;
+  @IsString() @IsOptional() plantBranch?: string;
   @IsString() @IsOptional() workStation?: string;
   @IsString() @IsOptional() section?: string;
   @IsString() @IsOptional() subSection?: string;

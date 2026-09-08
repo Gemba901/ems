@@ -44,6 +44,9 @@ export default function ApprovalTasksPage() {
 
 function ApprovalTasksContent() {
   const router = useRouter();
+  const organizationTimeZone = useAuthStore(
+    (state) => state.user?.organizationTimeZone,
+  );
   const [pendingTasks, setPendingTasks] = useState<DwmsAssignedTaskHistoryItem[]>([]);
   const [approvedTasks, setApprovedTasks] = useState<DwmsAssignedTaskHistoryItem[]>([]);
   const [rejectedTasks, setRejectedTasks] = useState<DwmsAssignedTaskHistoryItem[]>([]);
@@ -192,7 +195,10 @@ function ApprovalTasksContent() {
 
   const formatDate = (value?: string | null) => {
     if (!value) return "Not available";
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(value));
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: organizationTimeZone || "UTC",
+      dateStyle: "medium",
+    }).format(new Date(value));
   };
 
   const getPriorityBadgeColor = (priority?: string | null) => {

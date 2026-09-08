@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { EmailService } from 'src/notifications/channels/email.service';
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
@@ -21,6 +24,19 @@ const mockJwtService = {
     verify: jest.fn(),
 };
 
+const mockConfigService = {
+    get: jest.fn(),
+};
+
+const mockEmailService = {
+    send: jest.fn(),
+};
+
+const mockCache = {
+    get: jest.fn(),
+    set: jest.fn(),
+};
+
 describe('AuthService', () => {
     let service: AuthService;
 
@@ -30,6 +46,9 @@ describe('AuthService', () => {
                 AuthService,
                 { provide: PrismaService, useValue: mockPrisma },
                 { provide: JwtService, useValue: mockJwtService },
+                { provide: ConfigService, useValue: mockConfigService },
+                { provide: EmailService, useValue: mockEmailService },
+                { provide: CACHE_MANAGER, useValue: mockCache },
             ],
         }).compile();
 

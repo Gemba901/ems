@@ -42,6 +42,7 @@ import { Role } from "@/types/role";
 import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
 import { LeaveService, LEAVE_TYPE_LABELS } from "@/services/leave.service";
 import { NoticeService, Notice, NoticeType } from "@/services/notice.service";
+import DwmsTodayTasksWidget from "@/app/dwms/components/home/DwmsTodayTasksWidget";
 
 // Module registry
 
@@ -143,16 +144,15 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
   STEEL: {
     key: "STEEL",
     label: "Steel Manufacturing",
-    tagline: "Production & Sourcing",
-    description: "Plan production runs, track raw material sourcing, and manage the steel manufacturing workflow end to end.",
+    tagline: "End-to-end steel production workflow",
+    description: "Plan, source, receive, prepare, and manage steel production from start to finish. Follow each process from production planning and raw-material sourcing through material intake, preparation, production, quality checks, and final handover.",
     icon: Factory,
     color: "text-slate-600",
     bg: "bg-slate-50",
     ring: "ring-slate-200",
     href: "/steel",
     actions: [
-      { label: "Production Plans",       href: "/steel/p01", icon: ClipboardList },
-      { label: "Raw Material Sourcing",  href: "/steel/p02", icon: Package },
+      { label: "Start Steel Manufacturing", href: "/steel", icon: ArrowRight },
     ],
   },
   KAIZEN: {
@@ -343,6 +343,8 @@ export default function DashboardPage() {
 
       {accessToken && <RemindersStrip token={accessToken} />}
 
+      {activeModules.includes("DWMS") && <DwmsTodayTasksWidget />}
+
       {/* <DashboardRoleSection /> */}
 
       {/* Active modules */}
@@ -427,7 +429,7 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {/* Explore more */}
+      {/* Explore more
       {canSeeExploreMore && upcomingToShow.length > 0 && (
         <section>
           <div className="flex items-center gap-3 mb-5">
@@ -461,7 +463,7 @@ export default function DashboardPage() {
             ))}
           </div>
         </section>
-      )}
+      )} */}
 
     </div>
   );

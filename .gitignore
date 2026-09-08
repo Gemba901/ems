@@ -44,5 +44,8 @@ employee_details.md
 
 # DWMS local development uploads
 dwms-local-uploads/
-packages/db/scripts/*
+packages/db/local-scripts/
 packages/db/seed-output/
+
+# Local DWMS exports, previews, and helper scripts
+/dwms-local/

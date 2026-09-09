@@ -99,11 +99,11 @@ export function Sidebar({
     {
       name: "Your work",
       items: [
-        ["Today", "/dwms"],
-        ["My tasks", "/dwms/tasks"],
-        ["Assigned by me", "/dwms/assignedTasks"],
+        ["My Routine Work ", "/dwms"],
+        ["Tasks assigned to me", "/dwms/tasks"],
+        ["Tasks assigned by me", "/dwms/assignedTasks"],
         ["Approvals", "/dwms/approvalTasks"],
-        ["Alerts", "/dwms/alerts"],
+        ["Alerts/Abnormality", "/dwms/alerts"],
       ],
     },
     {

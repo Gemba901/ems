@@ -49,3 +49,4 @@ packages/db/seed-output/
 
 # Local DWMS exports, previews, and helper scripts
 /dwms-local/
+/docs

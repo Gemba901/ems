@@ -3,8 +3,11 @@ import { DepartmentsController } from './departments.controller';
 import { DepartmentsService } from './departments.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 
+import { TenancyModule } from '../tenancy/tenancy.module';
+import { ConfigModule } from '@nestjs/config';
+
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, ConfigModule, TenancyModule],
   controllers: [DepartmentsController],
   providers: [DepartmentsService]
 })

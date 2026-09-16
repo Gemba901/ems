@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/api-client";
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = "/api";
 
 export interface ChatMessage {
   role: 'user' | 'assistant';

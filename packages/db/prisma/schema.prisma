@@ -112,9 +112,11 @@ enum TicketStatus {
 
 //organization
 model Organization {
+  files FileAsset[]
   id           String       @id @default(uuid())
   name         String
   shortName    String?
+  slug         String?      @unique
   logoUrl      String?
   industry     String?
   email        String?
@@ -3168,4 +3170,81 @@ model KaizenReview {
 
   kaizen   Kaizen   @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
   reviewer Employee @relation(fields: [reviewerId], references: [id])
+}
+
+// Durable signup reservation. Identity is verified before a company is created.
+model OnboardingRequest {
+  id                String   @id @default(uuid())
+  requestKeyHash    String   @unique
+  fingerprint       String
+  slug              String?  @unique
+  requestedSlug     String
+  companyName       String
+  firstName         String
+  lastName          String
+  email             String
+  phone             String
+  timeZone          String
+  status            String   @default("PENDING_VERIFICATION")
+  verificationHash  String
+  expiresAt         DateTime
+  verifiedAt        DateTime?
+  passwordHash      String?
+  existingUserId    String?
+  organizationId    String?  @unique
+  attempts          Int      @default(0)
+  nextAttemptAt     DateTime @default(now())
+  failureCode       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  messages          OnboardingMessage[]
+
+  @@index([status, nextAttemptAt])
+  @@index([email, createdAt])
+}
+
+// Lease-based delivery; sending is at-least-once and outside company transactions.
+model OnboardingMessage {
+  id          String   @id @default(uuid())
+  requestId   String
+  kind        String
+  request     OnboardingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  attempts    Int      @default(0)
+  availableAt DateTime @default(now())
+  leaseId     String?
+  leaseUntil  DateTime?
+  sentAt      DateTime?
+  failedAt    DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([requestId, kind])
+  @@index([sentAt, failedAt, availableAt])
+}
+
+
+// Metadata is the authorization boundary; storage buckets must also remain private.
+model FileAsset {
+  id String @id @default(uuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy String
+  key String
+  fileName String
+  contentType String
+  size Int
+  folder String
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  @@index([organizationId, status])
+}
+
+model ScheduledJobRun {
+  key String @id
+  window String
+  leaseId String
+  leaseUntil DateTime
+  completedAt DateTime?
+  attempts Int @default(1)
+  failedAt DateTime?
+  updatedAt DateTime @updatedAt
 }

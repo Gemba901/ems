@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
   Controller,
   Post,
@@ -12,6 +15,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EmployeeService } from './employee.service';
@@ -22,8 +26,9 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 
+@TenantRequired()
 @Controller('employee')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard)
 export class EmployeeController {
   constructor(private employeeService: EmployeeService) {}
 
@@ -77,14 +82,16 @@ export class EmployeeController {
   // GET /employee/organization/:orgId/departments
   @Get('organization/:orgId/departments')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR)
-  async getDepartments(@Param('orgId') orgId: string) {
+  async getDepartments(@Param('orgId') orgId: string, @CurrentUser() user: { organizationId: string }) {
+    if (orgId !== user.organizationId) throw new NotFoundException('Organization not found');
     return this.employeeService.getDepartmentsByOrganization(orgId);
   }
 
   // GET /employee/organization/:orgId/department-hods — HODs for the suggestion routing picker
   @Get('organization/:orgId/department-hods')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR)
-  async getDepartmentHODs(@Param('orgId') orgId: string) {
+  async getDepartmentHODs(@Param('orgId') orgId: string, @CurrentUser() user: { organizationId: string }) {
+    if (orgId !== user.organizationId) throw new NotFoundException('Organization not found');
     return this.employeeService.getDepartmentHODs(orgId);
   }
 
@@ -94,14 +101,15 @@ export class EmployeeController {
    * GET /employee/:id
    */
   @Get(':id')
-  async getById(@Param('id') id: string) {
-    return this.employeeService.getEmployeeById(id);
+  async getById(@Param('id') id: string, @CurrentUser() user: { organizationId: string }) {
+    return this.employeeService.getEmployeeById(id, user.organizationId);
   }
 
   // GET /employee/organization/:orgId/stats — workforce analytics for HR reports
   @Get('organization/:orgId/stats')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
-  async getOrgStats(@Param('orgId') orgId: string) {
+  async getOrgStats(@Param('orgId') orgId: string, @CurrentUser() user: { organizationId: string }) {
+    if (orgId !== user.organizationId) throw new NotFoundException('Organization not found');
     return this.employeeService.getOrganizationStats(orgId);
   }
 
@@ -115,7 +123,9 @@ export class EmployeeController {
   async getByOrganization(
     @Param('orgId') orgId: string,
     @Query() paginationDto: PaginationDto,
+    @CurrentUser() user: { organizationId: string },
   ) {
+    if (orgId !== user.organizationId) throw new NotFoundException('Organization not found');
     const { page = 1, limit = 10, search, departmentId } = paginationDto;
 
     if (page < 1 || limit < 1) {
@@ -150,6 +160,7 @@ export class EmployeeController {
   async getByDepartment(
     @Param('deptId') deptId: string,
     @Query() paginationDto: PaginationDto,
+    @CurrentUser() user: { organizationId: string },
   ) {
     const { page = 1, limit = 10 } = paginationDto;
 
@@ -160,8 +171,8 @@ export class EmployeeController {
     const skip = (page - 1) * limit;
 
     const [employees, total] = await Promise.all([
-      this.employeeService.getEmployeesByDepartment(deptId, undefined, skip, limit),
-      this.employeeService.countEmployeesByDepartment(deptId),
+      this.employeeService.getEmployeesByDepartment(deptId, user.organizationId, skip, limit),
+      this.employeeService.countEmployeesByDepartment(deptId, user.organizationId),
     ]);
 
     return {
@@ -185,15 +196,16 @@ export class EmployeeController {
   async update(
     @Param('id') id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
+    @CurrentUser() user: { organizationId: string },
   ) {
-    return this.employeeService.updateEmployee(id, updateEmployeeDto);
+    return this.employeeService.updateEmployee(id, updateEmployeeDto, user.organizationId);
   }
 
   // DELETE /employee/:id
   @Delete(':id')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  async remove(@Param('id') id: string) {
-    return this.employeeService.deleteEmployee(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: { organizationId: string }) {
+    return this.employeeService.deleteEmployee(id, user.organizationId);
   }
 
   // PATCH /employee/company/theme — admin updates their company's primary color
@@ -234,7 +246,8 @@ export class EmployeeController {
   async updateAvatar(
     @Param('id') id: string,
     @Body() dto: UpdateAvatarDto,
+    @CurrentUser() user: { organizationId: string; userId: string; roleLevel: Role },
   ) {
-    return this.employeeService.updateAvatar(id, dto.avatarUrl);
+    return this.employeeService.updateAvatar(id, dto.avatarUrl, user.organizationId, user.userId, user.roleLevel);
   }
 }

@@ -1,3 +1,7 @@
+import { PlatformAdminGuard } from '../tenancy/platform-admin.guard';
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { TicketStatus, TicketType } from 'db';
@@ -43,8 +47,9 @@ class UpdateTicketDto{
 
 type CurrentUserPayload = { userId: string; organizationId: string; isAdminOrg: boolean; roleLevel: string };
 
+@TenantRequired()
 @Controller('tickets')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard)
 export class TicketsController {
     constructor(private ticketsService: TicketsService) {}
 
@@ -81,9 +86,22 @@ export class TicketsController {
      * Only the platform's Super Admins view system tickets.
      */
     @Get('system')
+    @UseGuards(PlatformAdminGuard)
     @Roles(Role.SUPER_ADMIN)
     async getSystemTickets() {
         return this.ticketsService.getSystemTicket();
+    }
+
+    @Get('system/:id')
+    @UseGuards(PlatformAdminGuard)
+    async getSystemById(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+        return this.ticketsService.getById(id, user.userId, user.organizationId, true, user.roleLevel);
+    }
+
+    @Patch('system/:id')
+    @UseGuards(PlatformAdminGuard)
+    async updateSystem(@Param('id') id: string, @Body() dto: UpdateTicketDto, @CurrentUser() user: CurrentUserPayload) {
+        return this.ticketsService.updateTicket(id, dto, user.userId, user.organizationId, true);
     }
 
     /**
@@ -93,7 +111,7 @@ export class TicketsController {
      */
     @Get(':id')
     async getById(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
-        return this.ticketsService.getById(id, user.userId, user.organizationId, user.isAdminOrg, user.roleLevel);
+        return this.ticketsService.getById(id, user.userId, user.organizationId, false, user.roleLevel);
     }
 
     /**
@@ -108,6 +126,6 @@ export class TicketsController {
         @Body() dto: UpdateTicketDto,
         @CurrentUser() user: CurrentUserPayload,
     ) {
-        return this.ticketsService.updateTicket(id, dto, user.userId, user.organizationId, user.isAdminOrg);
+        return this.ticketsService.updateTicket(id, dto, user.userId, user.organizationId, false);
     }
 }

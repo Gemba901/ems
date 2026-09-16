@@ -14,11 +14,15 @@ import { ModuleType } from 'db';
 export class CreateOrganizationDto {
     @IsString()
     @IsNotEmpty()
-    name: string;
+    name!: string;
 
     @IsOptional()
     @IsString()
     shortName?: string;
+
+    @IsString()
+    @IsNotEmpty()
+    slug!: string;
 
     @IsOptional()
     @IsString()
@@ -52,18 +56,18 @@ export class CreateOrganizationDto {
     // Initial admin user
     @IsString()
     @IsNotEmpty()
-    adminFirstName: string;
+    adminFirstName!: string;
 
     @IsString()
     @IsNotEmpty()
-    adminLastName: string;
+    adminLastName!: string;
 
     @IsEmail()
-    adminEmail: string;
+    adminEmail!: string;
 
     @IsString()
     @IsNotEmpty()
-    adminPhone: string;
+    adminPhone!: string;
 
     // Existing SUPER_ADMIN users to add as employees in the org's GembaPMS
     // platform-team department. Falls back to all current SUPER_ADMIN users
@@ -122,7 +126,7 @@ export class UpdateOrgStatusDto {
     @IsEnum(['ACTIVE', 'SUSPENDED', 'INACTIVE'], {
         message: 'status must be one of: ACTIVE, SUSPENDED, INACTIVE',
     })
-    status: 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
+    status!: 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
 }
 
 export class OrgPaginationDto {

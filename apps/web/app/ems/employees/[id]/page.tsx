@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState, type ElementType } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -429,7 +430,7 @@ export default function EmployeeDetailPage() {
               <div className="relative group shrink-0">
                 <div className="h-20 w-20 rounded-2xl overflow-hidden bg-slate-100">
                   {employee.avatarUrl ? (
-                    <img src={employee.avatarUrl} alt={fullName} className="h-full w-full object-cover" />
+                    <TenantImage src={employee.avatarUrl} alt={fullName} className="h-full w-full object-cover" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-xl font-bold text-slate-400">
                       {employee.firstName[0]}{employee.lastName[0]}
@@ -1046,7 +1047,7 @@ export default function EmployeeDetailPage() {
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
               {avatarInput && (
                 <div className="mb-4 rounded-xl overflow-hidden h-20 w-20 bg-slate-100 border border-slate-200">
-                  <img src={avatarInput} alt="Preview" className="w-full h-full object-cover"
+                  <TenantImage src={avatarInput} alt="Preview" className="w-full h-full object-cover"
                     onError={(e) => (e.currentTarget.style.display = "none")} />
                 </div>
               )}

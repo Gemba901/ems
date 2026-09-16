@@ -12,10 +12,14 @@ import * as bcrypt from 'bcrypt';
 jest.mock('bcrypt');
 
 const mockPrisma = {
+    userOrganization: { findMany: jest.fn() },
+    refreshToken: { create: jest.fn() },
+    employee: { findFirst: jest.fn() },
     user: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
     },
 };
 
@@ -55,7 +59,10 @@ describe('AuthService', () => {
         service = module.get<AuthService>(AuthService);
 
         // Reset all mocks before each test
-        jest.clearAllMocks();
+        jest.resetAllMocks();
+        mockPrisma.employee.findFirst.mockResolvedValue(null);
+        mockPrisma.refreshToken.create.mockResolvedValue({});
+        mockPrisma.userOrganization.findMany.mockResolvedValue([{ organizationId: 'org-1', roleId: 2, role: { name: 'ADMIN' }, organization: { name: 'Acme', slug: 'acme', status: 'ACTIVE', isAdminOrg: false } }]);
     });
 
     // ─────────────────────────────────────────────────────────────
@@ -97,6 +104,7 @@ describe('AuthService', () => {
             const result = await service.login('user@test.com', 'correctpassword');
 
             expect(result.accessToken).toBe('signed-jwt-token');
+            if (!result.user) throw new Error('Expected a single-company login');
             expect(result.user.name).toBe('John Doe');
             expect(result.user.userId).toBe('user-1');
         });
@@ -113,32 +121,20 @@ describe('AuthService', () => {
                 .rejects.toThrow(new UnauthorizedException('Account not found! Please contact your administrator.'));
         });
 
-        it('should throw if account already has a password', async () => {
-            mockPrisma.user.findFirst.mockResolvedValue({
-                id: 'user-1',
-                password: 'already-set',
-            });
-
-            await expect(service.verifyFirstTimeUser('user@test.com'))
-                .rejects.toThrow(new UnauthorizedException('Account already setup! Please login with your password.'));
+        it('routes an existing password holder to login without issuing setup credentials', async () => {
+            mockPrisma.user.findFirst.mockResolvedValue({ id: 'user-1', password: 'already-set', organizations: [] });
+            const result = await service.verifyFirstTimeUser('user@test.com');
+            expect(result.hasPassword).toBe(true);
+            expect(result).not.toHaveProperty('setupToken');
+            expect(mockJwtService.sign).not.toHaveBeenCalled();
         });
 
-        it('should return a setupToken if user has no password yet', async () => {
-            mockPrisma.user.findFirst.mockResolvedValue({
-                id: 'user-1',
-                password: null,
-            });
-            mockJwtService.sign.mockReturnValue('setup-jwt-token');
-
+        it('requires email ownership verification when no password is set', async () => {
+            mockPrisma.user.findFirst.mockResolvedValue({ id: 'user-1', password: null, organizations: [] });
             const result = await service.verifyFirstTimeUser('user@test.com');
-
-            expect(result.setupToken).toBe('setup-jwt-token');
-            expect(result.message).toBe('User verified! Proceed to create password.');
-            // Ensure the token was signed with the correct purpose
-            expect(mockJwtService.sign).toHaveBeenCalledWith(
-                { userId: 'user-1', purpsose: 'FIRST_TIME_SETUP' },
-                { expiresIn: '15m' }
-            );
+            expect(result).toMatchObject({ hasPassword: false, verificationRequired: true });
+            expect(result).not.toHaveProperty('setupToken');
+            expect(mockJwtService.sign).not.toHaveBeenCalled();
         });
     });
 
@@ -158,7 +154,7 @@ describe('AuthService', () => {
         it('should throw if the token purpose is wrong', async () => {
             mockJwtService.verify.mockReturnValue({
                 userId: 'user-1',
-                purpsose: 'SOMETHING_ELSE',
+                purpose: 'SOMETHING_ELSE',
             });
 
             await expect(service.createPassword('wrong-purpose-token', 'newpass123'))
@@ -168,7 +164,7 @@ describe('AuthService', () => {
         it('should throw if user is not found', async () => {
             mockJwtService.verify.mockReturnValue({
                 userId: 'user-1',
-                purpsose: 'FIRST_TIME_SETUP',
+                purpose: 'PASSWORD_RESET_SETUP',
             });
             mockPrisma.user.findUnique.mockResolvedValue(null);
 
@@ -179,7 +175,7 @@ describe('AuthService', () => {
         it('should throw if user already has a password (token replay blocked)', async () => {
             mockJwtService.verify.mockReturnValue({
                 userId: 'user-1',
-                purpsose: 'FIRST_TIME_SETUP',
+                purpose: 'PASSWORD_RESET_SETUP',
             });
             mockPrisma.user.findUnique.mockResolvedValue({
                 id: 'user-1',
@@ -187,26 +183,26 @@ describe('AuthService', () => {
             });
 
             await expect(service.createPassword('valid-token', 'newpass123'))
-                .rejects.toThrow(new UnauthorizedException('Password already set. Please login.'));
+                .rejects.toThrow(UnauthorizedException);
         });
 
         it('should hash the password and update the user on success', async () => {
             mockJwtService.verify.mockReturnValue({
                 userId: 'user-1',
-                purpsose: 'FIRST_TIME_SETUP',
+                purpose: 'PASSWORD_RESET_SETUP',
             });
             mockPrisma.user.findUnique.mockResolvedValue({
                 id: 'user-1',
                 password: null,
             });
             (bcrypt.hash as jest.Mock).mockResolvedValue('new-hashed-password');
-            mockPrisma.user.update.mockResolvedValue({});
+            mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
 
             const result = await service.createPassword('valid-token', 'newpass123');
 
             expect(bcrypt.hash).toHaveBeenCalledWith('newpass123', 10);
-            expect(mockPrisma.user.update).toHaveBeenCalledWith({
-                where: { id: 'user-1' },
+            expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+                where: { id: 'user-1', password: null },
                 data: { password: 'new-hashed-password' },
             });
             expect(result.message).toBe('Password created successfully! You can now login.');

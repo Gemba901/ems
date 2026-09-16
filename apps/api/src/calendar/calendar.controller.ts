@@ -1,3 +1,7 @@
+import { PlatformAdminGuard } from '../tenancy/platform-admin.guard';
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
   Controller, Get, Post, Patch, Put, Delete, Body, Param, Query,
   UseGuards, Res,
@@ -22,8 +26,9 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
 
+@TenantRequired()
 @Controller('calendar')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.CALENDAR)
 export class CalendarController {
   constructor(private calendar: CalendarService) {}
@@ -35,17 +40,18 @@ export class CalendarController {
     @Query('year') year: string,
     @Query('month') month: string,
     @Query('clientOrgId') clientOrgId: string | undefined,
-    @CurrentUser() user: { organizationId: string; roleLevel: string },
+    @CurrentUser() user: { organizationId: string; roleLevel: string; isAdminOrg: boolean },
   ) {
     const y = year  ? parseInt(year,  10) : new Date().getFullYear();
     const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
-    return this.calendar.getMonthVisits(y, m, user.organizationId, user.roleLevel, clientOrgId);
+    return this.calendar.getMonthVisits(y, m, user.organizationId, (user.isAdminOrg ? user.roleLevel : (user.roleLevel === Role.SUPER_ADMIN ? Role.ADMIN : user.roleLevel)), clientOrgId);
   }
 
   // ── CRUD visits ──────────────────────────────────────────────────────────
 
   @Post('visits')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async createVisit(
     @Body() dto: CreateVisitDto,
     @CurrentUser() user: { userId: string },
@@ -55,12 +61,14 @@ export class CalendarController {
 
   @Patch('visits/:id')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async updateVisit(@Param('id') id: string, @Body() dto: UpdateVisitDto) {
     return this.calendar.updateVisit(id, dto);
   }
 
   @Delete('visits/:id')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async deleteVisit(@Param('id') id: string) {
     return this.calendar.deleteVisit(id);
   }
@@ -69,6 +77,7 @@ export class CalendarController {
 
   @Post('visits/:id/attendees')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async addAttendee(
     @Param('id') visitId: string,
     @Body() dto: AddVisitAttendeeDto,
@@ -78,6 +87,7 @@ export class CalendarController {
 
   @Delete('visits/:id/attendees/:employeeId')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async removeAttendee(
     @Param('id') visitId: string,
     @Param('employeeId') employeeId: string,
@@ -89,9 +99,9 @@ export class CalendarController {
 
   @Get('requests')
   async getRequests(
-    @CurrentUser() user: { organizationId: string; roleLevel: string },
+    @CurrentUser() user: { organizationId: string; roleLevel: string; isAdminOrg: boolean },
   ) {
-    return this.calendar.getRequests(user.organizationId, user.roleLevel);
+    return this.calendar.getRequests(user.organizationId, (user.isAdminOrg ? user.roleLevel : (user.roleLevel === Role.SUPER_ADMIN ? Role.ADMIN : user.roleLevel)));
   }
 
   @Post('requests')
@@ -104,6 +114,7 @@ export class CalendarController {
 
   @Patch('requests/:id/respond')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async respondToRequest(
     @Param('id') id: string,
     @Body() dto: RespondToRequestDto,
@@ -117,9 +128,9 @@ export class CalendarController {
   @Get('upcoming')
   async getUpcoming(
     @Query() query: UpcomingVisitsQueryDto,
-    @CurrentUser() user: { organizationId: string; roleLevel: string },
+    @CurrentUser() user: { organizationId: string; roleLevel: string; isAdminOrg: boolean },
   ) {
-    return this.calendar.getUpcomingVisits(user.organizationId, user.roleLevel, query.limit ?? 5);
+    return this.calendar.getUpcomingVisits(user.organizationId, (user.isAdminOrg ? user.roleLevel : (user.roleLevel === Role.SUPER_ADMIN ? Role.ADMIN : user.roleLevel)), query.limit ?? 5);
   }
 
   // ── iCal export ──────────────────────────────────────────────────────────
@@ -127,12 +138,12 @@ export class CalendarController {
   @Get('export/ical')
   async exportIcal(
     @Query() query: IcalQueryDto,
-    @CurrentUser() user: { organizationId: string; roleLevel: string },
+    @CurrentUser() user: { organizationId: string; roleLevel: string; isAdminOrg: boolean },
     @Res() res: Response,
   ) {
     const year  = query.year  ?? new Date().getFullYear();
     const month = query.month;
-    const ical  = await this.calendar.getIcalExport(year, month, user.organizationId, user.roleLevel);
+    const ical  = await this.calendar.getIcalExport(year, month, user.organizationId, (user.isAdminOrg ? user.roleLevel : (user.roleLevel === Role.SUPER_ADMIN ? Role.ADMIN : user.roleLevel)));
     const filename = month
       ? `visits-${year}-${String(month).padStart(2, '0')}.ics`
       : `visits-${year}.ics`;
@@ -146,22 +157,24 @@ export class CalendarController {
   @Get('analytics')
   async getAnalytics(
     @Query() query: AnalyticsQueryDto,
-    @CurrentUser() user: { organizationId: string; roleLevel: string },
+    @CurrentUser() user: { organizationId: string; roleLevel: string; isAdminOrg: boolean },
   ) {
     const year = query.year ?? new Date().getFullYear();
-    return this.calendar.getAnalytics(year, user.organizationId, user.roleLevel);
+    return this.calendar.getAnalytics(year, user.organizationId, (user.isAdminOrg ? user.roleLevel : (user.roleLevel === Role.SUPER_ADMIN ? Role.ADMIN : user.roleLevel)));
   }
 
   // ── Orgs / employees ─────────────────────────────────────────────────────
 
   @Get('organizations')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async getOrganizations() {
     return this.calendar.getPartnerOrganizations();
   }
 
   @Get('organizations/:orgId/employees')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async getOrgEmployees(@Param('orgId') orgId: string) {
     return this.calendar.getOrgEmployees(orgId);
   }
@@ -175,6 +188,7 @@ export class CalendarController {
 
   @Post('blocks')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async createBlock(
     @Body() dto: CreateCalendarBlockDto,
     @CurrentUser() user: { userId: string },
@@ -184,6 +198,7 @@ export class CalendarController {
 
   @Delete('blocks/:id')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async deleteBlock(@Param('id') id: string) {
     return this.calendar.deleteBlock(id);
   }
@@ -193,9 +208,9 @@ export class CalendarController {
   @Get('agenda')
   async getAgenda(
     @Query() query: GetEventsQueryDto,
-    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string },
+    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string; isAdminOrg: boolean },
   ) {
-    return this.calendar.getAgenda(query.year, query.month, user.userId, user.organizationId, user.roleLevel);
+    return this.calendar.getAgenda(query.year, query.month, user.userId, user.organizationId, (user.isAdminOrg ? user.roleLevel : (user.roleLevel === Role.SUPER_ADMIN ? Role.ADMIN : user.roleLevel)));
   }
 
   // ── Holistic Calendar ──────────────────────────────────────────────────────
@@ -211,18 +226,18 @@ export class CalendarController {
   @Post('events')
   async createEvent(
     @Body() dto: CreateCalendarEventDto,
-    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string },
+    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string; isAdminOrg: boolean },
   ) {
-    return this.calendar.createEvent(dto, user.userId, user.organizationId, user.roleLevel);
+    return this.calendar.createEvent(dto, user.userId, user.organizationId, (user.isAdminOrg ? user.roleLevel : (user.roleLevel === Role.SUPER_ADMIN ? Role.ADMIN : user.roleLevel)));
   }
 
   @Patch('events/:id')
   async updateEvent(
     @Param('id') id: string,
     @Body() dto: UpdateCalendarEventDto,
-    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string },
+    @CurrentUser() user: { userId: string; organizationId: string; roleLevel: string; isAdminOrg: boolean },
   ) {
-    return this.calendar.updateEvent(id, dto, user.userId, user.organizationId, user.roleLevel);
+    return this.calendar.updateEvent(id, dto, user.userId, user.organizationId, (user.isAdminOrg ? user.roleLevel : (user.roleLevel === Role.SUPER_ADMIN ? Role.ADMIN : user.roleLevel)));
   }
 
   @Delete('events/:id')
@@ -251,8 +266,8 @@ export class CalendarController {
   }
 
   @Get('availability')
-  async checkAvailability(@Query() query: CheckAvailabilityQueryDto) {
-    return this.calendar.checkAvailability(query.employeeId, query.startAt, query.endAt);
+  async checkAvailability(@Query() query: CheckAvailabilityQueryDto, @CurrentUser() user: { organizationId: string }) {
+    return this.calendar.checkAvailability(query.employeeId, query.startAt, query.endAt, user.organizationId);
   }
 
   @Get('org-employees')
@@ -264,8 +279,8 @@ export class CalendarController {
 
   @Get('employees/:id/stats')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR)
-  async getEmployeeEventStats(@Param('id') employeeId: string) {
-    return this.calendar.getEmployeeEventStats(employeeId);
+  async getEmployeeEventStats(@Param('id') employeeId: string, @CurrentUser() user: { organizationId: string }) {
+    return this.calendar.getEmployeeEventStats(employeeId, user.organizationId);
   }
 
   @Get('employees/:id/invitation-log')
@@ -273,20 +288,23 @@ export class CalendarController {
   async getEmployeeInvitationLog(
     @Param('id') employeeId: string,
     @Query() query: InvitationLogQueryDto,
+    @CurrentUser() user: { organizationId: string },
   ) {
-    return this.calendar.getEmployeeInvitationLog(employeeId, query.page ?? 1, query.limit ?? 20);
+    return this.calendar.getEmployeeInvitationLog(employeeId, query.page ?? 1, query.limit ?? 20, user.organizationId);
   }
 
   // ── Visit Month Plans ─────────────────────────────────────────────────────
 
   @Get('visit-plans')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async getVisitMonthPlan(@Query() query: VisitMonthPlanQueryDto) {
     return this.calendar.getVisitMonthPlan(query.clientOrgId, query.year, query.month);
   }
 
   @Get('visit-plans/all')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async getAllVisitMonthPlans(
     @Query('year') year: string,
     @Query('month') month: string,
@@ -298,6 +316,7 @@ export class CalendarController {
 
   @Put('visit-plans')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async upsertVisitMonthPlan(
     @Body() dto: UpsertVisitMonthPlanDto,
     @CurrentUser() user: { userId: string },
@@ -307,6 +326,7 @@ export class CalendarController {
 
   @Patch('visit-plans/:planId/slots/:slotIndex')
   @Roles(Role.SUPER_ADMIN)
+  @UseGuards(PlatformAdminGuard)
   async updateVisitPlanSlot(
     @Param('planId') planId: string,
     @Param('slotIndex') slotIndex: string,

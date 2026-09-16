@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { endSession } from "@/lib/session";
+import { apiClient } from "@/lib/api-client";
+const API_URL = "/api";
 
 export const AuthService = {
     async verifyIdentifier(identifier: string, type: "phoneOrEmail" | "employeeCode" = "phoneOrEmail") {
@@ -108,17 +110,20 @@ export const AuthService = {
     },
 
     async logout() {
-        await fetch(`${API_URL}/auth/logout`, {
-            method: "POST",
-            credentials: "include",
-        }).catch(() => {});
+        await endSession();
+    },
+
+    async updateMyOrg(token: string, data: { logoUrl?: string; primaryColor?: string }) {
+        const res = await apiClient('/api/company/organization', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }, token);
+        if (!res.ok) throw new Error('Failed to update company profile');
+        return res.json();
     },
 
     async getMyOrg(token: string): Promise<{ id: string; name: string; status: string; modules: string[]; logoUrl: string | null; primaryColor: string | null; timeZone: string }> {
-        const res = await fetch(`${API_URL}/auth/my-org`, {
+        const res = await apiClient(`${API_URL}/auth/my-org`, {
             credentials: "include",
             headers: { Authorization: `Bearer ${token}` },
-        });
+        }, token);
         if (!res.ok) throw new Error("Failed to load organization info.");
         return res.json();
     },

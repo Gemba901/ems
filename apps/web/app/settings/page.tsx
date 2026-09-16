@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState, useRef } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -181,7 +182,7 @@ function LogoSection() {
         setUploading(true);
         try {
             const { fileUrl } = await uploadImage(file, "logos", accessToken);
-            await AdminService.updateOrganization(accessToken, orgId, { logoUrl: fileUrl });
+            await AuthService.updateMyOrg(accessToken, { logoUrl: fileUrl });
             queryClient.invalidateQueries({ queryKey: ["settings"] });
             if (user) setAuth({ ...user, organizationUrl: fileUrl }, accessToken);
         } catch (err) {
@@ -207,7 +208,7 @@ function LogoSection() {
             <div className="grid gap-4 sm:grid-cols-[auto_1fr] items-center">
                 <div className="h-24 w-24 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
                     {logoUrl ? (
-                        <img src={logoUrl} alt="Organization logo" className="h-full w-full object-cover" />
+                        <TenantImage src={logoUrl} alt="Organization logo" className="h-full w-full object-cover" />
                     ) : (
                         <span className="text-xs text-slate-400">No logo yet</span>
                     )}

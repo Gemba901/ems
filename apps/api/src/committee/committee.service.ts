@@ -66,7 +66,7 @@ export class CommitteeService {
 
   async getCommittee(id: string, organizationId: string) {
     const committee = await this.prisma.steeringCommittee.findUnique({
-      where: { id },
+      where: { id, organizationId },
       include: committeeInclude,
     });
     if (!committee || committee.organizationId !== organizationId) {
@@ -77,7 +77,7 @@ export class CommitteeService {
 
   async addMember(committeeId: string, dto: AddMemberDto, organizationId: string) {
     const committee = await this.prisma.steeringCommittee.findUnique({
-      where: { id: committeeId },
+      where: { id: committeeId, organizationId },
     });
     if (!committee || committee.organizationId !== organizationId) {
       throw new NotFoundException('Committee not found');
@@ -102,7 +102,7 @@ export class CommitteeService {
 
   async removeMember(committeeId: string, employeeId: string, organizationId: string) {
     const committee = await this.prisma.steeringCommittee.findUnique({
-      where: { id: committeeId },
+      where: { id: committeeId, organizationId },
     });
     if (!committee || committee.organizationId !== organizationId) {
       throw new NotFoundException('Committee not found');
@@ -121,11 +121,11 @@ export class CommitteeService {
   }
 
   async deleteCommittee(id: string, organizationId: string) {
-    const committee = await this.prisma.steeringCommittee.findUnique({ where: { id } });
+    const committee = await this.prisma.steeringCommittee.findUnique({ where: { id, organizationId } });
     if (!committee || committee.organizationId !== organizationId) {
       throw new NotFoundException('Committee not found');
     }
-    await this.prisma.steeringCommittee.delete({ where: { id } });
+    await this.prisma.steeringCommittee.delete({ where: { id, organizationId } });
     return { message: 'Committee deleted' };
   }
 
@@ -144,7 +144,7 @@ export class CommitteeService {
   // The single committee SELECTED_FOR_SGA suggestions are forwarded to for this org
   async setDesignatedSgaCommittee(committeeId: string, organizationId: string) {
     const committee = await this.prisma.steeringCommittee.findUnique({
-      where: { id: committeeId },
+      where: { id: committeeId, organizationId },
     });
     if (!committee || committee.organizationId !== organizationId) {
       throw new NotFoundException('Committee not found');

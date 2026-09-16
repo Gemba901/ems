@@ -241,14 +241,14 @@ export abstract class DwmsBaseService {
     return Math.min(90, Math.max(1, Math.trunc(days)));
   }
 
-  async isSuperior(superiorId: string, employeeId: string): Promise<boolean> {
+  async isSuperior(superiorId: string, employeeId: string, organizationId: string): Promise<boolean> {
     let currentId: string | null = employeeId;
     const visited = new Set<string>();
     while (currentId) {
       if (visited.has(currentId)) break;
       visited.add(currentId);
       const employee = await this.prisma.employee.findUnique({
-        where: { id: currentId },
+        where: { id: currentId, organizationId },
         select: { reportingManagerId: true },
       });
       if (!employee || !employee.reportingManagerId) break;

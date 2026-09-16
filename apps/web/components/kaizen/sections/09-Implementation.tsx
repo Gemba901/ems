@@ -1,5 +1,7 @@
 "use client";
 
+import { TenantFileLink } from "@/components/files/TenantFileLink";
+import { TenantImage } from "@/components/files/TenantImage";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ImagePlus, Loader2, X } from "lucide-react";
@@ -99,10 +101,10 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
         {kaizen.afterPhotoUrls.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             {kaizen.afterPhotoUrls.map((url, i) => (
-              <a key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-slate-100 aspect-square block">
+              <TenantFileLink key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-slate-100 aspect-square block">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={`After ${i + 1}`} className="w-full h-full object-cover" />
-              </a>
+                <TenantImage src={url} alt={`After ${i + 1}`} className="w-full h-full object-cover" />
+              </TenantFileLink>
             ))}
           </div>
         )}
@@ -143,7 +145,7 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
             {afterPhotoUrls.map((url, i) => (
               <div key={url} className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 aspect-square">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={`After ${i + 1}`} className="w-full h-full object-cover" />
+                <TenantImage src={url} alt={`After ${i + 1}`} className="w-full h-full object-cover" />
                 <button
                   type="button"
                   onClick={() => removePhoto(i)}

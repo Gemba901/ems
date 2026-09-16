@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
@@ -750,7 +751,7 @@ function HRContent() {
                                             <td className="px-4 py-3.5">
                                                 <div className="flex items-center gap-3">
                                                     {emp.avatarUrl ? (
-                                                        <img src={emp.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover border border-slate-200 shrink-0" />
+                                                        <TenantImage src={emp.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover border border-slate-200 shrink-0" />
                                                     ) : (
                                                         <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
                                                             {emp.firstName[0]}{emp.lastName[0]}

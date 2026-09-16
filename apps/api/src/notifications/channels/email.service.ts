@@ -28,7 +28,7 @@ export class EmailService {
         this.from = this.config.get<string>('SES_FROM_EMAIL', 'info@gembapms.com');
     }
 
-    async send(payload: EmailPayload): Promise<void> {
+    async send(payload: EmailPayload, options: { requireDelivery?: boolean } = {}): Promise<void> {
         const { to, subject, title, message, actionUrl, actionLabel } = payload;
 
         const ctaBlock = actionUrl
@@ -98,6 +98,8 @@ export class EmailService {
             }));
             this.logger.log(`Email sent to ${to}: "${subject}"`);
         } catch (err) {
+            // Verification links must never be logged or reported as delivered on failure.
+            if (options.requireDelivery) throw new Error("Email delivery failed");
             this.logger.error(`Failed to send email to ${to}: ${(err as Error).message}`);
 
             // Outside production, surface the content (and any action link) directly in the

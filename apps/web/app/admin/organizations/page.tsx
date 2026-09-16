@@ -1,10 +1,12 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import {
   AdminService,
+  type CreateOrganizationPayload,
   Organization,
   OrgStatus,
   ModuleType,
@@ -102,12 +104,31 @@ function Field({
 const inputCls =
   "w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all";
 
+// Mirror the API's reserved names; server validation remains authoritative.
+const RESERVED_SLUGS = new Set(["www", "api", "admin", "app", "auth", "staging", "support"]);
+
+function validateSlug(value: string): string | null {
+  const slug = value.trim().toLowerCase();
+  if (slug.length < 3 || slug.length > 40) {
+    return "Company address must contain 3–40 characters.";
+  }
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])$/.test(slug)) {
+    return "Use letters, numbers and hyphens, without a leading or trailing hyphen.";
+  }
+  if (RESERVED_SLUGS.has(slug)) {
+    return "This company address is reserved. Please choose another.";
+  }
+  return null;
+}
+
 function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [slugTouched, setSlugTouched] = useState(false);
   const [form, setForm] = useState({
     name: "",
+    slug: "",
     shortName: "",
     industry: "",
     email: "",
@@ -115,6 +136,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
     address: "",
     logoUrl: "",
   });
+  const slugError = slugTouched ? validateSlug(form.slug) : null;
   const [adminForm, setAdminForm] = useState({
     firstName: "",
     lastName: "",
@@ -189,6 +211,8 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
       setError("Organization name is required.");
       return;
     }
+    setSlugTouched(true);
+    if (validateSlug(form.slug)) return;
     if (!adminForm.firstName.trim()) {
       setError("Admin first name is required.");
       return;
@@ -209,15 +233,9 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
     setSubmitting(true);
     setError(null);
     try {
-      const payload: Record<string, string> & {
-        modules?: ModuleType[];
-        adminFirstName: string;
-        adminLastName: string;
-        adminEmail: string;
-        adminPhone: string;
-        gembaTeamUserIds?: string[];
-      } = {
+      const payload: CreateOrganizationPayload = {
         name: form.name.trim(),
+        slug: form.slug.trim().toLowerCase(),
         adminFirstName: adminForm.firstName.trim(),
         adminLastName: adminForm.lastName.trim(),
         adminEmail: adminForm.email.trim(),
@@ -245,6 +263,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
   function handleClose() {
     setForm({
       name: "",
+      slug: "",
       shortName: "",
       industry: "",
       email: "",
@@ -252,6 +271,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
       address: "",
       logoUrl: "",
     });
+    setSlugTouched(false);
     setAdminForm({ firstName: "", lastName: "", email: "", phone: "" });
     setAdminPhoneCountry("254");
     setShowPhonePicker(false);
@@ -309,6 +329,33 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
               placeholder="e.g. Sunveat Food Limited"
               autoFocus
             />
+          </Field>
+
+          <Field label="Company Address" required>
+            <input
+              aria-label="Company address"
+              aria-describedby={slugError ? "organization-slug-help organization-slug-error" : "organization-slug-help"}
+              aria-invalid={!!slugError}
+              value={form.slug}
+              onChange={(e) => set("slug", e.target.value)}
+              onBlur={() => {
+                set("slug", form.slug.trim().toLowerCase());
+                setSlugTouched(true);
+              }}
+              className={inputCls}
+              placeholder="e.g. sunveat"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <p id="organization-slug-help" className="mt-1 text-[11px] text-slate-500">
+              Choose 3–40 letters, numbers or hyphens for your future workspace address.
+            </p>
+            {slugError && (
+              <p id="organization-slug-error" role="alert" className="text-xs text-red-600">
+                {slugError}
+              </p>
+            )}
           </Field>
 
           <Field label="Short Name / Abbreviation">
@@ -413,7 +460,7 @@ function NewOrgDrawer({ open, onClose, onCreated, token }: NewOrgDrawerProps) {
             </div>
             {form.logoUrl && (
               <div className="flex items-center gap-2 mt-3">
-                <img
+                <TenantImage
                   src={form.logoUrl}
                   alt="preview"
                   onError={(e) => (e.currentTarget.style.display = "none")}
@@ -937,8 +984,8 @@ export default function AdminOrganizationsPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             {org.logoUrl ? (
-                              <img
-                                src={org.logoUrl}
+                              <TenantImage
+                                src={org.logoUrl} organizationId={org.id}
                                 alt={org.name}
                                 className="h-8 w-8 rounded-lg object-cover shrink-0 border border-slate-100"
                               />

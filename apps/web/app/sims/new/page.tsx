@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -400,7 +401,7 @@ export default function NewSuggestionPage() {
                   {imagePreview ? (
                     <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={imagePreview} alt="Preview" className="w-full max-h-60 object-contain" />
+                      <TenantImage src={imagePreview} alt="Preview" className="w-full max-h-60 object-contain" />
                       <button
                         type="button"
                         onClick={removeImage}

@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { apiClient } from "@/lib/api-client";
+const API_URL = "/api";
 
 function authHeaders(token: string) {
     return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
@@ -36,33 +37,33 @@ export interface CreateNoticePayload {
 
 export const NoticeService = {
     async getNotices(token: string): Promise<Notice[]> {
-        const res = await fetch(`${API_URL}/notices`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/notices`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async createNotice(token: string, payload: CreateNoticePayload): Promise<Notice> {
-        const res = await fetch(`${API_URL}/notices`, {
+        const res = await apiClient(`${API_URL}/notices`, {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify(payload),
-        });
+        }, token);
         return handleResponse(res);
     },
 
     async updateNotice(token: string, id: string, payload: Partial<CreateNoticePayload>): Promise<Notice> {
-        const res = await fetch(`${API_URL}/notices/${id}`, {
+        const res = await apiClient(`${API_URL}/notices/${id}`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify(payload),
-        });
+        }, token);
         return handleResponse(res);
     },
 
     async deleteNotice(token: string, id: string): Promise<void> {
-        const res = await fetch(`${API_URL}/notices/${id}`, {
+        const res = await apiClient(`${API_URL}/notices/${id}`, {
             method: "DELETE",
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse(res);
     },
 };

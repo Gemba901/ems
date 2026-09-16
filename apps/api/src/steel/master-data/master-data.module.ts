@@ -1,3 +1,5 @@
+import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { ConfigModule } from '@nestjs/config';
 import { Module } from '@nestjs/common';
 import { MasterDataService } from './master-data.service';
 import { MasterDataController } from './master-data.controller';
@@ -5,7 +7,7 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [TenancyModule, ConfigModule, PrismaModule],
   controllers: [MasterDataController],
   providers: [MasterDataService, ModuleGuard],
 })

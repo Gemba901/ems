@@ -28,15 +28,19 @@ export class DepartmentsService {
     }
 
     // get a single department by id with employee count
-    async getDepartmentById(id: string) {
-        return this.prisma.department.findUnique({
-            where: { id },
+    async getDepartmentById(id: string, organizationId: string) {
+        const department = await this.prisma.department.findFirst({
+            where: { id, organizationId },
             include: {
                 _count: {
                     select: { employees: true }
                 }
             }
-        })
+        });
+        if (!department) {
+            throw new NotFoundException('Department not found');
+        }
+        return department;
     }
 
     // rename a department (always allowed regardless of employee count)
@@ -44,20 +48,20 @@ export class DepartmentsService {
         if (!name?.trim()) {
             throw new BadRequestException('Department name is required');
         }
-        const dept = await this.prisma.department.findUnique({ where: { id } });
+        const dept = await this.prisma.department.findFirst({ where: { id, organizationId } });
         if (!dept || dept.organizationId !== organizationId) {
             throw new NotFoundException('Department not found');
         }
         return this.prisma.department.update({
-            where: { id },
+            where: { id, organizationId },
             data: { name: name.trim() },
         });
     }
 
     // delete a department — only if it has zero employees
     async deleteDepartment(id: string, organizationId: string) {
-        const dept = await this.prisma.department.findUnique({
-            where: { id },
+        const dept = await this.prisma.department.findFirst({
+            where: { id, organizationId },
             include: {
                 _count: { select: { employees: true, suggestions: true } },
             },
@@ -71,6 +75,6 @@ export class DepartmentsService {
         if (dept._count.suggestions > 0) {
             throw new ConflictException('Cannot delete: this department has suggestions linked to it');
         }
-        return this.prisma.department.delete({ where: { id } });
+        return this.prisma.department.delete({ where: { id, organizationId } });
     }
 }

@@ -1,5 +1,6 @@
 "use client"
 
+import { TenantImage } from "@/components/files/TenantImage";
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
+import { useToast } from "@/contexts/toast.context";
 import { Role } from "@/types/role";
 import { useOrgModules } from "@/hooks/useOrgModules";
 
@@ -144,11 +146,16 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
   const { hasModule } = useOrgModules();
   const queryClient = useQueryClient();
 
+  const { toast } = useToast();
   const handleLogout = async () => {
-    await AuthService.logout();
-    logout();
-    queryClient.clear();
-    router.push("/login");
+    try {
+      await AuthService.logout();
+      logout();
+      queryClient.clear();
+      router.push("/login");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Unable to sign out. Please try again.", "error");
+    }
   };
 
   const userRole = user?.roleLevel;
@@ -210,7 +217,7 @@ export function Sidebar({ open = false, onClose, collapsed = false, onToggle }: 
             <>
               <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-indigo-500/20">
                 {user?.organizationUrl ? (
-                  <img
+                  <TenantImage
                     src={user.organizationUrl}
                     alt={user.organizationName ?? ""}
                     className="h-full w-full object-cover"

@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
@@ -113,7 +114,7 @@ export default function MyProfilePage() {
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex items-center gap-5">
         <div className="relative shrink-0 group">
           {(employee as any).avatarUrl ? (
-            <img
+            <TenantImage
               src={(employee as any).avatarUrl}
               alt={fullName}
               className="h-16 w-16 rounded-2xl object-cover border border-slate-200"
@@ -248,7 +249,7 @@ export default function MyProfilePage() {
             <div className="px-6 py-5 space-y-4">
               <p className="text-xs text-slate-500">Paste a publicly accessible image URL (HTTPS).</p>
               {avatarUrl && (
-                <img
+                <TenantImage
                   src={avatarUrl}
                   alt="Preview"
                   onError={(e) => (e.currentTarget.style.display = "none")}

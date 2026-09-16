@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
@@ -318,7 +319,7 @@ export default function OrgDetailPage() {
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-4">
                         {org.logoUrl ? (
-                            <img src={org.logoUrl} alt={org.name} className="h-14 w-14 rounded-xl object-cover border border-slate-200" />
+                            <TenantImage src={org.logoUrl} organizationId={org.id} alt={org.name} className="h-14 w-14 rounded-xl object-cover border border-slate-200" />
                         ) : (
                             <div className="h-14 w-14 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-xl font-bold shrink-0">
                                 {org.name[0].toUpperCase()}
@@ -651,7 +652,7 @@ export default function OrgDetailPage() {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     {emp.avatarUrl ? (
-                                                        <img src={emp.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover shrink-0 border border-slate-200" />
+                                                        <TenantImage src={emp.avatarUrl} organizationId={org.id} alt="" className="h-7 w-7 rounded-full object-cover shrink-0 border border-slate-200" />
                                                     ) : (
                                                         <div className="h-7 w-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
                                                             {emp.firstName[0]}{emp.lastName[0]}

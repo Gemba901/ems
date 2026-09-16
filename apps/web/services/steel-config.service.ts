@@ -2,7 +2,7 @@ import { apiClient } from "@/lib/api-client";
 import type { ProductType, PlantRoute, SteelDepartment, CreditStatus } from "./steel-master-data.service";
 import type { Supplier, EmployeeRef } from "./steel-sourcing.service";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = "/api";
 
 function authHeaders(token: string) {
   return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };

@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
   Controller,
   Get,
@@ -56,8 +59,9 @@ const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
  * Charge Verification (A01-A05), S2 Charging & Melting Operation (A06-A09),
  * S3 Melt Completion & Handover (A10-A14).
  */
+@TenantRequired()
 @Controller('steel/melting')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.STEEL)
 @Roles(...MELTING_ROLES)
 export class MeltingController {

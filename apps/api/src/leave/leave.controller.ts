@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
     Controller, Get, Post, Patch, Body, Param, Query, UseGuards,
 } from '@nestjs/common';
@@ -16,8 +19,9 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
 
+@TenantRequired()
 @Controller('leave')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.LEAVE)
 export class LeaveController {
     constructor(private leave: LeaveService) {}

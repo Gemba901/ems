@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -128,7 +129,7 @@ function LeaveProfile() {
             <div className="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4">
                 <div className="h-16 w-16 shrink-0 rounded-full overflow-hidden bg-slate-800 text-white text-lg font-bold flex items-center justify-center">
                     {employee.avatarUrl ? (
-                        <img src={employee.avatarUrl} alt="" className="h-full w-full object-cover" />
+                        <TenantImage src={employee.avatarUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
                         initials(employee.firstName, employee.lastName)
                     )}

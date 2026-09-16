@@ -1,3 +1,5 @@
+import { OperationsModule } from './operations/operations.module';
+import { OnboardingModule } from "./onboarding/onboarding.module";
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -23,6 +25,7 @@ import { DwmsModule } from './dwms/dwms.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { SteelDomainModule } from './steel/steel-domain.module';
 import { KaizenModule } from './kaizen/kaizen.module';
+import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
   imports: [
@@ -37,6 +40,9 @@ import { KaizenModule } from './kaizen/kaizen.module';
       max: 500,
     }),
     PrismaModule,
+    OnboardingModule,
+    TenancyModule,
+    OperationsModule,
     AuthModule,
     EmployeeModule,
     DepartmentsModule,

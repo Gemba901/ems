@@ -1,0 +1,7 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { inspectEnvironment } from './check-env.mjs';
+const env = { TENANT_BASE_DOMAIN: 'staging.example.test', TENANT_PROXY_SECRET: 'a'.repeat(64), API_INTERNAL_URL: 'https://api-staging.example.test', TENANT_PLATFORM_HOSTS: 'staging.example.test', TENANT_PLATFORM_SLUG: 'gemba', DEPLOYMENT_ENV: 'staging', DATABASE_URL: 'postgresql://user:secret@db/staging', EXPECTED_DATABASE_NAME: 'staging', AWS_REGION: 'eu-north-1', AWS_PRIVATE_UPLOAD_BUCKET: 'private-staging', SES_FROM_EMAIL: 'mail@example.test', BUSINESS_JOBS_ENABLED: 'false', ONBOARDING_ENABLED: 'false' };
+test('accepts private staging API and web environment shapes', () => { assert.deepEqual(inspectEnvironment(env, 'api'), []); assert.deepEqual(inspectEnvironment(env, 'web'), []); });
+test('blocks accidental database target mismatch without exposing credentials', () => { const errors = inspectEnvironment({ ...env, EXPECTED_DATABASE_NAME: 'production' }, 'api'); assert.ok(errors.some(x => x.includes('different database'))); assert.ok(!JSON.stringify(errors).includes('secret@')); });
+test('rejects insecure upstream and missing signup worker', () => { assert.ok(inspectEnvironment({ ...env, API_INTERNAL_URL: 'http://api.example.test' }, 'web').length); assert.ok(inspectEnvironment({ ...env, ONBOARDING_ENABLED: 'true' }, 'api').some(x => x.includes('worker'))); });

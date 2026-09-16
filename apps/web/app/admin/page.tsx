@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
@@ -263,7 +264,7 @@ export default function AdminDashboardPage() {
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
                                             {org.logoUrl ? (
-                                                <img src={org.logoUrl} alt={org.name} className="h-7 w-7 rounded-lg object-cover shrink-0" />
+                                                <TenantImage src={org.logoUrl} organizationId={org.id} alt={org.name} className="h-7 w-7 rounded-lg object-cover shrink-0" />
                                             ) : (
                                                 <div className="h-7 w-7 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-[11px] font-bold shrink-0">
                                                     {org.name[0].toUpperCase()}

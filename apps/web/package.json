@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:proxy": "node tests/api-proxy.test.mjs",
+    "test:session": "../../packages/db/node_modules/.bin/tsx tests/session.test.ts",
+    "test:proxy-integration": "node tests/proxy-route.integration.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

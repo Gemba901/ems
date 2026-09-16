@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useAuthStore } from "@/store/auth.store";
+
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
@@ -14,6 +16,10 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
         },
       }),
   );
+
+  useEffect(() => useAuthStore.subscribe((state, previous) => {
+    if (state.user?.userId !== previous.user?.userId || state.user?.organizationId !== previous.user?.organizationId) queryClient.clear();
+  }), [queryClient]);
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

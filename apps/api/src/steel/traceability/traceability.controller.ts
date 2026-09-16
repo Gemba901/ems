@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { TraceabilityService } from './traceability.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -21,8 +24,9 @@ const TRACEABILITY_ROLES = [
 ];
 
 /** Read-only cross-process traceability for the Steel domain. */
+@TenantRequired()
 @Controller('steel/traceability')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.STEEL)
 @Roles(...TRACEABILITY_ROLES)
 export class TraceabilityController {

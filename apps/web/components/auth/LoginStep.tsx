@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, User, ArrowRight, AlertCircle } from "lucide-react";
@@ -36,8 +37,9 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
             return;
         }
 
+        if (response.workspaceUrl) { window.location.assign(response.workspaceUrl); return; }
         setAuth(response.user, response.accessToken);
-        router.push(response.user.roleLevel === "SUPER_ADMIN" ? "/admin" : "/");
+        router.push(response.user.isAdminOrg && response.user.roleLevel === "SUPER_ADMIN" ? "/admin" : "/");
     } catch (err: any) {
         setError(err.message || "Incorrect password. Please try again.");
     } finally {
@@ -54,7 +56,7 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
     >
       <div className="flex flex-col items-center mb-8">
         {data.logoUrl ? (
-          <img
+          <TenantImage
             src={data.logoUrl}
             alt={data.orgName || "Organization"}
             className="h-16 w-auto max-w-[160px] object-contain mb-6"

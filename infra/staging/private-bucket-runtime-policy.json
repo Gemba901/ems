@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InspectPrivateBucket",
+      "Effect": "Allow",
+      "Action": ["s3:GetBucketPublicAccessBlock", "s3:GetBucketPolicyStatus"],
+      "Resource": "arn:aws:s3:::REPLACE_PRIVATE_STAGING_BUCKET"
+    },
+    {
+      "Sid": "CompanyFiles",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::REPLACE_PRIVATE_STAGING_BUCKET/organizations/*"
+    }
+  ]
+}

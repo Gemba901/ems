@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { MasterDataService } from './master-data.service';
 import {
@@ -26,8 +29,9 @@ const PLANNING_ROLES = [
 ];
 
 /** Read-only master-data lookups backing the P01 selection screens. */
+@TenantRequired()
 @Controller('steel/master-data')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.STEEL)
 @Roles(...PLANNING_ROLES)
 export class MasterDataController {

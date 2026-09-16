@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
-import type { Prisma } from 'db';
+import { Prisma } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OrgStatus, ModuleType } from 'db';
 import {
@@ -17,6 +17,7 @@ import {
     OrgPaginationDto,
     OrgEmployeePaginationDto,
 } from './dto/organizations.dto';
+import { getOrganizationSlugError, normalizeOrganizationSlug } from 'src/common/utils/organization-slug';
 
 const CACHE_KEYS = {
     PLATFORM_STATS: 'platform:stats',
@@ -28,9 +29,9 @@ export class OrganizationsService {
     constructor(
         private prisma: PrismaService,
         @Inject(CACHE_MANAGER) private cache: Cache,
-    ) {}
+    ) { }
 
-    // ── Platform-wide stats ──────────────────────────────────────────────────
+    // Platform-wide stats
 
     async getPlatformStats() {
         const cached = await this.cache.get(CACHE_KEYS.PLATFORM_STATS);
@@ -106,12 +107,12 @@ export class OrganizationsService {
         return result;
     }
 
-    // ── List all organizations ───────────────────────────────────────────────
+    // List all organizations
 
     async listAll(dto: OrgPaginationDto) {
-        const page  = dto.page  ?? 1;
+        const page = dto.page ?? 1;
         const limit = dto.limit ?? 20;
-        const skip  = (page - 1) * limit;
+        const skip = (page - 1) * limit;
 
         const [organizations, total] = await Promise.all([
             this.prisma.organization.findMany({
@@ -121,10 +122,10 @@ export class OrganizationsService {
                 include: {
                     _count: {
                         select: {
-                            employees:        true,
-                            departments:      true,
+                            employees: true,
+                            departments: true,
                             userOrganizations: true,
-                            suggestions:      true,
+                            suggestions: true,
                         },
                     },
                 },
@@ -143,7 +144,7 @@ export class OrganizationsService {
         };
     }
 
-    // ── Get single organization ──────────────────────────────────────────────
+    // Get single organization
 
     async getById(id: string) {
         const org = await this.prisma.organization.findUnique({
@@ -157,10 +158,10 @@ export class OrganizationsService {
                 },
                 _count: {
                     select: {
-                        employees:         true,
-                        departments:       true,
+                        employees: true,
+                        departments: true,
                         userOrganizations: true,
-                        suggestions:       true,
+                        suggestions: true,
                     },
                 },
             },
@@ -170,7 +171,7 @@ export class OrganizationsService {
         return org;
     }
 
-    // ── Per-org aggregate stats ──────────────────────────────────────────────
+    // Per-org aggregate stats
 
     async getOrgStats(id: string) {
         await this.findOrFail(id);
@@ -184,10 +185,10 @@ export class OrganizationsService {
                     include: {
                         _count: {
                             select: {
-                                employees:         true,
-                                departments:       true,
+                                employees: true,
+                                departments: true,
                                 userOrganizations: true,
-                                suggestions:       true,
+                                suggestions: true,
                             },
                         },
                     },
@@ -209,7 +210,7 @@ export class OrganizationsService {
                 }),
             ]);
 
-        const statusMap   = Object.fromEntries(suggestionsByStatus.map((s) => [s.status, s._count.id]));
+        const statusMap = Object.fromEntries(suggestionsByStatus.map((s) => [s.status, s._count.id]));
         const categoryMap: Record<string, number> = {};
         for (const s of suggestionsByCategory) {
             for (const cat of s.categories) {
@@ -218,17 +219,17 @@ export class OrganizationsService {
         }
 
         const totalSuggestions = counts!._count.suggestions;
-        const implemented      = statusMap['IMPLEMENTED'] ?? 0;
-        const approved         = (statusMap['APPROVED'] ?? 0) + implemented;
+        const implemented = statusMap['IMPLEMENTED'] ?? 0;
+        const approved = (statusMap['APPROVED'] ?? 0) + implemented;
         const implementationRate =
             totalSuggestions > 0 ? Math.round((implemented / totalSuggestions) * 100) : 0;
         const approvalRate =
             totalSuggestions > 0 ? Math.round((approved / totalSuggestions) * 100) : 0;
 
         return {
-            employeeCount:   counts!._count.employees,
+            employeeCount: counts!._count.employees,
             departmentCount: counts!._count.departments,
-            userCount:       counts!._count.userOrganizations,
+            userCount: counts!._count.userOrganizations,
             suggestionCount: totalSuggestions,
             implementationRate,
             approvalRate,
@@ -236,12 +237,12 @@ export class OrganizationsService {
                 newEmployees,
                 newSuggestions: recentSuggestions,
             },
-            suggestionsByStatus:   statusMap,
+            suggestionsByStatus: statusMap,
             suggestionsByCategory: categoryMap,
         };
     }
 
-    // ── Departments ──────────────────────────────────────────────────────────
+    // Departments
 
     async getDepartments(id: string) {
         await this.findOrFail(id);
@@ -255,14 +256,14 @@ export class OrganizationsService {
         });
     }
 
-    // ── Employees ────────────────────────────────────────────────────────────
+    // Employees
 
     async getEmployees(id: string, dto: OrgEmployeePaginationDto) {
         await this.findOrFail(id);
 
-        const page  = dto.page  ?? 1;
+        const page = dto.page ?? 1;
         const limit = dto.limit ?? 20;
-        const skip  = (page - 1) * limit;
+        const skip = (page - 1) * limit;
 
         const where: Record<string, unknown> = { organizationId: id };
         if (dto.departmentId) where.departmentId = dto.departmentId;
@@ -294,14 +295,14 @@ export class OrganizationsService {
         };
     }
 
-    // ── Suggestions ──────────────────────────────────────────────────────────
+    // Suggestions
 
     async getSuggestions(id: string, dto: OrgPaginationDto) {
         await this.findOrFail(id);
 
-        const page  = dto.page  ?? 1;
+        const page = dto.page ?? 1;
         const limit = dto.limit ?? 20;
-        const skip  = (page - 1) * limit;
+        const skip = (page - 1) * limit;
 
         const [suggestions, total] = await Promise.all([
             this.prisma.suggestion.findMany({
@@ -331,7 +332,7 @@ export class OrganizationsService {
         };
     }
 
-    // ── Roles (global) ──────────────────────────────────────────────────────────
+    // Roles (global)
 
     async getRoles(id: string) {
         await this.findOrFail(id);
@@ -399,14 +400,52 @@ export class OrganizationsService {
         }
     }
 
-    // ── Create organization ──────────────────────────────────────────────────
+    // Create organization
 
-    async create(dto: CreateOrganizationDto) {
+    private async companyLogo(tx: Prisma.TransactionClient, url: string | undefined, organizationId: string, sourceOrganizationId?: string) {
+        if (!url?.startsWith('/api/uploads/files/')) return url;
+        const id = url.slice('/api/uploads/files/'.length);
+        await tx.$executeRaw`SELECT set_config('gemba.organization_id', ${organizationId}, true)`;
+        let source = await tx.fileAsset.findFirst({ where: { id, status: 'READY', folder: 'logos', organizationId } });
+        if (!source && sourceOrganizationId) {
+            await tx.$executeRaw`SELECT set_config('gemba.organization_id', ${sourceOrganizationId}, true)`;
+            source = await tx.fileAsset.findFirst({ where: { id, status: 'READY', folder: 'logos', organizationId: sourceOrganizationId } });
+        }
+        if (!source) throw new BadRequestException('Company logo is unavailable');
+        if (source.organizationId === organizationId) return url;
+        if (!sourceOrganizationId || source.organizationId !== sourceOrganizationId) throw new ForbiddenException('Logo access denied');
+        // Platform-created branding gets an explicit tenant-owned reference.
+        // The immutable private object may be shared; access uses metadata ownership.
+        const { id: _id, organizationId: _org, createdAt: _created, ...data } = source;
+        await tx.$executeRaw`SELECT set_config('gemba.organization_id', ${organizationId}, true)`;
+        const copy = await tx.fileAsset.create({ data: { ...data, organizationId } });
+        return `/api/uploads/files/${copy.id}`;
+    }
+
+    async create(dto: CreateOrganizationDto, sourceOrganizationId?: string) {
         // Check for duplicate org name (case-insensitive)
         const existing = await this.prisma.organization.findFirst({
             where: { name: { equals: dto.name, mode: 'insensitive' } },
         });
         if (existing) throw new ConflictException('An organization with this name already exists');
+
+        // check for duplicate org slugs and validate the slug name
+        const slug = normalizeOrganizationSlug(dto.slug ?? '');
+        const slugError = getOrganizationSlugError(slug);
+
+        if (slugError) {
+            throw new BadRequestException(slugError);
+        }
+
+        const alreadyTaken = await this.prisma.organization.findFirst({
+            where: {
+                slug: { equals: slug, mode: 'insensitive' },
+            },
+        });
+
+        if (alreadyTaken) {
+            throw new ConflictException('This company address is already taken. Please choose another.');
+        }
 
         // Check admin email is not already in use
         const existingUser = await this.prisma.user.findUnique({
@@ -417,75 +456,110 @@ export class OrganizationsService {
         const gembaTeamUserIds =
             dto.gembaTeamUserIds ?? (await this.getPlatformSuperAdmins()).map((u) => u.id);
 
-        return this.prisma.$transaction(async (tx) => {
-            const org = await (tx.organization as any).create({
-                data: {
-                    name:      dto.name,
-                    shortName: dto.shortName,
-                    logoUrl:   dto.logoUrl,
-                    industry:  dto.industry,
-                    email:     dto.email,
-                    phone:     dto.phone,
-                    address:   dto.address,
-                    ...(dto.timeZone !== undefined && { timeZone: dto.timeZone }),
-                    modules:   dto.modules ?? [],
-                },
-            });
+        try {
+            return await this.prisma.$transaction(async (tx) => {
+                // Use the same reservation lock as public signup so an administrator
+                // cannot claim an address already awaiting verification/provisioning.
+                await tx.$executeRaw`SELECT pg_advisory_xact_lock(53841291)`;
+                const reservation = await tx.onboardingRequest.findFirst({ where: {
+                    slug,
+                    OR: [
+                        { status: 'PENDING_VERIFICATION', expiresAt: { gt: new Date() } },
+                        { status: { in: ['PROVISIONING', 'READY', 'FAILED'] } },
+                    ],
+                } });
+                if (reservation) throw new ConflictException('This company address is reserved by an onboarding request');
+                const org = await (tx.organization as any).create({
+                    data: {
+                        name: dto.name,
+                        slug,
+                        shortName: dto.shortName,
+                        logoUrl: dto.logoUrl,
+                        industry: dto.industry,
+                        email: dto.email,
+                        phone: dto.phone,
+                        address: dto.address,
+                        ...(dto.timeZone !== undefined && { timeZone: dto.timeZone }),
+                        modules: dto.modules ?? [],
+                    },
+                });
 
-            const adminRole = await tx.role.findUniqueOrThrow({ where: { name: 'ADMIN' } });
+                const adminRole = await tx.role.findUniqueOrThrow({ where: { name: 'ADMIN' } });
 
-            const user = await tx.user.create({
-                data: {
-                    name:  `${dto.adminFirstName} ${dto.adminLastName}`,
-                    email: dto.adminEmail,
-                    phone: dto.adminPhone,
-                },
-            });
+                const user = await tx.user.create({
+                    data: {
+                        name: `${dto.adminFirstName} ${dto.adminLastName}`,
+                        email: dto.adminEmail,
+                        phone: dto.adminPhone,
+                    },
+                });
 
-            await tx.userOrganization.create({
-                data: {
-                    userId:         user.id,
-                    organizationId: org.id,
-                    roleId:         adminRole.id,
-                },
-            });
+                await tx.userOrganization.create({
+                    data: {
+                        userId: user.id,
+                        organizationId: org.id,
+                        roleId: adminRole.id,
+                    },
+                });
 
-            await tx.employee.create({
-                data: {
-                    firstName:      dto.adminFirstName,
-                    lastName:       dto.adminLastName,
-                    email:          dto.adminEmail,
-                    phone:          dto.adminPhone,
-                    organizationId: org.id,
-                    userId:         user.id,
-                },
-            });
+                await tx.employee.create({
+                    data: {
+                        firstName: dto.adminFirstName,
+                        lastName: dto.adminLastName,
+                        email: dto.adminEmail,
+                        phone: dto.adminPhone,
+                        organizationId: org.id,
+                        userId: user.id,
+                    },
+                });
 
-            await this.addGembaTeam(tx, org.id, gembaTeamUserIds);
+                await this.addGembaTeam(tx, org.id, gembaTeamUserIds);
+                const logoUrl = await this.companyLogo(tx, dto.logoUrl, org.id, sourceOrganizationId);
+                if (logoUrl !== dto.logoUrl) await tx.organization.update({ where: { id: org.id }, data: { logoUrl } });
 
                 await this.cache.del(CACHE_KEYS.PLATFORM_STATS);
-            await this.cache.del(CACHE_KEYS.ORG_LIST);
+                await this.cache.del(CACHE_KEYS.ORG_LIST);
 
-            // Re-fetch with _count so the response matches the list shape
-            return tx.organization.findUniqueOrThrow({
-                where: { id: org.id },
-                include: {
-                    _count: {
-                        select: {
-                            employees:         true,
-                            departments:       true,
-                            userOrganizations: true,
-                            suggestions:       true,
+                // Re-fetch with _count so the response matches the list shape
+                return tx.organization.findUniqueOrThrow({
+                    where: { id: org.id },
+                    include: {
+                        _count: {
+                            select: {
+                                employees: true,
+                                departments: true,
+                                userOrganizations: true,
+                                suggestions: true,
+                            },
                         },
                     },
-                },
+                });
             });
-        });
+        } catch (error: unknown) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError) {
+                const target = error.meta?.target;
+
+                const isSlugConflict =
+                    error.code === 'P2002' &&
+                    error.meta?.modelName === 'Organization' &&
+                    Array.isArray(target) &&
+                    target.length === 1 &&
+                    target[0] === 'slug';
+
+                if (isSlugConflict) {
+                    throw new ConflictException(
+                        'This company address is already taken. Please choose another.',
+                    );
+                }
+            }
+
+            throw error;
+        }
     }
 
-    // ── Update organization details ──────────────────────────────────────────
+    // Update organization details
 
-    async update(id: string, dto: UpdateOrganizationDto) {
+    async update(id: string, dto: UpdateOrganizationDto, sourceOrganizationId?: string) {
         await this.findOrFail(id);
 
         // Prevent duplicate name if name is being changed
@@ -496,24 +570,27 @@ export class OrganizationsService {
             if (duplicate) throw new ConflictException('An organization with this name already exists');
         }
 
+        const logoUrl = dto.logoUrl?.startsWith('/api/uploads/files/')
+            ? await this.prisma.$transaction(tx => this.companyLogo(tx, dto.logoUrl, id, sourceOrganizationId))
+            : dto.logoUrl;
         return (this.prisma.organization as any).update({
             where: { id },
             data: {
-                ...(dto.name         !== undefined && { name:         dto.name }),
-                ...(dto.shortName    !== undefined && { shortName:    dto.shortName }),
-                ...(dto.logoUrl      !== undefined && { logoUrl:      dto.logoUrl }),
-                ...(dto.industry     !== undefined && { industry:     dto.industry }),
-                ...(dto.email        !== undefined && { email:        dto.email }),
-                ...(dto.phone        !== undefined && { phone:        dto.phone }),
-                ...(dto.address      !== undefined && { address:      dto.address }),
-                ...(dto.timeZone     !== undefined && { timeZone:     dto.timeZone }),
-                ...(dto.modules      !== undefined && { modules:      dto.modules }),
+                ...(dto.name !== undefined && { name: dto.name }),
+                ...(dto.shortName !== undefined && { shortName: dto.shortName }),
+                ...(dto.logoUrl !== undefined && { logoUrl }),
+                ...(dto.industry !== undefined && { industry: dto.industry }),
+                ...(dto.email !== undefined && { email: dto.email }),
+                ...(dto.phone !== undefined && { phone: dto.phone }),
+                ...(dto.address !== undefined && { address: dto.address }),
+                ...(dto.timeZone !== undefined && { timeZone: dto.timeZone }),
+                ...(dto.modules !== undefined && { modules: dto.modules }),
                 ...(dto.primaryColor !== undefined && { primaryColor: dto.primaryColor }),
             },
         });
     }
 
-    // ── Update status (ACTIVE / SUSPENDED / INACTIVE) ────────────────────────
+    // Update status (ACTIVE / SUSPENDED / INACTIVE)
 
     async updateStatus(id: string, status: OrgStatus) {
         const org = await this.findOrFail(id);
@@ -536,7 +613,7 @@ export class OrganizationsService {
         };
     }
 
-    // ── Delete organization ──────────────────────────────────────────────────
+    // Delete organization
     // Hard delete: only allowed when org is INACTIVE to prevent accidental data loss.
     // Deletes all dependent records in safe order inside a transaction.
 
@@ -633,7 +710,7 @@ export class OrganizationsService {
         const orphans = await this.prisma.user.findMany({
             where: {
                 organizations: { none: {} },
-                employees:     { none: {} },
+                employees: { none: {} },
             },
             select: { id: true },
         });
@@ -648,7 +725,7 @@ export class OrganizationsService {
                 // Nullify Employee.userId so employee records are not lost
                 await tx.employee.updateMany({
                     where: { userId: { in: ids } },
-                    data:  { userId: null },
+                    data: { userId: null },
                 });
                 // Delete all tables with a non-cascading FK to User
                 await tx.userOrganization.deleteMany({ where: { userId: { in: ids } } });
@@ -677,11 +754,11 @@ export class OrganizationsService {
         await this.prisma.$transaction(async (tx) => {
             await (tx.organization as any).updateMany({
                 where: { isAdminOrg: true },
-                data:  { isAdminOrg: false },
+                data: { isAdminOrg: false },
             });
             await (tx.organization as any).update({
                 where: { id },
-                data:  { isAdminOrg: true },
+                data: { isAdminOrg: true },
             });
         });
 

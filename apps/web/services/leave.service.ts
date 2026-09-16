@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { apiClient } from "@/lib/api-client";
+const API_URL = "/api";
 
 function authHeaders(token: string) {
     return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
@@ -170,94 +171,94 @@ export const LEAVE_STATUS_COLORS: Record<LeaveStatus, string> = {
 
 export const LeaveService = {
     async getPolicy(token: string, year: number): Promise<LeavePolicy[]> {
-        const res = await fetch(`${API_URL}/leave/policy?year=${year}`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/policy?year=${year}`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async upsertPolicy(token: string, body: { year: number; entries: { type: LeaveType; allocated: number }[] }): Promise<LeavePolicy[]> {
-        const res = await fetch(`${API_URL}/leave/policy`, {
+        const res = await apiClient(`${API_URL}/leave/policy`, {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify(body),
-        });
+        }, token);
         return handleResponse(res);
     },
 
     async applyPolicy(token: string, year: number): Promise<{ applied: number; leaveTypes: number; year: number }> {
-        const res = await fetch(`${API_URL}/leave/policy/apply`, {
+        const res = await apiClient(`${API_URL}/leave/policy/apply`, {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify({ year }),
-        });
+        }, token);
         return handleResponse(res);
     },
 
     async getSettings(token: string): Promise<LeaveSettings> {
-        const res = await fetch(`${API_URL}/leave/settings`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/settings`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async updateSettings(token: string, body: Partial<LeaveSettings>): Promise<LeaveSettings> {
-        const res = await fetch(`${API_URL}/leave/settings`, {
+        const res = await apiClient(`${API_URL}/leave/settings`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify(body),
-        });
+        }, token);
         return handleResponse(res);
     },
 
     async getDepartments(token: string): Promise<LeaveDepartment[]> {
-        const res = await fetch(`${API_URL}/leave/departments`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/departments`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async updateDeptMin(token: string, deptId: string, minLeaveHeadcount: number): Promise<LeaveDepartment> {
-        const res = await fetch(`${API_URL}/leave/departments/${deptId}/min-headcount`, {
+        const res = await apiClient(`${API_URL}/leave/departments/${deptId}/min-headcount`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify({ minLeaveHeadcount }),
-        });
+        }, token);
         return handleResponse(res);
     },
 
     async getSummary(token: string, year?: number): Promise<LeaveSummary> {
         const qs = year ? `?year=${year}` : "";
-        const res = await fetch(`${API_URL}/leave/summary${qs}`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/summary${qs}`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async getYearlyAnalytics(token: string): Promise<YearlyAnalytics[]> {
-        const res = await fetch(`${API_URL}/leave/analytics/years`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/analytics/years`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async getMyBalance(token: string): Promise<LeaveBalance[]> {
-        const res = await fetch(`${API_URL}/leave/balance`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/balance`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async getEmployeeBalance(token: string, employeeId: string): Promise<LeaveBalance[]> {
-        const res = await fetch(`${API_URL}/leave/balance/${employeeId}`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/balance/${employeeId}`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async getBalanceSummary(token: string, year?: number): Promise<LeaveBalanceSummary> {
         const qs = year ? `?year=${year}` : "";
-        const res = await fetch(`${API_URL}/leave/balance/summary${qs}`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/balance/summary${qs}`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async getCoverageAlerts(token: string): Promise<LeaveCoverageAlert[]> {
-        const res = await fetch(`${API_URL}/leave/coverage`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/coverage`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async upsertBalance(token: string, employeeId: string, body: { type: LeaveType; allocated: number; year?: number }): Promise<LeaveBalance> {
-        const res = await fetch(`${API_URL}/leave/balance/${employeeId}`, {
+        const res = await apiClient(`${API_URL}/leave/balance/${employeeId}`, {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify(body),
-        });
+        }, token);
         return handleResponse(res);
     },
 
@@ -266,17 +267,17 @@ export const LeaveService = {
         if (params?.status) qs.set("status", params.status);
         if (params?.employeeId) qs.set("employeeId", params.employeeId);
         if (params?.year) qs.set("year", String(params.year));
-        const res = await fetch(`${API_URL}/leave/requests?${qs}`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/requests?${qs}`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async getColleagues(token: string): Promise<LeaveColleague[]> {
-        const res = await fetch(`${API_URL}/leave/colleagues`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/colleagues`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
     async checkOverlap(token: string, startDate: string, endDate: string): Promise<{ count: number; colleagues: LeaveOverlapEntry[] }> {
-        const res = await fetch(`${API_URL}/leave/overlap?startDate=${startDate}&endDate=${endDate}`, { headers: authHeaders(token) });
+        const res = await apiClient(`${API_URL}/leave/overlap?startDate=${startDate}&endDate=${endDate}`, { headers: authHeaders(token) }, token);
         return handleResponse(res);
     },
 
@@ -286,28 +287,28 @@ export const LeaveService = {
         handoverEmployeeId?: string; handoverNotes?: string;
         handoverEmployee2Id?: string; handoverNotes2?: string;
     }): Promise<{ request: LeaveRequest; overlapping: LeaveOverlapEntry[] }> {
-        const res = await fetch(`${API_URL}/leave/requests`, {
+        const res = await apiClient(`${API_URL}/leave/requests`, {
             method: "POST",
             headers: authHeaders(token),
             body: JSON.stringify(body),
-        });
+        }, token);
         return handleResponse(res);
     },
 
     async reviewRequest(token: string, id: string, body: { status: "APPROVED" | "REJECTED"; reviewNote?: string }): Promise<LeaveRequest> {
-        const res = await fetch(`${API_URL}/leave/requests/${id}/review`, {
+        const res = await apiClient(`${API_URL}/leave/requests/${id}/review`, {
             method: "PATCH",
             headers: authHeaders(token),
             body: JSON.stringify(body),
-        });
+        }, token);
         return handleResponse(res);
     },
 
     async cancelRequest(token: string, id: string): Promise<LeaveRequest> {
-        const res = await fetch(`${API_URL}/leave/requests/${id}/cancel`, {
+        const res = await apiClient(`${API_URL}/leave/requests/${id}/cancel`, {
             method: "PATCH",
             headers: authHeaders(token),
-        });
+        }, token);
         return handleResponse(res);
     },
 };

@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantFileLink } from "@/components/files/TenantFileLink";
 import {
   FormEvent,
   ReactNode,
@@ -387,7 +388,7 @@ function TaskDetailContent() {
                         </p>
                       )}
                       {event.attachmentUrl && (
-                        <a
+                        <TenantFileLink
                           href={event.attachmentUrl}
                           target="_blank"
                           rel="noreferrer"
@@ -395,7 +396,7 @@ function TaskDetailContent() {
                         >
                           <Paperclip className="h-3.5 w-3.5" />
                           {event.attachmentName || "View attachment"}
-                        </a>
+                        </TenantFileLink>
                       )}
                     </div>
                   </div>

@@ -37,12 +37,12 @@ export class NoticesService {
     }
 
     async updateNotice(id: string, organizationId: string, dto: UpdateNoticeDto) {
-        const notice = await (this.prisma as any).notice.findUnique({ where: { id } });
+        const notice = await (this.prisma as any).notice.findUnique({ where: { id, organizationId } });
         if (!notice)                                throw new NotFoundException('Notice not found');
         if (notice.organizationId !== organizationId) throw new ForbiddenException();
 
         return (this.prisma as any).notice.update({
-            where: { id },
+            where: { id, organizationId },
             data: {
                 ...(dto.type      !== undefined ? { type:      dto.type }      : {}),
                 ...(dto.title     !== undefined ? { title:     dto.title }     : {}),
@@ -56,9 +56,9 @@ export class NoticesService {
     }
 
     async deleteNotice(id: string, organizationId: string) {
-        const notice = await (this.prisma as any).notice.findUnique({ where: { id } });
+        const notice = await (this.prisma as any).notice.findUnique({ where: { id, organizationId } });
         if (!notice)                                throw new NotFoundException('Notice not found');
         if (notice.organizationId !== organizationId) throw new ForbiddenException();
-        return (this.prisma as any).notice.delete({ where: { id } });
+        return (this.prisma as any).notice.delete({ where: { id, organizationId } });
     }
 }

@@ -1,3 +1,7 @@
+import { PlatformAdminGuard } from '../tenancy/platform-admin.guard';
+import { TenantRequired } from '../tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from '../tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from '../tenancy/tenant.guard';
 import { Controller, Post, Get, Body, Request, Response, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto, VerifyFirstTimeDto, CreatePasswordDto, SelectOrgDto, ForgotPasswordDto, ResetPasswordDto, VerifyTempPasswordDto } from './dto/auth.dto';
@@ -98,8 +102,15 @@ export class AuthController {
         return this.authService.verifyTempPassword(dto.tempPassword, req.ip);
     }
 
+    @Get('platform/my-org')
+    @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+    getPlatformOrg(@Request() req: any) {
+        return this.authService.getMyOrg(req.user.organizationId);
+    }
+
     @Get('my-org')
-    @UseGuards(JwtAuthGuard)
+    @TenantRequired()
+    @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard)
     getMyOrg(@Request() req: any) {
         return this.authService.getMyOrg(req.user.organizationId);
     }

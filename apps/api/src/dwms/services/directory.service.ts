@@ -267,7 +267,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
     if (approverRoles.includes(TaskPermissionRole.DIRECT_MANAGER)) {
       if (assignee.reportingManagerId) {
         const manager = await this.prisma.employee.findUnique({
-          where: { id: assignee.reportingManagerId },
+          where: { id: assignee.reportingManagerId, organizationId: user.organizationId },
           select: {
             id: true,
             firstName: true,
@@ -283,7 +283,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
     if (approverRoles.includes(TaskPermissionRole.HIGHER_LEVEL_MANAGERS)) {
       if (assignee.reportingManagerId) {
         const directManager = await this.prisma.employee.findUnique({
-          where: { id: assignee.reportingManagerId },
+          where: { id: assignee.reportingManagerId, organizationId: user.organizationId },
           select: {
             id: true,
             reportingManagerId: true,
@@ -295,7 +295,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
         });
         if (directManager?.reportingManagerId) {
           const higherManager = await this.prisma.employee.findUnique({
-            where: { id: directManager.reportingManagerId },
+            where: { id: directManager.reportingManagerId, organizationId: user.organizationId },
             select: {
               id: true,
               firstName: true,
@@ -464,7 +464,7 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
       while (managerId && !visited.has(managerId)) {
         visited.add(managerId);
         const manager = await this.prisma.employee.findUnique({
-          where: { id: managerId },
+          where: { id: managerId, organizationId: user.organizationId },
           select: {
             id: true,
             reportingManagerId: true,
@@ -486,12 +486,12 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
       assignee.reportingManagerId
     ) {
       const directManager = await this.prisma.employee.findUnique({
-        where: { id: assignee.reportingManagerId },
+        where: { id: assignee.reportingManagerId, organizationId: user.organizationId },
         select: { id: true, reportingManagerId: true },
       });
       if (directManager?.reportingManagerId) {
         const higherManager = await this.prisma.employee.findUnique({
-          where: { id: directManager.reportingManagerId },
+          where: { id: directManager.reportingManagerId, organizationId: user.organizationId },
           select: {
             id: true,
             firstName: true,

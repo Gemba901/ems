@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
   Controller,
   Get,
@@ -48,8 +51,9 @@ const RELEASE_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
  * Acceptance (A05-A10), S11 Unloading & Weighing (A11-A12), S12 Yard
  * Storage & Stock Release (A13-A14).
  */
+@TenantRequired()
 @Controller('steel/material-intake')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.STEEL)
 @Roles(...INTAKE_ROLES)
 export class MaterialIntakeController {

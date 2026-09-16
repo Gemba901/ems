@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
   Controller,
   Get,
@@ -39,8 +42,9 @@ const FURNACE_READ_ROLES = [
 const FURNACE_ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 
 /** Furnace / FurnaceLining master data, reused by P05 Melting. */
+@TenantRequired()
 @Controller('steel/furnaces')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.STEEL)
 @Roles(...FURNACE_READ_ROLES)
 export class FurnaceController {

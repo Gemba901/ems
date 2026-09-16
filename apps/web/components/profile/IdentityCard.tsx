@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { EmployeeProfileData } from "@/types/employee";
@@ -31,7 +32,7 @@ export const IdentityCard = ({ employee, canEditAvatar, onAvatarSave }: Identity
     <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-6">
       <div className="relative group shrink-0">
         <div className="h-24 w-24 bg-slate-800 rounded-2xl overflow-hidden">
-          <img
+          <TenantImage
             src={employee.avatarUrl ?? "/api/placeholder/100/100"}
             alt={employee.name}
             className="w-full h-full object-cover"
@@ -81,7 +82,7 @@ export const IdentityCard = ({ employee, canEditAvatar, onAvatarSave }: Identity
             />
             {avatarInput && (
               <div className="mb-4 rounded-xl overflow-hidden h-20 w-20 bg-slate-100 border border-slate-200">
-                <img
+                <TenantImage
                   src={avatarInput}
                   alt="Preview"
                   className="w-full h-full object-cover"

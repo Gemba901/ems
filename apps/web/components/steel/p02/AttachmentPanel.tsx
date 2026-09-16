@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantFileLink } from "@/components/files/TenantFileLink";
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, Trash2, Upload } from "lucide-react";
@@ -78,9 +79,9 @@ export function AttachmentPanel({
         <ul className="divide-y divide-input">
           {stageAttachments.map((a) => (
             <li key={a.id} className="flex items-center justify-between py-1.5 text-xs">
-              <a href={a.fileUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate max-w-[70%]">
+              <TenantFileLink href={a.fileUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate max-w-[70%]">
                 {a.fileName}
-              </a>
+              </TenantFileLink>
               <div className="flex items-center gap-2 text-muted-foreground">
                 {a.uploadedBy && <span>{a.uploadedBy.firstName} {a.uploadedBy.lastName}</span>}
                 <button

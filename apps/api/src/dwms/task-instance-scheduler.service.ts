@@ -1,3 +1,4 @@
+import { ScheduledJobsService } from '../operations/scheduled-jobs.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DwmsService } from './dwms.service';
@@ -7,11 +8,11 @@ import { TASK_INSTANCE_GENERATION_DAYS } from './services/task.service';
 export class DwmsTaskInstanceSchedulerService {
   private readonly logger = new Logger(DwmsTaskInstanceSchedulerService.name);
 
-  constructor(private readonly dwmsService: DwmsService) {}
+  constructor(private readonly dwmsService: DwmsService, private readonly jobs: ScheduledJobsService) {}
 
   @Cron('0 12 * * *', { timeZone: 'GMT' })
   async generateUpcomingInstances() {
-    try {
+    return this.jobs.run('dwms-instances', new Date().toISOString().slice(0, 10), async () => {
       const result = await this.dwmsService.generateUpcomingTaskInstances(
         TASK_INSTANCE_GENERATION_DAYS,
       );
@@ -22,11 +23,6 @@ export class DwmsTaskInstanceSchedulerService {
           result.tasks +
           ' tasks',
       );
-    } catch (error) {
-      this.logger.warn(
-        'Failed to generate upcoming DWMS task instances: ' +
-          ((error as Error)?.message ?? error),
-      );
-    }
+    });
   }
 }

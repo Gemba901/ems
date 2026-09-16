@@ -1,5 +1,8 @@
 "use client";
 
+import { apiClient } from "@/lib/api-client";
+
+
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -363,7 +366,7 @@ export default function CalendarPage() {
   const handleIcalDownload = async () => {
     try {
       const url = CalendarService.getIcalUrl(year, month);
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiClient(url, { headers: { Authorization: `Bearer ${token}` } }, token);
       const blob = await res.blob();
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);

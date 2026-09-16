@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
   Controller,
   Get,
@@ -19,8 +22,9 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
 
+@TenantRequired()
 @Controller('sims')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.SIMS)
 export class SimsController {
   constructor(private simsService: SimsService) {}
@@ -42,8 +46,8 @@ export class SimsController {
    * Employee views their own submissions with full review history.
    */
   @Get('me')
-  async getMine(@CurrentUser() user: { userId: string }) {
-    return this.simsService.getMySuggestions(user.userId);
+  async getMine(@CurrentUser() user: { userId: string; organizationId: string }) {
+    return this.simsService.getMySuggestions(user.userId, user.organizationId);
   }
 
   /**
@@ -64,9 +68,9 @@ export class SimsController {
   @Roles(Role.HOD)
   async getDepartment(
     @Query() query: QuerySuggestionsDto,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: { userId: string; organizationId: string },
   ) {
-    return this.simsService.getDepartmentSuggestions(user.userId, query);
+    return this.simsService.getDepartmentSuggestions(user.userId, query, user.organizationId);
   }
 
   /**

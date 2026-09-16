@@ -66,6 +66,14 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       throw new BadRequestException('DWMS alerts cannot have low severity');
     }
 
+    // Validate every supplied relation, including fields irrelevant to targetType.
+    if (dto.departmentId && !await this.prisma.department.findFirst({ where: { id: dto.departmentId, organizationId: user.organizationId }, select: { id: true } })) {
+      throw new NotFoundException('Department not found');
+    }
+    if (dto.againstUserId) await this.validateDwmsEmployee(dto.againstUserId, user.organizationId, 'Employee not found in this organization');
+    if (dto.taskInstanceId && !await this.prisma.taskInstance.findFirst({ where: { id: dto.taskInstanceId, owner: { organizationId: user.organizationId } }, select: { id: true } })) {
+      throw new NotFoundException('Task instance not found');
+    }
     const targetType = dto.targetType ?? 'GENERAL';
 
     if (targetType === 'GENERAL') {
@@ -120,7 +128,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
         );
       }
       const instance = await this.prisma.taskInstance.findUnique({
-        where: { id: dto.taskInstanceId },
+        where: { id: dto.taskInstanceId, owner: { organizationId: user.organizationId } },
         select: { ownerId: true },
       });
       if (!instance) {
@@ -135,6 +143,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       const isUserSuperior = await this.isSuperior(
         employee.id,
         instance.ownerId,
+        user.organizationId,
       );
       if (!isUserSuperior && !isMgmt) {
         throw new ForbiddenException(
@@ -164,7 +173,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       notifyTargetId = dto.againstUserId;
     } else if (dto.taskInstanceId) {
       const inst = await this.prisma.taskInstance.findUnique({
-        where: { id: dto.taskInstanceId },
+        where: { id: dto.taskInstanceId, owner: { organizationId: user.organizationId } },
         select: { ownerId: true },
       });
       notifyTargetId = inst?.ownerId ?? null;
@@ -1184,7 +1193,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     }
 
     const newOwner = await this.prisma.employee.findUnique({
-      where: { id: newOwnerId },
+      where: { id: newOwnerId, organizationId: user.organizationId },
     });
 
     if (!newOwner || newOwner.organizationId !== user.organizationId) {

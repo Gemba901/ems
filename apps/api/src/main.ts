@@ -1,16 +1,18 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { requestLogging } from './operations/request-logging';
+import { SafeExceptionFilter } from './operations/safe-exception.filter';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(requestLogging);
   app.use(cookieParser());
 
   const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : ['https://ems-web-swart.vercel.app', 'https://ems.gembapms.co.in', 'http://localhost:3000'];
+    : ['https://ems-web-swart.vercel.app', 'https://ems.gembapms.co.in', 'http://localhost:3000', 'https://bees.gembapms.com'];
 
   app.enableCors({
     origin: allowedOrigins,
@@ -21,7 +23,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
   }));
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalFilters(new SafeExceptionFilter());
 
   await app.listen(process.env.PORT ?? 5001);
 }

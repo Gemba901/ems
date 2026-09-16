@@ -1,3 +1,4 @@
+import { ScheduledJobsService } from '../operations/scheduled-jobs.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -14,16 +15,22 @@ export class SimsReminderService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private jobs: ScheduledJobsService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
   async remindHODsAboutPendingSuggestions() {
+    return this.jobs.run('sims-reminders', new Date().toISOString().slice(0, 10), () => this.sendReminders());
+  }
+
+  private async sendReminders() {
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - REMINDER_THRESHOLD_DAYS);
 
     // Find suggestions that have been in a reviewable state for too long
     const staleSuggestions = await this.prisma.suggestion.findMany({
       where: {
+        organization: { status: 'ACTIVE', modules: { has: 'SIMS' } },
         status: { in: ['UNDER_REVIEW', 'ON_HOLD'] },
         updatedAt: { lt: thresholdDate },
       },

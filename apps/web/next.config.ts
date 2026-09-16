@@ -3,7 +3,7 @@ import withPWA from "next-pwa";
 
 const nextConfig: NextConfig = {
   output: process.env.DOCKER_BUILD === "true" ? "standalone" : undefined,
-  allowedDevOrigins: ["192.168.100.19", "10.36.90.18", "localhost"],
+  allowedDevOrigins: ["192.168.100.19", "10.36.90.18", "localhost", "*.localhost"],
   turbopack: {},
 };
 
@@ -13,6 +13,7 @@ const pwaConfig = withPWA({
   register: true,
   skipWaiting: true,
   clientsClaim: true,
+  runtimeCaching: [{ urlPattern: /\/api\//, handler: "NetworkOnly" }],
 });
 
 export default pwaConfig(nextConfig);

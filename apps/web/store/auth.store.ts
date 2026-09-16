@@ -1,10 +1,9 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { Role } from "@/types/role";
 
 export { Role };
 
-interface User {
+export interface User {
     userId: string;
     name: string;
     email: string | null;
@@ -13,7 +12,8 @@ interface User {
     organizationName: string;
     organizationUrl: string | null;
     organizationTimeZone: string;
-    roleId: string;
+    roleId: number;
+    organizationSlug?: string | null;
     roleLevel: Role;
     isAdminOrg: boolean;
     jobTitle: string | null;
@@ -31,24 +31,14 @@ interface AuthState {
     setHasHydrated: (value: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-    persist(
-        (set) => ({
-            user: null,
-            accessToken: null,
-            isAuthenticated: false,
-            _hasHydrated: false,
-
-            setAuth: (user, token) => set({ user, accessToken: token, isAuthenticated: true }),
-            setAccessToken: (token) => set({ accessToken: token }),
-            logout: () => set({ user: null, accessToken: null, isAuthenticated: false }),
-            setHasHydrated: (value) => set({ _hasHydrated: value }),
-        }),
-        {
-            name: "geos-auth-storage",
-            onRehydrateStorage: () => (state) => {
-                state?.setHasHydrated(true);
-            },
-        }
-    )
-);
+// Session credentials remain in memory; the HttpOnly cookie restores a reload.
+export const useAuthStore = create<AuthState>()((set) => ({
+    user: null,
+    accessToken: null,
+    isAuthenticated: false,
+    _hasHydrated: false,
+    setAuth: (user, token) => set({ user, accessToken: token, isAuthenticated: true }),
+    setAccessToken: (token) => set({ accessToken: token }),
+    logout: () => set({ user: null, accessToken: null, isAuthenticated: false }),
+    setHasHydrated: (value) => set({ _hasHydrated: value }),
+}));

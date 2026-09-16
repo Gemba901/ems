@@ -8,18 +8,17 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Role } from 'src/common/enum/role.enum';
 import { EmailService } from 'src/notifications/channels/email.service';
+import type { AccessTokenPayload } from './access-token-payload';
+import { OrgStatus, Prisma } from 'db';
+import type { TenantContext } from 'src/tenancy/tenant-context';
 
-export interface JwtPayload {
-    userId: string;
-    organizationId: string | null;
-    roleId: number;
-    email: string | null;
+// Retain the additional fields already used by the frontend.
+export interface JwtPayload extends AccessTokenPayload {
     phone: string;
     organizationName: string;
+    organizationSlug: string | null;
     organizationUrl: string | null;
     organizationTimeZone: string;
-    roleLevel: Role;
-    isAdminOrg: boolean;
     jobTitle: string | null;
     departmentId: string | null;
 }
@@ -27,7 +26,7 @@ export interface JwtPayload {
 type UserOrganizationRelation = {
     organizationId: string;
     roleId: number;
-    organization: { name: string; logoUrl: string | null; isAdminOrg: boolean; timeZone: string };
+    organization: { slug?: string | null; status: OrgStatus; name: string; logoUrl: string | null; isAdminOrg: boolean; timeZone: string };
     role: { name: string };
 };
 
@@ -103,35 +102,148 @@ export class AuthService {
     // disambiguate by showing which companies matched — that would leak one tenant's identity
     // to someone who merely typed in a matching code at another tenant. Instead we point the
     // user at their phone/email, which is inherently scoped to their own account.
-    private async getUserIdByEmployeeCode(employeeCode: string): Promise<string> {
+    private async getUserIdByEmployeeCode(
+        employeeCode: string,
+        organizationId?: string,
+    ): Promise<string> {
         const employees = await this.prisma.employee.findMany({
-            where: { employeeCode: employeeCode.trim(), userId: { not: null } },
+            where: {
+                employeeCode: employeeCode.trim(),
+                userId: { not: null },
+
+                // Company login searches only the resolved organization.
+                // Existing central flows can still use the unscoped lookup.
+                ...(organizationId ? { organizationId } : {}),
+            },
             select: { userId: true },
         });
 
-        const userIds = [...new Set(employees.map((e) => e.userId as string))];
+        const userIds = [
+            ...new Set(
+                employees
+                    .map((employee) => employee.userId)
+                    .filter((id): id is string => id !== null),
+            ),
+        ];
 
         if (userIds.length === 0) {
-            throw new UnauthorizedException('Account not found! Please contact your administrator.');
+            throw new UnauthorizedException('Invalid credentials');
         }
 
         if (userIds.length > 1) {
-            throw new UnauthorizedException('This employee code is registered at more than one company. Please log in using your phone number or email instead.');
+            throw new UnauthorizedException(
+                'This employee code is registered at more than one company. ' +
+                'Please log in using your phone number or email instead.',
+            );
         }
 
         return userIds[0];
     }
 
+
+    private async authenticateUser(
+        phoneOrEmail: string | undefined,
+        password: string,
+        employeeCode?: string,
+        organizationId?: string,
+    ) {
+        let user: {
+            id: string;
+            email: string | null;
+            phone: string;
+            password: string | null;
+            name: string;
+        } | null;
+
+        // Apply membership filtering to company email/phone lookups too.
+        const membershipFilter = organizationId
+            ? { organizations: { some: { organizationId } } }
+            : {};
+
+        if (employeeCode?.trim()) {
+            const userId = await this.getUserIdByEmployeeCode(
+                employeeCode,
+                organizationId,
+            );
+
+            user = await this.prisma.user.findUnique({
+                where: { id: userId },
+            });
+        } else {
+            const identifier = phoneOrEmail?.trim();
+
+            // LoginDto currently permits both identifiers to be absent.
+            // Reject this cleanly instead of calling includes() on undefined.
+            if (!identifier) {
+                throw new UnauthorizedException('Invalid credentials');
+            }
+
+            if (identifier.includes('@')) {
+                user = await this.prisma.user.findFirst({
+                    where: {
+                        email: identifier.toLowerCase(),
+                        ...membershipFilter,
+                    },
+                });
+            } else {
+                const candidates = await this.prisma.user.findMany({
+                    where: {
+                        phone: { in: this.phoneVariants(identifier) },
+                        ...membershipFilter,
+                    },
+                });
+
+                // Preserve the current handling of legacy phone formats.
+                user =
+                    candidates.find((candidate) => candidate.password) ??
+                    candidates[0] ??
+                    null;
+            }
+        }
+
+        // Use the same failure message for unknown users and invalid passwords.
+        if (!user?.password) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        const matches = await bcrypt.compare(password, user.password);
+
+        if (!matches) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        return user;
+    }
+
+
     private async buildJwt(
         user: { id: string; email: string | null; phone: string; name: string },
-        membership: { organizationId: string; roleId: number; role: { name: string }; organization: { name: string; logoUrl: string | null; isAdminOrg: boolean; timeZone: string } },
+        membership: { organizationId: string; roleId: number; role: { name: string }; organization: { slug?: string | null; status: OrgStatus; name: string; logoUrl: string | null; isAdminOrg: boolean; timeZone: string } },
+
+        // Normal login uses PrismaService.
+        // Refresh passes its transaction so token creation can roll back.
+        db: Prisma.TransactionClient = this.prisma,
     ) {
-        const employee = await this.prisma.employee.findFirst({
-            where: { userId: user.id, organizationId: membership.organizationId },
-            select: { jobTitle: true, departmentId: true },
+        if (membership.organization.status !== OrgStatus.ACTIVE) {
+            throw new UnauthorizedException('Company access denied.');
+        }
+        if (!Object.values(Role).includes(membership.role.name as Role)) {
+            throw new UnauthorizedException('Unsupported company role.');
+        }
+        const employee = await db.employee.findFirst({
+            where: {
+                userId: user.id,
+                organizationId: membership.organizationId,
+            },
+            select: {
+                jobTitle: true,
+                departmentId: true,
+            },
         });
 
         const payload: JwtPayload = {
+            tokenType: 'ACCESS',
+
             userId: user.id,
             organizationId: membership.organizationId,
             roleId: membership.roleId,
@@ -139,6 +251,7 @@ export class AuthService {
             email: user.email,
             phone: user.phone,
             organizationName: membership.organization.name,
+            organizationSlug: membership.organization.slug ?? null,
             organizationUrl: membership.organization.logoUrl,
             organizationTimeZone: membership.organization.timeZone,
             isAdminOrg: membership.organization.isAdminOrg,
@@ -152,7 +265,7 @@ export class AuthService {
         const tokenHash = this.hashToken(rawRefreshToken);
         const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 
-        await this.prisma.refreshToken.create({
+        await db.refreshToken.create({
             data: { tokenHash, userId: user.id, organizationId: membership.organizationId, expiresAt },
         });
 
@@ -164,29 +277,11 @@ export class AuthService {
     }
 
     async login(phoneOrEmail: string | undefined, password: string, employeeCode?: string) {
-        let user: { id: string; email: string | null; phone: string; password: string | null; name: string } | null;
-
-        if (employeeCode) {
-            const userId = await this.getUserIdByEmployeeCode(employeeCode);
-            user = await this.prisma.user.findUnique({ where: { id: userId } });
-        } else {
-            const isEmail = phoneOrEmail!.includes('@');
-            if (isEmail) {
-                const normalized = phoneOrEmail!.trim().toLowerCase();
-                user = await this.prisma.user.findFirst({ where: { email: normalized } });
-            } else {
-                const variants = this.phoneVariants(phoneOrEmail!);
-                const candidates = await this.prisma.user.findMany({ where: { phone: { in: variants } } });
-                user = candidates.find(u => u.password) ?? candidates[0] ?? null;
-            }
-        }
-
-        if (!user) throw new UnauthorizedException('Invalid credentials');
-
-        if (!user.password) throw new UnauthorizedException('Password not set. Please complete your account setup first.');
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) throw new UnauthorizedException('Invalid credentials');
+        const user = await this.authenticateUser(
+            phoneOrEmail,
+            password,
+            employeeCode,
+        );
 
         // Fetch memberships separately to get only valid (org still exists) rows
         const memberships = await this.prisma.userOrganization.findMany({
@@ -195,7 +290,7 @@ export class AuthService {
         }) as unknown as UserOrganizationRelation[];
 
         const validMemberships = memberships.filter(
-            (m) => m.organization != null && m.role != null,
+            (m) => m.organization?.status === OrgStatus.ACTIVE && m.role != null,
         );
 
         if (validMemberships.length === 0) {
@@ -221,6 +316,55 @@ export class AuthService {
                 organizationUrl: m.organization.logoUrl,
             })),
         };
+    }
+
+    async loginForTenant(
+        tenant: TenantContext,
+        phoneOrEmail: string | undefined,
+        password: string,
+        employeeCode?: string,
+    ) {
+        // Fail closed if a caller has not supplied resolved company context.
+        if (!tenant?.organizationId) {
+            throw new UnauthorizedException('Company context is required.');
+        }
+
+        const user = await this.authenticateUser(
+            phoneOrEmail,
+            password,
+            employeeCode,
+            tenant.organizationId,
+        );
+
+        // A correct password does not grant access to every company.
+        const membership = await this.prisma.userOrganization.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: user.id,
+                    organizationId: tenant.organizationId,
+                },
+            },
+            include: {
+                organization: true,
+                role: true,
+            },
+        });
+
+        if (
+            !membership ||
+            membership.organization.status !== OrgStatus.ACTIVE
+        ) {
+            throw new UnauthorizedException('Company access denied.');
+        }
+
+        // Match the role rules already enforced by TenantGuard.
+        if (!Object.values(Role).includes(membership.role.name as Role)) {
+            throw new UnauthorizedException('Unsupported company role.');
+        }
+
+        // Issue tokens directly for this company.
+        // Company login never returns an organization-selection token.
+        return this.buildJwt(user, membership);
     }
 
     async selectOrg(selectionToken: string, organizationId: string) {
@@ -250,31 +394,139 @@ export class AuthService {
         });
     }
 
+    // Existing central endpoint retains its current service signature.
+    // The stored refresh token determines which organization it refreshes.
     async refresh(rawRefreshToken: string) {
-        const tokenHash = this.hashToken(rawRefreshToken);
+        return this.rotateRefreshToken(rawRefreshToken);
+    }
 
-        const stored = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
+    // Company endpoints must supply context resolved by the trusted guard.
+    async refreshForTenant(
+        tenant: TenantContext,
+        rawRefreshToken: string,
+    ) {
+        if (!tenant?.organizationId) {
+            throw new UnauthorizedException('Company context is required.');
+        }
 
-        if (!stored || stored.expiresAt < new Date()) {
-            if (stored) await this.prisma.refreshToken.delete({ where: { tokenHash } });
+        return this.rotateRefreshToken(
+            rawRefreshToken,
+            tenant.organizationId,
+        );
+    }
+
+    private async rotateRefreshToken(
+        rawRefreshToken: string,
+        expectedOrganizationId?: string,
+    ) {
+        if (
+            typeof rawRefreshToken !== 'string' ||
+            !rawRefreshToken.trim()
+        ) {
             throw new UnauthorizedException('Invalid or expired refresh token');
         }
 
-        const membership = await this.prisma.userOrganization.findUnique({
-            where: { userId_organizationId: { userId: stored.userId, organizationId: stored.organizationId } },
-            include: { user: true, organization: true, role: true },
-        }) as UserOrganizationMembership | null;
+        const tokenHash = this.hashToken(rawRefreshToken);
 
-        if (!membership) throw new UnauthorizedException('User membership not found');
+        return this.prisma.$transaction(
+            async (tx) => {
+                const stored = await tx.refreshToken.findUnique({
+                    where: { tokenHash },
+                });
 
-        // Rotate: delete old token before issuing new one
-        await this.prisma.refreshToken.delete({ where: { tokenHash } });
+                if (!stored) {
+                    throw new UnauthorizedException(
+                        'Invalid or expired refresh token',
+                    );
+                }
 
-        return this.buildJwt(membership.user, {
-            organizationId: membership.organizationId,
-            roleId: membership.roleId,
-            role: membership.role,
-            organization: membership.organization,
+                // Check company ownership before changing the stored token.
+                // A token presented to another company must remain untouched.
+                if (
+                    expectedOrganizationId !== undefined &&
+                    stored.organizationId !== expectedOrganizationId
+                ) {
+                    throw new UnauthorizedException(
+                        'Invalid or expired refresh token',
+                    );
+                }
+
+                if (stored.expiresAt.getTime() <= Date.now()) {
+                    throw new UnauthorizedException(
+                        'Invalid or expired refresh token',
+                    );
+                }
+
+                // Recheck membership on every refresh.
+                // Previously issued tokens do not prove current access.
+                const membership = await tx.userOrganization.findUnique({
+                    where: {
+                        userId_organizationId: {
+                            userId: stored.userId,
+                            organizationId: stored.organizationId,
+                        },
+                    },
+                    include: {
+                        user: true,
+                        organization: true,
+                        role: true,
+                    },
+                });
+
+                if (
+                    !membership ||
+                    membership.organization.status !== OrgStatus.ACTIVE
+                ) {
+                    throw new UnauthorizedException('Company access denied.');
+                }
+
+                if (
+                    !Object.values(Role).includes(
+                        membership.role.name as Role,
+                    )
+                ) {
+                    throw new UnauthorizedException(
+                        'Unsupported company role.',
+                    );
+                }
+
+                // Consume the token conditionally.
+                // Concurrent refresh requests may both read it, but only one
+                // can delete it successfully and proceed to issue a replacement.
+                const consumed = await tx.refreshToken.deleteMany({
+                    where: {
+                        tokenHash,
+                        userId: stored.userId,
+                        organizationId: stored.organizationId,
+                        expiresAt: { gt: new Date() },
+                    },
+                });
+
+                if (consumed.count !== 1) {
+                    throw new UnauthorizedException(
+                        'Invalid or expired refresh token',
+                    );
+                }
+
+                // Use the SAME transaction for the replacement token.
+                // If this fails, the deletion above is rolled back.
+                return this.buildJwt(
+                    membership.user,
+                    membership,
+                    tx,
+                );
+            },
+            {
+                isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+            },
+        );
+    }
+
+    async revokeRefreshTokenForTenant(tenant: TenantContext, raw: string) {
+        if (!tenant?.organizationId) throw new UnauthorizedException('Company context is required.');
+        if (typeof raw !== 'string' || !raw.trim()) return;
+        await this.prisma.refreshToken.deleteMany({
+            where: { tokenHash: this.hashToken(raw), organizationId: tenant.organizationId },
         });
     }
 
@@ -283,28 +535,32 @@ export class AuthService {
         await this.prisma.refreshToken.deleteMany({ where: { tokenHash } });
     }
 
-    async verifyFirstTimeUser(phoneOrEmail?: string, employeeCode?: string) {
+    async verifyFirstTimeUser(phoneOrEmail?: string, employeeCode?: string, organizationId?: string) {
+        if (!employeeCode?.trim() && !phoneOrEmail?.trim()) throw new UnauthorizedException('Account not found');
+        const membershipWhere = { ...(organizationId ? { organizationId } : {}), organization: { status: OrgStatus.ACTIVE } };
+        const membershipFilter = { organizations: { some: membershipWhere } };
+        const include = { organizations: { where: membershipWhere, include: { organization: true } } };
         let user: UserWithOrganizationOnly | null;
 
         if (employeeCode) {
-            const userId = await this.getUserIdByEmployeeCode(employeeCode);
+            const userId = await this.getUserIdByEmployeeCode(employeeCode, organizationId);
             user = await this.prisma.user.findUnique({
-                where: { id: userId },
-                include: { organizations: { include: { organization: true } } },
+                where: { id: userId, ...membershipFilter },
+                include,
             }) as UserWithOrganizationOnly | null;
         } else {
             const isEmail = phoneOrEmail!.includes('@');
             if (isEmail) {
                 const normalized = phoneOrEmail!.trim().toLowerCase();
                 user = await this.prisma.user.findFirst({
-                    where: { email: normalized },
-                    include: { organizations: { include: { organization: true } } },
+                    where: { email: normalized, ...membershipFilter },
+                    include,
                 }) as UserWithOrganizationOnly | null;
             } else {
                 const variants = this.phoneVariants(phoneOrEmail!);
                 const candidates = await this.prisma.user.findMany({
-                    where: { phone: { in: variants } },
-                    include: { organizations: { include: { organization: true } } },
+                    where: { phone: { in: variants }, ...membershipFilter },
+                    include,
                 }) as UserWithOrganizationOnly[];
                 user = candidates.find(u => u.password) ?? candidates[0] ?? null;
             }
@@ -329,19 +585,32 @@ export class AuthService {
 
         if (hasPassword) return responseData;
 
-        const setupToken = this.jwtService.sign(
-            { userId: user.id, purpose: 'FIRST_TIME_SETUP' },
-            { expiresIn: '15m' },
-        );
+        // Looking up an identifier is not proof of account ownership.
+        // The existing reset-password email flow provides single-use ownership proof.
+        return { ...responseData, verificationRequired: true };
 
-        return { ...responseData, setupToken };
+    }
+
+    async verifyFirstTimeForTenant(tenant: TenantContext, phoneOrEmail?: string, employeeCode?: string) {
+        if (!tenant?.organizationId) throw new UnauthorizedException('Company context is required.');
+        return this.verifyFirstTimeUser(phoneOrEmail, employeeCode, tenant.organizationId);
+    }
+
+    async createPasswordForTenant(tenant: TenantContext, token: string, password: string) {
+        if (!tenant?.organizationId) throw new UnauthorizedException('Company context is required.');
+        let decoded: { userId?: string };
+        try { decoded = this.jwtService.verify(token); } catch { throw new UnauthorizedException('Invalid setup token'); }
+        if (!decoded.userId || !await this.prisma.userOrganization.findUnique({ where: { userId_organizationId: { userId: decoded.userId, organizationId: tenant.organizationId } } })) {
+            throw new UnauthorizedException('Company access denied.');
+        }
+        return this.createPassword(token, password);
     }
 
     async createPassword(setupToken: string, newPassword: string) {
         try {
             const decoded = this.jwtService.verify(setupToken);
 
-            if (decoded.purpose !== 'FIRST_TIME_SETUP' && decoded.purpose !== 'PASSWORD_RESET_SETUP') {
+            if (decoded.purpose !== 'PASSWORD_RESET_SETUP') {
                 throw new UnauthorizedException('Invalid setup token');
             }
 
@@ -351,10 +620,11 @@ export class AuthService {
 
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-            await this.prisma.user.update({
-                where: { id: decoded.userId },
+            const changed = await this.prisma.user.updateMany({
+                where: { id: decoded.userId, password: null },
                 data: { password: hashedPassword },
             });
+            if (changed.count !== 1) throw new UnauthorizedException('Password already set');
 
             return { message: 'Password created successfully! You can now login.' };
         } catch (error) {
@@ -390,7 +660,7 @@ export class AuthService {
                 message: `We received a request to reset the password for your account, ${user.name}. This link expires in 30 minutes and can only be used once. If you didn't request this, you can safely ignore this email — your password won't change.`,
                 actionUrl: resetUrl,
                 actionLabel: 'Reset Password',
-            });
+            }, { requireDelivery: true });
         }
 
         return { message: 'If an account with that email exists, a reset link has been sent to it.' };
@@ -411,12 +681,12 @@ export class AuthService {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        await this.prisma.$transaction([
-            this.prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } }),
-            this.prisma.passwordResetToken.update({ where: { tokenHash }, data: { usedAt: new Date() } }),
-            // Kill every existing session — if an attacker was already inside, this locks them out too.
-            this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
-        ]);
+        await this.prisma.$transaction(async tx => {
+            const consumed = await tx.passwordResetToken.updateMany({ where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
+            if (consumed.count !== 1) throw new UnauthorizedException('Reset link already used or expired');
+            await tx.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
+            await tx.refreshToken.deleteMany({ where: { userId: user.id } });
+        });
 
         if (user.email) {
             await this.emailService.send({
@@ -471,11 +741,12 @@ export class AuthService {
             throw new UnauthorizedException('Invalid or expired temporary password.');
         }
 
-        await this.prisma.$transaction([
-            this.prisma.passwordResetToken.update({ where: { tokenHash }, data: { usedAt: new Date() } }),
-            this.prisma.user.update({ where: { id: stored.userId }, data: { password: null } }),
-            this.prisma.refreshToken.deleteMany({ where: { userId: stored.userId } }),
-        ]);
+        await this.prisma.$transaction(async tx => {
+            const consumed = await tx.passwordResetToken.updateMany({ where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
+            if (consumed.count !== 1) throw new UnauthorizedException('Temporary password already used or expired');
+            await tx.user.update({ where: { id: stored.userId }, data: { password: null } });
+            await tx.refreshToken.deleteMany({ where: { userId: stored.userId } });
+        });
 
         const setupToken = this.jwtService.sign(
             { userId: stored.userId, purpose: 'PASSWORD_RESET_SETUP' },

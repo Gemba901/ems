@@ -30,8 +30,9 @@ export function OrgPickerStep({ data, onBack }: OrgPickerStepProps) {
 
     try {
       const response = await AuthService.selectOrg(data.selectionToken, orgId);
+      if (response.workspaceUrl) { window.location.assign(response.workspaceUrl); return; }
       setAuth(response.user, response.accessToken);
-      router.push(response.user.roleLevel === "SUPER_ADMIN" ? "/admin" : "/");
+      router.push(response.user.isAdminOrg && response.user.roleLevel === "SUPER_ADMIN" ? "/admin" : "/");
     } catch (err: any) {
       setError(err.message || "Failed to select organization.");
       setSelected(null);

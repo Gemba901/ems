@@ -182,7 +182,7 @@ export class EmsService {
     }
 
     const updated = await this.prisma.employee.update({
-      where: { id: employeeId },
+      where: { id: employeeId, organizationId },
       data: updateData,
       select: EMS_EMPLOYEE_SELECT,
     });

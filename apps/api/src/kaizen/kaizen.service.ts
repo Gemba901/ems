@@ -50,9 +50,9 @@ export class KaizenService {
         private notifications: NotificationsService
     ) { }
 
-    private async resolveEmployee(userId: string, organizationId?: string) {
+    private async resolveEmployee(userId: string, organizationId: string) {
         const employee = await this.prisma.employee.findFirst({
-            where: { userId, ...(organizationId && { organizationId }) },
+            where: { userId, organizationId },
             select: { id: true, departmentId: true, organizationId: true },
         });
         if (!employee) throw new ForbiddenException('No employee profile linked to your account');
@@ -390,6 +390,10 @@ export class KaizenService {
 
     // Part 4: basic daily kaizen information
     async updateBasicInfo(kaizenId: string, userId: string, dto: UpdateKaizenBasicInfoDto, organizationId: string) {
+        const ids = [...new Set([...(dto.teamMemberIds ?? []), ...(dto.kaizenOwnerId ? [dto.kaizenOwnerId] : [])])];
+        if (ids.length && await this.prisma.employee.count({ where: { id: { in: ids }, organizationId } }) !== ids.length) {
+            throw new BadRequestException('Kaizen team members must belong to this organization');
+        }
         const kaizen = await this.findKaizenOrThrow(kaizenId, organizationId);
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertEditable(kaizen, employee.id);

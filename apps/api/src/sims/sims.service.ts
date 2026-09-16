@@ -61,9 +61,9 @@ export class SimsService {
     private kaizenService: KaizenService,
   ) { }
 
-  private async resolveEmployee(userId: string, organizationId?: string) {
+  private async resolveEmployee(userId: string, organizationId: string) {
     const employee = await this.prisma.employee.findFirst({
-      where: { userId, ...(organizationId && { organizationId }) },
+      where: { userId, organizationId },
       select: { id: true, departmentId: true, organizationId: true },
     });
     if (!employee) throw new ForbiddenException('No employee profile linked to your account');
@@ -281,8 +281,8 @@ export class SimsService {
   }
 
   // Query
-  async getMySuggestions(userId: string) {
-    const employee = await this.resolveEmployee(userId);
+  async getMySuggestions(userId: string, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
     return this.prisma.suggestion.findMany({
       where: { employeeId: employee.id },
       orderBy: { createdAt: 'desc' },
@@ -290,8 +290,8 @@ export class SimsService {
     });
   }
 
-  async getDepartmentSuggestions(userId: string, query: QuerySuggestionsDto) {
-    const employee = await this.resolveEmployee(userId);
+  async getDepartmentSuggestions(userId: string, query: QuerySuggestionsDto, organizationId: string) {
+    const employee = await this.resolveEmployee(userId, organizationId);
     if (!employee.departmentId) throw new ForbiddenException('Your account is not assigned to a department');
 
     const { status, category, page, limit } = query;
@@ -402,7 +402,7 @@ export class SimsService {
     }
 
     if (roleLevel === Role.EMPLOYEE) {
-      const employee = await this.resolveEmployee(userId);
+      const employee = await this.resolveEmployee(userId, organizationId);
       const isResponsibleParty =
         (suggestion.decisionDetails as Record<string, any> | null)?.responsibleEmployeeId === employee.id;
       if (suggestion.employeeId !== employee.id && !isResponsibleParty) {
@@ -412,7 +412,7 @@ export class SimsService {
     }
 
     if (roleLevel === Role.HOD) {
-      const employee = await this.resolveEmployee(userId);
+      const employee = await this.resolveEmployee(userId, organizationId);
       if (suggestion.departmentId !== employee.departmentId) {
         throw new ForbiddenException('You can only view suggestions from your department');
       }
@@ -422,7 +422,7 @@ export class SimsService {
   }
 
   async getSummary(userId: string, organizationId: string) {
-    const employee = await this.resolveEmployee(userId);
+    const employee = await this.resolveEmployee(userId, organizationId);
 
     const [deptSuggestions, orgSuggestions, deptEmployeeCount, orgEmployeeCount] = await Promise.all([
       employee.departmentId

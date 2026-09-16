@@ -1,3 +1,4 @@
+import { PlatformAdminGuard } from '../tenancy/platform-admin.guard';
 import {
     Controller,
     Get,
@@ -36,7 +37,7 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
  * The guard is applied at the controller level so every endpoint inherits it.
  */
 @Controller('organizations')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PlatformAdminGuard, RolesGuard)
 @Roles(Role.SUPER_ADMIN)
 export class OrganizationsController {
     constructor(
@@ -164,8 +165,8 @@ export class OrganizationsController {
      * Create a new organization. Automatically seeds 5 default roles.
      */
     @Post()
-    create(@Body() dto: CreateOrganizationDto) {
-        return this.organizationsService.create(dto);
+    create(@Body() dto: CreateOrganizationDto, @CurrentUser() user: { organizationId: string }) {
+        return this.organizationsService.create(dto, user.organizationId);
     }
 
     /**
@@ -183,7 +184,7 @@ export class OrganizationsController {
         if (user.roleLevel !== Role.SUPER_ADMIN && user.organizationId !== id) {
             throw new ForbiddenException('You can only update your own organization');
         }
-        return this.organizationsService.update(id, dto);
+        return this.organizationsService.update(id, dto, user.organizationId);
     }
 
     /**
@@ -221,7 +222,7 @@ export class OrganizationsController {
      * Must be declared before DELETE :id so the literal path wins.
      */
     @Delete('orphan-users')
-    @UseGuards(JwtAuthGuard, RolesGuard)
+    @UseGuards(RolesGuard)
     @Roles(Role.SUPER_ADMIN)
     @HttpCode(HttpStatus.OK)
     deleteOrphanUsers() {

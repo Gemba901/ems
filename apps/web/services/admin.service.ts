@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/api-client";
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = "/api";
 
 function authHeaders(token: string) {
     return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
@@ -16,6 +16,24 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export type OrgStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
 export type ModuleType = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN";
+
+export interface CreateOrganizationPayload {
+    name: string;
+    slug: string;
+    shortName?: string;
+    industry?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    logoUrl?: string;
+    timeZone?: string;
+    modules?: ModuleType[];
+    adminFirstName: string;
+    adminLastName: string;
+    adminEmail: string;
+    adminPhone: string;
+    gembaTeamUserIds?: string[];
+}
 
 export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: string }[] = [
     { key: "SIMS",     label: "SIMS",     description: "Suggestions & Idea Management" },
@@ -93,7 +111,7 @@ export interface PaginatedResponse<T> {
     pagination: { page: number; limit: number; total: number; pages: number };
 }
 
-// ── Service ───────────────────────────────────────────────────────────────────
+//  Service
 
 export const AdminService = {
     async getPlatformStats(token: string): Promise<PlatformStats> {
@@ -145,10 +163,7 @@ export const AdminService = {
         page = 1,
         limit = 20,
     ): Promise<PaginatedResponse<any>> {
-        const res = await fetch(
-            `${API_URL}/organizations/${id}/suggestions?page=${page}&limit=${limit}`,
-            { headers: authHeaders(token) },
-        );
+        const res = await apiClient(`${API_URL}/organizations/${id}/suggestions?page=${page}&limit=${limit}`, { headers: authHeaders(token) }, token);
         return handleResponse<PaginatedResponse<any>>(res);
     },
 
@@ -184,7 +199,7 @@ export const AdminService = {
         return handleResponse<PlatformAdmin[]>(res);
     },
 
-    async createOrganization(token: string, data: Record<string, string> & { modules?: ModuleType[]; adminFirstName: string; adminLastName: string; adminEmail: string; adminPhone: string; gembaTeamUserIds?: string[] }): Promise<any> {
+    async createOrganization(token: string, data: CreateOrganizationPayload): Promise<any> {
         const res = await apiClient(`${API_URL}/organizations`, {
             method: "POST",
             headers: authHeaders(token),

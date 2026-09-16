@@ -1,4 +1,3 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { EmployeeController } from './employee.controller';
 import { EmployeeService } from './employee.service';
 import { BadRequestException } from '@nestjs/common';
@@ -6,6 +5,7 @@ import { BadRequestException } from '@nestjs/common';
 describe('EmployeeController', () => {
   let controller: EmployeeController;
   let service: EmployeeService;
+  const user = { organizationId: 'org-1' };
 
   const mockEmployeeService = {
     onboardEmployee: jest.fn(),
@@ -46,18 +46,8 @@ describe('EmployeeController', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [EmployeeController],
-      providers: [
-        {
-          provide: EmployeeService,
-          useValue: mockEmployeeService,
-        },
-      ],
-    }).compile();
-
-    controller = module.get<EmployeeController>(EmployeeController);
-    service = module.get<EmployeeService>(EmployeeService);
+    service = mockEmployeeService as unknown as EmployeeService;
+    controller = new EmployeeController(service);
   });
 
   afterEach(() => {
@@ -84,13 +74,13 @@ describe('EmployeeController', () => {
         employee: mockEmployee,
       });
 
-      const result = await controller.onboard(createEmployeeDto as any);
+      const result = await controller.onboard(createEmployeeDto as any, user);
 
       expect(result).toEqual({
         user: mockEmployee.user,
         employee: mockEmployee,
       });
-      expect(service.onboardEmployee).toHaveBeenCalledWith(createEmployeeDto, 'dept-1');
+      expect(service.onboardEmployee).toHaveBeenCalledWith(createEmployeeDto, 'org-1');
     });
 
     it('should handle duplicate email error', async () => {
@@ -107,7 +97,7 @@ describe('EmployeeController', () => {
         new BadRequestException('Employee with this email or phone already exists'),
       );
 
-      await expect(controller.onboard(createEmployeeDto as any)).rejects.toThrow(
+      await expect(controller.onboard(createEmployeeDto as any, user)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -117,10 +107,10 @@ describe('EmployeeController', () => {
     it('should return an employee by id', async () => {
       mockEmployeeService.getEmployeeById.mockResolvedValue(mockEmployee);
 
-      const result = await controller.getById('emp-1');
+      const result = await controller.getById('emp-1', user);
 
       expect(result).toEqual(mockEmployee);
-      expect(service.getEmployeeById).toHaveBeenCalledWith('emp-1');
+      expect(service.getEmployeeById).toHaveBeenCalledWith('emp-1', 'org-1');
     });
 
     it('should throw error if employee not found', async () => {
@@ -128,7 +118,7 @@ describe('EmployeeController', () => {
         new BadRequestException('Employee not found'),
       );
 
-      await expect(controller.getById('invalid-id')).rejects.toThrow(
+      await expect(controller.getById('invalid-id', user)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -147,6 +137,7 @@ describe('EmployeeController', () => {
       const result = await controller.getByOrganization(
         'org-1',
         pagination as any,
+        user,
       );
 
       expect(result).toEqual({
@@ -162,8 +153,10 @@ describe('EmployeeController', () => {
         'org-1',
         0,
         10,
+        undefined,
+        undefined,
       );
-      expect(service.countEmployeesByOrganization).toHaveBeenCalledWith('org-1');
+      expect(service.countEmployeesByOrganization).toHaveBeenCalledWith('org-1', undefined, undefined);
     });
 
     it('should use default pagination values', async () => {
@@ -172,12 +165,14 @@ describe('EmployeeController', () => {
       ]);
       mockEmployeeService.countEmployeesByOrganization.mockResolvedValue(1);
 
-      await controller.getByOrganization('org-1', {} as any);
+      await controller.getByOrganization('org-1', {} as any, user);
 
       expect(service.getEmployeesByOrganization).toHaveBeenCalledWith(
         'org-1',
         0,
         10,
+        undefined,
+        undefined,
       );
     });
 
@@ -185,7 +180,7 @@ describe('EmployeeController', () => {
       const invalidPagination = { page: 0, limit: 10 };
 
       await expect(
-        controller.getByOrganization('org-1', invalidPagination as any),
+        controller.getByOrganization('org-1', invalidPagination as any, user),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -203,6 +198,7 @@ describe('EmployeeController', () => {
       const result = await controller.getByDepartment(
         'dept-1',
         pagination as any,
+        user,
       );
 
       expect(result).toEqual({
@@ -216,7 +212,7 @@ describe('EmployeeController', () => {
       });
       expect(service.getEmployeesByDepartment).toHaveBeenCalledWith(
         'dept-1',
-        undefined,
+        'org-1',
         0,
         10,
       );
@@ -226,7 +222,7 @@ describe('EmployeeController', () => {
       const invalidPagination = { page: -1, limit: 10 };
 
       await expect(
-        controller.getByDepartment('dept-1', invalidPagination as any),
+        controller.getByDepartment('dept-1', invalidPagination as any, user),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -242,12 +238,13 @@ describe('EmployeeController', () => {
       const updatedEmployee = { ...mockEmployee, ...updateEmployeeDto };
       mockEmployeeService.updateEmployee.mockResolvedValue(updatedEmployee);
 
-      const result = await controller.update('emp-1', updateEmployeeDto as any);
+      const result = await controller.update('emp-1', updateEmployeeDto as any, user);
 
       expect(result).toEqual(updatedEmployee);
       expect(service.updateEmployee).toHaveBeenCalledWith(
         'emp-1',
         updateEmployeeDto,
+        'org-1',
       );
     });
 
@@ -257,7 +254,7 @@ describe('EmployeeController', () => {
       );
 
       await expect(
-        controller.update('invalid-id', {} as any),
+        controller.update('invalid-id', {} as any, user),
       ).rejects.toThrow(BadRequestException);
     });
   });

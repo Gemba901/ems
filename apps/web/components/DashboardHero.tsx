@@ -50,7 +50,7 @@ export default function DashboardHero() {
 
   useEffect(() => {
     if (!accessToken) return;
-    apiClient(`${process.env.NEXT_PUBLIC_API_URL}/quotes/daily`, {}, accessToken)
+    apiClient("/api/quotes/daily", {}, accessToken)
       .then((r) => r.json())
       .then((data) => {
         if (data.quote) setDailyQuote({ quote: data.quote, author: data.author });

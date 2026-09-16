@@ -1,7 +1,7 @@
 import { apiClient } from "@/lib/api-client";
 import { SteelMaterialType } from "@/services/steel-sourcing.service";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = "/api";
 
 function authHeaders(token: string) {
   return {

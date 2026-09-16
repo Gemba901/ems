@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { SteelDashboardService } from './dashboard.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -23,8 +26,9 @@ const DASHBOARD_ROLES = [
 /**
  * Steel Operations home — cross-process recent activity feed and KPIs (P01-P06).
  */
+@TenantRequired()
 @Controller('steel/dashboard')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.STEEL)
 @Roles(...DASHBOARD_ROLES)
 export class SteelDashboardController {

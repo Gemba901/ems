@@ -1,3 +1,5 @@
+import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { ConfigModule } from '@nestjs/config';
 import { Module } from '@nestjs/common';
 import { DwmsController } from './dwms.controller';
 import { DwmsService } from './dwms.service';
@@ -8,7 +10,7 @@ import { AuthModule } from 'src/auth/auth.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, NotificationsModule],
+  imports: [TenancyModule, ConfigModule, PrismaModule, AuthModule, NotificationsModule],
   controllers: [DwmsController],
   providers: [
     DwmsService,

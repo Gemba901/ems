@@ -1,5 +1,6 @@
+import { uploadImage } from "./uploads.service";
 import { apiClient } from "@/lib/api-client";
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = "/api";
 
 function authHeaders(token: string) {
   return {
@@ -147,17 +148,7 @@ function buildQuery(params: Record<string, string | number | undefined>) {
 }
 
 export async function uploadSuggestionImage(file: File, token: string): Promise<string> {
-  const presignRes = await apiClient(`${API_URL}/uploads/presigned-url`, {
-    method: "POST",
-    headers: authHeaders(token),
-    body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: "suggestions" }),
-  }, token);
-  const { uploadUrl, fileUrl } = await handleResponse<{ uploadUrl: string; fileUrl: string }>(presignRes);
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-  if (!putRes.ok) {
-    throw new Error(`Failed to upload file to S3: ${putRes.status}`);
-  }
-  return fileUrl;
+  return (await uploadImage(file, 'suggestions', token)).fileUrl;
 }
 
 export const SimsService = {

@@ -1,3 +1,5 @@
+import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { ConfigModule } from '@nestjs/config';
 import { Module } from '@nestjs/common';
 import { CalendarService } from './calendar.service';
 import { CalendarController } from './calendar.controller';
@@ -6,7 +8,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule],
+  imports: [TenancyModule, ConfigModule, PrismaModule, NotificationsModule],
   providers: [CalendarService, ModuleGuard],
   controllers: [CalendarController],
 })

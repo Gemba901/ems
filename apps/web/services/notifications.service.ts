@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/api-client";
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = "/api";
 
 function authHeaders(token: string) {
   return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
@@ -80,9 +80,9 @@ export interface NotificationPreferences {
 }
 
 export async function getNotificationPreferences(token: string): Promise<NotificationPreferences> {
-  const res = await fetch(`${API_URL}/notifications/preferences`, {
+  const res = await apiClient(`${API_URL}/notifications/preferences`, {
     headers: authHeaders(token),
-  });
+  }, token);
   return handleResponse<NotificationPreferences>(res);
 }
 

@@ -1,3 +1,4 @@
+import { SessionProvider } from "@/contexts/SessionProvider";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -50,7 +51,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} bg-slate-50 text-slate-900`}>
         <QueryProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <SessionProvider><ToastProvider>{children}</ToastProvider></SessionProvider>
         </QueryProvider>
       </body>
     </html>

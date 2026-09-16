@@ -1,75 +1,24 @@
-import { useAuthStore } from "@/store/auth.store";
+import { useAuthStore } from '@/store/auth.store';
+import { invalidateLocalSession, refreshSession } from './session';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-// Deduplicate concurrent 401s so only one refresh call goes out
-let refreshPromise: Promise<string | null> | null = null;
-
-async function tryRefresh(): Promise<string | null> {
-    if (refreshPromise) return refreshPromise;
-
-    refreshPromise = (async () => {
-        try {
-            const res = await fetch(`${API_URL}/auth/refresh`, {
-                method: "POST",
-                credentials: "include",
-            });
-
-            if (!res.ok) return null;
-
-            const { accessToken } = await res.json();
-            useAuthStore.getState().setAccessToken(accessToken);
-            return accessToken as string;
-        } catch {
-            return null;
-        } finally {
-            refreshPromise = null;
-        }
-    })();
-
-    return refreshPromise;
-}
-
-/**
- * Drop-in replacement for fetch that:
- * 1. Attaches `Authorization: Bearer <token>` automatically.
- * 2. On 401, attempts a silent token refresh via the httpOnly refresh-token cookie.
- * 3. Retries the original request once with the new access token.
- * 4. If refresh fails, clears the auth store and redirects to /login.
- */
-export async function apiClient(
-    url: string,
-    options: RequestInit = {},
-    token: string,
-): Promise<Response> {
-    const response = await fetch(url, {
-        ...options,
-        credentials: "include",
-        headers: {
-            ...options.headers,
-            Authorization: `Bearer ${token}`,
-        },
-    });
-
+export async function apiClient(url: string, options: RequestInit = {}, token: string): Promise<Response> {
+    // Keep bearer tokens on this origin even if a future caller supplies a bad URL.
+    if (!url.startsWith('/api/') || url.includes('\\')) throw new Error('API requests must use the same-origin proxy');
+    const send = (accessToken: string) => {
+        const headers = new Headers(options.headers);
+        headers.set('Authorization', `Bearer ${accessToken}`);
+        return fetch(url, { ...options, credentials: 'same-origin', cache: 'no-store', headers });
+    };
+    const current = useAuthStore.getState().accessToken ?? token;
+    const response = await send(current);
     if (response.status !== 401) return response;
-
-    const newToken = await tryRefresh();
-
-    if (!newToken) {
-        useAuthStore.getState().logout();
-        if (typeof window !== "undefined") {
-            window.location.href = "/login";
-        }
+    // A different request may already have refreshed while this one was in flight.
+    const latest = useAuthStore.getState().accessToken;
+    const refreshed = latest && latest !== current ? latest : await refreshSession();
+    if (!refreshed) {
+        invalidateLocalSession();
+        if (typeof window !== 'undefined') window.location.assign('/login');
         return response;
     }
-
-    // Retry once with the fresh token
-    return fetch(url, {
-        ...options,
-        credentials: "include",
-        headers: {
-            ...options.headers,
-            Authorization: `Bearer ${newToken}`,
-        },
-    });
+    return send(refreshed);
 }

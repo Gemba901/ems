@@ -47,7 +47,16 @@ export class EmployeeService {
         return digits;
     }
 
+    private async assertDepartment(departmentId: string | null | undefined, organizationId: string) {
+        if (!departmentId) return;
+        const department = await this.prisma.department.findFirst({ where: { id: departmentId, organizationId }, select: { id: true } });
+        if (!department) throw new BadRequestException('Department not found in this organization');
+    }
+
     async onboardEmployee(data: any, organizationId: string) {
+        await this.assertDepartment(data.departmentId, organizationId);
+        const role = await this.prisma.role.findUnique({ where: { id: Number(data.roleId) } });
+        if (!role || role.name === 'SUPER_ADMIN') throw new ForbiddenException('Cannot assign this role');
         const email = String(data.email ?? '').trim().toLowerCase();
         const phone = this.normalizePhoneForStorage(data.phone);
 
@@ -112,6 +121,7 @@ export class EmployeeService {
                 include: {
                     department: true,
                     user: {
+                        omit: { password: true },
                         include: {
                             organizations: {
                                 where: { organizationId },
@@ -184,6 +194,7 @@ export class EmployeeService {
             include: {
                 department: true,
                 user: {
+                    omit: { password: true },
                     include: {
                         organizations: {
                             where: { organizationId },
@@ -218,14 +229,15 @@ export class EmployeeService {
     }
 
     // get employee details by id
-    async getEmployeeById(id: string) {
-        const employee = await this.prisma.employee.findUnique({
-            where: { id },
+    async getEmployeeById(id: string, organizationId: string) {
+        const employee = await this.prisma.employee.findFirst({
+            where: { id, organizationId },
             include: {
                 department: true,
                 user: {
+                    omit: { password: true },
                     include: {
-                        organizations: { include: { role: true } },
+                        organizations: { where: { organizationId }, include: { role: true } },
                     },
                 },
                 committeeMembers: {
@@ -259,6 +271,7 @@ export class EmployeeService {
             include: {
                 department: true,
                 user: {
+                    omit: { password: true },
                     include: {
                         organizations: {
                             where: { organizationId },
@@ -292,15 +305,14 @@ export class EmployeeService {
     }
 
     // get employees in a specific department with pagination
-    async getEmployeesByDepartment(departmentId: string, organizationId?: string, skip: number = 0, take: number = 10) {
-        const query: any = { departmentId };
-        if (organizationId) query.organizationId = organizationId;
+    async getEmployeesByDepartment(departmentId: string, organizationId: string, skip: number = 0, take: number = 10) {
+        const query = { departmentId, organizationId };
 
         return this.prisma.employee.findMany({
             where: query,
             include: {
                 department: true,
-                user: true,
+                user: { omit: { password: true } },
             },
             skip,
             take,
@@ -308,36 +320,28 @@ export class EmployeeService {
     }
 
     // count total employees in a department
-    async countEmployeesByDepartment(departmentId: string): Promise<number> {
+    async countEmployeesByDepartment(departmentId: string, organizationId: string): Promise<number> {
         return this.prisma.employee.count({
-            where: { departmentId }
+            where: { departmentId, organizationId }
         });
     }
 
     // update employee details
-    async updateEmployee(id: string, data: any) {
-        const employee = await this.prisma.employee.findUnique({ where: { id } });
+    async updateEmployee(id: string, data: any, organizationId: string) {
+        await this.assertDepartment(data.departmentId, organizationId);
+        const employee = await this.prisma.employee.findFirst({ where: { id, organizationId } });
         if (!employee) throw new BadRequestException('Employee not found');
 
         const updatedEmployee = await this.prisma.employee.update({
-            where: { id },
+            where: { id, organizationId },
             data: {
                 firstName: data.firstName,
                 lastName: data.lastName,
                 email: data.email,
+                phone: data.phone,
                 departmentId: data.departmentId,
             }
         });
-
-        if (data.email || data.phone) {
-            await this.prisma.user.update({
-                where: { id: employee.userId! },
-                data: {
-                    email: data.email,
-                    phone: data.phone,
-                }
-            });
-        }
 
         return updatedEmployee;
     }
@@ -417,7 +421,7 @@ export class EmployeeService {
 
     // update an employee's role within their organization
     async updateEmployeeRole(id: string, roleId: number, organizationId: string) {
-        const employee = await this.prisma.employee.findUnique({ where: { id } });
+        const employee = await this.prisma.employee.findFirst({ where: { id, organizationId } });
         if (!employee) throw new BadRequestException('Employee not found');
         if (employee.organizationId !== organizationId) throw new ForbiddenException('Cannot manage employees from another organization');
         if (!employee.userId) throw new BadRequestException('Employee has no linked user account');
@@ -441,11 +445,14 @@ export class EmployeeService {
     // out-of-band; the employee redeems it via the "forgot password" flow (auth/verify-temp-password),
     // which is what actually clears their real password and kills their sessions.
     async resetEmployeePassword(id: string, organizationId: string) {
-        const employee = await this.prisma.employee.findUnique({ where: { id } });
+        const employee = await this.prisma.employee.findFirst({ where: { id, organizationId } });
         if (!employee) throw new BadRequestException('Employee not found');
         if (employee.organizationId !== organizationId) throw new ForbiddenException('Cannot manage employees from another organization');
         if (!employee.userId) throw new BadRequestException('Employee has no linked user account');
 
+        // A company administrator must not take over a shared account.
+        const memberships = await this.prisma.userOrganization.count({ where: { userId: employee.userId } });
+        if (memberships !== 1) throw new ForbiddenException('Shared accounts must use email password recovery');
         const { tempPassword, expiresInMinutes } = await this.authService.generateTempPassword(employee.userId);
 
         return {
@@ -456,14 +463,17 @@ export class EmployeeService {
     }
 
     // update employee avatar URL
-    async updateAvatar(id: string, avatarUrl: string) {
-        const employee = await this.prisma.employee.findUnique({ where: { id } });
+    async updateAvatar(id: string, avatarUrl: string, organizationId: string, userId: string, roleLevel: string) {
+        const employee = await this.prisma.employee.findFirst({ where: { id, organizationId } });
         if (!employee) throw new BadRequestException('Employee not found');
 
+        if (employee.userId !== userId && !['ADMIN', 'SUPER_ADMIN'].includes(roleLevel)) {
+            throw new ForbiddenException('You can only update your own avatar');
+        }
         return (this.prisma.employee as any).update({
-            where: { id },
+            where: { id, organizationId },
             data: { avatarUrl },
-            include: { department: true, user: { include: { organizations: { include: { role: true } } } } },
+            include: { department: true, user: { omit: { password: true }, include: { organizations: { where: { organizationId }, include: { role: true } } } } },
         });
     }
 
@@ -493,7 +503,7 @@ export class EmployeeService {
 
         const existingEmployees = await this.prisma.employee.findMany({
             where: { organizationId },
-            include: { user: { include: { organizations: { where: { organizationId } } } } },
+            include: { user: { omit: { password: true }, include: { organizations: { where: { organizationId } } } } },
         });
 
         const matchedExistingIds = new Set<string>();
@@ -587,6 +597,7 @@ export class EmployeeService {
             // A recognized Role/Access Level cell always wins (including demotions from a manual
             // change in Settings > Members). A blank/unrecognized cell leaves an existing member's
             // role untouched rather than silently resetting them to EMPLOYEE.
+            if (currentUserId && row.roleName === 'SUPER_ADMIN') throw new ForbiddenException('Company imports cannot assign SUPER_ADMIN');
             const resolvedRoleId = row.roleName ? roleIdByName.get(row.roleName) : undefined;
 
             const user = await this.getOrCreateImportUser(db, row, organizationId, employeeRole.id, resolvedRoleId, preloadedUser);
@@ -630,8 +641,8 @@ export class EmployeeService {
     }
 
     // delete employee — removes org membership; deletes user only if they have no remaining memberships
-    async deleteEmployee(id: string) {
-        const employee = await this.prisma.employee.findUnique({ where: { id } });
+    async deleteEmployee(id: string, organizationId: string) {
+        const employee = await this.prisma.employee.findFirst({ where: { id, organizationId } });
         if (!employee) throw new BadRequestException('Employee not found');
 
         await this.prisma.$transaction(async (tx) => {
@@ -746,15 +757,6 @@ export class EmployeeService {
                 data: {
                     email: row.email,
                     phone: row.phone ?? `no-phone-${row.employeeCode ?? row.rowNumber}-${Date.now()}`,
-                    name: `${row.firstName} ${row.lastName}`,
-                },
-            });
-        } else {
-            await tx.user.update({
-                where: { id: user.id },
-                data: {
-                    email: row.email,
-                    ...(row.phone ? { phone: row.phone } : {}),
                     name: `${row.firstName} ${row.lastName}`,
                 },
             });

@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Check, ArrowRight, Loader2, AlertCircle } from "lucide-react";
@@ -68,7 +69,7 @@ export function SetupStep({ data, onComplete }: SetupStepProps) {
         <div className="z-10">
           <div className="mb-12">
             {data.logoUrl ? (
-              <img
+              <TenantImage
                 src={data.logoUrl}
                 alt={data.orgName || "Organization"}
                 className="h-12 w-auto max-w-[160px] object-contain"

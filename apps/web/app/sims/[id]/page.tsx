@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -474,7 +475,7 @@ export default function SuggestionDetailPage() {
                   {suggestion.imageUrl && (
                     <div className="mt-5 rounded-xl overflow-hidden border border-slate-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <TenantImage
                         src={suggestion.imageUrl}
                         alt="Supporting image"
                         className="w-full max-h-96 object-contain bg-slate-50"
@@ -588,7 +589,7 @@ export default function SuggestionDetailPage() {
                           <dd className="text-sm text-emerald-900 mt-0.5 break-words">
                             {key === "evidence" && typeof value === "string" ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={value} alt="Evidence" className="mt-1 max-h-48 rounded-lg border border-emerald-200" />
+                              <TenantImage src={value} alt="Evidence" className="mt-1 max-h-48 rounded-lg border border-emerald-200" />
                             ) : (
                               String(value)
                             )}
@@ -742,7 +743,7 @@ export default function SuggestionDetailPage() {
                                   {kaizenPhotoPreview ? (
                                     <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={kaizenPhotoPreview} alt="Before preview" className="w-full max-h-48 object-contain" />
+                                      <TenantImage src={kaizenPhotoPreview} alt="Before preview" className="w-full max-h-48 object-contain" />
                                       <button
                                         type="button"
                                         onClick={removeKaizenPhoto}

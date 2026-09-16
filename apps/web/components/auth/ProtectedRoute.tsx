@@ -16,6 +16,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
+    setIsAuthorized(false);
     if (!_hasHydrated) return;
     if (!isAuthenticated || !user) {
       router.replace("/login");
@@ -31,7 +32,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
   }, [_hasHydrated, isAuthenticated, user, allowedRoles, router]);
 
   // Prevent the "flash" of content while checking
-  if (!isAuthorized) {
+  if (!isAuthorized || !_hasHydrated || !isAuthenticated || !user || (allowedRoles?.length && !allowedRoles.includes(user.roleLevel))) {
     // loading spinner
     return <div className="h-screen flex items-center justify-center">Loading...</div>;
   }

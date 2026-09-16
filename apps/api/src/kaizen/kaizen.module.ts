@@ -1,3 +1,5 @@
+import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { ConfigModule } from '@nestjs/config';
 import { Module } from '@nestjs/common';
 import { KaizenController } from './kaizen.controller';
 import { KaizenService } from './kaizen.service';
@@ -8,7 +10,7 @@ import { ModuleGuard } from 'src/auth/guards/module.guard';
 
 
 @Module({
-  imports: [PrismaModule, AuthModule, NotificationsModule],
+  imports: [TenancyModule, ConfigModule, PrismaModule, AuthModule, NotificationsModule],
   controllers: [KaizenController],
   providers: [KaizenService, ModuleGuard],
   exports: [KaizenService],

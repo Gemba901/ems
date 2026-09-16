@@ -1570,6 +1570,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
   async generateUpcomingTaskInstances(days = TASK_INSTANCE_GENERATION_DAYS) {
     const tasks = await this.prisma.task.findMany({
       where: {
+        owner: { organization: { status: 'ACTIVE', modules: { has: 'DWMS' } } },
         status: { notIn: nonOverdueStatusValues },
       },
       include: { owner: { select: { organizationId: true } } },

@@ -1,3 +1,4 @@
+import { TenantImage } from "@/components/files/TenantImage";
 import {
   KaizenStatus,
   KaizenTrigger,
@@ -242,7 +243,7 @@ export function Thumbnail({ src, alt }: { src: string | null | undefined; alt: s
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} className="h-14 w-14 shrink-0 rounded-lg object-cover bg-slate-100" />
+    <TenantImage src={src} alt={alt} className="h-14 w-14 shrink-0 rounded-lg object-cover bg-slate-100" />
   );
 }
 

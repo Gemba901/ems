@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 const NAV = [
+    { label: "Readiness", href: "/admin/readiness", icon: Shield },
     { label: "Dashboard",     href: "/admin",               icon: LayoutDashboard },
     { label: "Organizations", href: "/admin/organizations",  icon: Building2 },
     { label: "Settings",      href: "/admin/settings",       icon: Settings },

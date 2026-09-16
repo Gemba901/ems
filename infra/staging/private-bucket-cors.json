@@ -1,0 +1,10 @@
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["https://REPLACE_STAGING_CENTRAL_HOST", "https://*.REPLACE_STAGING_TENANT_BASE"],
+      "AllowedMethods": ["PUT"],
+      "AllowedHeaders": ["content-type", "if-none-match"],
+      "MaxAgeSeconds": 300
+    }
+  ]
+}

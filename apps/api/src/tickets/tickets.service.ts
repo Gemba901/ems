@@ -25,9 +25,9 @@ export class TicketsService {
         private notifications: NotificationsService,
     ) { }
 
-    private async resolveEmployee(userId: string, organizationId?: string) {
+    private async resolveEmployee(userId: string, organizationId: string) {
         const employee = await this.prisma.employee.findFirst({
-            where: { userId, ...(organizationId && { organizationId }) },
+            where: { userId, organizationId },
             select: { id: true, organizationId: true },
         });
         if (!employee) throw new ForbiddenException('No employee profile linked to your account');
@@ -144,7 +144,7 @@ export class TicketsService {
     async getMine(userId: string, organizationId: string) {
         const employee = await this.resolveEmployee(userId, organizationId);
         return this.prisma.tickets.findMany({
-            where: { raisedById: employee.id },
+            where: { raisedById: employee.id, organizationId },
             include: this.raisedByInclude,
             orderBy: { createdAt: 'desc' },
         });
@@ -153,7 +153,7 @@ export class TicketsService {
     // get a single ticket with its update history
     async getById(id: string, userId: string, organizationId: string, isAdminOrg: boolean, roleLevel: string) {
         const ticket = await this.prisma.tickets.findFirst({
-            where: { id },
+            where: { id, ...(isAdminOrg ? { type: TicketType.SYSTEM_TICKET } : { organizationId }) },
             include: this.detailInclude,
         });
         if (!ticket) throw new NotFoundException('Ticket not found');
@@ -171,14 +171,14 @@ export class TicketsService {
 
     // update ticket status (should also show who fixed, and if there was any feedback to the one who raised the ticket)
     async updateTicket(id: string, input: UpdateTicketInput, userId: string, organizationId: string, isAdminOrg: boolean) {
-        const ticket = await this.prisma.tickets.findFirst({ where: { id } });
+        const ticket = await this.prisma.tickets.findFirst({ where: { id, ...(isAdminOrg ? { type: TicketType.SYSTEM_TICKET } : { organizationId }) } });
         if (!ticket) throw new NotFoundException('Ticket not found');
 
         if (!isAdminOrg && ticket.organizationId !== organizationId) {
             throw new ForbiddenException('Cannot update a ticket outside your organization');
         }
 
-        const updater = await this.resolveEmployee(userId, isAdminOrg ? undefined : organizationId);
+        const updater = await this.resolveEmployee(userId, organizationId);
         const updatedById = updater.id;
 
         const statusChanged = Boolean(input.statusChanged && input.statusChanged !== ticket.status);

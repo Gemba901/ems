@@ -1,9 +1,13 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { QuotesService } from './quotes.service';
 
+@TenantRequired()
 @Controller('quotes')
-@UseGuards(JwtAuthGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard)
 export class QuotesController {
     constructor(private quotesService: QuotesService) { }
 

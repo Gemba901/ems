@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
@@ -128,7 +129,7 @@ function DeptContent() {
                                 {/* Top: avatar + name + chevron */}
                                 <div className="flex items-start gap-3">
                                     {emp.avatarUrl ? (
-                                        <img
+                                        <TenantImage
                                             src={emp.avatarUrl}
                                             alt=""
                                             className="h-11 w-11 rounded-full object-cover border border-slate-200 shrink-0"

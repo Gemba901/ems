@@ -54,7 +54,7 @@ describe('DWMS overdue recipient delivery', () => {
       },
     };
     notifications = { create: jest.fn().mockResolvedValue({}) };
-    service = new DwmsEscalationService(prisma, notifications);
+    service = new DwmsEscalationService(prisma, notifications, { run: (_name: string, _window: string, work: () => Promise<unknown>) => work() } as any);
   });
 
   it('delivers once to selected recipients and excludes employees outside the organization', async () => {

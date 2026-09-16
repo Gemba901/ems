@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantImage } from "@/components/files/TenantImage";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -21,7 +22,7 @@ function EmployeeCard({ emp }: { emp: EmployeeApiResponse }) {
         >
             <div className="h-11 w-11 shrink-0 rounded-full overflow-hidden bg-slate-800 text-white text-sm font-bold flex items-center justify-center">
                 {emp.avatarUrl ? (
-                    <img src={emp.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    <TenantImage src={emp.avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
                     initials(emp.firstName, emp.lastName)
                 )}

@@ -1,3 +1,6 @@
+import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
   BadRequestException,
   Body,
@@ -62,8 +65,9 @@ const IMPORT_ENTITIES: ImportEntityType[] = [
   'production-routes',
 ];
 
+@TenantRequired()
 @Controller('steel/config')
-@UseGuards(JwtAuthGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.STEEL)
 @Roles(...CONFIG_ADMIN_ROLES)
 export class ConfigController {

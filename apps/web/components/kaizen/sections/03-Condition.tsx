@@ -1,5 +1,7 @@
 "use client";
 
+import { TenantFileLink } from "@/components/files/TenantFileLink";
+import { TenantImage } from "@/components/files/TenantImage";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { FileIcon, ImagePlus, Loader2, X } from "lucide-react";
@@ -79,12 +81,12 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {kaizen.conditionEvidenceUrls.map((url, i) =>
               isImageUrl(url) ? (
-                <a key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-slate-100 aspect-square block">
+                <TenantFileLink key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-slate-100 aspect-square block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
-                </a>
+                  <TenantImage src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
+                </TenantFileLink>
               ) : (
-                <a
+                <TenantFileLink
                   key={url}
                   href={url}
                   target="_blank"
@@ -93,7 +95,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
                 >
                   <FileIcon className="h-6 w-6" />
                   <span className="text-[10px]">File {i + 1}</span>
-                </a>
+                </TenantFileLink>
               ),
             )}
           </div>
@@ -130,7 +132,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
               <div key={url} className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 aspect-square">
                 {isImageUrl(url) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
+                  <TenantImage src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400">
                     <FileIcon className="h-6 w-6" />

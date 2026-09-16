@@ -27,6 +27,65 @@
 
 ## Project setup
 
+### Tenant hostname resolution (milestone 2)
+
+The API now registers `TenancyModule`. Set this required variable in the API's local `.env` and in each deployment's environment before starting the updated API:
+
+```env
+TENANT_BASE_DOMAIN=gembapms.co.in
+TENANT_PROXY_SECRET=<server-only-random-secret>
+```
+
+Use your actual company-domain suffix, without a protocol, port, path or surrounding whitespace. For example, `acme.gembapms.co.in` resolves the organization with slug `acme`. A development suffix such as `example.test` can be used for direct resolver tests without public DNS. Missing or malformed configuration prevents initialization. No fallback production domain is assumed.
+
+The registered trusted-context guard also requires a random `TENANT_PROXY_SECRET` (64–1024 characters, no whitespace). Generate a value with `openssl rand -hex 32`; the placeholder above is not a usable secret. Configure the same credential in the Next.js server proxy, never in a `NEXT_PUBLIC_` variable or browser code. Proxy-to-API traffic must use HTTPS. Redact the credential from logs and rotate it if exposed. The proxy must overwrite `x-gemba-proxy-secret` and derive/overwrite `x-gemba-tenant-hostname` from its validated incoming hostname. It must not pass through browser-supplied tenant headers.
+
+Production/staging deployment variables must be configured on the API host, not only in local `.env` files. Recreate the API container after changing its environment file; restarting an existing container does not reload that file. Keep each environment's base domain and organization slugs consistent.
+
+The parser permits exactly one tenant label and classifies reserved labels and the base domain as platform addresses. The company resolver rejects platform/invalid hosts and unknown companies with 404, and inactive/suspended companies with 403. Database failures propagate as operational errors. Existing companies need the milestone 1 slug migration/backfill before they can be resolved.
+
+### Company authentication and authorization (milestone 3)
+
+Company business routes require `TrustedTenantContextGuard → JwtAuthGuard → TenantGuard`, followed by existing role/module guards. TenantGuard rechecks current membership, company status, and permissions. JWT authentication must not run again after TenantGuard, as that would restore stale permissions. Company login, refresh and logout require trusted hostname resolution but do not require an unexpired access token.
+
+The audited business areas include employees, departments, committees, notices, notifications, tickets, SIMS, Kaizen, EMS, leave, calendar, DWMS, uploads and all steel controllers. Company queries use organization filters or a tenant-owned parent/employee access check. Related employee, department, invitee, Kaizen team and DWMS alert references are checked before writes. Existing steel parent/foreign-key validation and organization-filtered analytics are retained.
+
+Platform administration requires current SUPER_ADMIN membership in the ACTIVE organization designated `isAdminOrg`. Holding SUPER_ADMIN in a client company does not authorize platform operations. Intentional cross-company operations are the organization administration endpoints, explicitly guarded Calendar consultancy administration, and the system-ticket support routes.
+
+API changes for the milestone 4 frontend/proxy:
+
+- Company sessions: `POST /auth/company/login`, `/refresh`, `/logout`. The existing DWMS refresh/logout aliases now require trusted company forwarding and bind to that company.
+- Company profile: `GET/PATCH /company/organization`. Company admins cannot change enabled modules. `/organizations` remains platform administration.
+- Platform support: `GET /tickets/system`, `GET/PATCH /tickets/system/:id`. Ordinary ticket detail/update routes stay company-scoped, including for platform users.
+- Employee contact updates/imports change company employee records, not shared login identities. Shared accounts must use email password recovery rather than company-admin temporary credentials. Company onboarding/import cannot grant SUPER_ADMIN.
+- Upload signing requires company authentication. New object keys use `organizations/<organizationId>/<folder>/<uuid>-<filename>`. This does not change existing S3 objects or their read policy.
+- `/auth/my-org` now requires trusted company forwarding and current membership.
+
+Browser calls to protected routes require the milestone 4 same-origin proxy. Never expose `TENANT_PROXY_SECRET` in browser code. These API changes should ship with that proxy and the corresponding frontend endpoint changes.
+
+Focused tests, from `apps/api`:
+
+```bash
+pnpm exec jest --runInBand departments employee tenancy auth/access-token-payload.spec.ts auth/jwt.strategy.spec.ts auth/company-auth.service.spec.ts auth/company-auth.controller.spec.ts uploads/upload-key.spec.ts steel dwms
+```
+
+The HTTP integration suite discovers business controllers and checks guard ordering on every business route, then exercises real Nest/Passport requests for cross-company denial. Database access in these HTTP tests is mocked; the runner needs permission to open local sockets. Service tests cover scoped lookups, related-record rejection, current permissions and shared-account boundaries. The repository's unrelated legacy tests are not included in this focused command.
+
+Refresh rollback/concurrency tests use real PostgreSQL, with an explicit test URL (never the application's DATABASE_URL). To reproduce using a disposable container:
+
+```bash
+docker run --detach --rm --name gemba-m3-postgres-test -e POSTGRES_PASSWORD=local-test-only -p 127.0.0.1:55439:5432 postgres:16-alpine
+# From packages/db, after PostgreSQL is ready:
+DATABASE_URL=postgresql://postgres:local-test-only@127.0.0.1:55439/postgres pnpm exec prisma db push
+# From apps/api:
+NODE_OPTIONS=--experimental-vm-modules MILESTONE3_TEST_DATABASE_URL=postgresql://postgres:local-test-only@127.0.0.1:55439/postgres pnpm exec jest --runInBand auth/company-refresh.postgres.spec.ts
+docker stop gemba-m3-postgres-test
+```
+
+These tests prove persistence/replay rejection, wrong-company token preservation, rollback of the old-token deletion on replacement failure, and exactly one replacement when two real transactions read the same token. Without the explicit test URL this suite is skipped. Tests clean up their own records; the container is disposable.
+
+Milestone 4 covers browser/proxy integration, cookie forwarding, frontend endpoint updates and end-to-end company-hostname tests. DNS/TLS rollout and operational/database isolation hardening remain later deployment work.
+
 ```bash
 $ pnpm install
 ```
@@ -96,3 +155,15 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+The milestone 4 proxy and browser-session implementation is documented in [the web README](../web/README.md#company-workspaces--milestone-4). It uses private runtime configuration; the old public API URL is no longer used by web services.
+
+### Verified onboarding (milestone 5)
+
+See [the onboarding runbook](src/onboarding/README.md) for the signup state machine, migration order, private configuration, worker retry behavior and tests. Signup is disabled by default. Existing account setup now requires email recovery or a secret administrator-issued temporary password; identifier lookup no longer grants password setup.
+
+### Staging readiness (milestone 6)
+
+See [the milestone 6 rollout and manual-test runbook](../../infra/staging/README.md)
+for private files, job controls, database roles, migrations, monitoring and rollback.
+The central platform administration UI exposes `/admin/readiness`.

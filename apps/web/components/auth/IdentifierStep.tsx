@@ -93,6 +93,10 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
     try {
       const response = await AuthService.verifyIdentifier(resolved, identifierType);
       const orgs: { id: string; name: string; organizationUrl: string | null }[] = response.organizations ?? [];
+      if (response.verificationRequired) {
+        setError("Verify your email using Forgot password to set up this account.");
+        return;
+      }
       onSuccess({
         identifier: resolved,
         identifierType,
@@ -261,6 +265,7 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continue"}
         </button>
       </form>
+      <a href="/forgot-password" className="mt-4 block text-center text-sm text-blue-600">Forgot password / Set up account</a>
 
       <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-mono space-x-2 tracking-widest uppercase">
         <span>Gemba PMS</span>

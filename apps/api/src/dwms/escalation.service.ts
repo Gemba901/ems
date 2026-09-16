@@ -1,3 +1,4 @@
+import { ScheduledJobsService } from '../operations/scheduled-jobs.service';
 import { filterAlertRecipients } from './utils/alertRecipients';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -30,6 +31,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private jobs: ScheduledJobsService,
   ) {}
 
   onApplicationBootstrap() {
@@ -48,7 +50,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
       return this.escalationRun;
     }
 
-    const run = this.runEscalationCheck(trigger)
+    const run = this.jobs.run('dwms-escalations', new Date().toISOString().slice(0, 13), () => this.runEscalationCheck(trigger))
       .catch((error) => {
         this.logger.error(
           `DWMS ${trigger} escalation check failed before organization processing: ${(error as Error)?.message ?? error}`,
@@ -64,7 +66,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
   private async runEscalationCheck(trigger: 'startup' | 'cron') {
     const startedAt = Date.now();
     const organizations = await this.prisma.organization.findMany({
-      where: { modules: { has: ModuleType.DWMS } },
+      where: { status: 'ACTIVE', modules: { has: ModuleType.DWMS } },
       select: {
         id: true,
         dwmsPermissionConfig: true,
@@ -99,6 +101,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
     this.logger.log(
       `Finished ${trigger} DWMS escalation check: ${processed} processed, ${failed} failed, ${Date.now() - startedAt}ms`,
     );
+    if (failed) throw new Error('Some organizations failed escalation processing');
   }
 
   private async processOrganization(organizationId: string, config: any) {

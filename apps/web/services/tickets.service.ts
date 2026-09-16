@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/api-client";
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = "/api";
 
 function authHeaders(token: string) {
   return {
@@ -96,13 +96,13 @@ export const TicketsService = {
     return handleResponse<Ticket[]>(res);
   },
 
-  async getById(id: string, token: string): Promise<TicketDetail> {
-    const res = await apiClient(`${API_URL}/tickets/${id}`, { headers: authHeaders(token) }, token);
+  async getById(id: string, token: string, support = false): Promise<TicketDetail> {
+    const res = await apiClient(`${API_URL}/tickets/${support ? "system/" : ""}${id}`, { headers: authHeaders(token) }, token);
     return handleResponse<TicketDetail>(res);
   },
 
-  async update(id: string, data: UpdateTicketPayload, token: string): Promise<Ticket> {
-    const res = await apiClient(`${API_URL}/tickets/${id}`, {
+  async update(id: string, data: UpdateTicketPayload, token: string, support = false): Promise<Ticket> {
+    const res = await apiClient(`${API_URL}/tickets/${support ? "system/" : ""}${id}`, {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),

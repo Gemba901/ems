@@ -944,6 +944,13 @@ export class CalendarService {
     };
   }
 
+    private async assertCompanyEmployees(ids: string[], organizationId: string) {
+        const unique = [...new Set(ids)];
+        if (!unique.length) return;
+        const count = await this.prisma.employee.count({ where: { id: { in: unique }, organizationId } });
+        if (count !== unique.length) throw new NotFoundException('Employee not found in this organization');
+    }
+
   async createEvent(dto: CreateCalendarEventDto, userId: string, organizationId: string, roleLevel: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
 
@@ -956,6 +963,7 @@ export class CalendarService {
     const endAt   = new Date(dto.endAt);
 
     if (dto.inviteeIds?.length) {
+      await this.assertCompanyEmployees(dto.inviteeIds, organizationId);
       await this.assertInviteesNotOOO(dto.inviteeIds, startAt, endAt);
     }
 
@@ -1052,7 +1060,7 @@ export class CalendarService {
   async updateEvent(id: string, dto: UpdateCalendarEventDto, userId: string, organizationId: string, roleLevel?: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const event = await this.prisma.calendarEvent.findUnique({
-      where: { id },
+      where: { id, organizationId },
       select: { id: true, createdById: true, parentEventId: true, startAt: true, endAt: true },
     });
     if (!event) throw new NotFoundException('Event not found');
@@ -1075,6 +1083,7 @@ export class CalendarService {
     if (dto.prospectOrgName !== undefined) data.prospectOrgName = dto.prospectOrgName;
 
     if (dto.addInviteeIds?.length) {
+      await this.assertCompanyEmployees(dto.addInviteeIds, organizationId);
       const effectiveStart = dto.startAt ? new Date(dto.startAt) : event.startAt;
       const effectiveEnd   = dto.endAt   ? new Date(dto.endAt)   : event.endAt;
       await this.assertInviteesNotOOO(dto.addInviteeIds, effectiveStart, effectiveEnd);
@@ -1107,19 +1116,19 @@ export class CalendarService {
     if (dto.updateMode === DeleteModeDto.ALL_IN_SERIES) {
       const root = event.parentEventId ?? id;
       await this.prisma.calendarEvent.updateMany({
-        where: { OR: [{ id: root }, { parentEventId: root }] },
+        where: { organizationId, OR: [{ id: root }, { parentEventId: root }] },
         data,
       });
       return { updated: 'series' };
     }
 
-    return this.prisma.calendarEvent.update({ where: { id }, data });
+    return this.prisma.calendarEvent.update({ where: { id, organizationId }, data });
   }
 
   async deleteEvent(id: string, deleteMode: DeleteModeDto | undefined, userId: string, organizationId: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
     const event = await this.prisma.calendarEvent.findUnique({
-      where: { id },
+      where: { id, organizationId },
       select: { id: true, createdById: true, parentEventId: true },
     });
     if (!event) throw new NotFoundException('Event not found');
@@ -1128,12 +1137,12 @@ export class CalendarService {
     if (deleteMode === DeleteModeDto.ALL_IN_SERIES) {
       const root = event.parentEventId ?? id;
       await this.prisma.calendarEvent.deleteMany({
-        where: { OR: [{ id: root }, { parentEventId: root }] },
+        where: { organizationId, OR: [{ id: root }, { parentEventId: root }] },
       });
       return { message: 'Series deleted' };
     }
 
-    await this.prisma.calendarEvent.delete({ where: { id } });
+    await this.prisma.calendarEvent.delete({ where: { id, organizationId } });
     return { message: 'Event deleted' };
   }
 
@@ -1183,7 +1192,8 @@ export class CalendarService {
     });
   }
 
-  async checkAvailability(employeeId: string, startAt: string, endAt: string) {
+  async checkAvailability(employeeId: string, startAt: string, endAt: string, organizationId: string) {
+    await this.assertCompanyEmployees([employeeId], organizationId);
     const start = new Date(startAt);
     const end   = new Date(endAt);
     const leave = await this.prisma.leaveRequest.findFirst({
@@ -1198,7 +1208,8 @@ export class CalendarService {
     return { available: !leave, leave: leave ?? null };
   }
 
-  async getEmployeeEventStats(employeeId: string) {
+  async getEmployeeEventStats(employeeId: string, organizationId: string) {
+    await this.assertCompanyEmployees([employeeId], organizationId);
     const [accepted, declined, pending, total] = await Promise.all([
       this.prisma.eventInvitation.count({ where: { inviteeId: employeeId, status: 'ACCEPTED' } }),
       this.prisma.eventInvitation.count({ where: { inviteeId: employeeId, status: 'DECLINED' } }),
@@ -1208,7 +1219,8 @@ export class CalendarService {
     return { accepted, declined, pending, total };
   }
 
-  async getEmployeeInvitationLog(employeeId: string, page = 1, limit = 20) {
+  async getEmployeeInvitationLog(employeeId: string, page = 1, limit = 20, organizationId: string) {
+    await this.assertCompanyEmployees([employeeId], organizationId);
     const skip = (page - 1) * limit;
     const [invitations, total] = await Promise.all([
       this.prisma.eventInvitation.findMany({

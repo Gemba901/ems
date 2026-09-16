@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/api-client";
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = "/api";
 
 function authHeaders(token: string) {
     return { Authorization: `Bearer ${token}` };
@@ -14,6 +14,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export interface UploadResult {
+    id: string;
+    uploadHeaders: Record<string, string>;
     uploadUrl: string;
     fileUrl: string;
     key: string;
@@ -24,6 +26,7 @@ export async function uploadImage(file: File, folder: string, token: string): Pr
         fileName: file.name,
         fileType: file.type || "application/octet-stream",
         folder,
+        size: file.size,
     };
 
     const response = await apiClient(`${API_URL}/uploads/presigned-url`, {
@@ -35,19 +38,19 @@ export async function uploadImage(file: File, folder: string, token: string): Pr
         body: JSON.stringify(payload),
     }, token);
 
-    const { uploadUrl, fileUrl, key } = await handleResponse<UploadResult>(response);
+    const { id, uploadUrl, uploadHeaders, fileUrl, key } = await handleResponse<UploadResult>(response);
 
     const putResponse = await fetch(uploadUrl, {
         method: "PUT",
         body: file,
-        headers: {
-            "Content-Type": file.type || "application/octet-stream",
-        },
+        headers: uploadHeaders,
     });
 
     if (!putResponse.ok) {
         throw new Error(`Failed to upload file to S3: ${putResponse.status}`);
     }
 
-    return { uploadUrl, fileUrl, key };
+    const completed = await apiClient(`${API_URL}/uploads/${id}/complete`, { method: 'POST' }, token);
+    await handleResponse(completed);
+    return { id, uploadUrl, uploadHeaders, fileUrl, key };
 }

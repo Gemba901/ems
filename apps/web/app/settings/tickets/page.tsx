@@ -78,7 +78,7 @@ export default function TicketsSettingsPage() {
               {tickets.map((t) => (
                 <Link
                   key={t.id}
-                  href={`/tickets/${t.id}`}
+                  href={`/tickets/${t.id}?support=1`}
                   className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50 transition-colors"
                 >
                   <div className="min-w-0">

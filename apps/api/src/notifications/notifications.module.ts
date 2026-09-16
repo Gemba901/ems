@@ -1,3 +1,5 @@
+import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { ConfigModule } from '@nestjs/config';
 import { Module } from '@nestjs/common';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
@@ -8,7 +10,7 @@ import { WhatsappService } from './channels/whatsapp.service';
 import { ChannelDispatcherService } from './channels/channel-dispatcher.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [TenancyModule, ConfigModule, PrismaModule],
   controllers: [NotificationsController],
   providers: [
     NotificationsService,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -11,16 +11,18 @@ import { TicketsService, TicketStatus, TicketType } from "@/services/tickets.ser
 import { StatusPill, TypePill, STATUS_OPTIONS, STATUS_LABELS, TYPE_LABELS, moduleLabel, formatDateTime } from "@/components/tickets/tickets-ui";
 import { ArrowLeft, Loader2, Send, MessageSquare, ArrowUpCircle } from "lucide-react";
 
-export default function TicketDetailPage() {
+function TicketDetailContent() {
   const { id } = useParams<{ id: string }>();
   const { accessToken, user } = useAuthStore();
   const queryClient = useQueryClient();
+  const query = useSearchParams();
+  const support = query.get("support") === "1" && user?.isAdminOrg === true && user?.roleLevel === Role.SUPER_ADMIN;
 
   const canManage = user?.roleLevel === Role.SUPER_ADMIN || user?.roleLevel === Role.ADMIN;
 
   const { data: ticket, isLoading, error } = useQuery({
-    queryKey: ["ticket", id],
-    queryFn: () => TicketsService.getById(id, accessToken!),
+    queryKey: ["ticket", id, support],
+    queryFn: () => TicketsService.getById(id, accessToken!, support),
     enabled: !!accessToken && !!id,
   });
 
@@ -29,7 +31,7 @@ export default function TicketDetailPage() {
 
   const updateMutation = useMutation({
     mutationFn: (payload: { statusChanged?: TicketStatus; typeChanged?: TicketType; note?: string }) =>
-      TicketsService.update(id, payload, accessToken!),
+      TicketsService.update(id, payload, accessToken!, support),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ticket", id] });
       setStatusChanged("");
@@ -182,4 +184,8 @@ export default function TicketDetailPage() {
       </div>
     </ProtectedRoute>
   );
+}
+
+export default function TicketDetailPage() {
+  return <Suspense fallback={<div>Loading ticket…</div>}><TicketDetailContent /></Suspense>;
 }

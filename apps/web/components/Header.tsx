@@ -80,6 +80,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dwms/activities/ingestions": "Activity Import History",
   "/dwms/actions/new": "New Work",
   "/dwms/settings": "DWMS Settings",
+  "/dwms/docs": "Documentation",
   "/leave": "Leave Management",
   "/leave/apply": "Apply for Leave",
   "/leave/calendar": "Company Leave Calendar",
@@ -95,6 +96,7 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/ems/employees/")) return "Employee Details";
   if (pathname.startsWith("/leave/employees/")) return "Employee Leave Profile";
   if (pathname.startsWith("/dwms/alerts/")) return "Alert Details";
+  if (pathname.startsWith("/dwms/docs/")) return "Documentation";
   if (pathname.startsWith("/dwms/activities/ingestions/")) return "Activity Import Details";
   if (pathname.startsWith("/dwms/")) return "Daily Work";
   if (pathname.startsWith("/sims/")) return "Suggestions";
@@ -144,13 +146,15 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       {/* Left: brand + page context */}
       <div className="flex items-center gap-3">
-        <button
-          className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100"
-          onClick={onMenuClick}
-          aria-label="Open menu"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+        {onMenuClick && (
+          <button
+            className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100"
+            onClick={onMenuClick}
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
 
         <div className="flex items-center gap-2" title="Business Excellence EcoSystem">
           <div className="flex shrink-0 items-center justify-center text-indigo-600">

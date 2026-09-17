@@ -15,7 +15,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 
 export type OrgStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
-export type ModuleType = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN";
+export type ModuleType = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA";
 
 export interface CreateOrganizationPayload {
     name: string;
@@ -43,6 +43,7 @@ export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: s
     { key: "DWMS",     label: "DWMS",     description: "Daily Work Management: Tasks & Alerts" },
     { key: "STEEL",    label: "Steel Manufacturing", description: "Production Planning (Process 1)" },
     { key: "KAIZEN",   label: "Daily Gemba Kaizen", description: "Daily Gemba Walks & Kaizen Tracking" },
+    { key: "SGA",      label: "Small Group Activities", description: "Team-based CAPDo Improvement Cycles" },
 ];
 
 export interface Organization {

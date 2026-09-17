@@ -25,6 +25,7 @@ import { DwmsModule } from './dwms/dwms.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { SteelDomainModule } from './steel/steel-domain.module';
 import { KaizenModule } from './kaizen/kaizen.module';
+import { SgaModule } from './sga/sga.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
@@ -61,6 +62,7 @@ import { TenancyModule } from './tenancy/tenancy.module';
     TicketsModule,
     SteelDomainModule,
     KaizenModule,
+    SgaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -31,6 +31,7 @@ import {
   Pin,
   ClipboardCheck,
   Factory,
+  Users2,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -46,7 +47,7 @@ import DwmsTodayTasksWidget from "@/app/dwms/components/home/DwmsTodayTasksWidge
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -167,6 +168,20 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     href: "/kaizen",
     actions: [
       { label: "New Kaizen", href: "/kaizen/new", icon: FileEdit },
+    ],
+  },
+  SGA: {
+    key: "SGA",
+    label: "Small Group Activities",
+    tagline: "Team CAPDo Improvement Cycles",
+    description: "Run team-based Small Group Activities through a full Start → Team & Approve → Understand & Analyse → Plan & Implement → Check Results → Verify & Close cycle.",
+    icon: Users2,
+    color: "text-purple-600",
+    bg: "bg-purple-50",
+    ring: "ring-purple-200",
+    href: "/sga",
+    actions: [
+      { label: "New SGA", href: "/sga/new", icon: FileEdit },
     ],
   },
 };

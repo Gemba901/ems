@@ -37,6 +37,7 @@ enum ModuleType {
   DWMS
   STEEL
   KAIZEN
+  SGA
 }
 
 enum CommitteeType {
@@ -147,6 +148,7 @@ model Organization {
   alerts               Alert[]
   tickets              Tickets[]
   kaizens              Kaizen[]
+  sgas                 Sga[]
 
   // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
   sgaCommitteeId String?
@@ -368,6 +370,14 @@ model Employee {
   kaizenReviews         KaizenReview[]
   kaizenVerifications   KaizenVerification[]      @relation("KaizenVerificationBy")
   alertComments         AlertComment[]
+  sgasRaised            Sga[]                     @relation("SgaRaisedBy")
+  sgasOwned             Sga[]                     @relation("SgaOwner")
+  sgaTeamMemberships    Sga[]                     @relation("SgaTeamMembers")
+  sgaHodDecisions       Sga[]                     @relation("SgaHodDecisionBy")
+  sgaDepartmentRepFor   Sga[]                     @relation("SgaDepartmentRep")
+  sgaVerifications      SgaVerification[]         @relation("SgaVerificationBy")
+  sgaActionsResponsible SgaActionItem[]           @relation("SgaActionResponsible")
+  sgaReviews            SgaReview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -419,6 +429,9 @@ model Department {
   alerts       Alert[]
   kaizens      Kaizen[]
   activities   Activity[]
+  sgasMain      Sga[] @relation("SgaMainDepartment")
+  sgasOther     Sga[] @relation("SgaOtherDepartments")
+  sgasVerifying Sga[] @relation("SgaVerifyingDepartment")
 }
 
 model SteeringCommittee {
@@ -3169,6 +3182,368 @@ model KaizenReview {
   createdAt     DateTime     @default(now())
 
   kaizen   Kaizen   @relation(fields: [kaizenId], references: [id], onDelete: Cascade)
+  reviewer Employee @relation(fields: [reviewerId], references: [id])
+}
+
+// SMALL GROUP ACTIVITY (SGA)
+
+enum SgaStatus {
+  DRAFT
+  PENDING_HOD_APPROVAL
+  RETURNED_FOR_REVISION
+  REJECTED
+  IN_PROGRESS
+  PENDING_VERIFICATION
+  RETURNED_FOR_REWORK
+  VERIFIED_CLOSED
+}
+
+enum SgaStartingReason {
+  QUALITY_PROBLEM_OR_IMPROVEMENT
+  COST_REDUCTION_OR_FINANCIAL_LOSS
+  DELIVERY_DELAY_OR_PROCESS_FLOW
+  SAFETY_OR_ENVIRONMENTAL_IMPROVEMENT
+  PRODUCTIVITY_OR_CAPACITY_IMPROVEMENT
+  MORALE_TEAMWORK_OR_WORK_DIFFICULTY
+  TECHNOLOGY_OR_AUTOMATION_IMPROVEMENT
+  SYSTEMS_INFORMATION_OR_DATA_REPORTING_IMPROVEMENT
+  INVENTORY_OR_WIP_REDUCTION
+  MACHINE_BREAKDOWN_OR_EQUIPMENT_PERFORMANCE
+  SMED_CHANGEOVER_TIME_REDUCTION
+  EXTERNAL_CUSTOMER_REQUIREMENT_OR_COMPLAINT
+  INTERNAL_CUSTOMER_OR_CROSS_FUNCTIONAL_REQUIREMENT
+  ALERT_OR_ABNORMALITY_REQUIRING_TEAM_PROJECT
+  AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION
+  MANAGEMENT_IMPROVEMENT_PRIORITY
+  DAILY_KAIZEN_UPGRADED_TO_SGA
+  OTHER
+}
+
+enum SgaReferenceApplicability {
+  APPLICABLE
+  NOT_APPLICABLE
+  REFERENCE_NOT_FOUND
+}
+
+enum SgaQcdsmtCategory {
+  QUALITY
+  COST
+  DELIVERY
+  SAFETY
+  MORALE
+  TECHNOLOGY
+}
+
+enum SgaUnit {
+  SECONDS
+  HOURS
+  MINUTES
+  PIECES
+  KILOGRAMS
+  TONNES
+  METRES
+  LITRES
+  PERCENTAGE
+  CURRENCY
+  OTHER
+}
+
+enum SgaWaste {
+  TRANSPORTATION
+  INVENTORY
+  MOTION
+  WAITING
+  OVERPRODUCTION
+  OVERPROCESSING
+  DEFECTS
+  NOT_APPLICABLE
+}
+
+enum SgaHodDecision {
+  PENDING
+  APPROVED
+  RETURNED
+  REJECTED
+}
+
+enum SgaMeetingFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum SgaWeekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum SgaRootCauseTool {
+  FISHBONE_5M
+  WHY_WHY
+  PARETO
+  PROCESS_OBSERVATION
+  DATA_TREND
+  OTHER
+}
+
+enum SgaFishboneCategory {
+  PEOPLE
+  MACHINE
+  MATERIAL
+  METHOD
+  MEASUREMENT
+  ENVIRONMENT_OTHER
+}
+
+enum SgaImplementationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
+enum SgaVerificationStage {
+  AFFECTED_DEPARTMENT
+  HOD
+  STEERING_COMMITTEE
+  FINANCE
+}
+
+enum SgaVerificationDecision {
+  PENDING
+  VERIFIED
+  RETURN
+  NOT_APPLICABLE
+}
+
+enum SgaBenefitPeriod {
+  PER_DAY
+  PER_WEEK
+  PER_MONTH
+  PER_YEAR
+  ONE_TIME
+}
+
+model Sga {
+  id             String    @id @default(uuid())
+  organizationId String
+  employeeId     String
+  status         SgaStatus @default(DRAFT)
+
+  // Step 1 / Section 1 — why is this SGA being started
+  startingReason         SgaStartingReason?
+  referenceApplicability SgaReferenceApplicability?
+  referenceNumber        String?
+
+  // Step 1 / Section 2 — SGA information and problem
+  title                String?
+  problemDescription   String?
+  startDate            DateTime?
+  targetCompletionDate DateTime?
+  mainDepartmentId     String?
+  workArea             String?
+  beforeFileUrls       String[] @default([])
+
+  // Step 1 / Section 3 — seven wastes tags (QCDSMT detail lives in SgaQcdsmtImpact)
+  wastes SgaWaste[] @default([])
+
+  // Step 2 / Section 4 — team
+  ownerId String?
+
+  // Step 2 / Section 5 — meeting plan (recurring schedule, distinct from actual meeting reports)
+  meetingFrequency       SgaMeetingFrequency?
+  meetingDay             SgaWeekday?
+  meetingTime            String?
+  meetingDurationMinutes Int?
+  meetingLocation        String?
+
+  // Step 2 / Section 6 — resources, investment, HOD approval
+  requiredResources             String?
+  expectedBenefitSummary        String?
+  approximateInvestmentAmount   Decimal? @db.Decimal(14, 2)
+  approximateInvestmentCurrency String?
+  hodDecision                   SgaHodDecision @default(PENDING)
+  hodRemarks                    String?
+  hodDecisionById               String?
+  hodDecisionAt                 DateTime?
+
+  // Step 3 / Section 7 — current condition
+  evidenceSource         String?
+  immediateControlNeeded Boolean @default(false)
+
+  // Step 3 / Section 8 — root cause analysis
+  rootCauseTools     SgaRootCauseTool[] @default([])
+  otherAnalysisNotes String?
+
+  // Step 4 / Section 11 — implementation
+  implementationSummary            String?
+  afterFileUrls                    String[] @default([])
+  actualImplementationCost         Decimal? @db.Decimal(14, 2)
+  actualImplementationCostCurrency String?
+  implementationStatus             SgaImplementationStatus @default(NOT_STARTED)
+
+  // Step 5 / Section 13 — benefits and sustainability
+  qcdsmtBenefitAchieved           String?
+  wasteReductionAchieved          String?
+  financialLossBeforeImprovement  Decimal? @db.Decimal(14, 2)
+  verifiedGrossBenefit            Decimal? @db.Decimal(14, 2)
+  benefitPeriod                   SgaBenefitPeriod?
+  effectivenessConfirmationPeriod String?
+  sopUpdated                      Boolean @default(false)
+  employeesTrained                Boolean @default(false)
+  followUpCheckPlanned            Boolean @default(false)
+  appliedElsewhere                Boolean @default(false)
+  lessonsLearned                  String?
+
+  // Step 6 / Section 14 — verify and close
+  verifyingDepartmentId String?
+  departmentRepId       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  employee            Employee     @relation("SgaRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
+  mainDepartment      Department?  @relation("SgaMainDepartment", fields: [mainDepartmentId], references: [id])
+  otherDepartments    Department[] @relation("SgaOtherDepartments")
+  owner               Employee?    @relation("SgaOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  teamMembers         Employee[]   @relation("SgaTeamMembers")
+  hodDecisionBy       Employee?    @relation("SgaHodDecisionBy", fields: [hodDecisionById], references: [id], onDelete: SetNull)
+  verifyingDepartment Department?  @relation("SgaVerifyingDepartment", fields: [verifyingDepartmentId], references: [id])
+  departmentRep       Employee?    @relation("SgaDepartmentRep", fields: [departmentRepId], references: [id], onDelete: SetNull)
+
+  qcdsmtImpacts  SgaQcdsmtImpact[]
+  measures       SgaMeasure[]
+  fishboneCauses SgaFishboneCause[]
+  meetingReports SgaMeetingReport[]
+  actionItems    SgaActionItem[]
+  verifications  SgaVerification[]
+  reviews        SgaReview[]
+
+  @@index([organizationId, status])
+  @@index([employeeId, createdAt])
+  @@index([ownerId])
+  @@index([mainDepartmentId, status])
+}
+
+model SgaQcdsmtImpact {
+  id              String            @id @default(uuid())
+  sgaId           String
+  category        SgaQcdsmtCategory
+  description     String?
+  whatIsMeasured  String
+  baselineValue   String?
+  targetValue     String?
+  unit            SgaUnit
+  otherUnitLabel  String?
+  currency        String?
+  expectedBenefit String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+
+  @@unique([sgaId, category])
+  @@index([sgaId])
+}
+
+model SgaMeasure {
+  id               String             @id @default(uuid())
+  sgaId            String
+  whatIsMeasured   String
+  baselineValue    String?
+  targetValue      String?
+  finalResultValue String?
+  unit             SgaUnit
+  otherUnitLabel   String?
+  linkedQcdsmt     SgaQcdsmtCategory?
+  linkedWaste      SgaWaste?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+
+  @@index([sgaId])
+}
+
+model SgaFishboneCause {
+  id          String              @id @default(uuid())
+  sgaId       String
+  category    SgaFishboneCategory
+  description String
+  createdAt   DateTime @default(now())
+
+  sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+
+  @@index([sgaId])
+}
+
+model SgaMeetingReport {
+  id              String   @id @default(uuid())
+  sgaId           String
+  meetingNumber   Int
+  meetingDate     DateTime
+  durationMinutes Int?
+  attendeeIds     String[] @default([])
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+
+  @@unique([sgaId, meetingNumber])
+  @@index([sgaId])
+}
+
+model SgaActionItem {
+  id                  String    @id @default(uuid())
+  sgaId               String
+  confirmedRootCause  String
+  improvementAction   String
+  responsiblePersonId String?
+  dueDate             DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sga               Sga       @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+  responsiblePerson Employee? @relation("SgaActionResponsible", fields: [responsiblePersonId], references: [id], onDelete: SetNull)
+
+  @@index([sgaId])
+}
+
+model SgaVerification {
+  id           String                  @id @default(uuid())
+  sgaId        String
+  stage        SgaVerificationStage
+  decision     SgaVerificationDecision @default(PENDING)
+  remarks      String?
+  verifiedById String?
+  verifiedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sga        Sga       @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+  verifiedBy Employee? @relation("SgaVerificationBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([sgaId, stage])
+  @@index([sgaId])
+}
+
+model SgaReview {
+  id            String    @id @default(uuid())
+  sgaId         String
+  reviewerId    String
+  statusChanged SgaStatus
+  note          String?
+  createdAt     DateTime @default(now())
+
+  sga      Sga      @relation(fields: [sgaId], references: [id], onDelete: Cascade)
   reviewer Employee @relation(fields: [reviewerId], references: [id])
 }
 

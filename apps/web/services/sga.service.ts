@@ -1,0 +1,687 @@
+import { apiClient } from "@/lib/api-client";
+const API_URL = "/api";
+
+function authHeaders(token: string) {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || `Request failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
+export type SgaStatus =
+  | "DRAFT"
+  | "PENDING_HOD_APPROVAL"
+  | "RETURNED_FOR_REVISION"
+  | "REJECTED"
+  | "IN_PROGRESS"
+  | "PENDING_VERIFICATION"
+  | "RETURNED_FOR_REWORK"
+  | "VERIFIED_CLOSED";
+
+export type SgaStartingReason =
+  | "QUALITY_PROBLEM_OR_IMPROVEMENT"
+  | "COST_REDUCTION_OR_FINANCIAL_LOSS"
+  | "DELIVERY_DELAY_OR_PROCESS_FLOW"
+  | "SAFETY_OR_ENVIRONMENTAL_IMPROVEMENT"
+  | "PRODUCTIVITY_OR_CAPACITY_IMPROVEMENT"
+  | "MORALE_TEAMWORK_OR_WORK_DIFFICULTY"
+  | "TECHNOLOGY_OR_AUTOMATION_IMPROVEMENT"
+  | "SYSTEMS_INFORMATION_OR_DATA_REPORTING_IMPROVEMENT"
+  | "INVENTORY_OR_WIP_REDUCTION"
+  | "MACHINE_BREAKDOWN_OR_EQUIPMENT_PERFORMANCE"
+  | "SMED_CHANGEOVER_TIME_REDUCTION"
+  | "EXTERNAL_CUSTOMER_REQUIREMENT_OR_COMPLAINT"
+  | "INTERNAL_CUSTOMER_OR_CROSS_FUNCTIONAL_REQUIREMENT"
+  | "ALERT_OR_ABNORMALITY_REQUIRING_TEAM_PROJECT"
+  | "AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION"
+  | "MANAGEMENT_IMPROVEMENT_PRIORITY"
+  | "DAILY_KAIZEN_UPGRADED_TO_SGA"
+  | "OTHER";
+
+export type SgaReferenceApplicability = "APPLICABLE" | "NOT_APPLICABLE" | "REFERENCE_NOT_FOUND";
+
+export type SgaQcdsmtCategory = "QUALITY" | "COST" | "DELIVERY" | "SAFETY" | "MORALE" | "TECHNOLOGY";
+
+export type SgaUnit =
+  | "SECONDS"
+  | "HOURS"
+  | "MINUTES"
+  | "PIECES"
+  | "KILOGRAMS"
+  | "TONNES"
+  | "METRES"
+  | "LITRES"
+  | "PERCENTAGE"
+  | "CURRENCY"
+  | "OTHER";
+
+export type SgaWaste =
+  | "TRANSPORTATION"
+  | "INVENTORY"
+  | "MOTION"
+  | "WAITING"
+  | "OVERPRODUCTION"
+  | "OVERPROCESSING"
+  | "DEFECTS"
+  | "NOT_APPLICABLE";
+
+export type SgaHodDecision = "PENDING" | "APPROVED" | "RETURNED" | "REJECTED";
+
+export type SgaMeetingFrequency = "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+
+export type SgaWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+
+export type SgaRootCauseTool = "FISHBONE_5M" | "WHY_WHY" | "PARETO" | "PROCESS_OBSERVATION" | "DATA_TREND" | "OTHER";
+
+export type SgaFishboneCategory = "PEOPLE" | "MACHINE" | "MATERIAL" | "METHOD" | "MEASUREMENT" | "ENVIRONMENT_OTHER";
+
+export type SgaImplementationStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "ON_HOLD";
+
+export type SgaVerificationStage = "AFFECTED_DEPARTMENT" | "HOD" | "STEERING_COMMITTEE" | "FINANCE";
+
+export type SgaVerificationDecision = "PENDING" | "VERIFIED" | "RETURN" | "NOT_APPLICABLE";
+
+export type SgaBenefitPeriod = "PER_DAY" | "PER_WEEK" | "PER_MONTH" | "PER_YEAR" | "ONE_TIME";
+
+export interface SgaEmployeeSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  department?: { id: string; name: string } | null;
+}
+
+export interface SgaPersonSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface SgaReview {
+  id: string;
+  statusChanged: SgaStatus;
+  note: string | null;
+  createdAt: string;
+  reviewer: SgaPersonSummary;
+}
+
+export interface SgaQcdsmtImpact {
+  id: string;
+  sgaId: string;
+  category: SgaQcdsmtCategory;
+  description: string | null;
+  whatIsMeasured: string;
+  baselineValue: string | null;
+  targetValue: string | null;
+  unit: SgaUnit;
+  otherUnitLabel: string | null;
+  currency: string | null;
+  expectedBenefit: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SgaMeasure {
+  id: string;
+  sgaId: string;
+  whatIsMeasured: string;
+  baselineValue: string | null;
+  targetValue: string | null;
+  finalResultValue: string | null;
+  unit: SgaUnit;
+  otherUnitLabel: string | null;
+  linkedQcdsmt: SgaQcdsmtCategory | null;
+  linkedWaste: SgaWaste | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SgaFishboneCause {
+  id: string;
+  sgaId: string;
+  category: SgaFishboneCategory;
+  description: string;
+  createdAt: string;
+}
+
+export interface SgaMeetingReport {
+  id: string;
+  sgaId: string;
+  meetingNumber: number;
+  meetingDate: string;
+  durationMinutes: number | null;
+  attendeeIds: string[];
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SgaActionItem {
+  id: string;
+  sgaId: string;
+  confirmedRootCause: string;
+  improvementAction: string;
+  responsiblePersonId: string | null;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  responsiblePerson: SgaPersonSummary | null;
+}
+
+export interface SgaVerification {
+  id: string;
+  sgaId: string;
+  stage: SgaVerificationStage;
+  decision: SgaVerificationDecision;
+  remarks: string | null;
+  verifiedById: string | null;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  verifiedBy: SgaPersonSummary | null;
+}
+
+export interface Sga {
+  id: string;
+  organizationId: string;
+  employeeId: string;
+  status: SgaStatus;
+
+  // Step 1 §1: reason
+  startingReason: SgaStartingReason | null;
+  referenceApplicability: SgaReferenceApplicability | null;
+  referenceNumber: string | null;
+
+  // Step 1 §2: SGA information and problem
+  title: string | null;
+  problemDescription: string | null;
+  startDate: string | null;
+  targetCompletionDate: string | null;
+  mainDepartmentId: string | null;
+  workArea: string | null;
+  beforeFileUrls: string[];
+
+  // Step 1 §3: seven wastes
+  wastes: SgaWaste[];
+
+  // Step 2 §4: team
+  ownerId: string | null;
+
+  // Step 2 §5: meeting plan
+  meetingFrequency: SgaMeetingFrequency | null;
+  meetingDay: SgaWeekday | null;
+  meetingTime: string | null;
+  meetingDurationMinutes: number | null;
+  meetingLocation: string | null;
+
+  // Step 2 §6: resources, investment, HOD approval
+  requiredResources: string | null;
+  expectedBenefitSummary: string | null;
+  approximateInvestmentAmount: string | null;
+  approximateInvestmentCurrency: string | null;
+  hodDecision: SgaHodDecision;
+  hodRemarks: string | null;
+  hodDecisionById: string | null;
+  hodDecisionAt: string | null;
+
+  // Step 3 §7: current condition
+  evidenceSource: string | null;
+  immediateControlNeeded: boolean;
+
+  // Step 3 §8: root cause analysis
+  rootCauseTools: SgaRootCauseTool[];
+  otherAnalysisNotes: string | null;
+
+  // Step 4 §11: implementation
+  implementationSummary: string | null;
+  afterFileUrls: string[];
+  actualImplementationCost: string | null;
+  actualImplementationCostCurrency: string | null;
+  implementationStatus: SgaImplementationStatus;
+
+  // Step 5 §13: benefits and sustainability
+  qcdsmtBenefitAchieved: string | null;
+  wasteReductionAchieved: string | null;
+  financialLossBeforeImprovement: string | null;
+  verifiedGrossBenefit: string | null;
+  benefitPeriod: SgaBenefitPeriod | null;
+  effectivenessConfirmationPeriod: string | null;
+  sopUpdated: boolean;
+  employeesTrained: boolean;
+  followUpCheckPlanned: boolean;
+  appliedElsewhere: boolean;
+  lessonsLearned: string | null;
+
+  // Step 6 §14: verify and close
+  verifyingDepartmentId: string | null;
+  departmentRepId: string | null;
+
+  createdAt: string;
+  updatedAt: string;
+
+  employee: SgaEmployeeSummary;
+  mainDepartment: { id: string; name: string } | null;
+  otherDepartments: { id: string; name: string }[];
+  owner: SgaPersonSummary | null;
+  teamMembers: SgaPersonSummary[];
+  hodDecisionBy: SgaPersonSummary | null;
+  verifyingDepartment: { id: string; name: string } | null;
+  departmentRep: SgaPersonSummary | null;
+  qcdsmtImpacts: SgaQcdsmtImpact[];
+  measures: SgaMeasure[];
+  fishboneCauses: SgaFishboneCause[];
+  meetingReports: SgaMeetingReport[];
+  actionItems: SgaActionItem[];
+  verifications: SgaVerification[];
+  reviews: SgaReview[];
+}
+
+// Step 1 §1
+export interface CreateSgaPayload {
+  startingReason?: SgaStartingReason;
+}
+
+export interface UpdateSgaReasonPayload {
+  startingReason: SgaStartingReason;
+  referenceApplicability?: SgaReferenceApplicability;
+  referenceNumber?: string;
+}
+
+// Step 1 §2
+export interface UpdateSgaInfoPayload {
+  title: string;
+  problemDescription: string;
+  startDate: string;
+  targetCompletionDate: string;
+  mainDepartmentId?: string;
+  otherDepartmentIds?: string[];
+  workArea?: string;
+  beforeFileUrls?: string[];
+}
+
+// Step 1 §3
+export interface SgaQcdsmtImpactItemPayload {
+  category: SgaQcdsmtCategory;
+  description?: string;
+  whatIsMeasured: string;
+  baselineValue?: string;
+  targetValue?: string;
+  unit: SgaUnit;
+  otherUnitLabel?: string;
+  currency?: string;
+  expectedBenefit?: string;
+}
+
+export interface UpdateSgaImpactPayload {
+  impacts: SgaQcdsmtImpactItemPayload[];
+  wastes?: SgaWaste[];
+}
+
+// Step 2 §4
+export interface UpdateSgaTeamPayload {
+  ownerId: string;
+  teamMemberIds?: string[];
+}
+
+// Step 2 §5
+export interface UpdateSgaMeetingPlanPayload {
+  meetingFrequency?: SgaMeetingFrequency;
+  meetingDay?: SgaWeekday;
+  meetingTime?: string;
+  meetingDurationMinutes?: number;
+  meetingLocation?: string;
+}
+
+// Step 2 §6
+export interface UpdateSgaResourcesPayload {
+  requiredResources?: string;
+  expectedBenefitSummary?: string;
+  approximateInvestmentAmount?: number;
+  approximateInvestmentCurrency?: string;
+}
+
+export interface SubmitSgaHodApprovalPayload {
+  decision: "APPROVED" | "RETURNED" | "REJECTED";
+  remarks?: string;
+}
+
+// Step 3 §7
+export interface SgaMeasureItemPayload {
+  id?: string;
+  whatIsMeasured: string;
+  baselineValue?: string;
+  targetValue?: string;
+  finalResultValue?: string;
+  unit: SgaUnit;
+  otherUnitLabel?: string;
+  linkedQcdsmt?: SgaQcdsmtCategory;
+  linkedWaste?: SgaWaste;
+}
+
+export interface UpdateSgaConditionPayload {
+  evidenceSource?: string;
+  immediateControlNeeded: boolean;
+  measures?: SgaMeasureItemPayload[];
+}
+
+// Step 3 §8
+export interface SgaFishboneCauseItemPayload {
+  id?: string;
+  category: SgaFishboneCategory;
+  description: string;
+}
+
+export interface UpdateSgaRootCausePayload {
+  rootCauseTools?: SgaRootCauseTool[];
+  otherAnalysisNotes?: string;
+  fishboneCauses?: SgaFishboneCauseItemPayload[];
+}
+
+// Step 3 §9
+export interface CreateSgaMeetingReportPayload {
+  meetingNumber: number;
+  meetingDate: string;
+  durationMinutes?: number;
+  attendeeIds?: string[];
+  notes?: string;
+}
+
+export interface UpdateSgaMeetingReportPayload {
+  meetingDate?: string;
+  durationMinutes?: number;
+  attendeeIds?: string[];
+  notes?: string;
+}
+
+// Step 4 §10
+export interface SgaActionItemPayload {
+  id?: string;
+  confirmedRootCause: string;
+  improvementAction: string;
+  responsiblePersonId?: string;
+  dueDate?: string;
+}
+
+export interface UpdateSgaActionPlanPayload {
+  actionItems: SgaActionItemPayload[];
+}
+
+// Step 4 §11
+export interface UpdateSgaImplementationPayload {
+  implementationSummary?: string;
+  afterFileUrls?: string[];
+  actualImplementationCost?: number;
+  actualImplementationCostCurrency?: string;
+  implementationStatus: SgaImplementationStatus;
+}
+
+// Step 5 §12
+export interface UpdateSgaResultMeasureItemPayload {
+  id?: string;
+  whatIsMeasured: string;
+  baselineValue?: string;
+  targetValue?: string;
+  finalResultValue?: string;
+  unit: SgaUnit;
+  otherUnitLabel?: string;
+  linkedQcdsmt?: SgaQcdsmtCategory;
+  linkedWaste?: SgaWaste;
+}
+
+export interface UpdateSgaResultsPayload {
+  measures: UpdateSgaResultMeasureItemPayload[];
+}
+
+// Step 5 §13
+export interface UpdateSgaBenefitsPayload {
+  qcdsmtBenefitAchieved?: string;
+  wasteReductionAchieved?: string;
+  financialLossBeforeImprovement?: number;
+  verifiedGrossBenefit?: number;
+  benefitPeriod?: SgaBenefitPeriod;
+  effectivenessConfirmationPeriod?: string;
+  sopUpdated: boolean;
+  employeesTrained: boolean;
+  followUpCheckPlanned: boolean;
+  appliedElsewhere: boolean;
+  lessonsLearned?: string;
+}
+
+// Step 6 §14
+export interface UpdateSgaVerifyingDepartmentPayload {
+  verifyingDepartmentId: string;
+  departmentRepId?: string;
+}
+
+export interface SubmitSgaVerificationStagePayload {
+  stage: SgaVerificationStage;
+  decision: "VERIFIED" | "RETURN";
+  remarks?: string;
+}
+
+export const SgaService = {
+  async create(data: CreateSgaPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async getAll(token: string): Promise<Sga[]> {
+    const res = await apiClient(`${API_URL}/sga`, { headers: authHeaders(token) }, token);
+    return handleResponse<Sga[]>(res);
+  },
+
+  async getMine(token: string): Promise<Sga[]> {
+    const res = await apiClient(`${API_URL}/sga/me`, { headers: authHeaders(token) }, token);
+    return handleResponse<Sga[]>(res);
+  },
+
+  async getPendingVerification(token: string): Promise<Sga[]> {
+    const res = await apiClient(`${API_URL}/sga/pending-verification`, { headers: authHeaders(token) }, token);
+    return handleResponse<Sga[]>(res);
+  },
+
+  async getByDepartment(departmentId: string, token: string): Promise<Sga[]> {
+    const res = await apiClient(`${API_URL}/sga/department/${departmentId}`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<Sga[]>(res);
+  },
+
+  async getById(id: string, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}`, { headers: authHeaders(token) }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async getHistory(id: string, token: string): Promise<SgaReview[]> {
+    const res = await apiClient(`${API_URL}/sga/${id}/history`, { headers: authHeaders(token) }, token);
+    return handleResponse<SgaReview[]>(res);
+  },
+
+  async updateReason(id: string, data: UpdateSgaReasonPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/reason`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateInfo(id: string, data: UpdateSgaInfoPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/info`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateImpact(id: string, data: UpdateSgaImpactPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/impact`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateTeam(id: string, data: UpdateSgaTeamPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/team`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateMeetingPlan(id: string, data: UpdateSgaMeetingPlanPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/meeting-plan`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateResources(id: string, data: UpdateSgaResourcesPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/resources`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async submitForHodApproval(id: string, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/submit-for-hod-approval`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async submitHodApproval(id: string, data: SubmitSgaHodApprovalPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/hod-approval`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateCondition(id: string, data: UpdateSgaConditionPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/condition`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateRootCause(id: string, data: UpdateSgaRootCausePayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/root-cause`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async createMeetingReport(id: string, data: CreateSgaMeetingReportPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/meeting-reports`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateMeetingReport(id: string, reportId: string, data: UpdateSgaMeetingReportPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/meeting-reports/${reportId}`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async deleteMeetingReport(id: string, reportId: string, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/meeting-reports/${reportId}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateActionPlan(id: string, data: UpdateSgaActionPlanPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/action-plan`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateImplementation(id: string, data: UpdateSgaImplementationPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/implementation`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateResults(id: string, data: UpdateSgaResultsPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/results`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateBenefits(id: string, data: UpdateSgaBenefitsPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/benefits`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateVerifyingDepartment(id: string, data: UpdateSgaVerifyingDepartmentPayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/verifying-department`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async submitForVerification(id: string, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/submit-for-verification`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async submitVerificationStage(id: string, data: SubmitSgaVerificationStagePayload, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/verify`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+};

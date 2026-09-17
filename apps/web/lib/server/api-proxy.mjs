@@ -1,6 +1,6 @@
 // Imported only by the server route. Configuration is supplied at request time.
 const RESERVED = new Set(['www', 'api', 'admin', 'app', 'auth', 'staging', 'support']);
-const ROOTS = new Set(['operations', 'onboarding', 'auth', 'organizations', 'company', 'employee', 'departments', 'committees', 'notices', 'notifications', 'tickets', 'sims', 'kaizen', 'ems', 'leave', 'calendar', 'dwms', 'uploads', 'chat', 'quotes', 'steel']);
+const ROOTS = new Set(['operations', 'onboarding', 'auth', 'organizations', 'company', 'employee', 'departments', 'committees', 'notices', 'notifications', 'tickets', 'sims', 'kaizen', 'sga', 'ems', 'leave', 'calendar', 'dwms', 'uploads', 'chat', 'quotes', 'steel']);
 const AUTH = new Set(['login', 'refresh', 'logout', 'select-org', 'verify-first-time', 'create-password', 'forgot-password', 'reset-password', 'verify-temp-password', 'my-org']);
 const COMPANY_AUTH = new Set(['login', 'refresh', 'logout', 'verify-first-time', 'create-password']);
 const LIMIT = 20 * 1024 * 1024;

@@ -322,6 +322,7 @@ export class UpdateActivityDto {
 
 export enum ActivityIngestionAssignmentMode {
   INDIVIDUAL = 'Individual',
+  JOB_ROLE = 'Job Role',
   ALL_USERS = 'All Users',
   ALL_MANAGEMENT = 'All Management',
   ALL_HOD = 'All HOD',

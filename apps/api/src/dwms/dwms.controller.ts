@@ -417,8 +417,24 @@ export class DwmsController {
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
   @RequiresModule(ModuleType.DWMS)
-  getAlerts(@CurrentUser() user: UserPayload) {
-    return this.dwmsService.getAlerts(user);
+  getAlerts(
+    @CurrentUser() user: UserPayload,
+    @Query('tab') tab?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('severity') severity?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.dwmsService.getAlerts(
+      user,
+      tab,
+      page,
+      limit,
+      status,
+      severity,
+      search,
+    );
   }
 
   @Get('alerts/myResponsibleCount')

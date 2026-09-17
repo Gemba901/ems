@@ -2,6 +2,8 @@
 
 Assign Task creates work for one employee. The task can happen once or repeat automatically. It can also require an approver, completion evidence, and send notifications when it becomes overdue.
 
+> **Quick start:** Choose the employee, write a clear title, select how often the work happens, choose the priority, and select **Assign task**. Add an approver or required document only when someone must check the result.
+
 ## 1. What Assign Task does
 
 The feature stores the work to be done, the employee who owns it, its schedule, priority, approval route, and evidence rules. DWMS then creates dated task occurrences that the owner works on.
@@ -12,6 +14,8 @@ The feature stores the work to be done, the employee who owns it, its schedule, 
 - **Assigned By:** The employee who created the assignment.
 
 Each occurrence keeps its own status, due time, completion note, attachment, comments, and history.
+
+**Example:** “Inspect fire extinguishers” is the task definition. If it repeats monthly, September and October are separate occurrences. Completing September does not automatically complete October.
 
 ## 2. Who can use it
 
@@ -24,6 +28,7 @@ Every signed-in employee who can enter DWMS can open the Task tab. The people av
   - the HOD's direct and indirect reportees, even when a reportee belongs to another department.
 
   DWMS combines these groups, shows each person only once, and removes the HOD who is creating the task. For example, a Production HOD can select Production employees, other HODs, and everyone who reports under them through the reporting hierarchy. The Production HOD cannot select themselves.
+
 - **Employee:** Can assign to direct and indirect reportees. The employee is not included as their own assignee.
 
 > Opening the form does not give permission to assign work to everyone. DWMS checks the selected employee again when the task is saved.

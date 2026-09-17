@@ -1,4 +1,5 @@
 import type { DwmsDashboardMetrics } from "@/services/dwms.service";
+import { getCompletionRate } from "./completionRate";
 
 type KpiCardsProps = {
   stats: DwmsDashboardMetrics;
@@ -16,7 +17,7 @@ function formatDuration(minutes: number | undefined) {
 export default function KpiCards({ stats, periodLabel }: KpiCardsProps) {
   const completed = stats.completedTasks ?? stats.completedCount;
   const total = stats.totalTasks;
-  const rate = stats.tasksPerformedTodayPercent ?? stats.completionRate;
+  const rate = getCompletionRate(stats);
   const remaining =
     total != null && completed != null
       ? Math.max(0, total - completed)
@@ -45,9 +46,8 @@ export default function KpiCards({ stats, periodLabel }: KpiCardsProps) {
     },
     {
       label: "Completion rate",
-      value:
-        total === 0 || !Number.isFinite(rate) ? "—" : `${Math.round(rate)}%`,
-      detail: "Completed / scheduled tasks",
+      value: total === 0 ? "—" : `${rate}%`,
+      detail: "Weighted by task status",
     },
     {
       label: "Avg. acknowledgement",

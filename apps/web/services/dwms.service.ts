@@ -547,6 +547,28 @@ export interface DwmsAssignedTaskHistoryItem {
 export interface DwmsAlertListResponse {
   alerts?: DwmsAlertItem[];
   employeeId?: string;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export type DwmsAlertListTab =
+  | "MY_ALERTS"
+  | "ABNORMALITIES"
+  | "DEPARTMENTAL"
+  | "ORGANISATIONAL"
+  | "OPENED_BY_ME";
+
+export interface DwmsAlertListParams {
+  tab: DwmsAlertListTab;
+  page?: number;
+  limit?: number;
+  status?: string;
+  severity?: string;
+  search?: string;
 }
 
 export interface DwmsTargetUsersResponse {
@@ -750,6 +772,8 @@ export interface IngestActivityRowPayload {
 export type DwmsTaskListScope =
   | "scheduled"
   | "future"
+  | "not_acknowledged"
+  | "pending"
   | "overdue"
   | "approval_pending"
   | "completed";
@@ -767,6 +791,7 @@ export interface DwmsTaskSummaryResponse {
 
 export enum ActivityIngestionAssignmentMode {
   INDIVIDUAL = "Individual",
+  JOB_ROLE = "Job Role",
   ALL_USERS = "All Users",
   ALL_MANAGEMENT = "All Management",
   ALL_HOD = "All HOD",
@@ -791,6 +816,7 @@ export interface DwmsActivityIngestionRow {
   activityName?: string | null;
   activityCode?: string | null;
   responsibleEmployeeCode?: string | null;
+  responsibleJobRole?: string | null;
   message?: string | null;
   activityId?: string | null;
   taskId?: string | null;
@@ -1004,8 +1030,21 @@ export const DwmsService = {
     );
   },
 
-  async getAlerts(token: string): Promise<DwmsAlertListResponse> {
-    return getJson<DwmsAlertListResponse>("/dwms/alerts", token);
+  async getAlerts(
+    token: string,
+    params: DwmsAlertListParams,
+  ): Promise<DwmsAlertListResponse> {
+    return getJson<DwmsAlertListResponse>(
+      `/dwms/alerts${buildQuery({
+        tab: params.tab,
+        page: params.page,
+        limit: params.limit,
+        status: params.status,
+        severity: params.severity,
+        search: params.search,
+      })}`,
+      token,
+    );
   },
 
   async getAlertTargets(token: string): Promise<DwmsTargetUsersResponse> {

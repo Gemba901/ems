@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DwmsOverviewDashboardResponse } from '@/services/dwms.service';
+import { getCompletionRate } from './completionRate';
 
 type OverviewDashboardProps = {
   overviewData: DwmsOverviewDashboardResponse;
@@ -25,7 +26,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment }: 
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {overviewData.departmentCompliance?.map((d) => {
-              const rate = d.tasksPerformedTodayPercent ?? d.completionRate ?? 100;
+              const rate = getCompletionRate(d);
               let colorBg = 'bg-rose-500';
               if (rate >= 80) colorBg = 'bg-emerald-500';
               else if (rate >= 50) colorBg = 'bg-amber-500';
@@ -84,12 +85,12 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment }: 
                   
                   <div className="flex flex-wrap items-center gap-4 text-[10.5px] border-t border-border-app/40 pt-2 sm:border-t-0 sm:pt-0">
                     <div className="flex flex-col text-left sm:text-right">
-                      <span className="font-medium text-muted-app text-[9px] uppercase tracking-wider">Tasks Today</span>
+                      <span className="font-medium text-muted-app text-[9px] uppercase tracking-wider">Completion Rate</span>
                       <span className={`px-1.5 py-0.5 rounded-md font-bold text-[9.5px] w-fit sm:ml-auto mt-0.5 ${
-                        (e.tasksPerformedTodayPercent ?? 0) >= 80 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' :
-                        (e.tasksPerformedTodayPercent ?? 0) >= 50 ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-450'
+                        getCompletionRate(e) >= 80 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' :
+                        getCompletionRate(e) >= 50 ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-450'
                       }`}>
-                        {e.tasksPerformedTodayPercent ?? 0}%
+                        {getCompletionRate(e)}%
                       </span>
                     </div>
                     <div className="flex flex-col text-left sm:text-center w-14">

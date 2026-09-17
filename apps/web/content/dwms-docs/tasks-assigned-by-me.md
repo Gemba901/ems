@@ -2,6 +2,8 @@
 
 Tasks assigned by me lets an assigner follow acknowledgement, progress, deadlines, completion, and evidence for work they created.
 
+> **A useful daily check:** Look at **Not Acknowledged** first, then **Overdue**, and finally **Pending**. This quickly shows work that may need clarification, help, or follow-up.
+
 ## 1. Open the workspace
 
 In Daily Work Management, open the left menu and select **Tasks assigned by me**. After a new task is assigned successfully, DWMS also redirects the creator here.
@@ -38,6 +40,15 @@ Select a card to open the full task record, including approver, dependencies, li
 6. **Overdue:** DWMS marks unfinished work overdue after its due time and creates configured delay alerts.
 
 The assigner monitors this flow but does not change the owner's task progress from this page.
+
+### When should I follow up?
+
+- A task is still **Not Acknowledged** near its due date: confirm that the owner saw and understood it.
+- A task is **In Progress** for longer than expected: ask whether there is a blocker.
+- A task is **Approval Pending**: the approver, rather than the owner, now needs to act.
+- A task is **Overdue**: agree on recovery action and use the linked alert when one was created.
+
+Use comments or normal workplace communication to clarify the work. Do not create a duplicate task merely because the original task is delayed.
 
 ## 6. Assign more work
 

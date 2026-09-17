@@ -11,6 +11,7 @@ import {
   Severity,
   TaskStatus,
 } from 'db';
+import type { Prisma } from 'db';
 import { CreateAlertCommentDto, CreateAlertDto } from '../dto/dwms.dto';
 import { UserPayload } from './base.service';
 import { DwmsDirectoryService } from './directory.service';
@@ -48,14 +49,78 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
   }
 
   private async getVisibleAlertForUser(user: UserPayload, alertId: string) {
-    const list = await this.getAlerts(user);
-    const alert = (list.alerts ?? []).find((item: any) => item.id === alertId);
+    const { where } = await this.getAlertVisibility(user);
+    const alert = await this.prisma.alert.findFirst({
+      where: { AND: [where, { id: alertId }] },
+      include: this.getAlertIncludeOptions(),
+    });
 
     if (!alert) {
       throw new NotFoundException('Alert not found');
     }
 
-    return alert;
+    return this.serializeAlertListItem(alert);
+  }
+
+  private getAlertIncludeOptions() {
+    return {
+      raisedBy: {
+        select: { id: true, firstName: true, lastName: true, email: true },
+      },
+      againstUser: {
+        select: { id: true, firstName: true, lastName: true, email: true },
+      },
+      department: { select: { id: true, name: true } },
+      taskInstance: {
+        select: {
+          id: true,
+          task: { select: { title: true } },
+          owner: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              reportingManagerId: true,
+            },
+          },
+        },
+      },
+    };
+  }
+
+  private serializeAlertListItem(alert: any) {
+    return {
+      ...alert,
+      raisedBy: alert.raisedBy
+        ? {
+            id: alert.raisedBy.id,
+            name: `${alert.raisedBy.firstName} ${alert.raisedBy.lastName}`,
+            email: alert.raisedBy.email,
+          }
+        : null,
+      againstUser: alert.againstUser
+        ? {
+            id: alert.againstUser.id,
+            name: `${alert.againstUser.firstName} ${alert.againstUser.lastName}`,
+            email: alert.againstUser.email,
+          }
+        : null,
+      taskInstance: alert.taskInstance
+        ? {
+            id: alert.taskInstance.id,
+            task: alert.taskInstance.task,
+            owner: alert.taskInstance.owner
+              ? {
+                  id: alert.taskInstance.owner.id,
+                  name: `${alert.taskInstance.owner.firstName} ${alert.taskInstance.owner.lastName}`.trim(),
+                  email: alert.taskInstance.owner.email,
+                  reportingToId: alert.taskInstance.owner.reportingManagerId,
+                }
+              : null,
+          }
+        : null,
+    };
   }
 
   async createAlert(user: UserPayload, dto: CreateAlertDto) {
@@ -277,14 +342,15 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     }));
   }
 
-  async getAlerts(user: UserPayload) {
-    const employee = await this.getEmployee(user.userId, user.organizationId);
+  private async getAlertVisibility(user: UserPayload) {
+    const [employee, config] = await Promise.all([
+      this.getEmployee(user.userId, user.organizationId),
+      this.prisma.dwmsPermissionConfig.findUnique({
+        where: { organizationId: user.organizationId },
+        select: { alertViewLevel: true },
+      }),
+    ]);
     const role = this.getDwmsRole(user.roleLevel);
-
-    const config = await this.prisma.dwmsPermissionConfig.findUnique({
-      where: { organizationId: user.organizationId },
-      select: { alertViewLevel: true },
-    });
     const configLevel = config?.alertViewLevel ?? 'OWN';
 
     let effectiveViewLevel: 'OWN' | 'DEPARTMENT' | 'ORGANIZATION' = 'OWN';
@@ -297,45 +363,20 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       effectiveViewLevel = configLevel as 'OWN' | 'DEPARTMENT' | 'ORGANIZATION';
     }
 
-    let alerts: any[] = [];
-
-    const includeOptions = {
-      raisedBy: {
-        select: { id: true, firstName: true, lastName: true, email: true },
-      },
-      againstUser: {
-        select: { id: true, firstName: true, lastName: true, email: true },
-      },
-      department: { select: { id: true, name: true } },
-      taskInstance: {
-        select: {
-          id: true,
-          task: { select: { title: true } },
-          owner: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              reportingManagerId: true,
-            },
-          },
-        },
-      },
-    };
-
     if (effectiveViewLevel === 'ORGANIZATION') {
-      alerts = await this.prisma.alert.findMany({
+      return {
+        employee,
         where: { organizationId: user.organizationId },
-        include: includeOptions,
-        orderBy: { createdAt: 'desc' },
-      });
-    } else if (effectiveViewLevel === 'DEPARTMENT') {
+      };
+    }
+
+    if (effectiveViewLevel === 'DEPARTMENT') {
       const reporteeIds = (await this.listReporteesRecursive(employee.id)).map(
         (r) => r.id,
       );
 
-      alerts = await this.prisma.alert.findMany({
+      return {
+        employee,
         where: {
           organizationId: user.organizationId,
           OR: [
@@ -353,59 +394,162 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
               cond !== undefined,
           ),
         },
-        include: includeOptions,
-        orderBy: { createdAt: 'desc' },
-      });
-    } else {
-      alerts = await this.prisma.alert.findMany({
-        where: {
-          organizationId: user.organizationId,
-          OR: [
-            { raisedById: employee.id },
-            { recipientEmployeeIds: { has: employee.id } },
-            { againstUserId: employee.id },
-            { taskInstance: { ownerId: employee.id } },
-          ],
-        },
-        include: includeOptions,
-        orderBy: { createdAt: 'desc' },
-      });
+      };
     }
 
     return {
-      count: alerts.length,
-      alerts: alerts.map((a) => ({
-        ...a,
-        raisedBy: a.raisedBy
-          ? {
-              id: a.raisedBy.id,
-              name: `${a.raisedBy.firstName} ${a.raisedBy.lastName}`,
-              email: a.raisedBy.email,
-            }
-          : null,
-        againstUser: a.againstUser
-          ? {
-              id: a.againstUser.id,
-              name: `${a.againstUser.firstName} ${a.againstUser.lastName}`,
-              email: a.againstUser.email,
-            }
-          : null,
-        taskInstance: a.taskInstance
-          ? {
-              id: a.taskInstance.id,
-              task: a.taskInstance.task,
-              owner: a.taskInstance.owner
-                ? {
-                    id: a.taskInstance.owner.id,
-                    name: `${a.taskInstance.owner.firstName} ${a.taskInstance.owner.lastName}`.trim(),
-                    email: a.taskInstance.owner.email,
-                    reportingToId: a.taskInstance.owner.reportingManagerId,
-                  }
-                : null,
-            }
-          : null,
-      })),
+      employee,
+      where: {
+        organizationId: user.organizationId,
+        OR: [
+          { raisedById: employee.id },
+          { recipientEmployeeIds: { has: employee.id } },
+          { againstUserId: employee.id },
+          { taskInstance: { ownerId: employee.id } },
+        ],
+      },
+    };
+  }
+
+  async getAlerts(
+    user: UserPayload,
+    rawTab?: string,
+    rawPage?: string,
+    rawLimit?: string,
+    rawStatus?: string,
+    rawSeverity?: string,
+    rawSearch?: string,
+  ) {
+    const { employee, where: visibilityWhere } =
+      await this.getAlertVisibility(user);
+    const allowedTabs = new Set([
+      'ALL',
+      'MY_ALERTS',
+      'ABNORMALITIES',
+      'DEPARTMENTAL',
+      'ORGANISATIONAL',
+      'OPENED_BY_ME',
+    ]);
+    const tab = rawTab?.trim().toUpperCase() || 'ALL';
+    if (!allowedTabs.has(tab)) {
+      throw new BadRequestException('Invalid alert tab');
+    }
+
+    const pageValue = Number(rawPage ?? 1);
+    const limitValue = Number(rawLimit ?? 20);
+    const page = Number.isFinite(pageValue)
+      ? Math.max(1, Math.trunc(pageValue))
+      : 1;
+    const limit = Number.isFinite(limitValue)
+      ? Math.min(100, Math.max(1, Math.trunc(limitValue)))
+      : 20;
+
+    const status = rawStatus?.trim().toUpperCase();
+    if (
+      status &&
+      status !== 'ALL' &&
+      !Object.values(AlertStatus).includes(status as AlertStatus)
+    ) {
+      throw new BadRequestException('Invalid alert status');
+    }
+    const severity = rawSeverity?.trim().toUpperCase();
+    if (
+      severity &&
+      severity !== 'ALL' &&
+      !Object.values(Severity).includes(severity as Severity)
+    ) {
+      throw new BadRequestException('Invalid alert severity');
+    }
+    const search = rawSearch?.trim().slice(0, 100) ?? '';
+
+    const tabWhere: Prisma.AlertWhereInput =
+      tab === 'MY_ALERTS'
+        ? {
+            isAbnormality: false,
+            OR: [
+              { againstUserId: employee.id },
+              { taskInstance: { ownerId: employee.id } },
+            ],
+          }
+        : tab === 'ABNORMALITIES'
+          ? { isAbnormality: true }
+          : tab === 'DEPARTMENTAL'
+            ? { isAbnormality: false, departmentId: { not: null } }
+            : tab === 'ORGANISATIONAL'
+              ? {
+                  isAbnormality: false,
+                  departmentId: null,
+                  againstUserId: null,
+                  taskInstanceId: null,
+                }
+              : tab === 'OPENED_BY_ME'
+                ? { isAbnormality: false, raisedById: employee.id }
+                : {};
+
+    const filters: Prisma.AlertWhereInput[] = [visibilityWhere, tabWhere];
+
+    if (status && status !== 'ALL') {
+      filters.push({ status: status as AlertStatus });
+    }
+    if (severity && severity !== 'ALL') {
+      filters.push(
+        severity === Severity.MEDIUM
+          ? { severity: { in: [Severity.MEDIUM, Severity.LOW] } }
+          : { severity: severity as Severity },
+      );
+    }
+    if (search) {
+      filters.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          {
+            raisedBy: {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          },
+          {
+            againstUser: {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          },
+          {
+            department: {
+              name: { contains: search, mode: 'insensitive' },
+            },
+          },
+        ],
+      });
+    }
+    const where: Prisma.AlertWhereInput = { AND: filters };
+
+    const [alerts, total] = await Promise.all([
+      this.prisma.alert.findMany({
+        where,
+        include: this.getAlertIncludeOptions(),
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.alert.count({ where }),
+    ]);
+
+    return {
+      count: total,
+      alerts: alerts.map((alert) => this.serializeAlertListItem(alert)),
       employeeId: employee.id,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: total > 0 ? Math.ceil(total / limit) : 0,
+      },
     };
   }
 
@@ -455,7 +599,9 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       alert,
       comments: comments.map((comment) => this.serializeAlertComment(comment)),
       sourceAlert: this.serializeRelatedAlert(sourceAlert),
-      abnormalities: abnormalities.map((item) => this.serializeRelatedAlert(item)),
+      abnormalities: abnormalities.map((item) =>
+        this.serializeRelatedAlert(item),
+      ),
       employeeId: employee.id,
     };
   }
@@ -500,7 +646,9 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
   async getEmployeeDwmsProfile(user: UserPayload, employeeId: string) {
     await this.getEmployee(user.userId, user.organizationId);
     if (!this.canUpdateDwmsPermissions(user.roleLevel)) {
-      throw new ForbiddenException('You are not authorized to view employee DWMS profile');
+      throw new ForbiddenException(
+        'You are not authorized to view employee DWMS profile',
+      );
     }
 
     const employee = await this.prisma.employee.findFirst({
@@ -511,7 +659,6 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     if (!employee) {
       throw new NotFoundException('Employee not found');
     }
-
 
     const alertInclude = {
       raisedBy: {
@@ -538,73 +685,78 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       },
     };
 
-    const [taskInstances, currentAlerts, abnormalities, raisedAlerts, roleActivities] =
-      await Promise.all([
-        this.prisma.taskInstance.findMany({
-          where: {
-            ownerId: employeeId,
-            task: { owner: { organizationId: user.organizationId } },
-            status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
-          },
-          include: {
-            task: {
-              include: {
-                owner: true,
-                assignedBy: true,
-                approvedBy: true,
-                activity: true,
-                department: true,
-              },
+    const [
+      taskInstances,
+      currentAlerts,
+      abnormalities,
+      raisedAlerts,
+      roleActivities,
+    ] = await Promise.all([
+      this.prisma.taskInstance.findMany({
+        where: {
+          ownerId: employeeId,
+          task: { owner: { organizationId: user.organizationId } },
+          status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
+        },
+        include: {
+          task: {
+            include: {
+              owner: true,
+              assignedBy: true,
+              approvedBy: true,
+              activity: true,
+              department: true,
             },
-            comments: true,
-            events: true,
-            alerts: { orderBy: { createdAt: 'desc' } },
           },
-          orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
-          take: 25,
-        }),
-        this.prisma.alert.findMany({
-          where: {
-            organizationId: user.organizationId,
-            isAbnormality: false,
-            status: { not: AlertStatus.CLOSED },
-            OR: [
-              { againstUserId: employeeId },
-              { taskInstance: { ownerId: employeeId } },
-            ],
-          },
-          include: alertInclude,
-          orderBy: { createdAt: 'desc' },
-          take: 25,
-        }),
-        this.prisma.alert.findMany({
-          where: {
-            organizationId: user.organizationId,
-            isAbnormality: true,
-            status: { not: AlertStatus.CLOSED },
-            OR: [
-              { raisedById: employeeId },
-              { againstUserId: employeeId },
-              { taskInstance: { ownerId: employeeId } },
-            ],
-          },
-          include: alertInclude,
-          orderBy: { createdAt: 'desc' },
-          take: 25,
-        }),
-        this.prisma.alert.findMany({
-          where: {
-            organizationId: user.organizationId,
-            raisedById: employeeId,
-            isAbnormality: false,
-            status: { not: AlertStatus.CLOSED },
-          },
-          include: alertInclude,
-          orderBy: { createdAt: 'desc' },
-          take: 25,
-        }),
-        this.listEmployeeRoleActivities(user, employeeId),
-      ]);
+          comments: true,
+          events: true,
+          alerts: { orderBy: { createdAt: 'desc' } },
+        },
+        orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+        take: 25,
+      }),
+      this.prisma.alert.findMany({
+        where: {
+          organizationId: user.organizationId,
+          isAbnormality: false,
+          status: { not: AlertStatus.CLOSED },
+          OR: [
+            { againstUserId: employeeId },
+            { taskInstance: { ownerId: employeeId } },
+          ],
+        },
+        include: alertInclude,
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+      }),
+      this.prisma.alert.findMany({
+        where: {
+          organizationId: user.organizationId,
+          isAbnormality: true,
+          status: { not: AlertStatus.CLOSED },
+          OR: [
+            { raisedById: employeeId },
+            { againstUserId: employeeId },
+            { taskInstance: { ownerId: employeeId } },
+          ],
+        },
+        include: alertInclude,
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+      }),
+      this.prisma.alert.findMany({
+        where: {
+          organizationId: user.organizationId,
+          raisedById: employeeId,
+          isAbnormality: false,
+          status: { not: AlertStatus.CLOSED },
+        },
+        include: alertInclude,
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+      }),
+      this.listEmployeeRoleActivities(user, employeeId),
+    ]);
 
     return {
       employee: {
@@ -761,8 +913,10 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
   private canApproveAlertClosure(user: UserPayload, employee: any, alert: any) {
     const role = this.getDwmsRole(user.roleLevel);
     const isMgmt = role === 'MANAGEMENT';
-    const isHod = role === 'HOD' && employee.departmentId === alert.departmentId;
-    const isApprover = (alert.closureApproverId ?? alert.raisedById) === employee.id;
+    const isHod =
+      role === 'HOD' && employee.departmentId === alert.departmentId;
+    const isApprover =
+      (alert.closureApproverId ?? alert.raisedById) === employee.id;
 
     return isApprover || isMgmt || isHod;
   }
@@ -992,7 +1146,10 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       approvalComment || 'Final acceptance confirmed',
     );
 
-    if (alert.closureRequestedById && alert.closureRequestedById !== employee.id) {
+    if (
+      alert.closureRequestedById &&
+      alert.closureRequestedById !== employee.id
+    ) {
       await this.notifications.create({
         employeeId: alert.closureRequestedById,
         type: NotificationType.INFO,
@@ -1049,7 +1206,10 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       rejectionNote,
     );
 
-    if (alert.closureRequestedById && alert.closureRequestedById !== employee.id) {
+    if (
+      alert.closureRequestedById &&
+      alert.closureRequestedById !== employee.id
+    ) {
       await this.notifications.create({
         employeeId: alert.closureRequestedById,
         type: NotificationType.ALERT,
@@ -1098,12 +1258,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       },
     });
 
-    await this.addAlertHistoryEntry(
-      alertId,
-      employee.id,
-      'Alert closed',
-      note,
-    );
+    await this.addAlertHistoryEntry(alertId, employee.id, 'Alert closed', note);
 
     return { message: 'Alert closed successfully', alert: updated };
   }
@@ -1288,12 +1443,3 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     return { message: 'Alert escalated successfully', alert: updated };
   }
 }
-
-
-
-
-
-
-
-
-

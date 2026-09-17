@@ -2,6 +2,8 @@
 
 Reports presents task completion, acknowledgement speed, completion speed, overdue work, and open alerts for the employee, team, department, or organization levels allowed by the user's role.
 
+> Reports help you spot a pattern. They do not explain the cause by themselves. Use the task and alert details to understand why a number is high or low.
+
 ## 1. Open Reports
 
 Select **Reports** in Daily Work Management. The initial tab is **My Performance**.
@@ -33,6 +35,15 @@ Dates are evaluated using the organization's configured time zone.
 - **Avg. completion:** Average time from acknowledgement, or creation when not acknowledged, to completion.
 
 An em dash means the metric is unavailable or has no valid denominator.
+
+### Plain-language example
+
+If 10 tasks were scheduled and 8 were completed, the completion rate is 80%. The remaining two may still be open, overdue, or waiting for approval. Open the task workspace before deciding what action is needed.
+
+- **Low completion rate:** Check Overdue and Approval Pending tasks.
+- **Slow acknowledgement:** Check whether employees receive and review new assignments promptly.
+- **Many open alerts:** Check alert severity, responsible person, and age.
+- **One department below others:** Check its employee scoreboard and task details.
 
 ## 5. Trend charts
 

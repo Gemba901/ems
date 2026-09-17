@@ -344,8 +344,10 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
       completionOutput: firstValue(row, ["Expected Output", "Output"]),
       primaryResponsibleDesignation: firstValue(row, [
         "Responsible Job Designation",
+        "Responsible Job Role",
         "Primary Responsible Designation",
         "Responsible Designation",
+        "Job Role",
       ]),
       evidenceRequired: firstValue(row, ["Documents Required", "Documents"]),
       effectiveFrom: organizationToday,
@@ -456,10 +458,6 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         file.name,
       );
       const failures = result.results.filter((row) => !row.success);
-      const assignedCount = result.results.reduce(
-        (total, row) => total + (row.success ? (row.assignedCount ?? 0) : 0),
-        0,
-      );
       if (failures.length > 0) {
         const failureByRowNumber = new Map(
           failures.map((failure) => [failure.rowNumber, failure.message]),
@@ -503,8 +501,8 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         : "";
       setMessage(
         failures.length > 0
-          ? `Imported ${result.created} activities and assigned them to ${assignedCount} users. ${result.failed} rows failed. ${failureSummary}${skippedSummary}`
-          : `Imported ${result.created} activities and assigned them to ${assignedCount} users successfully.${skippedSummary}`,
+          ? `Imported ${result.created} activities. ${result.failed} rows failed. ${failureSummary}${skippedSummary}`
+          : `Imported ${result.created} activities successfully.${skippedSummary}`,
       );
       onCreated?.();
     } catch (error) {
@@ -723,19 +721,20 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               <p className="font-bold text-slate-700">Optional columns</p>
               <p>
                 Department, Sub - Department, Activity Code, Estimated Time,
-                Purpose, Responsible Job Designation, Expected Output, Documents
-                Required, Parent Activity Code, Assignment Mode, Emp ID.
+                Purpose, Responsible Job Designation (or Job Role), Expected
+                Output, Documents Required, Parent Activity Code, Assignment
+                Mode, Emp ID.
               </p>
             </div>
             <p>
-              Assignment Mode must be Individual, All Users, All Management, or
-              All HOD. Leave it blank for Individual. Emp ID is required only for
-              Individual; group modes assign to every matching employee in the
-              organization. Frequency must be DAILY, WEEKLY, MONTHLY, QUARTERLY,
-              or YEARLY. Activity ingestion does not use due dates. Emp ID can
-              also be named Employee ID, Employee Code, Responsible Emp ID, or
-              Responsible Employee Code, and is stored only for import
-              traceability.
+              Assignment Mode must be Individual, Job Role, All Users, All
+              Management, or All HOD. Leave it blank for Individual. Job Role
+              associates the activity with Responsible Job Designation without
+              creating an individual assignment. Individual uses Emp ID and
+              does not associate the activity with a job role. Group modes
+              assign to every matching employee in the organization. Frequency
+              must be DAILY, WEEKLY, MONTHLY, QUARTERLY, or YEARLY. Activity
+              ingestion does not use due dates.
             </p>
           </div>
         </aside>

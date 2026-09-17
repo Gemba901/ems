@@ -18,6 +18,10 @@ Select **Alerts/Abnormality** in Daily Work Management. Use **Raise New Alert** 
 
 The tabs operate on the alerts already visible to you. Management receives organization visibility. HOD visibility is at least department level and can become organization-wide when configured. Regular employees use the configured Own, Department, or Organization view level.
 
+![Each alert card shows urgency, status, date, the problem, the linked task when present, and the person who raised it.](../../public/dwms-docs/alerts-abnormality/02-alert-list.png)
+
+> **Start here:** Open **My Alerts** first. These are the issues most likely to need your action. Deal with Critical alerts before High and Medium alerts, then use the other tabs for wider team awareness.
+
 ## 3. Search and filter
 
 Search by alert title, person, or department. Filter by status and severity.
@@ -33,6 +37,16 @@ Severity is Medium, High, or Critical.
 
 Cards identify the alert title, description, severity, status, raiser, responsible person or task, department, timestamps, and abnormality context. Select a card to open complete details.
 
+![Alert details bring together the problem, severity, responsible person, linked task, and history.](../../public/dwms-docs/alerts-abnormality/03-alert-detail.png)
+
+When you open an alert, answer these questions before acting:
+
+1. **What happened?** Read the title and description.
+2. **How urgent is it?** Check the severity in the top-right corner.
+3. **Who owns the next action?** Check **Against**, the responsible person, or the department.
+4. **Is work already linked?** Open **Linked task** when shown.
+5. **What has already happened?** Read History and comments before adding a new response.
+
 The detail page contains Alert Information, History and comments, Resolution, Corrective Action, related task links, and source/created abnormality links when present.
 
 ## 5. Respond with corrective action
@@ -40,6 +54,8 @@ The detail page contains Alert Information, History and comments, Resolution, Co
 The responsible employee, Management, or HOD can respond to an Open alert. Enter the corrective action taken or planned and submit it. The alert moves to In Progress and the action is preserved in its record.
 
 A useful response states containment, root cause or current finding, permanent action, owner, and expected completion.
+
+**Plain-language example:** “Stopped the leaking pump and placed a spill tray at 10:15. Maintenance found a loose seal and will replace it by 2:00 PM. Production is using Pump 2 until the repair is checked.” This is more useful than “Issue attended.”
 
 ## 6. Add comments
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DwmsEmployeeDashboardResponse } from '@/services/dwms.service';
+import { getCompletionRate } from './completionRate';
 
 type EmployeeDashboardProps = {
   employeeData: DwmsEmployeeDashboardResponse;
@@ -37,7 +38,7 @@ export default function EmployeeDashboard({
                   <th className="py-2.5 px-3">Name</th>
                   <th className="py-2.5 px-3">Role</th>
                   <th className="py-2.5 px-3">Department</th>
-                  <th className="py-2.5 px-3 text-center">Tasks Today</th>
+                  <th className="py-2.5 px-3 text-center">Completion Rate</th>
                   <th className="py-2.5 px-3 text-center">Avg Acknowledge</th>
                 </tr>
               </thead>
@@ -53,10 +54,10 @@ export default function EmployeeDashboard({
                     <td className="py-3 px-3 text-muted-app">{rep.departmentName}</td>
                     <td className="py-3 px-3 text-center">
                       <span className={`px-2 py-0.5 rounded-lg font-semibold ${
-                        (rep.tasksPerformedTodayPercent ?? 0) >= 80 ? 'bg-emerald-50 text-emerald-700' :
-                        (rep.tasksPerformedTodayPercent ?? 0) >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                        getCompletionRate(rep) >= 80 ? 'bg-emerald-50 text-emerald-700' :
+                        getCompletionRate(rep) >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
                       }`}>
-                        {rep.tasksPerformedTodayPercent ?? 0}%
+                        {getCompletionRate(rep)}%
                       </span>
                     </td>
                     <td className="py-3 px-3 text-center text-text-app">{formatDuration(rep.avgAcknowledgeTimeMin)}</td>

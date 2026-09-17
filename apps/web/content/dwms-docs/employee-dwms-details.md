@@ -2,6 +2,8 @@
 
 Employee DWMS details adds an operational DWMS panel to an employee's EMS profile. It brings together the employee's current work, alert responsibility, abnormalities, raised alerts, and activities applicable to their job title.
 
+> Use this page when supporting one employee. It answers “What work and issues currently involve this person?” without searching several DWMS pages separately.
+
 ## 1. Open the panel
 
 Open **EMS**, choose an employee, and view the employee detail page. The DWMS section is available only to authorized Management, Admin, Super Admin, and HR users.
@@ -11,6 +13,13 @@ The selected employee must belong to the current organization.
 ## 2. Read the summary
 
 The summary counts current tasks, current alerts, abnormalities, raised alerts, applicable activities, and active activities. Counts describe the selected employee, not the viewer.
+
+- **Current tasks:** Work the employee still needs to finish.
+- **Current alerts:** Open problems for which the employee is responsible.
+- **Abnormalities:** Open issues that have crossed an abnormality rule or were recorded as abnormalities.
+- **Raised alerts:** Problems reported by the employee that remain open.
+- **Applicable activities:** Standard work matching the employee's job role.
+- **Active activities:** Applicable standard work currently enabled for the employee.
 
 ## 3. Current Tasks
 

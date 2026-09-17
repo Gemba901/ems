@@ -559,7 +559,11 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     return this.serializeActivity(activity);
   }
 
-  async createActivity(user: UserPayload, dto: CreateActivityDto) {
+  async createActivity(
+    user: UserPayload,
+    dto: CreateActivityDto,
+    options: { linkJobRole?: boolean } = { linkJobRole: true },
+  ) {
     await this.getEmployee(user.userId, user.organizationId);
     if (!this.canManageActivities(user.roleLevel)) {
       throw new ForbiddenException(
@@ -614,11 +618,13 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         activity.id,
         parentActivityIds,
       );
-      await this.linkActivityToJobTitle(
-        user.organizationId,
-        activity.id,
-        dto.primaryResponsibleDesignation,
-      );
+      if (options.linkJobRole !== false) {
+        await this.linkActivityToJobTitle(
+          user.organizationId,
+          activity.id,
+          dto.primaryResponsibleDesignation,
+        );
+      }
       const createdActivity = await this.prisma.activity.findUnique({
         where: { id: activity.id },
         include: ACTIVITY_INCLUDE,
@@ -667,6 +673,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       activityName: row.activityName,
       activityCode: row.activityCode,
       responsibleEmployeeCode: row.responsibleEmployeeCode,
+      responsibleJobRole:
+        row.activity?.primaryResponsibleDesignation ?? null,
       message: row.message
         ? this.cleanActivityIngestionError({ message: row.message })
         : row.message,
@@ -716,7 +724,14 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         uploadedBy: {
           select: { id: true, firstName: true, lastName: true, email: true },
         },
-        rows: { orderBy: { rowNumber: 'asc' } },
+        rows: {
+          include: {
+            activity: {
+              select: { primaryResponsibleDesignation: true },
+            },
+          },
+          orderBy: { rowNumber: 'asc' },
+        },
       },
     });
     if (!ingestion) throw new NotFoundException('Activity ingestion not found');
@@ -785,6 +800,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       frequency: TaskFrequency;
       parentActivityCode: string | null;
       assignedCount: number;
+      assignmentMessage: string;
     }> = [];
 
     for (let index = 0; index < rows.length; index += 1) {
@@ -830,13 +846,29 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           );
         }
 
-        const recipients = await this.resolveActivityIngestionRecipients(
-          user.organizationId,
-          assignmentMode,
-          row.responsibleEmployeeCode,
-        );
+        const jobRole = activityPayload.primaryResponsibleDesignation?.trim();
+        if (
+          assignmentMode === ActivityIngestionAssignmentMode.JOB_ROLE &&
+          !jobRole
+        ) {
+          throw new BadRequestException(
+            'Responsible Job Designation is required for Job Role assignment mode',
+          );
+        }
 
-        const created = await this.createActivity(user, activityPayload);
+        const recipients =
+          assignmentMode === ActivityIngestionAssignmentMode.JOB_ROLE
+            ? []
+            : await this.resolveActivityIngestionRecipients(
+                user.organizationId,
+                assignmentMode,
+                row.responsibleEmployeeCode,
+              );
+
+        const created = await this.createActivity(user, activityPayload, {
+          linkJobRole:
+            assignmentMode === ActivityIngestionAssignmentMode.JOB_ROLE,
+        });
         const activityId = created.activity?.id;
         if (!activityId) {
           throw new BadRequestException('Activity could not be created');
@@ -861,7 +893,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           }
           const taskId = taskIds[0];
           const assignedCount = recipients.length;
-          const assignmentMessage = `Activity assigned to ${assignedCount} ${assignedCount === 1 ? 'user' : 'users'}`;
+          const assignmentMessage =
+            assignmentMode === ActivityIngestionAssignmentMode.JOB_ROLE
+              ? `Activity associated with job role "${jobRole}"`
+              : `Activity assigned to ${assignedCount} ${assignedCount === 1 ? 'user' : 'users'}`;
           const resultIndex = results.length;
           results.push({
             rowNumber,
@@ -900,6 +935,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             frequency: activityPayload.frequency,
             parentActivityCode,
             assignedCount,
+            assignmentMessage,
           });
         } catch (taskError) {
           await this.prisma.task
@@ -992,7 +1028,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           parentActivityIds,
         );
 
-        const message = `Activity assigned to ${item.assignedCount} ${item.assignedCount === 1 ? 'user' : 'users'} and parent activity linked`;
+        const message = `${item.assignmentMessage} and parent activity linked`;
         results[item.resultIndex].message = message;
         rowRecords[item.rowRecordIndex].message = message;
       } catch (error: any) {

@@ -98,6 +98,7 @@ function ActivityIngestionDetailContent() {
         row.rowNumber,
         row.activityName,
         row.activityCode,
+        row.responsibleJobRole,
         row.responsibleEmployeeCode,
         cleanDwmsMessage(row.message, "No message"),
         row.status,
@@ -161,7 +162,7 @@ function ActivityIngestionDetailContent() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search row, activity, Emp ID, reason..."
+            placeholder="Search row, activity, job role, reason..."
             className="w-full rounded-full border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
           />
         </div>
@@ -194,7 +195,7 @@ function ActivityIngestionDetailContent() {
                   <th className="px-5 py-3">Row</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Activity</th>
-                  <th className="px-5 py-3">Emp ID</th>
+                  <th className="px-5 py-3">Assignment target</th>
                   <th className="px-5 py-3">Reason</th>
                   <th className="px-5 py-3">Links</th>
                 </tr>
@@ -225,8 +226,10 @@ function ActivityIngestionDetailContent() {
                         {row.activityCode || "No code"}
                       </p>
                     </td>
-                    <td className="px-5 py-4 font-mono text-xs text-slate-600">
-                      {row.responsibleEmployeeCode || "Missing"}
+                    <td className="px-5 py-4 text-xs text-slate-600">
+                      {row.responsibleJobRole ||
+                        row.responsibleEmployeeCode ||
+                        "Organization group"}
                     </td>
                     <td className="px-5 py-4 text-slate-600">
                       {cleanDwmsMessage(row.message, "No message")}

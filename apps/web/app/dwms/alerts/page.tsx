@@ -1,6 +1,11 @@
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { useAuthStore } from "@/store/auth.store";
@@ -67,6 +72,8 @@ type AlertTab =
   | "ORGANISATIONAL"
   | "OPENED_BY_ME";
 
+const ALERT_PAGE_SIZE = 20;
+
 export default function AlertsRoute() {
   return (
     <ProtectedRoute>
@@ -96,6 +103,14 @@ function AlertsPage() {
   const [severityFilter, setSeverityFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [alertPage, setAlertPage] = useState(1);
+  const [alertPagination, setAlertPagination] = useState({
+    page: 1,
+    limit: ALERT_PAGE_SIZE,
+    total: 0,
+    pages: 0,
+  });
   const [actioningAlertId, setActioningAlertId] = useState<string | null>(null);
   const [actionText, setActionText] = useState("");
   const [submittingAction, setSubmittingAction] = useState(false);
@@ -111,13 +126,34 @@ function AlertsPage() {
     }).format(new Date(val));
   }
 
-  async function loadAlerts() {
+  const loadAlerts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const token = useAuthStore.getState().accessToken ?? "";
-      const res = await DwmsService.getAlerts(token);
+      const res = await DwmsService.getAlerts(token, {
+        tab: activeTab,
+        page: alertPage,
+        limit: ALERT_PAGE_SIZE,
+        status: statusFilter,
+        severity: severityFilter,
+        search: debouncedSearchTerm,
+      });
       setAlerts(res?.alerts ?? []);
+      const pagination = res?.pagination ?? {
+        page: alertPage,
+        limit: ALERT_PAGE_SIZE,
+        total: res?.alerts?.length ?? 0,
+        pages: res?.alerts?.length ? 1 : 0,
+      };
+      if (
+        pagination.pages > 0 &&
+        alertPage > pagination.pages
+      ) {
+        setAlertPage(pagination.pages);
+        return;
+      }
+      setAlertPagination(pagination);
       if (res?.employeeId) {
         setEmployeeId(res.employeeId);
       }
@@ -126,12 +162,25 @@ function AlertsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [
+    activeTab,
+    alertPage,
+    debouncedSearchTerm,
+    severityFilter,
+    statusFilter,
+  ]);
 
 
   useEffect(() => {
     void loadAlerts();
-  }, []);
+  }, [loadAlerts]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   useEffect(() => {
     if (raiseParam === "true") {
@@ -165,59 +214,14 @@ function AlertsPage() {
     }
   }
 
-  const filteredAlerts = useMemo(() => {
-    return alerts.filter((alert) => {
-      const alertSeverity =
-        alert.severity === "LOW" ? "MEDIUM" : alert.severity;
-      const matchSeverity =
-        severityFilter === "ALL" || alertSeverity === severityFilter;
-      const matchStatus =
-        statusFilter === "ALL" || alert.status === statusFilter;
-      const text =
-        `${alert.title} ${alert.description} ${alert.raisedBy?.name || ""} ${alert.againstUser?.name || ""} ${alert.department?.name || ""}`.toLowerCase();
-      const matchSearch =
-        searchTerm.trim() === "" || text.includes(searchTerm.toLowerCase());
-      return matchSeverity && matchStatus && matchSearch;
-    });
-  }, [alerts, severityFilter, statusFilter, searchTerm]);
-
-
-  const tabFilteredAlerts = useMemo(() => {
-    return filteredAlerts.filter((alert) => {
-      if (activeTab === "ABNORMALITIES") {
-        return !!alert.isAbnormality;
-      }
-
-      if (alert.isAbnormality) {
-        return false;
-      }
-      const isMyAlert =
-        alert.againstUserId === employeeId ||
-        alert.againstUserId === user?.userId ||
-        alert.taskInstance?.owner?.id === employeeId ||
-        alert.taskInstance?.owner?.id === user?.userId;
-
-      if (activeTab === "MY_ALERTS") {
-        return isMyAlert;
-      }
-      if (activeTab === "DEPARTMENTAL") return !!alert.departmentId;
-      if (activeTab === "ORGANISATIONAL")
-        return (
-          !alert.departmentId && !alert.againstUserId && !alert.taskInstanceId
-        );
-      if (activeTab === "OPENED_BY_ME") {
-        const raiserId = alert.raisedBy?.id;
-        return raiserId === employeeId || raiserId === user?.userId;
-      }
-      return true;
-    });
-  }, [activeTab, filteredAlerts, employeeId, user]);
-
   return (
     <div className="mx-auto flex w-full max-w-none flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
       <DwmsTabHeader
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          setAlertPage(1);
+        }}
         tabs={[
           { key: "MY_ALERTS", label: "My Alerts", dotColor: "bg-blue-500" },
           {
@@ -241,52 +245,63 @@ function AlertsPage() {
             dotColor: "bg-slate-400",
           },
         ]}
-        rightContent={
+      />
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="min-w-0 flex-1">
+            <DwmsSearchFilterBar
+              searchValue={searchTerm}
+              onSearchChange={(value) => {
+                setSearchTerm(value);
+                setAlertPage(1);
+              }}
+              searchPlaceholder="Search title, person, department..."
+              filters={[
+                {
+                  key: "status",
+                  value: statusFilter,
+                  onChange: (value) => {
+                    setStatusFilter(value);
+                    setAlertPage(1);
+                  },
+                  ariaLabel: "Status filter",
+                  widthClassName: "md:w-56",
+                  options: [
+                    { value: "ALL", label: "All Statuses" },
+                    ...statuses.map((status) => ({
+                      value: status.value,
+                      label: status.label,
+                    })),
+                  ],
+                },
+                {
+                  key: "severity",
+                  value: severityFilter,
+                  onChange: (value) => {
+                    setSeverityFilter(value);
+                    setAlertPage(1);
+                  },
+                  ariaLabel: "Severity filter",
+                  widthClassName: "md:w-56",
+                  options: [
+                    { value: "ALL", label: "All Severities" },
+                    ...severities.map((severity) => ({
+                      value: severity.value,
+                      label: severity.label,
+                    })),
+                  ],
+                },
+              ]}
+            />
+          </div>
           <button
             type="button"
             onClick={() => router.push("/dwms/actions/new?mode=alert")}
-            className="mb-2 inline-flex h-10 shrink-0 cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700"
+            className="inline-flex h-10 w-full shrink-0 cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-transparent bg-blue-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"
           >
             Raise New Alert
           </button>
-        }
-      />
-      <div className="space-y-6">
-        <DwmsSearchFilterBar
-          searchValue={searchTerm}
-          onSearchChange={setSearchTerm}
-          searchPlaceholder="Search title, person, department..."
-          filters={[
-            {
-              key: "status",
-              value: statusFilter,
-              onChange: setStatusFilter,
-              ariaLabel: "Status filter",
-              widthClassName: "md:w-56",
-              options: [
-                { value: "ALL", label: "All Statuses" },
-                ...statuses.map((status) => ({
-                  value: status.value,
-                  label: status.label,
-                })),
-              ],
-            },
-            {
-              key: "severity",
-              value: severityFilter,
-              onChange: setSeverityFilter,
-              ariaLabel: "Severity filter",
-              widthClassName: "md:w-56",
-              options: [
-                { value: "ALL", label: "All Severities" },
-                ...severities.map((severity) => ({
-                  value: severity.value,
-                  label: severity.label,
-                })),
-              ],
-            },
-          ]}
-        />
+        </div>
 
         {error && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-400">
@@ -298,13 +313,13 @@ function AlertsPage() {
           <div className="rounded-2xl border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app">
             Loading alerts...
           </div>
-        ) : tabFilteredAlerts.length === 0 ? (
+        ) : alerts.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app">
             No alerts found in this section.
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {tabFilteredAlerts.map((alert) => {
+            {alerts.map((alert) => {
               const alertSeverity =
                 alert.severity === "LOW" ? "MEDIUM" : alert.severity;
               const severityConfig = severities.find(
@@ -487,14 +502,42 @@ function AlertsPage() {
             })}
           </div>
         )}
+
+        {!loading && alerts.length > 0 && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+            <span>
+              Page {alertPagination.page} of {alertPagination.pages} ·{" "}
+              {alertPagination.total} alerts
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setAlertPage((page) => Math.max(1, page - 1))
+                }
+                disabled={alertPagination.page <= 1}
+                className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setAlertPage((page) =>
+                    Math.min(alertPagination.pages, page + 1),
+                  )
+                }
+                disabled={alertPagination.page >= alertPagination.pages}
+                className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-</div>
+    </div>
   );
 }
-
-
-
-
-
 
 

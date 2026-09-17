@@ -994,6 +994,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       ![
         'scheduled',
         'future',
+        'not_acknowledged',
+        'pending',
         'overdue',
         'approval_pending',
         'completed',
@@ -1049,6 +1051,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     ];
     const pagedScope =
       scope === 'future' ||
+      scope === 'not_acknowledged' ||
+      scope === 'pending' ||
       scope === 'overdue' ||
       scope === 'approval_pending' ||
       scope === 'completed';
@@ -1076,13 +1080,22 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         instance,
       }));
       total = instances.length;
-    } else if (scope === 'future') {
+    } else if (
+      scope === 'future' ||
+      scope === 'not_acknowledged' ||
+      scope === 'pending'
+    ) {
       const futureWhere = {
         ownerId: employee.id,
         scheduledFor: { gte: referenceDate },
         dueAt: { gte: new Date() },
         status: { notIn: futureStatusExclusions },
         ...(frequency ? { frequency } : {}),
+        ...(scope === 'not_acknowledged'
+          ? { task: { acknowledgedAt: null } }
+          : scope === 'pending'
+            ? { task: { acknowledgedAt: { not: null } } }
+            : {}),
       };
       const [instances, futureTotal] = await Promise.all([
         this.prisma.taskInstance.findMany({

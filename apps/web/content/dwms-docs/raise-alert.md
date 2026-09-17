@@ -2,6 +2,8 @@
 
 Raise Alert records an abnormal situation that needs attention. The alert can be directed to a person, linked to a recently completed task, assigned to a department, or raised generally by an HOD or Management user.
 
+> **Quick start:** Describe what is wrong, choose how urgent it is, send it to the person or team best able to act, and select **Raise Alert**. An alert is for a problem that needs follow-up; it is not a replacement for an ordinary work instruction.
+
 ## 1. What Raise Alert does
 
 The feature records what happened, its operational severity, who raised it, and the person, task, or department responsible for follow-up. Every manually raised alert starts as an **Abnormal Situation** with **Open** status.
@@ -60,6 +62,13 @@ Severity describes operational impact, not how urgently the creator personally w
 Low severity is not available for DWMS alerts. Choose the level that best reflects the observed effect and explain the evidence in the description.
 
 ## 6. Choose who receives the alert
+
+Use this simple rule when choosing a target:
+
+- **One known employee should act:** Choose To Person.
+- **The problem was found while checking completed work:** Choose Task.
+- **A team owns the area, but the exact person is not known:** Choose Department.
+- **The issue affects the wider organization:** Choose General.
 
 ### General
 

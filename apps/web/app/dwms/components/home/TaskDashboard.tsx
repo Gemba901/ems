@@ -143,6 +143,10 @@ export default function TaskDashboard() {
       const scope =
         activeTab === "OVERDUE"
           ? "overdue"
+          : activeTab === "NOT_ACKNOWLEDGED"
+            ? "not_acknowledged"
+            : activeTab === "PENDING"
+              ? "pending"
           : activeTab === "APPROVAL_PENDING"
             ? "approval_pending"
             : activeTab === "COMPLETED"
@@ -429,8 +433,8 @@ export default function TaskDashboard() {
   ]);
 
   return (
-    <div className="relative pb-12">
-      <main className="mx-auto max-w-none px-4 pb-8 sm:px-6 lg:px-8 flex flex-col gap-6 pt-0">
+    <div className="relative">
+      <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-none flex-col gap-6 px-4 pb-8 pt-0 sm:px-6 lg:px-8">
         {/* Sticky Header Zone */}
         <div className="flex flex-col gap-4 pt-8 pb-4">
           {/* Title Zone & Filter Pills */}
@@ -657,8 +661,8 @@ export default function TaskDashboard() {
             })()}
           </div>
         )}
-        {!loading && taskPagination.pages > 1 && (
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+        {!loading && filteredTasks.length > 0 && taskPagination.pages > 1 && (
+          <div className="mt-auto flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
             <span>
               Page {taskPagination.page} of {taskPagination.pages} ·{" "}
               {taskPagination.total} tasks

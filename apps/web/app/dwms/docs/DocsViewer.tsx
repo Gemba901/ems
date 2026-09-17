@@ -99,7 +99,7 @@ const markdownComponents: Components = {
 export default function DocsViewer({ chapters, activeChapter, markdown }: { chapters: DocsChapter[]; activeChapter: DocsChapter; markdown: string }) {
   return (
     <ProtectedRoute>
-      <div className="mx-auto flex w-full max-w-[1600px] items-start gap-6 px-3 py-4 sm:px-6 sm:py-6 lg:gap-8 lg:px-8 lg:py-8">
+      <div className="mx-auto flex h-[calc(100vh-3.5rem)] w-full max-w-[1600px] items-start gap-6 overflow-hidden px-3 py-4 sm:px-6 sm:py-6 lg:gap-8 lg:px-8 lg:py-8">
         <aside className="sticky top-20 hidden h-[calc(100vh-6rem)] w-72 shrink-0 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block">
           <div className="mb-4 flex items-center gap-2 px-2 text-sm font-bold text-slate-900"><BookOpenText className="h-5 w-5 text-indigo-600" aria-hidden="true" />DWMS documentation</div>
           <Link href="/dwms" className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to Daily Work</Link>
@@ -111,7 +111,7 @@ export default function DocsViewer({ chapters, activeChapter, markdown }: { chap
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1">
+        <main className="h-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain">
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:mb-6 sm:p-4 lg:hidden">
             <Link href="/dwms" className="mb-3 flex items-center gap-2 text-sm font-semibold text-indigo-700"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to Daily Work</Link>
             <label htmlFor="docs-chapter" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">Documentation chapter</label>

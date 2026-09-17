@@ -2,6 +2,8 @@
 
 Approvals combines task-completion reviews and alert-closure reviews assigned to the signed-in approver.
 
+> **Your decision matters:** Approve only when the submitted result is acceptable. Reject when more work or clearer evidence is needed, and write a reason that tells the employee exactly what to correct.
+
 ## 1. What appears here
 
 - A task appears after its owner submits Done and DWMS resolves you as its approver.
@@ -24,6 +26,17 @@ Each count includes both tasks and alerts.
 Search by title, employee, assigner, or alert details. Filter by **Critical**, **High**, or **Medium**; for tasks this is priority, and for alerts it is severity.
 
 Task cards show the submitter, assigner, due date, description, and completion attachment. Alert cards show the closure requester, alert raiser, request date, description, and severity. Select a card to open its complete history before deciding.
+
+### A simple review checklist
+
+1. Read the original instruction or alert description.
+2. Check the completion note or corrective action.
+3. Open the attachment when evidence was supplied or required.
+4. Read recent history and comments for important context.
+5. Approve if the expected result is met; otherwise reject with a specific next action.
+
+- **Helpful rejection:** “Please attach the signed inspection sheet for all three machines.”
+- **Unhelpful rejection:** “Not correct.”
 
 ## 4. Approve a task completion
 

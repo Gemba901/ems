@@ -76,6 +76,42 @@ describe('DWMS task creation', () => {
     ).rejects.toThrow('Invalid date');
   });
 
+  it.each([
+    ['not_acknowledged', { acknowledgedAt: null }],
+    ['pending', { acknowledgedAt: { not: null } }],
+  ])(
+    'paginates the %s task subset at the database query',
+    async (scope, acknowledgementFilter) => {
+      prisma.taskInstance = {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      };
+
+      const result = await service.getMyDwmsTasks(
+        user,
+        undefined,
+        undefined,
+        scope,
+        '1',
+        '20',
+      );
+
+      expect(prisma.taskInstance.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            task: acknowledgementFilter,
+          }),
+          skip: 0,
+          take: 20,
+        }),
+      );
+      expect(prisma.taskInstance.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({ task: acknowledgementFilter }),
+      });
+      expect(result.pagination).toMatchObject({ total: 0, pages: 0 });
+    },
+  );
+
   it('allows authorized system generation without applying the importing user reportee scope', async () => {
     service.listReportees.mockResolvedValue({ users: [] });
     const result = await service.createAssignedTask(user, dto, {
@@ -252,13 +288,11 @@ describe('DWMS occurrence progress and approval', () => {
     };
     prisma = {
       employee: {
-        findFirst: jest
-          .fn()
-          .mockResolvedValue({
-            id: 'owner',
-            firstName: 'Task',
-            lastName: 'Owner',
-          }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'owner',
+          firstName: 'Task',
+          lastName: 'Owner',
+        }),
       },
       taskInstance: {
         findFirst: jest.fn().mockImplementation(async () => ({ ...instance })),

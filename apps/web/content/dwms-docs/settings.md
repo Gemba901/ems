@@ -2,6 +2,8 @@
 
 Settings controls DWMS approval candidates, alert and analytics visibility, acknowledgement escalation, automatic abnormalities, and escalation recipients for the current organization.
 
+> **Important:** Settings apply across the organization. If you are unsure, review the Summary tab and confirm the intended rule with the process owner before saving.
+
 ## 1. Who can use Settings
 
 Management, Admin, Super Admin, and HR users can open and save DWMS Settings. Other roles do not see Settings in the DWMS menu and receive a restricted page if they open the route directly.
@@ -16,6 +18,15 @@ Changes affect future routing and automated processing across the organization, 
 ![Edit Rules groups permission rules, acknowledgement windows, abnormality windows, and escalation settings.](../../public/dwms-docs/settings/01-edit-rules.png)
 
 Values are not active until the save request succeeds.
+
+### What each group changes
+
+- **Task approver rules:** Who appears when an assigner chooses an approver.
+- **Employee alert view:** Which alerts a regular employee can browse.
+- **Employee analytics view:** Which performance information a regular employee can access.
+- **Acknowledgement windows:** How long an unacknowledged task waits before escalation.
+- **Abnormality windows:** How long an open alert waits before an abnormality is created.
+- **Escalation targets:** Who receives escalation notifications.
 
 ## 3. Task approver rules
 

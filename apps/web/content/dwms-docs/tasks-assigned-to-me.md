@@ -2,6 +2,8 @@
 
 Tasks assigned to me is the searchable workspace for every task occurrence you own, including current, overdue, approval-pending, and completed work.
 
+> **If you are new to DWMS:** Start with **Not Acknowledged**, acknowledge your new work, then use **Pending** for the work you need to complete. Use **Overdue** first whenever it has a count above zero.
+
 ## 1. Open the workspace
 
 In Daily Work Management, open the left menu and select **Tasks assigned to me**. Every signed-in DWMS user can open their own list.
@@ -37,6 +39,15 @@ Select **Acknowledge** on new work. Then use the status control to move forward 
 
 DWMS does not allow backward progress. Overdue and Approval Pending are system-managed states. A recurring task can be updated only inside its scheduled window, and a dependent activity cannot progress until its prerequisite occurrence is Done.
 
+### What the progress choices mean
+
+- **Pending:** You have acknowledged the task but have not started the work.
+- **In Progress:** You have started and the work is underway.
+- **Less Than 50:** Some work is complete, but less than half.
+- **Partly Done:** At least half is complete, but the result is not ready to submit.
+- **Done:** The work and any required evidence are ready for completion or approval.
+- **Not Applicable:** The task genuinely does not apply for this occurrence. Do not use this merely because the work is late.
+
 ## 6. Submit completion
 
 When you select Done:
@@ -51,6 +62,16 @@ Without an approver, the occurrence becomes Done immediately. With an approver, 
 ## 7. Task details and collaboration
 
 The detail page shows Task Information, dependencies, linked alerts, History, and Comments. Use it to confirm the exact scheduled date and due time, review who assigned and approves the work, open attached evidence, follow status events, and leave a comment.
+
+![Task details show the current progress, due time, owner, assigner, approver, and evidence requirement in one place.](../../public/dwms-docs/tasks-assigned-to-me/02-task-detail.png)
+
+Read this page from top to bottom:
+
+1. Check the status and progress bar to understand the current position.
+2. Read the title and instructions so you know the expected result.
+3. Check **Scheduled for** and **Due at**. The due time is the last safe time to submit.
+4. Check **Required document** before starting, so evidence is not forgotten.
+5. Read **History** when you need to know who changed the task and when.
 
 If an alert is linked to the occurrence, open it from the task details to follow the corrective-action workflow.
 

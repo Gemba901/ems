@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import TaskMiniCard from "./components/home/TaskMiniCard";
+import TaskCalendar from "./components/home/TaskCalendar";
 import TaskDateSeparator, {
   getDateSeparatorMeta,
 } from "./components/TaskDateSeparator";
@@ -16,22 +17,67 @@ import {
 } from "@/services/dwms.service";
 import { uploadImage } from "@/services/uploads.service";
 import { addDaysToDateKey } from "./utils/organizationDate";
-import { Minus, PlusCircle, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  CalendarDays,
+  Minus,
+  PlusCircle,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
-type HomeTaskView = "TODAY" | "WEEK" | "MONTH";
+type HomeTaskView = "TODAY" | "WEEK" | "MONTH" | "CALENDAR";
+
+const statusCompletion: Record<TaskStatus, number> = {
+  PENDING: 0,
+  IN_PROGRESS: 20,
+  DONE: 100,
+  APPROVAL_PENDING: 100,
+  PARTLY_DONE: 50,
+  LESS_THAN_50: 10,
+  NOT_APPLICABLE: 0,
+  OVERDUE: 0,
+};
+
+function calculateCompletionRate(tasks: TaskItem[]) {
+  const applicableTasks = tasks.filter(
+    (task) => task.status !== "NOT_APPLICABLE",
+  );
+  if (applicableTasks.length === 0) return null;
+
+  const completionTotal = applicableTasks.reduce(
+    (sum, task) => sum + statusCompletion[task.status],
+    0,
+  );
+  return Math.round(completionTotal / applicableTasks.length);
+}
 
 function getTaskWindow(view: HomeTaskView, start: string) {
+  if (view === "CALENDAR") {
+    const monthStart = `${start.slice(0, 7)}-01`;
+    const end = addMonthsToDateKey(monthStart, 1);
+    return { start: monthStart, end, days: 31 };
+  }
   const days = view === "TODAY" ? 1 : view === "WEEK" ? 7 : 30;
   const end = addDaysToDateKey(start, days) ?? start;
   return { start, end, days };
 }
 
 function getPreviousTaskWindow(view: HomeTaskView, currentStart: string) {
+  if (view === "CALENDAR") {
+    const start = addMonthsToDateKey(`${currentStart.slice(0, 7)}-01`, -1);
+    return { start, end: addMonthsToDateKey(start, 1) };
+  }
   const current = getTaskWindow(view, currentStart);
   const daysAgo = view === "TODAY" ? 7 : current.days;
   const start = addDaysToDateKey(current.start, -daysAgo) ?? current.start;
   const end = addDaysToDateKey(start, current.days) ?? start;
   return { start, end };
+}
+
+function addMonthsToDateKey(dateKey: string, months: number) {
+  const date = new Date(`${dateKey.slice(0, 7)}-01T00:00:00.000Z`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
 }
 
 function isTaskScheduledInWindow(task: TaskItem, start: string, end: string) {
@@ -40,12 +86,38 @@ function isTaskScheduledInWindow(task: TaskItem, start: string, end: string) {
   return scheduledDateKey >= start && scheduledDateKey < end;
 }
 
+function isTaskIncludedInView(task: TaskItem, view: HomeTaskView) {
+  if (view === "WEEK") {
+    return task.isAdhoc || task.frequency === "WEEKLY";
+  }
+  if (view === "MONTH") {
+    return task.isAdhoc || task.frequency === "MONTHLY";
+  }
+  return true;
+}
+
 function isHomeVisibleTask(task: TaskItem) {
-  return !task.isOverdue && task.status !== "OVERDUE" && task.status !== "DONE" && task.status !== "NOT_APPLICABLE";
+  return (
+    !task.isOverdue &&
+    task.status !== "OVERDUE" &&
+    task.status !== "DONE" &&
+    task.status !== "NOT_APPLICABLE"
+  );
 }
 
 function getHomeTaskDateValue(task: TaskItem) {
   return task.scheduledFor ?? task.dueAt;
+}
+
+function formatCalendarSelection(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 }
 export default function HomePage() {
   return (
@@ -61,6 +133,11 @@ function HomeContent() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [previousTasks, setPreviousTasks] = useState<TaskItem[]>([]);
   const [taskView, setTaskView] = useState<HomeTaskView>("TODAY");
+  const [organizationDate, setOrganizationDate] = useState<string | null>(null);
+  const [calendarMonthStart, setCalendarMonthStart] = useState<string | null>(null);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<
+    string | null
+  >(null);
   const [activeAlertsCount, setActiveAlertsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -81,12 +158,19 @@ function HomeContent() {
       setError(null);
       try {
         const token = useAuthStore.getState().accessToken ?? "";
+        const requestedDate =
+          view === "CALENDAR" ? (calendarMonthStart ?? undefined) : undefined;
         const [taskResponse, alertsRes] = await Promise.all([
-          DwmsService.getTodayTasks(token, undefined, "scheduled"),
+          DwmsService.getTodayTasks(token, requestedDate, "scheduled"),
           DwmsService.getOpenAlertCount(token),
         ]);
         if (!taskResponse?.date) {
           throw new Error("The server did not provide the organization date");
+        }
+        setOrganizationDate((current) => current ?? taskResponse.date!);
+        if (view === "CALENDAR" && !calendarMonthStart) {
+          setCalendarMonthStart(`${taskResponse.date.slice(0, 7)}-01`);
+          setSelectedCalendarDate(taskResponse.date);
         }
         const { start, end } = getTaskWindow(view, taskResponse.date);
         const previousWindow = getPreviousTaskWindow(view, taskResponse.date);
@@ -99,7 +183,10 @@ function HomeContent() {
         const previousByInstanceId = new Map<string, TaskItem>();
 
         (taskResponse?.tasks ?? []).forEach((task) => {
-          if (isTaskScheduledInWindow(task, start, end)) {
+          if (
+            isTaskScheduledInWindow(task, start, end) &&
+            isTaskIncludedInView(task, view)
+          ) {
             byInstanceId.set(task.instanceId, task);
           }
         });
@@ -110,7 +197,7 @@ function HomeContent() {
               task,
               previousWindow.start,
               previousWindow.end,
-            )
+            ) && isTaskIncludedInView(task, view)
           ) {
             previousByInstanceId.set(task.instanceId, task);
           }
@@ -125,7 +212,7 @@ function HomeContent() {
         setLoading(false);
       }
     },
-    [taskView],
+    [calendarMonthStart, taskView],
   );
 
   useEffect(() => {
@@ -155,29 +242,31 @@ function HomeContent() {
     const total = applicableTasks.length;
     const done = applicableTasks.filter((t) => t.status === "DONE").length;
     const remaining = total - done;
-    const productivity = total > 0 ? Math.round((done / total) * 100) : 100;
-    const previousTotal = previousTasks.filter(
-      (task) => task.status !== "NOT_APPLICABLE",
-    ).length;
-    const previousDone = previousTasks.filter(
-      (task) => task.status === "DONE",
-    ).length;
-    const previousProductivity =
-      previousTotal > 0
-        ? Math.round((previousDone / previousTotal) * 100)
-        : null;
+    const productivity = calculateCompletionRate(applicableTasks);
+    const previousProductivity = calculateCompletionRate(previousTasks);
     const productivityChange =
-      total === 0 || previousProductivity === null
+      productivity === null || previousProductivity === null
         ? null
         : productivity - previousProductivity;
 
     return { total, done, remaining, productivity, productivityChange };
   }, [previousTasks, tasks]);
 
+  const selectedCalendarTasks = useMemo(() => {
+    if (!selectedCalendarDate) return [];
+    return tasks.filter(
+      (task) => task.scheduledFor?.slice(0, 10) === selectedCalendarDate,
+    );
+  }, [selectedCalendarDate, tasks]);
+
   const productivityTrend = useMemo(() => {
     const change = stats.productivityChange;
     const comparisonLabel =
-      taskView === "MONTH" ? "vs previous 30 days" : "vs last week";
+      taskView === "CALENDAR"
+        ? "vs previous month"
+        : taskView === "MONTH"
+          ? "vs previous 30 days"
+          : "vs last week";
 
     if (change === null) {
       return {
@@ -207,16 +296,39 @@ function HomeContent() {
     };
   }, [stats.productivityChange, taskView]);
 
-  const statusCompletion: Record<TaskStatus, number> = {
-    PENDING: 0,
-    IN_PROGRESS: 20,
-    DONE: 100,
-    APPROVAL_PENDING: 100,
-    PARTLY_DONE: 50,
-    LESS_THAN_50: 10,
-    NOT_APPLICABLE: 0,
-    OVERDUE: 0,
-  };
+  function handleTaskViewChange(view: HomeTaskView) {
+    if (view === "CALENDAR") {
+      const todayKey = organizationDate ?? new Date().toISOString().slice(0, 10);
+      setCalendarMonthStart(`${todayKey.slice(0, 7)}-01`);
+      setSelectedCalendarDate(todayKey);
+    }
+    setTaskView(view);
+  }
+
+  function moveCalendarMonth(months: number) {
+    setCalendarMonthStart((current) =>
+      addMonthsToDateKey(
+        current ??
+          `${(organizationDate ?? new Date().toISOString()).slice(0, 7)}-01`,
+        months,
+      ),
+    );
+    setSelectedCalendarDate(null);
+  }
+
+  function showCurrentCalendarMonth() {
+    const todayKey = organizationDate ?? new Date().toISOString().slice(0, 10);
+    setCalendarMonthStart(`${todayKey.slice(0, 7)}-01`);
+    setSelectedCalendarDate(todayKey);
+  }
+
+  function handleCalendarDateSelect(dateKey: string) {
+    const selectedMonthStart = `${dateKey.slice(0, 7)}-01`;
+    if (selectedMonthStart !== calendarMonthStart) {
+      setCalendarMonthStart(selectedMonthStart);
+    }
+    setSelectedCalendarDate(dateKey);
+  }
 
   async function handleStatusChange(
     instanceId: string,
@@ -337,7 +449,7 @@ function HomeContent() {
           },
           {
             label: "Completion rate",
-            value: stats.total ? `${stats.productivity}%` : "—",
+            value: stats.productivity === null ? "—" : `${stats.productivity}%`,
             detail: productivityTrend.label,
           },
         ].map((card) => (
@@ -358,16 +470,41 @@ function HomeContent() {
 
       {/* Tasks Section */}
       <section className="min-w-0">
-        <div className="flex flex-col gap-3 border-b border-border-app pb-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <h2 className="text-lg font-bold tracking-tight text-text-app">
-              {taskView === "TODAY"
-                ? "Today's tasks"
-                : taskView === "WEEK"
-                  ? "Week's tasks"
-                  : "Monthly tasks"}
-            </h2>
-            <div className="flex rounded-full border border-slate-200 bg-white p-1">
+        <div className="border-b border-border-app pb-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-text-app">
+                My task schedule
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Choose a focused list or explore every task by date.
+              </p>
+            </div>
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+              <button
+                type="button"
+                onClick={() => router.push("/dwms/actions/new?mode=ALERT")}
+                className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-4 py-2 text-xs font-bold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 sm:w-auto"
+              >
+                <span>Raise Alert</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/dwms/actions/new?mode=TASK")}
+                className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-transparent bg-[#52618a] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174] sm:w-auto"
+              >
+                <PlusCircle className="h-4 w-4" />
+                <span>Assign a Task</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div
+              role="tablist"
+              aria-label="Task time range"
+              className="flex w-full rounded-full border border-slate-200 bg-white p-1 shadow-sm sm:w-auto"
+            >
               {[
                 { key: "TODAY", label: "Today" },
                 { key: "WEEK", label: "Week" },
@@ -378,30 +515,38 @@ function HomeContent() {
                   <button
                     key={view.key}
                     type="button"
-                    onClick={() => setTaskView(view.key as HomeTaskView)}
-                    className={`h-8 rounded-full px-3 text-xs font-semibold transition ${active ? "bg-[#52618a] text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() =>
+                      handleTaskViewChange(view.key as HomeTaskView)
+                    }
+                    className={`h-9 flex-1 rounded-full px-5 text-xs font-bold transition sm:flex-none ${active ? "bg-[#52618a] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}
                   >
                     {view.label}
                   </button>
                 );
               })}
             </div>
-          </div>
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+
             <button
               type="button"
-              onClick={() => router.push("/dwms/actions/new?mode=ALERT")}
-              className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-4 py-2 text-xs font-bold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 sm:w-auto"
+              onClick={() => handleTaskViewChange("CALENDAR")}
+              aria-pressed={taskView === "CALENDAR"}
+              className={`group flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 text-left transition sm:w-auto sm:min-w-52 ${taskView === "CALENDAR" ? "border-[#52618a] bg-[#52618a] text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-[#52618a]/50 hover:bg-slate-50"}`}
             >
-              <span>Raise Alert</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push("/dwms/actions/new?mode=TASK")}
-              className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-transparent bg-[#52618a] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174] sm:w-auto"
-            >
-              <PlusCircle className="h-4 w-4" />
-              <span>Assign a Task</span>
+              <span
+                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${taskView === "CALENDAR" ? "bg-white/15 text-white" : "bg-[#52618a]/10 text-[#52618a]"}`}
+              >
+                <CalendarDays className="h-4 w-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-bold">Calendar view</span>
+                <span
+                  className={`mt-0.5 block text-[10px] ${taskView === "CALENDAR" ? "text-white/75" : "text-slate-500"}`}
+                >
+                  Explore every task by date
+                </span>
+              </span>
             </button>
           </div>
         </div>
@@ -410,13 +555,65 @@ function HomeContent() {
           <div className="rounded-2xl mt-2 border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app">
             Loading tasks...
           </div>
+        ) : taskView === "CALENDAR" && calendarMonthStart ? (
+          <div className="mt-3 space-y-4">
+            <TaskCalendar
+              tasks={tasks}
+              monthStart={calendarMonthStart}
+              todayKey={organizationDate ?? ""}
+              selectedDate={selectedCalendarDate}
+              onSelectDate={handleCalendarDateSelect}
+              onOpenTask={(task) =>
+                router.push(`/dwms/tasks/${task.instanceId}`)
+              }
+              onPreviousMonth={() => moveCalendarMonth(-1)}
+              onNextMonth={() => moveCalendarMonth(1)}
+              onToday={showCurrentCalendarMonth}
+            />
+
+            {selectedCalendarDate && (
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-bold text-slate-800">
+                    {formatCalendarSelection(selectedCalendarDate)}
+                  </h3>
+                  <span className="text-xs font-medium text-slate-500">
+                    {selectedCalendarTasks.length}{" "}
+                    {selectedCalendarTasks.length === 1 ? "task" : "tasks"}
+                  </span>
+                </div>
+                {selectedCalendarTasks.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-white py-8 text-center text-sm italic text-slate-500">
+                    No tasks scheduled for this date.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                    {selectedCalendarTasks.map((task) => (
+                      <TaskMiniCard
+                        key={task.instanceId}
+                        task={task}
+                        onClick={() =>
+                          router.push(`/dwms/tasks/${task.instanceId}`)
+                        }
+                        onStatusChange={handleStatusChange}
+                        onAcknowledgement={handleAcknowledgement}
+                        saving={
+                          savingId === task.instanceId || savingId === task.taskId
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         ) : visibleTasks.length === 0 ? (
           <div className="rounded-2xl mt-2 border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app italic">
             {taskView === "TODAY"
               ? "No tasks due today."
               : taskView === "WEEK"
-                ? "No tasks due this week."
-                : "No tasks due this month."}
+                ? "No assigned or weekly tasks due this week."
+                : "No assigned or monthly tasks due this month."}
           </div>
         ) : (
           <div className="mt-2 grid grid-cols-1 gap-3 xl:grid-cols-2">

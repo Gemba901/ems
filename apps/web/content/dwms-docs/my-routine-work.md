@@ -12,7 +12,7 @@ Use **Raise Alert** to report an abnormal situation or **Assign a Task** to crea
 
 ## 2. Read the summary
 
-The summary cards describe the tasks in the selected Today, Week, or Month view.
+The summary cards describe the tasks in the selected Today, Week, Month, or Calendar view.
 
 - **Completed:** Completed applicable tasks compared with all applicable tasks. Not Applicable work is excluded.
 - **Awaiting approval:** Tasks submitted as Done that still need an approver's decision.
@@ -22,10 +22,22 @@ The summary cards describe the tasks in the selected Today, Week, or Month view.
 ## 3. Change the time view
 
 - **Today:** Work scheduled for the organization's current date.
-- **Week:** Work scheduled from the start of the current week up to, but not including, the next week.
-- **Month:** Work scheduled from the start of the current month up to, but not including, the next month.
+- **Week:** Assigned/ad-hoc tasks and weekly-frequency work scheduled in the seven-day view.
+- **Month:** Assigned/ad-hoc tasks and monthly-frequency work scheduled in the 30-day view.
+- **Calendar:** Explore all scheduled tasks, regardless of frequency, on a monthly calendar. Use the arrow controls to move between months, select a date to see its full task cards, or select a task in the calendar to open its details. **Today** returns to the organization's current month and date.
 
 Tasks are grouped by scheduled date in the Week and Month views. Dates and deadlines use the organization's configured time zone rather than the device's local date.
+
+![Calendar view places scheduled work on its date and shows the selected day's full task list below the calendar.](../../public/dwms-docs/my-routine-work/02-calendar-view.png)
+
+### Which view should I use?
+
+- **Finish the work due now:** Choose Today.
+- **Plan the next few working days:** Choose Week.
+- **Look ahead at regular work:** Choose Month.
+- **Find work on a particular date:** Choose Calendar view.
+
+**Example:** If you will be on leave next Monday, open Calendar view, select Monday, and check which tasks need to be completed or handed over before you leave.
 
 ## 4. Understand task cards
 

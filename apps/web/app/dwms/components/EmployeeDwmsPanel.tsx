@@ -1,11 +1,13 @@
 "use client";
 
-import { type ElementType } from "react";
+import { type ElementType, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
   Bell,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Loader2,
 } from "lucide-react";
@@ -13,6 +15,7 @@ import {
   DwmsService,
   type EmployeeActivityAssignmentStatus,
   type DwmsAlertItem,
+  type DwmsPaginationMeta,
   type DwmsTaskItem,
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
@@ -27,11 +30,13 @@ type EmployeeDwmsPanelProps = {
 
 function formatDate(iso: string | null | undefined, timeZone?: string | null) {
   if (!iso) return "-";
-  return formatOrganizationDate(iso, timeZone, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }) ?? "-";
+  return (
+    formatOrganizationDate(iso, timeZone, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }) ?? "-"
+  );
 }
 
 function CardHeader({
@@ -59,7 +64,60 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   return <div className="p-4 text-sm text-slate-500 sm:p-5">{children}</div>;
 }
 
-function TaskList({ tasks, timeZone }: { tasks?: DwmsTaskItem[]; timeZone?: string | null }) {
+function PaginationControls({
+  pagination,
+  onPageChange,
+}: {
+  pagination?: DwmsPaginationMeta;
+  onPageChange: (page: number) => void;
+}) {
+  if (!pagination || pagination.totalItems === 0) return null;
+
+  const firstItem = (pagination.page - 1) * pagination.pageSize + 1;
+  const lastItem = Math.min(
+    pagination.page * pagination.pageSize,
+    pagination.totalItems,
+  );
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
+      <p className="text-xs text-slate-500">
+        {firstItem}-{lastItem} of {pagination.totalItems}
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Previous page"
+          disabled={pagination.page <= 1}
+          onClick={() => onPageChange(pagination.page - 1)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="min-w-20 text-center text-xs font-semibold text-slate-600">
+          Page {pagination.page} of {pagination.totalPages}
+        </span>
+        <button
+          type="button"
+          aria-label="Next page"
+          disabled={pagination.page >= pagination.totalPages}
+          onClick={() => onPageChange(pagination.page + 1)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TaskList({
+  tasks,
+  timeZone,
+}: {
+  tasks?: DwmsTaskItem[];
+  timeZone?: string | null;
+}) {
   return (
     <div className="divide-y divide-slate-100">
       {tasks?.length ? (
@@ -71,7 +129,12 @@ function TaskList({ tasks, timeZone }: { tasks?: DwmsTaskItem[]; timeZone?: stri
                   {task.title}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Due {formatDate(task.dueAt, task.organizationTimeZone || timeZone)} - {task.frequency}
+                  Due{" "}
+                  {formatDate(
+                    task.dueAt,
+                    task.organizationTimeZone || timeZone,
+                  )}{" "}
+                  - {task.frequency}
                 </p>
               </div>
               <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
@@ -139,19 +202,41 @@ export default function EmployeeDwmsPanel({
   canManageActivities,
 }: EmployeeDwmsPanelProps) {
   const queryClient = useQueryClient();
+  const [pages, setPages] = useState({
+    currentTasks: 1,
+    currentAlerts: 1,
+    abnormalities: 1,
+    raisedAlerts: 1,
+    activities: 1,
+  });
   const organizationTimeZone = useAuthStore(
     (state) => state.user?.organizationTimeZone,
   );
 
   const { data: dwmsProfile, isLoading: dwmsProfileLoading } = useQuery({
-    queryKey: ["dwms-employee-profile", employeeId],
-    queryFn: () => DwmsService.getEmployeeDwmsProfile(accessToken, employeeId),
+    queryKey: [
+      "dwms-employee-profile",
+      employeeId,
+      pages.currentTasks,
+      pages.currentAlerts,
+      pages.abnormalities,
+      pages.raisedAlerts,
+    ],
+    queryFn: () =>
+      DwmsService.getEmployeeDwmsProfile(accessToken, employeeId, {
+        taskPage: pages.currentTasks,
+        currentAlertPage: pages.currentAlerts,
+        abnormalityPage: pages.abnormalities,
+        raisedAlertPage: pages.raisedAlerts,
+      }),
+    placeholderData: (previousData) => previousData,
     enabled: !!accessToken && !!employeeId,
   });
 
   const { data: roleActivities, isLoading: roleActivitiesLoading } = useQuery({
     queryKey: ["dwms-employee-role-activities", employeeId, jobTitle],
-    queryFn: () => DwmsService.getEmployeeRoleActivities(accessToken, employeeId),
+    queryFn: () =>
+      DwmsService.getEmployeeRoleActivities(accessToken, employeeId),
     enabled: !!accessToken && !!employeeId && !!jobTitle,
   });
 
@@ -185,6 +270,21 @@ export default function EmployeeDwmsPanel({
   const activeActivityCount =
     roleActivities?.activities?.filter((item) => item.status === "ACTIVE")
       .length ?? 0;
+  const activityPageSize = 5;
+  const activityItems = roleActivities?.activities ?? [];
+  const activityPagination: DwmsPaginationMeta = {
+    page: pages.activities,
+    pageSize: activityPageSize,
+    totalItems: activityItems.length,
+    totalPages: Math.max(1, Math.ceil(activityItems.length / activityPageSize)),
+  };
+  const paginatedActivities = activityItems.slice(
+    (pages.activities - 1) * activityPageSize,
+    pages.activities * activityPageSize,
+  );
+  const changePage = (section: keyof typeof pages, page: number) => {
+    setPages((current) => ({ ...current, [section]: page }));
+  };
 
   return (
     <div className="space-y-5">
@@ -233,7 +333,14 @@ export default function EmployeeDwmsPanel({
                 iconColor="text-indigo-500"
                 iconBg="bg-indigo-50"
               />
-              <TaskList tasks={dwmsProfile?.currentTasks} timeZone={organizationTimeZone} />
+              <TaskList
+                tasks={dwmsProfile?.currentTasks}
+                timeZone={organizationTimeZone}
+              />
+              <PaginationControls
+                pagination={dwmsProfile?.pagination?.currentTasks}
+                onPageChange={(page) => changePage("currentTasks", page)}
+              />
             </div>
 
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
@@ -251,6 +358,10 @@ export default function EmployeeDwmsPanel({
                   `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
                 }
               />
+              <PaginationControls
+                pagination={dwmsProfile?.pagination?.currentAlerts}
+                onPageChange={(page) => changePage("currentAlerts", page)}
+              />
             </div>
 
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
@@ -267,6 +378,10 @@ export default function EmployeeDwmsPanel({
                 meta={(alert) =>
                   `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
                 }
+              />
+              <PaginationControls
+                pagination={dwmsProfile?.pagination?.abnormalities}
+                onPageChange={(page) => changePage("abnormalities", page)}
               />
             </div>
 
@@ -288,6 +403,10 @@ export default function EmployeeDwmsPanel({
                     "General"
                   } - ${formatDate(alert.createdAt, organizationTimeZone)}`
                 }
+              />
+              <PaginationControls
+                pagination={dwmsProfile?.pagination?.raisedAlerts}
+                onPageChange={(page) => changePage("raisedAlerts", page)}
               />
             </div>
           </div>
@@ -333,7 +452,7 @@ export default function EmployeeDwmsPanel({
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
-                  {roleActivities.activities.map(({ activity, status }) => {
+                  {paginatedActivities.map(({ activity, status }) => {
                     const nextStatus: EmployeeActivityAssignmentStatus =
                       status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
                     const isUpdating =
@@ -397,6 +516,10 @@ export default function EmployeeDwmsPanel({
                   })}
                 </div>
               )}
+              <PaginationControls
+                pagination={activityPagination}
+                onPageChange={(page) => changePage("activities", page)}
+              />
             </div>
           </div>
         </>

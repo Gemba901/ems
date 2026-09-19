@@ -2,7 +2,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  LoaderCircle,
+  UserRoundX,
+} from "lucide-react";
 import {
   DwmsService,
   getDwmsErrorMessage,
@@ -154,6 +160,7 @@ export default function CreateTaskAction() {
   const [description, setDescription] = useState("");
   const [assignedToId, setAssignedToId] = useState("");
   const [users, setUsers] = useState<DwmsEmployeeOption[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
   const [approverCandidates, setApproverCandidates] = useState<
     DwmsEmployeeOption[]
   >([]);
@@ -268,6 +275,7 @@ export default function CreateTaskAction() {
     let mounted = true;
 
     (async () => {
+      setLoadingUsers(true);
       try {
         if (!accessToken) {
           if (mounted) setUsers([]);
@@ -289,6 +297,8 @@ export default function CreateTaskAction() {
               "Unable to load team members. Please reload and try again.",
             ),
           );
+      } finally {
+        if (mounted) setLoadingUsers(false);
       }
     })();
 
@@ -573,6 +583,55 @@ export default function CreateTaskAction() {
       submittingRef.current = false;
       setLoading(false);
     }
+  }
+
+  if (loadingUsers) {
+    return (
+      <section
+        aria-live="polite"
+        aria-label="Loading task assignment options"
+        className="flex min-h-72 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-12 shadow-sm"
+      >
+        <div className="flex flex-col items-center text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+            <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+          </span>
+          <p className="mt-4 text-sm font-semibold text-slate-700">
+            Checking available team members
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            This should only take a moment.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  if (employeeOptions.length === 0) {
+    return (
+      <section
+        role="status"
+        className="relative flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm"
+      >
+        <div className="relative mx-auto max-w-md">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-indigo-600 shadow-sm">
+            <UserRoundX className="h-6 w-6" strokeWidth={1.7} aria-hidden="true" />
+          </span>
+          <h2 className="mt-5 text-xl font-bold tracking-tight text-slate-900">
+            No team members available
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            There is currently no one present who you can assign a task to.
+            When an employee is added to your reporting scope, they will appear
+            here automatically.
+          </p>
+          <div className="mx-auto mt-6 h-px w-16 bg-slate-200" />
+          <p className="mt-4 text-xs text-slate-500">
+            You can still use the other actions from the tabs above.
+          </p>
+        </div>
+      </section>
+    );
   }
 
   return (

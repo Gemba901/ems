@@ -267,8 +267,17 @@ export class DwmsController {
   getEmployeeDwmsProfile(
     @CurrentUser() user: UserPayload,
     @Param('employeeId') employeeId: string,
+    @Query('taskPage') taskPage?: string,
+    @Query('currentAlertPage') currentAlertPage?: string,
+    @Query('abnormalityPage') abnormalityPage?: string,
+    @Query('raisedAlertPage') raisedAlertPage?: string,
   ) {
-    return this.dwmsService.getEmployeeDwmsProfile(user, employeeId);
+    return this.dwmsService.getEmployeeDwmsProfile(user, employeeId, {
+      taskPage: Number(taskPage) || 1,
+      currentAlertPage: Number(currentAlertPage) || 1,
+      abnormalityPage: Number(abnormalityPage) || 1,
+      raisedAlertPage: Number(raisedAlertPage) || 1,
+    });
   }
   @Get('employees/:employeeId/activities')
   @TenantRequired()

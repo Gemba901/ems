@@ -10,6 +10,8 @@ Open **EMS**, choose an employee, and view the employee detail page. The DWMS se
 
 The selected employee must belong to the current organization.
 
+![Open the DWMS tab from an employee profile to see summary counts and current operational work.](../../public/dwms-docs/employee-dwms-details/01-dwms-summary.png)
+
 ## 2. Read the summary
 
 The summary counts current tasks, current alerts, abnormalities, raised alerts, applicable activities, and active activities. Counts describe the selected employee, not the viewer.
@@ -31,6 +33,8 @@ Completed and terminal historical work is not the focus of this panel; use Repor
 
 Current Alerts shows unresolved non-abnormality alerts for which the employee is responsible, either directly or through a linked task. Severity, status, and creation date help identify urgent items.
 
+![Current Alerts lists unresolved items with their severity, date, and status.](../../public/dwms-docs/employee-dwms-details/02-current-alerts.png)
+
 ## 5. Abnormalities
 
 Abnormalities shows open abnormality records involving the employee. These may have been created when a source alert exceeded its configured corrective-action window.
@@ -39,12 +43,16 @@ Abnormalities shows open abnormality records involving the employee. These may h
 
 Raised Alerts shows unresolved non-abnormality alerts opened by the employee. The entry identifies the person, task owner, or General target involved.
 
+![Raised Alerts appears directly above the employee's Applicable Activities section.](../../public/dwms-docs/employee-dwms-details/03-raised-alerts-and-applicable-activities.png)
+
 ## 7. Applicable Activities
 
 Applicable Activities is based on the employee's job title and active Activity master records. Each item shows activity name, code, frequency, and assignment state.
 
 - **Inactive:** The activity matches the job title but does not yet generate routine work for this employee.
 - **Active:** The activity is enabled for the employee and can generate scheduled task occurrences.
+
+![Applicable Activities lists the job-title activities, frequency, assignment state, and activation action.](../../public/dwms-docs/employee-dwms-details/04-applicable-activities.png)
 
 If the employee has no job title, update Master Data first. If no activity matches the job title, create or update the responsible designation in Activities.
 

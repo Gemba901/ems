@@ -33,6 +33,14 @@ Every signed-in employee who can enter DWMS can open the Task tab. The people av
 
 > Opening the form does not give permission to assign work to everyone. DWMS checks the selected employee again when the task is saved.
 
+### Employer view when no valid reportee exists
+
+If the employee opening the **Task** tab has no eligible person to assign work to, DWMS does not display the Assign Task form. Instead, the page shows a **No team members available** message explaining that nobody is currently available within the employee's reporting scope.
+
+![Employer view when no valid reportee exists: the Task tab displays a No team members available message instead of the Assign Task form.](../../public/dwms-docs/assign-task/12-no-valid-reportee.png)
+
+The other action tabs remain available. When a valid reportee is added to the employee's reporting structure, the Assign Task form appears automatically and the reportee becomes available in **Assign to**.
+
 ## 3. Where to click
 
 1. Open **Daily Work Management**.
@@ -174,7 +182,7 @@ The owner can read the instructions, acknowledge the assignment, update progress
 
 ## 12. Restrictions and messages
 
-- **No employees appear:** The creator may have no permitted reportees, or the employee list could not load.
+- **No team members available:** The creator has no eligible reportees, so the complete Assign Task form is replaced by an informational message.
 - **A date cannot be selected:** It is in the past, a non-working day, or a recognized holiday.
 - **Document Name is required:** Enter the expected file name or turn off the document requirement.
 - **Activity is unavailable:** Archived activities cannot create new tasks.

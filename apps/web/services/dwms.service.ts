@@ -223,6 +223,12 @@ export interface DwmsEmployeeRoleActivitiesResponse {
   count: number;
   activities: DwmsEmployeeRoleActivityItem[];
 }
+export interface DwmsPaginationMeta {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
 export interface DwmsEmployeeProfileResponse {
   employee?: {
     id: string;
@@ -239,6 +245,12 @@ export interface DwmsEmployeeProfileResponse {
     raisedAlerts: number;
     applicableActivities: number;
     activeActivities: number;
+  };
+  pagination?: {
+    currentTasks: DwmsPaginationMeta;
+    currentAlerts: DwmsPaginationMeta;
+    abnormalities: DwmsPaginationMeta;
+    raisedAlerts: DwmsPaginationMeta;
   };
   currentTasks?: DwmsTaskItem[];
   currentAlerts?: DwmsAlertItem[];
@@ -1293,13 +1305,30 @@ export const DwmsService = {
     );
   },
 
-
   async getEmployeeDwmsProfile(
     token: string,
     employeeId: string,
+    pages?: {
+      taskPage?: number;
+      currentAlertPage?: number;
+      abnormalityPage?: number;
+      raisedAlertPage?: number;
+    },
   ): Promise<DwmsEmployeeProfileResponse> {
+    const query = new URLSearchParams();
+    if (pages?.taskPage) query.set("taskPage", String(pages.taskPage));
+    if (pages?.currentAlertPage) {
+      query.set("currentAlertPage", String(pages.currentAlertPage));
+    }
+    if (pages?.abnormalityPage) {
+      query.set("abnormalityPage", String(pages.abnormalityPage));
+    }
+    if (pages?.raisedAlertPage) {
+      query.set("raisedAlertPage", String(pages.raisedAlertPage));
+    }
+    const queryString = query.toString();
     return getJson(
-      `/dwms/employees/${encodeURIComponent(employeeId)}/profile`,
+      `/dwms/employees/${encodeURIComponent(employeeId)}/profile${queryString ? `?${queryString}` : ""}`,
       token,
     );
   },

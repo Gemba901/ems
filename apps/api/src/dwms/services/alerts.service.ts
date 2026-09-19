@@ -643,7 +643,16 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     };
   }
 
-  async getEmployeeDwmsProfile(user: UserPayload, employeeId: string) {
+  async getEmployeeDwmsProfile(
+    user: UserPayload,
+    employeeId: string,
+    requestedPages: {
+      taskPage?: number;
+      currentAlertPage?: number;
+      abnormalityPage?: number;
+      raisedAlertPage?: number;
+    } = {},
+  ) {
     await this.getEmployee(user.userId, user.organizationId);
     if (!this.canUpdateDwmsPermissions(user.roleLevel)) {
       throw new ForbiddenException(
@@ -685,19 +694,60 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       },
     };
 
+    const pageSize = 5;
+    const normalizePage = (page?: number) =>
+      Number.isFinite(page) ? Math.max(1, Math.floor(page!)) : 1;
+    const pages = {
+      currentTasks: normalizePage(requestedPages.taskPage),
+      currentAlerts: normalizePage(requestedPages.currentAlertPage),
+      abnormalities: normalizePage(requestedPages.abnormalityPage),
+      raisedAlerts: normalizePage(requestedPages.raisedAlertPage),
+    };
+
+    const taskWhere = {
+      ownerId: employeeId,
+      task: { owner: { organizationId: user.organizationId } },
+      status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
+    };
+    const currentAlertWhere = {
+      organizationId: user.organizationId,
+      isAbnormality: false,
+      status: { not: AlertStatus.CLOSED },
+      OR: [
+        { againstUserId: employeeId },
+        { taskInstance: { ownerId: employeeId } },
+      ],
+    };
+    const abnormalityWhere = {
+      organizationId: user.organizationId,
+      isAbnormality: true,
+      status: { not: AlertStatus.CLOSED },
+      OR: [
+        { raisedById: employeeId },
+        { againstUserId: employeeId },
+        { taskInstance: { ownerId: employeeId } },
+      ],
+    };
+    const raisedAlertWhere = {
+      organizationId: user.organizationId,
+      raisedById: employeeId,
+      isAbnormality: false,
+      status: { not: AlertStatus.CLOSED },
+    };
+
     const [
       taskInstances,
+      currentTaskCount,
       currentAlerts,
+      currentAlertCount,
       abnormalities,
+      abnormalityCount,
       raisedAlerts,
+      raisedAlertCount,
       roleActivities,
     ] = await Promise.all([
       this.prisma.taskInstance.findMany({
-        where: {
-          ownerId: employeeId,
-          task: { owner: { organizationId: user.organizationId } },
-          status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
-        },
+        where: taskWhere,
         include: {
           task: {
             include: {
@@ -713,50 +763,43 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
           alerts: { orderBy: { createdAt: 'desc' } },
         },
         orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
-        take: 25,
+        skip: (pages.currentTasks - 1) * pageSize,
+        take: pageSize,
       }),
+      this.prisma.taskInstance.count({ where: taskWhere }),
       this.prisma.alert.findMany({
-        where: {
-          organizationId: user.organizationId,
-          isAbnormality: false,
-          status: { not: AlertStatus.CLOSED },
-          OR: [
-            { againstUserId: employeeId },
-            { taskInstance: { ownerId: employeeId } },
-          ],
-        },
+        where: currentAlertWhere,
         include: alertInclude,
         orderBy: { createdAt: 'desc' },
-        take: 25,
+        skip: (pages.currentAlerts - 1) * pageSize,
+        take: pageSize,
       }),
+      this.prisma.alert.count({ where: currentAlertWhere }),
       this.prisma.alert.findMany({
-        where: {
-          organizationId: user.organizationId,
-          isAbnormality: true,
-          status: { not: AlertStatus.CLOSED },
-          OR: [
-            { raisedById: employeeId },
-            { againstUserId: employeeId },
-            { taskInstance: { ownerId: employeeId } },
-          ],
-        },
+        where: abnormalityWhere,
         include: alertInclude,
         orderBy: { createdAt: 'desc' },
-        take: 25,
+        skip: (pages.abnormalities - 1) * pageSize,
+        take: pageSize,
       }),
+      this.prisma.alert.count({ where: abnormalityWhere }),
       this.prisma.alert.findMany({
-        where: {
-          organizationId: user.organizationId,
-          raisedById: employeeId,
-          isAbnormality: false,
-          status: { not: AlertStatus.CLOSED },
-        },
+        where: raisedAlertWhere,
         include: alertInclude,
         orderBy: { createdAt: 'desc' },
-        take: 25,
+        skip: (pages.raisedAlerts - 1) * pageSize,
+        take: pageSize,
       }),
+      this.prisma.alert.count({ where: raisedAlertWhere }),
       this.listEmployeeRoleActivities(user, employeeId),
     ]);
+
+    const pagination = (page: number, totalItems: number) => ({
+      page,
+      pageSize,
+      totalItems,
+      totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+    });
 
     return {
       employee: {
@@ -770,14 +813,20 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
           : null,
       },
       counts: {
-        currentTasks: taskInstances.length,
-        currentAlerts: currentAlerts.length,
-        abnormalities: abnormalities.length,
-        raisedAlerts: raisedAlerts.length,
+        currentTasks: currentTaskCount,
+        currentAlerts: currentAlertCount,
+        abnormalities: abnormalityCount,
+        raisedAlerts: raisedAlertCount,
         applicableActivities: roleActivities.count,
         activeActivities: roleActivities.activities.filter(
           (item: any) => item.status === 'ACTIVE',
         ).length,
+      },
+      pagination: {
+        currentTasks: pagination(pages.currentTasks, currentTaskCount),
+        currentAlerts: pagination(pages.currentAlerts, currentAlertCount),
+        abnormalities: pagination(pages.abnormalities, abnormalityCount),
+        raisedAlerts: pagination(pages.raisedAlerts, raisedAlertCount),
       },
       currentTasks: taskInstances.map((instance) =>
         this.serializeTaskInstance(instance.task, instance),

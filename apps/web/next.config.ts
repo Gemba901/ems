@@ -5,6 +5,12 @@ const nextConfig: NextConfig = {
   output: process.env.DOCKER_BUILD === "true" ? "standalone" : undefined,
   allowedDevOrigins: ["192.168.100.19", "10.36.90.18", "localhost", "*.localhost"],
   turbopack: {},
+  outputFileTracingIncludes: {
+    "/api/docs/dwms/*": [
+      "./content/dwms-docs/*.md",
+      "./content/dwms-docs-images/**/*.png",
+    ],
+  },
 };
 
 const pwaConfig = withPWA({

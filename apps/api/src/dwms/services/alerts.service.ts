@@ -131,7 +131,20 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       throw new BadRequestException('DWMS alerts cannot have low severity');
     }
 
-    // Validate every supplied relation, including fields irrelevant to targetType.
+    const targetType = dto.targetType ?? 'GENERAL';
+    const suppliedTargets = [
+      dto.taskInstanceId && 'TASK',
+      dto.againstUserId && 'PERSON',
+      dto.departmentId && 'DEPARTMENT',
+    ].filter(Boolean);
+    if (
+      !['GENERAL', 'TASK', 'PERSON', 'DEPARTMENT'].includes(targetType) ||
+      suppliedTargets.some((target) => target !== targetType)
+    ) {
+      throw new BadRequestException('Alert target fields must match targetType');
+    }
+
+    // Validate the supplied target relation within the organization.
     if (dto.departmentId && !await this.prisma.department.findFirst({ where: { id: dto.departmentId, organizationId: user.organizationId }, select: { id: true } })) {
       throw new NotFoundException('Department not found');
     }
@@ -139,8 +152,6 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     if (dto.taskInstanceId && !await this.prisma.taskInstance.findFirst({ where: { id: dto.taskInstanceId, owner: { organizationId: user.organizationId } }, select: { id: true } })) {
       throw new NotFoundException('Task instance not found');
     }
-    const targetType = dto.targetType ?? 'GENERAL';
-
     if (targetType === 'GENERAL') {
       if (role !== 'HOD' && role !== 'MANAGEMENT') {
         throw new ForbiddenException(
@@ -889,6 +900,14 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       throw new NotFoundException('Alert not found');
     }
 
+    if (alert.status === AlertStatus.CLOSED) {
+      throw new BadRequestException('Closed alerts cannot be changed');
+    }
+    const action = correctiveAction.trim();
+    if (!action) {
+      throw new BadRequestException('Corrective action is required');
+    }
+
     // Authorization check: Only target user, owner of target task, HOD, or Management can respond
     const role = this.getDwmsRole(user.roleLevel);
     const isMgmt = role === 'MANAGEMENT';
@@ -913,7 +932,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     const updated = await this.prisma.alert.update({
       where: { id: alertId },
       data: {
-        correctiveAction,
+        correctiveAction: action,
         status: AlertStatus.IN_PROGRESS,
       },
     });
@@ -1283,6 +1302,10 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       throw new NotFoundException('Alert not found');
     }
 
+    if (alert.status === AlertStatus.CLOSED) {
+      throw new BadRequestException('Alert is already closed');
+    }
+
     if (!this.canApproveAlertClosure(user, employee, alert)) {
       throw new ForbiddenException(
         'You are not authorized to close this alert',
@@ -1320,6 +1343,12 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
 
     if (!alert) {
       throw new NotFoundException('Alert not found');
+    }
+    if (!this.canApproveAlertClosure(user, employee, alert)) {
+      throw new ForbiddenException('You are not authorized to remind this alert owner');
+    }
+    if (alert.status === AlertStatus.CLOSED) {
+      throw new BadRequestException('Alert is already closed');
     }
 
     if (!alert.againstUserId) {
@@ -1387,8 +1416,15 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       throw new BadRequestException('Alert is not linked to a task instance');
     }
 
+    if (!this.canApproveAlertClosure(user, employee, alert)) {
+      throw new ForbiddenException('You are not authorized to reassign this task');
+    }
+    if (alert.status === AlertStatus.CLOSED) {
+      throw new BadRequestException('Alert is already closed');
+    }
+
     const taskInstance = await this.prisma.taskInstance.findUnique({
-      where: { id: alert.taskInstanceId },
+      where: { id: alert.taskInstanceId, owner: { organizationId: user.organizationId } },
       include: { task: true },
     });
 
@@ -1442,6 +1478,12 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
 
     if (!alert) {
       throw new NotFoundException('Alert not found');
+    }
+    if (!this.canApproveAlertClosure(user, employee, alert)) {
+      throw new ForbiddenException('You are not authorized to escalate this alert');
+    }
+    if (alert.status === AlertStatus.CLOSED) {
+      throw new BadRequestException('Alert is already closed');
     }
 
     const managerOfManagerId = employee.reportingManagerId;

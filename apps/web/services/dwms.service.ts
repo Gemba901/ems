@@ -790,6 +790,8 @@ export type DwmsTaskListScope =
   | "approval_pending"
   | "completed";
 
+export type DwmsTaskSource = "routine" | "assigned";
+
 export interface DwmsTaskSummaryResponse {
   tabs?: {
     all: number;
@@ -1381,15 +1383,16 @@ export const DwmsService = {
     scope?: DwmsTaskListScope,
     page?: number,
     limit?: number,
+    source?: DwmsTaskSource,
   ): Promise<DwmsTaskListResponse> {
     return getJson(
-      `/dwms/myDwms/tasks${buildQuery({ date, scope, page, limit })}`,
+      `/dwms/myDwms/tasks${buildQuery({ date, scope, page, limit, source })}`,
       token,
     );
   },
 
-  async getMyDwmsTaskSummary(token: string): Promise<DwmsTaskSummaryResponse> {
-    return getJson("/dwms/myDwms/tasks/summary", token);
+  async getMyDwmsTaskSummary(token: string, source?: DwmsTaskSource): Promise<DwmsTaskSummaryResponse> {
+    return getJson(`/dwms/myDwms/tasks/summary${buildQuery({ source })}`, token);
   },
 
   async getTaskInstanceDetail(

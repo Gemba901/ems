@@ -6,7 +6,7 @@ Tasks assigned by me lets an assigner follow acknowledgement, progress, deadline
 
 ## 1. Open the workspace
 
-In Daily Work Management, open the left menu and select **Tasks assigned by me**. After a new task is assigned successfully, DWMS also redirects the creator here.
+In Daily Work Management, open the left menu and select **Assigned Tasks**, then choose **Assigned by me** in the filter beside the status tabs. After a new task is assigned successfully, DWMS opens this view.
 
 ## 2. Use the tabs
 
@@ -18,7 +18,7 @@ In Daily Work Management, open the left menu and select **Tasks assigned by me**
 - **Pending:** Acknowledged occurrences that are not Done or Overdue. This can include work awaiting approval.
 - **Not Acknowledged:** Active work the owner has not acknowledged. Recurring items are grouped for a clearer list.
 
-Each tab displays a count. Completed work is ordered from newest to oldest; active work is ordered by its relevant scheduled or due date.
+The active-work tabs display counts. **Completed** has no count badge; completed work is ordered from newest to oldest, while active work is ordered by its relevant scheduled or due date.
 
 ## 3. Search and filter
 

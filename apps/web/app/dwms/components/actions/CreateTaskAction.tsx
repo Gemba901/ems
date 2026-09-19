@@ -577,7 +577,7 @@ export default function CreateTaskAction() {
       setFrequency("PLANNED");
       setMessage("Task assigned successfully!");
 
-      router.push("/dwms/assignedTasks");
+      router.push("/dwms/tasks?view=by-me");
     } catch (err: unknown) {
       setMessage(getDwmsErrorMessage(err, "Failed to create assigned task"));
       submittingRef.current = false;

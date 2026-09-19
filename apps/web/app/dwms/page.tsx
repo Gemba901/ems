@@ -161,7 +161,7 @@ function HomeContent() {
         const requestedDate =
           view === "CALENDAR" ? (calendarMonthStart ?? undefined) : undefined;
         const [taskResponse, alertsRes] = await Promise.all([
-          DwmsService.getTodayTasks(token, requestedDate, "scheduled"),
+          DwmsService.getTodayTasks(token, requestedDate, "scheduled", undefined, undefined, "routine"),
           DwmsService.getOpenAlertCount(token),
         ]);
         if (!taskResponse?.date) {
@@ -178,6 +178,9 @@ function HomeContent() {
           token,
           previousWindow.start,
           "scheduled",
+          undefined,
+          undefined,
+          "routine",
         );
         const byInstanceId = new Map<string, TaskItem>();
         const previousByInstanceId = new Map<string, TaskItem>();

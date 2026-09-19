@@ -77,6 +77,71 @@ describe('DWMS task creation', () => {
   });
 
   it.each([
+    ['routine', { activityId: { not: null }, assignedById: null }],
+    ['assigned', { assignedById: { not: null } }],
+  ])('filters %s tasks and summary counts by activity and assigner', async (source, taskFilter) => {
+    prisma.taskInstance = {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    };
+
+    await service.getMyDwmsTasks(
+      user, undefined, undefined, 'pending', '1', '20', source,
+    );
+    const expectedTaskFilter = source === 'routine'
+      ? taskFilter
+      : { ...taskFilter, acknowledgedAt: { not: null } };
+    expect(prisma.taskInstance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          task: expectedTaskFilter,
+        }),
+      }),
+    );
+    expect(prisma.taskInstance.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        task: expectedTaskFilter,
+      }),
+    });
+
+    prisma.taskInstance.count.mockClear();
+    await service.getMyDwmsTaskSummary(user, undefined, source);
+    expect(prisma.taskInstance.count).toHaveBeenCalledTimes(6);
+    for (const [{ where }] of prisma.taskInstance.count.mock.calls) {
+      expect(where.task).toEqual(expect.objectContaining(taskFilter));
+    }
+  });
+
+  it('limits routine Pending instances and its count to the current day, week, or month', async () => {
+    prisma.taskInstance = {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    };
+    const currentPeriods = [
+      { frequency: TaskFrequency.DAILY, scheduledFor: { gte: new Date('2026-09-19'), lt: new Date('2026-09-20') } },
+      { frequency: TaskFrequency.WEEKLY, scheduledFor: { gte: new Date('2026-09-14'), lt: new Date('2026-09-21') } },
+      { frequency: TaskFrequency.MONTHLY, scheduledFor: { gte: new Date('2026-09-01'), lt: new Date('2026-10-01') } },
+    ];
+
+    await service.getMyDwmsTasks(user, undefined, '2026-09-19', 'pending', '1', '20', 'routine');
+    expect(prisma.taskInstance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: currentPeriods,
+          task: { activityId: { not: null }, assignedById: null },
+        }),
+      }),
+    );
+    await service.getMyDwmsTaskSummary(user, '2026-09-19', 'routine');
+    expect(prisma.taskInstance.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        OR: currentPeriods,
+        task: { activityId: { not: null }, assignedById: null },
+      }),
+    });
+  });
+
+  it.each([
     ['not_acknowledged', { acknowledgedAt: null }],
     ['pending', { acknowledgedAt: { not: null } }],
   ])(
@@ -119,6 +184,7 @@ describe('DWMS task creation', () => {
       notifyAssignee: false,
     });
     expect(result.task.assignedById).toBeNull();
+    expect(result.task.assignedByName).toBeNull();
     expect(notifications.create).not.toHaveBeenCalled();
   });
 
@@ -153,6 +219,7 @@ describe('DWMS task creation', () => {
     expect(result.task).toMatchObject({
       title: 'Inspect equipment',
       ownerId: 'owner',
+      assignedById: 'creator',
       approvedById: 'approver',
       backupOwnerId: 'backup',
     });

@@ -173,8 +173,8 @@ In activity mode, the evidence rule and document name come from the activity. Th
 1. **Validation:** DWMS checks required fields, creator access, selected owner, date, priority, approver, recipient count, and evidence settings.
 2. **Task saved:** The creator is stored as Assigned By and the selected employee as Owner.
 3. **Occurrences created:** A one-time occurrence is created for its date. Recurring occurrences are generated according to the automatic schedule.
-4. **Owner notified:** The owner receives a **New Task Assigned** notification that opens Tasks assigned to me.
-5. **Creator redirected:** The creator is taken to Tasks assigned by me, where acknowledgement and progress can be followed.
+4. **Owner notified:** The owner receives a **New Task Assigned** notification that opens the **Assigned to me** view of Assigned Tasks.
+5. **Creator redirected:** The creator is taken to the **Assigned by me** view, where acknowledgement and progress can be followed.
 
 The owner can read the instructions, acknowledge the assignment, update progress, add comments, and submit completion. The assigner can follow acknowledgement and progress. A selected approver receives the work only after completion is submitted for review.
 

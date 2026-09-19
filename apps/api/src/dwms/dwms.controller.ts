@@ -108,6 +108,7 @@ export class DwmsController {
     @Query('scope') scope?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('source') source?: string,
   ) {
     return this.dwmsService.getMyDwmsTasks(
       user,
@@ -116,6 +117,7 @@ export class DwmsController {
       scope,
       page,
       limit,
+      source,
     );
   }
 
@@ -126,8 +128,9 @@ export class DwmsController {
   getMyDwmsTaskSummary(
     @CurrentUser() user: UserPayload,
     @Query('date') date?: string,
+    @Query('source') source?: string,
   ) {
-    return this.dwmsService.getMyDwmsTaskSummary(user, date);
+    return this.dwmsService.getMyDwmsTaskSummary(user, date, source);
   }
 
   @Get('myDwms/tasks/:id')

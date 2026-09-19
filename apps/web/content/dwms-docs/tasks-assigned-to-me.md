@@ -1,16 +1,16 @@
 # Tasks assigned to me
 
-Tasks assigned to me is the searchable workspace for every task occurrence you own, including current, overdue, approval-pending, and completed work.
+Tasks assigned to me is the searchable workspace for task occurrences explicitly assigned to you by another employee, including current, overdue, approval-pending, and completed work. Activity-generated routine work appears in **Routine Work** instead.
 
 > **If you are new to DWMS:** Start with **Not Acknowledged**, acknowledge your new work, then use **Pending** for the work you need to complete. Use **Overdue** first whenever it has a count above zero.
 
 ## 1. Open the workspace
 
-In Daily Work Management, open the left menu and select **Tasks assigned to me**. Every signed-in DWMS user can open their own list.
+In Daily Work Management, open the left menu and select **Assigned Tasks**. Use the filter beside the status tabs to select **Assigned to me**. Every signed-in DWMS user can open their own list.
 
 ## 2. Use the status tabs
 
-Each tab shows its item count.
+The active-work tabs show their item counts. **Completed** is a history tab without a count badge.
 
 ![Tasks assigned to me combines status tabs, search, filters, and dated task cards.](../../public/dwms-docs/tasks-assigned-to-me/01-task-workspace.png)
 
@@ -23,7 +23,7 @@ Each tab shows its item count.
 
 ## 3. Search and filter
 
-Search task titles and other displayed task information with **Search tasks**. Use **Filter** to limit the list to Daily, Weekly, or Monthly frequency, and **Assigned By** to show tasks from one assigner.
+Search task titles and other displayed task information with **Search tasks**. Use **Frequency** to limit the list to Daily, Weekly, or Monthly frequency, and **Assigned By** to show tasks from one assigner.
 
 Filters work together. Clear them or return to All when an expected task is not visible.
 

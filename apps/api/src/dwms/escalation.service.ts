@@ -121,6 +121,9 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
     const overdueTasks = await this.prisma.task.findMany({
       where: {
         owner: { organizationId },
+        // Routine/activity tasks are intentionally not escalated. Only tasks
+        // explicitly assigned by an employee can create overdue alerts.
+        assignedById: { not: null },
         status: { notIn: NON_OVERDUE_TASK_STATUSES },
         dueDate: { not: null, lt: today },
       },
@@ -145,6 +148,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
       where: {
         owner: { organizationId },
         isAdhoc: true,
+        assignedById: { not: null },
         acknowledgedAt: null,
         createdAt: { lt: unacknowledgedCutoff },
         dueDate: { gte: today },
@@ -170,6 +174,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
     const overdueInstances = await this.prisma.taskInstance.findMany({
       where: {
         owner: { organizationId },
+        task: { assignedById: { not: null } },
         dueAt: { lt: now },
         status: { notIn: NON_OVERDUE_TASK_STATUSES },
       },
@@ -263,7 +268,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
         taskInstance: {
           select: {
             ownerId: true,
-            task: { select: { title: true } },
+            task: { select: { title: true, assignedById: true } },
           },
         },
       },
@@ -271,6 +276,10 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
     });
 
     for (const alert of alerts) {
+      if (alert.taskInstance && !alert.taskInstance.task?.assignedById) {
+        continue;
+      }
+
       const windowMins = this.abnormalityWindowMins(config, alert.severity);
       const ageMins = Math.floor(
         (now.getTime() - alert.createdAt.getTime()) / 60_000,
@@ -355,10 +364,13 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
     reason: 'overdue' | 'unacknowledged';
   }) {
     const { organizationId, config, task, reason } = params;
+    if (!task.assignedById) return;
+
     const title =
       reason === 'overdue'
         ? `Overdue task: ${task.title}`
         : `Unacknowledged task: ${task.title}`;
+    const deduplicationKey = taskDelayAlertKey(task.id, reason);
 
     const contactIds =
       reason === 'unacknowledged'
@@ -372,10 +384,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
 
     const existing = await this.prisma.alert.findFirst({
       where: {
-        organizationId,
-        type: AlertType.DELAY,
-        title,
-        againstUserId: task.ownerId,
+        deduplicationKey,
       },
       select: { id: true },
     });
@@ -411,7 +420,7 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
           raisedById,
           againstUserId: task.ownerId,
           recipientEmployeeIds: [...notificationTargets],
-          deduplicationKey: taskDelayAlertKey(task.id, reason),
+          deduplicationKey,
         },
         select: { id: true },
       });
@@ -438,6 +447,8 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
     instance: any;
   }) {
     const { organizationId, instance } = params;
+    if (!instance.task?.assignedById) return;
+
     const title = `Overdue task instance: ${instance.task.title}`;
 
     const existing = await this.prisma.alert.findFirst({
@@ -517,6 +528,8 @@ export class DwmsEscalationService implements OnApplicationBootstrap {
       raisedById,
       notificationTargets,
     } = params;
+
+    if (!instance.task?.assignedById) return;
 
     const overdueAlertCount = await this.prisma.alert.count({
       where: {

@@ -11,7 +11,7 @@ Select **Alerts/Abnormality** in Daily Work Management. Use **Raise New Alert** 
 ![Alerts and Abnormality provides responsibility tabs, search, status and severity filters, and alert cards.](../../public/dwms-docs/alerts-abnormality/01-alerts-workspace.png)
 
 - **My Alerts:** Alerts for which you are the person or task owner responsible for action.
-- **Abnormalities:** Alerts marked as abnormalities by DWMS.
+- **Abnormalities:** Separate abnormality records created by DWMS and linked to a source alert.
 - **Department Alerts:** Alerts linked to a department.
 - **Organization Alerts:** General alerts without a person, task, or department target.
 - **Opened by Me:** Alerts you raised.
@@ -83,9 +83,12 @@ All decisions remain in the alert history.
 
 ## 9. Automatic abnormalities
 
-DWMS watches Open alerts against the severity-specific Abnormality windows configured in Settings. If an alert remains without corrective action beyond its window, DWMS creates an abnormality linked to the source alert.
+DWMS creates a separate abnormality record in either of these cases:
 
-The source and created abnormality link to each other in the detail view. This preserves the original issue while making the missed response threshold visible as a separate abnormal condition.
+- **No corrective action within the configured window:** An unresolved alert passes the time limit for its severity, as set by the organization in Settings.
+- **Repeated overdue task:** The same task assigned to the same owner produces three overdue task-instance alerts.
+
+The source alert and created abnormality link to each other in the detail view. Manually raised alerts are not currently grouped for the three-report rule; that recurrence path applies to overdue task instances.
 
 ## 10. Escalation and task-linked actions
 

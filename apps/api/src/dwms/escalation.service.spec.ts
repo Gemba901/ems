@@ -1,4 +1,5 @@
 import { DwmsEscalationService } from './escalation.service';
+import { Severity } from 'db';
 
 describe('DWMS overdue recipient delivery', () => {
   let prisma: any;
@@ -50,6 +51,7 @@ describe('DWMS overdue recipient delivery', () => {
       alert: {
         count: jest.fn().mockResolvedValue(1),
         findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({ id: 'alert' }),
       },
     };
@@ -133,6 +135,19 @@ describe('DWMS overdue recipient delivery', () => {
     expect(notifications.create).not.toHaveBeenCalled();
   });
 
+  it('deduplicates task alerts by task identity rather than title and owner', async () => {
+    await (service as any).raiseTaskAlert({
+      organizationId: 'org',
+      config: {},
+      task,
+      reason: 'overdue',
+    });
+    expect(prisma.alert.findFirst).toHaveBeenCalledWith({
+      where: { deduplicationKey: 'dwms:task-delay:task:overdue' },
+      select: { id: true },
+    });
+  });
+
   it('keeps selected recipients able to open repeated-overdue abnormalities', async () => {
     prisma.alert.count.mockResolvedValue(3);
     await (service as any).raiseInstanceAlert({
@@ -142,5 +157,43 @@ describe('DWMS overdue recipient delivery', () => {
     expect(prisma.alert.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isAbnormality: true, recipientEmployeeIds: ['owner', 'selected'] }),
     }));
+  });
+
+  it('does not create a repeated-overdue abnormality before the third alert', async () => {
+    prisma.alert.count.mockResolvedValue(2);
+    await (service as any).raiseRepeatedOverdueAbnormality({
+      organizationId: 'org',
+      instance: { id: 'instance', taskId: 'task', ownerId: 'owner', owner, task, dueAt: new Date() },
+      sourceAlertId: 'source',
+      raisedById: 'assigner',
+      notificationTargets: new Set(['owner']),
+    });
+    expect(prisma.alert.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [59, false],
+    [60, true],
+  ])('uses the organization window at %i minutes for an unanswered alert', async (ageMins, shouldCreate) => {
+    const now = new Date('2026-09-19T10:00:00.000Z');
+    prisma.alert.findMany.mockResolvedValue([{
+      id: 'source',
+      title: 'Pressure drop',
+      description: 'Compressor pressure fell',
+      severity: Severity.MEDIUM,
+      createdAt: new Date(now.getTime() - ageMins * 60_000),
+      raisedById: 'owner',
+      againstUserId: null,
+      taskInstance: null,
+      taskInstanceId: null,
+      departmentId: null,
+    }]);
+    await (service as any).raiseAbnormalitiesForStaleAlerts('org', { abnormalityMediumMins: 60 }, now);
+    expect(prisma.alert.create).toHaveBeenCalledTimes(shouldCreate ? 1 : 0);
+    if (shouldCreate) {
+      expect(prisma.alert.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ isAbnormality: true, abnormalitySourceAlertId: 'source' }),
+      }));
+    }
   });
 });

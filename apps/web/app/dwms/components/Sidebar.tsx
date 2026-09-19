@@ -6,11 +6,11 @@ import {
   PanelLeft,
   Home,
   ClipboardList,
-  Send,
   ClipboardCheck,
   AlertTriangle,
   BarChart3,
   BookOpenCheck,
+  BookOpen,
   Settings2,
   Plus,
   BellPlus,
@@ -36,13 +36,14 @@ const managementRoles = new Set(["MANAGEMENT", "SUPER_ADMIN", "ADMIN", "HR"]);
 
 const navigationIcons: Record<string, LucideIcon> = {
   "/dwms": Home,
+  "/dwms/routine-work": ClipboardList,
   "/dwms/tasks": ClipboardList,
-  "/dwms/assignedTasks": Send,
   "/dwms/approvalTasks": ClipboardCheck,
   "/dwms/alerts": AlertTriangle,
   "/dwms/dashboard": BarChart3,
   "/dwms/activities": BookOpenCheck,
   "/dwms/settings": Settings2,
+  "/docs/dwms": BookOpen,
 };
 
 function RailLink({
@@ -99,9 +100,9 @@ export function Sidebar({
     {
       name: "Your work",
       items: [
-        ["My Routine Work ", "/dwms"],
-        ["Tasks assigned to me", "/dwms/tasks"],
-        ["Tasks assigned by me", "/dwms/assignedTasks"],
+        ["Home", "/dwms"],
+        ["Routine Work", "/dwms/routine-work"],
+        ["Assigned Tasks", "/dwms/tasks"],
         ["Approvals", "/dwms/approvalTasks"],
         ["Alerts/Abnormality", "/dwms/alerts"],
       ],
@@ -114,6 +115,7 @@ export function Sidebar({
           ? [["Activities", "/dwms/activities"]]
           : []),
         ...(managementRoles.has(role) ? [["Settings", "/dwms/settings"]] : []),
+        ["Documentation", "/docs/dwms"],
       ],
     },
   ];

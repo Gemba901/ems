@@ -1,12 +1,12 @@
 # Raise Alert
 
-Raise Alert records an abnormal situation that needs attention. The alert can be directed to a person, linked to a recently completed task, assigned to a department, or raised generally by an HOD or Management user.
+Raise Alert records an issue that needs attention. The alert can be directed to a person, linked to a recently completed task, assigned to a department, or raised generally by an HOD or Management user.
 
 > **Quick start:** Describe what is wrong, choose how urgent it is, send it to the person or team best able to act, and select **Raise Alert**. An alert is for a problem that needs follow-up; it is not a replacement for an ordinary work instruction.
 
 ## 1. What Raise Alert does
 
-The feature records what happened, its operational severity, who raised it, and the person, task, or department responsible for follow-up. Every manually raised alert starts as an **Abnormal Situation** with **Open** status.
+The feature records what happened, its operational severity, who raised it, and the person, task, or department responsible for follow-up. Every manually raised record starts as an **alert** with **Open** status. If it remains without corrective action beyond the organization's configured time limit, DWMS creates a separate, linked abnormality.
 
 - **Raised By:** The employee who creates the alert.
 - **Raised To:** The target that should respond: General, Person, Task, or Department.
@@ -41,7 +41,7 @@ You can also click **Raise Alert** above the task list on the My Routine Work sc
 
 ## 4. Complete the alert details
 
-- **Title — required:** A short, specific name for the abnormal situation. It appears in the alert list, details, and notification.
+- **Title — required:** A short, specific name for the issue. It appears in the alert list, details, and notification.
 - **Description — required:** What happened, where it happened, the impact, and any immediate action already taken.
 - **Severity:** Medium, High, or Critical. Medium is selected initially.
 - **Raised To:** General, To Person, Task, or Department. Task is selected initially.
@@ -72,7 +72,7 @@ Use this simple rule when choosing a target:
 
 ### General
 
-Use **General** for an organization-level abnormal situation when there is no single task, person, or department target. The option is available only to HOD and Management users in the form. No additional target field is shown.
+Use **General** for an organization-level issue when there is no single task, person, or department target. The option is available only to HOD and Management users in the form. No additional target field is shown.
 
 ![General creates an organization-level alert without an additional target field.](../../public/dwms-docs/raise-alert/06-general-target.png)
 
@@ -86,7 +86,7 @@ The picker is based on task-assignment access. The creator cannot raise an alert
 
 ### Task
 
-Use **Task** when the abnormal situation was found while reviewing a known piece of work. Open **Select Task** and search by task title or owner. Each result identifies the task and the employee who owned it.
+Use **Task** when the issue was found while reviewing a known piece of work. Open **Select Task** and search by task title or owner. Each result identifies the task and the employee who owned it.
 
 ![Task opens a searchable list of eligible recent task occurrences.](../../public/dwms-docs/raise-alert/03-task-target.png)
 
@@ -117,7 +117,7 @@ For example, use “Compressor pressure drop in Utility Area” instead of “Ma
 ## 8. What happens after clicking Raise Alert
 
 1. **Validation:** DWMS checks the required text, allowed severity, target selection, and the creator's permission for that target.
-2. **Alert saved:** The creator is stored as Raised By. The alert is stored as an Abnormal Situation with Open status and the selected severity.
+2. **Alert saved:** The creator is stored as Raised By. The record is an alert with Open status and the selected severity; it is not yet an abnormality.
 3. **Target linked:** The selected person, task occurrence, or department is connected to the alert. A General alert has no specific target record.
 4. **Notification sent when applicable:** A person target receives an **Alert Raised Against You** notification. For a task target, the task owner receives the same notification. It opens the new alert's details.
 5. **Creator redirected:** The creator is taken to **Alerts / Abnormality**, where the new alert can be found and followed.

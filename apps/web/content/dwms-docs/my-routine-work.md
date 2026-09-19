@@ -1,10 +1,12 @@
 # My Routine Work
 
-My Routine Work is the DWMS home page. It shows the signed-in employee's scheduled work, current alerts, and completion progress in the organization's time zone.
+**Home** is the DWMS dashboard. It shows the signed-in employee's routine work, current alerts, and completion progress in the organization's time zone. **Routine Work** opens a searchable list of routine task occurrences with status tabs.
 
 ## 1. Open the page
 
-Open **Daily Work Management** and select **My Routine Work**. The page is available to every signed-in DWMS user.
+Open **Daily Work Management** and select **Home** for the dashboard, or **Routine Work** for the task list. Both are available to every signed-in DWMS user. Tasks explicitly assigned by another employee appear in **Assigned Tasks → Assigned to me**, not Routine Work.
+
+In Routine Work, **Pending** shows daily occurrences scheduled today, weekly occurrences scheduled this week, and monthly occurrences scheduled this month. Overdue and approval-pending work have separate tabs. **Not Acknowledged** is only shown for person-assigned tasks. The Routine Work **Completed** tab has no total badge because it is a history view rather than a current workload count.
 
 Use **Raise Alert** to report an abnormal situation or **Assign a Task** to create work for an eligible employee.
 
@@ -22,8 +24,8 @@ The summary cards describe the tasks in the selected Today, Week, Month, or Cale
 ## 3. Change the time view
 
 - **Today:** Work scheduled for the organization's current date.
-- **Week:** Assigned/ad-hoc tasks and weekly-frequency work scheduled in the seven-day view.
-- **Month:** Assigned/ad-hoc tasks and monthly-frequency work scheduled in the 30-day view.
+- **Week:** Weekly-frequency routine work scheduled in the seven-day view.
+- **Month:** Monthly-frequency routine work scheduled in the 30-day view.
 - **Calendar:** Explore all scheduled tasks, regardless of frequency, on a monthly calendar. Use the arrow controls to move between months, select a date to see its full task cards, or select a task in the calendar to open its details. **Today** returns to the organization's current month and date.
 
 Tasks are grouped by scheduled date in the Week and Month views. Dates and deadlines use the organization's configured time zone rather than the device's local date.
@@ -49,7 +51,7 @@ Recurring activity tasks are separate dated occurrences. Updating one occurrence
 
 ## 5. Acknowledge assigned work
 
-New assigned work shows **Not Acknowledged**. Select **Acknowledge** to confirm that you have seen and accepted the task. DWMS records the acknowledgement time and informs the assigner.
+New work assigned by another employee shows **Not Acknowledged** in **Assigned Tasks → Assigned to me**. Select **Acknowledge** to confirm that you have seen and accepted the task. DWMS records the acknowledgement time and informs the assigner.
 
 Acknowledgement is separate from progress. Acknowledging a task does not start or complete it.
 
@@ -106,4 +108,4 @@ Use **Add comment** to record context or a handoff. Comments are visible to user
 - A completed or approval-pending task cannot be changed by the owner.
 - Past-due active work is managed as overdue by DWMS.
 
-For a searchable history of all your work, open **Tasks assigned to me**.
+For person-assigned work, open **Assigned Tasks → Assigned to me**.

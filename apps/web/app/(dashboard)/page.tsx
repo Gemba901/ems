@@ -137,7 +137,7 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     ring: "ring-rose-200",
     href: "/dwms",
     actions: [
-      { label: "My tasks",       href: "/dwms/assignedTasks", icon: ListChecks },
+      { label: "My tasks",       href: "/dwms/tasks?view=by-me", icon: ListChecks },
       // { label: "Raise an alert", href: "/dwms/alerts",        icon: AlertTriangle },
       // { label: "Approvals",      href: "/dwms/approvalTasks", icon: Inbox, roles: [Role.HOD, Role.ADMIN, Role.SUPER_ADMIN, Role.MANAGEMENT] },
     ],

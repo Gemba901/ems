@@ -67,7 +67,7 @@ Use zero only when escalation should be eligible immediately. Higher urgency nor
 
 ## 7. Abnormality windows
 
-Enter the maximum hours an Open alert may remain without corrective action before DWMS creates a linked abnormality. Configure separate Medium, High, and Critical values.
+Enter the maximum hours an unresolved alert may remain without corrective action before DWMS creates a linked abnormality. Configure separate Medium, High, and Critical values. This time-based rule is separate from the three-overdue-occurrence rule for task instances.
 
 The new abnormality retains a relationship to its source alert so both records can be traced from the alert detail page.
 

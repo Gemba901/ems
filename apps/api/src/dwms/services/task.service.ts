@@ -92,6 +92,27 @@ function getUtcMonthDifference(from: Date, to: Date) {
   );
 }
 
+function getCurrentRoutinePeriodWhere(referenceDate: Date) {
+  const nextDay = new Date(referenceDate);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+
+  const weekStart = new Date(referenceDate);
+  weekStart.setUTCDate(weekStart.getUTCDate() - (weekStart.getUTCDay() + 6) % 7);
+  const nextWeek = new Date(weekStart);
+  nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
+
+  const monthStart = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1));
+  const nextMonth = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth() + 1, 1));
+
+  return {
+    OR: [
+      { frequency: TaskFrequency.DAILY, scheduledFor: { gte: referenceDate, lt: nextDay } },
+      { frequency: TaskFrequency.WEEKLY, scheduledFor: { gte: weekStart, lt: nextWeek } },
+      { frequency: TaskFrequency.MONTHLY, scheduledFor: { gte: monthStart, lt: nextMonth } },
+    ],
+  };
+}
+
 function isSameUtcDayOfMonth(anchor: Date, value: Date) {
   return anchor.getUTCDate() === value.getUTCDate();
 }
@@ -974,6 +995,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     rawScope?: string,
     rawPage?: string,
     rawLimit?: string,
+    rawSource?: string,
   ) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
@@ -989,6 +1011,16 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const referenceDate =
       parseDateOnly(rawDate) ?? getCurrentUtcDateInTimeZone(timeZone);
     const scope = rawScope?.trim().toLowerCase() ?? null;
+    const source = rawSource?.trim().toLowerCase() ?? null;
+    if (source && !['routine', 'assigned'].includes(source)) {
+      throw new BadRequestException('Invalid task source');
+    }
+    const sourceTaskWhere = source === 'routine'
+      ? { activityId: { not: null }, assignedById: null }
+      : source === 'assigned'
+        ? { assignedById: { not: null } }
+        : null;
+    const sourceWhere = sourceTaskWhere ? { task: sourceTaskWhere } : {};
     if (
       scope &&
       ![
@@ -1066,6 +1098,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         where: {
           ownerId: employee.id,
           scheduledFor: { gte: referenceDate, lt: scheduledThrough },
+          ...sourceWhere,
           ...(frequency ? { frequency } : {}),
         },
         include: instanceListInclude,
@@ -1085,16 +1118,20 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       scope === 'not_acknowledged' ||
       scope === 'pending'
     ) {
+      const routinePending = source === 'routine' && scope === 'pending';
       const futureWhere = {
         ownerId: employee.id,
-        scheduledFor: { gte: referenceDate },
+        ...(routinePending
+          ? getCurrentRoutinePeriodWhere(referenceDate)
+          : { scheduledFor: { gte: referenceDate } }),
+        ...sourceWhere,
         dueAt: { gte: new Date() },
         status: { notIn: futureStatusExclusions },
         ...(frequency ? { frequency } : {}),
         ...(scope === 'not_acknowledged'
-          ? { task: { acknowledgedAt: null } }
-          : scope === 'pending'
-            ? { task: { acknowledgedAt: { not: null } } }
+          ? { task: { ...sourceTaskWhere, acknowledgedAt: null } }
+          : scope === 'pending' && !routinePending
+            ? { task: { ...sourceTaskWhere, acknowledgedAt: { not: null } } }
             : {}),
       };
       const [instances, futureTotal] = await Promise.all([
@@ -1120,6 +1157,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       const overdueWhere = {
         ownerId: employee.id,
         dueAt: { lt: new Date() },
+        ...sourceWhere,
         status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
         ...(frequency ? { frequency } : {}),
       };
@@ -1142,6 +1180,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       const approvalPendingWhere = {
         ownerId: employee.id,
         status: APPROVAL_PENDING_STATUS,
+        ...sourceWhere,
         ...(frequency ? { frequency } : {}),
       };
       const [instances, approvalPendingTotal] = await Promise.all([
@@ -1168,6 +1207,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       const completedWhere = {
         ownerId: employee.id,
         status: TaskStatus.DONE,
+        ...sourceWhere,
         completedAt: { lte: completedThrough },
         ...(frequency ? { frequency } : {}),
       };
@@ -1196,6 +1236,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         where: {
           ownerId: employee.id,
           scheduledFor: referenceDate,
+          ...sourceWhere,
           ...(frequency ? { frequency } : {}),
         },
         include: instanceListInclude,
@@ -1278,6 +1319,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       organizationTimeZone: timeZone,
       frequency: frequency ?? null,
       scope: scope ?? null,
+      source,
       count: total,
       tasks: serializedTaskInstances,
       pagination: {
@@ -1289,7 +1331,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     };
   }
 
-  async getMyDwmsTaskSummary(user: UserPayload, rawDate?: string) {
+  async getMyDwmsTaskSummary(user: UserPayload, rawDate?: string, rawSource?: string) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
@@ -1298,6 +1340,16 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     }
     const referenceDate =
       parseDateOnly(rawDate) ?? getCurrentUtcDateInTimeZone(timeZone);
+    const source = rawSource?.trim().toLowerCase() ?? null;
+    if (source && !['routine', 'assigned'].includes(source)) {
+      throw new BadRequestException('Invalid task source');
+    }
+    const sourceTaskWhere = source === 'routine'
+      ? { activityId: { not: null }, assignedById: null }
+      : source === 'assigned'
+        ? { assignedById: { not: null } }
+        : null;
+    const sourceWhere = sourceTaskWhere ? { task: sourceTaskWhere } : {};
 
     const now = new Date();
     const terminalStatusExclusions = [
@@ -1312,6 +1364,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     const futureWhere = {
       ownerId: employee.id,
       scheduledFor: { gte: referenceDate },
+      ...sourceWhere,
       dueAt: { gte: now },
       status: { notIn: futureStatusExclusions },
     };
@@ -1322,20 +1375,29 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           where: {
             ownerId: employee.id,
             dueAt: { lt: now },
+            ...sourceWhere,
             status: { notIn: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
           },
         }),
         this.prisma.taskInstance.count({
-          where: { ownerId: employee.id, status: APPROVAL_PENDING_STATUS },
+          where: { ownerId: employee.id, status: APPROVAL_PENDING_STATUS, ...sourceWhere },
         }),
         this.prisma.taskInstance.count({
-          where: { ownerId: employee.id, status: TaskStatus.DONE },
+          where: { ownerId: employee.id, status: TaskStatus.DONE, ...sourceWhere },
         }),
         this.prisma.taskInstance.count({
-          where: { ...futureWhere, task: { acknowledgedAt: null } },
+          where: { ...futureWhere, task: { ...sourceTaskWhere, acknowledgedAt: null } },
         }),
         this.prisma.taskInstance.count({
-          where: { ...futureWhere, task: { acknowledgedAt: { not: null } } },
+          where: source === 'routine'
+            ? {
+                ownerId: employee.id,
+                ...sourceWhere,
+                dueAt: { gte: now },
+                status: { notIn: futureStatusExclusions },
+                ...getCurrentRoutinePeriodWhere(referenceDate),
+              }
+            : { ...futureWhere, task: { ...sourceTaskWhere, acknowledgedAt: { not: null } } },
         }),
       ]);
 

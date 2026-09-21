@@ -4,7 +4,6 @@ import { useAuthStore } from "@/store/auth.store";
 import type {
   DwmsAlertItem,
   DwmsAssignedTaskHistoryItem,
-  DwmsAlertStatus,
   DwmsTaskItem,
   DwmsTaskStatus,
 } from "@/services/dwms.service";
@@ -12,7 +11,6 @@ import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
-  Clock,
   ExternalLink,
   Loader2,
   MessageSquare,
@@ -56,13 +54,6 @@ const taskStatusTone: Record<DwmsTaskStatus, string> = {
   LESS_THAN_50: "border-orange-200 bg-orange-100 text-orange-700",
   NOT_APPLICABLE: "border-violet-200 bg-violet-100 text-violet-700",
   OVERDUE: "border-rose-200 bg-rose-100 text-rose-700",
-};
-
-const alertStatusTone: Record<DwmsAlertStatus, string> = {
-  OPEN: "border-blue-200 bg-blue-50 text-blue-700",
-  IN_PROGRESS: "border-sky-200 bg-sky-50 text-sky-700",
-  ESCALATED: "border-violet-200 bg-violet-50 text-violet-700",
-  CLOSED: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
 const severityTone: Record<string, string> = {
@@ -440,9 +431,9 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
           {label(normalizedSeverity)}
         </span>
         <span
-          className={`rounded-full border px-3 py-1 text-xs font-semibold ${alertStatusTone[alert.status]}`}
+          className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
         >
-          {label(alert.status)}
+          {alert.pendingAcknowledgments ? "Not Acknowledged" : "Acknowledged"}
         </span>
         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
           {label(alert.type)}
@@ -490,27 +481,9 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
         />
         <DetailRow
           label="Repeat Count"
-          value={String(alert.repeatCount ?? 0)}
-        />
-        <DetailRow
-          label="Resolved At"
-          value={
-            alert.resolvedAt ? formatDate(alert.resolvedAt, true, timeZone) : "Not resolved"
-          }
+          value={String(alert.raiseCount)}
         />
       </div>
-
-      {alert.correctiveAction && (
-        <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-blue-800">
-            <Clock className="h-4 w-4" />
-            Corrective Action Taken
-          </div>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-blue-900/80">
-            {alert.correctiveAction}
-          </p>
-        </section>
-      )}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
@@ -523,7 +496,7 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <AlertTriangle className="h-4 w-4 text-slate-500" />
-          <span>{alert.isRepeated ? "Repeated alert" : "Single alert"}</span>
+          <span>{alert.isAbnormality ? "Abnormality" : "Alert"}</span>
         </div>
       </div>
     </>

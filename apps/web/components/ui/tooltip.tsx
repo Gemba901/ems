@@ -26,15 +26,23 @@ function TooltipTrigger({
 
 function TooltipContent({
   className,
+  positionerClassName,
+  side,
   sideOffset = 6,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Popup> & {
+  positionerClassName?: string
+  side?: React.ComponentProps<typeof TooltipPrimitive.Positioner>["side"]
   sideOffset?: number
 }) {
   return (
     <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Positioner sideOffset={sideOffset}>
+      <TooltipPrimitive.Positioner
+        side={side}
+        sideOffset={sideOffset}
+        className={cn("z-50", positionerClassName)}
+      >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
           className={cn(

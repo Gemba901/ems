@@ -6,8 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  AlertClosureApprovalStatus,
-  AlertStatus,
   AlertType,
   EmployeeActivityStatus,
   NotificationType,
@@ -220,10 +218,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     user: UserPayload,
   ): Promise<{ users: { id: string }[] }>;
   abstract listApproverCandidates(
-    user: UserPayload,
-    assignedToId: string,
-  ): Promise<{ users: { id: string }[] }>;
-  abstract listOverdueAlertCandidates(
     user: UserPayload,
     assignedToId: string,
   ): Promise<{ users: { id: string }[] }>;
@@ -555,37 +549,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         note: data.note?.trim() || null,
         attachmentUrl: data.attachmentUrl ?? null,
         attachmentName: data.attachmentName ?? null,
-      },
-    });
-  }
-
-  private async closeDelayAlertsForCompletedInstance(
-    taskInstanceId: string,
-    closureNote: string,
-    closureApproverId: string,
-  ) {
-    await this.prisma.alert.updateMany({
-      where: {
-        taskInstanceId,
-        type: AlertType.DELAY,
-        OR: [
-          { deduplicationKey: { not: null } },
-          { title: { startsWith: 'Overdue task instance:' } },
-        ],
-        status: {
-          in: [
-            AlertStatus.OPEN,
-            AlertStatus.IN_PROGRESS,
-            AlertStatus.ESCALATED,
-          ],
-        },
-      },
-      data: {
-        status: AlertStatus.CLOSED,
-        resolvedAt: new Date(),
-        closureNote,
-        closureApproverId,
-        closureApprovalStatus: AlertClosureApprovalStatus.APPROVED,
       },
     });
   }
@@ -953,12 +916,10 @@ export abstract class DwmsTaskService extends DwmsBaseService {
             id: alert.id,
             title: alert.title,
             description: alert.description,
-            status: alert.status,
+            isAbnormality: alert.isAbnormality,
+            raiseCount: alert.raiseCount,
             severity: alert.severity,
             createdAt: alert.createdAt.toISOString(),
-            resolvedAt: alert.resolvedAt
-              ? alert.resolvedAt.toISOString()
-              : null,
           }))
         : [],
     };
@@ -1566,14 +1527,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       attachmentName: dto.completionAttachmentName ?? null,
     });
 
-    if (effectiveStatus === TaskStatus.DONE) {
-      await this.closeDelayAlertsForCompletedInstance(
-        updatedInstance.id,
-        'System closed: The linked overdue task was completed.',
-        employee.id,
-      );
-    }
-
     if (effectiveStatus === APPROVAL_PENDING_STATUS && approvalRecipientId) {
       await this.notifications.create({
         employeeId: approvalRecipientId,
@@ -1849,27 +1802,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       }
     }
 
-    const overdueAlertToEmployeeIds = await this.normalizeEmployeeIds(
-      dto.overdueAlertToEmployeeIds,
-      user.organizationId,
-      'Overdue alert recipients',
-      10,
-    );
-    if (overdueAlertToEmployeeIds.length) {
-      const { users: recipients } = await this.listOverdueAlertCandidates(
-        user,
-        dto.assignedToId,
-      );
-      if (
-        overdueAlertToEmployeeIds.some(
-          (id) => !recipients.some((candidate) => candidate.id === id),
-        )
-      ) {
-        throw new BadRequestException(
-          'Select eligible overdue alert recipients for this assignee',
-        );
-      }
-    }
 
     const activity = dto.activityId
       ? await this.prisma.activity.findFirst({
@@ -1926,8 +1858,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         isAdhoc: dto.isAdhoc ?? true,
         acknowledgedAt: dto.acknowledgeOnCreate ? new Date() : null,
         approvedById: dto.approvedById ?? null,
-        overdueAlertTo: dto.overdueAlertTo ?? 'ASSIGNER',
-        overdueAlertToEmployeeIds,
         backupOwnerId,
         activityId: activity?.id ?? null,
         requiresCompletionDocument,
@@ -2334,12 +2264,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       note: approvalComment || null,
     });
 
-    await this.closeDelayAlertsForCompletedInstance(
-      instance.id,
-      `System closed: The linked overdue task was completed and approved by ${employee.firstName} ${employee.lastName}.`,
-      employee.id,
-    );
-
     const task = instance.task;
     const notificationTargets = new Set<string>([task.ownerId]);
     if (task.assignedById) notificationTargets.add(task.assignedById);
@@ -2661,14 +2585,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       attachmentName: dto.completionAttachmentName ?? null,
     });
 
-    if (effectiveStatus === TaskStatus.DONE) {
-      await this.closeDelayAlertsForCompletedInstance(
-        updated.id,
-        'System closed: The linked overdue task was completed.',
-        employee.id,
-      );
-    }
-
     if (effectiveStatus === APPROVAL_PENDING_STATUS && approvalRecipientId) {
       await this.notifications.create({
         employeeId: approvalRecipientId,
@@ -2754,14 +2670,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       attachmentUrl: dto.completionAttachmentUrl ?? null,
       attachmentName: dto.completionAttachmentName ?? null,
     });
-
-    if (effectiveStatus === TaskStatus.DONE) {
-      await this.closeDelayAlertsForCompletedInstance(
-        updated.id,
-        'System closed: The linked overdue task was completed.',
-        employee.id,
-      );
-    }
 
     if (effectiveStatus === APPROVAL_PENDING_STATUS && approvalRecipientId) {
       await this.notifications.create({

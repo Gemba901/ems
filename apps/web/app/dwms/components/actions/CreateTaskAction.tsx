@@ -178,12 +178,6 @@ export default function CreateTaskAction() {
   const [message, setMessage] = useState<string | null>(null);
 
   const [approvedById, setApprovedById] = useState("");
-  const [overdueAlertRecipientIds, setOverdueAlertRecipientIds] = useState<
-    string[]
-  >([]);
-  const [overdueAlertRecipients, setOverdueAlertRecipients] = useState<
-    DwmsEmployeeOption[]
-  >([]);
   const [backupOwnerId, setBackupOwnerId] = useState("");
   const [requiresCompletionDocument, setRequiresCompletionDocument] =
     useState(false);
@@ -194,7 +188,6 @@ export default function CreateTaskAction() {
       )
     : false;
 
-  const selectedUser = users.find((u) => u.id === assignedToId);
   const workingDaySet = useMemo(() => new Set(workingDays), [workingDays]);
   const todayDateStr = organizationToday;
   const calendarCells = useMemo(
@@ -241,18 +234,6 @@ export default function CreateTaskAction() {
     [approverCandidates],
   );
 
-  const overdueAlertRecipientOptions = useMemo(
-    () =>
-      overdueAlertRecipients.map((employee) => ({
-        value: employee.id,
-        label: employee.name,
-        secondaryLabel: formatDesignationLabel(employee.designation),
-        description: employee.email,
-        imageUrl: employee.avatarUrl ?? null,
-        variant: "employee" as const,
-      })),
-    [overdueAlertRecipients],
-  );
 
   const activityOptions = useMemo(
     () =>
@@ -427,55 +408,6 @@ export default function CreateTaskAction() {
     };
   }, [accessToken, assignedToId]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadOverdueAlertRecipients() {
-      if (!assignedToId) {
-        setOverdueAlertRecipients([]);
-        setOverdueAlertRecipientIds([]);
-        return;
-      }
-
-      try {
-        if (!accessToken) {
-          if (mounted) {
-            setOverdueAlertRecipients([]);
-            setOverdueAlertRecipientIds([]);
-          }
-          return;
-        }
-
-        const res = await DwmsService.getOverdueAlertRecipients(
-          accessToken,
-          assignedToId,
-        );
-        if (!mounted) return;
-        const nextRecipients = res?.users ?? [];
-        setOverdueAlertRecipients(nextRecipients);
-        setOverdueAlertRecipientIds((current) => {
-          const valid = current.filter((id) =>
-            nextRecipients.some((candidate) => candidate.id === id),
-          );
-          return valid.length > 0
-            ? valid
-            : nextRecipients.length > 0
-              ? [nextRecipients[0].id]
-              : [];
-        });
-      } catch {
-        if (!mounted) return;
-        setOverdueAlertRecipients([]);
-        setOverdueAlertRecipientIds([]);
-      }
-    }
-
-    void loadOverdueAlertRecipients();
-
-    return () => {
-      mounted = false;
-    };
-  }, [accessToken, assignedToId, selectedUser?.name]);
 
   const validBackupOwnerId = users.some((user) => user.id === backupOwnerId)
     ? backupOwnerId
@@ -550,10 +482,6 @@ export default function CreateTaskAction() {
           priority,
           frequency,
           approvedById: approvedById || undefined,
-          overdueAlertToEmployeeIds:
-            overdueAlertRecipientIds.length > 0
-              ? overdueAlertRecipientIds
-              : undefined,
           backupOwnerId: isDailyOrWeekly
             ? validBackupOwnerId || undefined
             : undefined,
@@ -568,7 +496,6 @@ export default function CreateTaskAction() {
       setDescription("");
       setAssignedToId("");
       setApprovedById("");
-      setOverdueAlertRecipientIds([]);
       setBackupOwnerId("");
       setRequiresCompletionDocument(false);
       setCompletionDocumentName("");
@@ -919,20 +846,6 @@ export default function CreateTaskAction() {
                 />
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Notify when overdue (optional)
-                </label>
-                <DwmsSelectDropdown
-                  mode="multiple"
-                  value={overdueAlertRecipientIds}
-                  options={overdueAlertRecipientOptions}
-                  onChange={setOverdueAlertRecipientIds}
-                  placeholder="Choose team members..."
-                  variant="employee"
-                  emptyMessage="No matching recipients found."
-                />
-              </div>
             </div>
             <label
               className={`flex items-start gap-3 rounded-md border px-4 py-3 text-sm transition ${

@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export type DwmsDropdownOption = {
@@ -30,6 +31,9 @@ type CommonProps = {
   className?: string;
   triggerClassName?: string;
   contentClassName?: string;
+  descriptionDisplay?: 'inline' | 'tooltip';
+  showTriggerDescription?: boolean;
+  selectionSummary?: 'default' | 'first-with-count';
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
 };
 
@@ -70,6 +74,9 @@ export default function DwmsSelectDropdown(props: Props) {
     className,
     triggerClassName,
     contentClassName,
+    descriptionDisplay = 'inline',
+    showTriggerDescription = true,
+    selectionSummary = 'default',
     onFocus,
   } = props;
 
@@ -128,7 +135,9 @@ export default function DwmsSelectDropdown(props: Props) {
 
   const selectedLabel = selectedOptions.length === 0
     ? placeholder
-    : selectedOptions.slice(0, 2).map((option) => option.label).join(', ') + (selectedOptions.length > 2 ? ` +${selectedOptions.length - 2}` : '');
+    : selectionSummary === 'first-with-count'
+      ? `${selectedOptions[0].label}${selectedOptions.length > 1 ? ` +${selectedOptions.length - 1}` : ''}`
+      : selectedOptions.slice(0, 2).map((option) => option.label).join(', ') + (selectedOptions.length > 2 ? ` +${selectedOptions.length - 2}` : '');
 
   const toggleValue = (optionValue: string) => {
     if (disabled) return;
@@ -201,7 +210,7 @@ export default function DwmsSelectDropdown(props: Props) {
           <span className={`block truncate ${selectedOptions.length === 0 ? 'text-black' : 'text-slate-800'}`}>
             {selectedLabel}
           </span>
-          {isEmployeeSelector && (
+          {isEmployeeSelector && showTriggerDescription && (
             <span className="mt-0.5 block truncate text-[10px] font-medium text-muted-app">
               {selectedOptions.length === 0
                 ? multiple ? 'Choose one or more employees' : 'Choose an employee'
@@ -234,13 +243,55 @@ export default function DwmsSelectDropdown(props: Props) {
             </div>
           )}
 
-          <div className="max-h-72 overflow-y-auto">
+          <TooltipProvider>
+          <div className={cn('max-h-72 overflow-y-auto', descriptionDisplay === 'tooltip' && 'space-y-1')}>
             {filteredOptions.length === 0 ? (
               <div className="px-3 py-4 text-xs text-muted-app">{emptyMessage}</div>
             ) : filteredOptions.map((option) => {
               const active = selectedValues.includes(option.value);
               const optionIsEmployee = isEmployeeSelector || option.variant === 'employee';
               const atLimit = multiple && !active && selectionLimitReached && !option.exclusive && option.value !== 'ANYONE';
+
+              if (descriptionDisplay === 'tooltip' && option.description && !optionIsEmployee) {
+                return (
+                  <Tooltip key={option.value}>
+                    <TooltipTrigger
+                      render={(triggerProps) => (
+                        <button
+                          {...triggerProps}
+                          type="button"
+                          onClick={() => toggleValue(option.value)}
+                          disabled={disabled || atLimit}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition',
+                            active ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50',
+                            atLimit ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                          )}
+                        >
+                          <span className="min-w-0 flex-1 whitespace-normal break-words">
+                            {option.label}
+                          </span>
+                          <span
+                            className={cn(
+                              'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
+                              active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-white'
+                            )}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </span>
+                        </button>
+                      )}
+                    />
+                    <TooltipContent
+                      side="top"
+                      positionerClassName="z-[100100]"
+                      className="max-w-72 border border-slate-200 bg-white px-3 py-2 leading-5 text-slate-700 shadow-xl"
+                    >
+                      {option.description}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
 
               return (
                 <button
@@ -296,6 +347,7 @@ export default function DwmsSelectDropdown(props: Props) {
               );
             })}
           </div>
+          </TooltipProvider>
 
           {(multiple || allowClear) && (
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-[11px] text-slate-500">

@@ -31,9 +31,7 @@ import {
   TaskApprovalActionDto,
   CreateAlertDto,
   CreateAlertCommentDto,
-  LogCorrectiveActionDto,
-  CloseAlertDto,
-  ReassignEscalatedTaskDto,
+  AcknowledgeAlertOccurrenceDto,
   CreateActivityDto,
   UpdateActivityDto,
   CreateTaskFromActivityDto,
@@ -270,16 +268,16 @@ export class DwmsController {
   getEmployeeDwmsProfile(
     @CurrentUser() user: UserPayload,
     @Param('employeeId') employeeId: string,
-    @Query('taskPage') taskPage?: string,
+    @Query('routinePage') routinePage?: string,
+    @Query('assignedPage') assignedPage?: string,
     @Query('currentAlertPage') currentAlertPage?: string,
     @Query('abnormalityPage') abnormalityPage?: string,
-    @Query('raisedAlertPage') raisedAlertPage?: string,
   ) {
     return this.dwmsService.getEmployeeDwmsProfile(user, employeeId, {
-      taskPage: Number(taskPage) || 1,
+      routinePage: Number(routinePage) || 1,
+      assignedPage: Number(assignedPage) || 1,
       currentAlertPage: Number(currentAlertPage) || 1,
       abnormalityPage: Number(abnormalityPage) || 1,
-      raisedAlertPage: Number(raisedAlertPage) || 1,
     });
   }
   @Get('employees/:employeeId/activities')
@@ -449,12 +447,12 @@ export class DwmsController {
     );
   }
 
-  @Get('alerts/myResponsibleCount')
+  @Get('alerts/myCount')
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
   @RequiresModule(ModuleType.DWMS)
-  getMyResponsibleAlertCount(@CurrentUser() user: UserPayload) {
-    return this.dwmsService.getMyResponsibleAlertCount(user);
+  getMyAlertCount(@CurrentUser() user: UserPayload) {
+    return this.dwmsService.getMyAlertCount(user);
   }
 
   @Get('alerts/:id')
@@ -476,106 +474,37 @@ export class DwmsController {
   ) {
     return this.dwmsService.addAlertComment(user, id, dto);
   }
-  @Patch('alerts/:id/response')
+  @Get('alerts/history/:targetId')
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
   @RequiresModule(ModuleType.DWMS)
-  logCorrectiveAction(
+  getAlertHistories(
+    @CurrentUser() user: UserPayload,
+    @Param('targetId') targetId: string,
+    @Query('targetType') targetType: string,
+  ) {
+    return this.dwmsService.getAlertHistories(user, targetType, targetId);
+  }
+
+  @Post('alerts/:id/raise-again')
+  @TenantRequired()
+  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  raiseAlertAgain(@CurrentUser() user: UserPayload, @Param('id') id: string) {
+    return this.dwmsService.raiseAlertAgain(user, id);
+  }
+
+  @Post('alerts/:id/occurrences/:occurrenceId/acknowledge')
+  @TenantRequired()
+  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  acknowledgeAlertOccurrence(
     @CurrentUser() user: UserPayload,
     @Param('id') id: string,
-    @Body() dto: LogCorrectiveActionDto,
+    @Param('occurrenceId') occurrenceId: string,
+    @Body() dto: AcknowledgeAlertOccurrenceDto,
   ) {
-    return this.dwmsService.logCorrectiveAction(user, id, dto.correctiveAction);
-  }
-
-  @Patch('alerts/:id/closure-request')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  requestAlertClosure(
-    @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-    @Body() dto: CloseAlertDto,
-  ) {
-    return this.dwmsService.requestAlertClosure(user, id, dto.closureNote);
-  }
-
-  @Patch('alerts/:id/close')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  closeAlert(
-    @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-    @Body() dto: CloseAlertDto,
-  ) {
-    return this.dwmsService.closeAlert(user, id, dto.closureNote);
-  }
-
-  @Get('approvalAlerts')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  getAlertClosureApprovals(
-    @CurrentUser() user: UserPayload,
-    @Query('status') status?: string,
-  ) {
-    return this.dwmsService.getAlertClosureApprovals(user, status);
-  }
-
-  @Patch('approvalAlerts/:id/approve')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  approveAlertClosure(
-    @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-    @Body() dto: TaskApprovalActionDto = {},
-  ) {
-    return this.dwmsService.approveAlertClosure(user, id, dto?.comment);
-  }
-
-  @Patch('approvalAlerts/:id/reject')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  rejectAlertClosure(
-    @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-    @Body() dto: TaskApprovalActionDto = {},
-  ) {
-    return this.dwmsService.rejectAlertClosure(user, id, dto?.comment);
-  }
-
-  @Post('alerts/:id/remind')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  remindAlertOwner(@CurrentUser() user: UserPayload, @Param('id') id: string) {
-    return this.dwmsService.remindAlertOwner(user, id);
-  }
-
-  @Post('alerts/:id/reassign')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  reassignEscalatedTask(
-    @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-    @Body() dto: ReassignEscalatedTaskDto,
-  ) {
-    return this.dwmsService.reassignEscalatedTask(user, id, dto.newOwnerId);
-  }
-
-  @Post('alerts/:id/escalate')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  escalateAlertFurther(
-    @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-  ) {
-    return this.dwmsService.escalateAlertFurther(user, id);
+    return this.dwmsService.acknowledgeAlertOccurrence(user, id, occurrenceId, dto);
   }
 
   // --- Users Endpoints ---
@@ -606,16 +535,6 @@ export class DwmsController {
     return this.dwmsService.listApproverCandidates(user, assignedToId);
   }
 
-  @Get('users/overdueAlertRecipients')
-  @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  @RequiresModule(ModuleType.DWMS)
-  listOverdueAlertRecipients(
-    @CurrentUser() user: UserPayload,
-    @Query('assignedToId') assignedToId: string,
-  ) {
-    return this.dwmsService.listOverdueAlertCandidates(user, assignedToId);
-  }
 
   // --- Dashboard Endpoints ---
   @Get('dashboard/overview')
@@ -654,6 +573,14 @@ export class DwmsController {
   }
 
   // --- DWMS Settings Endpoints ---
+  @Get('access')
+  @TenantRequired()
+  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  getDwmsAccess(@CurrentUser() user: UserPayload) {
+    return this.dwmsService.getDwmsAccessCapabilities(user);
+  }
+
   @Get('settings')
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)

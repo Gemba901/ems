@@ -14,9 +14,6 @@ class TestTaskService extends DwmsTaskService {
   listReportees = jest
     .fn()
     .mockResolvedValue({ users: [{ id: 'owner' }, { id: 'backup' }] });
-  listOverdueAlertCandidates = jest
-    .fn()
-    .mockResolvedValue({ users: [{ id: 'approver' }] });
   listApproverCandidates = jest
     .fn()
     .mockResolvedValue({ users: [{ id: 'approver' }] });
@@ -188,27 +185,6 @@ describe('DWMS task creation', () => {
     expect(notifications.create).not.toHaveBeenCalled();
   });
 
-  it('persists selected overdue recipients', async () => {
-    const result = await service.createAssignedTask(user, {
-      ...dto,
-      overdueAlertToEmployeeIds: ['approver'],
-    });
-    expect(result.task.overdueAlertToEmployeeIds).toEqual(['approver']);
-  });
-
-  it.each(['foreign', 'owner'])(
-    'rejects ineligible overdue recipients (%s)',
-    async (id) => {
-      await expect(
-        service.createAssignedTask(user, {
-          ...dto,
-          overdueAlertToEmployeeIds: [id],
-        }),
-      ).rejects.toThrow(BadRequestException);
-      expect(prisma.task.create).not.toHaveBeenCalled();
-    },
-  );
-
   it('creates an authorized task with eligible approval and backup ownership', async () => {
     const result = await service.createAssignedTask(user, {
       ...dto,
@@ -376,9 +352,6 @@ describe('DWMS occurrence progress and approval', () => {
       .mockResolvedValue(undefined);
     jest
       .spyOn(service as any, 'recordTaskInstanceEvent')
-      .mockResolvedValue(undefined);
-    jest
-      .spyOn(service as any, 'closeDelayAlertsForCompletedInstance')
       .mockResolvedValue(undefined);
   });
 

@@ -1,26 +1,9 @@
-import { toIsoDate } from './taskSchedule';
-
 type ScheduledTaskInstance = {
-  taskId: string;
-  scheduledFor: Date;
+  id: string;
 };
 
 export function taskInstanceDelayAlertKey(instance: ScheduledTaskInstance) {
-  return `dwms:task-delay:${instance.taskId}:${toIsoDate(instance.scheduledFor)}`;
-}
-
-export function taskDelayAlertKey(
-  taskId: string,
-  reason: 'overdue' | 'unacknowledged',
-) {
-  return `dwms:task-delay:${taskId}:${reason}`;
-}
-
-export function repeatedOverdueAbnormalityKey(
-  taskId: string,
-  ownerId: string,
-) {
-  return `dwms:repeated-overdue:${taskId}:${ownerId}`;
+  return `dwms:task-instance-overdue:${instance.id}`;
 }
 
 export function isUniqueConstraintError(error: unknown) {

@@ -1,17 +1,31 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
-import { AlertTriangle, Bell, CheckCircle2, Loader2, Shield, Users } from 'lucide-react';
-import { DEFAULT_DWMS_SETTINGS, DwmsService, getDwmsErrorMessage, type DwmsApproverRule, type DwmsEmployeeOption, type DwmsSettingsState, type EscalationContactRule, DWMS_APPROVER_RULE_OPTIONS, DWMS_ESCALATION_RULE_OPTIONS, DWMS_VIEW_LEVEL_OPTIONS, toDwmsSettingsPayload } from '@/services/dwms.service';
-import DwmsTabHeader from '../components/DwmsTabHeader';
-import DwmsSelectDropdown from '../components/DwmsSelectDropdown';
-import { useAuthStore } from '@/store/auth.store';
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Shield,
+  Users,
+} from "lucide-react";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import { useAuthStore } from "@/store/auth.store";
+import {
+  DEFAULT_DWMS_SETTINGS,
+  DWMS_APPROVER_RULE_OPTIONS,
+  DWMS_VIEW_LEVEL_OPTIONS,
+  DwmsService,
+  getDwmsErrorMessage,
+  toDwmsSettingsPayload,
+  type DwmsApproverRule,
+  type DwmsEmployeeOption,
+  type DwmsSettingsState,
+} from "@/services/dwms.service";
+import DwmsSelectDropdown from "../components/DwmsSelectDropdown";
+import DwmsTabHeader from "../components/DwmsTabHeader";
 
-const MANAGEMENT_ROLES = new Set(['MANAGEMENT', 'SUPER_ADMIN', 'ADMIN', 'HR']);
-type EmployeeOption = DwmsEmployeeOption;
-type DwmsSettings = DwmsSettingsState;
+const MANAGEMENT_ROLES = new Set(["MANAGEMENT", "SUPER_ADMIN", "ADMIN", "HR"]);
 
 function SectionCard({
   icon: Icon,
@@ -35,7 +49,9 @@ function SectionCard({
           <p className="text-xs text-slate-400">{description}</p>
         </div>
       </div>
-      <div className="overflow-visible divide-y divide-slate-50">{children}</div>
+      <div className="divide-y divide-slate-50 overflow-visible">
+        {children}
+      </div>
     </div>
   );
 }
@@ -50,12 +66,14 @@ function SettingRow({
   control: React.ReactNode;
 }) {
   return (
-    <div className="relative overflow-visible flex flex-col gap-4 px-6 py-4 md:flex-row md:items-center md:justify-between">
+    <div className="relative flex flex-col gap-4 overflow-visible px-6 py-4 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0 flex-1 pr-2">
         <p className="text-sm font-medium text-slate-700">{title}</p>
         <p className="mt-0.5 text-xs text-slate-400">{hint}</p>
       </div>
-      <div className="relative shrink-0 overflow-visible md:max-w-[560px]">{control}</div>
+      <div className="relative shrink-0 overflow-visible md:max-w-[560px]">
+        {control}
+      </div>
     </div>
   );
 }
@@ -67,7 +85,7 @@ function EmployeeMultiSelectDropdown({
   disabled,
 }: {
   value: string[];
-  employees: EmployeeOption[];
+  employees: DwmsEmployeeOption[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
 }) {
@@ -78,42 +96,22 @@ function EmployeeMultiSelectDropdown({
       options={employees.map((employee) => ({
         value: employee.id,
         label: employee.name,
-        secondaryLabel: employee.designation ?? employee.role ?? 'Employee',
+        secondaryLabel: employee.designation ?? employee.role ?? "Employee",
         imageUrl: employee.avatarUrl ?? null,
-        variant: 'employee',
+        variant: "employee",
       }))}
       onChange={onChange}
       disabled={disabled}
-      placeholder="Select up to 3 employees"
+      placeholder="Select Employees"
       maxSelected={3}
       variant="employee"
+      className="w-56 max-w-full"
+      triggerClassName="h-10 min-h-10 rounded-full px-3 py-2 text-sm"
+      contentClassName="left-auto right-0 w-80"
+      selectionSummary="first-with-count"
+      showTriggerDescription={false}
       emptyMessage="No matching employees found."
     />
-  );
-}
-
-function HourSelect({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: number;
-  onChange: (next: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <input
-        type="number"
-        min={0}
-        step={1}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        disabled={disabled}
-        className="w-32 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:opacity-70"
-      />
-      <span className="text-xs text-slate-400">hours</span>
-    </div>
   );
 }
 
@@ -122,8 +120,10 @@ function ViewLevelSelect({
   onChange,
   disabled,
 }: {
-  value: DwmsSettings['alertViewLevel'] | DwmsSettings['analyticsViewLevel'];
-  onChange: (next: DwmsSettings['alertViewLevel'] | DwmsSettings['analyticsViewLevel']) => void;
+  value:
+    | DwmsSettingsState["alertViewLevel"]
+    | DwmsSettingsState["analyticsViewLevel"];
+  onChange: (next: DwmsSettingsState["alertViewLevel"]) => void;
   disabled?: boolean;
 }) {
   return (
@@ -131,7 +131,9 @@ function ViewLevelSelect({
       <DwmsSelectDropdown
         value={value}
         options={DWMS_VIEW_LEVEL_OPTIONS}
-        onChange={(next) => onChange(next as DwmsSettings['alertViewLevel'])}
+        onChange={(next) =>
+          onChange(next as DwmsSettingsState["alertViewLevel"])
+        }
         disabled={disabled}
         placeholder="Select view level"
         triggerClassName="rounded-2xl border-slate-200 px-4 py-2.5 text-sm text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
@@ -151,12 +153,15 @@ export default function DwmsSettingsPage() {
 function DwmsSettingsContent() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
-  const canEdit = MANAGEMENT_ROLES.has(String(user?.roleLevel ?? '').toUpperCase());
+  const canEdit = MANAGEMENT_ROLES.has(
+    String(user?.roleLevel ?? "").toUpperCase(),
+  );
   const isForbidden = Boolean(user) && !canEdit;
-  const [activeTab, setActiveTab] = useState<'EDIT' | 'SUMMARY'>('EDIT');
-
-  const [settings, setSettings] = useState<DwmsSettings>(DEFAULT_DWMS_SETTINGS);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [activeTab, setActiveTab] = useState<"EDIT" | "SUMMARY">("EDIT");
+  const [settings, setSettings] = useState<DwmsSettingsState>(
+    DEFAULT_DWMS_SETTINGS,
+  );
+  const [employees, setEmployees] = useState<DwmsEmployeeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,361 +169,272 @@ function DwmsSettingsContent() {
 
   useEffect(() => {
     if (isForbidden) {
-      router.replace('/dwms');
+      router.replace("/dwms");
       return;
     }
+    if (!accessToken) return;
 
     let mounted = true;
-
-    async function load() {
-      if (!accessToken) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const [settingsRes, usersRes] = await Promise.all([
-          DwmsService.getSettings(accessToken),
-          DwmsService.listUsers(accessToken),
-        ]);
-
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      DwmsService.getSettings(accessToken),
+      DwmsService.listUsers(accessToken),
+    ])
+      .then(([savedSettings, people]) => {
         if (!mounted) return;
-
-        setSettings(settingsRes);
-
-        setEmployees((usersRes ?? []).map((employee) => ({
-          id: employee.id,
-          name: employee.name,
-          email: employee.email,
-          avatarUrl: employee.avatarUrl ?? null,
-          role: employee.role ?? null,
-          designation: employee.designation ?? null,
-        })));
-      } catch (loadError: unknown) {
-        if (!mounted) return;
-        setError(getDwmsErrorMessage(loadError, 'Failed to load DWMS settings'));
-      } finally {
+        setSettings(savedSettings);
+        setEmployees(people ?? []);
+      })
+      .catch((cause) => {
+        if (mounted)
+          setError(getDwmsErrorMessage(cause, "Failed to load DWMS settings"));
+      })
+      .finally(() => {
         if (mounted) setLoading(false);
-      }
-    }
-
-    void load();
+      });
 
     return () => {
       mounted = false;
     };
   }, [accessToken, isForbidden, router]);
 
-  const selectedApproverCustomEmployees = useMemo(
-    () => employees.filter((employee) => settings.approverCustomEmployeeIds.includes(employee.id)),
-    [employees, settings.approverCustomEmployeeIds]
+  const selectedApprovers = useMemo(
+    () =>
+      employees.filter((employee) =>
+        settings.approverCustomEmployeeIds.includes(employee.id),
+      ),
+    [employees, settings.approverCustomEmployeeIds],
   );
 
-  const selectedEscalationContacts = useMemo(
-    () => employees.filter((employee) => settings.customEscalationContactIds.includes(employee.id)),
-    [employees, settings.customEscalationContactIds]
-  );
-
-  const updateSetting = <K extends keyof DwmsSettings>(key: K, value: DwmsSettings[K]) => {
+  const updateSetting = <K extends keyof DwmsSettingsState>(
+    key: K,
+    value: DwmsSettingsState[K],
+  ) => {
     setSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateApproverRules = (next: string[]) => {
+    const currentRules = settings.approverRoles.filter(
+      (rule) => rule !== "OWNER",
+    );
+    const selected = next.filter(
+      (rule): rule is DwmsApproverRule => rule !== "OWNER",
+    );
+    const addedAnyone =
+      selected.includes("ANYONE") && !currentRules.includes("ANYONE");
+    const normalized = addedAnyone
+      ? ["ANYONE" as DwmsApproverRule]
+      : selected.filter((rule) => rule !== "ANYONE");
+    updateSetting("approverRoles", ["OWNER", ...normalized]);
   };
 
   const handleSave = async () => {
     if (!accessToken) {
-      setError('Authentication token is missing. Please refresh and try again.');
+      setError(
+        "Authentication token is missing. Please refresh and try again.",
+      );
       return;
     }
-
     setSaving(true);
     setError(null);
     setSuccess(null);
-
     try {
-      const response = await DwmsService.updateSettings(accessToken, toDwmsSettingsPayload(settings));
-
+      const response = await DwmsService.updateSettings(
+        accessToken,
+        toDwmsSettingsPayload(settings),
+      );
       setSettings(response);
-
-      setSuccess('DWMS settings saved successfully.');
-    } catch (saveError: unknown) {
-      setError(getDwmsErrorMessage(saveError, 'Failed to save DWMS settings'));
+      setSuccess("DWMS settings saved successfully.");
+    } catch (cause) {
+      setError(getDwmsErrorMessage(cause, "Failed to save DWMS settings"));
     } finally {
       setSaving(false);
     }
   };
 
-  const formatSelectedSummaryValue = (
-    selectedRules: string[],
-    customLabel: string,
-    customEnabled: boolean,
-    customNames: string[]
-  ) => {
-    const ruleSummary = selectedRules.map((rule) => rule.replace(/_/g, ' ')).join(', ');
-    const customSummary = customEnabled
-      ? customNames.length > 0
-        ? `${customLabel}: ${customNames.join(', ')}`
-        : customLabel
-      : '';
-
-    return [ruleSummary, customSummary].filter(Boolean).join(' | ') || 'None';
-  };
-
-  const selectedValuesSummary = [
-    {
-      label: 'Task approver',
-      value: formatSelectedSummaryValue(
-        ['OWNER', ...settings.approverRoles.filter((rule) => rule !== 'OWNER' && rule !== 'CUSTOM')],
-        'Custom employees',
-        settings.approverRoles.includes('CUSTOM'),
-        selectedApproverCustomEmployees.map((employee) => employee.name)
+  const approverSummary = [
+    "Owner",
+    ...settings.approverRoles
+      .filter((rule) => rule !== "OWNER" && rule !== "CUSTOM")
+      .map(
+        (rule) =>
+          DWMS_APPROVER_RULE_OPTIONS.find((option) => option.value === rule)
+            ?.label ?? rule,
       ),
-    },
+    ...(settings.approverRoles.includes("CUSTOM")
+      ? [
+          `Custom: ${selectedApprovers.map((employee) => employee.name).join(", ") || "None selected"}`,
+        ]
+      : []),
+  ].join(" · ");
+
+  const summary = [
+    { label: "Task approver", value: approverSummary },
+    { label: "Alert view", value: settings.alertViewLevel.replace(/_/g, " ") },
     {
-      label: 'Escalation target',
-      value: formatSelectedSummaryValue(
-        settings.escalationContactRules.filter((rule) => rule !== 'CUSTOM'),
-        'Custom employees',
-        settings.escalationContactRules.includes('CUSTOM'),
-        selectedEscalationContacts.map((employee) => employee.name)
-      ),
-    },
-    {
-      label: 'Alert view',
-      value: settings.alertViewLevel.replace(/_/g, ' '),
-    },
-    {
-      label: 'Analytics view',
-      value: settings.analyticsViewLevel.replace(/_/g, ' '),
-    },
-    {
-      label: 'Ack windows',
-      value: `Medium ${settings.escalateUnacknowledgedMediumHours}h, High ${settings.escalateUnacknowledgedHighHours}h, Critical ${settings.escalateUnacknowledgedCriticalHours}h`,
-    },
-    {
-      label: 'Abnormality windows',
-      value: `Medium ${settings.abnormalityMediumHours}h, High ${settings.abnormalityHighHours}h, Critical ${settings.abnormalityCriticalHours}h`,
+      label: "Analytics view",
+      value: settings.analyticsViewLevel.replace(/_/g, " "),
     },
   ];
 
-  if (isForbidden) {
-    return (
-      <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-12">
-        <div className="w-full rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <Shield className="mx-auto h-10 w-10 text-slate-400" />
-          <h1 className="mt-4 text-2xl font-bold text-slate-900">Settings restricted</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Only Management, HR, admin, and super admin users can change DWMS settings.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (isForbidden) return null;
 
   return (
     <div className="mx-auto flex w-full max-w-none flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-        <div className="space-y-6">
-          <DwmsTabHeader
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            tabs={[
-              { key: 'EDIT', label: 'Edit Rules', dotColor: 'bg-blue-500' },
-              { key: 'SUMMARY', label: 'Summary', dotColor: 'bg-emerald-500' },
-            ]}
-          />
+      <div className="space-y-6">
+        <DwmsTabHeader
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          tabs={[
+            { key: "EDIT", label: "Edit Rules", dotColor: "bg-blue-500" },
+            { key: "SUMMARY", label: "Summary", dotColor: "bg-emerald-500" },
+          ]}
+        />
 
-          {error && (
-            <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+        {success && (
+          <div
+            role="status"
+            className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+          >
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{success}</span>
+          </div>
+        )}
 
-          {success && (
-            <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{success}</span>
-            </div>
-          )}
-
-          {!canEdit && (
-            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              <Shield className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>Only admin, management, HR, and super admin users can change DWMS permission settings.</span>
-            </div>
-          )}
-
-          {activeTab === 'EDIT' ? (
-            <div className="space-y-6">
-              {loading ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
-                  <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-slate-400" />
-                  Loading DWMS settings...
-                </div>
-              ) : (
-                <>
-                  <SectionCard
-                    icon={Shield}
-                    title="Permission rules"
-                    description="Define who can be selected to approve tasks, assign work, and view operational data."
-                  >
-                    <SettingRow
-                      title="Task approver"
-                      hint="Choose all rules that decide who can be selected to approve a task. Anyone is exclusive."
-                      control={
-                        <DwmsSelectDropdown
-                          mode="multiple"
-                          value={['OWNER', ...settings.approverRoles.filter((rule) => rule !== 'OWNER')]}
-                          options={DWMS_APPROVER_RULE_OPTIONS}
-                          onChange={(next) => updateSetting('approverRoles', next.filter((rule): rule is DwmsApproverRule => rule !== 'OWNER'))}
-                          disabled={!canEdit}
-                          placeholder="Select approver rules"
-                        />
-                      }
-                    />
-
-                    {settings.approverRoles.includes('CUSTOM') && (
-                      <SettingRow
-                        title="Custom approver employees"
-                        hint="Select up to 3 employees who can be selected to approve tasks."
-                        control={<EmployeeMultiSelectDropdown value={settings.approverCustomEmployeeIds} employees={employees} onChange={(next) => updateSetting('approverCustomEmployeeIds', next.slice(0, 3))} disabled={!canEdit} />}
+        {activeTab === "EDIT" ? (
+          <div className="space-y-6">
+            {loading ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
+                <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-slate-400" />
+                Loading DWMS settings...
+              </div>
+            ) : (
+              <>
+                <SectionCard
+                  icon={Shield}
+                  title="Permission rules"
+                  description="Define task approvers and the operational data employees can view."
+                >
+                  <SettingRow
+                    title="Task approver"
+                    hint="The task owner is always eligible. Anyone is exclusive; Custom allows up to three employees."
+                    control={
+                      <DwmsSelectDropdown
+                        mode="multiple"
+                        value={settings.approverRoles.filter(
+                          (rule) => rule !== "OWNER",
+                        )}
+                        options={DWMS_APPROVER_RULE_OPTIONS}
+                        onChange={updateApproverRules}
+                        disabled={!canEdit}
+                        placeholder="Select approver rules"
+                        className="w-56 max-w-full"
+                        contentClassName="w-full"
+                        descriptionDisplay="tooltip"
+                        selectionSummary="first-with-count"
                       />
-                    )}
-
+                    }
+                  />
+                  {settings.approverRoles.includes("CUSTOM") && (
                     <SettingRow
-                      title="Employee alert view"
-                      hint="Set how much alert data a regular employee can see."
-                      control={<ViewLevelSelect value={settings.alertViewLevel} onChange={(value) => updateSetting('alertViewLevel', value)} disabled={!canEdit} />}
-                    />
-
-                    <SettingRow
-                      title="Employee analytics view"
-                      hint="Set how much dashboard data a regular employee can see."
-                      control={<ViewLevelSelect value={settings.analyticsViewLevel} onChange={(value) => updateSetting('analyticsViewLevel', value)} disabled={!canEdit} />}
-                    />
-                  </SectionCard>
-
-                  <SectionCard
-                    icon={AlertTriangle}
-                    title="Acknowledgement windows"
-                    description="Set how long a task can stay unacknowledged for each severity."
-                  >
-                    <SettingRow
-                      title="Medium severity"
-                      hint="Allowed acknowledgement time before a medium task escalates."
-                      control={<HourSelect value={settings.escalateUnacknowledgedMediumHours} onChange={(value) => updateSetting('escalateUnacknowledgedMediumHours', value)} disabled={!canEdit} />}
-                    />
-
-                    <SettingRow
-                      title="High severity"
-                      hint="Allowed acknowledgement time before a high-severity task escalates."
-                      control={<HourSelect value={settings.escalateUnacknowledgedHighHours} onChange={(value) => updateSetting('escalateUnacknowledgedHighHours', value)} disabled={!canEdit} />}
-                    />
-
-                    <SettingRow
-                      title="Critical severity"
-                      hint="Allowed acknowledgement time before a critical task escalates."
-                      control={<HourSelect value={settings.escalateUnacknowledgedCriticalHours} onChange={(value) => updateSetting('escalateUnacknowledgedCriticalHours', value)} disabled={!canEdit} />}
-                    />
-                  </SectionCard>
-
-                  <SectionCard
-                    icon={Bell}
-                    title="Abnormality windows"
-                    description="Set how long an open alert can stay without corrective action before an abnormality is created."
-                  >
-                    <SettingRow
-                      title="Medium severity"
-                      hint="Time allowed before a medium alert becomes an abnormality."
-                      control={<HourSelect value={settings.abnormalityMediumHours} onChange={(value) => updateSetting('abnormalityMediumHours', value)} disabled={!canEdit} />}
-                    />
-
-                    <SettingRow
-                      title="High severity"
-                      hint="Time allowed before a high-severity alert becomes an abnormality."
-                      control={<HourSelect value={settings.abnormalityHighHours} onChange={(value) => updateSetting('abnormalityHighHours', value)} disabled={!canEdit} />}
-                    />
-
-                    <SettingRow
-                      title="Critical severity"
-                      hint="Time allowed before a critical alert becomes an abnormality."
-                      control={<HourSelect value={settings.abnormalityCriticalHours} onChange={(value) => updateSetting('abnormalityCriticalHours', value)} disabled={!canEdit} />}
-                    />
-                  </SectionCard>
-                  <SectionCard
-                    icon={Bell}
-                    title="Escalation target"
-                    description="Choose who can receive task escalation alerts."
-                  >
-                    <SettingRow
-                      title="Who can be selected as escalator"
-                      hint="Choose all rules that decide who can be selected to receive escalation alerts first."
+                      title="Custom approver employees"
+                      hint="Select up to 3 employees who can approve tasks."
                       control={
-                        <DwmsSelectDropdown
-                          mode="multiple"
-                          value={settings.escalationContactRules}
-                          options={DWMS_ESCALATION_RULE_OPTIONS}
-                          onChange={(next) => updateSetting('escalationContactRules', next.filter((rule): rule is EscalationContactRule => rule === 'ASSIGNER' || rule === 'MANAGER' || rule === 'CUSTOM'))}
+                        <EmployeeMultiSelectDropdown
+                          value={settings.approverCustomEmployeeIds}
+                          employees={employees}
+                          onChange={(next) =>
+                            updateSetting(
+                              "approverCustomEmployeeIds",
+                              next.slice(0, 3),
+                            )
+                          }
                           disabled={!canEdit}
-                          placeholder="Select escalation contacts"
                         />
                       }
                     />
-
-                    {settings.escalationContactRules.includes('CUSTOM') && (
-                      <SettingRow
-                        title="Custom escalation contact"
-                        hint="Pick up to 3 employees who can be selected to receive the escalation alert."
-                        control={
-                          <EmployeeMultiSelectDropdown
-                            value={settings.customEscalationContactIds}
-                            employees={employees}
-                            onChange={(next) => updateSetting('customEscalationContactIds', next.slice(0, 3))}
-                            disabled={!canEdit}
-                          />
+                  )}
+                  <SettingRow
+                    title="Employee alert view"
+                    hint="Controls access to department- and organization-targeted alert views. Personal and reporting-team alerts remain relationship-based."
+                    control={
+                      <ViewLevelSelect
+                        value={settings.alertViewLevel}
+                        onChange={(value) =>
+                          updateSetting("alertViewLevel", value)
                         }
+                        disabled={!canEdit}
                       />
-                    )}
-                  </SectionCard>
-
-                  <div className="flex justify-end pt-1">
-                    <button
-                      type="button"
-                      onClick={handleSave}
-                      disabled={!canEdit || loading || saving}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Save DWMS settings
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-100 bg-white px-6 py-5 shadow-sm">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
-                    <Users className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">Selected Values</p>
-                    <p className="text-xs text-slate-400">Read-only snapshot of the current settings.</p>
-                  </div>
+                    }
+                  />
+                  <SettingRow
+                    title="Employee analytics view"
+                    hint="Controls personal, department, or organization dashboard access."
+                    control={
+                      <ViewLevelSelect
+                        value={settings.analyticsViewLevel}
+                        onChange={(value) =>
+                          updateSetting("analyticsViewLevel", value)
+                        }
+                        disabled={!canEdit}
+                      />
+                    }
+                  />
+                </SectionCard>
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleSave()}
+                    disabled={!canEdit || saving}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save DWMS settings"}
+                  </button>
                 </div>
-                <div className="mt-4 divide-y divide-slate-100">
-                  {selectedValuesSummary.map((item) => (
-                    <div key={item.label} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between">
-                      <span className="text-xs text-slate-500">{item.label}</span>
-                      <span className="text-xs font-semibold text-slate-700 sm:max-w-[70%] sm:text-right">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-slate-100 bg-white px-6 py-5 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
+                <Users className="h-4 w-4 text-slate-500" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800">
+                  Selected Values
+                </p>
+                <p className="text-xs text-slate-400">
+                  Read-only snapshot of the current settings.
+                </p>
               </div>
             </div>
-          )}
-        </div>
+            <div className="mt-4 divide-y divide-slate-100">
+              {summary.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <span className="text-xs text-slate-500">{item.label}</span>
+                  <span className="text-xs font-semibold text-slate-700 sm:max-w-[70%] sm:text-right">
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

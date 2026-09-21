@@ -22,7 +22,6 @@ import {
   TaskStatus,
   Priority,
   Severity,
-  OverdueAlertTo,
 } from 'db';
 
 export class CreateAssignedTaskDto {
@@ -59,17 +58,6 @@ export class CreateAssignedTaskDto {
   @IsOptional()
   @IsString()
   approvedById?: string;
-
-  @IsOptional()
-  @IsEnum(OverdueAlertTo)
-  overdueAlertTo?: OverdueAlertTo;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @ArrayMaxSize(10)
-  @IsString({ each: true })
-  overdueAlertToEmployeeIds?: string[];
 
   @IsOptional()
   @IsString()
@@ -445,20 +433,8 @@ export class CreateAlertCommentDto {
   @IsString()
   comment!: string;
 }
-export class LogCorrectiveActionDto {
+export class AcknowledgeAlertOccurrenceDto {
   @IsNotEmpty()
   @IsString()
-  correctiveAction!: string;
-}
-
-export class CloseAlertDto {
-  @IsNotEmpty()
-  @IsString()
-  closureNote!: string;
-}
-
-export class ReassignEscalatedTaskDto {
-  @IsNotEmpty()
-  @IsString()
-  newOwnerId!: string;
+  note!: string;
 }

@@ -76,6 +76,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dwms/assignedTasks": "Assigned Tasks",
   "/dwms/approvalTasks": "Approvals",
   "/dwms/alerts": "Alerts",
+  "/dwms/abnormalities": "Abnormalities",
   "/dwms/dashboard": "Reports",
   "/dwms/activities": "Activities",
   "/dwms/activities/ingestions": "Activity Import History",

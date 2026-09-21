@@ -86,16 +86,6 @@ function isTaskScheduledInWindow(task: TaskItem, start: string, end: string) {
   return scheduledDateKey >= start && scheduledDateKey < end;
 }
 
-function isTaskIncludedInView(task: TaskItem, view: HomeTaskView) {
-  if (view === "WEEK") {
-    return task.isAdhoc || task.frequency === "WEEKLY";
-  }
-  if (view === "MONTH") {
-    return task.isAdhoc || task.frequency === "MONTHLY";
-  }
-  return true;
-}
-
 function isHomeVisibleTask(task: TaskItem) {
   return (
     !task.isOverdue &&
@@ -138,7 +128,7 @@ function HomeContent() {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
   >(null);
-  const [activeAlertsCount, setActiveAlertsCount] = useState(0);
+  const [alertsCount, setAlertsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completionTask, setCompletionTask] = useState<{
@@ -161,8 +151,8 @@ function HomeContent() {
         const requestedDate =
           view === "CALENDAR" ? (calendarMonthStart ?? undefined) : undefined;
         const [taskResponse, alertsRes] = await Promise.all([
-          DwmsService.getTodayTasks(token, requestedDate, "scheduled", undefined, undefined, "routine"),
-          DwmsService.getOpenAlertCount(token),
+          DwmsService.getTodayTasks(token, requestedDate, "scheduled"),
+          DwmsService.getMyAlertCount(token),
         ]);
         if (!taskResponse?.date) {
           throw new Error("The server did not provide the organization date");
@@ -180,15 +170,13 @@ function HomeContent() {
           "scheduled",
           undefined,
           undefined,
-          "routine",
         );
         const byInstanceId = new Map<string, TaskItem>();
         const previousByInstanceId = new Map<string, TaskItem>();
 
         (taskResponse?.tasks ?? []).forEach((task) => {
           if (
-            isTaskScheduledInWindow(task, start, end) &&
-            isTaskIncludedInView(task, view)
+            isTaskScheduledInWindow(task, start, end)
           ) {
             byInstanceId.set(task.instanceId, task);
           }
@@ -200,7 +188,7 @@ function HomeContent() {
               task,
               previousWindow.start,
               previousWindow.end,
-            ) && isTaskIncludedInView(task, view)
+            )
           ) {
             previousByInstanceId.set(task.instanceId, task);
           }
@@ -208,7 +196,7 @@ function HomeContent() {
 
         setTasks(Array.from(byInstanceId.values()));
         setPreviousTasks(Array.from(previousByInstanceId.values()));
-        setActiveAlertsCount(Number(alertsRes?.count ?? 0));
+        setAlertsCount(Number(alertsRes?.count ?? 0));
       } catch (err: unknown) {
         setError(getDwmsErrorMessage(err, "Failed to load home page data"));
       } finally {
@@ -446,9 +434,9 @@ function HomeContent() {
             detail: "Submitted for review",
           },
           {
-            label: "Open alerts",
-            value: activeAlertsCount,
-            detail: activeAlertsCount ? "Needs attention" : "No open alerts",
+            label: "Alerts",
+            value: alertsCount,
+            detail: "Alerts raised against you",
           },
           {
             label: "Completion rate",

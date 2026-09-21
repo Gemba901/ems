@@ -7,11 +7,9 @@ import { useAuthStore } from "@/store/auth.store";
 import {
   DwmsService,
   getDwmsErrorMessage,
-  type DwmsAlertItem,
   type DwmsAssignedTaskHistoryItem,
 } from "@/services/dwms.service";
 import {
-  AlertTriangle,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -24,11 +22,9 @@ import DwmsTabHeader from "../components/DwmsTabHeader";
 
 type ApprovalTab = "pending" | "approved" | "rejected";
 type PriorityFilter = "ALL" | "MEDIUM" | "HIGH" | "CRITICAL";
-type ApprovalItemKind = "task" | "alert";
 type ApprovalAction = "approve" | "reject";
 
 type ApprovalDecision = {
-  kind: ApprovalItemKind;
   action: ApprovalAction;
   id: string;
   title: string;
@@ -50,9 +46,6 @@ function ApprovalTasksContent() {
   const [pendingTasks, setPendingTasks] = useState<DwmsAssignedTaskHistoryItem[]>([]);
   const [approvedTasks, setApprovedTasks] = useState<DwmsAssignedTaskHistoryItem[]>([]);
   const [rejectedTasks, setRejectedTasks] = useState<DwmsAssignedTaskHistoryItem[]>([]);
-  const [pendingAlerts, setPendingAlerts] = useState<DwmsAlertItem[]>([]);
-  const [approvedAlerts, setApprovedAlerts] = useState<DwmsAlertItem[]>([]);
-  const [rejectedAlerts, setRejectedAlerts] = useState<DwmsAlertItem[]>([]);
   const [activeTab, setActiveTab] = useState<ApprovalTab>("pending");
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -72,32 +65,20 @@ function ApprovalTasksContent() {
         pendingTaskResponse,
         approvedTaskResponse,
         rejectedTaskResponse,
-        pendingAlertResponse,
-        approvedAlertResponse,
-        rejectedAlertResponse,
       ] = await Promise.all([
         DwmsService.getApprovalTasks(token, "pending"),
         DwmsService.getApprovalTasks(token, "approved"),
         DwmsService.getApprovalTasks(token, "rejected"),
-        DwmsService.getApprovalAlerts(token, "pending"),
-        DwmsService.getApprovalAlerts(token, "approved"),
-        DwmsService.getApprovalAlerts(token, "rejected"),
       ]);
 
       setPendingTasks(pendingTaskResponse.tasks ?? []);
       setApprovedTasks(approvedTaskResponse.tasks ?? []);
       setRejectedTasks(rejectedTaskResponse.tasks ?? []);
-      setPendingAlerts(pendingAlertResponse.alerts ?? []);
-      setApprovedAlerts(approvedAlertResponse.alerts ?? []);
-      setRejectedAlerts(rejectedAlertResponse.alerts ?? []);
     } catch (fetchError: unknown) {
       setError(getDwmsErrorMessage(fetchError, "Failed to load approvals"));
       setPendingTasks([]);
       setApprovedTasks([]);
       setRejectedTasks([]);
-      setPendingAlerts([]);
-      setApprovedAlerts([]);
-      setRejectedAlerts([]);
     } finally {
       setLoading(false);
     }
@@ -130,21 +111,17 @@ function ApprovalTasksContent() {
       return;
     }
 
-    const itemKey = `${approvalModal.kind}:${approvalModal.id}`;
+    const itemKey = `task:${approvalModal.id}`;
     setSavingId(itemKey);
     setError(null);
     setCommentError(null);
 
     try {
       const token = useAuthStore.getState().accessToken ?? "";
-      if (approvalModal.kind === "task" && approvalModal.action === "approve") {
+      if (approvalModal.action === "approve") {
         await DwmsService.approveTask(token, approvalModal.id, { comment: note });
-      } else if (approvalModal.kind === "task" && approvalModal.action === "reject") {
-        await DwmsService.rejectTask(token, approvalModal.id, { comment: note });
-      } else if (approvalModal.kind === "alert" && approvalModal.action === "approve") {
-        await DwmsService.approveAlertClosure(token, approvalModal.id, { comment: note });
       } else {
-        await DwmsService.rejectAlertClosure(token, approvalModal.id, { comment: note });
+        await DwmsService.rejectTask(token, approvalModal.id, { comment: note });
       }
 
       setApprovalModal(null);
@@ -158,7 +135,6 @@ function ApprovalTasksContent() {
   }
 
   const currentTasks = activeTab === "pending" ? pendingTasks : activeTab === "approved" ? approvedTasks : rejectedTasks;
-  const currentAlerts = activeTab === "pending" ? pendingAlerts : activeTab === "approved" ? approvedAlerts : rejectedAlerts;
 
   const filteredTasks = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -175,23 +151,6 @@ function ApprovalTasksContent() {
     });
   }, [currentTasks, priorityFilter, searchTerm]);
 
-  const filteredAlerts = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    return currentAlerts.filter((alert) => {
-      const severity = alert.severity === "LOW" ? "MEDIUM" : (alert.severity ?? "MEDIUM");
-      if (priorityFilter !== "ALL" && severity !== priorityFilter) return false;
-      if (!q) return true;
-
-      return [
-        alert.title,
-        alert.description,
-        alert.closureNote,
-        alert.closureRequestedBy?.name,
-        alert.againstUser?.name,
-        alert.taskInstance?.task?.title,
-      ].some((value) => String(value ?? "").toLowerCase().includes(q));
-    });
-  }, [currentAlerts, priorityFilter, searchTerm]);
 
   const formatDate = (value?: string | null) => {
     if (!value) return "Not available";
@@ -220,7 +179,7 @@ function ApprovalTasksContent() {
     : activeTab === "approved"
       ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
       : "bg-rose-500/10 text-rose-600 border border-rose-500/20";
-  const emptyCount = currentTasks.length + currentAlerts.length;
+  const emptyCount = currentTasks.length;
 
   return (
     <div className="mx-auto max-w-none px-4 pt-8 sm:px-6 lg:px-8 space-y-6 pb-8">
@@ -232,19 +191,19 @@ function ApprovalTasksContent() {
             key: "pending",
             label: "Required to Approve",
             dotColor: "bg-cyan-500",
-            count: pendingTasks.length + pendingAlerts.length,
+            count: pendingTasks.length,
           },
           {
             key: "approved",
             label: "Approved",
             dotColor: "bg-emerald-500",
-            count: approvedTasks.length + approvedAlerts.length,
+            count: approvedTasks.length,
           },
           {
             key: "rejected",
             label: "Rejected",
             dotColor: "bg-rose-500",
-            count: rejectedTasks.length + rejectedAlerts.length,
+            count: rejectedTasks.length,
           },
         ]}
       />
@@ -252,7 +211,7 @@ function ApprovalTasksContent() {
         <DwmsSearchFilterBar
           searchValue={searchTerm}
           onSearchChange={setSearchTerm}
-          searchPlaceholder="Search title, employee, assigner, alert..."
+          searchPlaceholder="Search title, employee, or assigner..."
           filters={[
             {
               key: "priority",
@@ -279,11 +238,11 @@ function ApprovalTasksContent() {
           <div className="rounded-2xl border border-dashed border-border-app bg-white py-24 text-center text-sm text-muted-app">
             Loading approvals...
           </div>
-        ) : filteredTasks.length === 0 && filteredAlerts.length === 0 ? (
+        ) : filteredTasks.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border-app bg-white py-24 text-center text-sm text-muted-app">
             {emptyCount === 0
               ? activeTab === "pending"
-                ? "No tasks or alerts are waiting for your approval."
+                ? "No tasks are waiting for your approval."
                 : activeTab === "approved"
                   ? "No approved items yet."
                   : "No rejected items yet."
@@ -291,76 +250,6 @@ function ApprovalTasksContent() {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredAlerts.map((alert) => {
-              const severity = alert.severity === "LOW" ? "MEDIUM" : (alert.severity ?? "MEDIUM");
-              const saving = savingId === `alert:${alert.id}`;
-              const requestedBy = alert.closureRequestedBy?.name || alert.againstUser?.name || alert.taskInstance?.owner?.name || "Responsible person";
-
-              return (
-                <article
-                  key={`alert:${alert.id}`}
-                  onClick={() => router.push(`/dwms/alerts/${alert.id}`)}
-                  className="cursor-pointer rounded-2xl border border-border-app bg-white p-4 transition hover:border-slate-300 hover:shadow-md"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${getPriorityBadgeColor(String(severity))}`}>
-                          {String(severity)}
-                        </span>
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${tabTone}`}>
-                          Alert Closure {tabStatusLabel}
-                        </span>
-                      </div>
-
-                      <div>
-                        <h3 className="text-base font-semibold text-text-app">{alert.title}</h3>
-                        <p className="mt-1 text-sm text-muted-app font-light leading-relaxed">{alert.description}</p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-app">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-bg-app px-3 py-1 font-medium text-text-app">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          Requested by: {requestedBy}
-                        </span>
-                        {alert.raisedBy?.name && (
-                          <span className="rounded-full bg-bg-app px-3 py-1 font-medium text-text-app">
-                            Raised by: {alert.raisedBy.name}
-                          </span>
-                        )}
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-bg-app px-3 py-1 font-medium text-text-app">
-                          <Clock className="h-3.5 w-3.5" />
-                          Requested: {formatDate(alert.closureRequestedAt ?? alert.updatedAt ?? alert.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {activeTab === "pending" && (
-                      <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => openApprovalModal({ kind: "alert", action: "reject", id: alert.id, title: alert.title })}
-                          disabled={saving}
-                          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-[11px] font-bold text-rose-600 shadow-sm transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <XCircle className="h-3.5 w-3.5" />
-                          {saving ? "Rejecting..." : "Reject"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openApprovalModal({ kind: "alert", action: "approve", id: alert.id, title: alert.title })}
-                          disabled={saving}
-                          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-3 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          {saving ? "Approving..." : "Approve"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
 
             {filteredTasks.map((task) => {
               const ownerName = task.ownerName || task.owner?.name || "Unknown employee";
@@ -424,7 +313,7 @@ function ApprovalTasksContent() {
                       <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
                         <button
                           type="button"
-                          onClick={() => openApprovalModal({ kind: "task", action: "reject", id: task.id, title: task.title })}
+                          onClick={() => openApprovalModal({ action: "reject", id: task.id, title: task.title })}
                           disabled={saving}
                           className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-[11px] font-bold text-rose-600 shadow-sm transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                         >
@@ -433,7 +322,7 @@ function ApprovalTasksContent() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => openApprovalModal({ kind: "task", action: "approve", id: task.id, title: task.title })}
+                          onClick={() => openApprovalModal({ action: "approve", id: task.id, title: task.title })}
                           disabled={saving}
                           className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-3 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
@@ -456,10 +345,10 @@ function ApprovalTasksContent() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-app">
-                  {approvalModal.kind === "task" ? "Task Approval" : "Alert Approval"}
+                  Task Approval
                 </p>
                 <h2 className="mt-1 text-lg font-bold text-text-app">
-                  {approvalModal.action === "approve" ? "Approve" : "Reject"} {approvalModal.kind}
+                  {approvalModal.action === "approve" ? "Approve" : "Reject"} task
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-muted-app">{approvalModal.title}</p>
               </div>
@@ -516,7 +405,6 @@ function ApprovalTasksContent() {
     </div>
   );
 }
-
 
 
 

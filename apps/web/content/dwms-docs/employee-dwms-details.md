@@ -17,9 +17,9 @@ The selected employee must belong to the current organization.
 The summary counts current tasks, current alerts, abnormalities, raised alerts, applicable activities, and active activities. Counts describe the selected employee, not the viewer.
 
 - **Current tasks:** Work the employee still needs to finish.
-- **Current alerts:** Open problems for which the employee is responsible.
-- **Abnormalities:** Open issues that have crossed an abnormality rule or were recorded as abnormalities.
-- **Raised alerts:** Problems reported by the employee that remain open.
+- **Current alerts:** Alert histories for which the employee is responsible.
+- **Abnormalities:** Those histories after their third raise.
+- **Raised alerts:** Histories initially raised by the employee.
 - **Applicable activities:** Standard work matching the employee's job role.
 - **Active activities:** Applicable standard work currently enabled for the employee.
 
@@ -31,19 +31,17 @@ Completed and terminal historical work is not the focus of this panel; use Repor
 
 ## 4. Current Alerts
 
-Current Alerts shows unresolved non-abnormality alerts for which the employee is responsible, either directly or through a linked task. Severity, status, and creation date help identify urgent items.
+Current Alerts shows non-abnormality histories for which the employee is responsible. Each history shows its raise count and acknowledgment state.
 
-![Current Alerts lists unresolved items with their severity, date, and status.](../../public/dwms-docs/employee-dwms-details/02-current-alerts.png)
 
 ## 5. Abnormalities
 
-Abnormalities shows open abnormality records involving the employee. These may have been created when a source alert exceeded its configured corrective-action window.
+Abnormalities shows the employee's alert histories that have been raised at least three times.
 
 ## 6. Raised Alerts
 
-Raised Alerts shows unresolved non-abnormality alerts opened by the employee. The entry identifies the person, task owner, or General target involved.
+Raised Alerts shows histories initially raised by the employee. The entry identifies the responsible person, task, department, or organization target involved.
 
-![Raised Alerts appears directly above the employee's Applicable Activities section.](../../public/dwms-docs/employee-dwms-details/03-raised-alerts-and-applicable-activities.png)
 
 ## 7. Applicable Activities
 

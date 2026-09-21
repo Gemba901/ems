@@ -78,7 +78,6 @@ An activity describes standard work. Creating a task from it does not change the
 - **Due date — required for Once:** The working day by which a one-time task must be completed.
 - **Priority — required:** Medium, High, or Critical urgency.
 - **Approver — optional:** The person who reviews submitted completion. None allows direct completion when no other review rule applies.
-- **Notify when overdue — optional:** Additional people who receive overdue alerts. Up to 10 unique employees can be selected.
 - **Document required for completion — optional:** Prevents completion until the owner attaches evidence.
 - **Document Name — required when a document is required:** Tells the owner which file is expected.
 
@@ -136,7 +135,7 @@ Click Priority to choose the urgency shown on the owner's task.
 - **High:** Work requiring greater attention.
 - **Critical:** The most urgent work.
 
-Priority appears on the owner's task card and is also used by task delay and acknowledgement timing rules where configured.
+Priority appears on the owner's task card.
 
 ## 9. Approval and overdue alerts
 
@@ -150,13 +149,7 @@ The approver list appears after an owner is selected. Search the list and select
 
 When an approver is selected, marking the task Done submits it as **Approval Pending**. The approver receives a notification and decides whether to approve or reject it.
 
-### Notify when overdue
-
-The selected employees receive the task-delay alert in addition to the people selected by escalation rules. They do not become task owners or approvers.
-
-![Notify when overdue supports selecting additional alert recipients.](../../public/dwms-docs/assign-task/10-overdue-recipients.png)
-
-A selected employee will be included as an additional overdue-alert recipient.
+Each overdue task instance can generate one automatic alert addressed to the task owner. The owner acknowledges it with a note.
 
 ## 10. Completion evidence
 

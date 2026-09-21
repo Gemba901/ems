@@ -7,30 +7,34 @@ type SVGLineChartProps = {
   valueKey?: keyof DwmsDashboardTrendPoint;
   ySuffix?: string;
   tooltipLabel?: string;
+  height?: number;
+  variant?: 'line' | 'bar';
 };
 
 export default function SVGLineChart({
   trendData,
   valueKey = 'value',
   ySuffix = '',
-  tooltipLabel = 'Value'
+  tooltipLabel = 'Value',
+  height = 220,
+  variant = 'line'
 }: SVGLineChartProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   if (!trendData || trendData.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center rounded-2xl border border-dashed border-border-app bg-bg-app/50 text-sm text-muted-app">
+      <div className={`flex items-center justify-center rounded-2xl border border-dashed border-border-app bg-bg-app/50 text-sm text-muted-app ${height <= 180 ? 'h-36' : 'h-48'}`}>
         No trend data available.
       </div>
     );
   }
 
   const width = 600;
-  const height = 220;
-  const paddingLeft = 45;
-  const paddingRight = 20;
-  const paddingTop = 20;
-  const paddingBottom = 35;
+  const isCompact = height <= 180;
+  const paddingLeft = isCompact ? 42 : 48;
+  const paddingRight = isCompact ? 16 : 22;
+  const paddingTop = isCompact ? 14 : 20;
+  const paddingBottom = isCompact ? 28 : 34;
 
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
@@ -46,7 +50,7 @@ export default function SVGLineChart({
     return val > max ? val : max;
   }, 0);
 
-  const maxScale = ySuffix.trim() === '%' ? 100 : (maxValInData > 0 ? Math.ceil(maxValInData * 1.2) : 10);
+  const maxScale = ySuffix.trim() === '%' ? 100 : (maxValInData > 0 ? Math.ceil(maxValInData * 1.1) : 10);
 
   const pointsCount = trendData.length;
   const getX = (index: number) => pointsCount === 1 ? paddingLeft + chartWidth / 2 : paddingLeft + (index * (chartWidth / (pointsCount - 1)));
@@ -54,58 +58,53 @@ export default function SVGLineChart({
     const v = Math.max(0, Math.min(maxScale, val));
     return paddingTop + chartHeight - (v / maxScale) * chartHeight;
   };
+  const barWidth = Math.max(3, Math.min(24, (chartWidth / Math.max(pointsCount, 1)) * 0.62));
 
   let pathD = '';
-  let areaD = '';
 
   trendData.forEach((d, i) => {
     const x = getX(i);
     const y = getY(getValue(d));
     if (i === 0) {
       pathD = `M ${x} ${y}`;
-      areaD = `M ${x} ${paddingTop + chartHeight} L ${x} ${y}`;
     } else {
       pathD += ` L ${x} ${y}`;
-      areaD += ` L ${x} ${y}`;
-    }
-    if (i === pointsCount - 1) {
-      areaD += ` L ${x} ${paddingTop + chartHeight} Z`;
     }
   });
 
+  const maxXAxisLabels = isCompact ? 5 : 7;
+  const xLabelStep = Math.max(1, Math.ceil((pointsCount - 1) / Math.max(maxXAxisLabels - 1, 1)));
+  const shouldShowXAxisLabel = (index: number) => (
+    index === 0 || index === pointsCount - 1 || index % xLabelStep === 0
+  );
+
   return (
     <div className="relative w-full overflow-hidden">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible select-none">
-        <defs>
-          <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-          </linearGradient>
-          <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#60a5fa" />
-            <stop offset="100%" stopColor="#2563eb" />
-          </linearGradient>
-        </defs>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-auto w-full select-none overflow-visible"
+        role="img"
+        aria-label={`${tooltipLabel} trend across ${pointsCount} data point${pointsCount === 1 ? '' : 's'}`}
+      >
 
         {/* Horizontal grid lines */}
         {[0, 25, 50, 75, 100].map((percent) => {
           const val = (percent / 100) * maxScale;
           const y = getY(val);
           return (
-            <g key={percent} className="opacity-15 dark:opacity-10">
+            <g key={percent}>
               <line
                 x1={paddingLeft}
                 y1={y}
                 x2={width - paddingRight}
                 y2={y}
-                stroke="currentColor"
+                stroke={percent === 0 ? "#cbd5e1" : "#e2e8f0"}
                 strokeWidth="1"
-                strokeDasharray="4 4"
               />
               <text
                 x={paddingLeft - 8}
                 y={y + 4}
-                className="text-[10px] fill-current font-medium text-muted-app"
+                className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} fill-slate-500 font-medium`}
                 textAnchor="end"
               >
                 {Math.round(val)}{ySuffix}
@@ -114,20 +113,33 @@ export default function SVGLineChart({
           );
         })}
 
-        {/* Shaded Area */}
-        {trendData.length > 0 && <path d={areaD} fill="url(#areaGradient)" />}
-
-        {/* Line */}
-        {trendData.length > 0 && (
+        {variant === 'line' && trendData.length > 0 && (
           <path
             d={pathD}
             fill="none"
-            stroke="url(#lineGradient)"
-            strokeWidth="3.5"
+            stroke="#2563eb"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
         )}
+
+        {variant === 'bar' && trendData.map((d, i) => {
+          const value = getValue(d);
+          const y = getY(value);
+          const baseline = paddingTop + chartHeight;
+          return (
+            <rect
+              key={`bar-${d.date ?? d.label ?? i}`}
+              x={getX(i) - barWidth / 2}
+              y={y}
+              width={barWidth}
+              height={Math.max(0, baseline - y)}
+              rx="2"
+              className="fill-blue-500/80"
+            />
+          );
+        })}
 
         {/* Hotspots / Labels */}
         {trendData.map((d, i) => {
@@ -142,16 +154,7 @@ export default function SVGLineChart({
             label = d.label ?? '';
           }
           
-          let step = 1;
-          if (pointsCount > 60) {
-            step = 10;
-          } else if (pointsCount > 20) {
-            step = 5;
-          } else if (pointsCount > 10) {
-            step = 2;
-          }
-          
-          const showLabel = i % step === 0;
+          const showLabel = shouldShowXAxisLabel(i);
           const uniqueKey = d.date ? d.date : `${d.label}-${i}`;
 
           return (
@@ -160,7 +163,7 @@ export default function SVGLineChart({
                 <text
                   x={x}
                   y={paddingTop + chartHeight + 16}
-                  className="text-[9px] font-semibold fill-current text-muted-app"
+                  className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} fill-slate-500 font-medium`}
                   textAnchor="middle"
                 >
                   {label}
@@ -173,19 +176,23 @@ export default function SVGLineChart({
                 cy={y}
                 r="12"
                 className="fill-transparent cursor-pointer"
+                tabIndex={0}
+                aria-label={`${label}: ${getValue(d).toFixed(1)}${ySuffix}`}
                 onMouseEnter={() => setHoveredIdx(i)}
                 onMouseLeave={() => setHoveredIdx(null)}
+                onFocus={() => setHoveredIdx(i)}
+                onBlur={() => setHoveredIdx(null)}
               />
 
-              {/* Hover dot */}
+              {/* Data point / active point */}
               <circle
                 cx={x}
                 cy={y}
-                r="5.5"
+                r={hoveredIdx === i ? "5" : "3"}
                 className={`transition-all duration-150 pointer-events-none ${
-                  hoveredIdx === i || pointsCount === 1
-                    ? 'fill-blue-500 stroke-zinc-50 stroke-2'
-                    : 'fill-blue-500 opacity-0'
+                  hoveredIdx === i || pointsCount <= 12 || i === pointsCount - 1
+                    ? 'fill-white stroke-blue-600 stroke-2'
+                    : 'fill-blue-600 opacity-0'
                 }`}
               />
             </g>
@@ -196,21 +203,21 @@ export default function SVGLineChart({
       {/* Tooltip */}
       {hoveredIdx !== null && trendData[hoveredIdx] && (
         <div
-          className="pointer-events-none absolute z-10 rounded-xl border border-border-app bg-white p-2 text-xs text-text-app shadow-xl transition-all duration-150"
+          className="pointer-events-none absolute z-10 min-w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-lg transition-all duration-150"
           style={{
             left: `${(getX(hoveredIdx) / width) * 100}%`,
             top: `${(getY(getValue(trendData[hoveredIdx])) / height) * 100 - 16}%`,
             transform: 'translate(-50%, -100%)',
           }}
         >
-          <div className="font-medium text-[10px] text-muted-app mb-0.5">
+          <div className="mb-1 text-[10px] font-medium text-slate-500">
             {trendData[hoveredIdx].date ? (
               formatOrganizationDateKey(trendData[hoveredIdx].date, { month: 'short', day: 'numeric' })
             ) : (
               trendData[hoveredIdx].label
             )}
           </div>
-          <div className="font-bold text-accent-app">
+          <div className="font-semibold tabular-nums text-slate-950">
             {tooltipLabel}: {getValue(trendData[hoveredIdx]).toFixed(1)}{ySuffix}
           </div>
           {trendData[hoveredIdx].total !== undefined && (

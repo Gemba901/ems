@@ -3,12 +3,10 @@ import {
   ArrayUnique,
   IsArray,
   IsEnum,
-  IsNumber,
   IsOptional,
   IsString,
-  Min,
 } from 'class-validator';
-import { EscalationContactRule, TaskPermissionRole, ViewLevel } from 'db';
+import { TaskPermissionRole, ViewLevel } from 'db';
 
 const MAX_CUSTOM_TASK_PEOPLE = 3;
 
@@ -44,54 +42,4 @@ export class UpdateDwmsPermissionConfigDto {
   @IsOptional()
   @IsEnum(ViewLevel)
   analyticsViewLevel?: ViewLevel;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  escalateUnacknowledgedMins?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  escalateUnacknowledgedMediumMins?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  escalateUnacknowledgedHighMins?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  escalateUnacknowledgedCriticalMins?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  abnormalityMediumMins?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  abnormalityHighMins?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  abnormalityCriticalMins?: number;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @IsEnum(EscalationContactRule, { each: true })
-  escalationContactRules?: EscalationContactRule[];
-
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @ArrayMaxSize(MAX_CUSTOM_TASK_PEOPLE)
-  @IsString({ each: true })
-  customEscalationContactIds?: string[];
 }
-
-

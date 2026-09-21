@@ -1,7 +1,7 @@
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { EscalationContactRule, TaskPermissionRole, TaskStatus } from 'db';
+import { TaskPermissionRole, TaskStatus } from 'db';
 import { TASK_ROLE_VALUES } from '../dto/dwmsSettings.dto';
 import { parseTimeZone } from '../utils/taskSchedule';
 
@@ -61,16 +61,6 @@ export abstract class DwmsBaseService {
     return timeZone;
   }
 
-  protected normalizeAckWindowFallback(
-    mins: number | null | undefined,
-    fallback: number,
-  ) {
-    const value =
-      typeof mins === 'number' && Number.isFinite(mins)
-        ? Math.trunc(mins)
-        : fallback;
-    return Math.max(0, value);
-  }
 
   protected async validateDwmsEmployee(
     employeeId: string,
@@ -156,56 +146,8 @@ export abstract class DwmsBaseService {
     return normalized;
   }
 
-  protected normalizeEscalationContactRules(input?: EscalationContactRule[]) {
-    const selected = [...new Set((input ?? []).filter(Boolean))];
-    if (selected.length === 0) {
-      return [EscalationContactRule.ASSIGNER];
-    }
-    return selected;
-  }
-
   protected formatDwmsPermissionConfig(config: any) {
-    if (!config) return config;
-
-    const escalationContactRules =
-      Array.isArray(config.escalationContactRules) &&
-      config.escalationContactRules.length > 0
-        ? config.escalationContactRules
-        : [EscalationContactRule.ASSIGNER];
-
-    return {
-      ...config,
-      escalationContactRules,
-      escalateUnacknowledgedMediumMins: this.normalizeAckWindowFallback(
-        config.escalateUnacknowledgedMediumMins,
-        1440,
-      ),
-      escalateUnacknowledgedHighMins: this.normalizeAckWindowFallback(
-        config.escalateUnacknowledgedHighMins,
-        480,
-      ),
-      escalateUnacknowledgedCriticalMins: this.normalizeAckWindowFallback(
-        config.escalateUnacknowledgedCriticalMins,
-        120,
-      ),
-      abnormalityMediumMins: this.normalizeAckWindowFallback(
-        config.abnormalityMediumMins,
-        1440,
-      ),
-      abnormalityHighMins: this.normalizeAckWindowFallback(
-        config.abnormalityHighMins,
-        480,
-      ),
-      abnormalityCriticalMins: this.normalizeAckWindowFallback(
-        config.abnormalityCriticalMins,
-        120,
-      ),
-      customEscalationContactIds:
-        Array.isArray(config.customEscalationContactIds) &&
-        config.customEscalationContactIds.length > 0
-          ? config.customEscalationContactIds
-          : [],
-    };
+    return config;
   }
 
   // Dynamic role level mapper from EMS to DWMS format

@@ -1,6 +1,7 @@
 "use client";
 
 import { type ElementType, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
@@ -26,6 +27,7 @@ type EmployeeDwmsPanelProps = {
   accessToken: string;
   jobTitle?: string | null;
   canManageActivities: boolean;
+  showApplicableActivities?: boolean;
 };
 
 function formatDate(iso: string | null | undefined, timeZone?: string | null) {
@@ -114,15 +116,22 @@ function PaginationControls({
 function TaskList({
   tasks,
   timeZone,
+  onOpen,
 }: {
   tasks?: DwmsTaskItem[];
   timeZone?: string | null;
+  onOpen: (task: DwmsTaskItem) => void;
 }) {
   return (
     <div className="divide-y divide-slate-100">
       {tasks?.length ? (
         tasks.map((task) => (
-          <div key={task.instanceId} className="p-4">
+          <button
+            key={task.instanceId}
+            type="button"
+            onClick={() => onOpen(task)}
+            className="w-full p-4 text-left transition-colors hover:bg-slate-50"
+          >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <div className="min-w-0">
                 <p className="break-words text-sm font-semibold text-slate-900">
@@ -141,7 +150,7 @@ function TaskList({
                 {task.status.replace(/_/g, " ")}
               </span>
             </div>
-          </div>
+          </button>
         ))
       ) : (
         <EmptyState>No current DWMS tasks.</EmptyState>
@@ -155,11 +164,13 @@ function AlertList({
   emptyMessage,
   tone,
   meta,
+  onOpen,
 }: {
   alerts?: DwmsAlertItem[];
   emptyMessage: string;
   tone: "rose" | "amber" | "blue";
   meta: (alert: DwmsAlertItem) => string;
+  onOpen: (alert: DwmsAlertItem) => void;
 }) {
   const badgeClass =
     tone === "rose"
@@ -172,7 +183,12 @@ function AlertList({
     <div className="divide-y divide-slate-100">
       {alerts?.length ? (
         alerts.map((alert) => (
-          <div key={alert.id} className="p-4">
+          <button
+            key={alert.id}
+            type="button"
+            onClick={() => onOpen(alert)}
+            className="w-full p-4 text-left transition-colors hover:bg-slate-50"
+          >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <div className="min-w-0">
                 <p className="break-words text-sm font-semibold text-slate-900">
@@ -183,10 +199,10 @@ function AlertList({
               <span
                 className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${badgeClass}`}
               >
-                {alert.status.replace(/_/g, " ")}
+                {alert.isAbnormality ? "Abnormality" : alert.pendingAcknowledgments ? "Not Acknowledged" : "Acknowledged"}
               </span>
             </div>
-          </div>
+          </button>
         ))
       ) : (
         <EmptyState>{emptyMessage}</EmptyState>
@@ -200,13 +216,15 @@ export default function EmployeeDwmsPanel({
   accessToken,
   jobTitle,
   canManageActivities,
+  showApplicableActivities = true,
 }: EmployeeDwmsPanelProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [pages, setPages] = useState({
-    currentTasks: 1,
+    routineWork: 1,
+    assignedTasks: 1,
     currentAlerts: 1,
     abnormalities: 1,
-    raisedAlerts: 1,
     activities: 1,
   });
   const organizationTimeZone = useAuthStore(
@@ -217,17 +235,17 @@ export default function EmployeeDwmsPanel({
     queryKey: [
       "dwms-employee-profile",
       employeeId,
-      pages.currentTasks,
+      pages.routineWork,
+      pages.assignedTasks,
       pages.currentAlerts,
       pages.abnormalities,
-      pages.raisedAlerts,
     ],
     queryFn: () =>
       DwmsService.getEmployeeDwmsProfile(accessToken, employeeId, {
-        taskPage: pages.currentTasks,
+        routinePage: pages.routineWork,
+        assignedPage: pages.assignedTasks,
         currentAlertPage: pages.currentAlerts,
         abnormalityPage: pages.abnormalities,
-        raisedAlertPage: pages.raisedAlerts,
       }),
     placeholderData: (previousData) => previousData,
     enabled: !!accessToken && !!employeeId,
@@ -237,7 +255,7 @@ export default function EmployeeDwmsPanel({
     queryKey: ["dwms-employee-role-activities", employeeId, jobTitle],
     queryFn: () =>
       DwmsService.getEmployeeRoleActivities(accessToken, employeeId),
-    enabled: !!accessToken && !!employeeId && !!jobTitle,
+    enabled: showApplicableActivities && !!accessToken && !!employeeId && !!jobTitle,
   });
 
   const activityStatusMutation = useMutation({
@@ -267,9 +285,6 @@ export default function EmployeeDwmsPanel({
     },
   });
 
-  const activeActivityCount =
-    roleActivities?.activities?.filter((item) => item.status === "ACTIVE")
-      .length ?? 0;
   const activityPageSize = 5;
   const activityItems = roleActivities?.activities ?? [];
   const activityPagination: DwmsPaginationMeta = {
@@ -288,26 +303,16 @@ export default function EmployeeDwmsPanel({
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        {[
-          ["Current Tasks", dwmsProfile?.counts?.currentTasks ?? 0],
-          ["Current Alerts", dwmsProfile?.counts?.currentAlerts ?? 0],
-          ["Abnormalities", dwmsProfile?.counts?.abnormalities ?? 0],
-          ["Raised Alerts", dwmsProfile?.counts?.raisedAlerts ?? 0],
-          [
-            "Activities",
-            dwmsProfile?.counts?.applicableActivities ??
-              roleActivities?.count ??
-              0,
-          ],
-          [
-            "Active Activities",
-            dwmsProfile?.counts?.activeActivities ?? activeActivityCount,
-          ],
-        ].map(([label, value]) => (
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {([
+          ["routineWork", "Routine Work", dwmsProfile?.counts?.routineWork ?? 0],
+          ["assignedTasks", "Assigned Tasks", dwmsProfile?.counts?.assignedTasks ?? 0],
+          ["currentAlerts", "Alerts", dwmsProfile?.counts?.currentAlerts ?? 0],
+          ["abnormalities", "Abnormalities", dwmsProfile?.counts?.abnormalities ?? 0],
+        ] as const).map(([section, label, value]) => (
           <div
-            key={label}
-            className="min-w-0 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:p-4"
+            key={section}
+            className="min-w-0 rounded-2xl border border-slate-100 bg-white p-3 text-left shadow-sm sm:p-4"
           >
             <p className="break-words text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[11px]">
               {label}
@@ -326,45 +331,43 @@ export default function EmployeeDwmsPanel({
       ) : (
         <>
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
               <CardHeader
                 icon={ClipboardList}
-                title="Current Tasks"
+                title="Routine Work"
                 iconColor="text-indigo-500"
                 iconBg="bg-indigo-50"
               />
               <TaskList
-                tasks={dwmsProfile?.currentTasks}
+                tasks={dwmsProfile?.routineWork}
                 timeZone={organizationTimeZone}
+                onOpen={(task) => router.push(`/dwms/tasks/${task.instanceId}`)}
               />
               <PaginationControls
-                pagination={dwmsProfile?.pagination?.currentTasks}
-                onPageChange={(page) => changePage("currentTasks", page)}
+                pagination={dwmsProfile?.pagination?.routineWork}
+                onPageChange={(page) => changePage("routineWork", page)}
               />
             </div>
 
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
               <CardHeader
-                icon={AlertTriangle}
-                title="Current Alerts"
-                iconColor="text-rose-500"
-                iconBg="bg-rose-50"
+                icon={ClipboardList}
+                title="Assigned Tasks"
+                iconColor="text-indigo-500"
+                iconBg="bg-indigo-50"
               />
-              <AlertList
-                alerts={dwmsProfile?.currentAlerts}
-                emptyMessage="No current alerts assigned to this employee."
-                tone="rose"
-                meta={(alert) =>
-                  `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
-                }
+              <TaskList
+                tasks={dwmsProfile?.assignedTasks}
+                timeZone={organizationTimeZone}
+                onOpen={(task) => router.push(`/dwms/tasks/${task.instanceId}`)}
               />
               <PaginationControls
-                pagination={dwmsProfile?.pagination?.currentAlerts}
-                onPageChange={(page) => changePage("currentAlerts", page)}
+                pagination={dwmsProfile?.pagination?.assignedTasks}
+                onPageChange={(page) => changePage("assignedTasks", page)}
               />
             </div>
 
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
               <CardHeader
                 icon={Bell}
                 title="Abnormalities"
@@ -378,6 +381,7 @@ export default function EmployeeDwmsPanel({
                 meta={(alert) =>
                   `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
                 }
+                onOpen={(alert) => router.push(`/dwms/alerts/${alert.id}`)}
               />
               <PaginationControls
                 pagination={dwmsProfile?.pagination?.abnormalities}
@@ -385,32 +389,30 @@ export default function EmployeeDwmsPanel({
               />
             </div>
 
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
               <CardHeader
-                icon={Bell}
-                title="Raised Alerts"
-                iconColor="text-blue-500"
-                iconBg="bg-blue-50"
+                icon={AlertTriangle}
+                title="Alerts"
+                iconColor="text-rose-500"
+                iconBg="bg-rose-50"
               />
               <AlertList
-                alerts={dwmsProfile?.raisedAlerts}
-                emptyMessage="No open alerts raised by this employee."
-                tone="blue"
+                alerts={dwmsProfile?.currentAlerts}
+                emptyMessage="No alerts assigned to this employee."
+                tone="rose"
                 meta={(alert) =>
-                  `Against ${
-                    alert.againstUser?.name ??
-                    alert.taskInstance?.owner?.name ??
-                    "General"
-                  } - ${formatDate(alert.createdAt, organizationTimeZone)}`
+                  `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
                 }
+                onOpen={(alert) => router.push(`/dwms/alerts/${alert.id}`)}
               />
               <PaginationControls
-                pagination={dwmsProfile?.pagination?.raisedAlerts}
-                onPageChange={(page) => changePage("raisedAlerts", page)}
+                pagination={dwmsProfile?.pagination?.currentAlerts}
+                onPageChange={(page) => changePage("currentAlerts", page)}
               />
             </div>
           </div>
 
+          {showApplicableActivities && (
           <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
             <CardHeader
               icon={Activity}
@@ -522,6 +524,7 @@ export default function EmployeeDwmsPanel({
               />
             </div>
           </div>
+          )}
         </>
       )}
     </div>

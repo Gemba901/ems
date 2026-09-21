@@ -7,6 +7,7 @@ import {
   DwmsService,
   getDwmsErrorMessage,
   type DwmsAlertField,
+  type DwmsAlertItem,
   type DwmsAlertTargetTask,
   type DwmsAlertTargetType,
   type DwmsDepartmentOption,
@@ -127,6 +128,18 @@ export default function DwmsAlertForm({
     DwmsDepartmentOption[]
   >([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [histories, setHistories] = useState<DwmsAlertItem[]>([]);
+  const [selectedHistoryId, setSelectedHistoryId] = useState("");
+  const historyTargetId = targetType === "PERSON"
+    ? raiseAgainstUserId
+    : targetType === "TASK"
+      ? raiseTaskInstanceId
+      : targetType === "DEPARTMENT"
+        ? raiseDepartmentId
+        : "organization";
+  const historyTargetLabel = targetType === "GENERAL"
+    ? "organization"
+    : targetType.toLowerCase();
 
   const isHodOrMgmt =
     user?.roleLevel === "HOD" || user?.roleLevel === "MANAGEMENT";
@@ -151,26 +164,42 @@ export default function DwmsAlertForm({
     if (!isHodOrMgmt && targetType === "GENERAL") setTargetType("TASK");
   }, [isHodOrMgmt, targetType]);
 
+  useEffect(() => {
+    setSelectedHistoryId("");
+    setHistories([]);
+    if (!historyTargetId) return;
+    let active = true;
+    const token = useAuthStore.getState().accessToken ?? "";
+    void DwmsService.getAlertHistories(token, targetType, historyTargetId)
+      .then((result) => { if (active) setHistories(result.alerts ?? []); })
+      .catch((error) => { if (active) setMessage(getDwmsErrorMessage(error, "Failed to load previous alerts.")); });
+    return () => { active = false; };
+  }, [historyTargetId, targetType]);
+
   async function handleAlertSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!raiseTitle.trim() || !raiseDescription.trim()) return;
+    if (!selectedHistoryId && (!raiseTitle.trim() || !raiseDescription.trim())) return;
 
     setSubmitting(true);
     setMessage(null);
     try {
       const token = useAuthStore.getState().accessToken ?? "";
-      await DwmsService.createAlert(token, {
-        severity: raiseSeverity,
-        title: raiseTitle,
-        description: raiseDescription,
-        targetType,
-        taskInstanceId:
-          targetType === "TASK" ? raiseTaskInstanceId || null : null,
-        againstUserId:
-          targetType === "PERSON" ? raiseAgainstUserId || null : null,
-        departmentId:
-          targetType === "DEPARTMENT" ? raiseDepartmentId || null : null,
-      });
+      if (selectedHistoryId) {
+        await DwmsService.raiseAlertAgain(token, selectedHistoryId);
+      } else {
+        await DwmsService.createAlert(token, {
+          severity: raiseSeverity,
+          title: raiseTitle,
+          description: raiseDescription,
+          targetType,
+          taskInstanceId:
+            targetType === "TASK" ? raiseTaskInstanceId || null : null,
+          againstUserId:
+            targetType === "PERSON" ? raiseAgainstUserId || null : null,
+          departmentId:
+            targetType === "DEPARTMENT" ? raiseDepartmentId || null : null,
+        });
+      }
       onCreated();
     } catch (err: unknown) {
       setMessage(getDwmsErrorMessage(err, "Failed to raise alert."));
@@ -195,7 +224,7 @@ export default function DwmsAlertForm({
             Title <span className="text-red-500">*</span>
           </label>
           <input
-            required
+            required={!selectedHistoryId}
             value={raiseTitle}
             onFocus={() => setFocusedField("title")}
             onChange={(e) => setRaiseTitle(e.target.value)}
@@ -209,7 +238,7 @@ export default function DwmsAlertForm({
             Description <span className="text-red-500">*</span>
           </label>
           <textarea
-            required
+            required={!selectedHistoryId}
             rows={4}
             value={raiseDescription}
             onFocus={() => setFocusedField("description")}
@@ -346,6 +375,24 @@ export default function DwmsAlertForm({
           </div>
         )}
 
+        {historyTargetId && (
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Previous alerts you raised for this {historyTargetLabel}</h3>
+            <p className="mt-1 text-xs text-slate-600">Select a history to raise it again, or create a new alert.</p>
+            <label className="mt-3 flex items-center gap-2 text-sm text-slate-800">
+              <input type="radio" name="alertHistory" checked={!selectedHistoryId} onChange={() => setSelectedHistoryId("")} />
+              Create a new alert
+            </label>
+            {histories.length === 0 && <p className="mt-3 text-xs text-slate-500">No previous alerts found.</p>}
+            {histories.map((item) => (
+              <label key={item.id} className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                <input type="radio" name="alertHistory" value={item.id} checked={selectedHistoryId === item.id} onChange={() => setSelectedHistoryId(item.id)} />
+                <span><span className="font-semibold">{item.title}</span><span className="block text-xs text-slate-600">Raised {item.raiseCount} time{item.raiseCount === 1 ? "" : "s"}{item.isAbnormality ? " · Abnormality" : ""}</span></span>
+              </label>
+            ))}
+          </section>
+        )}
+
         <div className="flex justify-end gap-2 border-t border-border-app pt-4">
           <button
             type="button"
@@ -359,7 +406,7 @@ export default function DwmsAlertForm({
             disabled={submitting}
             className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
           >
-            {submitting ? "Raising Alert..." : "Raise Alert"}
+            {submitting ? "Raising Alert..." : selectedHistoryId ? "Raise Previous Alert Again" : "Raise Alert"}
           </button>
         </div>
       </form>

@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useAuthStore } from '@/store/auth.store';
 import {
   DwmsService,
+  type DwmsAccessCapabilities,
   type DwmsDashboardTrendPoint,
   type DwmsDepartmentDashboardResponse,
   type DwmsEmployeeDashboardResponse,
@@ -17,6 +18,7 @@ import SVGLineChart from '../components/dashboard/SVGLineChart';
 import OverviewDashboard from '../components/dashboard/OverviewDashboard';
 import DepartmentDashboard from '../components/dashboard/DepartmentDashboard';
 import EmployeeDashboard from '../components/dashboard/EmployeeDashboard';
+import EmployeeDwmsPanel from '../components/EmployeeDwmsPanel';
 import DwmsTabHeader from '../components/DwmsTabHeader';
 import DwmsSelectDropdown from '../components/DwmsSelectDropdown';
 import { addDaysToDateKey } from '../utils/organizationDate';
@@ -28,6 +30,13 @@ const graphRangeOptions: Array<{ value: GraphRange; label: string; days: number;
   { value: '1m', label: 'Last 30 days', days: 30, metricLabel: 'Tasks Performed Last 30 Days' },
   { value: '3m', label: 'Last 90 days', days: 90, metricLabel: 'Tasks Performed Last 90 Days' },
 ];
+
+const fixedTrendGraphs = [
+  { value: 'alertsCount', label: 'Alerts', suffix: '', tooltipLabel: 'Alerts' },
+  { value: 'completionRate', label: 'Completion Rate', suffix: '%', tooltipLabel: 'Completion Rate' },
+  { value: 'completedOnTimeRate', label: 'Completed on Time', suffix: '%', tooltipLabel: 'Completed on Time' },
+  { value: 'avgAcknowledgeTimeMin', label: 'Avg. Acknowledgement', suffix: ' min', tooltipLabel: 'Avg. Acknowledgement' },
+] as const;
 
 function filterTrendByRange(trendData: DwmsDashboardTrendPoint[], days: number) {
   if (!trendData || trendData.length === 0) return [];
@@ -64,16 +73,18 @@ export default function DashboardRoute() {
 }
 
 function DashboardPage() {
-  const { user } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
 
   // Tab: 'overview' | 'department' | 'employee' | 'team'
   const [activeTab, setActiveTab] = useState<'overview' | 'department' | 'employee' | 'team'>('employee');
   const [graphRange, setGraphRange] = useState<GraphRange>('7d');
+  const [access, setAccess] = useState<DwmsAccessCapabilities | null>(null);
 
   // Selections
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [hasDefaultedTeamEmp, setHasDefaultedTeamEmp] = useState(false);
+  const [showSelectedEmployeeInsights, setShowSelectedEmployeeInsights] = useState(false);
 
   // Loaded Data
   const [overviewData, setOverviewData] = useState<DwmsOverviewDashboardResponse | null>(null);
@@ -120,6 +131,19 @@ function DashboardPage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+    void DwmsService.getAccessCapabilities(accessToken)
+      .then(setAccess)
+      .catch((cause) => setError(cause instanceof Error ? cause.message : 'Failed to load dashboard access'));
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!access) return;
+    if (activeTab === 'overview' && access.analyticsViewLevel !== 'ORGANIZATION') setActiveTab('employee');
+    if ((activeTab === 'department' || activeTab === 'team') && access.analyticsViewLevel === 'OWN') setActiveTab('employee');
+  }, [access, activeTab]);
+
   // Load lists when overview data or department scoreboard is fetched
   useEffect(() => {
     if (overviewData) {
@@ -165,7 +189,7 @@ function DashboardPage() {
       } else if (activeTab === 'department') {
         // If MANAGEMENT and no department selected yet, load overview to extract departments
         let deptId = selectedDeptId;
-        if (!deptId && user.roleLevel === 'MANAGEMENT') {
+        if (!deptId && access?.analyticsViewLevel === 'ORGANIZATION') {
           const overview = await DwmsService.getDashboardOverview(token, days);
           updateOverviewData(overview);
           const firstDepartment = overview.departmentCompliance?.[0];
@@ -173,7 +197,7 @@ function DashboardPage() {
             deptId = firstDepartment.id;
             setSelectedDeptId(deptId);
           }
-        } else if (!deptId && user.roleLevel === 'HOD') {
+        } else if (!deptId && access?.analyticsViewLevel === 'DEPARTMENT') {
           deptId = user.departmentId || '';
           setSelectedDeptId(deptId);
         }
@@ -188,7 +212,7 @@ function DashboardPage() {
         let empId = selectedEmpId;
 
         // Ensure lists are loaded for role-based dropdown filter
-        if (user.roleLevel === 'MANAGEMENT' && !overviewDataRef.current) {
+        if (access?.analyticsViewLevel === 'ORGANIZATION' && !overviewDataRef.current) {
           const overview = await DwmsService.getDashboardOverview(token, days);
           updateOverviewData(overview);
           const firstEmployee = overview.employeeScoreboard?.[0];
@@ -196,7 +220,7 @@ function DashboardPage() {
             empId = firstEmployee.id;
             setSelectedEmpId(empId);
           }
-        } else if (user.roleLevel === 'HOD' && !departmentDataRef.current) {
+        } else if (access?.analyticsViewLevel === 'DEPARTMENT' && !departmentDataRef.current) {
           const deptId = user.departmentId || '';
           const dept = await DwmsService.getDashboardDepartment(token, deptId, days);
           updateDepartmentData(dept);
@@ -228,7 +252,7 @@ function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, graphRange, selectedDeptId, selectedEmpId, user, updateOverviewData, updateDepartmentData]);
+  }, [access, activeTab, graphRange, selectedDeptId, selectedEmpId, user, updateOverviewData, updateDepartmentData]);
 
   useEffect(() => {
     void fetchData();
@@ -247,13 +271,6 @@ function DashboardPage() {
     return [];
   }, [activeTab, overviewData, departmentData, employeeData]);
 
-  const ackTrends = useMemo(() => {
-    if (activeTab === 'overview') return overviewData?.trends?.timeToAcknowledge ?? [];
-    if (activeTab === 'department') return departmentData?.trends?.timeToAcknowledge ?? [];
-    if (activeTab === 'employee' || activeTab === 'team') return employeeData?.trends?.timeToAcknowledge ?? [];
-    return [];
-  }, [activeTab, overviewData, departmentData, employeeData]);
-
   const selectedGraphRange = graphRangeOptions.find((option) => option.value === graphRange) ?? graphRangeOptions[0];
 
   const filteredCompletionTrends = useMemo(
@@ -261,15 +278,19 @@ function DashboardPage() {
     [completionTrends, selectedGraphRange.days]
   );
 
-  const filteredAckTrends = useMemo(
-    () => filterTrendByRange(ackTrends, selectedGraphRange.days),
-    [ackTrends, selectedGraphRange.days]
-  );
-
   // Callback to instantly switch to Department tab when clicking on Heatmap
   const handleSelectDepartment = (deptId: string) => {
     setSelectedDeptId(deptId);
     setActiveTab('department');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSelectDepartmentEmployee = (employeeId: string) => {
+    setSelectedEmpId(employeeId);
+    setHasDefaultedTeamEmp(true);
+    setShowSelectedEmployeeInsights(true);
+    setActiveTab('team');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -278,6 +299,7 @@ function DashboardPage() {
       <DwmsTabHeader
         activeTab={activeTab}
         onTabChange={(tab) => {
+          setShowSelectedEmployeeInsights(false);
           if (tab === 'employee') {
             setActiveTab('employee');
             if (user) setSelectedEmpId(user.userId);
@@ -298,19 +320,19 @@ function DashboardPage() {
         }}
         tabs={[
           { key: 'employee', label: 'My Performance', dotColor: 'bg-blue-500' },
-          ...(user?.roleLevel === 'MANAGEMENT' || user?.roleLevel === 'HOD'
+          ...(access?.analyticsViewLevel === 'DEPARTMENT' || access?.analyticsViewLevel === 'ORGANIZATION'
             ? [
                 { key: 'team' as const, label: 'Employee Performance', dotColor: 'bg-indigo-500' },
                 { key: 'department' as const, label: 'Department Performance', dotColor: 'bg-violet-500' },
               ]
             : []),
-          ...(user?.roleLevel === 'MANAGEMENT'
+          ...(access?.analyticsViewLevel === 'ORGANIZATION'
             ? [{ key: 'overview' as const, label: 'Organisational Performance', dotColor: 'bg-emerald-500' }]
             : []),
         ]}
         rightContent={(
-          <div className="flex flex-wrap items-center gap-3 pb-3">
-            {activeTab === 'department' && user?.roleLevel === 'MANAGEMENT' && departmentsList.length > 0 && (
+          <div className="relative z-40 flex translate-y-1 flex-wrap items-center gap-3">
+            {activeTab === 'department' && access?.analyticsViewLevel === 'ORGANIZATION' && departmentsList.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-app font-semibold">Department:</span>
                 <div className="w-48">
@@ -325,25 +347,22 @@ function DashboardPage() {
               </div>
             )}
 
-            {activeTab === 'team' && (user?.roleLevel === 'MANAGEMENT' || user?.roleLevel === 'HOD') && employeesList.length > 0 && (
+            {activeTab === 'team' && access?.analyticsViewLevel !== 'OWN' && employeesList.length > 0 && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-app font-semibold">Inspect Employee:</span>
                 <div className="w-60">
                   <DwmsSelectDropdown
-                    value={selectedEmpId === user?.userId ? '' : selectedEmpId}
-                    options={[
-                      { value: '', label: 'Show All Reportees' },
-                      ...employeesList.map((emp) => ({
+                    value={selectedEmpId}
+                    options={employeesList.map((emp) => ({
                         value: emp.id,
                         label: emp.name,
                         secondaryLabel: emp.department || 'No Dept',
                         variant: 'employee' as const,
-                      })),
-                    ]}
-                    onChange={(value) => {
-                      setSelectedEmpId(value || user?.userId || '');
+                      }))}
+                    onChange={(employeeId) => {
+                      setSelectedEmpId(employeeId);
+                      setShowSelectedEmployeeInsights(true);
                     }}
-                    placeholder="Show all reportees"
+                    placeholder="Select employee"
                     searchEnabled
                     triggerClassName="h-10 rounded-xl border-border-app bg-white px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-accent-app"
                   />
@@ -373,7 +392,7 @@ function DashboardPage() {
         <div className="space-y-6">
 
           {/* Render charts and cards only when we are NOT in the 'team' tab, OR when in 'team' tab but viewing a specific employee */}
-          {(activeTab !== 'team' || selectedEmpId !== user?.userId) && (
+          {(activeTab !== 'team' || selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && (
             <>
               {/* 1. Visual Charts Row (Completion Trend & Acknowledgement Time) */}
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -404,51 +423,24 @@ function DashboardPage() {
                   periodLabel={selectedGraphRange.metricLabel}
                 />
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Completion Trend Chart */}
-                <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between border-b border-border-app pb-3 mb-4">
-                    <div>
-                      <h3 className="font-semibold text-text-app">Completion Trend</h3>
-                      <p className="text-xs text-muted-app">
-                        {selectedGraphRange.days}-day task completion timeline
-                      </p>
+                  <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-2">
+                    {fixedTrendGraphs.map((graph) => (
+                    <div key={graph.value} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+                      <div className="mb-3 border-b border-border-app pb-2">
+                        <h3 className="font-semibold text-text-app">{graph.label}</h3>
+                        <p className="text-xs text-muted-app">{selectedGraphRange.days}-day timeline</p>
+                      </div>
+                      <SVGLineChart
+                        trendData={filteredCompletionTrends}
+                        valueKey={graph.value}
+                        ySuffix={graph.suffix}
+                        tooltipLabel={graph.tooltipLabel}
+                        height={160}
+                        variant="line"
+                      />
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-app font-semibold">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-accent-app" />
-                      Compliance Rate %
-                    </div>
-                  </div>
-                  <SVGLineChart
-                    trendData={filteredCompletionTrends}
-                    valueKey="completionRate"
-                    ySuffix="%"
-                    tooltipLabel="Compliance"
-                  />
+                  ))}
                 </div>
-
-                {/* Acknowledgement Time Chart */}
-                <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between border-b border-border-app pb-3 mb-4">
-                    <div>
-                      <h3 className="font-semibold text-text-app">Avg Acknowledge Time</h3>
-                      <p className="text-xs text-muted-app">
-                        {selectedGraphRange.days}-day average task acknowledgement delay
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-app font-semibold">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" />
-                      Ack Time (min)
-                    </div>
-                  </div>
-                  <SVGLineChart
-                    trendData={filteredAckTrends}
-                    valueKey="avgAcknowledgeTimeMin"
-                    ySuffix=" min"
-                    tooltipLabel="Avg Ack Time"
-                  />
-                </div>
-              </div>
 
 
             </>
@@ -459,11 +451,15 @@ function DashboardPage() {
             <OverviewDashboard
               overviewData={overviewData}
               onSelectDepartment={handleSelectDepartment}
+              onSelectEmployee={handleSelectDepartmentEmployee}
             />
           )}
 
           {activeTab === 'department' && departmentData && (
-            <DepartmentDashboard departmentData={departmentData} />
+            <DepartmentDashboard
+              departmentData={departmentData}
+              onSelectEmployee={handleSelectDepartmentEmployee}
+            />
           )}
 
           {activeTab === 'employee' && employeeData?.employee && (
@@ -476,12 +472,23 @@ function DashboardPage() {
           )}
 
           {activeTab === 'team' && employeeData?.employee && (
-            <EmployeeDashboard
-              employeeData={{ ...employeeData, employee: employeeData.employee }}
-              loggedInUserId={user?.userId || ''}
-              onSelectEmployee={setSelectedEmpId}
-              activeSubTab={selectedEmpId === user?.userId ? 'team' : 'insights'}
-            />
+            <>
+              <EmployeeDashboard
+                employeeData={{ ...employeeData, employee: employeeData.employee }}
+                loggedInUserId={user?.userId || ''}
+                onSelectEmployee={setSelectedEmpId}
+                activeSubTab={selectedEmpId === user?.userId && !showSelectedEmployeeInsights ? 'team' : 'insights'}
+              />
+              {(selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && accessToken && (
+                <EmployeeDwmsPanel
+                  employeeId={employeeData.employee.id}
+                  accessToken={accessToken}
+                  jobTitle={employeeData.employee.role}
+                  canManageActivities={false}
+                  showApplicableActivities={false}
+                />
+              )}
+            </>
           )}
 
         </div>

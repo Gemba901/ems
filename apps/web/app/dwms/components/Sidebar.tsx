@@ -40,6 +40,7 @@ const navigationIcons: Record<string, LucideIcon> = {
   "/dwms/tasks": ClipboardList,
   "/dwms/approvalTasks": ClipboardCheck,
   "/dwms/alerts": AlertTriangle,
+  "/dwms/abnormalities": AlertTriangle,
   "/dwms/dashboard": BarChart3,
   "/dwms/activities": BookOpenCheck,
   "/dwms/settings": Settings2,
@@ -102,9 +103,10 @@ export function Sidebar({
       items: [
         ["Home", "/dwms"],
         ["Routine Work", "/dwms/routine-work"],
-        ["Assigned Tasks", "/dwms/tasks"],
+        ["Assigned Task", "/dwms/tasks"],
+        ["Alert", "/dwms/alerts"],
+        ["Abnormalities", "/dwms/abnormalities"],
         ["Approvals", "/dwms/approvalTasks"],
-        ["Alerts/Abnormality", "/dwms/alerts"],
       ],
     },
     {

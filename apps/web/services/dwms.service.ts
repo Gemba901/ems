@@ -115,7 +115,6 @@ export type DwmsApproverRule =
   | "ANYONE"
   | "CUSTOM";
 export type ViewLevel = "OWN" | "DEPARTMENT" | "ORGANIZATION";
-export type EscalationContactRule = "ASSIGNER" | "MANAGER" | "CUSTOM";
 export type DwmsTaskStatus =
   | "PENDING"
   | "IN_PROGRESS"
@@ -135,12 +134,6 @@ export type DwmsFrequency =
   | "ADHOC";
 export type DwmsPriority = "MEDIUM" | "HIGH" | "CRITICAL";
 export type DwmsSeverity = "MEDIUM" | "HIGH" | "CRITICAL";
-export type DwmsAlertStatus = "OPEN" | "IN_PROGRESS" | "CLOSED" | "ESCALATED";
-export type DwmsAlertClosureApprovalStatus =
-  | "NONE"
-  | "PENDING"
-  | "APPROVED"
-  | "REJECTED";
 export type DwmsAlertTargetType = "GENERAL" | "PERSON" | "TASK" | "DEPARTMENT";
 export type DwmsAlertField =
   | "general"
@@ -239,23 +232,23 @@ export interface DwmsEmployeeProfileResponse {
     department?: DwmsDepartmentOption | null;
   };
   counts?: {
-    currentTasks: number;
+    routineWork: number;
+    assignedTasks: number;
     currentAlerts: number;
     abnormalities: number;
-    raisedAlerts: number;
     applicableActivities: number;
     activeActivities: number;
   };
   pagination?: {
-    currentTasks: DwmsPaginationMeta;
+    routineWork: DwmsPaginationMeta;
+    assignedTasks: DwmsPaginationMeta;
     currentAlerts: DwmsPaginationMeta;
     abnormalities: DwmsPaginationMeta;
-    raisedAlerts: DwmsPaginationMeta;
   };
-  currentTasks?: DwmsTaskItem[];
+  routineWork?: DwmsTaskItem[];
+  assignedTasks?: DwmsTaskItem[];
   currentAlerts?: DwmsAlertItem[];
   abnormalities?: DwmsAlertItem[];
-  raisedAlerts?: DwmsAlertItem[];
   applicableActivities?: DwmsEmployeeRoleActivityItem[];
 }
 export interface DwmsSettingsResponse {
@@ -263,15 +256,6 @@ export interface DwmsSettingsResponse {
   approverCustomEmployeeIds?: string[];
   alertViewLevel?: ViewLevel;
   analyticsViewLevel?: ViewLevel;
-  escalateUnacknowledgedMins?: number;
-  escalateUnacknowledgedMediumMins?: number;
-  escalateUnacknowledgedHighMins?: number;
-  escalateUnacknowledgedCriticalMins?: number;
-  abnormalityMediumMins?: number;
-  abnormalityHighMins?: number;
-  abnormalityCriticalMins?: number;
-  escalationContactRules?: string[];
-  customEscalationContactIds?: string[];
   config?: DwmsSettingsResponse;
 }
 
@@ -280,15 +264,6 @@ export interface DwmsSettingsState {
   approverCustomEmployeeIds: string[];
   alertViewLevel: ViewLevel;
   analyticsViewLevel: ViewLevel;
-  escalateUnacknowledgedMins: number;
-  escalateUnacknowledgedMediumHours: number;
-  escalateUnacknowledgedHighHours: number;
-  escalateUnacknowledgedCriticalHours: number;
-  abnormalityMediumHours: number;
-  abnormalityHighHours: number;
-  abnormalityCriticalHours: number;
-  escalationContactRules: EscalationContactRule[];
-  customEscalationContactIds: string[];
 }
 
 export interface DwmsSettingsPayload {
@@ -296,15 +271,12 @@ export interface DwmsSettingsPayload {
   approverCustomEmployeeIds: string[];
   alertViewLevel: ViewLevel;
   analyticsViewLevel: ViewLevel;
-  escalateUnacknowledgedMins: number;
-  escalateUnacknowledgedMediumMins: number;
-  escalateUnacknowledgedHighMins: number;
-  escalateUnacknowledgedCriticalMins: number;
-  abnormalityMediumMins: number;
-  abnormalityHighMins: number;
-  abnormalityCriticalMins: number;
-  escalationContactRules: EscalationContactRule[];
-  customEscalationContactIds: string[];
+}
+
+export interface DwmsAccessCapabilities {
+  alertViewLevel: ViewLevel;
+  analyticsViewLevel: ViewLevel;
+  hasReportees: boolean;
 }
 
 export const DEFAULT_DWMS_SETTINGS: DwmsSettingsState = {
@@ -312,17 +284,7 @@ export const DEFAULT_DWMS_SETTINGS: DwmsSettingsState = {
   approverCustomEmployeeIds: [],
   alertViewLevel: "OWN",
   analyticsViewLevel: "DEPARTMENT",
-  escalateUnacknowledgedMins: 60,
-  escalateUnacknowledgedMediumHours: 24,
-  escalateUnacknowledgedHighHours: 8,
-  escalateUnacknowledgedCriticalHours: 2,
-  abnormalityMediumHours: 24,
-  abnormalityHighHours: 8,
-  abnormalityCriticalHours: 2,
-  escalationContactRules: ["ASSIGNER"],
-  customEscalationContactIds: [],
 };
-
 export const DWMS_APPROVER_RULE_OPTIONS: {
   value: DwmsApproverRule;
   label: string;
@@ -381,34 +343,6 @@ export const DWMS_VIEW_LEVEL_OPTIONS: {
     value: "ORGANIZATION",
     label: "Organization",
     description: "Full organization visibility.",
-  },
-];
-
-const DWMS_ESCALATION_RULE_VALUES: EscalationContactRule[] = [
-  "ASSIGNER",
-  "MANAGER",
-  "CUSTOM",
-];
-
-export const DWMS_ESCALATION_RULE_OPTIONS: {
-  value: EscalationContactRule;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "ASSIGNER",
-    label: "Assigner",
-    description: "The employee who assigned the task can be alerted.",
-  },
-  {
-    value: "MANAGER",
-    label: "Managers",
-    description: "Managers in the assignee's reporting chain can be alerted.",
-  },
-  {
-    value: "CUSTOM",
-    label: "Custom Employees",
-    description: "Specific employees can be alerted.",
   },
 ];
 
@@ -569,7 +503,9 @@ export interface DwmsAlertListResponse {
 
 export type DwmsAlertListTab =
   | "MY_ALERTS"
-  | "ABNORMALITIES"
+  | "TEAM_ALERTS"
+  | "MY_ABNORMALITIES"
+  | "TEAM_ABNORMALITIES"
   | "DEPARTMENTAL"
   | "ORGANISATIONAL"
   | "OPENED_BY_ME";
@@ -578,7 +514,6 @@ export interface DwmsAlertListParams {
   tab: DwmsAlertListTab;
   page?: number;
   limit?: number;
-  status?: string;
   severity?: string;
   search?: string;
 }
@@ -591,6 +526,7 @@ export interface DwmsTargetUsersResponse {
 
 export interface DwmsAlertTargetTask {
   instanceId: string;
+  ownerId: string;
   title: string;
   ownerName: string;
   ownerEmail: string;
@@ -607,6 +543,12 @@ export interface DwmsDashboardTrendPoint {
   avgAcknowledgeTimeMin?: number;
   completed?: number;
   total?: number;
+  allTasks?: number;
+  completedTasks?: number;
+  notCompletedTasks?: number;
+  overdueTasks?: number;
+  alertsCount?: number;
+  completedOnTimeRate?: number;
 }
 
 export interface DwmsDashboardMetrics {
@@ -615,11 +557,11 @@ export interface DwmsDashboardMetrics {
   completedTasks?: number;
   overdueTasks?: number;
   pendingTasks?: number;
-  openAlerts?: number;
   overdueCount?: number;
   completedCount?: number;
   tasksPerformedTodayPercent?: number;
-  openAlertsCount?: number;
+  alertsCount?: number;
+  completedOnTimeRate?: number | null;
   avgAcknowledgeTimeMin?: number;
   avgCloseTimeMin?: number;
 }
@@ -637,7 +579,7 @@ export interface DwmsDashboardTrends {
   tasksPerformedToday?: DwmsDashboardTrendPoint[];
   timeToAcknowledge?: DwmsDashboardTrendPoint[];
   timeToClose?: DwmsDashboardTrendPoint[];
-  openAlerts?: DwmsDashboardTrendPoint[];
+  pendingAlertAcknowledgments?: DwmsDashboardTrendPoint[];
 }
 
 export interface DwmsOverviewDashboardResponse {
@@ -667,24 +609,21 @@ export interface DwmsAlertItem {
   title: string;
   description: string;
   severity: DwmsSeverity | string;
-  status: DwmsAlertStatus;
-  correctiveAction?: string | null;
-  closureNote?: string | null;
-  resolvedAt?: string | null;
-  closureApprovalStatus?: DwmsAlertClosureApprovalStatus | string;
-  closureApproverId?: string | null;
-  closureRequestedById?: string | null;
-  closureRequestedAt?: string | null;
-  closureRejectedAt?: string | null;
-  closureRejectionNote?: string | null;
+  raiseCount: number;
+  pendingAcknowledgments: number;
+  occurrences: Array<{
+    id: string;
+    raisedAt: string;
+    raisedBy?: DwmsUserRef | null;
+    acknowledgedAt?: string | null;
+    acknowledgmentNote?: string | null;
+    acknowledgedBy?: DwmsUserRef | null;
+  }>;
+  responsibleEmployee?: DwmsUserRef | null;
   createdAt: string;
   updatedAt?: string;
-  repeatCount?: number;
-  isRepeated?: boolean;
   isAbnormality?: boolean;
-  abnormalitySourceAlertId?: string | null;
   raisedBy?: { id: string; name: string; email: string } | null;
-  closureRequestedBy?: { id: string; name: string; email: string } | null;
   taskInstance?: {
     id: string;
     task: { title: string };
@@ -714,8 +653,6 @@ export interface DwmsAlertDetailResponse {
   alert: DwmsAlertItem;
   employeeId?: string;
   comments: DwmsAlertComment[];
-  sourceAlert?: Partial<DwmsAlertItem> | null;
-  abnormalities?: Array<Partial<DwmsAlertItem> | null>;
 }
 export interface CreateDwmsAlertPayload {
   type?: string;
@@ -737,9 +674,6 @@ export interface CreateAssignedTaskPayload {
   frequency?: string;
   priority?: string;
   approvedById?: string | null;
-  overdueAlertTo?: string | null;
-  overdueAlertContactId?: string | null;
-  overdueAlertToEmployeeIds?: string[];
   backupOwnerId?: string | null;
   requiresCompletionDocument?: boolean;
   completionDocumentName?: string | null;
@@ -862,24 +796,10 @@ export interface UpdateTaskStatusPayload {
   completionAttachmentName?: string | null;
 }
 
-function normalizeEscalationContactRules(
-  rules?: string[] | null,
-): EscalationContactRule[] {
-  const normalized = [
-    ...new Set(
-      (rules ?? []).filter((rule): rule is EscalationContactRule =>
-        DWMS_ESCALATION_RULE_VALUES.includes(rule as EscalationContactRule),
-      ),
-    ),
-  ];
-  return normalized.length > 0 ? normalized : ["ASSIGNER"];
-}
-
 export function toDwmsSettingsState(
   input?: DwmsSettingsResponse | null,
 ): DwmsSettingsState {
   const config = input?.config ?? input ?? {};
-
   return {
     ...DEFAULT_DWMS_SETTINGS,
     ...config,
@@ -887,60 +807,13 @@ export function toDwmsSettingsState(
       ? ["OWNER", ...config.approverRoles.filter((rule) => rule !== "OWNER")]
       : ["OWNER"],
     approverCustomEmployeeIds: config.approverCustomEmployeeIds ?? [],
-    escalationContactRules: normalizeEscalationContactRules(
-      config.escalationContactRules,
-    ),
-    customEscalationContactIds: config.customEscalationContactIds ?? [],
-    escalateUnacknowledgedMins: Number(
-      config.escalateUnacknowledgedMins ??
-        DEFAULT_DWMS_SETTINGS.escalateUnacknowledgedMins,
-    ),
-    escalateUnacknowledgedMediumHours: toHours(
-      Number(
-        config.escalateUnacknowledgedMediumMins ??
-          DEFAULT_DWMS_SETTINGS.escalateUnacknowledgedMediumHours * 60,
-      ),
-    ),
-    escalateUnacknowledgedHighHours: toHours(
-      Number(
-        config.escalateUnacknowledgedHighMins ??
-          DEFAULT_DWMS_SETTINGS.escalateUnacknowledgedHighHours * 60,
-      ),
-    ),
-    escalateUnacknowledgedCriticalHours: toHours(
-      Number(
-        config.escalateUnacknowledgedCriticalMins ??
-          DEFAULT_DWMS_SETTINGS.escalateUnacknowledgedCriticalHours * 60,
-      ),
-    ),
-    abnormalityMediumHours: toHours(
-      Number(
-        config.abnormalityMediumMins ??
-          DEFAULT_DWMS_SETTINGS.abnormalityMediumHours * 60,
-      ),
-    ),
-    abnormalityHighHours: toHours(
-      Number(
-        config.abnormalityHighMins ??
-          DEFAULT_DWMS_SETTINGS.abnormalityHighHours * 60,
-      ),
-    ),
-    abnormalityCriticalHours: toHours(
-      Number(
-        config.abnormalityCriticalMins ??
-          DEFAULT_DWMS_SETTINGS.abnormalityCriticalHours * 60,
-      ),
-    ),
+    alertViewLevel:
+      config.alertViewLevel ?? DEFAULT_DWMS_SETTINGS.alertViewLevel,
   };
 }
-
 export function toDwmsSettingsPayload(
   settings: DwmsSettingsState,
 ): DwmsSettingsPayload {
-  const escalationContactRules = normalizeEscalationContactRules(
-    settings.escalationContactRules,
-  );
-
   return {
     approverRoles: [
       "OWNER",
@@ -951,31 +824,14 @@ export function toDwmsSettingsPayload(
       : [],
     alertViewLevel: settings.alertViewLevel,
     analyticsViewLevel: settings.analyticsViewLevel,
-    escalateUnacknowledgedMins: Math.round(
-      Number(settings.escalateUnacknowledgedMins),
-    ),
-    escalateUnacknowledgedMediumMins: toMinutes(
-      Number(settings.escalateUnacknowledgedMediumHours),
-    ),
-    escalateUnacknowledgedHighMins: toMinutes(
-      Number(settings.escalateUnacknowledgedHighHours),
-    ),
-    escalateUnacknowledgedCriticalMins: toMinutes(
-      Number(settings.escalateUnacknowledgedCriticalHours),
-    ),
-    abnormalityMediumMins: toMinutes(Number(settings.abnormalityMediumHours)),
-    abnormalityHighMins: toMinutes(Number(settings.abnormalityHighHours)),
-    abnormalityCriticalMins: toMinutes(
-      Number(settings.abnormalityCriticalHours),
-    ),
-    escalationContactRules,
-    customEscalationContactIds: escalationContactRules.includes("CUSTOM")
-      ? settings.customEscalationContactIds
-      : [],
   };
 }
 
 export const DwmsService = {
+  async getAccessCapabilities(token: string): Promise<DwmsAccessCapabilities> {
+    return getJson<DwmsAccessCapabilities>("/dwms/access", token);
+  },
+
   async getSettings(token: string): Promise<DwmsSettingsState> {
     const data = await getJson<DwmsSettingsResponse>("/dwms/settings", token);
     return toDwmsSettingsState(data);
@@ -1053,7 +909,6 @@ export const DwmsService = {
         tab: params.tab,
         page: params.page,
         limit: params.limit,
-        status: params.status,
         severity: params.severity,
         search: params.search,
       })}`,
@@ -1068,8 +923,44 @@ export const DwmsService = {
   async createAlert(
     token: string,
     body: CreateDwmsAlertPayload,
-  ): Promise<DwmsAlertItem> {
+  ): Promise<{ alert: DwmsAlertItem }> {
     return sendJson("/dwms/alerts", token, "POST", body);
+  },
+
+  async getAlertHistories(
+    token: string,
+    targetType: DwmsAlertTargetType,
+    targetId: string,
+  ): Promise<{ alerts: DwmsAlertItem[] }> {
+    return getJson(
+      `/dwms/alerts/history/${encodeURIComponent(targetId)}${buildQuery({ targetType })}`,
+      token,
+    );
+  },
+
+  async raiseAlertAgain(
+    token: string,
+    alertId: string,
+  ): Promise<{ alert: DwmsAlertItem }> {
+    return sendJson(
+      `/dwms/alerts/${encodeURIComponent(alertId)}/raise-again`,
+      token,
+      "POST",
+    );
+  },
+
+  async acknowledgeAlertOccurrence(
+    token: string,
+    alertId: string,
+    occurrenceId: string,
+    note: string,
+  ): Promise<unknown> {
+    return sendJson(
+      `/dwms/alerts/${encodeURIComponent(alertId)}/occurrences/${encodeURIComponent(occurrenceId)}/acknowledge`,
+      token,
+      "POST",
+      { note },
+    );
   },
 
   async getAlertDetail(
@@ -1091,78 +982,6 @@ export const DwmsService = {
       { comment },
     );
   },
-  async respondToAlert(
-    token: string,
-    alertId: string,
-    body: { correctiveAction: string },
-  ): Promise<unknown> {
-    return sendJson(`/dwms/alerts/${alertId}/response`, token, "PATCH", body);
-  },
-
-  async requestAlertClosure(
-    token: string,
-    alertId: string,
-    body: { closureNote: string },
-  ): Promise<unknown> {
-    return sendJson(
-      `/dwms/alerts/${alertId}/closure-request`,
-      token,
-      "PATCH",
-      body,
-    );
-  },
-
-  async closeAlert(
-    token: string,
-    alertId: string,
-    body: { closureNote: string },
-  ): Promise<unknown> {
-    return sendJson(`/dwms/alerts/${alertId}/close`, token, "PATCH", body);
-  },
-
-  async approveAlertClosure(
-    token: string,
-    alertId: string,
-    body?: { comment?: string | null },
-  ): Promise<unknown> {
-    return sendJson(
-      `/dwms/approvalAlerts/${encodeURIComponent(alertId)}/approve`,
-      token,
-      "PATCH",
-      body,
-    );
-  },
-
-  async rejectAlertClosure(
-    token: string,
-    alertId: string,
-    body?: { comment?: string | null },
-  ): Promise<unknown> {
-    return sendJson(
-      `/dwms/approvalAlerts/${encodeURIComponent(alertId)}/reject`,
-      token,
-      "PATCH",
-      body,
-    );
-  },
-
-  async remindAlertOwner(token: string, alertId: string): Promise<unknown> {
-    return sendJson(`/dwms/alerts/${alertId}/remind`, token, "POST");
-  },
-
-  async reassignEscalatedTask(
-    token: string,
-    alertId: string,
-    newOwnerId: string,
-  ): Promise<unknown> {
-    return sendJson(`/dwms/alerts/${alertId}/reassign`, token, "POST", {
-      newOwnerId,
-    });
-  },
-
-  async escalateAlertFurther(token: string, alertId: string): Promise<unknown> {
-    return sendJson(`/dwms/alerts/${alertId}/escalate`, token, "POST");
-  },
 
   async getAssignedTasksByMe(
     token: string,
@@ -1179,15 +998,6 @@ export const DwmsService = {
   ): Promise<DwmsAssignedTaskListResponse> {
     return getJson<DwmsAssignedTaskListResponse>(
       `/dwms/approvalTasks${buildQuery({ status })}`,
-      token,
-    );
-  },
-  async getApprovalAlerts(
-    token: string,
-    status: "pending" | "approved" | "rejected" = "pending",
-  ): Promise<DwmsAlertListResponse> {
-    return getJson<DwmsAlertListResponse>(
-      `/dwms/approvalAlerts${buildQuery({ status })}`,
       token,
     );
   },
@@ -1228,16 +1038,6 @@ export const DwmsService = {
   ): Promise<{ users?: DwmsEmployeeOption[] }> {
     return getJson(
       `/dwms/users/approvers${buildQuery({ assignedToId })}`,
-      token,
-    );
-  },
-
-  async getOverdueAlertRecipients(
-    token: string,
-    assignedToId: string,
-  ): Promise<{ users?: DwmsEmployeeOption[] }> {
-    return getJson(
-      `/dwms/users/overdueAlertRecipients${buildQuery({ assignedToId })}`,
       token,
     );
   },
@@ -1311,22 +1111,21 @@ export const DwmsService = {
     token: string,
     employeeId: string,
     pages?: {
-      taskPage?: number;
+      routinePage?: number;
+      assignedPage?: number;
       currentAlertPage?: number;
       abnormalityPage?: number;
-      raisedAlertPage?: number;
     },
   ): Promise<DwmsEmployeeProfileResponse> {
     const query = new URLSearchParams();
-    if (pages?.taskPage) query.set("taskPage", String(pages.taskPage));
+    if (pages?.routinePage) query.set("routinePage", String(pages.routinePage));
+    if (pages?.assignedPage)
+      query.set("assignedPage", String(pages.assignedPage));
     if (pages?.currentAlertPage) {
       query.set("currentAlertPage", String(pages.currentAlertPage));
     }
     if (pages?.abnormalityPage) {
       query.set("abnormalityPage", String(pages.abnormalityPage));
-    }
-    if (pages?.raisedAlertPage) {
-      query.set("raisedAlertPage", String(pages.raisedAlertPage));
     }
     const queryString = query.toString();
     return getJson(
@@ -1391,8 +1190,14 @@ export const DwmsService = {
     );
   },
 
-  async getMyDwmsTaskSummary(token: string, source?: DwmsTaskSource): Promise<DwmsTaskSummaryResponse> {
-    return getJson(`/dwms/myDwms/tasks/summary${buildQuery({ source })}`, token);
+  async getMyDwmsTaskSummary(
+    token: string,
+    source?: DwmsTaskSource,
+  ): Promise<DwmsTaskSummaryResponse> {
+    return getJson(
+      `/dwms/myDwms/tasks/summary${buildQuery({ source })}`,
+      token,
+    );
   },
 
   async getTaskInstanceDetail(
@@ -1405,8 +1210,8 @@ export const DwmsService = {
     );
   },
 
-  async getOpenAlertCount(token: string): Promise<{ count?: number }> {
-    return getJson("/dwms/alerts/myResponsibleCount", token);
+  async getMyAlertCount(token: string): Promise<{ count?: number }> {
+    return getJson("/dwms/alerts/myCount", token);
   },
 
   async updateTaskStatus(
@@ -1447,11 +1252,3 @@ export const DwmsService = {
     return getJson("/dwms/status", token);
   },
 };
-
-function toHours(minutes: number) {
-  return Number.isFinite(minutes) ? Number((minutes / 60).toFixed(2)) : 0;
-}
-
-function toMinutes(hours: number) {
-  return Number.isFinite(hours) ? Math.max(0, Math.round(hours * 60)) : 0;
-}

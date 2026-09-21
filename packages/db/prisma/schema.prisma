@@ -361,6 +361,8 @@ model Employee {
   primaryActivities     Activity[]                @relation("ActivityPrimaryResponsible")
   alertsRaised          Alert[]                   @relation("AlertsRaised")
   alertsAgainst         Alert[]                   @relation("AlertsAgainst")
+  alertOccurrencesRaised AlertOccurrence[]        @relation("AlertOccurrencesRaised")
+  alertOccurrencesAcknowledged AlertOccurrence[] @relation("AlertOccurrencesAcknowledged")
   ticketsRaised         Tickets[]                 @relation("ticketsRaisedBy")
   ticketUpdates         TicketUpdate[]
   kaizensRaised         Kaizen[]                  @relation("KaizenRaisedBy")
@@ -2695,8 +2697,6 @@ model Task {
   ownerName                  String?
   assignedByName             String?
   approvedById               String?
-  overdueAlertToEmployeeIds   String[] @default([])
-  overdueAlertTo             OverdueAlertTo         @default(ASSIGNER)
   backupOwnerId              String?
   activity                   Activity?              @relation(fields: [activityId], references: [id], onDelete: SetNull)
   assignedBy                 Employee?              @relation("TaskAssignedBy", fields: [assignedById], references: [id])
@@ -2776,7 +2776,6 @@ model TaskInstanceEvent {
 }
 
 model Alert {
-  recipientEmployeeIds String[] @default([])
   id                       String                     @id @default(uuid())
   type                     AlertType
   title                    String
@@ -2784,22 +2783,12 @@ model Alert {
   raisedById               String
   organizationId           String?
   severity                 Severity
-  status                   AlertStatus                @default(OPEN)
-  correctiveAction         String?
-  closureNote              String?
-  resolvedAt               DateTime?
+  raiseCount               Int                        @default(1)
   taskInstanceId           String?
   departmentId             String?
   againstUserId            String?
   isAbnormality            Boolean                    @default(false)
-  abnormalitySourceAlertId String?                    @unique
   deduplicationKey         String?                    @unique
-  closureApprovalStatus    AlertClosureApprovalStatus @default(NONE)
-  closureApproverId        String?
-  closureRequestedById     String?
-  closureRequestedAt       DateTime?
-  closureRejectedAt        DateTime?
-  closureRejectionNote     String?
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
 
@@ -2809,6 +2798,7 @@ model Alert {
   department   Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   againstUser  Employee?      @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
   comments     AlertComment[]
+  occurrences  AlertOccurrence[]
 
   @@index([raisedById])
   @@index([organizationId])
@@ -2816,8 +2806,23 @@ model Alert {
   @@index([departmentId])
   @@index([againstUserId])
   @@index([isAbnormality])
-  @@index([closureApproverId, closureApprovalStatus])
-  @@index([closureRequestedById])
+}
+
+model AlertOccurrence {
+  id                 String    @id @default(uuid())
+  alertId            String
+  raisedById         String
+  raisedAt           DateTime  @default(now())
+  acknowledgedById   String?
+  acknowledgedAt     DateTime?
+  acknowledgmentNote String?
+
+  alert          Alert     @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  raisedBy       Employee  @relation("AlertOccurrencesRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  acknowledgedBy Employee? @relation("AlertOccurrencesAcknowledged", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  @@index([alertId, raisedAt])
+  @@index([acknowledgedById])
 }
 
 model AlertComment {
@@ -2856,19 +2861,6 @@ enum Severity {
   CRITICAL
 }
 
-enum AlertStatus {
-  OPEN
-  IN_PROGRESS
-  CLOSED
-  ESCALATED
-}
-
-enum AlertClosureApprovalStatus {
-  NONE
-  PENDING
-  APPROVED
-  REJECTED
-}
 
 enum TaskFrequency {
   DAILY
@@ -2907,10 +2899,6 @@ enum Priority {
   CRITICAL
 }
 
-enum OverdueAlertTo {
-  ASSIGNER
-  MANAGER
-}
 
 enum ViewLevel {
   OWN
@@ -2918,13 +2906,6 @@ enum ViewLevel {
   ORGANIZATION
 }
 
-enum EscalationContactRule {
-  ASSIGNER
-  MANAGER
-  HOD
-  HIGHER_LEVEL_MANAGERS
-  CUSTOM
-}
 
 enum TaskPermissionRole {
   ADMIN
@@ -2947,16 +2928,6 @@ model DwmsPermissionConfig {
 
   alertViewLevel     ViewLevel @default(OWN)
   analyticsViewLevel ViewLevel @default(DEPARTMENT)
-
-  escalateUnacknowledgedMediumMins   Int                     @default(1440)
-  escalateUnacknowledgedHighMins     Int                     @default(480)
-  escalateUnacknowledgedCriticalMins Int                     @default(120)
-  escalateUnacknowledgedMins         Int                     @default(60)
-  abnormalityMediumMins              Int                     @default(1440)
-  abnormalityHighMins                Int                     @default(480)
-  abnormalityCriticalMins            Int                     @default(120)
-  escalationContactRules             EscalationContactRule[] @default([])
-  customEscalationContactIds         String[]                @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -104,7 +104,7 @@ export default function VerificationSection({ sga, access, token, onSaved, ctx }
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="6.15">Verification &amp; Closure</SectionLabel>
+      <SectionLabel n="6.2">Verification &amp; Closure</SectionLabel>
       <p className="text-xs text-slate-400 mb-4">
         This SGA closes once all four stages verify it. Any stage returning it sends it back for rework.
       </p>

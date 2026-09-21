@@ -7,13 +7,14 @@ import { SgaService, SgaMeetingFrequency, SgaWeekday } from "@/services/sga.serv
 import { MEETING_FREQUENCY_LABELS, SectionLabel, WEEKDAY_LABELS, WEEKDAY_OPTIONS } from "@/components/sga/sga-ui";
 import { SgaSectionHandle, SgaSectionProps } from "./types";
 
-const FREQUENCY_OPTIONS: SgaMeetingFrequency[] = ["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"];
+const FREQUENCY_OPTIONS: SgaMeetingFrequency[] = ["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY", "CUSTOM"];
 
 const MeetingPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function MeetingPlanSection(
   { sga, access, token, onSaved },
   ref,
 ) {
   const [meetingFrequency, setMeetingFrequency] = useState<SgaMeetingFrequency | "">(sga.meetingFrequency ?? "");
+  const [meetingFrequencyCustomText, setMeetingFrequencyCustomText] = useState(sga.meetingFrequencyCustomText ?? "");
   const [meetingDay, setMeetingDay] = useState<SgaWeekday | "">(sga.meetingDay ?? "");
   const [meetingTime, setMeetingTime] = useState(sga.meetingTime ?? "");
   const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(
@@ -23,18 +24,23 @@ const MeetingPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(functio
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      SgaService.updateMeetingPlan(
+    mutationFn: () => {
+      if (meetingFrequency === "CUSTOM" && !meetingFrequencyCustomText.trim()) {
+        throw new Error("Please describe the custom meeting schedule.");
+      }
+      return SgaService.updateMeetingPlan(
         sga.id,
         {
           meetingFrequency: meetingFrequency || undefined,
-          meetingDay: meetingDay || undefined,
+          meetingFrequencyCustomText: meetingFrequency === "CUSTOM" ? meetingFrequencyCustomText.trim() : undefined,
+          meetingDay: meetingFrequency !== "DAILY" && meetingDay ? meetingDay : undefined,
           meetingTime: meetingTime.trim() || undefined,
           meetingDurationMinutes: meetingDurationMinutes ? Number(meetingDurationMinutes) : undefined,
           meetingLocation: meetingLocation.trim() || undefined,
         },
         token,
-      ),
+      );
+    },
     onSuccess: (updated) => onSaved(updated),
     onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
@@ -53,16 +59,23 @@ const MeetingPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(functio
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="2.5">Meeting Plan</SectionLabel>
+        <SectionLabel n="2.2">Meeting Plan</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Frequency</p>
             <p className="text-sm text-slate-700">{sga.meetingFrequency ? MEETING_FREQUENCY_LABELS[sga.meetingFrequency] : "Not set"}</p>
           </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Day</p>
-            <p className="text-sm text-slate-700">{sga.meetingDay ? WEEKDAY_LABELS[sga.meetingDay] : "Not set"}</p>
-          </div>
+          {sga.meetingFrequency === "CUSTOM" ? (
+            <div>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Custom Schedule</p>
+              <p className="text-sm text-slate-700">{sga.meetingFrequencyCustomText || "Not set"}</p>
+            </div>
+          ) : sga.meetingFrequency !== "DAILY" ? (
+            <div>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Day</p>
+              <p className="text-sm text-slate-700">{sga.meetingDay ? WEEKDAY_LABELS[sga.meetingDay] : "Not set"}</p>
+            </div>
+          ) : null}
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Time</p>
             <p className="text-sm text-slate-700">{sga.meetingTime || "Not set"}</p>
@@ -84,7 +97,7 @@ const MeetingPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(functio
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="2.5">Meeting Plan</SectionLabel>
+      <SectionLabel n="2.2">Meeting Plan</SectionLabel>
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -104,23 +117,38 @@ const MeetingPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(functio
               ))}
             </select>
           </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-              Day <span className="text-xs font-normal text-slate-400">(optional)</span>
-            </label>
-            <select
-              value={meetingDay}
-              onChange={(e) => setMeetingDay(e.target.value as SgaWeekday)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-            >
-              <option value="">Select...</option>
-              {WEEKDAY_OPTIONS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {meetingFrequency === "CUSTOM" ? (
+            <div>
+              <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+                Custom schedule <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={meetingFrequencyCustomText}
+                onChange={(e) => setMeetingFrequencyCustomText(e.target.value)}
+                placeholder="e.g. Every other Tuesday and Friday"
+                className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              />
+            </div>
+          ) : meetingFrequency !== "DAILY" ? (
+            <div>
+              <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+                Day <span className="text-xs font-normal text-slate-400">(optional)</span>
+              </label>
+              <select
+                value={meetingDay}
+                onChange={(e) => setMeetingDay(e.target.value as SgaWeekday)}
+                className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              >
+                <option value="">Select...</option>
+                {WEEKDAY_OPTIONS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div>
             <label className="text-sm font-semibold text-slate-700 block mb-1.5">
               Time <span className="text-xs font-normal text-slate-400">(optional)</span>

@@ -75,7 +75,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="5.12">Check the Results</SectionLabel>
+        <SectionLabel n="5.1">Check the Results</SectionLabel>
         {sga.measures.length === 0 ? (
           <p className="text-sm text-slate-400">No measures recorded.</p>
         ) : (
@@ -98,7 +98,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="5.12">Check the Results</SectionLabel>
+      <SectionLabel n="5.1">Check the Results</SectionLabel>
       <p className="text-xs text-slate-400 mb-4">Record the final result against each baseline/target measure.</p>
       <div className="space-y-4">
         {rows.map((row, index) => (

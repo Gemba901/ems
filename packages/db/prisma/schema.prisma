@@ -3210,7 +3210,8 @@ enum SgaStartingReason {
   INVENTORY_OR_WIP_REDUCTION
   MACHINE_BREAKDOWN_OR_EQUIPMENT_PERFORMANCE
   SMED_CHANGEOVER_TIME_REDUCTION
-  EXTERNAL_CUSTOMER_REQUIREMENT_OR_COMPLAINT
+  EXTERNAL_CUSTOMER_REQUIREMENT
+  EXTERNAL_CUSTOMER_COMPLAINT
   INTERNAL_CUSTOMER_OR_CROSS_FUNCTIONAL_REQUIREMENT
   ALERT_OR_ABNORMALITY_REQUIRING_TEAM_PROJECT
   AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION
@@ -3223,6 +3224,15 @@ enum SgaReferenceApplicability {
   APPLICABLE
   NOT_APPLICABLE
   REFERENCE_NOT_FOUND
+}
+
+enum SgaReferenceType {
+  ISO_STANDARD_OR_CLAUSE
+  SOP_OR_WORK_INSTRUCTION
+  AUDIT_REPORT_OR_FINDING
+  CUSTOMER_SPECIFICATION
+  REGULATORY_OR_STATUTORY_REQUIREMENT
+  OTHER
 }
 
 enum SgaQcdsmtCategory {
@@ -3271,6 +3281,7 @@ enum SgaMeetingFrequency {
   WEEKLY
   BIWEEKLY
   MONTHLY
+  CUSTOM
 }
 
 enum SgaWeekday {
@@ -3338,7 +3349,9 @@ model Sga {
 
   // Step 1 / Section 1 — why is this SGA being started
   startingReason         SgaStartingReason?
+  startingReasonOther    String?
   referenceApplicability SgaReferenceApplicability?
+  referenceType          SgaReferenceType?
   referenceNumber        String?
 
   // Step 1 / Section 2 — SGA information and problem
@@ -3350,18 +3363,16 @@ model Sga {
   workArea             String?
   beforeFileUrls       String[] @default([])
 
-  // Step 1 / Section 3 — seven wastes tags (QCDSMT detail lives in SgaQcdsmtImpact)
-  wastes SgaWaste[] @default([])
-
   // Step 2 / Section 4 — team
   ownerId String?
 
   // Step 2 / Section 5 — meeting plan (recurring schedule, distinct from actual meeting reports)
-  meetingFrequency       SgaMeetingFrequency?
-  meetingDay             SgaWeekday?
-  meetingTime            String?
-  meetingDurationMinutes Int?
-  meetingLocation        String?
+  meetingFrequency           SgaMeetingFrequency?
+  meetingFrequencyCustomText String?
+  meetingDay                 SgaWeekday?
+  meetingTime                String?
+  meetingDurationMinutes     Int?
+  meetingLocation            String?
 
   // Step 2 / Section 6 — resources, investment, HOD approval
   requiredResources             String?
@@ -3419,6 +3430,7 @@ model Sga {
   departmentRep       Employee?    @relation("SgaDepartmentRep", fields: [departmentRepId], references: [id], onDelete: SetNull)
 
   qcdsmtImpacts  SgaQcdsmtImpact[]
+  wasteImpacts   SgaWasteImpact[]
   measures       SgaMeasure[]
   fishboneCauses SgaFishboneCause[]
   meetingReports SgaMeetingReport[]
@@ -3430,6 +3442,21 @@ model Sga {
   @@index([employeeId, createdAt])
   @@index([ownerId])
   @@index([mainDepartmentId, status])
+}
+
+// Step 1 / Section 3 "Expected impact" seven-wastes tab — one row per selected waste
+model SgaWasteImpact {
+  id             String   @id @default(uuid())
+  sgaId          String
+  waste          SgaWaste
+  whatIsMeasured String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+
+  @@unique([sgaId, waste])
+  @@index([sgaId])
 }
 
 model SgaQcdsmtImpact {

@@ -86,7 +86,7 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="4.11">Implementation</SectionLabel>
+        <SectionLabel n="4.2">Implementation</SectionLabel>
         <div className="space-y-3 mb-4">
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Status</p>
@@ -120,7 +120,7 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="4.11">Implementation</SectionLabel>
+      <SectionLabel n="4.2">Implementation</SectionLabel>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">Status</label>

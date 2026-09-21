@@ -38,7 +38,8 @@ export type SgaStartingReason =
   | "INVENTORY_OR_WIP_REDUCTION"
   | "MACHINE_BREAKDOWN_OR_EQUIPMENT_PERFORMANCE"
   | "SMED_CHANGEOVER_TIME_REDUCTION"
-  | "EXTERNAL_CUSTOMER_REQUIREMENT_OR_COMPLAINT"
+  | "EXTERNAL_CUSTOMER_REQUIREMENT"
+  | "EXTERNAL_CUSTOMER_COMPLAINT"
   | "INTERNAL_CUSTOMER_OR_CROSS_FUNCTIONAL_REQUIREMENT"
   | "ALERT_OR_ABNORMALITY_REQUIRING_TEAM_PROJECT"
   | "AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION"
@@ -47,6 +48,14 @@ export type SgaStartingReason =
   | "OTHER";
 
 export type SgaReferenceApplicability = "APPLICABLE" | "NOT_APPLICABLE" | "REFERENCE_NOT_FOUND";
+
+export type SgaReferenceType =
+  | "ISO_STANDARD_OR_CLAUSE"
+  | "SOP_OR_WORK_INSTRUCTION"
+  | "AUDIT_REPORT_OR_FINDING"
+  | "CUSTOMER_SPECIFICATION"
+  | "REGULATORY_OR_STATUTORY_REQUIREMENT"
+  | "OTHER";
 
 export type SgaQcdsmtCategory = "QUALITY" | "COST" | "DELIVERY" | "SAFETY" | "MORALE" | "TECHNOLOGY";
 
@@ -75,7 +84,7 @@ export type SgaWaste =
 
 export type SgaHodDecision = "PENDING" | "APPROVED" | "RETURNED" | "REJECTED";
 
-export type SgaMeetingFrequency = "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+export type SgaMeetingFrequency = "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "CUSTOM";
 
 export type SgaWeekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
 
@@ -124,6 +133,15 @@ export interface SgaQcdsmtImpact {
   otherUnitLabel: string | null;
   currency: string | null;
   expectedBenefit: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SgaWasteImpact {
+  id: string;
+  sgaId: string;
+  waste: SgaWaste;
+  whatIsMeasured: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -196,7 +214,9 @@ export interface Sga {
 
   // Step 1 §1: reason
   startingReason: SgaStartingReason | null;
+  startingReasonOther: string | null;
   referenceApplicability: SgaReferenceApplicability | null;
+  referenceType: SgaReferenceType | null;
   referenceNumber: string | null;
 
   // Step 1 §2: SGA information and problem
@@ -208,14 +228,12 @@ export interface Sga {
   workArea: string | null;
   beforeFileUrls: string[];
 
-  // Step 1 §3: seven wastes
-  wastes: SgaWaste[];
-
   // Step 2 §4: team
   ownerId: string | null;
 
   // Step 2 §5: meeting plan
   meetingFrequency: SgaMeetingFrequency | null;
+  meetingFrequencyCustomText: string | null;
   meetingDay: SgaWeekday | null;
   meetingTime: string | null;
   meetingDurationMinutes: number | null;
@@ -275,6 +293,7 @@ export interface Sga {
   verifyingDepartment: { id: string; name: string } | null;
   departmentRep: SgaPersonSummary | null;
   qcdsmtImpacts: SgaQcdsmtImpact[];
+  wasteImpacts: SgaWasteImpact[];
   measures: SgaMeasure[];
   fishboneCauses: SgaFishboneCause[];
   meetingReports: SgaMeetingReport[];
@@ -290,7 +309,9 @@ export interface CreateSgaPayload {
 
 export interface UpdateSgaReasonPayload {
   startingReason: SgaStartingReason;
+  startingReasonOther?: string;
   referenceApplicability?: SgaReferenceApplicability;
+  referenceType?: SgaReferenceType;
   referenceNumber?: string;
 }
 
@@ -319,12 +340,24 @@ export interface SgaQcdsmtImpactItemPayload {
   expectedBenefit?: string;
 }
 
+export interface SgaWasteImpactItemPayload {
+  waste: SgaWaste;
+  whatIsMeasured?: string;
+}
+
 export interface UpdateSgaImpactPayload {
   impacts: SgaQcdsmtImpactItemPayload[];
-  wastes?: SgaWaste[];
+  wasteImpacts?: SgaWasteImpactItemPayload[];
 }
 
 // Step 2 §4
+export interface SgaTeamCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  jobTitle: string | null;
+}
+
 export interface UpdateSgaTeamPayload {
   ownerId: string;
   teamMemberIds?: string[];
@@ -333,6 +366,7 @@ export interface UpdateSgaTeamPayload {
 // Step 2 §5
 export interface UpdateSgaMeetingPlanPayload {
   meetingFrequency?: SgaMeetingFrequency;
+  meetingFrequencyCustomText?: string;
   meetingDay?: SgaWeekday;
   meetingTime?: string;
   meetingDurationMinutes?: number;
@@ -343,8 +377,8 @@ export interface UpdateSgaMeetingPlanPayload {
 export interface UpdateSgaResourcesPayload {
   requiredResources?: string;
   expectedBenefitSummary?: string;
-  approximateInvestmentAmount?: number;
-  approximateInvestmentCurrency?: string;
+  approximateInvestmentAmount: number;
+  approximateInvestmentCurrency: string;
 }
 
 export interface SubmitSgaHodApprovalPayload {
@@ -533,6 +567,11 @@ export const SgaService = {
       body: JSON.stringify(data),
     }, token);
     return handleResponse<Sga>(res);
+  },
+
+  async getTeamCandidates(id: string, token: string): Promise<SgaTeamCandidate[]> {
+    const res = await apiClient(`${API_URL}/sga/${id}/team-candidates`, { headers: authHeaders(token) }, token);
+    return handleResponse<SgaTeamCandidate[]>(res);
   },
 
   async updateTeam(id: string, data: UpdateSgaTeamPayload, token: string): Promise<Sga> {

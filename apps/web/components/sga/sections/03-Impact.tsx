@@ -3,7 +3,14 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import { SgaService, SgaQcdsmtCategory, SgaQcdsmtImpactItemPayload, SgaUnit, SgaWaste } from "@/services/sga.service";
+import {
+  SgaService,
+  SgaQcdsmtCategory,
+  SgaQcdsmtImpactItemPayload,
+  SgaUnit,
+  SgaWaste,
+  SgaWasteImpactItemPayload,
+} from "@/services/sga.service";
 import {
   CurrencySelect,
   QCDSMT_CATEGORIES,
@@ -17,6 +24,7 @@ import {
 import { SgaSectionHandle, SgaSectionProps } from "./types";
 
 type Row = SgaQcdsmtImpactItemPayload;
+type WasteRow = SgaWasteImpactItemPayload;
 
 function toRows(sga: SgaSectionProps["sga"]): Row[] {
   return sga.qcdsmtImpacts.map((i) => ({
@@ -32,15 +40,20 @@ function toRows(sga: SgaSectionProps["sga"]): Row[] {
   }));
 }
 
+function toWasteRows(sga: SgaSectionProps["sga"]): WasteRow[] {
+  return sga.wasteImpacts.map((w) => ({ waste: w.waste, whatIsMeasured: w.whatIsMeasured }));
+}
+
 const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function ImpactSection(
   { sga, access, token, onSaved },
   ref,
 ) {
   const [rows, setRows] = useState<Row[]>(toRows(sga));
-  const [wastes, setWastes] = useState<SgaWaste[]>(sga.wastes ?? []);
+  const [wasteRows, setWasteRows] = useState<WasteRow[]>(toWasteRows(sga));
   const [error, setError] = useState<string | null>(null);
 
   const availableCategories = QCDSMT_CATEGORIES.filter((c) => !rows.some((r) => r.category === c.value));
+  const availableWastes = WASTE_OPTIONS.filter((w) => !wasteRows.some((r) => r.waste === w.value));
 
   const addRow = (category: SgaQcdsmtCategory) => {
     setRows((prev) => [...prev, { category, whatIsMeasured: "", unit: "PIECES" }]);
@@ -54,8 +67,16 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
     setRows((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const toggleWaste = (w: SgaWaste) => {
-    setWastes((prev) => (prev.includes(w) ? prev.filter((x) => x !== w) : [...prev, w]));
+  const addWaste = (waste: SgaWaste) => {
+    setWasteRows((prev) => (waste === "NOT_APPLICABLE" ? [{ waste, whatIsMeasured: "" }] : [...prev, { waste, whatIsMeasured: "" }]));
+  };
+
+  const updateWasteRow = (index: number, whatIsMeasured: string) => {
+    setWasteRows((prev) => prev.map((r, i) => (i === index ? { ...r, whatIsMeasured } : r)));
+  };
+
+  const removeWasteRow = (index: number) => {
+    setWasteRows((prev) => prev.filter((_, i) => i !== index));
   };
 
   const mutation = useMutation({
@@ -66,9 +87,17 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
         if (r.unit === "OTHER" && !r.otherUnitLabel?.trim()) throw new Error("Specify the unit label for 'Other'.");
         if (r.unit === "CURRENCY" && !r.currency) throw new Error("Select a currency for the currency-unit impact.");
       }
+      for (const w of wasteRows) {
+        if (w.waste !== "NOT_APPLICABLE" && !w.whatIsMeasured?.trim()) {
+          throw new Error("Every selected waste needs a measurement description.");
+        }
+      }
       return SgaService.updateImpact(
         sga.id,
-        { impacts: rows.map((r) => ({ ...r, whatIsMeasured: r.whatIsMeasured.trim() })), wastes },
+        {
+          impacts: rows.map((r) => ({ ...r, whatIsMeasured: r.whatIsMeasured.trim() })),
+          wasteImpacts: wasteRows.map((w) => ({ ...w, whatIsMeasured: w.whatIsMeasured?.trim() })),
+        },
         token,
       );
     },
@@ -107,10 +136,17 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
             ))}
           </div>
         )}
-        {sga.wastes.length > 0 && (
+        {sga.wasteImpacts.length > 0 && (
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Seven Wastes</p>
-            <p className="text-sm text-slate-700">{sga.wastes.map((w) => WASTE_LABELS[w]).join(", ")}</p>
+            <div className="space-y-2">
+              {sga.wasteImpacts.map((w) => (
+                <div key={w.id} className="border border-slate-100 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-blue-600 mb-1">{WASTE_LABELS[w.waste]}</p>
+                  {w.whatIsMeasured && <p className="text-sm text-slate-700">{w.whatIsMeasured}</p>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -232,22 +268,43 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
             Seven wastes <span className="text-xs font-normal text-slate-400">(optional)</span>
           </label>
-          <div className="flex flex-wrap gap-1.5">
-            {WASTE_OPTIONS.map((w) => {
-              const checked = wastes.includes(w.value);
-              return (
-                <button
-                  key={w.value}
-                  type="button"
-                  onClick={() => toggleWaste(w.value)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    checked ? "bg-blue-600 border-blue-600 text-white" : "border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600"
-                  }`}
-                >
-                  {w.label}
-                </button>
-              );
-            })}
+          <div className="space-y-3">
+            {wasteRows.map((row, index) => (
+              <div key={row.waste} className="border border-slate-200 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-blue-600">{WASTE_LABELS[row.waste]}</p>
+                  <button type="button" onClick={() => removeWasteRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                {row.waste !== "NOT_APPLICABLE" && (
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1">What is measured?</label>
+                    <input
+                      type="text"
+                      value={row.whatIsMeasured ?? ""}
+                      onChange={(e) => updateWasteRow(index, e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {availableWastes.length > 0 && wasteRows[0]?.waste !== "NOT_APPLICABLE" && (
+              <div className="flex flex-wrap gap-1.5">
+                {availableWastes.map((w) => (
+                  <button
+                    key={w.value}
+                    type="button"
+                    onClick={() => addWaste(w.value)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> {w.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

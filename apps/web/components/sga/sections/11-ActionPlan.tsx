@@ -95,7 +95,7 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="4.10">Confirmed Causes &amp; Action Plan</SectionLabel>
+        <SectionLabel n="4.1">Confirmed Causes &amp; Action Plan</SectionLabel>
         {sga.actionItems.length === 0 ? (
           <p className="text-sm text-slate-400">No action items recorded.</p>
         ) : (
@@ -118,7 +118,7 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="4.10">Confirmed Causes &amp; Action Plan</SectionLabel>
+      <SectionLabel n="4.1">Confirmed Causes &amp; Action Plan</SectionLabel>
       <div className="space-y-4">
         {rows.map((row, index) => (
           <div key={index} className="border border-slate-200 rounded-lg p-4 space-y-3">

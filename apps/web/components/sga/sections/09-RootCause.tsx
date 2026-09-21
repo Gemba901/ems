@@ -73,7 +73,7 @@ const FishboneSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function R
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="3.8">Root Cause Analysis</SectionLabel>
+        <SectionLabel n="3.2">Root Cause Analysis</SectionLabel>
         <div className="mb-4">
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Tools Used</p>
           <p className="text-sm text-slate-700">
@@ -113,7 +113,7 @@ const FishboneSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function R
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="3.8">Root Cause Analysis</SectionLabel>
+      <SectionLabel n="3.2">Root Cause Analysis</SectionLabel>
       <div className="space-y-5">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">Tools used</label>

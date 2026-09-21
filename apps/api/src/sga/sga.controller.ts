@@ -166,6 +166,18 @@ export class SgaController {
     }
 
     /**
+     * GET /sga/:id/team-candidates
+     * Step 2 §4: employees in the SGA's main + other departments; raiser only, while editable
+     */
+    @Get(':id/team-candidates')
+    async getTeamCandidates(
+        @Param('id') id: string,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.sgaService.getTeamCandidates(id, user.userId, user.organizationId)
+    }
+
+    /**
      * PATCH /sga/:id/team
      * Step 2 §4: raiser only, while editable
      */

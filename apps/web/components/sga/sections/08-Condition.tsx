@@ -88,7 +88,7 @@ const ConditionSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="3.7">Current Condition</SectionLabel>
+        <SectionLabel n="3.1">Current Condition</SectionLabel>
         <div className="space-y-3 mb-4">
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Evidence Source</p>
@@ -120,7 +120,7 @@ const ConditionSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="3.7">Current Condition</SectionLabel>
+      <SectionLabel n="3.1">Current Condition</SectionLabel>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">

@@ -59,7 +59,7 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="6.14">Verifying Department</SectionLabel>
+        <SectionLabel n="6.1">Verifying Department</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Verifying Department</p>
@@ -78,7 +78,7 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="6.14">Verifying Department</SectionLabel>
+      <SectionLabel n="6.1">Verifying Department</SectionLabel>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">

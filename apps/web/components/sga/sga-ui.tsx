@@ -3,6 +3,7 @@ import {
   SgaStatus,
   SgaStartingReason,
   SgaReferenceApplicability,
+  SgaReferenceType,
   SgaQcdsmtCategory,
   SgaUnit,
   SgaWaste,
@@ -52,7 +53,8 @@ export const STARTING_REASONS: { value: SgaStartingReason; label: string }[] = [
   { value: "INVENTORY_OR_WIP_REDUCTION", label: "Inventory or WIP reduction" },
   { value: "MACHINE_BREAKDOWN_OR_EQUIPMENT_PERFORMANCE", label: "Machine breakdown or equipment performance" },
   { value: "SMED_CHANGEOVER_TIME_REDUCTION", label: "SMED / changeover time reduction" },
-  { value: "EXTERNAL_CUSTOMER_REQUIREMENT_OR_COMPLAINT", label: "External customer requirement or complaint" },
+  { value: "EXTERNAL_CUSTOMER_REQUIREMENT", label: "Customer requirement" },
+  { value: "EXTERNAL_CUSTOMER_COMPLAINT", label: "Customer complaint" },
   { value: "INTERNAL_CUSTOMER_OR_CROSS_FUNCTIONAL_REQUIREMENT", label: "Internal customer or cross-functional requirement" },
   { value: "ALERT_OR_ABNORMALITY_REQUIRING_TEAM_PROJECT", label: "Alert or abnormality requiring a team project" },
   { value: "AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION", label: "Audit finding or Gemba walk observation" },
@@ -65,6 +67,24 @@ export const REFERENCE_APPLICABILITY_LABELS: Record<SgaReferenceApplicability, s
   APPLICABLE: "Applicable",
   NOT_APPLICABLE: "Not applicable",
   REFERENCE_NOT_FOUND: "Reference not found",
+};
+
+export const REFERENCE_TYPE_OPTIONS: { value: SgaReferenceType; label: string }[] = [
+  { value: "ISO_STANDARD_OR_CLAUSE", label: "ISO standard / clause" },
+  { value: "SOP_OR_WORK_INSTRUCTION", label: "SOP / work instruction" },
+  { value: "AUDIT_REPORT_OR_FINDING", label: "Audit report / finding" },
+  { value: "CUSTOMER_SPECIFICATION", label: "Customer specification" },
+  { value: "REGULATORY_OR_STATUTORY_REQUIREMENT", label: "Regulatory / statutory requirement" },
+  { value: "OTHER", label: "Other" },
+];
+
+export const REFERENCE_TYPE_LABELS: Record<SgaReferenceType, string> = {
+  ISO_STANDARD_OR_CLAUSE: "ISO standard / clause",
+  SOP_OR_WORK_INSTRUCTION: "SOP / work instruction",
+  AUDIT_REPORT_OR_FINDING: "Audit report / finding",
+  CUSTOMER_SPECIFICATION: "Customer specification",
+  REGULATORY_OR_STATUTORY_REQUIREMENT: "Regulatory / statutory requirement",
+  OTHER: "Other",
 };
 
 export const QCDSMT_CATEGORIES: { value: SgaQcdsmtCategory; label: string }[] = [
@@ -154,6 +174,7 @@ export const MEETING_FREQUENCY_LABELS: Record<SgaMeetingFrequency, string> = {
   WEEKLY: "Weekly",
   BIWEEKLY: "Bi-weekly",
   MONTHLY: "Monthly",
+  CUSTOM: "Custom",
 };
 
 export const WEEKDAY_OPTIONS: { value: SgaWeekday; label: string }[] = [

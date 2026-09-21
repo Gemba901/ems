@@ -41,6 +41,7 @@ const sgaInclude = {
     verifyingDepartment: { select: { id: true, name: true } },
     departmentRep: { select: { id: true, firstName: true, lastName: true } },
     qcdsmtImpacts: true,
+    wasteImpacts: true,
     measures: true,
     fishboneCauses: true,
     meetingReports: { orderBy: { meetingNumber: 'asc' as const } },
@@ -336,7 +337,9 @@ export class SgaService {
             where: { id: sgaId },
             data: {
                 startingReason: dto.startingReason,
+                startingReasonOther: dto.startingReason === 'OTHER' ? dto.startingReasonOther : null,
                 referenceApplicability: dto.referenceApplicability,
+                referenceType: dto.referenceApplicability === 'APPLICABLE' ? dto.referenceType : null,
                 referenceNumber: dto.referenceApplicability === 'APPLICABLE' ? dto.referenceNumber : null,
             },
             include: sgaInclude,
@@ -388,8 +391,17 @@ export class SgaService {
         if (new Set(categories).size !== categories.length) {
             throw new BadRequestException('Each QCDSMT category can only be listed once');
         }
-        if (dto.wastes?.includes('NOT_APPLICABLE') && dto.wastes.length > 1) {
+        const wastes = dto.wasteImpacts?.map((w) => w.waste) ?? [];
+        if (new Set(wastes).size !== wastes.length) {
+            throw new BadRequestException('Each waste can only be listed once');
+        }
+        if (wastes.includes('NOT_APPLICABLE') && wastes.length > 1) {
             throw new BadRequestException('"Not Applicable" cannot be combined with other wastes');
+        }
+        for (const w of dto.wasteImpacts ?? []) {
+            if (w.waste !== 'NOT_APPLICABLE' && !w.whatIsMeasured?.trim()) {
+                throw new BadRequestException('Every selected waste needs a measurement description');
+            }
         }
 
         await this.prisma.$transaction(async (tx) => {
@@ -399,13 +411,38 @@ export class SgaService {
                     data: dto.impacts.map((impact) => ({ ...impact, sgaId })),
                 });
             }
-            await tx.sga.update({
-                where: { id: sgaId },
-                data: { wastes: dto.wastes ?? [] },
-            });
+            await tx.sgaWasteImpact.deleteMany({ where: { sgaId } });
+            if (dto.wasteImpacts?.length) {
+                await tx.sgaWasteImpact.createMany({
+                    data: dto.wasteImpacts.map((w) => ({
+                        sgaId,
+                        waste: w.waste,
+                        whatIsMeasured: w.waste === 'NOT_APPLICABLE' ? '' : (w.whatIsMeasured ?? '').trim(),
+                    })),
+                });
+            }
         });
 
         return this.findSgaOrThrow(sgaId, organizationId);
+    }
+
+    // Step 2 §4: employees eligible to be picked as owner/team member — anyone in the
+    // SGA's main department or any of its "other departments involved" (Step 1 §2)
+    async getTeamCandidates(sgaId: string, userId: string, organizationId: string) {
+        const sga = await this.findSgaOrThrow(sgaId, organizationId);
+        const employee = await this.resolveEmployee(userId, organizationId);
+        this.assertDraftEditable(sga, employee.id);
+
+        const departmentIds = [sga.mainDepartmentId, ...sga.otherDepartments.map((d) => d.id)].filter(
+            (id): id is string => !!id,
+        );
+        if (departmentIds.length === 0) return [];
+
+        return this.prisma.employee.findMany({
+            where: { organizationId, departmentId: { in: departmentIds } },
+            select: { id: true, firstName: true, lastName: true, jobTitle: true },
+            orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        });
     }
 
     // Step 2 §4
@@ -441,7 +478,8 @@ export class SgaService {
             where: { id: sgaId },
             data: {
                 meetingFrequency: dto.meetingFrequency,
-                meetingDay: dto.meetingDay,
+                meetingFrequencyCustomText: dto.meetingFrequency === 'CUSTOM' ? dto.meetingFrequencyCustomText : null,
+                meetingDay: dto.meetingFrequency === 'DAILY' ? null : dto.meetingDay,
                 meetingTime: dto.meetingTime,
                 meetingDurationMinutes: dto.meetingDurationMinutes,
                 meetingLocation: dto.meetingLocation,
@@ -461,8 +499,8 @@ export class SgaService {
             data: {
                 requiredResources: dto.requiredResources,
                 expectedBenefitSummary: dto.expectedBenefitSummary,
-                approximateInvestmentAmount: dto.approximateInvestmentAmount ?? null,
-                approximateInvestmentCurrency: dto.approximateInvestmentCurrency ?? null,
+                approximateInvestmentAmount: dto.approximateInvestmentAmount,
+                approximateInvestmentCurrency: dto.approximateInvestmentCurrency,
             },
             include: sgaInclude,
         });

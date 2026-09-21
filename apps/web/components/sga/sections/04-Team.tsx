@@ -3,7 +3,6 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { EmployeeService } from "@/services/employee.service";
 import { SgaService } from "@/services/sga.service";
 import { SectionLabel } from "@/components/sga/sga-ui";
 import { SgaSectionHandle, SgaSectionProps } from "./types";
@@ -18,19 +17,14 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>(sga.teamMembers.map((m) => m.id));
   const [error, setError] = useState<string | null>(null);
 
-  const { data: me } = useQuery({
-    queryKey: ["employee-me"],
-    queryFn: () => EmployeeService.getMe(token),
+  const { data: candidates } = useQuery({
+    queryKey: ["sga-team-candidates", sga.id],
+    queryFn: () => SgaService.getTeamCandidates(sga.id, token),
     enabled: !!token && access.editable,
   });
-  const { data: colleagues } = useQuery({
-    queryKey: ["employee-colleagues"],
-    queryFn: () => EmployeeService.getMyColleagues(token),
-    enabled: !!token && access.editable && !!me?.departmentId,
-  });
 
-  const ownerOptions = me ? [{ id: me.id, firstName: me.firstName, lastName: me.lastName }, ...(colleagues ?? [])] : (colleagues ?? []);
-  const memberOptions = (colleagues ?? []).filter((c) => c.id !== ownerId);
+  const ownerOptions = candidates ?? [];
+  const memberOptions = (candidates ?? []).filter((c) => c.id !== ownerId);
 
   const toggleTeamMember = (id: string) => {
     setTeamMemberIds((prev) => {
@@ -68,7 +62,7 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="2.4">Team</SectionLabel>
+        <SectionLabel n="2.1">Team</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">SGA Owner</p>
@@ -89,7 +83,7 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="2.4">Team</SectionLabel>
+      <SectionLabel n="2.1">Team</SectionLabel>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
@@ -107,7 +101,6 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
             {ownerOptions.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.firstName} {o.lastName}
-                {me && o.id === me.id ? " (You)" : ""}
               </option>
             ))}
           </select>
@@ -116,12 +109,14 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
             Team Members{" "}
             <span className="text-xs font-normal text-slate-400">
-              (optional, from your department · up to {MAX_TEAM_MEMBERS})
+              (optional, from the departments involved · up to {MAX_TEAM_MEMBERS})
             </span>
           </label>
           {memberOptions.length === 0 ? (
             <p className="text-xs text-slate-400 border border-slate-200 rounded-lg px-4 py-2.5">
-              No other colleagues in your department yet.
+              {sga.mainDepartmentId
+                ? "No other employees in the involved departments yet."
+                : "Select a main department in Step 1.2 first."}
             </p>
           ) : (
             <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-100">

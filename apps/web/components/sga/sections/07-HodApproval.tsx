@@ -24,7 +24,7 @@ export default function HodApprovalSection({ sga, access, token, onSaved }: SgaS
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="2.7">HOD Approval</SectionLabel>
+        <SectionLabel n="2.4">HOD Approval</SectionLabel>
         {sga.hodDecision === "PENDING" ? (
           <p className="text-sm text-slate-400">Awaiting main department HOD decision.</p>
         ) : (
@@ -42,7 +42,7 @@ export default function HodApprovalSection({ sga, access, token, onSaved }: SgaS
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="2.7">HOD Approval</SectionLabel>
+      <SectionLabel n="2.4">HOD Approval</SectionLabel>
       <p className="text-xs text-slate-400 mb-4">Review sections 1-6 before this SGA proceeds to the team's work.</p>
       <div className="space-y-4">
         <div>

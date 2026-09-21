@@ -19,7 +19,10 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (approximateInvestmentAmount && !approximateInvestmentCurrency) {
+      if (!approximateInvestmentAmount) {
+        throw new Error("Please provide the approximate investment amount.");
+      }
+      if (!approximateInvestmentCurrency) {
         throw new Error("Select a currency for the approximate investment amount.");
       }
       return SgaService.updateResources(
@@ -27,8 +30,8 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
         {
           requiredResources: requiredResources.trim() || undefined,
           expectedBenefitSummary: expectedBenefitSummary.trim() || undefined,
-          approximateInvestmentAmount: approximateInvestmentAmount ? Number(approximateInvestmentAmount) : undefined,
-          approximateInvestmentCurrency: approximateInvestmentAmount ? approximateInvestmentCurrency : undefined,
+          approximateInvestmentAmount: Number(approximateInvestmentAmount),
+          approximateInvestmentCurrency,
         },
         token,
       );
@@ -51,7 +54,7 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
   if (!access.editable) {
     return (
       <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="2.6">Resources &amp; Investment</SectionLabel>
+        <SectionLabel n="2.3">Resources &amp; Investment</SectionLabel>
         <div className="space-y-3">
           <div>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Required Resources</p>
@@ -76,7 +79,7 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="2.6">Resources &amp; Investment</SectionLabel>
+      <SectionLabel n="2.3">Resources &amp; Investment</SectionLabel>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
@@ -103,7 +106,7 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Approximate investment <span className="text-xs font-normal text-slate-400">(optional)</span>
+            Approximate investment <span className="text-red-500">*</span>
           </label>
           <div className="flex gap-2 min-w-0">
             <input

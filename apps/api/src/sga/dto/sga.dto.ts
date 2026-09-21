@@ -17,6 +17,7 @@ import { Type } from "class-transformer"
 import {
   SgaStartingReason,
   SgaReferenceApplicability,
+  SgaReferenceType,
   SgaQcdsmtCategory,
   SgaUnit,
   SgaWaste,
@@ -41,9 +42,17 @@ export class UpdateSgaReasonDto {
   @IsEnum(SgaStartingReason)
   startingReason!: SgaStartingReason;
 
+  @ValidateIf((o) => o.startingReason === SgaStartingReason.OTHER)
+  @IsString()
+  startingReasonOther?: string;
+
   @IsOptional()
   @IsEnum(SgaReferenceApplicability)
   referenceApplicability?: SgaReferenceApplicability;
+
+  @ValidateIf((o) => o.referenceApplicability === "APPLICABLE")
+  @IsEnum(SgaReferenceType)
+  referenceType?: SgaReferenceType;
 
   @ValidateIf((o) => o.referenceApplicability === "APPLICABLE")
   @IsString()
@@ -120,6 +129,15 @@ export class SgaQcdsmtImpactItemDto {
   expectedBenefit?: string;
 }
 
+export class SgaWasteImpactItemDto {
+  @IsEnum(SgaWaste)
+  waste!: SgaWaste;
+
+  @ValidateIf((o) => o.waste !== "NOT_APPLICABLE")
+  @IsString()
+  whatIsMeasured?: string;
+}
+
 export class UpdateSgaImpactDto {
   @IsArray()
   @ValidateNested({ each: true })
@@ -128,8 +146,9 @@ export class UpdateSgaImpactDto {
 
   @IsOptional()
   @IsArray()
-  @IsEnum(SgaWaste, { each: true })
-  wastes?: SgaWaste[];
+  @ValidateNested({ each: true })
+  @Type(() => SgaWasteImpactItemDto)
+  wasteImpacts?: SgaWasteImpactItemDto[];
 }
 
 // Step 2 §4: team
@@ -149,6 +168,10 @@ export class UpdateSgaMeetingPlanDto {
   @IsOptional()
   @IsEnum(SgaMeetingFrequency)
   meetingFrequency?: SgaMeetingFrequency;
+
+  @ValidateIf((o) => o.meetingFrequency === "CUSTOM")
+  @IsString()
+  meetingFrequencyCustomText?: string;
 
   @IsOptional()
   @IsEnum(SgaWeekday)
@@ -177,13 +200,11 @@ export class UpdateSgaResourcesDto {
   @IsString()
   expectedBenefitSummary?: string;
 
-  @IsOptional()
   @IsNumber()
-  approximateInvestmentAmount?: number;
+  approximateInvestmentAmount!: number;
 
-  @IsOptional()
   @IsString()
-  approximateInvestmentCurrency?: string;
+  approximateInvestmentCurrency!: string;
 }
 
 // Step 2 §6: HOD decision

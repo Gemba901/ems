@@ -3,20 +3,31 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { SgaService, SgaStartingReason, SgaReferenceApplicability } from "@/services/sga.service";
-import { STARTING_REASONS, REFERENCE_APPLICABILITY_LABELS, SectionLabel } from "@/components/sga/sga-ui";
+import { SgaService, SgaStartingReason, SgaReferenceApplicability, SgaReferenceType } from "@/services/sga.service";
+import {
+  STARTING_REASONS,
+  REFERENCE_APPLICABILITY_LABELS,
+  REFERENCE_TYPE_LABELS,
+  REFERENCE_TYPE_OPTIONS,
+  SectionLabel,
+} from "@/components/sga/sga-ui";
 import { SgaSectionHandle, SgaSectionProps } from "./types";
 
 const REFERENCE_APPLICABILITY_OPTIONS: SgaReferenceApplicability[] = ["APPLICABLE", "NOT_APPLICABLE", "REFERENCE_NOT_FOUND"];
+
+const EXPLANATION_MIN = 10;
+const EXPLANATION_MAX = 1000;
 
 const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function ReasonSection(
   { sga, access, token, onSaved },
   ref,
 ) {
   const [startingReason, setStartingReason] = useState<SgaStartingReason | "">(sga.startingReason ?? "");
+  const [startingReasonOther, setStartingReasonOther] = useState(sga.startingReasonOther ?? "");
   const [referenceApplicability, setReferenceApplicability] = useState<SgaReferenceApplicability | "">(
     sga.referenceApplicability ?? "",
   );
+  const [referenceType, setReferenceType] = useState<SgaReferenceType | "">(sga.referenceType ?? "");
   const [referenceNumber, setReferenceNumber] = useState(sga.referenceNumber ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +37,9 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
         sga.id,
         {
           startingReason: startingReason as SgaStartingReason,
+          startingReasonOther: startingReason === "OTHER" ? startingReasonOther.trim() : undefined,
           referenceApplicability: referenceApplicability ? (referenceApplicability as SgaReferenceApplicability) : undefined,
+          referenceType: referenceApplicability === "APPLICABLE" ? (referenceType as SgaReferenceType) : undefined,
           referenceNumber: referenceApplicability === "APPLICABLE" ? referenceNumber.trim() : undefined,
         },
         token,
@@ -39,6 +52,17 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
     save: async () => {
       if (!startingReason) {
         setError("Please select why this SGA was started.");
+        return false;
+      }
+      if (
+        startingReason === "OTHER" &&
+        (startingReasonOther.trim().length < EXPLANATION_MIN || startingReasonOther.trim().length > EXPLANATION_MAX)
+      ) {
+        setError(`Please explain in ${EXPLANATION_MIN}-${EXPLANATION_MAX} characters.`);
+        return false;
+      }
+      if (referenceApplicability === "APPLICABLE" && !referenceType) {
+        setError("Please select the reference type.");
         return false;
       }
       if (referenceApplicability === "APPLICABLE" && !referenceNumber.trim()) {
@@ -68,11 +92,20 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
             </p>
             <p className="text-sm text-slate-700">{reasonLabel?.label ?? sga.startingReason ?? "Not set"}</p>
           </div>
+          {sga.startingReason === "OTHER" && sga.startingReasonOther && (
+            <div>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Explanation</p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">{sga.startingReasonOther}</p>
+            </div>
+          )}
           {sga.referenceApplicability && (
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Reference</p>
               <p className="text-sm text-slate-700">
                 {REFERENCE_APPLICABILITY_LABELS[sga.referenceApplicability]}
+                {sga.referenceApplicability === "APPLICABLE" && sga.referenceType
+                  ? ` - ${REFERENCE_TYPE_LABELS[sga.referenceType]}`
+                  : ""}
                 {sga.referenceApplicability === "APPLICABLE" && sga.referenceNumber ? ` - ${sga.referenceNumber}` : ""}
               </p>
             </div>
@@ -107,6 +140,29 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
           </select>
         </div>
 
+        {startingReason === "OTHER" && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-semibold text-slate-700">
+                Please explain <span className="text-red-500">*</span>
+              </label>
+              <span className={`text-xs ${startingReasonOther.length > EXPLANATION_MAX ? "text-red-500" : "text-slate-400"}`}>
+                {startingReasonOther.length}/{EXPLANATION_MAX}
+              </span>
+            </div>
+            <textarea
+              rows={4}
+              value={startingReasonOther}
+              onChange={(e) => {
+                setStartingReasonOther(e.target.value);
+                setError(null);
+              }}
+              placeholder="Describe why this SGA was started..."
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+            />
+          </div>
+        )}
+
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
             Reference applicability <span className="text-xs font-normal text-slate-400">(optional)</span>
@@ -127,6 +183,29 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
             ))}
           </select>
         </div>
+
+        {referenceApplicability === "APPLICABLE" && (
+          <div>
+            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+              Reference type <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={referenceType}
+              onChange={(e) => {
+                setReferenceType(e.target.value as SgaReferenceType);
+                setError(null);
+              }}
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            >
+              <option value="">Select...</option>
+              {REFERENCE_TYPE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {referenceApplicability === "APPLICABLE" && (
           <div>

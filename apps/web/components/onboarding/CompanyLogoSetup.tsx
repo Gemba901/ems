@@ -42,18 +42,18 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
   }
   return (
     <>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-blue-600">
-        Company profile
+      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-blue-600">
+        The finishing touch
       </p>
-      <h2 className="text-xl font-semibold tracking-tight">
-        Add your company logo
+      <h2 className="text-3xl font-semibold tracking-tight">
+        Put your name on it.
       </h2>
-      <p className="mt-1 mb-4 text-sm leading-relaxed text-slate-500">
-        Add a logo for {user?.organizationName || "your company"} or do this
-        later in Company Settings.
+      <p className="mt-3 mb-7 leading-relaxed text-slate-500">
+        Add a logo for {user?.organizationName || "your company"} so your team
+        feels at home. You can also do this later in Company Settings.
       </p>
-      <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-slate-300 bg-white p-4">
-        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-slate-100 bg-slate-50">
+      <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-slate-300 bg-white p-8">
+        <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
           {user?.organizationUrl ? (
             <TenantImage
               src={user.organizationUrl}
@@ -85,19 +85,19 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
         <p className="text-xs text-slate-500">PNG, JPG or WebP · Up to 5 MB</p>
       </div>
       {error && (
-        <div className="mt-3">
+        <div className="mt-5">
           <Notice error>{error}</Notice>
         </div>
       )}
       {saved && (
-        <div className="mt-3">
+        <div className="mt-5">
           <Notice>Your company logo is saved.</Notice>
         </div>
       )}
       <button
         disabled={busy}
         onClick={onContinue}
-        className={`${buttonClass} mt-3 w-full`}
+        className={`${buttonClass} mt-7 w-full`}
       >
         {saved ? "Enter your workspace" : "Skip for now & enter workspace"}
         <ArrowRight size={18} />

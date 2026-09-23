@@ -626,8 +626,9 @@ export const SgaService = {
     return handleResponse<Sga>(res);
   },
 
-  async getTeamCandidates(id: string, token: string): Promise<SgaTeamCandidate[]> {
-    const res = await apiClient(`${API_URL}/sga/${id}/team-candidates`, { headers: authHeaders(token) }, token);
+  async getTeamCandidates(id: string, token: string, departmentIds?: string[]): Promise<SgaTeamCandidate[]> {
+    const query = departmentIds?.length ? `?departmentIds=${departmentIds.join(",")}` : "";
+    const res = await apiClient(`${API_URL}/sga/${id}/team-candidates${query}`, { headers: authHeaders(token) }, token);
     return handleResponse<SgaTeamCandidate[]>(res);
   },
 

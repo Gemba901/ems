@@ -1,7 +1,7 @@
 "use client";
 
 import { TenantImage } from "@/components/files/TenantImage";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { FileIcon, ImagePlus, Loader2, X } from "lucide-react";
 import { EmployeeService } from "@/services/employee.service";
@@ -24,8 +24,12 @@ function isImageUrl(url: string) {
   return /\.(png|jpe?g|gif|webp|svg)$/i.test(url);
 }
 
-const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoSection(
-  { sga, access, token, onSaved },
+interface InfoSectionProps extends SgaSectionProps {
+  onDepartmentSelectionChange?: (mainDepartmentId: string, otherDepartmentIds: string[]) => void;
+}
+
+const InfoSection = forwardRef<SgaSectionHandle, InfoSectionProps>(function InfoSection(
+  { sga, access, token, onSaved, onDepartmentSelectionChange },
   ref,
 ) {
   const [title, setTitle] = useState(sga.title ?? "");
@@ -53,6 +57,12 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
   });
 
   const otherDeptOptions = (departments ?? []).filter((d) => d.id !== mainDepartmentId);
+
+  // Let the parent form know about the department selection as soon as it changes, so
+  // the Team section can look up candidates before this section has been saved.
+  useEffect(() => {
+    onDepartmentSelectionChange?.(mainDepartmentId, otherDepartmentIds);
+  }, [mainDepartmentId, otherDepartmentIds, onDepartmentSelectionChange]);
 
   const toggleOtherDepartment = (id: string) => {
     setOtherDepartmentIds((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));

@@ -9,8 +9,14 @@ import { SgaSectionHandle, SgaSectionProps } from "./types";
 
 const MAX_TEAM_MEMBERS = 5;
 
-const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamSection(
-  { sga, access, token, onSaved },
+interface TeamSectionProps extends SgaSectionProps {
+  // Department IDs picked in Step 1.2 but not necessarily saved yet — takes precedence
+  // over the SGA's persisted departments so candidates load without a save round-trip.
+  pendingDepartmentIds?: { main: string; other: string[] };
+}
+
+const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function TeamSection(
+  { sga, access, token, onSaved, pendingDepartmentIds },
   ref,
 ) {
   const [ownerId, setOwnerId] = useState(sga.ownerId ?? "");
@@ -18,11 +24,14 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
   const [error, setError] = useState<string | null>(null);
   const editable = access.editable;
 
-  const departmentKey = [sga.mainDepartmentId, ...sga.otherDepartments.map((d) => d.id)].join(",");
+  const mainDepartmentId = pendingDepartmentIds?.main ?? sga.mainDepartmentId ?? "";
+  const otherDepartmentIds = pendingDepartmentIds?.other ?? sga.otherDepartments.map((d) => d.id);
+  const departmentIds = [mainDepartmentId, ...otherDepartmentIds].filter(Boolean);
+  const departmentKey = departmentIds.join(",");
   const { data: candidates } = useQuery({
     queryKey: ["sga-team-candidates", sga.id, departmentKey],
-    queryFn: () => SgaService.getTeamCandidates(sga.id, token),
-    enabled: !!token && editable,
+    queryFn: () => SgaService.getTeamCandidates(sga.id, token, departmentIds),
+    enabled: !!token && editable && departmentIds.length > 0,
   });
 
   // The candidates endpoint only allows the raiser while still in draft, so once
@@ -102,7 +111,7 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
             <p className="text-xs text-slate-400 border border-slate-200 rounded-lg px-4 py-2.5">
               {!editable
                 ? "No team members selected."
-                : sga.mainDepartmentId
+                : mainDepartmentId
                 ? "No other employees in the involved departments yet."
                 : "Select a main department in Step 1.2 first."}
             </p>

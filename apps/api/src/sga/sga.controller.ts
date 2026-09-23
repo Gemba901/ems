@@ -1,7 +1,7 @@
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import { TenantGuard } from 'src/tenancy/tenant.guard';
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { SgaService } from './sga.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -166,15 +166,19 @@ export class SgaController {
     }
 
     /**
-     * GET /sga/:id/team-candidates
-     * Step 2 §4: employees in the SGA's main + other departments; raiser only, while editable
+     * GET /sga/:id/team-candidates?departmentIds=a,b,c
+     * Step 2 §4: employees in the SGA's main + other departments; raiser only, while editable.
+     * `departmentIds`, when given, overrides the persisted departments so the picker can
+     * reflect a Step 1.2 department selection that hasn't been saved yet.
      */
     @Get(':id/team-candidates')
     async getTeamCandidates(
         @Param('id') id: string,
+        @Query('departmentIds') departmentIds: string | undefined,
         @CurrentUser() user: { userId: string, organizationId: string }
     ){
-        return this.sgaService.getTeamCandidates(id, user.userId, user.organizationId)
+        const parsed = departmentIds ? departmentIds.split(',').filter(Boolean) : undefined;
+        return this.sgaService.getTeamCandidates(id, user.userId, user.organizationId, parsed)
     }
 
     /**

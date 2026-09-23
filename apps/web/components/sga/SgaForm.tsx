@@ -77,6 +77,10 @@ export default function SgaForm({
   const [hodApprovalSubmitError, setHodApprovalSubmitError] = useState<string | null>(null);
   const [saveProgressError, setSaveProgressError] = useState<string | null>(null);
   const [verificationSubmitError, setVerificationSubmitError] = useState<string | null>(null);
+  const [pendingDepartmentIds, setPendingDepartmentIds] = useState<{ main: string; other: string[] }>({
+    main: sga.mainDepartmentId ?? "",
+    other: sga.otherDepartments.map((d) => d.id),
+  });
   const [savingDraft, setSavingDraft] = useState(false);
   const [submittingForHodApproval, setSubmittingForHodApproval] = useState(false);
   const [savingProgress, setSavingProgress] = useState(false);
@@ -208,9 +212,23 @@ export default function SgaForm({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         <div className="lg:col-span-2 space-y-5">
           <ReasonSection ref={reasonRef} sga={sga} access={gating.reason} token={token} onSaved={onSaved} />
-          <InfoSection ref={infoRef} sga={sga} access={gating.info} token={token} onSaved={onSaved} />
+          <InfoSection
+            ref={infoRef}
+            sga={sga}
+            access={gating.info}
+            token={token}
+            onSaved={onSaved}
+            onDepartmentSelectionChange={(main, other) => setPendingDepartmentIds({ main, other })}
+          />
           <ImpactSection ref={impactRef} sga={sga} access={gating.impact} token={token} onSaved={onSaved} />
-          <TeamSection ref={teamRef} sga={sga} access={gating.team} token={token} onSaved={onSaved} />
+          <TeamSection
+            ref={teamRef}
+            sga={sga}
+            access={gating.team}
+            token={token}
+            onSaved={onSaved}
+            pendingDepartmentIds={pendingDepartmentIds}
+          />
           <MeetingPlanSection ref={meetingPlanRef} sga={sga} access={gating.meetingPlan} token={token} onSaved={onSaved} />
           <ResourcesSection ref={resourcesRef} sga={sga} access={gating.resources} token={token} onSaved={onSaved} />
 

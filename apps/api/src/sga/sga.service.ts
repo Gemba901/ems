@@ -436,15 +436,26 @@ export class SgaService {
     }
 
     // Step 2 §4: employees eligible to be picked as owner/team member — anyone in the
-    // SGA's main department or any of its "other departments involved" (Step 1 §2)
-    async getTeamCandidates(sgaId: string, userId: string, organizationId: string) {
+    // SGA's main department or any of its "other departments involved" (Step 1 §2).
+    // `pendingDepartmentIds`, when provided, overrides the persisted departments so the
+    // picker can reflect a department chosen in Step 1.2 that hasn't been saved yet.
+    async getTeamCandidates(sgaId: string, userId: string, organizationId: string, pendingDepartmentIds?: string[]) {
         const sga = await this.findSgaOrThrow(sgaId, organizationId);
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertDraftEditable(sga, employee.id);
 
-        const departmentIds = [sga.mainDepartmentId, ...sga.otherDepartments.map((d) => d.id)].filter(
-            (id): id is string => !!id,
-        );
+        let departmentIds: string[];
+        if (pendingDepartmentIds) {
+            const count = await this.prisma.department.count({ where: { id: { in: pendingDepartmentIds }, organizationId } });
+            if (count !== pendingDepartmentIds.length) {
+                throw new BadRequestException('One or more departments were not found in this organization');
+            }
+            departmentIds = pendingDepartmentIds;
+        } else {
+            departmentIds = [sga.mainDepartmentId, ...sga.otherDepartments.map((d) => d.id)].filter(
+                (id): id is string => !!id,
+            );
+        }
         if (departmentIds.length === 0) return [];
 
         return this.prisma.employee.findMany({

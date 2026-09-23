@@ -2,7 +2,7 @@ import { PlatformAdminGuard } from '../tenancy/platform-admin.guard';
 import { TenantRequired } from '../tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from '../tenancy/trusted-tenant-context.guard';
 import { TenantGuard } from '../tenancy/tenant.guard';
-import { Controller, Post, Get, Body, Request, Response, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Request, Response, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto, VerifyFirstTimeDto, CreatePasswordDto, SelectOrgDto, ForgotPasswordDto, ResetPasswordDto, VerifyTempPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -55,7 +55,7 @@ export class AuthController {
         const rawToken = req.cookies?.[REFRESH_COOKIE];
         if (!rawToken) {
             clearRefreshCookie(res);
-            return res.status(401).json({ message: 'No refresh token' });
+            throw new UnauthorizedException('No refresh token');
         }
 
         const result = await this.authService.refresh(rawToken);

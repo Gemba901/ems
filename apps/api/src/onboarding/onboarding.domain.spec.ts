@@ -14,6 +14,11 @@ describe('Onboarding domain readiness gate', () => {
     status: 'PROVISIONING',
     existingUserId: 'user-id',
     email: 'test@example.com',
+    shortName: 'SFL',
+    industry: 'Food & Beverage',
+    companyEmail: 'office@example.com',
+    companyPhone: '+254712345678',
+    companyAddress: 'Nairobi',
   };
   function fixture(domainFailure?: Error, attempts = 1) {
     const row = { ...claimed, attempts };
@@ -50,6 +55,32 @@ describe('Onboarding domain readiness gate', () => {
     );
     return { service, db, tx, domains };
   }
+  it('reports progress against the claimed attempt before creating company records', async () => {
+    const { service, db, tx, domains } = fixture();
+    domains.ensureReady.mockImplementation(
+      async (_slug: string, report: (stage: string) => Promise<void>) => {
+        await report('REGISTERING_DOMAIN');
+        await report('CHECKING_HTTPS');
+      },
+    );
+    await service.provisionOne();
+    expect(
+      db.onboardingRequest.updateMany.mock.calls.map(
+        (call) => call[0].data.provisioningStage,
+      ),
+    ).toEqual(['REGISTERING_DOMAIN', 'CHECKING_HTTPS', 'CREATING_WORKSPACE']);
+    expect(db.onboardingRequest.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: claimed.id,
+        status: 'PROVISIONING',
+        attempts: claimed.attempts,
+      },
+      data: { provisioningStage: 'CREATING_WORKSPACE', failureCode: null },
+    });
+    expect(
+      db.onboardingRequest.updateMany.mock.invocationCallOrder[2],
+    ).toBeLessThan(tx.organization.create.mock.invocationCallOrder[0]);
+  });
   it('does not create a company or welcome email before domain readiness', async () => {
     const { service, db, tx } = fixture(
       new WorkspaceDomainError('Workspace HTTPS login page not ready'),
@@ -85,8 +116,20 @@ describe('Onboarding domain readiness gate', () => {
   it('creates the company and queues welcome only after domain readiness succeeds', async () => {
     const { service, tx, domains } = fixture();
     await service.provisionOne();
-    expect(domains.ensureReady).toHaveBeenCalledWith('test-company');
+    expect(domains.ensureReady).toHaveBeenCalledWith(
+      'test-company',
+      expect.any(Function),
+    );
     expect(tx.organization.create).toHaveBeenCalledTimes(1);
+    expect(tx.organization.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        shortName: 'SFL',
+        industry: 'Food & Beverage',
+        email: 'office@example.com',
+        phone: '+254712345678',
+        address: 'Nairobi',
+      }),
+    });
     expect(tx.onboardingMessage.create).toHaveBeenCalledWith({
       data: { requestId: claimed.id, kind: 'WELCOME' },
     });

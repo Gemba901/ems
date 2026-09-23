@@ -3283,6 +3283,12 @@ enum SgaFishboneCategory {
   ENVIRONMENT_OTHER
 }
 
+enum SgaWhyWhyDecision {
+  MORE_INVESTIGATION_REQUIRED
+  ROOT_CAUSE_CONFIRMED
+  NOT_ROOT_CAUSE
+}
+
 enum SgaImplementationStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -3342,6 +3348,7 @@ model Sga {
   meetingFrequencyCustomText String?
   meetingDay                 SgaWeekday?
   meetingTime                String?
+  meetingEndTime             String?
   meetingDurationMinutes     Int?
   meetingLocation            String?
 
@@ -3360,8 +3367,9 @@ model Sga {
   immediateControlNeeded Boolean @default(false)
 
   // Step 3 / Section 8 — root cause analysis
-  rootCauseTools     SgaRootCauseTool[] @default([])
-  otherAnalysisNotes String?
+  rootCauseTools       SgaRootCauseTool[] @default([])
+  otherAnalysisNotes   String?
+  otherAnalysisFileUrls String[] @default([])
 
   // Step 4 / Section 11 — implementation
   implementationSummary            String?
@@ -3371,7 +3379,6 @@ model Sga {
   implementationStatus             SgaImplementationStatus @default(NOT_STARTED)
 
   // Step 5 / Section 13 — benefits and sustainability
-  qcdsmtBenefitAchieved           String?
   wasteReductionAchieved          String?
   financialLossBeforeImprovement  Decimal? @db.Decimal(14, 2)
   verifiedGrossBenefit            Decimal? @db.Decimal(14, 2)
@@ -3404,8 +3411,10 @@ model Sga {
   wasteImpacts   SgaWasteImpact[]
   measures       SgaMeasure[]
   fishboneCauses SgaFishboneCause[]
+  whyWhyChains   SgaWhyWhyChain[]
   meetingReports SgaMeetingReport[]
   actionItems    SgaActionItem[]
+  qcdsmtBenefits SgaQcdsmtBenefit[]
   verifications  SgaVerification[]
   reviews        SgaReview[]
 
@@ -3417,16 +3426,55 @@ model Sga {
 
 // Step 1 / Section 3 "Expected impact" seven-wastes tab — one row per selected waste
 model SgaWasteImpact {
-  id             String   @id @default(uuid())
-  sgaId          String
-  waste          SgaWaste
-  whatIsMeasured String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String   @id @default(uuid())
+  sgaId           String
+  waste           SgaWaste
+  description     String?
+  whatIsMeasured  String
+  baselineValue   String?
+  targetValue     String?
+  unit            SgaUnit  @default(PIECES)
+  otherUnitLabel  String?
+  currency        String?
+  expectedBenefit String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
   @@unique([sgaId, waste])
+  @@index([sgaId])
+}
+
+// Step 3 / Section 8 Why-Why sub-panel — one row per independent 5-whys chain
+model SgaWhyWhyChain {
+  id                 String            @id @default(uuid())
+  sgaId              String
+  causeToInvestigate String
+  linked5mCategory   SgaFishboneCategory?
+  whys               String[]          @default([])
+  evidence           String?
+  finalDecision      SgaWhyWhyDecision @default(MORE_INVESTIGATION_REQUIRED)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+
+  @@index([sgaId])
+}
+
+// Step 5 / Section 13 "Benefits" QCDSMT tab — one row per selected category
+model SgaQcdsmtBenefit {
+  id               String            @id @default(uuid())
+  sgaId            String
+  category         SgaQcdsmtCategory
+  whatWasAchieved  String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
+
+  @@unique([sgaId, category])
   @@index([sgaId])
 }
 
@@ -3553,6 +3601,12 @@ model OnboardingRequest {
   slug              String?  @unique
   requestedSlug     String
   companyName       String
+  shortName         String?
+  industry          String?
+  companyEmail      String?
+  companyPhone      String?
+  companyAddress    String?
+  provisioningStage String?
   firstName         String
   lastName          String
   email             String

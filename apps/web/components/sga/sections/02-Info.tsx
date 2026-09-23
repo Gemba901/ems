@@ -1,6 +1,5 @@
 "use client";
 
-import { TenantFileLink } from "@/components/files/TenantFileLink";
 import { TenantImage } from "@/components/files/TenantImage";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -8,7 +7,7 @@ import { FileIcon, ImagePlus, Loader2, X } from "lucide-react";
 import { EmployeeService } from "@/services/employee.service";
 import { SgaService } from "@/services/sga.service";
 import { uploadImage } from "@/services/uploads.service";
-import { formatDate, SectionLabel } from "@/components/sga/sga-ui";
+import { SectionLabel } from "@/components/sga/sga-ui";
 import { SgaSectionHandle, SgaSectionProps } from "./types";
 
 const MAX_FILES = 8;
@@ -40,16 +39,17 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editable = access.editable;
 
   const { data: me } = useQuery({
     queryKey: ["employee-me"],
     queryFn: () => EmployeeService.getMe(token),
-    enabled: !!token && access.editable,
+    enabled: !!token,
   });
   const { data: departments } = useQuery({
     queryKey: ["sga-departments", me?.organizationId],
     queryFn: () => EmployeeService.getDepartments(me!.organizationId, token),
-    enabled: !!token && access.editable && !!me?.organizationId,
+    enabled: !!token && !!me?.organizationId,
   });
 
   const otherDeptOptions = (departments ?? []).filter((d) => d.id !== mainDepartmentId);
@@ -121,70 +121,6 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
     },
   }));
 
-  if (!access.editable) {
-    return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="1.2">SGA Information &amp; Problem</SectionLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Title</p>
-            <p className="text-sm text-slate-700">{sga.title || "Untitled"}</p>
-          </div>
-          <div className="sm:col-span-2">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Problem Description</p>
-            <p className="text-sm text-slate-700 whitespace-pre-wrap">{sga.problemDescription || "Not set."}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Start Date</p>
-            <p className="text-sm text-slate-700">{sga.startDate ? formatDate(sga.startDate) : "Not set"}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Target Completion</p>
-            <p className="text-sm text-slate-700">{sga.targetCompletionDate ? formatDate(sga.targetCompletionDate) : "Not set"}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Main Department</p>
-            <p className="text-sm text-slate-700">{sga.mainDepartment?.name ?? "Not set"}</p>
-          </div>
-          {sga.otherDepartments.length > 0 && (
-            <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Other Departments</p>
-              <p className="text-sm text-slate-700">{sga.otherDepartments.map((d) => d.name).join(", ")}</p>
-            </div>
-          )}
-          {sga.workArea && (
-            <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Work Area</p>
-              <p className="text-sm text-slate-700">{sga.workArea}</p>
-            </div>
-          )}
-        </div>
-        {sga.beforeFileUrls.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-            {sga.beforeFileUrls.map((url, i) =>
-              isImageUrl(url) ? (
-                <TenantFileLink key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-slate-100 aspect-square block">
-                  <TenantImage src={url} alt={`Before ${i + 1}`} className="w-full h-full object-cover" />
-                </TenantFileLink>
-              ) : (
-                <TenantFileLink
-                  key={url}
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-lg border border-slate-200 aspect-square flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-blue-500 hover:border-blue-300 transition-colors"
-                >
-                  <FileIcon className="h-6 w-6" />
-                  <span className="text-[10px]">File {i + 1}</span>
-                </TenantFileLink>
-              ),
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
       <SectionLabel n="1.2">SGA Information &amp; Problem</SectionLabel>
@@ -196,9 +132,10 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
           <input
             type="text"
             value={title}
+            disabled={!editable}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="A short, descriptive title"
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           />
         </div>
         <div>
@@ -208,9 +145,10 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
           <textarea
             rows={4}
             value={problemDescription}
+            disabled={!editable}
             onChange={(e) => setProblemDescription(e.target.value)}
             placeholder="Describe the problem this SGA addresses..."
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
           />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -221,8 +159,9 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
             <input
               type="date"
               value={startDate}
+              disabled={!editable}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
           <div>
@@ -233,8 +172,9 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
               type="date"
               value={targetCompletionDate}
               min={startDate}
+              disabled={!editable}
               onChange={(e) => setTargetCompletionDate(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
         </div>
@@ -244,11 +184,12 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
           </label>
           <select
             value={mainDepartmentId}
+            disabled={!editable}
             onChange={(e) => {
               setMainDepartmentId(e.target.value);
               setOtherDepartmentIds((prev) => prev.filter((d) => d !== e.target.value));
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">Select a department...</option>
             {(departments ?? []).map((d) => (
@@ -258,17 +199,21 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
             ))}
           </select>
         </div>
-        {otherDeptOptions.length > 0 && (
+        {(editable ? otherDeptOptions.length > 0 : otherDepartmentIds.length > 0) && (
           <div>
             <label className="text-sm font-semibold text-slate-700 block mb-1.5">
               Other departments involved <span className="text-xs font-normal text-slate-400">(optional)</span>
             </label>
             <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-100">
-              {otherDeptOptions.map((d) => (
-                <label key={d.id} className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+              {(editable ? otherDeptOptions : (departments ?? []).filter((d) => otherDepartmentIds.includes(d.id))).map((d) => (
+                <label
+                  key={d.id}
+                  className={`flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 ${editable ? "cursor-pointer" : "cursor-default opacity-80"}`}
+                >
                   <input
                     type="checkbox"
                     checked={otherDepartmentIds.includes(d.id)}
+                    disabled={!editable}
                     onChange={() => toggleOtherDepartment(d.id)}
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
                   />
@@ -285,9 +230,10 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
           <input
             type="text"
             value={workArea}
+            disabled={!editable}
             onChange={(e) => setWorkArea(e.target.value)}
             placeholder="e.g. Line 3, Packing Bay"
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           />
         </div>
         <div>
@@ -308,16 +254,18 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
                     <span className="text-[10px]">File {i + 1}</span>
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => removeFile(i)}
-                  className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-slate-900/60 hover:bg-slate-900/80 flex items-center justify-center text-white transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-slate-900/60 hover:bg-slate-900/80 flex items-center justify-center text-white transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             ))}
-            {beforeFileUrls.length < MAX_FILES && (
+            {editable && beforeFileUrls.length < MAX_FILES && (
               <button
                 type="button"
                 disabled={uploading}
@@ -329,7 +277,7 @@ const InfoSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function InfoS
               </button>
             )}
           </div>
-          <input ref={fileInputRef} type="file" multiple onChange={handleFileChange} className="hidden" />
+          {editable && <input ref={fileInputRef} type="file" multiple onChange={handleFileChange} className="hidden" />}
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (

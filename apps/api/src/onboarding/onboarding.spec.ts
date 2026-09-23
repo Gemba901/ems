@@ -4,7 +4,7 @@ import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { OnboardingGuard } from './onboarding.guard';
 import { SignupDto } from './onboarding.dto';
-import { OnboardingService, backoff } from './onboarding.service';
+import { OnboardingService, backoff, digest } from './onboarding.service';
 import { WorkspaceDomainService } from './workspace-domain.service';
 
 const secret = 'x'.repeat(64);
@@ -72,6 +72,75 @@ describe('Onboarding public boundary', () => {
     );
     expect(service.token('id', 'verify')).not.toBe(
       service.token('id', 'progress'),
+    );
+  });
+  it('validates profile fields without requiring them for older clients', async () => {
+    const base = {
+      requestKey: 'a'.repeat(64),
+      slug: 'company',
+      companyName: 'Company',
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane@example.com',
+      phone: '+254712345678',
+      timeZone: 'Africa/Nairobi',
+    };
+    expect(await validate(plainToInstance(SignupDto, base))).toHaveLength(0);
+    const invalid = await validate(
+      plainToInstance(SignupDto, {
+        ...base,
+        shortName: ' ',
+        industry: ' ',
+        companyEmail: 'wrong',
+        companyPhone: 'abc',
+        companyAddress: ' ',
+      }),
+    );
+    expect(invalid.map((e) => e.property)).toEqual(
+      expect.arrayContaining([
+        'shortName',
+        'industry',
+        'companyEmail',
+        'companyPhone',
+        'companyAddress',
+      ]),
+    );
+  });
+  it('exposes safe real progress and only offers a retry for recoverable failures', async () => {
+    const request = {
+      id: 'id',
+      requestKeyHash: digest('key'),
+      status: 'PROVISIONING',
+      provisioningStage: 'CHECKING_HTTPS',
+      failureCode: 'PROVISIONING_FAILED',
+      companyName: 'Acme',
+      passwordHash: 'private',
+      verificationHash: 'private',
+    };
+    const service = new OnboardingService(
+      {
+        onboardingRequest: { findUnique: jest.fn().mockResolvedValue(request) },
+      } as any,
+      new ConfigService(),
+      {} as any,
+    );
+    const result = await service.status({ id: 'id', token: 'key' });
+    expect(result).toEqual(
+      expect.objectContaining({
+        provisioningStage: 'CHECKING_HTTPS',
+        retryScheduled: true,
+        canRetry: false,
+      }),
+    );
+    expect(result).not.toHaveProperty('passwordHash');
+    expect(result).not.toHaveProperty('verificationHash');
+    request.status = 'FAILED';
+    expect((await service.status({ id: 'id', token: 'key' })).canRetry).toBe(
+      true,
+    );
+    request.failureCode = 'DETAILS_CONFLICT';
+    expect((await service.status({ id: 'id', token: 'key' })).canRetry).toBe(
+      false,
     );
   });
   it('caps retry backoff', () => {

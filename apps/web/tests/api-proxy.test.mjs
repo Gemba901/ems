@@ -144,3 +144,10 @@ test('operational diagnostics are restricted to central hosts and preserve reque
   const denied = await proxyRequest(req('operations/readiness'), ['operations', 'readiness'], config, () => { throw Error('must not fetch'); });
   assert.equal(denied.status, 404);
 });
+
+test('workspace previews expose only public host metadata, including the configured base', async () => {
+  const response = await proxyRequest(req('workspace', { host: 'admin.example.test' }), ['workspace'], config, () => assert.fail('Workspace metadata must not call the API'));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await response.json(), { kind: 'platform', hostname: 'admin.example.test', baseDomain: 'example.test', slug: null });
+});

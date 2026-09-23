@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { companySlug, slugError } from '../lib/onboarding';
+assert.equal(companySlug('  Sunveat Food Limited '), 'sunveat-food-limited');
+assert.equal(companySlug('Société & Sons, Ltd.'), 'societe-sons-ltd');
+assert.equal(companySlug('A---B    C'), 'a-b-c');
+assert.equal(companySlug('x'.repeat(39) + ' more'), 'x'.repeat(39));
+assert.ok(slugError('admin'));
+assert.ok(slugError('-company'));
+assert.ok(slugError('company-'));
+assert.ok(slugError('co'));
+assert.equal(slugError('company-123'), '');
+console.log('Onboarding slug checks passed');

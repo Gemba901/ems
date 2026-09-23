@@ -12,6 +12,7 @@ import {
   SgaWeekday,
   SgaRootCauseTool,
   SgaFishboneCategory,
+  SgaWhyWhyDecision,
   SgaImplementationStatus,
   SgaVerificationStage,
   SgaVerificationDecision,
@@ -232,6 +233,24 @@ export const FISHBONE_CATEGORY_LABELS: Record<SgaFishboneCategory, string> = {
   MEASUREMENT: "Measurement",
   ENVIRONMENT_OTHER: "Environment / Other",
 };
+
+export const WHY_WHY_DECISION_OPTIONS: { value: SgaWhyWhyDecision; label: string }[] = [
+  { value: "MORE_INVESTIGATION_REQUIRED", label: "More Investigation Required" },
+  { value: "ROOT_CAUSE_CONFIRMED", label: "Root Cause Confirmed" },
+  { value: "NOT_ROOT_CAUSE", label: "Not the Root Cause" },
+];
+
+export const WHY_WHY_DECISION_LABELS: Record<SgaWhyWhyDecision, string> = {
+  MORE_INVESTIGATION_REQUIRED: "More Investigation Required",
+  ROOT_CAUSE_CONFIRMED: "Root Cause Confirmed",
+  NOT_ROOT_CAUSE: "Not the Root Cause",
+};
+
+// Tools that share ONE combined "Analysis details / findings" + upload block when
+// several are selected together, per the reference design (Pareto / Process
+// Observation / Data Trend / Other Analysis). Fishbone and Why-Why are fully
+// structured and never fold into this shared block.
+export const SIMPLE_ROOT_CAUSE_TOOLS: SgaRootCauseTool[] = ["PARETO", "PROCESS_OBSERVATION", "DATA_TREND", "OTHER"];
 
 export const IMPLEMENTATION_STATUS_OPTIONS: { value: SgaImplementationStatus; label: string }[] = [
   { value: "NOT_STARTED", label: "Not started" },

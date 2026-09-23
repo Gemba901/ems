@@ -16,7 +16,6 @@ import {
   QCDSMT_CATEGORIES,
   QCDSMT_LABELS,
   SectionLabel,
-  UNIT_LABELS,
   UNIT_OPTIONS,
   WASTE_LABELS,
   WASTE_OPTIONS,
@@ -41,7 +40,17 @@ function toRows(sga: SgaSectionProps["sga"]): Row[] {
 }
 
 function toWasteRows(sga: SgaSectionProps["sga"]): WasteRow[] {
-  return sga.wasteImpacts.map((w) => ({ waste: w.waste, whatIsMeasured: w.whatIsMeasured }));
+  return sga.wasteImpacts.map((w) => ({
+    waste: w.waste,
+    description: w.description ?? undefined,
+    whatIsMeasured: w.whatIsMeasured,
+    baselineValue: w.baselineValue ?? undefined,
+    targetValue: w.targetValue ?? undefined,
+    unit: w.unit,
+    otherUnitLabel: w.otherUnitLabel ?? undefined,
+    currency: w.currency ?? undefined,
+    expectedBenefit: w.expectedBenefit ?? undefined,
+  }));
 }
 
 const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function ImpactSection(
@@ -51,6 +60,7 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
   const [rows, setRows] = useState<Row[]>(toRows(sga));
   const [wasteRows, setWasteRows] = useState<WasteRow[]>(toWasteRows(sga));
   const [error, setError] = useState<string | null>(null);
+  const editable = access.editable;
 
   const availableCategories = QCDSMT_CATEGORIES.filter((c) => !rows.some((r) => r.category === c.value));
   const availableWastes = WASTE_OPTIONS.filter((w) => !wasteRows.some((r) => r.waste === w.value));
@@ -68,11 +78,12 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
   };
 
   const addWaste = (waste: SgaWaste) => {
-    setWasteRows((prev) => (waste === "NOT_APPLICABLE" ? [{ waste, whatIsMeasured: "" }] : [...prev, { waste, whatIsMeasured: "" }]));
+    const blank: WasteRow = { waste, whatIsMeasured: "", unit: "PIECES" };
+    setWasteRows((prev) => (waste === "NOT_APPLICABLE" ? [blank] : [...prev, blank]));
   };
 
-  const updateWasteRow = (index: number, whatIsMeasured: string) => {
-    setWasteRows((prev) => prev.map((r, i) => (i === index ? { ...r, whatIsMeasured } : r)));
+  const updateWasteRow = (index: number, patch: Partial<WasteRow>) => {
+    setWasteRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   };
 
   const removeWasteRow = (index: number) => {
@@ -88,9 +99,10 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
         if (r.unit === "CURRENCY" && !r.currency) throw new Error("Select a currency for the currency-unit impact.");
       }
       for (const w of wasteRows) {
-        if (w.waste !== "NOT_APPLICABLE" && !w.whatIsMeasured?.trim()) {
-          throw new Error("Every selected waste needs a measurement description.");
-        }
+        if (w.waste === "NOT_APPLICABLE") continue;
+        if (!w.whatIsMeasured?.trim()) throw new Error("Every selected waste needs a measurement description.");
+        if (w.unit === "OTHER" && !w.otherUnitLabel?.trim()) throw new Error("Specify the unit label for 'Other'.");
+        if (w.unit === "CURRENCY" && !w.currency) throw new Error("Select a currency for the currency-unit waste.");
       }
       return SgaService.updateImpact(
         sga.id,
@@ -116,43 +128,6 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
     },
   }));
 
-  if (!access.editable) {
-    return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="1.3">Expected Impact</SectionLabel>
-        {sga.qcdsmtImpacts.length === 0 ? (
-          <p className="text-sm text-slate-400">No QCDSMT impacts recorded.</p>
-        ) : (
-          <div className="space-y-3 mb-4">
-            {sga.qcdsmtImpacts.map((i) => (
-              <div key={i.id} className="border border-slate-100 rounded-lg p-3">
-                <p className="text-xs font-semibold text-blue-600 mb-1">{QCDSMT_LABELS[i.category]}</p>
-                <p className="text-sm text-slate-700">{i.whatIsMeasured}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {i.baselineValue ?? "-"} → {i.targetValue ?? "-"}{" "}
-                  {i.unit === "OTHER" ? i.otherUnitLabel : i.unit === "CURRENCY" ? i.currency ?? UNIT_LABELS[i.unit] : UNIT_LABELS[i.unit]}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-        {sga.wasteImpacts.length > 0 && (
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Seven Wastes</p>
-            <div className="space-y-2">
-              {sga.wasteImpacts.map((w) => (
-                <div key={w.id} className="border border-slate-100 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-blue-600 mb-1">{WASTE_LABELS[w.waste]}</p>
-                  {w.whatIsMeasured && <p className="text-sm text-slate-700">{w.whatIsMeasured}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
       <SectionLabel n="1.3">Expected Impact</SectionLabel>
@@ -160,21 +135,25 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
         Record the Quality / Cost / Delivery / Safety / Morale / Technology dimensions this SGA affects, and tag any of the seven wastes it reduces.
       </p>
       <div className="space-y-4">
+        {rows.length === 0 && !editable && <p className="text-sm text-slate-400">No QCDSMT impacts recorded.</p>}
         {rows.map((row, index) => (
           <div key={row.category} className="border border-slate-200 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-blue-600">{QCDSMT_LABELS[row.category]}</p>
-              <button type="button" onClick={() => removeRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {editable && (
+                <button type="button" onClick={() => removeRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 block mb-1">How is this affected now?</label>
               <input
                 type="text"
                 value={row.description ?? ""}
+                disabled={!editable}
                 onChange={(e) => updateRow(index, { description: e.target.value })}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
             <div>
@@ -182,8 +161,9 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
               <input
                 type="text"
                 value={row.whatIsMeasured}
+                disabled={!editable}
                 onChange={(e) => updateRow(index, { whatIsMeasured: e.target.value })}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -192,8 +172,9 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
                 <input
                   type="text"
                   value={row.baselineValue ?? ""}
+                  disabled={!editable}
                   onChange={(e) => updateRow(index, { baselineValue: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
               <div>
@@ -201,16 +182,18 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
                 <input
                   type="text"
                   value={row.targetValue ?? ""}
+                  disabled={!editable}
                   onChange={(e) => updateRow(index, { targetValue: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-500 block mb-1">Unit</label>
                 <select
                   value={row.unit}
+                  disabled={!editable}
                   onChange={(e) => updateRow(index, { unit: e.target.value as SgaUnit })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
                 >
                   {UNIT_OPTIONS.map((u) => (
                     <option key={u.value} value={u.value}>
@@ -226,15 +209,16 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
                 <input
                   type="text"
                   value={row.otherUnitLabel ?? ""}
+                  disabled={!editable}
                   onChange={(e) => updateRow(index, { otherUnitLabel: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
             )}
             {row.unit === "CURRENCY" && (
               <div>
                 <label className="text-xs font-medium text-slate-500 block mb-1">Currency</label>
-                <CurrencySelect value={row.currency} onChange={(currency) => updateRow(index, { currency })} className="w-full" />
+                <CurrencySelect value={row.currency} onChange={(currency) => updateRow(index, { currency })} disabled={!editable} className="w-full" />
               </div>
             )}
             <div>
@@ -242,14 +226,15 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
               <input
                 type="text"
                 value={row.expectedBenefit ?? ""}
+                disabled={!editable}
                 onChange={(e) => updateRow(index, { expectedBenefit: e.target.value })}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
           </div>
         ))}
 
-        {availableCategories.length > 0 && (
+        {editable && availableCategories.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {availableCategories.map((c) => (
               <button
@@ -269,29 +254,110 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
             Seven wastes <span className="text-xs font-normal text-slate-400">(optional)</span>
           </label>
           <div className="space-y-3">
+            {wasteRows.length === 0 && !editable && <p className="text-sm text-slate-400">No wastes recorded.</p>}
             {wasteRows.map((row, index) => (
               <div key={row.waste} className="border border-slate-200 rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-blue-600">{WASTE_LABELS[row.waste]}</p>
-                  <button type="button" onClick={() => removeWasteRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {editable && (
+                    <button type="button" onClick={() => removeWasteRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 {row.waste !== "NOT_APPLICABLE" && (
-                  <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">What is measured?</label>
-                    <input
-                      type="text"
-                      value={row.whatIsMeasured ?? ""}
-                      onChange={(e) => updateWasteRow(index, e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 block mb-1">How is this affected now?</label>
+                      <input
+                        type="text"
+                        value={row.description ?? ""}
+                        disabled={!editable}
+                        onChange={(e) => updateWasteRow(index, { description: e.target.value })}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 block mb-1">What is measured?</label>
+                      <input
+                        type="text"
+                        value={row.whatIsMeasured ?? ""}
+                        disabled={!editable}
+                        onChange={(e) => updateWasteRow(index, { whatIsMeasured: e.target.value })}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 block mb-1">Baseline</label>
+                        <input
+                          type="text"
+                          value={row.baselineValue ?? ""}
+                          disabled={!editable}
+                          onChange={(e) => updateWasteRow(index, { baselineValue: e.target.value })}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 block mb-1">Target</label>
+                        <input
+                          type="text"
+                          value={row.targetValue ?? ""}
+                          disabled={!editable}
+                          onChange={(e) => updateWasteRow(index, { targetValue: e.target.value })}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 block mb-1">Unit</label>
+                        <select
+                          value={row.unit}
+                          disabled={!editable}
+                          onChange={(e) => updateWasteRow(index, { unit: e.target.value as SgaUnit })}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        >
+                          {UNIT_OPTIONS.map((u) => (
+                            <option key={u.value} value={u.value}>
+                              {u.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {row.unit === "OTHER" && (
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 block mb-1">Unit label</label>
+                        <input
+                          type="text"
+                          value={row.otherUnitLabel ?? ""}
+                          disabled={!editable}
+                          onChange={(e) => updateWasteRow(index, { otherUnitLabel: e.target.value })}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        />
+                      </div>
+                    )}
+                    {row.unit === "CURRENCY" && (
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 block mb-1">Currency</label>
+                        <CurrencySelect value={row.currency} onChange={(currency) => updateWasteRow(index, { currency })} disabled={!editable} className="w-full" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 block mb-1">Expected benefit</label>
+                      <input
+                        type="text"
+                        value={row.expectedBenefit ?? ""}
+                        disabled={!editable}
+                        onChange={(e) => updateWasteRow(index, { expectedBenefit: e.target.value })}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                      />
+                    </div>
+                  </>
                 )}
               </div>
             ))}
 
-            {availableWastes.length > 0 && wasteRows[0]?.waste !== "NOT_APPLICABLE" && (
+            {editable && availableWastes.length > 0 && wasteRows[0]?.waste !== "NOT_APPLICABLE" && (
               <div className="flex flex-wrap gap-1.5">
                 {availableWastes.map((w) => (
                   <button

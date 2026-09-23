@@ -16,15 +16,22 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
   const [ownerId, setOwnerId] = useState(sga.ownerId ?? "");
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>(sga.teamMembers.map((m) => m.id));
   const [error, setError] = useState<string | null>(null);
+  const editable = access.editable;
 
+  const departmentKey = [sga.mainDepartmentId, ...sga.otherDepartments.map((d) => d.id)].join(",");
   const { data: candidates } = useQuery({
-    queryKey: ["sga-team-candidates", sga.id],
+    queryKey: ["sga-team-candidates", sga.id, departmentKey],
     queryFn: () => SgaService.getTeamCandidates(sga.id, token),
-    enabled: !!token && access.editable,
+    enabled: !!token && editable,
   });
 
-  const ownerOptions = candidates ?? [];
-  const memberOptions = (candidates ?? []).filter((c) => c.id !== ownerId);
+  // The candidates endpoint only allows the raiser while still in draft, so once
+  // the section is no longer editable we fall back to the SGA's own saved
+  // owner/team-member records to still show correct labels in the disabled form.
+  const ownerOptions = editable ? candidates ?? [] : sga.owner ? [{ ...sga.owner, jobTitle: null }] : [];
+  const memberOptions = editable
+    ? (candidates ?? []).filter((c) => c.id !== ownerId)
+    : sga.teamMembers.map((m) => ({ ...m, jobTitle: null as string | null }));
 
   const toggleTeamMember = (id: string) => {
     setTeamMemberIds((prev) => {
@@ -59,28 +66,6 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
     },
   }));
 
-  if (!access.editable) {
-    return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="2.1">Team</SectionLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">SGA Owner</p>
-            <p className="text-sm text-slate-700">
-              {sga.owner ? `${sga.owner.firstName} ${sga.owner.lastName}` : "Not set"}
-            </p>
-          </div>
-          {sga.teamMembers.length > 0 && (
-            <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Team Members</p>
-              <p className="text-sm text-slate-700">{sga.teamMembers.map((m) => `${m.firstName} ${m.lastName}`).join(", ")}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
       <SectionLabel n="2.1">Team</SectionLabel>
@@ -91,11 +76,12 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
           </label>
           <select
             value={ownerId}
+            disabled={!editable}
             onChange={(e) => {
               setOwnerId(e.target.value);
               setTeamMemberIds((prev) => prev.filter((id) => id !== e.target.value));
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">Select an owner...</option>
             {ownerOptions.map((o) => (
@@ -114,7 +100,9 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
           </label>
           {memberOptions.length === 0 ? (
             <p className="text-xs text-slate-400 border border-slate-200 rounded-lg px-4 py-2.5">
-              {sga.mainDepartmentId
+              {!editable
+                ? "No team members selected."
+                : sga.mainDepartmentId
                 ? "No other employees in the involved departments yet."
                 : "Select a main department in Step 1.2 first."}
             </p>
@@ -122,12 +110,12 @@ const TeamSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function TeamS
             <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-100">
               {memberOptions.map((c) => {
                 const checked = teamMemberIds.includes(c.id);
-                const disabled = !checked && teamMemberIds.length >= MAX_TEAM_MEMBERS;
+                const disabled = !editable || (!checked && teamMemberIds.length >= MAX_TEAM_MEMBERS);
                 return (
                   <label
                     key={c.id}
                     className={`flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 ${
-                      disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+                      disabled ? "opacity-70 cursor-default" : "cursor-pointer"
                     }`}
                   >
                     <input

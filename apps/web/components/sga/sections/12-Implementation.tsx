@@ -3,11 +3,10 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ImagePlus, Loader2, X } from "lucide-react";
-import { TenantFileLink } from "@/components/files/TenantFileLink";
 import { TenantImage } from "@/components/files/TenantImage";
 import { uploadImage } from "@/services/uploads.service";
 import { SgaImplementationStatus, SgaService } from "@/services/sga.service";
-import { CurrencySelect, IMPLEMENTATION_STATUS_LABELS, IMPLEMENTATION_STATUS_OPTIONS, SectionLabel } from "@/components/sga/sga-ui";
+import { CurrencySelect, IMPLEMENTATION_STATUS_OPTIONS, SectionLabel } from "@/components/sga/sga-ui";
 import { SgaSectionHandle, SgaSectionProps } from "./types";
 
 const MAX_PHOTOS = 8;
@@ -24,6 +23,7 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editable = access.editable;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -83,41 +83,6 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
 
   if (!access.visible) return null;
 
-  if (!access.editable) {
-    return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="4.2">Implementation</SectionLabel>
-        <div className="space-y-3 mb-4">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Status</p>
-            <p className="text-sm text-slate-700">{IMPLEMENTATION_STATUS_LABELS[sga.implementationStatus]}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Summary</p>
-            <p className="text-sm text-slate-700 whitespace-pre-wrap">{sga.implementationSummary || "Not set."}</p>
-          </div>
-          {sga.actualImplementationCost && (
-            <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Actual Cost</p>
-              <p className="text-sm text-slate-700">
-                {sga.actualImplementationCostCurrency} {sga.actualImplementationCost}
-              </p>
-            </div>
-          )}
-        </div>
-        {sga.afterFileUrls.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {sga.afterFileUrls.map((url, i) => (
-              <TenantFileLink key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-slate-100 aspect-square block">
-                <TenantImage src={url} alt={`After ${i + 1}`} className="w-full h-full object-cover" />
-              </TenantFileLink>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
       <SectionLabel n="4.2">Implementation</SectionLabel>
@@ -126,8 +91,9 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">Status</label>
           <select
             value={implementationStatus}
+            disabled={!editable}
             onChange={(e) => setImplementationStatus(e.target.value as SgaImplementationStatus)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             {IMPLEMENTATION_STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>
@@ -143,9 +109,10 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
           <textarea
             rows={4}
             value={implementationSummary}
+            disabled={!editable}
             onChange={(e) => setImplementationSummary(e.target.value)}
             placeholder="Describe what was implemented..."
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
           />
         </div>
         <div>
@@ -159,16 +126,18 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
             {afterFileUrls.map((url, i) => (
               <div key={url} className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 aspect-square">
                 <TenantImage src={url} alt={`After ${i + 1}`} className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => removeFile(i)}
-                  className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-slate-900/60 hover:bg-slate-900/80 flex items-center justify-center text-white transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-slate-900/60 hover:bg-slate-900/80 flex items-center justify-center text-white transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             ))}
-            {afterFileUrls.length < MAX_PHOTOS && (
+            {editable && afterFileUrls.length < MAX_PHOTOS && (
               <button
                 type="button"
                 disabled={uploading}
@@ -180,7 +149,7 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
               </button>
             )}
           </div>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} className="hidden" />
+          {editable && <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} className="hidden" />}
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
@@ -192,10 +161,11 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
               min="0"
               step="0.01"
               value={actualImplementationCost}
+              disabled={!editable}
               onChange={(e) => setActualImplementationCost(e.target.value)}
-              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
-            <CurrencySelect value={actualImplementationCostCurrency} onChange={setActualImplementationCostCurrency} className="w-32 shrink-0" />
+            <CurrencySelect value={actualImplementationCostCurrency} onChange={setActualImplementationCostCurrency} disabled={!editable} className="w-32 shrink-0" />
           </div>
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}

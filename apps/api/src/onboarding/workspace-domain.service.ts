@@ -56,7 +56,12 @@ export class WorkspaceDomainService {
     return { token, project, team, branch, base };
   }
 
-  async ensureReady(slug: string): Promise<void> {
+  async ensureReady(
+    slug: string,
+    reportStage?: (
+      stage: 'REGISTERING_DOMAIN' | 'CHECKING_HTTPS',
+    ) => Promise<void>,
+  ): Promise<void> {
     if (!this.enabled()) return;
     if (getOrganizationSlugError(slug))
       throw new WorkspaceDomainError('Invalid workspace slug');
@@ -95,6 +100,7 @@ export class WorkspaceDomainService {
       }
     };
 
+    await reportStage?.('REGISTERING_DOMAIN');
     let response = await api(domainPath);
     if (response.status === 404) {
       await response.body?.cancel();
@@ -135,6 +141,7 @@ export class WorkspaceDomainService {
     if (dns.misconfigured !== false)
       throw new WorkspaceDomainError('Vercel domain DNS configuration pending');
 
+    await reportStage?.('CHECKING_HTTPS');
     // A verified domain alone does not prove that its certificate has been issued.
     // Use normal TLS validation, no credentials, and never follow redirects.
     try {

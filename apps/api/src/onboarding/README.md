@@ -1,5 +1,10 @@
 # Milestone 5: verified onboarding
 
+See the [architecture guide](../../../../infra/company-onboarding/README.md),
+[operations runbook](../../../../infra/company-onboarding/operations.md), and
+[scaling roadmap](../../../../infra/company-onboarding/scaling.md) for the wider
+deployment decisions, incident history and future production work.
+
 This module adds signup at the **central web hostname** `/signup`. Company hosts
 cannot call onboarding through the proxy. API endpoints require the server proxy
 credential. Request DTOs expose company/contact details only; role, platform-team

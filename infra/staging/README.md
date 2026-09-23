@@ -1,5 +1,10 @@
 # Milestone 6: staging rollout and acceptance
 
+For the recorded company-domain architecture, incident history and future capacity
+plan, see [company onboarding](../company-onboarding/README.md),
+[operations](../company-onboarding/operations.md), and
+[scaling recommendations](../company-onboarding/scaling.md).
+
 This release wires private company files, coordinated scheduled jobs, request
 logging, safe error responses and a platform-only `/admin/readiness` page.
 It does not deploy infrastructure. Record the release commit and the results below
@@ -136,8 +141,8 @@ scanning require a separately reviewed policy before unrestricted uploads.
 ## 4. Deploy and inspect
 
 Build db, API and web from the same release. Existing deploy automation does not
-apply migrations; complete step 2 first. This branch itself does not trigger the
-main/staging deployment workflow. Deploy the API and web together after review.
+apply migrations; complete step 2 first. The current workflow deploys API images
+on pushes to `main` and `staging`. Coordinate API and web releases after review.
 The Docker build context now excludes environment files and local build caches.
 
 Sign in as a current platform administrator on the central host and open

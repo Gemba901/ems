@@ -44,10 +44,12 @@ const sgaInclude = {
     wasteImpacts: true,
     measures: true,
     fishboneCauses: true,
+    whyWhyChains: true,
     meetingReports: { orderBy: { meetingNumber: 'asc' as const } },
     actionItems: {
         include: { responsiblePerson: { select: { id: true, firstName: true, lastName: true } } },
     },
+    qcdsmtBenefits: true,
     verifications: {
         include: { verifiedBy: { select: { id: true, firstName: true, lastName: true } } },
     },
@@ -417,7 +419,14 @@ export class SgaService {
                     data: dto.wasteImpacts.map((w) => ({
                         sgaId,
                         waste: w.waste,
+                        description: w.description,
                         whatIsMeasured: w.waste === 'NOT_APPLICABLE' ? '' : (w.whatIsMeasured ?? '').trim(),
+                        baselineValue: w.baselineValue,
+                        targetValue: w.targetValue,
+                        unit: w.unit ?? 'PIECES',
+                        otherUnitLabel: w.unit === 'OTHER' ? w.otherUnitLabel : undefined,
+                        currency: w.currency,
+                        expectedBenefit: w.expectedBenefit,
                     })),
                 });
             }
@@ -474,6 +483,14 @@ export class SgaService {
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertDraftEditable(sga, employee.id);
 
+        let durationMinutes = dto.meetingDurationMinutes;
+        if (dto.meetingTime && dto.meetingEndTime) {
+            const [sh, sm] = dto.meetingTime.split(':').map(Number);
+            const [eh, em] = dto.meetingEndTime.split(':').map(Number);
+            const diff = (eh * 60 + em) - (sh * 60 + sm);
+            durationMinutes = diff > 0 ? diff : diff + 24 * 60;
+        }
+
         return this.prisma.sga.update({
             where: { id: sgaId },
             data: {
@@ -481,7 +498,8 @@ export class SgaService {
                 meetingFrequencyCustomText: dto.meetingFrequency === 'CUSTOM' ? dto.meetingFrequencyCustomText : null,
                 meetingDay: dto.meetingFrequency === 'DAILY' ? null : dto.meetingDay,
                 meetingTime: dto.meetingTime,
-                meetingDurationMinutes: dto.meetingDurationMinutes,
+                meetingEndTime: dto.meetingEndTime,
+                meetingDurationMinutes: durationMinutes,
                 meetingLocation: dto.meetingLocation,
             },
             include: sgaInclude,
@@ -646,6 +664,7 @@ export class SgaService {
                 data: {
                     rootCauseTools: dto.rootCauseTools ?? undefined,
                     otherAnalysisNotes: dto.otherAnalysisNotes,
+                    otherAnalysisFileUrls: dto.otherAnalysisFileUrls ?? undefined,
                 },
             });
             if (dto.fishboneCauses) {
@@ -653,6 +672,14 @@ export class SgaService {
                 if (dto.fishboneCauses.length) {
                     await tx.sgaFishboneCause.createMany({
                         data: dto.fishboneCauses.map(({ id: _id, ...c }) => ({ ...c, sgaId })),
+                    });
+                }
+            }
+            if (dto.whyWhyChains) {
+                await tx.sgaWhyWhyChain.deleteMany({ where: { sgaId } });
+                if (dto.whyWhyChains.length) {
+                    await tx.sgaWhyWhyChain.createMany({
+                        data: dto.whyWhyChains.map(({ id: _id, ...c }) => ({ ...c, sgaId, whys: c.whys ?? [] })),
                     });
                 }
             }
@@ -674,7 +701,7 @@ export class SgaService {
             throw new BadRequestException(`Meeting #${dto.meetingNumber} has already been logged`);
         }
 
-        return this.prisma.sgaMeetingReport.create({
+        await this.prisma.sgaMeetingReport.create({
             data: {
                 sgaId,
                 meetingNumber: dto.meetingNumber,
@@ -684,6 +711,8 @@ export class SgaService {
                 notes: dto.notes,
             },
         });
+
+        return this.findSgaOrThrow(sgaId, organizationId);
     }
 
     async updateMeetingReport(sgaId: string, reportId: string, userId: string, dto: UpdateSgaMeetingReportDto, organizationId: string) {
@@ -694,7 +723,7 @@ export class SgaService {
         const report = await this.prisma.sgaMeetingReport.findFirst({ where: { id: reportId, sgaId } });
         if (!report) throw new NotFoundException('Meeting report not found');
 
-        return this.prisma.sgaMeetingReport.update({
+        await this.prisma.sgaMeetingReport.update({
             where: { id: reportId },
             data: {
                 meetingDate: dto.meetingDate ? new Date(dto.meetingDate) : undefined,
@@ -703,6 +732,8 @@ export class SgaService {
                 notes: dto.notes,
             },
         });
+
+        return this.findSgaOrThrow(sgaId, organizationId);
     }
 
     async deleteMeetingReport(sgaId: string, reportId: string, userId: string, organizationId: string) {
@@ -714,7 +745,7 @@ export class SgaService {
         if (!report) throw new NotFoundException('Meeting report not found');
 
         await this.prisma.sgaMeetingReport.delete({ where: { id: reportId } });
-        return { success: true };
+        return this.findSgaOrThrow(sgaId, organizationId);
     }
 
     // Step 4 §10
@@ -795,23 +826,38 @@ export class SgaService {
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertTeamEditable(sga, employee.id);
 
-        return this.prisma.sga.update({
-            where: { id: sgaId },
-            data: {
-                qcdsmtBenefitAchieved: dto.qcdsmtBenefitAchieved,
-                wasteReductionAchieved: dto.wasteReductionAchieved,
-                financialLossBeforeImprovement: dto.financialLossBeforeImprovement ?? null,
-                verifiedGrossBenefit: dto.verifiedGrossBenefit ?? null,
-                benefitPeriod: dto.benefitPeriod,
-                effectivenessConfirmationPeriod: dto.effectivenessConfirmationPeriod,
-                sopUpdated: dto.sopUpdated,
-                employeesTrained: dto.employeesTrained,
-                followUpCheckPlanned: dto.followUpCheckPlanned,
-                appliedElsewhere: dto.appliedElsewhere,
-                lessonsLearned: dto.lessonsLearned,
-            },
-            include: sgaInclude,
+        const categories = dto.qcdsmtBenefits?.map((b) => b.category) ?? [];
+        if (new Set(categories).size !== categories.length) {
+            throw new BadRequestException('Each QCDSMT category can only be listed once');
+        }
+
+        await this.prisma.$transaction(async (tx) => {
+            await tx.sga.update({
+                where: { id: sgaId },
+                data: {
+                    wasteReductionAchieved: dto.wasteReductionAchieved,
+                    financialLossBeforeImprovement: dto.financialLossBeforeImprovement ?? null,
+                    verifiedGrossBenefit: dto.verifiedGrossBenefit ?? null,
+                    benefitPeriod: dto.benefitPeriod,
+                    effectivenessConfirmationPeriod: dto.effectivenessConfirmationPeriod,
+                    sopUpdated: dto.sopUpdated,
+                    employeesTrained: dto.employeesTrained,
+                    followUpCheckPlanned: dto.followUpCheckPlanned,
+                    appliedElsewhere: dto.appliedElsewhere,
+                    lessonsLearned: dto.lessonsLearned,
+                },
+            });
+            if (dto.qcdsmtBenefits) {
+                await tx.sgaQcdsmtBenefit.deleteMany({ where: { sgaId } });
+                if (dto.qcdsmtBenefits.length) {
+                    await tx.sgaQcdsmtBenefit.createMany({
+                        data: dto.qcdsmtBenefits.map((b) => ({ ...b, sgaId })),
+                    });
+                }
+            }
         });
+
+        return this.findSgaOrThrow(sgaId, organizationId);
     }
 
     // Step 6 §14: select the affected department + rep before submitting for verification

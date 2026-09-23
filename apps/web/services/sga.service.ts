@@ -92,6 +92,8 @@ export type SgaRootCauseTool = "FISHBONE_5M" | "WHY_WHY" | "PARETO" | "PROCESS_O
 
 export type SgaFishboneCategory = "PEOPLE" | "MACHINE" | "MATERIAL" | "METHOD" | "MEASUREMENT" | "ENVIRONMENT_OTHER";
 
+export type SgaWhyWhyDecision = "MORE_INVESTIGATION_REQUIRED" | "ROOT_CAUSE_CONFIRMED" | "NOT_ROOT_CAUSE";
+
 export type SgaImplementationStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "ON_HOLD";
 
 export type SgaVerificationStage = "AFFECTED_DEPARTMENT" | "HOD" | "STEERING_COMMITTEE" | "FINANCE";
@@ -141,7 +143,14 @@ export interface SgaWasteImpact {
   id: string;
   sgaId: string;
   waste: SgaWaste;
+  description: string | null;
   whatIsMeasured: string;
+  baselineValue: string | null;
+  targetValue: string | null;
+  unit: SgaUnit;
+  otherUnitLabel: string | null;
+  currency: string | null;
+  expectedBenefit: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -167,6 +176,27 @@ export interface SgaFishboneCause {
   category: SgaFishboneCategory;
   description: string;
   createdAt: string;
+}
+
+export interface SgaWhyWhyChain {
+  id: string;
+  sgaId: string;
+  causeToInvestigate: string;
+  linked5mCategory: SgaFishboneCategory | null;
+  whys: string[];
+  evidence: string | null;
+  finalDecision: SgaWhyWhyDecision;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SgaQcdsmtBenefit {
+  id: string;
+  sgaId: string;
+  category: SgaQcdsmtCategory;
+  whatWasAchieved: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SgaMeetingReport {
@@ -236,6 +266,7 @@ export interface Sga {
   meetingFrequencyCustomText: string | null;
   meetingDay: SgaWeekday | null;
   meetingTime: string | null;
+  meetingEndTime: string | null;
   meetingDurationMinutes: number | null;
   meetingLocation: string | null;
 
@@ -256,6 +287,7 @@ export interface Sga {
   // Step 3 §8: root cause analysis
   rootCauseTools: SgaRootCauseTool[];
   otherAnalysisNotes: string | null;
+  otherAnalysisFileUrls: string[];
 
   // Step 4 §11: implementation
   implementationSummary: string | null;
@@ -265,7 +297,6 @@ export interface Sga {
   implementationStatus: SgaImplementationStatus;
 
   // Step 5 §13: benefits and sustainability
-  qcdsmtBenefitAchieved: string | null;
   wasteReductionAchieved: string | null;
   financialLossBeforeImprovement: string | null;
   verifiedGrossBenefit: string | null;
@@ -296,8 +327,10 @@ export interface Sga {
   wasteImpacts: SgaWasteImpact[];
   measures: SgaMeasure[];
   fishboneCauses: SgaFishboneCause[];
+  whyWhyChains: SgaWhyWhyChain[];
   meetingReports: SgaMeetingReport[];
   actionItems: SgaActionItem[];
+  qcdsmtBenefits: SgaQcdsmtBenefit[];
   verifications: SgaVerification[];
   reviews: SgaReview[];
 }
@@ -342,7 +375,14 @@ export interface SgaQcdsmtImpactItemPayload {
 
 export interface SgaWasteImpactItemPayload {
   waste: SgaWaste;
+  description?: string;
   whatIsMeasured?: string;
+  baselineValue?: string;
+  targetValue?: string;
+  unit?: SgaUnit;
+  otherUnitLabel?: string;
+  currency?: string;
+  expectedBenefit?: string;
 }
 
 export interface UpdateSgaImpactPayload {
@@ -369,6 +409,7 @@ export interface UpdateSgaMeetingPlanPayload {
   meetingFrequencyCustomText?: string;
   meetingDay?: SgaWeekday;
   meetingTime?: string;
+  meetingEndTime?: string;
   meetingDurationMinutes?: number;
   meetingLocation?: string;
 }
@@ -412,10 +453,21 @@ export interface SgaFishboneCauseItemPayload {
   description: string;
 }
 
+export interface SgaWhyWhyChainItemPayload {
+  id?: string;
+  causeToInvestigate: string;
+  linked5mCategory?: SgaFishboneCategory;
+  whys?: string[];
+  evidence?: string;
+  finalDecision?: SgaWhyWhyDecision;
+}
+
 export interface UpdateSgaRootCausePayload {
   rootCauseTools?: SgaRootCauseTool[];
   otherAnalysisNotes?: string;
+  otherAnalysisFileUrls?: string[];
   fishboneCauses?: SgaFishboneCauseItemPayload[];
+  whyWhyChains?: SgaWhyWhyChainItemPayload[];
 }
 
 // Step 3 §9
@@ -474,8 +526,13 @@ export interface UpdateSgaResultsPayload {
 }
 
 // Step 5 §13
+export interface SgaQcdsmtBenefitItemPayload {
+  category: SgaQcdsmtCategory;
+  whatWasAchieved: string;
+}
+
 export interface UpdateSgaBenefitsPayload {
-  qcdsmtBenefitAchieved?: string;
+  qcdsmtBenefits?: SgaQcdsmtBenefitItemPayload[];
   wasteReductionAchieved?: string;
   financialLossBeforeImprovement?: number;
   verifiedGrossBenefit?: number;

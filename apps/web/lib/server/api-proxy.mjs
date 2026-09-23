@@ -99,7 +99,7 @@ export async function proxyRequest(request, parts, config, fetcher = fetch) {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.headers.get('origin') !== scope.origin) fail(403, 'Request origin is not allowed');
     if (request.headers.get('sec-fetch-site') === 'cross-site') fail(403, 'Request origin is not allowed');
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
-    if (parts.join('/') === 'workspace') return Response.json({ kind: scope.kind, hostname: scope.hostname, slug: scope.slug ?? null }, { headers: { 'Cache-Control': 'no-store' } });
+    if (parts.join('/') === 'workspace') return Response.json({ kind: scope.kind, hostname: scope.hostname, baseDomain: scope.base, port: scope.port, slug: scope.slug ?? null }, { headers: { 'Cache-Control': 'no-store' } });
     const path = upstreamPath(parts, scope);
     if (!config.apiUrl || !config.secret || config.secret.length < 64 || config.secret.length > 1024 || /\s/.test(config.secret)) fail(503, 'API configuration is unavailable');
     const api = new URL(config.apiUrl);

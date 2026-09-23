@@ -7,7 +7,6 @@ import { SgaService, SgaStartingReason, SgaReferenceApplicability, SgaReferenceT
 import {
   STARTING_REASONS,
   REFERENCE_APPLICABILITY_LABELS,
-  REFERENCE_TYPE_LABELS,
   REFERENCE_TYPE_OPTIONS,
   SectionLabel,
 } from "@/components/sga/sga-ui";
@@ -30,6 +29,7 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
   const [referenceType, setReferenceType] = useState<SgaReferenceType | "">(sga.referenceType ?? "");
   const [referenceNumber, setReferenceNumber] = useState(sga.referenceNumber ?? "");
   const [error, setError] = useState<string | null>(null);
+  const editable = access.editable;
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -79,42 +79,6 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
     },
   }));
 
-  const reasonLabel = STARTING_REASONS.find((r) => r.value === sga.startingReason);
-
-  if (!access.editable) {
-    return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="1.1">Reason</SectionLabel>
-        <div className="space-y-3">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              Why was this SGA started?
-            </p>
-            <p className="text-sm text-slate-700">{reasonLabel?.label ?? sga.startingReason ?? "Not set"}</p>
-          </div>
-          {sga.startingReason === "OTHER" && sga.startingReasonOther && (
-            <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Explanation</p>
-              <p className="text-sm text-slate-700 whitespace-pre-wrap">{sga.startingReasonOther}</p>
-            </div>
-          )}
-          {sga.referenceApplicability && (
-            <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Reference</p>
-              <p className="text-sm text-slate-700">
-                {REFERENCE_APPLICABILITY_LABELS[sga.referenceApplicability]}
-                {sga.referenceApplicability === "APPLICABLE" && sga.referenceType
-                  ? ` - ${REFERENCE_TYPE_LABELS[sga.referenceType]}`
-                  : ""}
-                {sga.referenceApplicability === "APPLICABLE" && sga.referenceNumber ? ` - ${sga.referenceNumber}` : ""}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
       <SectionLabel n="1.1">Reason</SectionLabel>
@@ -125,11 +89,12 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
           </label>
           <select
             value={startingReason}
+            disabled={!editable}
             onChange={(e) => {
               setStartingReason(e.target.value as SgaStartingReason);
               setError(null);
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">Select a reason...</option>
             {STARTING_REASONS.map((r) => (
@@ -153,12 +118,13 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
             <textarea
               rows={4}
               value={startingReasonOther}
+              disabled={!editable}
               onChange={(e) => {
                 setStartingReasonOther(e.target.value);
                 setError(null);
               }}
               placeholder="Describe why this SGA was started..."
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
         )}
@@ -169,11 +135,12 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
           </label>
           <select
             value={referenceApplicability}
+            disabled={!editable}
             onChange={(e) => {
               setReferenceApplicability(e.target.value as SgaReferenceApplicability);
               setError(null);
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">Select...</option>
             {REFERENCE_APPLICABILITY_OPTIONS.map((v) => (
@@ -191,11 +158,12 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
             </label>
             <select
               value={referenceType}
+              disabled={!editable}
               onChange={(e) => {
                 setReferenceType(e.target.value as SgaReferenceType);
                 setError(null);
               }}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             >
               <option value="">Select...</option>
               {REFERENCE_TYPE_OPTIONS.map((t) => (
@@ -215,12 +183,13 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
             <input
               type="text"
               value={referenceNumber}
+              disabled={!editable}
               onChange={(e) => {
                 setReferenceNumber(e.target.value);
                 setError(null);
               }}
               placeholder="e.g. AUDIT-2026-014"
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
         )}

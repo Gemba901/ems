@@ -111,6 +111,11 @@ export class OnboardingService {
       email: dto.email.trim().toLowerCase(),
       phone: dto.phone.trim(),
       timeZone: dto.timeZone.trim(),
+      shortName: dto.shortName?.trim(),
+      industry: dto.industry?.trim(),
+      companyEmail: dto.companyEmail?.trim().toLowerCase(),
+      companyPhone: dto.companyPhone?.trim(),
+      companyAddress: dto.companyAddress?.trim(),
     };
     const error = getOrganizationSlugError(data.requestedSlug);
     if (error) throw new BadRequestException(error);
@@ -282,6 +287,11 @@ export class OnboardingService {
       id: request.id,
       status,
       failureCode: request.failureCode,
+      companyName: request.companyName,
+      provisioningStage: request.provisioningStage,
+      retryScheduled: status === 'PROVISIONING' && !!request.failureCode,
+      canRetry:
+        status === 'FAILED' && request.failureCode === 'PROVISIONING_FAILED',
       ...(status === 'READY'
         ? { workspaceUrl: this.workspaceUrl(request.requestedSlug) }
         : {}),
@@ -304,6 +314,7 @@ export class OnboardingService {
         attempts: 0,
         nextAttemptAt: new Date(),
         failureCode: null,
+        provisioningStage: null,
       },
     });
     return this.status(dto);
@@ -353,7 +364,19 @@ export class OnboardingService {
       if (!claimed.verifiedAt) throw new Error('UNVERIFIED');
       // Provider/network calls must remain outside the company creation transaction.
       // A retry reuses the registered domain; no organization exists until HTTPS is ready.
-      await this.domains.ensureReady(claimed.requestedSlug);
+      const reportStage = async (provisioningStage: string) => {
+        // An expired worker must never overwrite the current attempt's progress.
+        await this.db.onboardingRequest.updateMany({
+          where: {
+            id: claimed.id,
+            status: 'PROVISIONING',
+            attempts: claimed.attempts,
+          },
+          data: { provisioningStage, failureCode: null },
+        });
+      };
+      await this.domains.ensureReady(claimed.requestedSlug, reportStage);
+      await reportStage('CREATING_WORKSPACE');
       await this.db.$transaction(
         async (tx) => {
           await tx.$queryRaw`SELECT id FROM "OnboardingRequest" WHERE id = ${claimed.id} FOR UPDATE`;
@@ -399,6 +422,11 @@ export class OnboardingService {
           const org = await tx.organization.create({
             data: {
               name: request.companyName,
+              shortName: request.shortName,
+              industry: request.industry,
+              email: request.companyEmail,
+              phone: request.companyPhone,
+              address: request.companyAddress,
               slug: request.requestedSlug,
               timeZone: request.timeZone,
               modules: this.modules(),

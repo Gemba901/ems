@@ -130,7 +130,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="3.3">Meeting Reports</SectionLabel>
+      <SectionLabel n="3.1">Meeting Reports</SectionLabel>
 
       {sga.meetingReports.length === 0 && !adding && (
         <p className="text-sm text-slate-400 mb-3">No meetings logged yet.</p>

@@ -16,6 +16,7 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
   const [approximateInvestmentAmount, setApproximateInvestmentAmount] = useState(sga.approximateInvestmentAmount ?? "");
   const [approximateInvestmentCurrency, setApproximateInvestmentCurrency] = useState(sga.approximateInvestmentCurrency ?? "");
   const [error, setError] = useState<string | null>(null);
+  const editable = access.editable;
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -51,32 +52,6 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
     },
   }));
 
-  if (!access.editable) {
-    return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="2.3">Resources &amp; Investment</SectionLabel>
-        <div className="space-y-3">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Required Resources</p>
-            <p className="text-sm text-slate-700 whitespace-pre-wrap">{sga.requiredResources || "Not set."}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Expected Benefit Summary</p>
-            <p className="text-sm text-slate-700 whitespace-pre-wrap">{sga.expectedBenefitSummary || "Not set."}</p>
-          </div>
-          {sga.approximateInvestmentAmount && (
-            <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Approximate Investment</p>
-              <p className="text-sm text-slate-700">
-                {sga.approximateInvestmentCurrency} {sga.approximateInvestmentAmount}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
       <SectionLabel n="2.3">Resources &amp; Investment</SectionLabel>
@@ -88,9 +63,10 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
           <textarea
             rows={3}
             value={requiredResources}
+            disabled={!editable}
             onChange={(e) => setRequiredResources(e.target.value)}
             placeholder="What resources, tools, or budget are needed?"
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
           />
         </div>
         <div>
@@ -100,8 +76,9 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
           <textarea
             rows={3}
             value={expectedBenefitSummary}
+            disabled={!editable}
             onChange={(e) => setExpectedBenefitSummary(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
           />
         </div>
         <div>
@@ -114,10 +91,11 @@ const ResourcesSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
               min="0"
               step="0.01"
               value={approximateInvestmentAmount}
+              disabled={!editable}
               onChange={(e) => setApproximateInvestmentAmount(e.target.value)}
-              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
-            <CurrencySelect value={approximateInvestmentCurrency} onChange={setApproximateInvestmentCurrency} className="w-32 shrink-0" />
+            <CurrencySelect value={approximateInvestmentCurrency} onChange={setApproximateInvestmentCurrency} disabled={!editable} className="w-32 shrink-0" />
           </div>
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}

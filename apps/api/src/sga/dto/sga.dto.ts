@@ -25,6 +25,7 @@ import {
   SgaWeekday,
   SgaRootCauseTool,
   SgaFishboneCategory,
+  SgaWhyWhyDecision,
   SgaImplementationStatus,
   SgaVerificationStage,
   SgaBenefitPeriod,
@@ -133,9 +134,37 @@ export class SgaWasteImpactItemDto {
   @IsEnum(SgaWaste)
   waste!: SgaWaste;
 
+  @IsOptional()
+  @IsString()
+  description?: string;
+
   @ValidateIf((o) => o.waste !== "NOT_APPLICABLE")
   @IsString()
   whatIsMeasured?: string;
+
+  @IsOptional()
+  @IsString()
+  baselineValue?: string;
+
+  @IsOptional()
+  @IsString()
+  targetValue?: string;
+
+  @ValidateIf((o) => o.waste !== "NOT_APPLICABLE")
+  @IsEnum(SgaUnit)
+  unit?: SgaUnit;
+
+  @ValidateIf((o) => o.unit === "OTHER")
+  @IsString()
+  otherUnitLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
+  @IsString()
+  expectedBenefit?: string;
 }
 
 export class UpdateSgaImpactDto {
@@ -180,6 +209,10 @@ export class UpdateSgaMeetingPlanDto {
   @IsOptional()
   @IsString()
   meetingTime?: string;
+
+  @IsOptional()
+  @IsString()
+  meetingEndTime?: string;
 
   @IsOptional()
   @IsInt()
@@ -282,6 +315,32 @@ export class SgaFishboneCauseItemDto {
   description!: string;
 }
 
+export class SgaWhyWhyChainItemDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @IsString()
+  causeToInvestigate!: string;
+
+  @IsOptional()
+  @IsEnum(SgaFishboneCategory)
+  linked5mCategory?: SgaFishboneCategory;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  whys?: string[];
+
+  @IsOptional()
+  @IsString()
+  evidence?: string;
+
+  @IsOptional()
+  @IsEnum(SgaWhyWhyDecision)
+  finalDecision?: SgaWhyWhyDecision;
+}
+
 export class UpdateSgaRootCauseDto {
   @IsOptional()
   @IsArray()
@@ -294,9 +353,20 @@ export class UpdateSgaRootCauseDto {
 
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
+  otherAnalysisFileUrls?: string[];
+
+  @IsOptional()
+  @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SgaFishboneCauseItemDto)
   fishboneCauses?: SgaFishboneCauseItemDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SgaWhyWhyChainItemDto)
+  whyWhyChains?: SgaWhyWhyChainItemDto[];
 }
 
 // Step 3 §9: meeting reports
@@ -436,10 +506,20 @@ export class UpdateSgaResultsDto {
 }
 
 // Step 5 §13: benefits and sustainability
+export class SgaQcdsmtBenefitItemDto {
+  @IsEnum(SgaQcdsmtCategory)
+  category!: SgaQcdsmtCategory;
+
+  @IsString()
+  whatWasAchieved!: string;
+}
+
 export class UpdateSgaBenefitsDto {
   @IsOptional()
-  @IsString()
-  qcdsmtBenefitAchieved?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SgaQcdsmtBenefitItemDto)
+  qcdsmtBenefits?: SgaQcdsmtBenefitItemDto[];
 
   @IsOptional()
   @IsString()

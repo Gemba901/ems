@@ -2,6 +2,14 @@
 
 This is the Employee Management System (EMS) built using a modern monorepo architecture powered by Turborepo.
 
+## Company onboarding and tenancy
+
+See the [architecture and implementation guide](infra/company-onboarding/README.md),
+[operations runbook](infra/company-onboarding/operations.md),
+[scaling roadmap](infra/company-onboarding/scaling.md), and
+[file inventory](infra/company-onboarding/file-inventory.md).
+These distinguish the working staging setup from outstanding production gates.
+
 ---
 
 ## 🚀 Tech Stack

@@ -99,9 +99,9 @@ export default function SgaForm({
 
   const draftRefs = [reasonRef, infoRef, impactRef, teamRef, meetingPlanRef, resourcesRef];
   const teamPhaseRefs = [
+    meetingReportsRef,
     conditionRef,
     rootCauseRef,
-    meetingReportsRef,
     actionPlanRef,
     implementationRef,
     resultsRef,
@@ -251,15 +251,13 @@ export default function SgaForm({
           )}
 
           {gating.condition.visible ? (
-            <ConditionSection ref={conditionRef} sga={sga} access={gating.condition} token={token} onSaved={onSaved} />
+            <>
+              <MeetingReportsSection ref={meetingReportsRef} sga={sga} access={gating.meetingReports} token={token} onSaved={onSaved} />
+              <ConditionSection ref={conditionRef} sga={sga} access={gating.condition} token={token} onSaved={onSaved} />
+              <RootCauseSection ref={rootCauseRef} sga={sga} access={gating.rootCause} token={token} onSaved={onSaved} />
+            </>
           ) : (
             <LockedSection n={3} label="Understand the Current Condition" />
-          )}
-          {gating.rootCause.visible && (
-            <RootCauseSection ref={rootCauseRef} sga={sga} access={gating.rootCause} token={token} onSaved={onSaved} />
-          )}
-          {gating.meetingReports.visible && (
-            <MeetingReportsSection ref={meetingReportsRef} sga={sga} access={gating.meetingReports} token={token} onSaved={onSaved} />
           )}
 
           {gating.actionPlan.visible ? (

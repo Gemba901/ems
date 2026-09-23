@@ -15,22 +15,26 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
   const [verifyingDepartmentId, setVerifyingDepartmentId] = useState(sga.verifyingDepartmentId ?? "");
   const [departmentRepId, setDepartmentRepId] = useState(sga.departmentRepId ?? "");
   const [error, setError] = useState<string | null>(null);
+  const editable = access.editable;
 
   const { data: me } = useQuery({
     queryKey: ["employee-me"],
     queryFn: () => EmployeeService.getMe(token),
-    enabled: !!token && access.editable,
+    enabled: !!token && editable,
   });
   const { data: departments } = useQuery({
     queryKey: ["employee-departments", me?.organizationId],
     queryFn: () => EmployeeService.getDepartments(me!.organizationId, token),
-    enabled: !!token && access.editable && !!me?.organizationId,
+    enabled: !!token && editable && !!me?.organizationId,
   });
   const { data: colleagues } = useQuery({
     queryKey: ["employee-colleagues"],
     queryFn: () => EmployeeService.getMyColleagues(token),
-    enabled: !!token && access.editable && !!me?.departmentId,
+    enabled: !!token && editable && !!me?.departmentId,
   });
+
+  const departmentOptions = editable ? departments ?? [] : sga.verifyingDepartment ? [sga.verifyingDepartment] : [];
+  const repOptions = editable ? colleagues ?? [] : sga.departmentRep ? [sga.departmentRep] : [];
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -56,26 +60,6 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
     },
   }));
 
-  if (!access.editable) {
-    return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-        <SectionLabel n="6.1">Verifying Department</SectionLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Verifying Department</p>
-            <p className="text-sm text-slate-700">{sga.verifyingDepartment?.name || "Not set"}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Department Representative</p>
-            <p className="text-sm text-slate-700">
-              {sga.departmentRep ? `${sga.departmentRep.firstName} ${sga.departmentRep.lastName}` : "Not set"}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
       <SectionLabel n="6.1">Verifying Department</SectionLabel>
@@ -86,11 +70,12 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
           </label>
           <select
             value={verifyingDepartmentId}
+            disabled={!editable}
             onChange={(e) => setVerifyingDepartmentId(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">Select a department...</option>
-            {(departments ?? []).map((d) => (
+            {departmentOptions.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
               </option>
@@ -103,11 +88,12 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
           </label>
           <select
             value={departmentRepId}
+            disabled={!editable}
             onChange={(e) => setDepartmentRepId(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">Select a representative...</option>
-            {(colleagues ?? []).map((c) => (
+            {repOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.firstName} {c.lastName}
               </option>

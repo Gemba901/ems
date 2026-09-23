@@ -42,6 +42,72 @@ configuration from the web README. For local testing use
 
 ## State and retry contract
 
+### Automatic company domains with external DNS
+
+Keep the existing DNS provider and configure one wildcard CNAME for `*.bees`
+pointing to the frontend project's Vercel CNAME target. The separate `bees`
+record remains necessary for the central signup host. Vercel registers individual
+company hostnames through its API; this mode does not require a Vercel wildcard
+domain or a wildcard certificate. Remove only the invalid `*.bees.gembapms.com`
+project-domain entry when using this mode; retain existing exact company domains.
+Do not change the root website, mail records, nameservers, or Hostinger CDN.
+
+Set these in the **API container's private environment**, not browser variables:
+
+```dotenv
+ONBOARDING_VERCEL_DOMAINS_ENABLED=true
+VERCEL_TOKEN=replace-with-private-team-scoped-token
+VERCEL_PROJECT_ID=replace-with-ems-web-project-id
+VERCEL_TEAM_ID=replace-with-owning-team-id
+VERCEL_DOMAIN_ENVIRONMENT=preview
+VERCEL_DOMAIN_GIT_BRANCH=staging
+TENANT_BASE_DOMAIN=bees.gembapms.com
+ONBOARDING_ORIGIN=https://bees.gembapms.com
+```
+
+Create the token at https://vercel.com/account/tokens scoped to the team owning
+`ems-web`, with project-domain management access; store it directly on EC2, never
+in chat, source control, logs, or NEXT_PUBLIC variables. Obtain the project ID in
+project Settings → General and team ID in team Settings → General. Monitor token
+expiry. For production set `VERCEL_DOMAIN_ENVIRONMENT=production`; the branch
+setting is ignored. Custom Vercel environments are not supported by this adapter.
+Preview branch domains must be publicly accessible without Vercel authentication
+so the company login and HTTPS readiness probe can reach them.
+
+The switch defaults to disabled, preserving existing manual/wildcard deployments.
+When enabled, missing settings fail startup. Deploy the API code and recreate the
+container with its updated environment (a restart does not reload `--env-file`).
+No database migration or new npm dependency is required for domain automation.
+
+After email verification, the worker creates or reuses the exact domain on the
+configured project and branch, attempts ownership verification, checks Vercel's
+DNS configuration, and requires a successful HTTPS HTML response from `/login`.
+Requests use timeouts and no redirects; the public probe has no Vercel credentials.
+The probe confirms HTTPS page availability, not successful authentication; company
+login and tenant isolation still require live acceptance tests after provisioning.
+Provider calls run before the final database transaction. A domain may remain on
+Vercel after a failed signup; the reserved slug and retries reuse it. Operators
+should review unused domain entries rather than deleting them during retries.
+
+DNS, certificate, API, and rate-limit failures use the existing five-attempt
+backoff and `PROVISIONING_FAILED` retry flow. Only safe local diagnostics and HTTP
+status numbers appear in logs (`Workspace domain pending`); provider response
+bodies and tokens do not. A conflicting branch, redirect, or custom environment
+requires correcting the domain assignment in Vercel before retrying. A required
+ownership TXT challenge must be completed through the Vercel dashboard. Domain
+limits and token permissions must be checked on the actual Vercel plan.
+
+Acceptance: use a fresh signup slug that has no individual DNS or Vercel entry;
+verify its email; confirm the exact hostname appears on the staging branch;
+confirm progress waits for HTTPS, then reaches READY; sign in and check isolation.
+Existing READY signups are not retroactively registered: add their exact domain
+in Vercel manually with the staging branch. Do not create duplicate companies.
+
+API references: [project domain registration](https://vercel.com/docs/rest-api/projects/add-a-domain-to-a-project),
+[domain configuration](https://vercel.com/docs/rest-api/domains/get-a-domain-s-configuration).
+
+### Provisioning and delivery
+
 `PENDING_VERIFICATION → PROVISIONING → READY`, with `EXPIRED` for abandoned signup
 and `FAILED` for exhausted provisioning or a permanent conflict. The existing
 Organization status continues to govern access. No Organization exists until the
@@ -100,6 +166,7 @@ From `apps/api`:
 
 ```bash
 pnpm exec jest --runInBand onboarding/onboarding.spec.ts auth/verified-account-setup.spec.ts organizations/organizations.service.spec.ts
+pnpm exec jest --runInBand onboarding/workspace-domain.service.spec.ts onboarding/onboarding.domain.spec.ts onboarding/onboarding.http.spec.ts
 ```
 
 `onboarding.postgres.spec.ts` requires explicit `MILESTONE5_TEST_DATABASE_URL` and

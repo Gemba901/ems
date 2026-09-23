@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from 'db';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { OnboardingService } from './onboarding.service';
+import { WorkspaceDomainService } from './workspace-domain.service';
 import { OnboardingWorker } from './onboarding.worker';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../notifications/channels/email.service';
@@ -51,7 +52,11 @@ const url = process.env.MILESTONE5_TEST_DATABASE_URL;
         create: { id: 2, name: 'ADMIN' },
         update: {},
       });
-      service = new OnboardingService(db as PrismaService, config);
+      service = new OnboardingService(
+        db as PrismaService,
+        config,
+        new WorkspaceDomainService(config),
+      );
       worker = new OnboardingWorker(
         db as PrismaService,
         config,

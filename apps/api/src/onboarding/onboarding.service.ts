@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnauthorizedException,
   HttpException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
@@ -20,6 +21,10 @@ import {
   SignupDto,
   VerifySignupDto,
 } from './onboarding.dto';
+import {
+  WorkspaceDomainError,
+  WorkspaceDomainService,
+} from './workspace-domain.service';
 
 export const digest = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -28,9 +33,11 @@ export const backoff = (attempt: number) =>
 
 @Injectable()
 export class OnboardingService {
+  private readonly logger = new Logger(OnboardingService.name);
   constructor(
     private readonly db: PrismaService,
     private readonly config: ConfigService,
+    private readonly domains: WorkspaceDomainService,
   ) {}
 
   onModuleInit() {
@@ -343,6 +350,10 @@ export class OnboardingService {
     });
     if (!claimed) return;
     try {
+      if (!claimed.verifiedAt) throw new Error('UNVERIFIED');
+      // Provider/network calls must remain outside the company creation transaction.
+      // A retry reuses the registered domain; no organization exists until HTTPS is ready.
+      await this.domains.ensureReady(claimed.requestedSlug);
       await this.db.$transaction(
         async (tx) => {
           await tx.$queryRaw`SELECT id FROM "OnboardingRequest" WHERE id = ${claimed.id} FOR UPDATE`;
@@ -423,6 +434,10 @@ export class OnboardingService {
         { timeout: 20_000 },
       );
     } catch (error) {
+      if (error instanceof WorkspaceDomainError)
+        this.logger.warn(
+          `Workspace domain pending: request=${claimed.id}; ${error.message}`,
+        );
       const permanent =
         (error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === 'P2002') ||

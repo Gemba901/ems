@@ -5,6 +5,7 @@ import { plainToInstance } from 'class-transformer';
 import { OnboardingGuard } from './onboarding.guard';
 import { SignupDto } from './onboarding.dto';
 import { OnboardingService, backoff } from './onboarding.service';
+import { WorkspaceDomainService } from './workspace-domain.service';
 
 const secret = 'x'.repeat(64);
 const context = (provided: unknown, name = 'signup') =>
@@ -67,6 +68,7 @@ describe('Onboarding public boundary', () => {
     const service = new OnboardingService(
       {} as any,
       new ConfigService({ ONBOARDING_TOKEN_SECRET: secret }),
+      new WorkspaceDomainService(new ConfigService()),
     );
     expect(service.token('id', 'verify')).not.toBe(
       service.token('id', 'progress'),

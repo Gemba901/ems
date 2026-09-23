@@ -136,28 +136,29 @@ export default function SignupPage() {
     }
   }
   return (
-    <OnboardingShell step={step}>
-      <div className="mb-8 flex items-center justify-between text-xs font-medium text-slate-500">
-        <span>STEP {step + 1} OF 4</span>
-        <span>
-          Already a member?{" "}
-          <Link href="/login" className="ml-1 text-blue-600 hover:underline">
-            Sign in
-          </Link>
-        </span>
+    <OnboardingShell step={step} wide={step === 1}>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {step === 0 ? "Administrator details" : "Company details"}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {step === 0
+              ? "Create the first administrator account for your workspace."
+              : "Set up your company profile and workspace address."}
+          </p>
+        </div>
+        <Link
+          href="/login"
+          className="py-1 text-xs font-medium text-blue-600 hover:underline"
+        >
+          Sign in instead
+        </Link>
       </div>
-      <h2 tabIndex={-1} className="text-3xl font-semibold tracking-tight">
-        {step === 0 ? "Let's start with you." : "Make it your company's space."}
-      </h2>
-      <p className="mt-3 mb-8 leading-relaxed text-slate-500">
-        {step === 0
-          ? "You'll be the first administrator. Use your own email to verify and secure your account."
-          : "Tell us about your company and choose the address your team will use to sign in."}
-      </p>
-      <form onSubmit={submit} className="space-y-5">
+      <form onSubmit={submit} className="space-y-3">
         {step === 0 ? (
           <>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field
                 label="First name"
                 {...field("firstName")}
@@ -179,7 +180,7 @@ export default function SignupPage() {
               type="email"
               autoComplete="email"
               maxLength={254}
-              hint="We'll send your verification link here."
+              hint="Your verification link will be sent here."
             />
             <Field
               label="Your phone number"
@@ -191,57 +192,29 @@ export default function SignupPage() {
               placeholder="+254712345678"
               hint="Include your country code, with no spaces."
             />
-            <Notice>
-              Your account will administer this workspace. You can invite your
-              team after setup.
-            </Notice>
+            <p className="text-xs text-slate-500">
+              You can invite your team once the workspace is ready.
+            </p>
           </>
         ) : (
           <>
-            <Field
-              label="Organization name"
-              {...field("companyName")}
-              minLength={2}
-              maxLength={120}
-              autoComplete="organization"
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  companyName: e.target.value,
-                  ...(!slugEdited ? { slug: companySlug(e.target.value) } : {}),
-                }))
-              }
-            />
-            <Field
-              label="Organization slug"
-              {...field("slug")}
-              maxLength={40}
-              minLength={3}
-              autoCapitalize="none"
-              spellCheck={false}
-              onChange={(e) => {
-                setSlugEdited(true);
-                setForm((f) => ({
-                  ...f,
-                  slug: e.target.value
-                    .toLowerCase()
-                    .replace(/\s/g, "-")
-                    .replace(/[^a-z0-9-]/g, ""),
-                }));
-              }}
-              hint="3–40 lowercase letters, numbers or hyphens. You can edit the suggested address."
-            />
-            <div className="-mt-2 flex items-start gap-2 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
-              <Building2 className="mt-0.5 h-4 w-4 shrink-0" />
-              <div className="min-w-0">
-                <p className="text-xs text-blue-600">Your company address</p>
-                <p className="mt-1 break-all font-medium">
-                  {form.slug || "your-company"}.{workspace?.baseDomain || "…"}
-                  {workspace?.port ? `:${workspace.port}` : ""}
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
+              <Field
+                label="Organization name"
+                {...field("companyName")}
+                minLength={2}
+                maxLength={120}
+                autoComplete="organization"
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    companyName: e.target.value,
+                    ...(!slugEdited
+                      ? { slug: companySlug(e.target.value) }
+                      : {}),
+                  }))
+                }
+              />
               <Field
                 label="Company short name"
                 {...field("shortName")}
@@ -249,34 +222,71 @@ export default function SignupPage() {
                 placeholder="e.g. SFL"
                 pattern=".*\S.*"
               />
-              <label className="block space-y-2 text-sm font-medium text-slate-700">
-                <span>Industry</span>
-                <select
-                  required
-                  name="industry"
-                  value={form.industry}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, industry: e.target.value }))
-                  }
-                  className={inputClass}
+              <div className="min-w-0 space-y-1.5">
+                <Field
+                  label="Organization slug"
+                  {...field("slug")}
+                  maxLength={40}
+                  minLength={3}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  onChange={(e) => {
+                    setSlugEdited(true);
+                    setForm((f) => ({
+                      ...f,
+                      slug: e.target.value
+                        .toLowerCase()
+                        .replace(/\s/g, "-")
+                        .replace(/[^a-z0-9-]/g, ""),
+                    }));
+                  }}
+                />
+                <p className="text-[11px] text-slate-500">
+                  3–40 lowercase letters, numbers or hyphens.
+                </p>
+                <p
+                  className="flex items-start gap-1.5 text-xs text-blue-700"
+                  aria-live="polite"
                 >
-                  <option value="">Select industry…</option>
-                  {industries.map((industry) => (
-                    <option key={industry}>{industry}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {form.industry === "Other" && (
-              <Field
-                label="Tell us your industry"
-                {...field("otherIndustry")}
-                minLength={2}
-                maxLength={120}
-                pattern=".*\S.*"
-              />
-            )}
-            <div className="grid gap-5 sm:grid-cols-2">
+                  <Building2
+                    aria-hidden="true"
+                    size={14}
+                    className="mt-0.5 shrink-0"
+                  />
+                  <span className="min-w-0 break-all font-mono">
+                    {form.slug || "your-company"}.{workspace?.baseDomain || "…"}
+                    {workspace?.port ? `:${workspace.port}` : ""}
+                  </span>
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="block space-y-1 text-xs font-medium text-slate-700">
+                  <span>Industry</span>
+                  <select
+                    required
+                    name="industry"
+                    value={form.industry}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, industry: e.target.value }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">Select industry…</option>
+                    {industries.map((industry) => (
+                      <option key={industry}>{industry}</option>
+                    ))}
+                  </select>
+                </label>
+                {form.industry === "Other" && (
+                  <Field
+                    label="Industry type"
+                    {...field("otherIndustry")}
+                    minLength={2}
+                    maxLength={120}
+                    pattern=".*\S.*"
+                  />
+                )}
+              </div>
               <Field
                 label="Company email"
                 {...field("companyEmail")}
@@ -291,31 +301,25 @@ export default function SignupPage() {
                 pattern="\+?[0-9]{7,15}"
                 placeholder="+254712345678"
               />
+              <Field
+                label="Company address"
+                {...field("companyAddress")}
+                autoComplete="street-address"
+                minLength={2}
+                maxLength={500}
+                pattern=".*\S.*"
+              />
+              <Field
+                label="Company timezone"
+                {...field("timeZone")}
+                maxLength={80}
+                placeholder="Africa/Nairobi"
+              />
             </div>
-            <Field
-              label="Company address"
-              {...field("companyAddress")}
-              autoComplete="street-address"
-              minLength={2}
-              maxLength={500}
-              pattern=".*\S.*"
-            />
-            <Field
-              label="Company timezone"
-              {...field("timeZone")}
-              maxLength={80}
-              hint="Used for company schedules and reports, e.g. Africa/Nairobi."
-            />
-            <div className="flex gap-3 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-              <ImagePlus className="h-5 w-5 shrink-0 text-blue-600" />
-              <p>
-                <span className="font-medium text-slate-800">
-                  Add your logo after sign-in.
-                </span>
-                <br />
-                We’ll offer a secure upload once your workspace is ready.
-              </p>
-            </div>
+            <p className="flex items-center gap-2 pt-1 text-xs text-slate-500">
+              <ImagePlus aria-hidden="true" size={15} className="shrink-0" />
+              Add your company logo after sign-in.
+            </p>
           </>
         )}
         {error && <Notice error>{error}</Notice>}
@@ -324,7 +328,7 @@ export default function SignupPage() {
             Open the main BEES website to create a company workspace.
           </Notice>
         )}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
           {step === 1 && (
             <button
               type="button"
@@ -333,20 +337,20 @@ export default function SignupPage() {
                 setStep(0);
                 setError("");
               }}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              className="mr-auto inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-600"
             >
               <ArrowLeft size={16} /> Back
             </button>
           )}
           <button
             disabled={busy || workspace?.kind !== "platform"}
-            className={`${buttonClass} flex-1`}
+            className={buttonClass}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {busy
               ? "Sending verification…"
               : step === 0
-                ? "Continue to company details"
+                ? "Company details"
                 : "Send verification email"}
             {!busy && <ArrowRight size={16} />}
           </button>

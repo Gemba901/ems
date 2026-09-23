@@ -4,83 +4,84 @@ import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { Check, Eye, EyeOff, Hexagon, ShieldCheck } from "lucide-react";
 
 export const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 disabled:bg-slate-50";
+  "w-full min-h-11 sm:min-h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 disabled:bg-slate-50";
 export const buttonClass =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 min-h-11 sm:min-h-10 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function OnboardingShell({
   children,
   step = 0,
   login = false,
+  wide = false,
+  framed = true,
 }: {
   children: ReactNode;
   step?: number;
   login?: boolean;
+  wide?: boolean;
+  framed?: boolean;
 }) {
+  const steps = ["Your details", "Your company", "Verify & secure", "Welcome"];
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 lg:grid lg:grid-cols-[minmax(300px,0.85fr)_minmax(0,1.4fr)]">
-      <aside className="relative overflow-hidden bg-slate-950 px-6 py-8 text-white sm:px-10 lg:flex lg:min-h-screen lg:flex-col lg:justify-between lg:px-12 lg:py-12">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -left-40 top-1/3 h-96 w-96 rounded-full bg-blue-600/20 blur-3xl"
-        />
-        <div className="relative flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600">
-            <Hexagon className="h-7 w-7" />
-          </span>
-          <div>
-            <p className="text-2xl font-bold tracking-tight">BEES</p>
-            <p className="text-xs text-slate-400">by GembaPMS</p>
+    <main className="min-h-svh bg-slate-50 text-slate-900">
+      <header className="border-b border-slate-800 bg-slate-950 text-white">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <Hexagon aria-hidden="true" className="h-6 w-6 text-blue-400" />
+            <span className="text-lg font-semibold tracking-tight">BEES</span>
+            <span className="border-l border-slate-700 pl-2.5 text-xs text-slate-400">
+              by GembaPMS
+            </span>
           </div>
+          <span className="hidden text-xs text-slate-400 sm:block">
+            {login ? "Company workspace" : "Workspace setup"}
+          </span>
         </div>
-        <div className="relative mt-8 max-w-md lg:my-16">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-blue-300">
-            Better work. Together.
-          </p>
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-            A shared space.
-            <br />
-            <span className="text-blue-400">A stronger team.</span>
-          </h1>
-          <p className="mt-5 hidden leading-relaxed text-slate-400 sm:block">
-            Bring your people, daily work and continuous improvement together in
-            your company workspace.
-          </p>
-          {!login && (
-            <ol
-              aria-label="Setup steps"
-              className="mt-10 hidden space-y-5 lg:block"
-            >
-              {[
-                "Your details",
-                "Your company",
-                "Verify & secure",
-                "Welcome aboard",
-              ].map((label, i) => (
+      </header>
+      <div
+        className={`mx-auto px-4 py-5 sm:px-6 sm:py-6 ${wide ? "max-w-4xl" : login ? "max-w-lg" : "max-w-2xl"}`}
+      >
+        {!login && (
+          <nav aria-label="Setup progress" className="mb-4">
+            <ol className="grid grid-cols-4 gap-2">
+              {steps.map((label, i) => (
                 <li
                   key={label}
                   aria-current={i === step ? "step" : undefined}
-                  className={`flex items-center gap-3 text-sm ${i === step ? "text-white" : "text-slate-400"}`}
+                  className={`border-t-2 pt-2 ${i <= step ? "border-blue-600" : "border-slate-200"}`}
                 >
-                  <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs ${i < step ? "border-blue-500 bg-blue-600 text-white" : i === step ? "border-blue-400 bg-blue-500/15 text-blue-300" : "border-slate-700"}`}
+                  <div
+                    className={`flex items-center gap-1.5 text-xs font-medium ${i === step ? "text-blue-700" : "text-slate-500"}`}
                   >
-                    {i < step ? <Check className="h-4 w-4" /> : `0${i + 1}`}
-                  </span>
-                  {label}
+                    {i < step ? (
+                      <Check aria-hidden="true" size={14} />
+                    ) : (
+                      <span className="font-mono text-[11px]">0{i + 1}</span>
+                    )}
+                    <span className="hidden sm:inline">{label}</span>
+                    <span className="sm:hidden">
+                      {["Details", "Company", "Verify", "Welcome"][i]}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ol>
-          )}
-        </div>
-        <p className="relative mt-8 hidden items-center gap-2 text-xs text-slate-400 lg:flex">
-          <ShieldCheck className="h-4 w-4 text-blue-400" /> Your company. Your
-          dedicated workspace.
+          </nav>
+        )}
+        <section
+          aria-label={login ? "Company sign-in" : steps[step]}
+          className={
+            framed
+              ? "rounded-lg border border-slate-200 bg-white p-5 sm:p-6"
+              : ""
+          }
+        >
+          {children}
+        </section>
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
+          <ShieldCheck aria-hidden="true" size={13} /> Secure company workspace
         </p>
-      </aside>
-      <section className="flex min-w-0 items-center justify-center px-5 py-10 sm:px-10 lg:py-14">
-        <div className="w-full max-w-xl">{children}</div>
-      </section>
+      </div>
     </main>
   );
 }
@@ -91,7 +92,7 @@ export function Field({
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   return (
-    <label className="block space-y-2 text-sm font-medium text-slate-700">
+    <label className="block space-y-1 text-xs font-medium text-slate-700">
       <span>{label}</span>
       <input {...props} className={`${inputClass} ${props.className ?? ""}`} />
       {hint && (
@@ -109,7 +110,7 @@ export function PasswordField({
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
   const [visible, setVisible] = useState(false);
   return (
-    <label className="block space-y-2 text-sm font-medium text-slate-700">
+    <label className="block space-y-1 text-xs font-medium text-slate-700">
       <span>{label}</span>
       <span className="relative block">
         <input
@@ -141,7 +142,7 @@ export function Notice({
   return (
     <div
       role={error ? "alert" : "status"}
-      className={`rounded-xl border p-4 text-sm leading-relaxed ${error ? "border-red-200 bg-red-50 text-red-700" : "border-blue-100 bg-blue-50 text-blue-800"}`}
+      className={`rounded-md border p-3 text-sm leading-relaxed ${error ? "border-red-200 bg-red-50 text-red-700" : "border-blue-100 bg-blue-50 text-blue-800"}`}
     >
       {children}
     </div>

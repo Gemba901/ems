@@ -219,21 +219,21 @@ export default function VerifySignupPage() {
       )}
       {verification && (
         <>
-          <span className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-            <ShieldCheck size={28} />
+          <span className="mb-4 flex h-9 w-9 items-center justify-center rounded-md bg-blue-100 text-blue-600">
+            <ShieldCheck size={20} />
           </span>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-blue-600">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-blue-600">
             Verify & secure
           </p>
-          <h2 className="text-3xl font-semibold tracking-tight">
-            One last step to make it yours.
+          <h2 className="text-xl font-semibold tracking-tight">
+            Secure your account
           </h2>
-          <p className="mt-3 mb-7 leading-relaxed text-slate-500">
+          <p className="mt-1 mb-4 text-sm leading-relaxed text-slate-500">
             Secure your administrator account to confirm your email and start
             creating your company workspace.
           </p>
-          <form onSubmit={verify} className="space-y-5">
-            <label className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 text-sm text-slate-600">
+          <form onSubmit={verify} className="space-y-3">
+            <label className="flex min-h-11 items-center gap-2 text-sm text-slate-600">
               <input
                 type="checkbox"
                 checked={existingAccount}
@@ -288,18 +288,18 @@ export default function VerifySignupPage() {
       )}
       {data.status === "PENDING_VERIFICATION" && (
         <>
-          <span className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-            <MailCheck size={32} />
+          <span className="mb-4 flex h-9 w-9 items-center justify-center rounded-md bg-blue-100 text-blue-600">
+            <MailCheck size={20} />
           </span>
-          <h2 className="text-3xl font-semibold tracking-tight">
+          <h2 className="text-xl font-semibold tracking-tight">
             Check your inbox.
           </h2>
-          <p className="mt-4 leading-relaxed text-slate-500">
+          <p className="mt-3 text-sm leading-relaxed text-slate-500">
             We’ve queued a verification link for your administrator email. Open
             it to secure your account and finish setting up{" "}
             {data.companyName || "your company"}.
           </p>
-          <div className="my-7 rounded-2xl border border-slate-200 bg-white p-5 text-sm leading-relaxed text-slate-600">
+          <div className="my-4 border-y border-slate-200 py-3 text-sm leading-relaxed text-slate-600">
             The link expires after 30 minutes. If it hasn’t arrived, check your
             spam folder. Keep this page open to follow your progress.
           </div>
@@ -312,7 +312,7 @@ export default function VerifySignupPage() {
           </button>
           <Link
             href="/signup"
-            className="mt-5 block text-sm text-slate-500 hover:text-blue-600"
+            className="mt-3 block text-sm text-slate-500 hover:text-blue-600"
           >
             Entered the wrong details? Start again
           </Link>
@@ -320,17 +320,20 @@ export default function VerifySignupPage() {
       )}
       {data.status === "PROVISIONING" && (
         <>
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-            <Loader2 size={30} className="motion-safe:animate-spin" />
+          <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-md bg-blue-100 text-blue-600">
+            <Loader2 size={20} className="motion-safe:animate-spin" />
           </div>
-          <h2 className="text-3xl font-semibold tracking-tight">
-            Making room for your team.
+          <h2 className="text-xl font-semibold tracking-tight">
+            Preparing your workspace
           </h2>
-          <p className="mt-3 text-slate-500">
-            {data.companyName || "Your company"} is on its way. We’ll let you
-            know when everything is ready.
+          <p className="mt-1 text-sm text-slate-500">
+            {data.companyName || "Your company"} is being set up. Progress
+            updates automatically.
           </p>
-          <ol className="my-8 space-y-3" aria-label="Workspace setup progress">
+          <ol
+            className="my-4 divide-y divide-slate-200 border-y border-slate-200"
+            aria-label="Workspace setup progress"
+          >
             {stages.map(({ key, title, description, icon: Icon }, index) => {
               const complete = stageIndex > index;
               const active = stageIndex === index;
@@ -338,7 +341,7 @@ export default function VerifySignupPage() {
                 <li
                   key={key}
                   aria-current={active ? "step" : undefined}
-                  className={`flex gap-4 rounded-2xl border p-5 ${active ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}
+                  className={`flex gap-3 border-l-2 px-3 py-3 ${active ? "border-l-blue-600 bg-blue-50" : "border-l-transparent"}`}
                 >
                   <span
                     className={`mt-0.5 ${complete ? "text-emerald-600" : active ? "text-blue-600" : "text-slate-400"}`}
@@ -377,21 +380,20 @@ export default function VerifySignupPage() {
       )}
       {ready && (
         <>
-          <span className="mb-7 flex h-20 w-20 items-center justify-center rounded-3xl bg-emerald-100 text-emerald-600">
-            <CheckCircle2 size={42} />
+          <span className="mb-4 flex h-9 w-9 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
+            <CheckCircle2 size={22} />
           </span>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-blue-600">
-            Your next chapter starts here
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-blue-600">
+            Workspace ready
           </p>
-          <h2 className="text-4xl font-semibold tracking-tight">
+          <h2 className="text-2xl font-semibold tracking-tight">
             Welcome to BEES<span className="text-blue-600">.</span>
           </h2>
           <p className="mt-2 text-sm font-medium text-slate-400">by GembaPMS</p>
-          <p className="mt-5 text-lg leading-relaxed text-slate-600">
-            {data.companyName || "Your company"} now has a space to work,
-            improve and grow together.
+          <p className="mt-3 text-sm leading-relaxed text-slate-600">
+            {data.companyName || "Your company"} is ready to use.
           </p>
-          <div className="my-7 rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="my-4 border-y border-slate-200 py-3">
             <p className="text-xs uppercase tracking-wider text-slate-400">
               Your workspace
             </p>
@@ -400,9 +402,9 @@ export default function VerifySignupPage() {
                 ?.replace(/^https?:\/\//, "")
                 .replace(/\/login$/, "")}
             </p>
-            <p className="mt-4 text-sm leading-relaxed text-slate-500">
-              Sign in with your administrator credentials. Then add your company
-              logo and make yourself at home.
+            <p className="mt-3 text-sm leading-relaxed text-slate-500">
+              Sign in with your administrator credentials to continue and add
+              your company logo.
             </p>
           </div>
           {continueUrl && (
@@ -414,10 +416,8 @@ export default function VerifySignupPage() {
       )}
       {data.status === "FAILED" && (
         <>
-          <h2 className="text-3xl font-semibold">
-            Setup needs a little attention.
-          </h2>
-          <p className="my-5 leading-relaxed text-slate-500">
+          <h2 className="text-xl font-semibold">Setup needs attention</h2>
+          <p className="my-3 leading-relaxed text-slate-500">
             {data.canRetry
               ? "We couldn't finish preparing your workspace. Your details are saved. Wait a minute, then retry."
               : "We couldn't complete setup with these details. Contact your administrator for help resolving the signup."}
@@ -431,17 +431,17 @@ export default function VerifySignupPage() {
               {busy ? "Retrying…" : "Retry workspace setup"}
             </button>
           )}
-          <p className="mt-4 break-all text-xs text-slate-500">
+          <p className="mt-3 break-all text-xs text-slate-500">
             Support reference: {progress?.id}
           </p>
         </>
       )}
       {data.status === "EXPIRED" && (
         <>
-          <h2 className="text-3xl font-semibold">
+          <h2 className="text-xl font-semibold">
             Your verification link expired.
           </h2>
-          <p className="my-5 text-slate-500">
+          <p className="my-3 text-slate-500">
             Start a new signup to receive a fresh link.
           </p>
           <Link href="/signup" className={buttonClass}>
@@ -451,8 +451,8 @@ export default function VerifySignupPage() {
       )}
       {loaded && !verification && !progress && (
         <>
-          <h2 className="text-3xl font-semibold">Let’s verify your email.</h2>
-          <p className="my-5 text-slate-500">
+          <h2 className="text-xl font-semibold">Let’s verify your email.</h2>
+          <p className="my-3 text-slate-500">
             Open the verification link from your email to continue, or start a
             new company signup.
           </p>
@@ -462,12 +462,12 @@ export default function VerifySignupPage() {
         </>
       )}
       {error && (
-        <div className="mt-5">
+        <div className="mt-3">
           <Notice error>{error}</Notice>
         </div>
       )}
       {message && (
-        <div className="mt-5">
+        <div className="mt-3">
           <Notice>{message}</Notice>
         </div>
       )}

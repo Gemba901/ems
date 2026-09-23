@@ -68,18 +68,16 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
         <CompanyLogoSetup onContinue={() => router.replace("/")} />
       ) : (
         <>
-          <div className="mb-8 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700">
+          <div className="mb-4 inline-flex max-w-full items-center gap-2 border-l-2 border-blue-600 pl-2 py-1 text-xs font-medium text-blue-700">
             <Building2 size={15} className="shrink-0" />
-            <span className="break-all">{hostname}</span>
+            <span className="break-all font-mono">{hostname}</span>
           </div>
-          <h2 className="text-3xl font-semibold tracking-tight">
-            Welcome back.
-          </h2>
-          <p className="mt-3 mb-8 text-slate-500">
+          <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
+          <p className="mt-1 mb-4 text-slate-500">
             Sign in to your company workspace.
           </p>
           <div
-            className="mb-6 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1"
+            className="mb-4 grid grid-cols-3 gap-1 rounded-md bg-slate-100 p-1"
             aria-label="Sign-in method"
           >
             {(["email", "phone", "employeeCode"] as const).map((value) => (
@@ -102,7 +100,7 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
               </button>
             ))}
           </div>
-          <form onSubmit={login} className="space-y-5">
+          <form onSubmit={login} className="space-y-3">
             <Field
               label={
                 mode === "email"
@@ -161,7 +159,7 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
               {busy ? "Signing in…" : "Sign in"}
             </button>
           </form>
-          <p className="mt-7 border-t border-slate-200 pt-6 text-xs leading-relaxed text-slate-500">
+          <p className="mt-3 border-t border-slate-200 pt-3 text-xs leading-relaxed text-slate-500">
             New team member? Use your account invitation to set a password, or
             choose Forgot password to verify your email.
           </p>

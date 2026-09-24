@@ -36,6 +36,7 @@ function setup(sga: SgaWithInclude, { employee = RAISER, roles = ['EMPLOYEE'] } 
         userOrganization: { findMany: jest.fn().mockResolvedValue(roles.map((name) => ({ role: { name } }))) },
         department: { findFirst: jest.fn().mockResolvedValue({ id: 'dept-1' }), count: jest.fn() },
         sgaReview: { create: jest.fn() },
+        sgaActionItem: { update: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
         $transaction: jest.fn(),
     };
     prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma));
@@ -119,5 +120,58 @@ describe('SgaService drafts', () => {
         const { service, prisma } = setup(draft({ status: 'PENDING_HOD_APPROVAL' } as never));
         await expect(service.deleteSga('sga-1', 'user-1', ORG)).rejects.toBeInstanceOf(BadRequestException);
         expect(prisma.sga.delete).not.toHaveBeenCalled();
+    });
+});
+
+describe('SgaService action items', () => {
+    const action = {
+        id: 'act-1',
+        confirmedRootCause: 'Worn guide rail',
+        improvementAction: 'Replace rail',
+        responsiblePersonId: 'emp-resp',
+        dueDate: null,
+        status: 'IN_PROGRESS',
+        completedAt: null,
+    };
+    const running = (overrides: Partial<SgaWithInclude> = {}) =>
+        draft({ status: 'IN_PROGRESS', teamMembers: [], actionItems: [action], ...overrides } as never);
+
+    it('lets the person responsible tick off their action and stamps completion', async () => {
+        const { service, prisma } = setup(running(), { employee: { ...OTHER, id: 'emp-resp' } });
+        await service.updateActionItemStatus('sga-1', 'act-1', 'user-1', { status: 'DONE' }, ORG);
+
+        const { where, data } = prisma.sgaActionItem.update.mock.calls[0][0];
+        expect(where).toEqual({ id: 'act-1' });
+        expect(data.status).toBe('DONE');
+        expect(data.completedAt).toBeInstanceOf(Date);
+    });
+
+    it('refuses someone outside the team who is not responsible', async () => {
+        const { service } = setup(running(), { employee: OTHER });
+        await expect(
+            service.updateActionItemStatus('sga-1', 'act-1', 'user-1', { status: 'DONE' }, ORG),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('refuses updates once the SGA has gone for verification', async () => {
+        const { service } = setup(running({ status: 'PENDING_VERIFICATION' } as never), { employee: { ...OTHER, id: 'emp-resp' } });
+        await expect(
+            service.updateActionItemStatus('sga-1', 'act-1', 'user-1', { status: 'OPEN' }, ORG),
+        ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('keeps progress on existing items when the plan is re-saved', async () => {
+        const { service, prisma } = setup(running());
+        await service.updateActionPlan('sga-1', 'user-1', {
+            actionItems: [
+                { id: 'act-1', confirmedRootCause: 'Worn guide rail', improvementAction: 'Replace rail and add PM check' },
+                { confirmedRootCause: 'No SOP', improvementAction: 'Write SOP' },
+            ],
+        }, ORG);
+
+        const { data } = prisma.sgaActionItem.createMany.mock.calls[0][0];
+        expect(data[0]).toMatchObject({ id: 'act-1', status: 'IN_PROGRESS', improvementAction: 'Replace rail and add PM check' });
+        expect(data[1].id).toBeUndefined();
+        expect(data[1].status).toBeUndefined();
     });
 });

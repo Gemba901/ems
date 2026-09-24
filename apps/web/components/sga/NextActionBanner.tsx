@@ -6,18 +6,18 @@ import { canActOnVerificationStage, SgaAccessContext, SgaGating } from "@/compon
 
 type Tone = "action" | "waiting" | "returned" | "done";
 
-const TONE_CLASS: Record<Tone, string> = {
-  action: "bg-indigo-50 border-indigo-200 text-indigo-900",
-  waiting: "bg-slate-50 border-slate-200 text-slate-700",
-  returned: "bg-orange-50 border-orange-200 text-orange-900",
-  done: "bg-emerald-50 border-emerald-200 text-emerald-900",
+const TONE_STYLE: Record<Tone, { label: string; chip: string; icon: string }> = {
+  action: { label: "Your turn", chip: "bg-indigo-50 text-indigo-700", icon: "text-indigo-600" },
+  waiting: { label: "Waiting", chip: "bg-slate-100 text-slate-600", icon: "text-slate-500" },
+  returned: { label: "Returned", chip: "bg-orange-50 text-orange-700", icon: "text-orange-600" },
+  done: { label: "Closed", chip: "bg-emerald-50 text-emerald-700", icon: "text-emerald-600" },
 };
 
 const TONE_ICON: Record<Tone, React.ReactNode> = {
-  action: <Hand className="h-4 w-4 shrink-0 mt-0.5" />,
-  waiting: <Clock className="h-4 w-4 shrink-0 mt-0.5" />,
-  returned: <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />,
-  done: <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />,
+  action: <Hand className="h-4 w-4" />,
+  waiting: <Clock className="h-4 w-4" />,
+  returned: <AlertTriangle className="h-4 w-4" />,
+  done: <CheckCircle2 className="h-4 w-4" />,
 };
 
 interface NextAction {
@@ -67,16 +67,35 @@ function getNextAction(sga: Sga, ctx: SgaAccessContext, gating: SgaGating): Next
   }
 }
 
-export default function NextActionBanner({ sga, ctx, gating }: { sga: Sga; ctx: SgaAccessContext; gating: SgaGating }) {
+// An information card that sits under the SGA summary and says who acts next.
+export default function NextActionBanner({
+  sga,
+  ctx,
+  gating,
+  className = "",
+}: {
+  sga: Sga;
+  ctx: SgaAccessContext;
+  gating: SgaGating;
+  className?: string;
+}) {
   const { tone, message, remarks } = getNextAction(sga, ctx, gating);
   if (!message) return null;
+  const style = TONE_STYLE[tone];
   return (
-    <div role="status" className={`flex gap-2.5 border rounded-xl px-4 py-3 text-sm ${TONE_CLASS[tone]}`}>
-      {TONE_ICON[tone]}
-      <div className="min-w-0">
-        <p className="font-medium">{message}</p>
-        {remarks && <p className="mt-1 text-xs opacity-80 italic break-words">&ldquo;{remarks}&rdquo;</p>}
+    <div role="status" className={`bg-white border border-slate-100 rounded-xl shadow-sm p-5 space-y-3 h-fit ${className}`}>
+      <div className="flex items-center justify-between gap-3 pb-2 border-b border-indigo-100">
+        <h3 className="text-sm font-semibold text-indigo-600">What&apos;s next</h3>
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${style.chip}`}>
+          <span className={style.icon}>{TONE_ICON[tone]}</span>
+          {style.label}
+        </span>
       </div>
+      {/* The chip already says "Your turn", so the message drops that prefix. */}
+      <p className="text-sm leading-relaxed text-slate-700">{message.replace(/^Your turn: /, "").replace(/^./, (c) => c.toUpperCase())}</p>
+      {remarks && (
+        <blockquote className="border-l-2 border-slate-200 pl-3 text-xs italic text-slate-500 break-words">&ldquo;{remarks}&rdquo;</blockquote>
+      )}
     </div>
   );
 }

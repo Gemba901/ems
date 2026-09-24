@@ -24,12 +24,13 @@ const emptyForm = (nextMeetingNumber: number): ReportForm => ({
   notes: "",
 });
 
-const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function MeetingReportsSection(
-  { sga, access, token, onSaved },
+// initialAdding opens the form straight away (the workspace's "Add meeting note" shortcut).
+const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps & { initialAdding?: boolean }>(function MeetingReportsSection(
+  { sga, access, token, onSaved, initialAdding = false },
   ref,
 ) {
   const nextMeetingNumber = sga.meetingReports.reduce((max, r) => Math.max(max, r.meetingNumber), 0) + 1;
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(initialAdding && access.editable);
   const [addForm, setAddForm] = useState<ReportForm>(emptyForm(nextMeetingNumber));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<ReportForm>(emptyForm(1));
@@ -340,7 +341,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
               }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
             >
-              <Plus className="h-3.5 w-3.5" /> Log a meeting
+              <Plus className="h-3.5 w-3.5" /> Add meeting note
             </button>
           )}
         </>

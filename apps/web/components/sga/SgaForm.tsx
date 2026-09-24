@@ -1,9 +1,8 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Clock, Loader2, Save, Send, XCircle } from "lucide-react";
-import { Sga, SgaService, SgaStatus } from "@/services/sga.service";
+import { Suspense } from "react";
+import { Check, CheckCircle2, ChevronDown, Clock, XCircle } from "lucide-react";
+import { Sga, SgaStatus } from "@/services/sga.service";
 import { EmployeeApiResponse } from "@/services/employee.service";
 import { Role } from "@/types/role";
 import {
@@ -19,6 +18,7 @@ import {
 import { getSgaGating, getStageStates, SgaAccessContext } from "@/components/sga/gating";
 import NextActionBanner from "@/components/sga/NextActionBanner";
 import SgaDraftWizard from "@/components/sga/SgaDraftWizard";
+import SgaWorkspace from "@/components/sga/SgaWorkspace";
 
 import ReasonSection from "./sections/01-Reason";
 import InfoSection from "./sections/02-Info";
@@ -27,16 +27,7 @@ import TeamSection from "./sections/04-Team";
 import MeetingPlanSection from "./sections/05-MeetingPlan";
 import ResourcesSection from "./sections/06-Resources";
 import HodApprovalSection from "./sections/07-HodApproval";
-import ConditionSection from "./sections/08-Condition";
-import RootCauseSection from "./sections/09-RootCause";
-import MeetingReportsSection from "./sections/10-MeetingReports";
-import ActionPlanSection from "./sections/11-ActionPlan";
-import ImplementationSection from "./sections/12-Implementation";
-import ResultsSection from "./sections/13-Results";
-import BenefitsSection from "./sections/14-Benefits";
-import VerifyingDepartmentSection from "./sections/15-VerifyingDepartment";
 import VerificationSection from "./sections/16-Verification";
-import { SgaSectionHandle } from "./sections/types";
 
 function TimelineIcon({ status }: { status: SgaStatus }) {
   const cls = "h-3.5 w-3.5";
@@ -75,74 +66,41 @@ export default function SgaForm({
   const gating = getSgaGating(sga, ctx);
   const stageStates = getStageStates(sga);
 
-  const [saveProgressError, setSaveProgressError] = useState<string | null>(null);
-  const [verificationSubmitError, setVerificationSubmitError] = useState<string | null>(null);
-  const [savingProgress, setSavingProgress] = useState(false);
-  const [submittingForVerification, setSubmittingForVerification] = useState(false);
+  const approved = gating.condition.visible;
+  const planSummary = [
+    sga.hodDecisionBy && `Approved by ${sga.hodDecisionBy.firstName} ${sga.hodDecisionBy.lastName}`,
+    sga.hodDecisionAt && formatDate(sga.hodDecisionAt),
+    sga.owner && `Leader ${sga.owner.firstName} ${sga.owner.lastName}`,
+    `${sga.teamMembers.length} team member${sga.teamMembers.length === 1 ? "" : "s"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
-  const conditionRef = useRef<SgaSectionHandle>(null);
-  const rootCauseRef = useRef<SgaSectionHandle>(null);
-  const meetingReportsRef = useRef<SgaSectionHandle>(null);
-  const actionPlanRef = useRef<SgaSectionHandle>(null);
-  const implementationRef = useRef<SgaSectionHandle>(null);
-  const resultsRef = useRef<SgaSectionHandle>(null);
-  const benefitsRef = useRef<SgaSectionHandle>(null);
-  const verifyingDepartmentRef = useRef<SgaSectionHandle>(null);
+  const planSections = (
+    <>
+      {gating.reason.editable ? (
+        // The raiser fills the draft step by step; everyone else sees the read-only stacked view.
+        <Suspense fallback={null}>
+          <SgaDraftWizard sga={sga} gating={gating} token={token} onSaved={onSaved} />
+        </Suspense>
+      ) : (
+        <>
+          <ReasonSection sga={sga} access={gating.reason} token={token} onSaved={onSaved} />
+          <InfoSection sga={sga} access={gating.info} token={token} onSaved={onSaved} />
+          <ImpactSection sga={sga} access={gating.impact} token={token} onSaved={onSaved} />
+          <TeamSection sga={sga} access={gating.team} token={token} onSaved={onSaved} />
+          <MeetingPlanSection sga={sga} access={gating.meetingPlan} token={token} onSaved={onSaved} />
+          <ResourcesSection sga={sga} access={gating.resources} token={token} onSaved={onSaved} />
+        </>
+      )}
 
-  const teamPhaseRefs = [
-    meetingReportsRef,
-    conditionRef,
-    rootCauseRef,
-    actionPlanRef,
-    implementationRef,
-    resultsRef,
-    benefitsRef,
-    verifyingDepartmentRef,
-  ];
-
-  const saveSections = async (refs: typeof teamPhaseRefs): Promise<boolean> => {
-    let allOk = true;
-    for (const sectionRef of refs) {
-      if (!sectionRef.current) continue;
-      const ok = await sectionRef.current.save();
-      if (!ok) allOk = false;
-    }
-    return allOk;
-  };
-
-  const handleSaveProgress = async () => {
-    setSaveProgressError(null);
-    setSavingProgress(true);
-    try {
-      const ok = await saveSections(teamPhaseRefs);
-      if (!ok) setSaveProgressError("Some sections failed to save. Check the errors above and try again.");
-    } finally {
-      setSavingProgress(false);
-    }
-  };
-
-  const submitForVerification = useMutation({
-    mutationFn: () => SgaService.submitForVerification(sga.id, token),
-    onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setVerificationSubmitError(err instanceof Error ? err.message : "Failed to submit"),
-  });
-
-  const handleSubmitForVerification = async () => {
-    setVerificationSubmitError(null);
-    setSubmittingForVerification(true);
-    try {
-      const ok = await saveSections(teamPhaseRefs);
-      if (!ok) {
-        setVerificationSubmitError("Some sections failed to save. Check the errors above and try again.");
-        return;
-      }
-      await submitForVerification.mutateAsync();
-    } catch {
-      // handled by the mutation's onError
-    } finally {
-      setSubmittingForVerification(false);
-    }
-  };
+      {gating.hodApproval.visible ? (
+        <HodApprovalSection sga={sga} access={gating.hodApproval} token={token} onSaved={onSaved} />
+      ) : (
+        <LockedSection n={2} label="HOD Approval" />
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-5">
@@ -162,100 +120,44 @@ export default function SgaForm({
 
       <SgaProgress states={stageStates} />
 
-      <NextActionBanner sga={sga} ctx={ctx} gating={gating} />
+      {/* On phones the side column falls below the page, so the card shows here instead. */}
+      <NextActionBanner sga={sga} ctx={ctx} gating={gating} className="lg:hidden" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         <div className="lg:col-span-2 space-y-5">
-          {gating.reason.editable ? (
-            // The raiser fills the draft step by step; everyone else sees the read-only stacked view.
-            <Suspense fallback={null}>
-              <SgaDraftWizard sga={sga} gating={gating} token={token} onSaved={onSaved} />
-            </Suspense>
+          {approved ? (
+            // Once approved the plan rarely changes, so it folds away above the workspace.
+            <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <summary className="flex cursor-pointer list-none items-start gap-3 px-4 py-4 hover:bg-slate-50 sm:px-5 [&::-webkit-details-marker]:hidden">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                  <Check className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-slate-900">1–2. Plan &amp; HOD approval</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{planSummary}</span>
+                </span>
+                <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="space-y-5 border-t border-slate-100 bg-slate-50/60 px-3 py-4 sm:px-5">
+                {planSections}
+              </div>
+            </details>
           ) : (
-            <>
-              <ReasonSection sga={sga} access={gating.reason} token={token} onSaved={onSaved} />
-              <InfoSection sga={sga} access={gating.info} token={token} onSaved={onSaved} />
-              <ImpactSection sga={sga} access={gating.impact} token={token} onSaved={onSaved} />
-              <TeamSection sga={sga} access={gating.team} token={token} onSaved={onSaved} />
-              <MeetingPlanSection sga={sga} access={gating.meetingPlan} token={token} onSaved={onSaved} />
-              <ResourcesSection sga={sga} access={gating.resources} token={token} onSaved={onSaved} />
-            </>
-          )}
-
-          {gating.hodApproval.visible ? (
-            <HodApprovalSection sga={sga} access={gating.hodApproval} token={token} onSaved={onSaved} />
-          ) : (
-            <LockedSection n={2} label="HOD Approval" />
+            planSections
           )}
 
           {gating.condition.visible ? (
+            // After HOD approval the SGA runs for weeks: one stage open at a time, each section
+            // saved on its own, with meetings and actions as their own quick tabs.
+            <Suspense fallback={null}>
+              <SgaWorkspace sga={sga} gating={gating} ctx={ctx} meId={me.id} token={token} onSaved={onSaved} />
+            </Suspense>
+          ) : (
             <>
-              <MeetingReportsSection ref={meetingReportsRef} sga={sga} access={gating.meetingReports} token={token} onSaved={onSaved} />
-              <ConditionSection ref={conditionRef} sga={sga} access={gating.condition} token={token} onSaved={onSaved} />
-              <RootCauseSection ref={rootCauseRef} sga={sga} access={gating.rootCause} token={token} onSaved={onSaved} />
+              <LockedSection n={3} label="Understand &amp; Analyse" />
+              <LockedSection n={4} label="Plan &amp; Implement" />
+              <LockedSection n={5} label="Check Results" />
             </>
-          ) : (
-            <LockedSection n={3} label="Understand the Current Condition" />
-          )}
-
-          {gating.actionPlan.visible ? (
-            <ActionPlanSection ref={actionPlanRef} sga={sga} access={gating.actionPlan} token={token} onSaved={onSaved} />
-          ) : (
-            <LockedSection n={4} label="Plan &amp; Implement" />
-          )}
-          {gating.implementation.visible && (
-            <ImplementationSection ref={implementationRef} sga={sga} access={gating.implementation} token={token} onSaved={onSaved} />
-          )}
-
-          {gating.results.visible ? (
-            <ResultsSection ref={resultsRef} sga={sga} access={gating.results} token={token} onSaved={onSaved} />
-          ) : (
-            <LockedSection n={5} label="Check Results" />
-          )}
-          {gating.benefits.visible && (
-            <BenefitsSection ref={benefitsRef} sga={sga} access={gating.benefits} token={token} onSaved={onSaved} />
-          )}
-
-          {(gating.condition.editable ||
-            gating.rootCause.editable ||
-            gating.actionPlan.editable ||
-            gating.implementation.editable ||
-            gating.results.editable ||
-            gating.benefits.editable ||
-            gating.verifyingDepartment.editable) && (
-            <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-              {(saveProgressError || verificationSubmitError) && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
-                  {saveProgressError || verificationSubmitError}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  disabled={savingProgress || submittingForVerification}
-                  onClick={handleSaveProgress}
-                  className="flex items-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-                >
-                  {savingProgress ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save Progress
-                </button>
-                {gating.canSubmitForVerification && (
-                  <button
-                    type="button"
-                    disabled={savingProgress || submittingForVerification}
-                    onClick={handleSubmitForVerification}
-                    className="flex items-center gap-2 bg-[#52618a] hover:bg-[#445174] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-                  >
-                    {submittingForVerification ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    Submit for Verification
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {gating.verifyingDepartment.visible && (
-            <VerifyingDepartmentSection ref={verifyingDepartmentRef} sga={sga} access={gating.verifyingDepartment} token={token} onSaved={onSaved} />
           )}
 
           {gating.verification.visible ? (
@@ -310,16 +212,19 @@ export default function SgaForm({
           </div>
         </div>
 
-        <SummaryPanel
-          title="SGA Summary"
-          rows={[
-            { label: "Department", value: sga.mainDepartment?.name ?? "No department" },
-            { label: "Raised By", value: `${sga.employee.firstName} ${sga.employee.lastName}` },
-            { label: "SGA Leader", value: sga.owner ? `${sga.owner.firstName} ${sga.owner.lastName}` : "Not set" },
-            { label: "Raised Date", value: formatDate(sga.createdAt) },
-            { label: "Status", value: <StatusBadge status={sga.status} /> },
-          ]}
-        />
+        <div className="space-y-5 lg:sticky lg:top-20">
+          <SummaryPanel
+            title="SGA Summary"
+            rows={[
+              { label: "Department", value: sga.mainDepartment?.name ?? "No department" },
+              { label: "Raised By", value: `${sga.employee.firstName} ${sga.employee.lastName}` },
+              { label: "SGA Leader", value: sga.owner ? `${sga.owner.firstName} ${sga.owner.lastName}` : "Not set" },
+              { label: "Raised Date", value: formatDate(sga.createdAt) },
+              { label: "Status", value: <StatusBadge status={sga.status} /> },
+            ]}
+          />
+          <NextActionBanner sga={sga} ctx={ctx} gating={gating} className="hidden lg:block" />
+        </div>
       </div>
     </div>
   );

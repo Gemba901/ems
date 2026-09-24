@@ -468,6 +468,12 @@ export class UpdateSgaActionPlanDto {
   actionItems!: SgaActionItemDto[];
 }
 
+// One-tap progress on a single action item
+export class UpdateSgaActionItemStatusDto {
+  @IsIn(['OPEN', 'IN_PROGRESS', 'DONE'])
+  status!: 'OPEN' | 'IN_PROGRESS' | 'DONE';
+}
+
 // Step 4 §11: implementation (owner only)
 export class UpdateSgaImplementationDto {
   @IsOptional()

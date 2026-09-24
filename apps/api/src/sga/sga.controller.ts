@@ -21,6 +21,7 @@ import {
     CreateSgaMeetingReportDto,
     UpdateSgaMeetingReportDto,
     UpdateSgaActionPlanDto,
+    UpdateSgaActionItemStatusDto,
     UpdateSgaImplementationDto,
     UpdateSgaResultsDto,
     UpdateSgaBenefitsDto,
@@ -335,6 +336,20 @@ export class SgaController {
         @CurrentUser() user: { userId: string, organizationId: string }
     ){
         return this.sgaService.updateActionPlan(id, user.userId, dto, user.organizationId)
+    }
+
+    /**
+     * PATCH /sga/:id/action-items/:itemId/status
+     * Step 4 §10: team members, or the person responsible for the action
+     */
+    @Patch(':id/action-items/:itemId/status')
+    async updateActionItemStatus(
+        @Param('id') id: string,
+        @Param('itemId') itemId: string,
+        @Body() dto: UpdateSgaActionItemStatusDto,
+        @CurrentUser() user: { userId: string, organizationId: string }
+    ){
+        return this.sgaService.updateActionItemStatus(id, itemId, user.userId, dto, user.organizationId)
     }
 
     /**

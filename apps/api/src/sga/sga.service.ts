@@ -14,6 +14,7 @@ import {
     CreateSgaMeetingReportDto,
     UpdateSgaMeetingReportDto,
     UpdateSgaActionPlanDto,
+    UpdateSgaActionItemStatusDto,
     UpdateSgaImplementationDto,
     UpdateSgaResultsDto,
     UpdateSgaBenefitsDto,
@@ -846,19 +847,48 @@ export class SgaService {
             throw new BadRequestException('Responsible persons must belong to this organization');
         }
 
+        // Items are rewritten on save; carry each kept item's id and progress over so
+        // ticking an action off is not lost when someone edits the plan.
+        const existing = new Map(sga.actionItems.map((a) => [a.id, a]));
         await this.prisma.$transaction(async (tx) => {
             await tx.sgaActionItem.deleteMany({ where: { sgaId } });
             if (dto.actionItems.length) {
                 await tx.sgaActionItem.createMany({
-                    data: dto.actionItems.map(({ id: _id, dueDate, ...item }) => ({
-                        ...item,
-                        sgaId,
-                        dueDate: dueDate ? new Date(dueDate) : undefined,
-                    })),
+                    data: dto.actionItems.map(({ id, dueDate, ...item }) => {
+                        const kept = id ? existing.get(id) : undefined;
+                        return {
+                            ...item,
+                            ...(kept && { id: kept.id, status: kept.status, completedAt: kept.completedAt }),
+                            sgaId,
+                            dueDate: dueDate ? new Date(dueDate) : undefined,
+                        };
+                    }),
                 });
             }
         });
 
+        return this.findSgaOrThrow(sgaId, organizationId);
+    }
+
+    // Step 4 §10: the team or the person responsible can move one action along
+    async updateActionItemStatus(sgaId: string, itemId: string, userId: string, dto: UpdateSgaActionItemStatusDto, organizationId: string) {
+        const sga = await this.findSgaOrThrow(sgaId, organizationId);
+        const employee = await this.resolveEmployee(userId, organizationId);
+        const item = sga.actionItems.find((a) => a.id === itemId);
+        if (!item) throw new NotFoundException('Action item not found');
+        if (item.responsiblePersonId !== employee.id) {
+            this.assertTeamEditable(sga, employee.id);
+        } else if (!TEAM_EDITABLE_STATUSES.includes(sga.status)) {
+            throw new BadRequestException('This SGA is not in a stage where actions can be updated');
+        }
+
+        await this.prisma.sgaActionItem.update({
+            where: { id: itemId },
+            data: {
+                status: dto.status,
+                completedAt: dto.status === 'DONE' ? (item.completedAt ?? new Date()) : null,
+            },
+        });
         return this.findSgaOrThrow(sgaId, organizationId);
     }
 

@@ -79,7 +79,12 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
         token,
       );
     },
-    onSuccess: (updated) => onSaved(updated),
+    onSuccess: (updated) => {
+      // Pick up the ids of newly created items so a later save keeps their progress.
+      setRows(toRows(updated));
+      setError(null);
+      onSaved(updated);
+    },
     onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 

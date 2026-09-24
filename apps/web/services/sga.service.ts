@@ -227,6 +227,8 @@ export interface SgaMeetingReport {
   updatedAt: string;
 }
 
+export type SgaActionStatus = "OPEN" | "IN_PROGRESS" | "DONE";
+
 export interface SgaActionItem {
   id: string;
   sgaId: string;
@@ -234,6 +236,8 @@ export interface SgaActionItem {
   improvementAction: string;
   responsiblePersonId: string | null;
   dueDate: string | null;
+  status: SgaActionStatus;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
   responsiblePerson: SgaPersonSummary | null;
@@ -754,6 +758,15 @@ export const SgaService = {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
+    }, token);
+    return handleResponse<Sga>(res);
+  },
+
+  async updateActionItemStatus(id: string, itemId: string, status: SgaActionStatus, token: string): Promise<Sga> {
+    const res = await apiClient(`${API_URL}/sga/${id}/action-items/${itemId}/status`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify({ status }),
     }, token);
     return handleResponse<Sga>(res);
   },

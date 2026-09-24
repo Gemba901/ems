@@ -3289,6 +3289,12 @@ enum SgaWhyWhyDecision {
   NOT_ROOT_CAUSE
 }
 
+enum SgaActionStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
 enum SgaImplementationStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -3554,6 +3560,8 @@ model SgaActionItem {
   improvementAction   String
   responsiblePersonId String?
   dueDate             DateTime?
+  status              SgaActionStatus @default(OPEN)
+  completedAt         DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

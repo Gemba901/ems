@@ -129,12 +129,15 @@ describe('AuthService', () => {
             expect(mockJwtService.sign).not.toHaveBeenCalled();
         });
 
-        it('requires email ownership verification when no password is set', async () => {
+        it('issues a short-lived first-time setup token when no password is set', async () => {
             mockPrisma.user.findFirst.mockResolvedValue({ id: 'user-1', password: null, organizations: [] });
             const result = await service.verifyFirstTimeUser('user@test.com');
-            expect(result).toMatchObject({ hasPassword: false, verificationRequired: true });
-            expect(result).not.toHaveProperty('setupToken');
-            expect(mockJwtService.sign).not.toHaveBeenCalled();
+            expect(result).toMatchObject({ hasPassword: false });
+            expect(result).toHaveProperty('setupToken');
+            expect(mockJwtService.sign).toHaveBeenCalledWith(
+                { userId: 'user-1', purpose: 'FIRST_TIME_SETUP' },
+                { expiresIn: '15m' },
+            );
         });
     });
 

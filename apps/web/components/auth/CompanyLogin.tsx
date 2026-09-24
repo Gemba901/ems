@@ -152,8 +152,7 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
             </button>
           </form>
           <p className="mt-8 border-t border-slate-200 pt-6 text-xs leading-relaxed text-slate-500">
-            New team member? Set your password from your invitation email, or
-            use Forgot password.
+            New team member? Use Forgot password to set up your account.
           </p>
         </>
       )}

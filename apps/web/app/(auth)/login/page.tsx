@@ -132,7 +132,10 @@ export default function AuthPage() {
     return () => controller.abort();
   }, []);
   if (!workspace) return <OnboardingShell login>{workspaceError ? <Notice error>Unable to load this workspace. Check the address and reload to try again.</Notice> : <p role="status" className="text-slate-500">Loading your workspace…</p>}</OnboardingShell>;
-  if (workspace.kind === "company") return <CompanyLogin hostname={workspace.hostname} />;
+  // New company admins arrive from signup with ?welcome=1 and add their logo after signing in.
+  // Everyone else uses the identify-first flow, which points first-time users to account setup.
+  if (workspace.kind === "company" && new URLSearchParams(window.location.search).get("welcome") === "1")
+    return <CompanyLogin hostname={workspace.hostname} />;
 
   return (
     <main

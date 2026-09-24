@@ -585,9 +585,15 @@ export class AuthService {
 
         if (hasPassword) return responseData;
 
-        // Looking up an identifier is not proof of account ownership.
-        // The existing reset-password email flow provides single-use ownership proof.
-        return { ...responseData, verificationRequired: true };
+        // SECURITY: knowing an identifier is not proof of account ownership, so anyone who knows
+        // an employee's email, phone or code can set their first password. Temporary until
+        // employee invitations ship (infra/company-onboarding/security.md, item 11).
+        const setupToken = this.jwtService.sign(
+            { userId: user.id, purpose: 'FIRST_TIME_SETUP' },
+            { expiresIn: '15m' },
+        );
+
+        return { ...responseData, setupToken };
 
     }
 
@@ -610,7 +616,7 @@ export class AuthService {
         try {
             const decoded = this.jwtService.verify(setupToken);
 
-            if (decoded.purpose !== 'PASSWORD_RESET_SETUP') {
+            if (decoded.purpose !== 'FIRST_TIME_SETUP' && decoded.purpose !== 'PASSWORD_RESET_SETUP') {
                 throw new UnauthorizedException('Invalid setup token');
             }
 

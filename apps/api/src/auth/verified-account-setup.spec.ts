@@ -46,22 +46,22 @@ describe('Verified account setup', () => {
     );
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed');
   });
-  it('identifier lookup cannot issue a password-setup token', async () => {
+  // Temporary: identifier lookup issues a setup token until employee invitations
+  // replace it (infra/company-onboarding/security.md, item 11).
+  it('identifier lookup issues a first-time setup token for passwordless accounts', async () => {
     const result = await service.verifyFirstTimeUser(user.email);
-    expect(result).toMatchObject({
-      verificationRequired: true,
-      hasPassword: false,
-    });
-    expect(result).not.toHaveProperty('setupToken');
+    expect(result).toMatchObject({ hasPassword: false });
+    expect(result).toHaveProperty('setupToken');
   });
-  it('rejects old identifier-only setup JWTs', async () => {
-    await expect(
-      service.createPassword(
-        jwt.sign({ userId: user.id, purpose: 'FIRST_TIME_SETUP' }),
-        'new-password',
-      ),
-    ).rejects.toMatchObject({ status: 401 });
-    expect(db.user.updateMany).not.toHaveBeenCalled();
+  it('first-time setup tokens only set a password that is still empty', async () => {
+    await service.createPassword(
+      jwt.sign({ userId: user.id, purpose: 'FIRST_TIME_SETUP' }),
+      'new-password',
+    );
+    expect(db.user.updateMany).toHaveBeenCalledWith({
+      where: { id: user.id, password: null },
+      data: { password: 'hashed' },
+    });
   });
   it('reset replay losing atomic consumption cannot update a password', async () => {
     await expect(

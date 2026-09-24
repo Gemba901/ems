@@ -23,6 +23,7 @@ but need an owner and a date.
 | 8 | Should fix | Progress tokens never expire | `onboarding.service.ts` `token` |
 | 9 | Should fix | Static AWS keys and broad provider tokens | API environment |
 | 10 | Should fix | Vercel Deployment Protection is off for the whole project | Vercel project settings |
+| 11 | Must fix | Anyone who knows an employee's email, phone or code can set that employee's first password | `auth.service.ts` `verifyFirstTimeUser`, `employee.service.ts` |
 
 ## Exposed endpoints
 
@@ -41,6 +42,7 @@ the proxy secret and capability tokens.
 | `POST /auth/forgot-password` | **None** | Email bombing; exhaust the shared per-IP bucket so real users are blocked | 1, 2, 6 |
 | `POST /auth/reset-password`, `/auth/verify-temp-password` | **None** | Guess tokens and temporary passwords; lock everyone out through the shared bucket | 1, 2 |
 | `POST /auth/verify-first-time`, `/auth/create-password` | **None** | Called directly, bypassing the proxy | 1 |
+| `POST /auth/company/verify-first-time` | Proxy secret | Get a password-setup token for any employee who hasn't set a password yet; list staff and read their names, with no rate limit | 2, 11 |
 
 ## 1. The API is reachable directly
 
@@ -224,10 +226,56 @@ exposes preview deployments.
 staging domains that serve tenants. Alternatively, let the readiness check through
 with a protection-bypass secret.
 
+## 11. First-time account setup
+
+**Problem.**
+- Adding an employee sends nothing. There is no invitation email, so a new
+  employee has no link to set their first password.
+- Instead, sign-in asks for the identifier first. If that account has no
+  password, `verify-first-time` returns a 15-minute `FIRST_TIME_SETUP` token and
+  the page lets the person choose a password straight away.
+- **Knowing an identifier is not proof of ownership.** Anyone who knows or
+  guesses an employee's email, phone number or employee code can set that
+  employee's password first and take over the account, with that employee's
+  role and data access. Employee codes are often sequential (`EMP001`,
+  `EMP002`…), and the endpoint has no rate limit.
+- The same step tells an unauthenticated caller whether a person works at the
+  company, whether they have set a password, and their name. That is enough to
+  list a company's staff for phishing.
+- History: commit `94f39a5` removed the token and sent first-time users to the
+  emailed reset link. It was **restored on 2026-09-24** because new employees
+  had no other practical way in. The code is marked with a `SECURITY` comment
+  in `verifyFirstTimeUser`.
+- Today's safeguards: the token lasts 15 minutes, only works on the employee's
+  own company address, and can only set a password that is still empty.
+
+**Fix.**
+- Send an invitation email when an employee with an email address is added.
+  It should contain a single-use "Set your password" link on the company's own
+  subdomain, valid for about 7 days, reusing the `PasswordResetToken` table.
+- Add a **Resend invite** action and an "Invite pending" / "Active" status on the
+  employee record.
+- Keep admin temporary passwords for staff without email, labelled as
+  "Set up sign-in" in the admin UI. Log who generated each one.
+- Count invite sends toward the per-recipient email cap from item 6.
+- Once invitations exist, stop issuing `FIRST_TIME_SETUP` tokens from
+  `verify-first-time`, and stop accepting them in `createPassword`. Then go back
+  to a single email + password sign-in form with a generic error, and remove the
+  identify step's name and password-status response.
+- Until then, rate-limit `verify-first-time` per IP and per identifier (see
+  item 2), and ask admins to have new staff sign in on their first day.
+
+**Done when.**
+- A newly added employee receives an invite and can sign in without admin help.
+- Knowing an identifier alone can no longer set a password.
+- An expired or used invite link is rejected.
+- Sign-in no longer reveals whether an account exists or has a password.
+
 ## Suggested order
 
 1. Items 1 and 2 together: the global guard and trusted client IP are
-   prerequisites for every other rate limit.
+   prerequisites for every other rate limit. Item 11 (employee invitations)
+   alongside them, because it allows account takeover today.
 2. Item 3 (Turnstile and per-IP limits), item 5 (shared reserved list) and the
    retry cap from item 4.
 3. The rest of item 4 (disposable email block, cleanup job, approval flag) and

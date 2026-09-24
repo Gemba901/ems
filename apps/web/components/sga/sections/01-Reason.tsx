@@ -5,6 +5,8 @@ import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { SgaService, SgaStartingReason, SgaReferenceApplicability, SgaReferenceType } from "@/services/sga.service";
 import {
+  HelpText,
+  STARTING_REASON_GROUPS,
   STARTING_REASONS,
   REFERENCE_APPLICABILITY_LABELS,
   REFERENCE_TYPE_OPTIONS,
@@ -36,7 +38,7 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
       SgaService.updateReason(
         sga.id,
         {
-          startingReason: startingReason as SgaStartingReason,
+          startingReason: startingReason || undefined,
           startingReasonOther: startingReason === "OTHER" ? startingReasonOther.trim() : undefined,
           referenceApplicability: referenceApplicability ? (referenceApplicability as SgaReferenceApplicability) : undefined,
           referenceType: referenceApplicability === "APPLICABLE" ? (referenceType as SgaReferenceType) : undefined,
@@ -50,14 +52,9 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
 
   useImperativeHandle(ref, () => ({
     save: async () => {
-      if (!startingReason) {
-        setError("Please select why this SGA was started.");
-        return false;
-      }
-      if (
-        startingReason === "OTHER" &&
-        (startingReasonOther.trim().length < EXPLANATION_MIN || startingReasonOther.trim().length > EXPLANATION_MAX)
-      ) {
+      // A missing reason is allowed while drafting; the submit checklist asks for it.
+      const otherLength = startingReasonOther.trim().length;
+      if (startingReason === "OTHER" && otherLength > 0 && (otherLength < EXPLANATION_MIN || otherLength > EXPLANATION_MAX)) {
         setError(`Please explain in ${EXPLANATION_MIN}-${EXPLANATION_MAX} characters.`);
         return false;
       }
@@ -85,8 +82,9 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Why was this SGA started? <span className="text-red-500">*</span>
+            What kind of problem is it? <span className="text-red-500">*</span>
           </label>
+          <HelpText>Pick the closest match. It helps route and report on SGAs.</HelpText>
           <select
             value={startingReason}
             disabled={!editable}
@@ -94,13 +92,17 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
               setStartingReason(e.target.value as SgaStartingReason);
               setError(null);
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">Select a reason...</option>
-            {STARTING_REASONS.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
+            {STARTING_REASON_GROUPS.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.reasons.map((value) => (
+                  <option key={value} value={value}>
+                    {STARTING_REASONS.find((r) => r.value === value)?.label ?? value}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -124,14 +126,18 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
                 setError(null);
               }}
               placeholder="Describe why this SGA was started..."
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
         )}
 
-        <div>
+        <details open={!!referenceApplicability} className="group rounded-lg border border-slate-200 px-4 py-3 space-y-4">
+          <summary className="cursor-pointer text-sm font-medium text-slate-600 select-none">
+            Linked to an audit, SOP, standard or customer spec? <span className="text-xs font-normal text-slate-400">(optional)</span>
+          </summary>
+        <div className="pt-3">
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Reference applicability <span className="text-xs font-normal text-slate-400">(optional)</span>
+            Is there a reference document?
           </label>
           <select
             value={referenceApplicability}
@@ -140,7 +146,7 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
               setReferenceApplicability(e.target.value as SgaReferenceApplicability);
               setError(null);
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">Select...</option>
             {REFERENCE_APPLICABILITY_OPTIONS.map((v) => (
@@ -163,7 +169,7 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
                 setReferenceType(e.target.value as SgaReferenceType);
                 setError(null);
               }}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             >
               <option value="">Select...</option>
               {REFERENCE_TYPE_OPTIONS.map((t) => (
@@ -189,10 +195,11 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
                 setError(null);
               }}
               placeholder="e.g. AUDIT-2026-014"
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
         )}
+        </details>
 
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (

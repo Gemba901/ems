@@ -54,6 +54,18 @@ export class SgaController {
     }
 
     /**
+     * DELETE /sga/:id
+     * raiser (or admin/management/superadmin) discards a draft that was never submitted
+     */
+    @Delete(':id')
+    async remove(
+        @Param('id') id: string,
+        @CurrentUser() user: { userId: string; organizationId: string }
+    ) {
+        return this.sgaService.deleteSga(id, user.userId, user.organizationId)
+    }
+
+    /**
      * GET /sga
      * all organizations SGAs; super admin, admin and management only
      */

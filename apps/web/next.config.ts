@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
       "./content/dwms-docs/*.md",
       "./content/dwms-docs-images/**/*.png",
     ],
+    "/api/docs/sga/*": ["./content/sga-docs/*.md"],
   },
 };
 

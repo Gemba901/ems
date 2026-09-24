@@ -1,19 +1,27 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { useEffect, useRef } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
-  Users2,
-  Plus,
+  PanelLeft,
   LayoutGrid,
   Building2,
+  BarChart3,
+  BookOpen,
+  Plus,
   ArrowLeft,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ChevronRight,
+  type LucideIcon,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuthStore } from "@/store/auth.store";
-import { Role } from "@/types/role";
+
+// Mirrors the DWMS sidebar (app/dwms/components/Sidebar.tsx) so both modules look and behave the same.
 
 interface SgaSidebarProps {
   open?: boolean;
@@ -22,153 +30,252 @@ interface SgaSidebarProps {
   onToggle?: () => void;
 }
 
-const SGA_NAV = [
-  {
-    name: "Overview",
-    href: "/sga",
-    icon: LayoutGrid,
-    exact: true,
-    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE],
-  },
-  {
-    name: "All SGAs",
-    href: "/sga/all",
-    icon: Building2,
-    exact: false,
-    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT],
-  },
-];
+const privilegedRoles = new Set(["SUPER_ADMIN", "ADMIN", "MANAGEMENT"]);
 
-function isActive(pathname: string, href: string, exact: boolean) {
-  if (exact) return pathname === href;
-  return pathname === href || pathname.startsWith(href + "/");
+const navigationIcons: Record<string, LucideIcon> = {
+  "/sga": LayoutGrid,
+  "/sga/all": Building2,
+  "/sga/reports": BarChart3,
+  "/docs/sga": BookOpen,
+};
+
+function isActive(pathname: string, href: string) {
+  return pathname === href || (href !== "/sga" && pathname.startsWith(href + "/"));
 }
 
-export function SgaSidebar({ open = false, onClose, collapsed = false, onToggle }: SgaSidebarProps) {
-  const pathname = usePathname();
-  const user = useAuthStore((state) => state.user);
-
-  // On mobile (open=true) always show full sidebar regardless of collapsed state
-  const isCollapsed = collapsed && !open;
-
-  const userRole = user?.roleLevel;
-  const filteredNav = SGA_NAV.filter(
-    (item) => userRole && item.allowedRoles.includes(userRole)
+function RailLink({
+  href,
+  label,
+  icon: Icon,
+  active = false,
+  primary = false,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  active?: boolean;
+  primary?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<Link href={href} />}
+        aria-label={label}
+        aria-current={active ? "page" : undefined}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${primary ? "bg-[#52618a] text-white hover:bg-[#445174]" : active ? "bg-indigo-50 text-indigo-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}
+      >
+        <Icon className="h-[18px] w-[18px]" strokeWidth={1.5} aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
+}
+
+export function SgaSidebar({
+  open = false,
+  onClose,
+  collapsed = false,
+  onToggle,
+}: SgaSidebarProps) {
+  const pathname = usePathname();
+  const { user } = useAuthStore();
+  const panel = useRef<HTMLElement>(null);
+  const openButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const toggleDesktop = () => {
+    onToggle?.();
+    requestAnimationFrame(() => {
+      (collapsed ? closeButton : openButton).current?.focus();
+    });
+  };
+  const role = String(user?.roleLevel ?? "").toUpperCase();
+  const groups = [
+    {
+      name: "Your work",
+      items: [
+        ["Overview", "/sga"],
+        ...(privilegedRoles.has(role) ? [["All SGAs", "/sga/all"]] : []),
+      ],
+    },
+    {
+      name: "Insights",
+      items: [
+        ["Reports", "/sga/reports"],
+        ["Documentation", "/docs/sga"],
+      ],
+    },
+  ];
+
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const links = () =>
+      Array.from(
+        panel.current?.querySelectorAll<HTMLElement>("a[href], button") ?? [],
+      );
+    links()[0]?.focus();
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose?.();
+      if (event.key !== "Tab") return;
+      const elements = links().filter(
+        (element) => element.getClientRects().length,
+      );
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) onClose?.();
+    };
+    desktop.addEventListener("change", closeOnDesktop);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      desktop.removeEventListener("change", closeOnDesktop);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKey);
+      previous?.focus();
+    };
+  }, [open, onClose]);
 
   return (
     <>
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/30 lg:hidden"
           onClick={onClose}
         />
       )}
-
+      {collapsed && (
+        <TooltipProvider>
+          <div className="fixed inset-y-0 left-0 z-30 hidden w-12 flex-col items-center border-r border-slate-200 bg-white lg:flex">
+            <div className="flex h-14 shrink-0 items-center">
+              <button
+                ref={openButton}
+                type="button"
+                onClick={toggleDesktop}
+                aria-label="Open sidebar"
+                title="Open sidebar"
+                aria-expanded={false}
+                aria-controls="sga-sidebar"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              >
+                <PanelLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="space-y-1 pb-3">
+              <RailLink href="/sga/new" label="New SGA" icon={Plus} primary />
+            </div>
+            <nav
+              aria-label="SGA shortcuts"
+              className="min-h-0 w-full flex-1 overflow-y-auto px-1 pb-2"
+            >
+              {groups.map((group, index) => (
+                <div
+                  key={group.name}
+                  role="group"
+                  aria-label={group.name}
+                  className={`space-y-1 ${index ? "mt-3 border-t border-slate-200 pt-3" : ""}`}
+                >
+                  {group.items.map(([label, href]) => (
+                    <RailLink
+                      key={href}
+                      href={href}
+                      label={label}
+                      icon={navigationIcons[href]}
+                      active={isActive(pathname, href)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </nav>
+            <div className="shrink-0 border-t border-slate-200 py-2">
+              <RailLink href="/" label="Back to Gemba" icon={ArrowLeft} />
+            </div>
+          </div>
+        </TooltipProvider>
+      )}
       <aside
-        className={`
-          fixed z-50 top-0 left-0 h-dvh flex flex-col bg-white border-r border-slate-200
-          transition-all duration-300 ease-in-out overflow-hidden w-64
-          ${open ? "translate-x-0" : "-translate-x-full"}
-          lg:translate-x-0
-          ${collapsed ? "lg:w-16" : "lg:w-64"}
-        `}
+        id="sga-sidebar"
+        ref={panel}
+        aria-label="Small group activity navigation"
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white ${open ? "visible translate-x-0" : "invisible -translate-x-full"} ${collapsed ? "lg:invisible lg:-translate-x-full" : "lg:visible lg:translate-x-0"}`}
       >
-        {/* ── Header: toggle + brand ── */}
-        <div className={`flex items-center h-14 border-b border-slate-100 shrink-0 ${isCollapsed ? "justify-center" : "px-4 gap-3"}`}>
-
-          {/* Collapse toggle: desktop only */}
-          <button
-            onClick={onToggle}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden lg:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-100 px-5">
+          <Link
+            href="/sga"
+            onClick={onClose}
+            className="min-w-0 truncate text-sm font-bold tracking-tight text-slate-900"
           >
-            {collapsed
-              ? <PanelLeftOpen className="h-4 w-4" />
-              : <PanelLeftClose className="h-4 w-4" />
-            }
+            Small Group Activities
+          </Link>
+          <button
+            ref={closeButton}
+            type="button"
+            onClick={toggleDesktop}
+            aria-label="Close sidebar"
+            title="Close sidebar"
+            aria-expanded={true}
+            aria-controls="sga-sidebar"
+            className="ml-2 hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 lg:flex"
+          >
+            <PanelLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
           </button>
-
-          {!isCollapsed && (
-            <>
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-blue-600 rounded-lg">
-                <Users2 className="h-4 w-4 text-white" />
-              </div>
-              <div className="min-w-0 flex flex-col">
-                <span className="text-sm font-bold text-slate-900 truncate leading-tight">
-                  Small Group Activities
-                </span>
-                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">
-                  SGA
-                </span>
-              </div>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded px-2 py-2 text-sm text-slate-600 hover:bg-slate-100 lg:hidden"
+          >
+            Close
+          </button>
         </div>
-
-        {/* ── New SGA CTA ── */}
-        <div className={`px-2 pt-3 pb-1 shrink-0 ${isCollapsed ? "flex justify-center" : ""}`}>
+        <div className="space-y-1 px-3 pb-5 pt-3">
           <Link
             href="/sga/new"
             onClick={onClose}
-            title={isCollapsed ? "New SGA" : undefined}
-            className={`flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors ${
-              isCollapsed ? "h-10 w-10 justify-center" : "h-10 w-full px-3 gap-2"
-            }`}
+            className="flex min-h-10 items-center justify-center rounded-xl bg-[#52618a] px-3 text-sm font-medium text-white hover:bg-[#445174]"
           >
-            <Plus className="h-4 w-4 shrink-0" />
-            {!isCollapsed && <span className="text-sm font-medium">New SGA</span>}
+            New SGA
           </Link>
         </div>
-
-        {/* ── Navigation ── */}
-        <nav className="flex-1 px-2 py-2 overflow-y-auto overflow-x-hidden min-h-0 space-y-0.5">
-          {!isCollapsed && (
-            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-3 pb-2">
-              Platform
-            </p>
-          )}
-          {filteredNav.map((item) => {
-            const active = isActive(pathname, item.href, item.exact);
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={onClose}
-                title={isCollapsed ? item.name : undefined}
-                className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
-                  active
-                    ? "bg-blue-50 text-blue-600"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                } ${isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
-              >
-                <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-600" : "text-slate-400"}`} />
-                {!isCollapsed && (
-                  <>
-                    <span className="flex-1">{item.name}</span>
-                    {active && <ChevronRight className="h-3.5 w-3.5 text-blue-400" />}
-                  </>
-                )}
-              </Link>
-            );
-          })}
+        <nav className="min-h-0 flex-1 space-y-7 overflow-y-auto px-3 pb-6">
+          {groups.map((group) => (
+            <div key={group.name}>
+              <p className="mx-3 mb-2 border-b border-slate-200 pb-2 text-xs font-medium text-slate-400">
+                {group.name}
+              </p>
+              {group.items.map(([label, href]) => {
+                const active = isActive(pathname, href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onClose}
+                    aria-current={active ? "page" : undefined}
+                    className={`my-0.5 flex min-h-11 items-center rounded-xl px-3 text-sm font-medium transition-colors ${active ? "bg-indigo-50 text-indigo-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
-
-        {/* ── Footer nav ── */}
-        <div className="px-2 pb-2 border-t border-slate-100 pt-2 space-y-0.5">
-          {/* Back to main app */}
-          <Link
-            href="/"
-            onClick={onClose}
-            title={isCollapsed ? "Main App" : undefined}
-            className={`flex items-center rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-white transition-all duration-150 ${
-              isCollapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
-            }`}
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0" />
-            {!isCollapsed && <span className="flex-1">Main App</span>}
-          </Link>
-        </div>
+        <Link
+          href="/"
+          onClick={onClose}
+          className="border-t border-slate-200 px-6 py-4 text-sm text-slate-500 hover:text-slate-900"
+        >
+          Back to Gemba
+        </Link>
       </aside>
     </>
   );

@@ -1,4 +1,4 @@
-import { Sga, SgaStatus, SgaVerificationStage } from "@/services/sga.service";
+import { Sga, SgaDraftMissingItem, SgaStatus, SgaVerificationStage } from "@/services/sga.service";
 import { SgaStageKey, SgaStageState } from "./sga-ui";
 
 export interface SgaAccessContext {
@@ -87,6 +87,25 @@ export function getSgaGating(sga: Sga, ctx: SgaAccessContext): SgaGating {
     canSubmitForHodApproval: draftEditable,
     canSubmitForVerification: (ctx.isRaiser || ctx.isOwner) && TEAM_EDITABLE_STATUSES.includes(sga.status),
   };
+}
+
+// Mirrors getDraftMissingItems() in the API's sga.service.ts. Steps refer to the draft
+// wizard: 1 Problem, 2 What will improve, 3 Team & meetings.
+export function getDraftChecklist(sga: Sga): SgaDraftMissingItem[] {
+  const missing: SgaDraftMissingItem[] = [];
+  if (!sga.title) missing.push({ key: "title", label: "Title", step: 1 });
+  if (!sga.problemDescription) missing.push({ key: "problemDescription", label: "Problem description", step: 1 });
+  if (!sga.startingReason) missing.push({ key: "startingReason", label: "Why this SGA was started", step: 1 });
+  if (sga.startingReason === "OTHER" && !sga.startingReasonOther?.trim()) {
+    missing.push({ key: "startingReasonOther", label: 'Explain the "Other" reason', step: 1 });
+  }
+  if (!sga.mainDepartmentId) missing.push({ key: "mainDepartmentId", label: "Main department", step: 1 });
+  if (!sga.startDate) missing.push({ key: "startDate", label: "Start date", step: 1 });
+  if (!sga.targetCompletionDate) missing.push({ key: "targetCompletionDate", label: "Target completion date", step: 1 });
+  if (sga.qcdsmtImpacts.length === 0) missing.push({ key: "impacts", label: "At least one thing that will improve", step: 2 });
+  if (!sga.ownerId) missing.push({ key: "ownerId", label: "SGA leader", step: 3 });
+  if (!sga.meetingFrequency) missing.push({ key: "meetingFrequency", label: "How often the team meets", step: 3 });
+  return missing;
 }
 
 export function canActOnVerificationStage(sga: Sga, stage: SgaVerificationStage, ctx: SgaAccessContext): boolean {

@@ -9,14 +9,17 @@ import { useAuthStore } from "@/store/auth.store";
 import { SgaService, Sga, SgaStatus } from "@/services/sga.service";
 import { EmployeeService } from "@/services/employee.service";
 import { StatusBadge, KpiCard, Thumbnail, SgaPagination, STATUS_LABELS, formatDate } from "@/components/sga/sga-ui";
-import { Plus, Users2, Loader2, ShieldCheck, CheckCircle2, Search, X } from "lucide-react";
+import { Plus, Users2, Loader2, ShieldCheck, CheckCircle2, Search, X, ArrowRight } from "lucide-react";
 
 type TabKey = "mine" | "department" | "verification";
 
 const PAGE_SIZE = 10;
 
-function SgaRow({ s, showOwner }: { s: Sga; showOwner?: boolean }) {
+const RAISER_EDITABLE_STATUSES: SgaStatus[] = ["DRAFT", "RETURNED_FOR_REVISION"];
+
+function SgaRow({ s, showOwner, myEmployeeId }: { s: Sga; showOwner?: boolean; myEmployeeId?: string }) {
   const title = s.title || s.problemDescription || "Untitled SGA";
+  const canContinue = !!myEmployeeId && s.employeeId === myEmployeeId && RAISER_EDITABLE_STATUSES.includes(s.status);
   return (
     <Link
       href={`/sga/${s.id}`}
@@ -30,13 +33,19 @@ function SgaRow({ s, showOwner }: { s: Sga; showOwner?: boolean }) {
           {s.mainDepartment?.name ?? "No department"} · {formatDate(s.createdAt)}
         </p>
       </div>
-      <StatusBadge status={s.status} />
+      {canContinue ? (
+        <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2.5 py-1">
+          {s.status === "DRAFT" ? "Continue draft" : "Update & resubmit"} <ArrowRight className="h-3 w-3" />
+        </span>
+      ) : (
+        <StatusBadge status={s.status} />
+      )}
     </Link>
   );
 }
 
-function SgaListCard({ sgas, isLoading, emptyText, showOwner }: {
-  sgas: Sga[]; isLoading: boolean; emptyText: string; showOwner?: boolean;
+function SgaListCard({ sgas, isLoading, emptyText, showOwner, myEmployeeId }: {
+  sgas: Sga[]; isLoading: boolean; emptyText: string; showOwner?: boolean; myEmployeeId?: string;
 }) {
   if (isLoading) {
     return <p className="text-sm text-slate-400 py-10 text-center flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading...</p>;
@@ -50,7 +59,7 @@ function SgaListCard({ sgas, isLoading, emptyText, showOwner }: {
   }
   return (
     <div className="bg-white border border-slate-100 rounded-xl shadow-sm divide-y divide-slate-50">
-      {sgas.map((s) => <SgaRow key={s.id} s={s} showOwner={showOwner} />)}
+      {sgas.map((s) => <SgaRow key={s.id} s={s} showOwner={showOwner} myEmployeeId={myEmployeeId} />)}
     </div>
   );
 }
@@ -66,6 +75,12 @@ export default function SgaOverviewPage() {
   const role = user?.roleLevel;
   const isPrivileged = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
   const canSeeDepartment = !!user?.departmentId;
+
+  const { data: me } = useQuery({
+    queryKey: ["employee-me"],
+    queryFn: () => EmployeeService.getMe(accessToken!),
+    enabled: !!accessToken,
+  });
 
   const { data: mine = [], isLoading: mineLoading } = useQuery({
     queryKey: ["sga-my"],
@@ -145,12 +160,12 @@ export default function SgaOverviewPage() {
     <ProtectedRoute
       allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}
     >
-      <div className="mx-5 space-y-5">
+      <div className="space-y-6">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold text-slate-900">Small Group Activities</h1>
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">Small Group Activities</h1>
           <Link
             href="/sga/new"
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#52618a] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174]"
           >
             <Plus className="h-3.5 w-3.5" />
             New SGA
@@ -158,21 +173,22 @@ export default function SgaOverviewPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiCard label="My SGAs" value={mine.length} icon={<Users2 className="h-4 w-4 text-blue-600" />} accent="bg-blue-50" />
+          <KpiCard label="My SGAs" value={mine.length} icon={<Users2 className="h-4 w-4 text-indigo-600" />} accent="bg-indigo-50" />
           <KpiCard label="In Progress" value={inProgressCount} icon={<Loader2 className="h-4 w-4 text-amber-600" />} accent="bg-amber-50" />
           <KpiCard label="Pending My Review" value={pendingMyVerificationCount} icon={<ShieldCheck className="h-4 w-4 text-purple-600" />} accent="bg-purple-50" />
           <KpiCard label="Verified This Month" value={verifiedThisMonthCount} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" />
         </div>
 
-        <div className="flex items-center gap-1 border-b border-slate-200">
+        <div className="flex gap-6 overflow-x-auto whitespace-nowrap border-b border-slate-200">
           {TABS.filter((t) => t.visible).map((t) => (
             <button
               key={t.key}
+              type="button"
               onClick={() => setTab(t.key)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`border-b-2 pb-3 text-sm font-semibold transition duration-150 ${
                 tab === t.key
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
+                  ? "border-indigo-500 text-indigo-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               {t.label}
@@ -188,13 +204,13 @@ export default function SgaOverviewPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title..."
-              className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as SgaStatus | "ALL")}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
           >
             <option value="ALL">All Statuses</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
@@ -205,7 +221,7 @@ export default function SgaOverviewPage() {
             <select
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
             >
               <option value="ALL">All Departments</option>
               {departments.map((d) => (
@@ -229,6 +245,7 @@ export default function SgaOverviewPage() {
           isLoading={activeLoading}
           emptyText={emptyText}
           showOwner={tab !== "mine"}
+          myEmployeeId={me?.id}
         />
 
         <SgaPagination page={page} totalPages={totalPages} onChange={setPage} />

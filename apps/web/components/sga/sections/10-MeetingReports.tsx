@@ -148,7 +148,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                       type="date"
                       value={editForm.meetingDate}
                       onChange={(e) => setEditForm({ ...editForm, meetingDate: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                     />
                   </div>
                   <div>
@@ -158,7 +158,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                       min="0"
                       value={editForm.durationMinutes}
                       onChange={(e) => setEditForm({ ...editForm, durationMinutes: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                     />
                   </div>
                 </div>
@@ -172,8 +172,8 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                         onClick={() => toggleAttendee(editForm, setEditForm, p.id)}
                         className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                           editForm.attendeeIds.includes(p.id)
-                            ? "bg-blue-600 border-blue-600 text-white"
-                            : "border-slate-200 text-slate-600 hover:border-blue-300"
+                            ? "bg-[#52618a] border-indigo-600 text-white"
+                            : "border-slate-200 text-slate-600 hover:border-indigo-300"
                         }`}
                       >
                         {p.firstName} {p.lastName}
@@ -187,7 +187,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                     rows={2}
                     value={editForm.notes}
                     onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -195,7 +195,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                     type="button"
                     disabled={updateMutation.isPending}
                     onClick={() => updateMutation.mutate(report.id)}
-                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    className="flex items-center gap-1.5 bg-[#52618a] hover:bg-[#445174] disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
                   >
                     {updateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                     Save
@@ -223,7 +223,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                 </div>
                 {access.editable && (
                   <div className="flex items-center gap-2 shrink-0">
-                    <button type="button" onClick={() => startEdit(report)} className="text-slate-400 hover:text-blue-600 transition-colors">
+                    <button type="button" onClick={() => startEdit(report)} className="text-slate-400 hover:text-indigo-600 transition-colors">
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
@@ -254,7 +254,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                     min="1"
                     value={addForm.meetingNumber}
                     onChange={(e) => setAddForm({ ...addForm, meetingNumber: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                   />
                 </div>
                 <div>
@@ -263,7 +263,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                     type="date"
                     value={addForm.meetingDate}
                     onChange={(e) => setAddForm({ ...addForm, meetingDate: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                   />
                 </div>
                 <div>
@@ -273,7 +273,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                     min="0"
                     value={addForm.durationMinutes}
                     onChange={(e) => setAddForm({ ...addForm, durationMinutes: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                   />
                 </div>
               </div>
@@ -287,8 +287,8 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                       onClick={() => toggleAttendee(addForm, setAddForm, p.id)}
                       className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                         addForm.attendeeIds.includes(p.id)
-                          ? "bg-blue-600 border-blue-600 text-white"
-                          : "border-slate-200 text-slate-600 hover:border-blue-300"
+                          ? "bg-[#52618a] border-indigo-600 text-white"
+                          : "border-slate-200 text-slate-600 hover:border-indigo-300"
                       }`}
                     >
                       {p.firstName} {p.lastName}
@@ -302,7 +302,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                   rows={2}
                   value={addForm.notes}
                   onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
                 />
               </div>
               {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
@@ -314,7 +314,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                     setError(null);
                     createMutation.mutate();
                   }}
-                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  className="flex items-center gap-1.5 bg-[#52618a] hover:bg-[#445174] disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
                 >
                   {createMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                   Save meeting
@@ -338,7 +338,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                 setAddForm(emptyForm(nextMeetingNumber));
                 setAdding(true);
               }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
             >
               <Plus className="h-3.5 w-3.5" /> Log a meeting
             </button>

@@ -59,9 +59,35 @@ const sgaInclude = {
     },
 };
 
-type SgaWithInclude = Prisma.SgaGetPayload<{ include: typeof sgaInclude }>;
+export type SgaWithInclude = Prisma.SgaGetPayload<{ include: typeof sgaInclude }>;
 
 const DRAFT_EDITABLE_STATUSES: SgaStatus[] = ['DRAFT', 'RETURNED_FOR_REVISION'];
+
+// `step` matches the guided draft wizard on the web (1 Problem, 2 Improve, 3 Team & meetings),
+// so the client can link each missing item to where it is filled in.
+export interface SgaDraftMissingItem {
+    key: string;
+    label: string;
+    step: number;
+}
+
+export function getDraftMissingItems(sga: SgaWithInclude): SgaDraftMissingItem[] {
+    const missing: SgaDraftMissingItem[] = [];
+    if (!sga.title) missing.push({ key: 'title', label: 'Title', step: 1 });
+    if (!sga.problemDescription) missing.push({ key: 'problemDescription', label: 'Problem description', step: 1 });
+    if (!sga.startingReason) missing.push({ key: 'startingReason', label: 'Why this SGA was started', step: 1 });
+    if (sga.startingReason === 'OTHER' && !sga.startingReasonOther?.trim()) {
+        missing.push({ key: 'startingReasonOther', label: 'Explain the "Other" reason', step: 1 });
+    }
+    if (!sga.mainDepartmentId) missing.push({ key: 'mainDepartmentId', label: 'Main department', step: 1 });
+    if (!sga.startDate) missing.push({ key: 'startDate', label: 'Start date', step: 1 });
+    if (!sga.targetCompletionDate) missing.push({ key: 'targetCompletionDate', label: 'Target completion date', step: 1 });
+    if (sga.qcdsmtImpacts.length === 0) missing.push({ key: 'impacts', label: 'At least one thing that will improve', step: 2 });
+    if (!sga.ownerId) missing.push({ key: 'ownerId', label: 'SGA leader', step: 3 });
+    if (!sga.meetingFrequency) missing.push({ key: 'meetingFrequency', label: 'How often the team meets', step: 3 });
+    return missing;
+}
+
 const TEAM_EDITABLE_STATUSES: SgaStatus[] = ['IN_PROGRESS', 'RETURNED_FOR_REWORK'];
 
 @Injectable()
@@ -195,17 +221,54 @@ export class SgaService {
     }
 
     // Step 1 §1: create draft
+    // Quick start: the draft is only created once the raiser has described the problem,
+    // with sensible defaults so the guided steps start partly filled in.
     async createSga(userId: string, dto: CreateSgaDto, organizationId: string) {
         const employee = await this.resolveEmployee(userId, organizationId);
+
+        const mainDepartmentId = dto.mainDepartmentId || employee.departmentId || undefined;
+        if (dto.mainDepartmentId) {
+            const dept = await this.prisma.department.findFirst({ where: { id: dto.mainDepartmentId, organizationId } });
+            if (!dept) throw new BadRequestException('Main department not found in this organization');
+        }
+
+        // The wizard creates an empty draft on "New SGA"; the problem and title are filled in step 1.
+        const problemDescription = dto.problemDescription?.trim() || undefined;
+        const title = dto.title?.trim() || problemDescription?.slice(0, 60).trim() || undefined;
+
         return this.prisma.sga.create({
             data: {
                 organizationId,
                 employeeId: employee.id,
                 startingReason: dto.startingReason,
+                title,
+                problemDescription,
+                mainDepartmentId,
+                workArea: dto.workArea?.trim() || undefined,
+                beforeFileUrls: dto.beforeFileUrls ?? [],
+                startDate: new Date(),
+                meetingFrequency: 'WEEKLY',
                 status: 'DRAFT',
             },
             include: sgaInclude,
         });
+    }
+
+    // Raiser (or admin/management) can discard an SGA that was never submitted
+    async deleteSga(sgaId: string, userId: string, organizationId: string) {
+        const sga = await this.findSgaOrThrow(sgaId, organizationId);
+        const employee = await this.resolveEmployee(userId, organizationId);
+        const roles = await this.getUserRoles(userId, organizationId);
+
+        if (sga.employeeId !== employee.id && !this.isPrivileged(roles)) {
+            throw new ForbiddenException('You can only delete your own SGA');
+        }
+        if (sga.status !== 'DRAFT') {
+            throw new BadRequestException('Only drafts that have not been submitted can be deleted');
+        }
+
+        await this.prisma.sga.delete({ where: { id: sgaId } });
+        return { id: sgaId };
     }
 
     async getAllSgas(organizationId: string) {
@@ -338,8 +401,10 @@ export class SgaService {
         return this.prisma.sga.update({
             where: { id: sgaId },
             data: {
-                startingReason: dto.startingReason,
-                startingReasonOther: dto.startingReason === 'OTHER' ? dto.startingReasonOther : null,
+                ...(dto.startingReason && {
+                    startingReason: dto.startingReason,
+                    startingReasonOther: dto.startingReason === 'OTHER' ? dto.startingReasonOther : null,
+                }),
                 referenceApplicability: dto.referenceApplicability,
                 referenceType: dto.referenceApplicability === 'APPLICABLE' ? dto.referenceType : null,
                 referenceNumber: dto.referenceApplicability === 'APPLICABLE' ? dto.referenceNumber : null,
@@ -364,14 +429,19 @@ export class SgaService {
                 throw new BadRequestException('One or more other departments were not found in this organization');
             }
         }
+        const startDate = dto.startDate ?? sga.startDate?.toISOString();
+        const targetCompletionDate = dto.targetCompletionDate ?? sga.targetCompletionDate?.toISOString();
+        if (startDate && targetCompletionDate && new Date(targetCompletionDate) < new Date(startDate)) {
+            throw new BadRequestException('Target completion date cannot be before the start date');
+        }
 
         return this.prisma.sga.update({
             where: { id: sgaId },
             data: {
                 title: dto.title,
                 problemDescription: dto.problemDescription,
-                startDate: new Date(dto.startDate),
-                targetCompletionDate: new Date(dto.targetCompletionDate),
+                startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+                targetCompletionDate: dto.targetCompletionDate ? new Date(dto.targetCompletionDate) : undefined,
                 mainDepartmentId: dto.mainDepartmentId,
                 workArea: dto.workArea,
                 beforeFileUrls: dto.beforeFileUrls ?? undefined,
@@ -467,7 +537,7 @@ export class SgaService {
 
     // Step 2 §4
     async updateTeam(sgaId: string, userId: string, dto: UpdateSgaTeamDto, organizationId: string) {
-        const ids = [...new Set([dto.ownerId, ...(dto.teamMemberIds ?? [])])];
+        const ids = [...new Set([dto.ownerId, ...(dto.teamMemberIds ?? [])].filter((id): id is string => !!id))];
         if (await this.prisma.employee.count({ where: { id: { in: ids }, organizationId } }) !== ids.length) {
             throw new BadRequestException('SGA team members must belong to this organization');
         }
@@ -541,9 +611,14 @@ export class SgaService {
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertDraftEditable(sga, employee.id);
 
-        if (!sga.startingReason || !sga.title || !sga.problemDescription || !sga.startDate
-            || !sga.targetCompletionDate || !sga.mainDepartmentId || !sga.ownerId || !sga.meetingFrequency) {
-            throw new BadRequestException('Complete steps 1 and 2 before submitting for HOD approval');
+        const missing = getDraftMissingItems(sga);
+        if (missing.length) {
+            throw new BadRequestException({
+                statusCode: 400,
+                error: 'Bad Request',
+                message: 'Complete the missing items before submitting for HOD approval',
+                missing,
+            });
         }
 
         const updated = await this.prisma.$transaction(async (tx) => {
@@ -562,7 +637,8 @@ export class SgaService {
             return result;
         });
 
-        const hodIds = await this.findDepartmentHODs(sga.mainDepartmentId, organizationId);
+        // getDraftMissingItems guarantees a main department at this point
+        const hodIds = await this.findDepartmentHODs(sga.mainDepartmentId!, organizationId);
         await this.notifications.createMany(
             hodIds
                 .filter((id) => id !== employee.id)

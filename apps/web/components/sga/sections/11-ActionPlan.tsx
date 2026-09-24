@@ -102,7 +102,7 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
         {rows.map((row, index) => (
           <div key={index} className="border border-slate-200 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-blue-600">Action {index + 1}</p>
+              <p className="text-xs font-semibold text-indigo-600">Action {index + 1}</p>
               {editable && (
                 <button type="button" onClick={() => removeRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
                   <Trash2 className="h-4 w-4" />
@@ -116,7 +116,7 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
                 value={row.confirmedRootCause}
                 disabled={!editable}
                 onChange={(e) => updateRow(index, { confirmedRootCause: e.target.value })}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
             <div>
@@ -126,7 +126,7 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
                 value={row.improvementAction}
                 disabled={!editable}
                 onChange={(e) => updateRow(index, { improvementAction: e.target.value })}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -136,7 +136,7 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
                   value={row.responsiblePersonId ?? ""}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { responsiblePersonId: e.target.value || undefined })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 >
                   <option value="">Unassigned</option>
                   {personOptions.map((p) => (
@@ -153,7 +153,7 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
                   value={row.dueDate ?? ""}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { dueDate: e.target.value || undefined })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
             </div>
@@ -163,7 +163,7 @@ const ActionPlanSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function
           <button
             type="button"
             onClick={addRow}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" /> Add action item
           </button>

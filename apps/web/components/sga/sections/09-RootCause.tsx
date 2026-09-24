@@ -207,7 +207,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                   checked={checked}
                   disabled={!editable}
                   onChange={() => toggleTool(t.value)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
                 />
                 <span>{t.label}</span>
               </label>
@@ -239,12 +239,12 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
             </div>
             <div className="border border-slate-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-blue-600">{FISHBONE_CATEGORY_LABELS[activeFishboneTab]}</p>
+                <p className="text-xs font-semibold text-indigo-600">{FISHBONE_CATEGORY_LABELS[activeFishboneTab]}</p>
                 {editable && (
                   <button
                     type="button"
                     onClick={() => addCause(activeFishboneTab)}
-                    className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors"
+                    className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-indigo-600 transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add Possible Cause
                   </button>
@@ -261,7 +261,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                         value={row.description}
                         disabled={!editable}
                         onChange={(e) => updateCause(row.idx, e.target.value)}
-                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                       />
                       {editable && (
                         <button type="button" onClick={() => removeCause(row.idx)} className="text-slate-400 hover:text-red-500 transition-colors">
@@ -297,7 +297,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                     disabled={!editable}
                     onChange={(e) => updateChain(chainIndex, { causeToInvestigate: e.target.value })}
                     placeholder="Select a 5M cause or enter another cause"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                   />
                   <datalist id={`fishbone-causes-${chainIndex}`}>
                     {fishboneCauses.map((c, i) => (
@@ -311,7 +311,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                     value={chain.linked5mCategory}
                     disabled={!editable}
                     onChange={(e) => updateChain(chainIndex, { linked5mCategory: e.target.value as SgaFishboneCategory })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                   >
                     <option value="">Not Linked / Standalone Why-Why</option>
                     {FISHBONE_CATEGORIES.map((cat) => (
@@ -329,7 +329,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                       disabled={!editable}
                       onChange={(e) => updateWhy(chainIndex, whyIndex, e.target.value)}
                       placeholder={`Why #${whyIndex + 1}`}
-                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                     />
                     {editable && (
                       <button type="button" onClick={() => removeWhy(chainIndex, whyIndex)} className="text-slate-400 hover:text-red-500 transition-colors">
@@ -342,7 +342,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                   <button
                     type="button"
                     onClick={() => addWhy(chainIndex)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" /> Ask Why
                   </button>
@@ -354,7 +354,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                     value={chain.evidence}
                     disabled={!editable}
                     onChange={(e) => updateChain(chainIndex, { evidence: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
                   />
                 </div>
                 <div>
@@ -363,7 +363,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                     value={chain.finalDecision}
                     disabled={!editable}
                     onChange={(e) => updateChain(chainIndex, { finalDecision: e.target.value as SgaWhyWhyDecision })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                   >
                     {WHY_WHY_DECISION_OPTIONS.map((d) => (
                       <option key={d.value} value={d.value}>
@@ -378,7 +378,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
               <button
                 type="button"
                 onClick={addChain}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" /> Start Another Why-Why Chain
               </button>
@@ -398,7 +398,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                 value={otherAnalysisNotes}
                 disabled={!editable}
                 onChange={(e) => setOtherAnalysisNotes(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
               />
             </div>
             <div>

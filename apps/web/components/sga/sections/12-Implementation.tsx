@@ -93,7 +93,7 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
             value={implementationStatus}
             disabled={!editable}
             onChange={(e) => setImplementationStatus(e.target.value as SgaImplementationStatus)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
             {IMPLEMENTATION_STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>
@@ -112,7 +112,7 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
             disabled={!editable}
             onChange={(e) => setImplementationSummary(e.target.value)}
             placeholder="Describe what was implemented..."
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
           />
         </div>
         <div>
@@ -142,7 +142,7 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
                 type="button"
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
-                className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all disabled:opacity-50"
+                className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all disabled:opacity-50"
               >
                 {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
                 {uploading ? "Uploading..." : "Add file"}
@@ -163,7 +163,7 @@ const ImplementationSection = forwardRef<SgaSectionHandle, SgaSectionProps>(func
               value={actualImplementationCost}
               disabled={!editable}
               onChange={(e) => setActualImplementationCost(e.target.value)}
-              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
             <CurrencySelect value={actualImplementationCostCurrency} onChange={setActualImplementationCostCurrency} disabled={!editable} className="w-32 shrink-0" />
           </div>

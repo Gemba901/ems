@@ -36,12 +36,34 @@ export class CreateSgaDto {
   @IsOptional()
   @IsEnum(SgaStartingReason)
   startingReason?: SgaStartingReason;
+
+  @IsOptional()
+  @IsString()
+  problemDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  mainDepartmentId?: string;
+
+  @IsOptional()
+  @IsString()
+  workArea?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  beforeFileUrls?: string[];
 }
 
 // Step 1 §1: update reason on an existing draft
 export class UpdateSgaReasonDto {
+  @IsOptional()
   @IsEnum(SgaStartingReason)
-  startingReason!: SgaStartingReason;
+  startingReason?: SgaStartingReason;
 
   @ValidateIf((o) => o.startingReason === SgaStartingReason.OTHER)
   @IsString()
@@ -61,19 +83,24 @@ export class UpdateSgaReasonDto {
 }
 
 // Step 1 §2: SGA information and problem
+// Fields are optional so a partial draft can be saved; completeness is checked on submit.
 export class UpdateSgaInfoDto {
+  @IsOptional()
   @IsString()
   @MinLength(5, { message: "Title must be at least 5 characters" })
-  title!: string;
+  title?: string;
 
+  @IsOptional()
   @IsString()
-  problemDescription!: string;
+  problemDescription?: string;
 
+  @IsOptional()
   @IsDateString()
-  startDate!: string;
+  startDate?: string;
 
+  @IsOptional()
   @IsDateString()
-  targetCompletionDate!: string;
+  targetCompletionDate?: string;
 
   @IsOptional()
   @IsString()
@@ -182,8 +209,9 @@ export class UpdateSgaImpactDto {
 
 // Step 2 §4: team
 export class UpdateSgaTeamDto {
+  @IsOptional()
   @IsString()
-  ownerId!: string;
+  ownerId?: string;
 
   @IsOptional()
   @IsArray()
@@ -233,11 +261,13 @@ export class UpdateSgaResourcesDto {
   @IsString()
   expectedBenefitSummary?: string;
 
+  @IsOptional()
   @IsNumber()
-  approximateInvestmentAmount!: number;
+  approximateInvestmentAmount?: number;
 
+  @ValidateIf((o) => o.approximateInvestmentAmount != null)
   @IsString()
-  approximateInvestmentCurrency!: string;
+  approximateInvestmentCurrency?: string;
 }
 
 // Step 2 §6: HOD decision

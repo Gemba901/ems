@@ -8,9 +8,25 @@ function authHeaders(token: string) {
   };
 }
 
+export interface SgaDraftMissingItem {
+  key: string;
+  label: string;
+  step: number;
+}
+
+// Thrown when submit-for-HOD-approval is refused because the draft is incomplete.
+export class SgaIncompleteError extends Error {
+  constructor(message: string, public missing: SgaDraftMissingItem[]) {
+    super(message);
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
+    if (Array.isArray(error.missing)) {
+      throw new SgaIncompleteError(error.message, error.missing);
+    }
     throw new Error(error.message || `Request failed with status ${res.status}`);
   }
   return res.json();
@@ -337,11 +353,16 @@ export interface Sga {
 
 // Step 1 §1
 export interface CreateSgaPayload {
+  problemDescription?: string;
+  title?: string;
   startingReason?: SgaStartingReason;
+  mainDepartmentId?: string;
+  workArea?: string;
+  beforeFileUrls?: string[];
 }
 
 export interface UpdateSgaReasonPayload {
-  startingReason: SgaStartingReason;
+  startingReason?: SgaStartingReason;
   startingReasonOther?: string;
   referenceApplicability?: SgaReferenceApplicability;
   referenceType?: SgaReferenceType;
@@ -350,10 +371,10 @@ export interface UpdateSgaReasonPayload {
 
 // Step 1 §2
 export interface UpdateSgaInfoPayload {
-  title: string;
-  problemDescription: string;
-  startDate: string;
-  targetCompletionDate: string;
+  title?: string;
+  problemDescription?: string;
+  startDate?: string;
+  targetCompletionDate?: string;
   mainDepartmentId?: string;
   otherDepartmentIds?: string[];
   workArea?: string;
@@ -399,7 +420,7 @@ export interface SgaTeamCandidate {
 }
 
 export interface UpdateSgaTeamPayload {
-  ownerId: string;
+  ownerId?: string;
   teamMemberIds?: string[];
 }
 
@@ -418,8 +439,8 @@ export interface UpdateSgaMeetingPlanPayload {
 export interface UpdateSgaResourcesPayload {
   requiredResources?: string;
   expectedBenefitSummary?: string;
-  approximateInvestmentAmount: number;
-  approximateInvestmentCurrency: string;
+  approximateInvestmentAmount?: number;
+  approximateInvestmentCurrency?: string;
 }
 
 export interface SubmitSgaHodApprovalPayload {
@@ -565,6 +586,14 @@ export const SgaService = {
       body: JSON.stringify(data),
     }, token);
     return handleResponse<Sga>(res);
+  },
+
+  async delete(id: string, token: string): Promise<{ id: string }> {
+    const res = await apiClient(`${API_URL}/sga/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<{ id: string }>(res);
   },
 
   async getAll(token: string): Promise<Sga[]> {

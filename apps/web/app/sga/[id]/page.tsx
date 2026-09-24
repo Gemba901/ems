@@ -33,7 +33,7 @@ export default function SgaDetailPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 mx-auto">
+      <div className="mx-auto">
         <Link href="/sga" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back to SGAs
         </Link>

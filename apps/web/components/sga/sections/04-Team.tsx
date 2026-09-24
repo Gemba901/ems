@@ -4,13 +4,13 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { SgaService } from "@/services/sga.service";
-import { SectionLabel } from "@/components/sga/sga-ui";
+import { HelpText, SectionLabel } from "@/components/sga/sga-ui";
 import { SgaSectionHandle, SgaSectionProps } from "./types";
 
 const MAX_TEAM_MEMBERS = 5;
 
 interface TeamSectionProps extends SgaSectionProps {
-  // Department IDs picked in Step 1.2 but not necessarily saved yet — takes precedence
+  // Department IDs picked in the Problem step but not necessarily saved yet — takes precedence
   // over the SGA's persisted departments so candidates load without a save round-trip.
   pendingDepartmentIds?: { main: string; other: string[] };
 }
@@ -52,15 +52,17 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (!ownerId) throw new Error("Please select an SGA owner.");
       if (teamMemberIds.length > MAX_TEAM_MEMBERS) throw new Error(`You can select up to ${MAX_TEAM_MEMBERS} team members.`);
       return SgaService.updateTeam(
         sga.id,
-        { ownerId, teamMemberIds: teamMemberIds.length ? teamMemberIds : undefined },
+        { ownerId: ownerId || undefined, teamMemberIds: teamMemberIds.length ? teamMemberIds : undefined },
         token,
       );
     },
-    onSuccess: (updated) => onSaved(updated),
+    onSuccess: (updated) => {
+      setError(null);
+      onSaved(updated);
+    },
     onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
@@ -81,8 +83,9 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            SGA Owner <span className="text-red-500">*</span>
+            SGA leader <span className="text-red-500">*</span>
           </label>
+          <HelpText>Runs the team meetings and owns the actions. Can be you.</HelpText>
           <select
             value={ownerId}
             disabled={!editable}
@@ -90,9 +93,9 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
               setOwnerId(e.target.value);
               setTeamMemberIds((prev) => prev.filter((id) => id !== e.target.value));
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
           >
-            <option value="">Select an owner...</option>
+            <option value="">Select a leader...</option>
             {ownerOptions.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.firstName} {o.lastName}
@@ -113,7 +116,7 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
                 ? "No team members selected."
                 : mainDepartmentId
                 ? "No other employees in the involved departments yet."
-                : "Select a main department in Step 1.2 first."}
+                : "Choose the main department in the Problem step first."}
             </p>
           ) : (
             <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-100">
@@ -132,7 +135,7 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
                       checked={checked}
                       disabled={disabled}
                       onChange={() => toggleTeamMember(c.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
                     />
                     <span>
                       {c.firstName} {c.lastName}

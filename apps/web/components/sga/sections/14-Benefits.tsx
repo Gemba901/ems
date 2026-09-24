@@ -94,7 +94,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
             {qcdsmtBenefits.map((row, index) => (
               <div key={row.category} className="border border-slate-200 rounded-lg p-4 space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-blue-600">{QCDSMT_LABELS[row.category]}</p>
+                  <p className="text-xs font-semibold text-indigo-600">{QCDSMT_LABELS[row.category]}</p>
                   {editable && (
                     <button type="button" onClick={() => removeBenefit(index)} className="text-slate-400 hover:text-red-500 transition-colors">
                       <Trash2 className="h-4 w-4" />
@@ -108,7 +108,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
                     value={row.whatWasAchieved}
                     disabled={!editable}
                     onChange={(e) => updateBenefit(index, e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                   />
                 </div>
               </div>
@@ -120,7 +120,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
                     key={c.value}
                     type="button"
                     onClick={() => addBenefit(c.value)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" /> {c.label}
                   </button>
@@ -139,7 +139,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
               value={wasteReductionAchieved}
               disabled={!editable}
               onChange={(e) => setWasteReductionAchieved(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
           <div>
@@ -153,7 +153,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
               value={financialLossBeforeImprovement}
               disabled={!editable}
               onChange={(e) => setFinancialLossBeforeImprovement(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
           <div>
@@ -167,7 +167,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
               value={verifiedGrossBenefit}
               disabled={!editable}
               onChange={(e) => setVerifiedGrossBenefit(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
           <div>
@@ -178,7 +178,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
               value={benefitPeriod}
               disabled={!editable}
               onChange={(e) => setBenefitPeriod(e.target.value as SgaBenefitPeriod)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             >
               <option value="">Select...</option>
               {BENEFIT_PERIOD_OPTIONS.map((p) => (
@@ -197,7 +197,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
               value={effectivenessConfirmationPeriod}
               disabled={!editable}
               onChange={(e) => setEffectivenessConfirmationPeriod(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
             />
           </div>
         </div>
@@ -219,7 +219,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
                 checked={value as boolean}
                 disabled={!editable}
                 onChange={(e) => (setter as (v: boolean) => void)(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
               />
               <span className="text-xs font-medium">{label as string}</span>
             </label>
@@ -234,7 +234,7 @@ const BenefitsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function B
             value={lessonsLearned}
             disabled={!editable}
             onChange={(e) => setLessonsLearned(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
           />
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}

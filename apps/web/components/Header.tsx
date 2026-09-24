@@ -83,6 +83,11 @@ const PAGE_TITLES: Record<string, string> = {
   "/dwms/actions/new": "New Work",
   "/dwms/settings": "DWMS Settings",
   "/docs/dwms": "Documentation",
+  "/sga": "Small Group Activities",
+  "/sga/all": "All SGAs",
+  "/sga/new": "New SGA",
+  "/sga/reports": "SGA Reports",
+  "/docs/sga": "Documentation",
   "/leave": "Leave Management",
   "/leave/apply": "Apply for Leave",
   "/leave/calendar": "Company Leave Calendar",
@@ -99,6 +104,8 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/leave/employees/")) return "Employee Leave Profile";
   if (pathname.startsWith("/dwms/alerts/")) return "Alert Details";
   if (pathname.startsWith("/docs/dwms/")) return "Documentation";
+  if (pathname.startsWith("/docs/sga/")) return "Documentation";
+  if (pathname.startsWith("/sga/")) return "SGA Details";
   if (pathname.startsWith("/dwms/activities/ingestions/")) return "Activity Import Details";
   if (pathname.startsWith("/dwms/")) return "Daily Work";
   if (pathname.startsWith("/sims/")) return "Suggestions";

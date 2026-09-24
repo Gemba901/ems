@@ -82,7 +82,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
         {rows.map((row, index) => (
           <div key={index} className="border border-slate-200 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-blue-600">Measure {index + 1}</p>
+              <p className="text-xs font-semibold text-indigo-600">Measure {index + 1}</p>
               {editable && (
                 <button type="button" onClick={() => removeRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
                   <Trash2 className="h-4 w-4" />
@@ -96,7 +96,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
                 value={row.whatIsMeasured}
                 disabled={!editable}
                 onChange={(e) => updateRow(index, { whatIsMeasured: e.target.value })}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
               />
             </div>
             <div className="grid grid-cols-4 gap-3">
@@ -107,7 +107,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
                   value={row.baselineValue ?? ""}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { baselineValue: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
               <div>
@@ -117,17 +117,17 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
                   value={row.targetValue ?? ""}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { targetValue: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-blue-600 block mb-1">Final result</label>
+                <label className="text-xs font-medium text-indigo-600 block mb-1">Final result</label>
                 <input
                   type="text"
                   value={row.finalResultValue ?? ""}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { finalResultValue: e.target.value })}
-                  className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
               <div>
@@ -136,7 +136,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
                   value={row.unit}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { unit: e.target.value as SgaUnit })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 >
                   {UNIT_OPTIONS.map((u) => (
                     <option key={u.value} value={u.value}>
@@ -154,7 +154,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
                   value={row.otherUnitLabel ?? ""}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { otherUnitLabel: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
             )}
@@ -165,7 +165,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
                   value={row.linkedQcdsmt ?? ""}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { linkedQcdsmt: (e.target.value || undefined) as SgaQcdsmtCategory | undefined })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 >
                   <option value="">None</option>
                   {QCDSMT_VALUES.map((c) => (
@@ -181,7 +181,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
                   value={row.linkedWaste ?? ""}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { linkedWaste: (e.target.value || undefined) as SgaWaste | undefined })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
                 >
                   <option value="">None</option>
                   {WASTE_VALUES.map((w) => (
@@ -198,7 +198,7 @@ const ResultsSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Re
           <button
             type="button"
             onClick={addRow}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" /> Add measure
           </button>

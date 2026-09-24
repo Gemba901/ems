@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, Clock, Loader2, Save, Send, XCircle } from "lucide-react";
 import { Sga, SgaService, SgaStatus } from "@/services/sga.service";
@@ -17,6 +17,8 @@ import {
   SummaryPanel,
 } from "@/components/sga/sga-ui";
 import { getSgaGating, getStageStates, SgaAccessContext } from "@/components/sga/gating";
+import NextActionBanner from "@/components/sga/NextActionBanner";
+import SgaDraftWizard from "@/components/sga/SgaDraftWizard";
 
 import ReasonSection from "./sections/01-Reason";
 import InfoSection from "./sections/02-Info";
@@ -73,25 +75,11 @@ export default function SgaForm({
   const gating = getSgaGating(sga, ctx);
   const stageStates = getStageStates(sga);
 
-  const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
-  const [hodApprovalSubmitError, setHodApprovalSubmitError] = useState<string | null>(null);
   const [saveProgressError, setSaveProgressError] = useState<string | null>(null);
   const [verificationSubmitError, setVerificationSubmitError] = useState<string | null>(null);
-  const [pendingDepartmentIds, setPendingDepartmentIds] = useState<{ main: string; other: string[] }>({
-    main: sga.mainDepartmentId ?? "",
-    other: sga.otherDepartments.map((d) => d.id),
-  });
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [submittingForHodApproval, setSubmittingForHodApproval] = useState(false);
   const [savingProgress, setSavingProgress] = useState(false);
   const [submittingForVerification, setSubmittingForVerification] = useState(false);
 
-  const reasonRef = useRef<SgaSectionHandle>(null);
-  const infoRef = useRef<SgaSectionHandle>(null);
-  const impactRef = useRef<SgaSectionHandle>(null);
-  const teamRef = useRef<SgaSectionHandle>(null);
-  const meetingPlanRef = useRef<SgaSectionHandle>(null);
-  const resourcesRef = useRef<SgaSectionHandle>(null);
   const conditionRef = useRef<SgaSectionHandle>(null);
   const rootCauseRef = useRef<SgaSectionHandle>(null);
   const meetingReportsRef = useRef<SgaSectionHandle>(null);
@@ -101,7 +89,6 @@ export default function SgaForm({
   const benefitsRef = useRef<SgaSectionHandle>(null);
   const verifyingDepartmentRef = useRef<SgaSectionHandle>(null);
 
-  const draftRefs = [reasonRef, infoRef, impactRef, teamRef, meetingPlanRef, resourcesRef];
   const teamPhaseRefs = [
     meetingReportsRef,
     conditionRef,
@@ -113,7 +100,7 @@ export default function SgaForm({
     verifyingDepartmentRef,
   ];
 
-  const saveSections = async (refs: typeof draftRefs): Promise<boolean> => {
+  const saveSections = async (refs: typeof teamPhaseRefs): Promise<boolean> => {
     let allOk = true;
     for (const sectionRef of refs) {
       if (!sectionRef.current) continue;
@@ -121,40 +108,6 @@ export default function SgaForm({
       if (!ok) allOk = false;
     }
     return allOk;
-  };
-
-  const handleSaveDraft = async () => {
-    setSaveDraftError(null);
-    setSavingDraft(true);
-    try {
-      const ok = await saveSections(draftRefs);
-      if (!ok) setSaveDraftError("Some sections failed to save. Check the errors above and try again.");
-    } finally {
-      setSavingDraft(false);
-    }
-  };
-
-  const submitForHodApproval = useMutation({
-    mutationFn: () => SgaService.submitForHodApproval(sga.id, token),
-    onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setHodApprovalSubmitError(err instanceof Error ? err.message : "Failed to submit"),
-  });
-
-  const handleSubmitForHodApproval = async () => {
-    setHodApprovalSubmitError(null);
-    setSubmittingForHodApproval(true);
-    try {
-      const ok = await saveSections(draftRefs);
-      if (!ok) {
-        setHodApprovalSubmitError("Some sections failed to save. Check the errors above and try again.");
-        return;
-      }
-      await submitForHodApproval.mutateAsync();
-    } catch {
-      // handled by the mutation's onError
-    } finally {
-      setSubmittingForHodApproval(false);
-    }
   };
 
   const handleSaveProgress = async () => {
@@ -209,57 +162,24 @@ export default function SgaForm({
 
       <SgaProgress states={stageStates} />
 
+      <NextActionBanner sga={sga} ctx={ctx} gating={gating} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         <div className="lg:col-span-2 space-y-5">
-          <ReasonSection ref={reasonRef} sga={sga} access={gating.reason} token={token} onSaved={onSaved} />
-          <InfoSection
-            ref={infoRef}
-            sga={sga}
-            access={gating.info}
-            token={token}
-            onSaved={onSaved}
-            onDepartmentSelectionChange={(main, other) => setPendingDepartmentIds({ main, other })}
-          />
-          <ImpactSection ref={impactRef} sga={sga} access={gating.impact} token={token} onSaved={onSaved} />
-          <TeamSection
-            ref={teamRef}
-            sga={sga}
-            access={gating.team}
-            token={token}
-            onSaved={onSaved}
-            pendingDepartmentIds={pendingDepartmentIds}
-          />
-          <MeetingPlanSection ref={meetingPlanRef} sga={sga} access={gating.meetingPlan} token={token} onSaved={onSaved} />
-          <ResourcesSection ref={resourcesRef} sga={sga} access={gating.resources} token={token} onSaved={onSaved} />
-
-          {gating.reason.editable && (
-            <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-              {(saveDraftError || hodApprovalSubmitError) && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
-                  {saveDraftError || hodApprovalSubmitError}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  disabled={savingDraft || submittingForHodApproval}
-                  onClick={handleSaveDraft}
-                  className="flex items-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-                >
-                  {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save as Draft
-                </button>
-                <button
-                  type="button"
-                  disabled={savingDraft || submittingForHodApproval}
-                  onClick={handleSubmitForHodApproval}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-                >
-                  {submittingForHodApproval ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Submit for HOD Approval
-                </button>
-              </div>
-            </div>
+          {gating.reason.editable ? (
+            // The raiser fills the draft step by step; everyone else sees the read-only stacked view.
+            <Suspense fallback={null}>
+              <SgaDraftWizard sga={sga} gating={gating} token={token} onSaved={onSaved} />
+            </Suspense>
+          ) : (
+            <>
+              <ReasonSection sga={sga} access={gating.reason} token={token} onSaved={onSaved} />
+              <InfoSection sga={sga} access={gating.info} token={token} onSaved={onSaved} />
+              <ImpactSection sga={sga} access={gating.impact} token={token} onSaved={onSaved} />
+              <TeamSection sga={sga} access={gating.team} token={token} onSaved={onSaved} />
+              <MeetingPlanSection sga={sga} access={gating.meetingPlan} token={token} onSaved={onSaved} />
+              <ResourcesSection sga={sga} access={gating.resources} token={token} onSaved={onSaved} />
+            </>
           )}
 
           {gating.hodApproval.visible ? (
@@ -324,7 +244,7 @@ export default function SgaForm({
                     type="button"
                     disabled={savingProgress || submittingForVerification}
                     onClick={handleSubmitForVerification}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                    className="flex items-center gap-2 bg-[#52618a] hover:bg-[#445174] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
                   >
                     {submittingForVerification ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     Submit for Verification
@@ -395,7 +315,7 @@ export default function SgaForm({
           rows={[
             { label: "Department", value: sga.mainDepartment?.name ?? "No department" },
             { label: "Raised By", value: `${sga.employee.firstName} ${sga.employee.lastName}` },
-            { label: "SGA Owner", value: sga.owner ? `${sga.owner.firstName} ${sga.owner.lastName}` : "Not set" },
+            { label: "SGA Leader", value: sga.owner ? `${sga.owner.firstName} ${sga.owner.lastName}` : "Not set" },
             { label: "Raised Date", value: formatDate(sga.createdAt) },
             { label: "Status", value: <StatusBadge status={sga.status} /> },
           ]}

@@ -6,10 +6,14 @@
 2. **Company:** name, editable slug, short name, industry (including a free-text Other option), company email, phone, address and timezone. Slugs follow the existing 3–40 character hostname policy. The preview uses the server-configured tenant base domain, not a hardcoded production address. Name changes update the suggestion until the user edits the slug.
 3. **Verification:** email instructions and resend feedback, followed by password and confirmation with independent visibility toggles. Existing account holders explicitly choose to use their current password; verification does not reset that password. New passwords must be at least 12 characters and all passwords must fit bcrypt's 72-byte limit.
 4. **Provisioning:** the browser polls the capability-protected status endpoint without overlapping requests. The worker reports domain registration, HTTPS readiness and company/admin creation. No artificial percentages or separate database creation are shown. Retries remain bounded by the existing worker policy, with recoverable failures offering a manual retry.
-5. **Welcome:** a ready workspace shows BEES by GembaPMS branding and an explicit continue button. There is no automatic cross-domain login. The user signs in with their verified credentials.
+5. **Welcome:** a ready workspace shows its address and an explicit "Go to sign in" button. There is no automatic cross-domain login. The user signs in with their verified credentials.
 6. **Logo:** the welcome link adds `?welcome=1` to the company login. After successful administrator sign-in, a logo upload is offered using the existing authenticated upload, completion and company update endpoints. Users can skip and upload later in Company Settings. This flag grants no permissions; company context and role checks remain server-enforced. PNG/JPEG/WebP up to 5 MB are accepted by this UI.
 
 Company-host login collects an identifier and password in one submission. Email, international phone and employee-code modes remain supported. Central login retains its company-discovery/selection flow. Both use the same origin proxy; the organization is still resolved from the trusted hostname.
+
+## Visual design
+
+The shell is a split layout. The left navy panel (`#283548`) shows the Gemba gear mark (`public/gemba-mark-light.png`) with the BEES wordmark, a checklist of the four real setup steps, and the workspace address. On company sign-in, the panel shows "Signing in to" and the company address instead of the checklist. On narrow screens the panel becomes a top bar with the step or address. Brand colours are Tailwind tokens in `apps/web/app/globals.css` (`gemba-navy`, `gemba-lime`, `gemba-red`, plus `-ink` variants that stay readable as text on white). Primary buttons are navy, progress and success use lime, and errors use brand red. Copy stays operational: no slogans, taglines or decorative icon tiles.
 
 ## Data and rollout
 
@@ -23,7 +27,7 @@ Logo upload still depends on the existing S3 CORS policy allowing company origin
 
 | File | Responsibility |
 | --- | --- |
-| `apps/web/components/onboarding/OnboardingShell.tsx` | Shared navy/blue signup and company login shell, form fields, password visibility, notices. |
+| `apps/web/components/onboarding/OnboardingShell.tsx` | Navy brand panel with setup checklist and address preview; shared fields, buttons, notices and `StepHeading`. |
 | `apps/web/app/(auth)/signup/page.tsx` | Two-step administrator/company form and idempotent submission. |
 | `apps/web/lib/onboarding.ts` | Slug suggestions, industry options, bounded onboarding requests. |
 | `apps/web/app/(auth)/signup/verify/page.tsx` | Email, password, real progress, recovery and ready states. |

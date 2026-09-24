@@ -8,6 +8,8 @@ every endpoint and external setting.
 
 - [Operations and troubleshooting](operations.md): configuration, deployment,
   acceptance, incident diagnosis, and recovery.
+- [Security risks](security.md): open risks that must be fixed before public
+  signup, exposed endpoints, and the order to fix them in.
 - [Scaling roadmap](scaling.md): remaining production gates, capacity triggers,
   domain strategy, workers, data, storage, and ownership.
 - [File inventory](file-inventory.md): historical change set and file responsibilities.
@@ -93,6 +95,8 @@ origins but can still be the same browser *site*; origin checks remain necessary
 New uploads use private objects and company-owned metadata. Transaction-local
 PostgreSQL context supports forced RLS on `FileAsset`. **Business-table RLS is
 not complete**: business isolation still depends on guards and service filters.
+The legacy `/auth/*` routes do not check the proxy credential yet; see
+[security risks](security.md).
 Private new uploads do not automatically migrate old public URLs.
 
 ## Signup lifecycle

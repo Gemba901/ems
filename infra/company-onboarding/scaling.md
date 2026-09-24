@@ -32,7 +32,7 @@ Complete these before treating successful staging onboarding as production readi
 | Inventory/migrate legacy public files | API + storage | References migrated and checked before public access is closed |
 | Backup/restore and recovery procedure | Platform + database | Restore into isolated environment with outbound email/jobs disabled; agree and measure RPO/RTO |
 | SES production access, sender authentication and delivery events | Platform | Account/region quotas checked; bounce/complaint handling and notification ownership demonstrated |
-| Signup abuse controls and resource limits | API + security | Ingress controls tested, quotas reviewed, sensitive credentials absent from logs |
+| Signup abuse controls and resource limits ([security risks](security.md)) | API + security | Ingress controls tested, quotas reviewed, sensitive credentials absent from logs |
 | Monitoring and operator ownership | Platform | A controlled failed signup produces an actionable alert and documented recovery |
 
 The current SES client explicitly supplies access keys. Prefer an instance/task role

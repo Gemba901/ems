@@ -4,6 +4,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* GEMBA PMS logo colours. Lime and red are darkened for text on white. */
+@theme {
+  --color-gemba-navy: #283548;
+  --color-gemba-navy-deep: #1e2837;
+  --color-gemba-lime: #81bb28;
+  --color-gemba-lime-ink: #4a7512;
+  --color-gemba-red: #ed4a4a;
+  --color-gemba-red-ink: #b42828;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

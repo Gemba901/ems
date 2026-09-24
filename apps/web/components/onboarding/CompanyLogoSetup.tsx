@@ -5,7 +5,12 @@ import { TenantImage } from "@/components/files/TenantImage";
 import { AuthService } from "@/services/auth.service";
 import { uploadImage } from "@/services/uploads.service";
 import { useAuthStore } from "@/store/auth.store";
-import { Notice, buttonClass } from "./OnboardingShell";
+import {
+  Notice,
+  StepHeading,
+  buttonClass,
+  secondaryButtonClass,
+} from "./OnboardingShell";
 
 export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
   const { user, accessToken, setAuth } = useAuthStore();
@@ -42,18 +47,13 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
   }
   return (
     <>
-      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-blue-600">
-        The finishing touch
-      </p>
-      <h2 className="text-3xl font-semibold tracking-tight">
-        Put your name on it.
-      </h2>
-      <p className="mt-3 mb-7 leading-relaxed text-slate-500">
-        Add a logo for {user?.organizationName || "your company"} so your team
-        feels at home. You can also do this later in Company Settings.
-      </p>
-      <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-slate-300 bg-white p-8">
-        <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
+      <StepHeading title="Add your company logo">
+        It appears in the sidebar and on reports for{" "}
+        {user?.organizationName || "your company"}. You can change it later in
+        Company Settings.
+      </StepHeading>
+      <div className="flex items-center gap-5 rounded-lg border border-slate-200 p-5">
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50">
           {user?.organizationUrl ? (
             <TenantImage
               src={user.organizationUrl}
@@ -61,28 +61,26 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
               className="h-full w-full object-contain p-2"
             />
           ) : (
-            <ImagePlus size={36} className="text-blue-400" />
+            <ImagePlus size={26} className="text-slate-400" />
           )}
         </div>
-        <label
-          className={`${buttonClass} relative cursor-pointer focus-within:ring-4 focus-within:ring-blue-200`}
-        >
-          {busy ? (
-            <Loader2 size={18} className="animate-spin" />
-          ) : (
-            <ImagePlus size={18} />
-          )}
-          {busy ? "Saving logo…" : "Choose company logo"}
-          <input
-            type="file"
-            aria-label="Choose company logo"
-            accept="image/png,image/jpeg,image/webp"
-            disabled={busy}
-            onChange={upload}
-            className="absolute inset-0 w-full cursor-pointer opacity-0"
-          />
-        </label>
-        <p className="text-xs text-slate-500">PNG, JPG or WebP · Up to 5 MB</p>
+        <div className="space-y-2">
+          <label
+            className={`${secondaryButtonClass} relative cursor-pointer focus-within:ring-3 focus-within:ring-gemba-navy/20`}
+          >
+            {busy && <Loader2 size={17} className="animate-spin" />}
+            {busy ? "Saving logo…" : "Choose file"}
+            <input
+              type="file"
+              aria-label="Choose company logo"
+              accept="image/png,image/jpeg,image/webp"
+              disabled={busy}
+              onChange={upload}
+              className="absolute inset-0 w-full cursor-pointer opacity-0"
+            />
+          </label>
+          <p className="text-xs text-slate-500">PNG, JPG or WebP, up to 5 MB</p>
+        </div>
       </div>
       {error && (
         <div className="mt-5">
@@ -97,10 +95,10 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
       <button
         disabled={busy}
         onClick={onContinue}
-        className={`${buttonClass} mt-7 w-full`}
+        className={`${buttonClass} mt-8 w-full`}
       >
-        {saved ? "Enter your workspace" : "Skip for now & enter workspace"}
-        <ArrowRight size={18} />
+        {saved ? "Continue to workspace" : "Skip for now"}
+        <ArrowRight size={17} />
       </button>
     </>
   );

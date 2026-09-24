@@ -1,19 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Building2,
-  ImagePlus,
-  Loader2,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import {
   Field,
   Notice,
   OnboardingShell,
+  StepHeading,
   buttonClass,
   inputClass,
+  secondaryButtonClass,
 } from "@/components/onboarding/OnboardingShell";
 import {
   companySlug,
@@ -135,25 +131,27 @@ export default function SignupPage() {
       setBusy(false);
     }
   }
+  const port = workspace?.port ? `:${workspace.port}` : "";
+  const address =
+    form.slug && workspace ? `${form.slug}.${workspace.baseDomain}${port}` : "";
   return (
-    <OnboardingShell step={step}>
-      <div className="mb-8 flex items-center justify-between text-xs font-medium text-slate-500">
-        <span>STEP {step + 1} OF 4</span>
-        <span>
-          Already a member?{" "}
-          <Link href="/login" className="ml-1 text-blue-600 hover:underline">
-            Sign in
-          </Link>
-        </span>
-      </div>
-      <h2 tabIndex={-1} className="text-3xl font-semibold tracking-tight">
-        {step === 0 ? "Let's start with you." : "Make it your company's space."}
-      </h2>
-      <p className="mt-3 mb-8 leading-relaxed text-slate-500">
-        {step === 0
-          ? "You'll be the first administrator. Use your own email to verify and secure your account."
-          : "Tell us about your company and choose the address your team will use to sign in."}
+    <OnboardingShell step={step} address={address}>
+      <p className="mb-10 text-right text-sm text-slate-500">
+        Already have a workspace?{" "}
+        <Link
+          href="/login"
+          className="font-medium text-gemba-navy underline-offset-4 hover:underline"
+        >
+          Sign in
+        </Link>
       </p>
+      <StepHeading
+        title={step === 0 ? "Create your company workspace" : "Company details"}
+      >
+        {step === 0
+          ? "You'll be the workspace administrator. We'll send a verification link to this email."
+          : "These appear on your workspace. The address is what your team will use to sign in."}
+      </StepHeading>
       <form onSubmit={submit} className="space-y-5">
         {step === 0 ? (
           <>
@@ -174,7 +172,7 @@ export default function SignupPage() {
               />
             </div>
             <Field
-              label="Your work email"
+              label="Work email"
               {...field("email")}
               type="email"
               autoComplete="email"
@@ -182,7 +180,7 @@ export default function SignupPage() {
               hint="We'll send your verification link here."
             />
             <Field
-              label="Your phone number"
+              label="Phone number"
               {...field("phone")}
               type="tel"
               autoComplete="tel"
@@ -191,15 +189,11 @@ export default function SignupPage() {
               placeholder="+254712345678"
               hint="Include your country code, with no spaces."
             />
-            <Notice>
-              Your account will administer this workspace. You can invite your
-              team after setup.
-            </Notice>
           </>
         ) : (
           <>
             <Field
-              label="Organization name"
+              label="Company name"
               {...field("companyName")}
               minLength={2}
               maxLength={120}
@@ -213,7 +207,7 @@ export default function SignupPage() {
               }
             />
             <Field
-              label="Organization slug"
+              label="Workspace address"
               {...field("slug")}
               maxLength={40}
               minLength={3}
@@ -229,18 +223,12 @@ export default function SignupPage() {
                     .replace(/[^a-z0-9-]/g, ""),
                 }));
               }}
-              hint="3–40 lowercase letters, numbers or hyphens. You can edit the suggested address."
+              hint="3–40 lowercase letters, numbers or hyphens. Suggested from your company name."
             />
-            <div className="-mt-2 flex items-start gap-2 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
-              <Building2 className="mt-0.5 h-4 w-4 shrink-0" />
-              <div className="min-w-0">
-                <p className="text-xs text-blue-600">Your company address</p>
-                <p className="mt-1 break-all font-medium">
-                  {form.slug || "your-company"}.{workspace?.baseDomain || "…"}
-                  {workspace?.port ? `:${workspace.port}` : ""}
-                </p>
-              </div>
-            </div>
+            <p className="-mt-2 rounded-lg bg-slate-50 px-3 py-2.5 font-mono text-sm break-all text-slate-700 lg:hidden">
+              {form.slug || "your-company"}.{workspace?.baseDomain || "…"}
+              {port}
+            </p>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field
                 label="Company short name"
@@ -249,7 +237,7 @@ export default function SignupPage() {
                 placeholder="e.g. SFL"
                 pattern=".*\S.*"
               />
-              <label className="block space-y-2 text-sm font-medium text-slate-700">
+              <label className="block space-y-1.5 text-sm font-medium text-slate-700">
                 <span>Industry</span>
                 <select
                   required
@@ -306,16 +294,9 @@ export default function SignupPage() {
               maxLength={80}
               hint="Used for company schedules and reports, e.g. Africa/Nairobi."
             />
-            <div className="flex gap-3 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-              <ImagePlus className="h-5 w-5 shrink-0 text-blue-600" />
-              <p>
-                <span className="font-medium text-slate-800">
-                  Add your logo after sign-in.
-                </span>
-                <br />
-                We’ll offer a secure upload once your workspace is ready.
-              </p>
-            </div>
+            <p className="text-xs text-slate-500">
+              You can upload your company logo after your first sign-in.
+            </p>
           </>
         )}
         {error && <Notice error>{error}</Notice>}
@@ -324,7 +305,7 @@ export default function SignupPage() {
             Open the main BEES website to create a company workspace.
           </Notice>
         )}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex items-center gap-3 border-t border-slate-200 pt-6">
           {step === 1 && (
             <button
               type="button"
@@ -333,7 +314,7 @@ export default function SignupPage() {
                 setStep(0);
                 setError("");
               }}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm"
+              className={secondaryButtonClass}
             >
               <ArrowLeft size={16} /> Back
             </button>
@@ -346,7 +327,7 @@ export default function SignupPage() {
             {busy
               ? "Sending verification…"
               : step === 0
-                ? "Continue to company details"
+                ? "Continue"
                 : "Send verification email"}
             {!busy && <ArrowRight size={16} />}
           </button>

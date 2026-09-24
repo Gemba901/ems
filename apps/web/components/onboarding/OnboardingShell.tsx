@@ -1,85 +1,131 @@
 "use client";
 
 import { useState, type InputHTMLAttributes, type ReactNode } from "react";
-import { Check, Eye, EyeOff, Hexagon, ShieldCheck } from "lucide-react";
+import Image from "next/image";
+import { Check, Eye, EyeOff } from "lucide-react";
 
 export const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 disabled:bg-slate-50";
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-gemba-navy focus:ring-3 focus:ring-gemba-navy/10 disabled:bg-slate-50";
 export const buttonClass =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-gemba-navy px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gemba-navy-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gemba-navy disabled:cursor-not-allowed disabled:opacity-50";
+export const secondaryButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gemba-navy disabled:cursor-not-allowed disabled:opacity-50";
 
+const setupSteps = [
+  { label: "Administrator", detail: "Your name and contact details" },
+  { label: "Company", detail: "Profile and workspace address" },
+  { label: "Verify email", detail: "Open the link and set a password" },
+  { label: "Workspace ready", detail: "Sign in and add your logo" },
+];
+
+/**
+ * Split layout for signup, verification and company sign-in. The navy panel
+ * carries the brand, the real setup steps and the workspace address; `step`
+ * past the last index marks every step complete.
+ */
 export function OnboardingShell({
   children,
   step = 0,
   login = false,
+  address,
+  addressLabel = "Workspace address",
+  addressPlaceholder = "Chosen in the company step",
 }: {
   children: ReactNode;
   step?: number;
   login?: boolean;
+  address?: string;
+  addressLabel?: string;
+  addressPlaceholder?: string;
 }) {
+  const current = setupSteps[Math.min(step, setupSteps.length - 1)];
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 lg:grid lg:grid-cols-[minmax(300px,0.85fr)_minmax(0,1.4fr)]">
-      <aside className="relative overflow-hidden bg-slate-950 px-6 py-8 text-white sm:px-10 lg:flex lg:min-h-screen lg:flex-col lg:justify-between lg:px-12 lg:py-12">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -left-40 top-1/3 h-96 w-96 rounded-full bg-blue-600/20 blur-3xl"
-        />
-        <div className="relative flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600">
-            <Hexagon className="h-7 w-7" />
-          </span>
-          <div>
-            <p className="text-2xl font-bold tracking-tight">BEES</p>
-            <p className="text-xs text-slate-400">by GembaPMS</p>
+    <main className="min-h-screen bg-white text-slate-900 lg:grid lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
+      <aside className="bg-gemba-navy px-5 py-4 text-white sm:px-8 lg:flex lg:min-h-screen lg:flex-col lg:px-10 lg:py-10">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/gemba-mark-light.png"
+              alt=""
+              width={40}
+              height={40}
+              preload
+              className="h-9 w-9 lg:h-10 lg:w-10"
+            />
+            <div className="leading-none">
+              <p className="text-xl font-bold tracking-tight">BEES</p>
+              <p className="mt-1 text-xs text-slate-300">by Gemba PMS</p>
+            </div>
           </div>
+          <p className="truncate text-xs text-slate-300 lg:hidden">
+            {login
+              ? address
+              : step >= setupSteps.length
+                ? "Setup complete"
+                : `Step ${step + 1} of ${setupSteps.length} · ${current.label}`}
+          </p>
         </div>
-        <div className="relative mt-8 max-w-md lg:my-16">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-blue-300">
-            Better work. Together.
-          </p>
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-            A shared space.
-            <br />
-            <span className="text-blue-400">A stronger team.</span>
-          </h1>
-          <p className="mt-5 hidden leading-relaxed text-slate-400 sm:block">
-            Bring your people, daily work and continuous improvement together in
-            your company workspace.
-          </p>
-          {!login && (
-            <ol
-              aria-label="Setup steps"
-              className="mt-10 hidden space-y-5 lg:block"
-            >
-              {[
-                "Your details",
-                "Your company",
-                "Verify & secure",
-                "Welcome aboard",
-              ].map((label, i) => (
+
+        {!login && (
+          <ol aria-label="Setup steps" className="mt-14 hidden lg:block">
+            {setupSteps.map(({ label, detail }, i) => {
+              const done = i < step;
+              const active = i === step;
+              return (
                 <li
                   key={label}
-                  aria-current={i === step ? "step" : undefined}
-                  className={`flex items-center gap-3 text-sm ${i === step ? "text-white" : "text-slate-400"}`}
+                  aria-current={active ? "step" : undefined}
+                  className="relative flex gap-4 pb-8 last:pb-0"
                 >
+                  {i < setupSteps.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      className={`absolute top-8 left-[13px] h-[calc(100%-2.25rem)] w-px ${done ? "bg-gemba-lime" : "bg-white/15"}`}
+                    />
+                  )}
                   <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs ${i < step ? "border-blue-500 bg-blue-600 text-white" : i === step ? "border-blue-400 bg-blue-500/15 text-blue-300" : "border-slate-700"}`}
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                      done
+                        ? "bg-gemba-lime text-gemba-navy"
+                        : active
+                          ? "border-2 border-gemba-lime text-gemba-lime"
+                          : "border border-white/25 text-slate-400"
+                    }`}
                   >
-                    {i < step ? <Check className="h-4 w-4" /> : `0${i + 1}`}
+                    {done ? (
+                      <Check className="h-4 w-4" strokeWidth={3} />
+                    ) : (
+                      i + 1
+                    )}
                   </span>
-                  {label}
+                  <div className="pt-0.5">
+                    <p
+                      className={`text-sm font-medium ${done || active ? "text-white" : "text-slate-400"}`}
+                    >
+                      {label}
+                      {done && <span className="sr-only"> (complete)</span>}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-400">{detail}</p>
+                  </div>
                 </li>
-              ))}
-            </ol>
-          )}
-        </div>
-        <p className="relative mt-8 hidden items-center gap-2 text-xs text-slate-400 lg:flex">
-          <ShieldCheck className="h-4 w-4 text-blue-400" /> Your company. Your
-          dedicated workspace.
-        </p>
+              );
+            })}
+          </ol>
+        )}
+
+        {(address || !login) && (
+          <div className="mt-auto hidden border-t border-white/10 pt-6 lg:block">
+            <p className="text-xs text-slate-400">{addressLabel}</p>
+            <p
+              className={`mt-1.5 font-mono text-sm break-all ${address ? "text-white" : "text-slate-500"}`}
+            >
+              {address || addressPlaceholder}
+            </p>
+          </div>
+        )}
       </aside>
-      <section className="flex min-w-0 items-center justify-center px-5 py-10 sm:px-10 lg:py-14">
-        <div className="w-full max-w-xl">{children}</div>
+      <section className="flex min-w-0 justify-center px-5 py-10 sm:px-10 lg:items-center lg:py-16">
+        <div className="w-full max-w-lg">{children}</div>
       </section>
     </main>
   );
@@ -91,7 +137,7 @@ export function Field({
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   return (
-    <label className="block space-y-2 text-sm font-medium text-slate-700">
+    <label className="block space-y-1.5 text-sm font-medium text-slate-700">
       <span>{label}</span>
       <input {...props} className={`${inputClass} ${props.className ?? ""}`} />
       {hint && (
@@ -109,22 +155,22 @@ export function PasswordField({
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
   const [visible, setVisible] = useState(false);
   return (
-    <label className="block space-y-2 text-sm font-medium text-slate-700">
+    <label className="block space-y-1.5 text-sm font-medium text-slate-700">
       <span>{label}</span>
       <span className="relative block">
         <input
           {...props}
           type={visible ? "text" : "password"}
-          className={`${inputClass} pr-12`}
+          className={`${inputClass} pr-11`}
         />
         <button
           type="button"
           aria-label={`${visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
           aria-pressed={visible}
           onClick={() => setVisible(!visible)}
-          className="absolute inset-y-0 right-0 px-4 text-slate-500 hover:text-blue-600"
+          className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-gemba-navy"
         >
-          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+          {visible ? <EyeOff size={17} /> : <Eye size={17} />}
         </button>
       </span>
     </label>
@@ -141,9 +187,34 @@ export function Notice({
   return (
     <div
       role={error ? "alert" : "status"}
-      className={`rounded-xl border p-4 text-sm leading-relaxed ${error ? "border-red-200 bg-red-50 text-red-700" : "border-blue-100 bg-blue-50 text-blue-800"}`}
+      className={`rounded-lg border-l-3 px-4 py-3 text-sm leading-relaxed ${error ? "border-gemba-red bg-red-50 text-gemba-red-ink" : "border-gemba-navy/40 bg-slate-50 text-slate-700"}`}
     >
       {children}
+    </div>
+  );
+}
+
+/** Page heading and one line of plain context under it. */
+export function StepHeading({
+  title,
+  children,
+}: {
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="mb-8">
+      <h1
+        tabIndex={-1}
+        className="text-2xl font-semibold tracking-tight text-slate-900"
+      >
+        {title}
+      </h1>
+      {children && (
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          {children}
+        </p>
+      )}
     </div>
   );
 }

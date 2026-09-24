@@ -1,21 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowRight,
-  Check,
-  CheckCircle2,
-  Globe2,
-  Loader2,
-  MailCheck,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
+import { ArrowRight, Check, Loader2 } from "lucide-react";
 import {
   Notice,
   OnboardingShell,
   PasswordField,
+  StepHeading,
   buttonClass,
+  secondaryButtonClass,
 } from "@/components/onboarding/OnboardingShell";
 import { onboardingRequest } from "@/lib/onboarding";
 
@@ -29,27 +22,9 @@ type Progress = {
   canRetry?: boolean;
 };
 const stages = [
-  {
-    key: "REGISTERING_DOMAIN",
-    title: "Connect your company address",
-    description:
-      "Registering the subdomain and checking its connection to your workspace.",
-    icon: Globe2,
-  },
-  {
-    key: "CHECKING_HTTPS",
-    title: "Check secure access",
-    description:
-      "Checking that your workspace sign-in page is available over HTTPS.",
-    icon: ShieldCheck,
-  },
-  {
-    key: "CREATING_WORKSPACE",
-    title: "Prepare your team workspace",
-    description:
-      "Saving your company profile, creating the initial administrator and enabling your assigned modules.",
-    icon: Users,
-  },
+  { key: "REGISTERING_DOMAIN", title: "Register workspace address" },
+  { key: "CHECKING_HTTPS", title: "Check secure (HTTPS) access" },
+  { key: "CREATING_WORKSPACE", title: "Create workspace and administrator" },
 ];
 function savedAccess(key: string): Access | null {
   try {
@@ -210,30 +185,33 @@ export default function VerifySignupPage() {
     (stage) => stage.key === data.provisioningStage,
   );
   const continueUrl = data.workspaceUrl ? `${data.workspaceUrl}?welcome=1` : "";
+  const host = data.workspaceUrl
+    ?.replace(/^https?:\/\//, "")
+    .replace(/\/login$/, "");
+  const company = data.companyName || "your company";
   return (
-    <OnboardingShell step={ready ? 3 : 2}>
+    <OnboardingShell
+      step={ready ? 4 : 2}
+      address={host}
+      addressPlaceholder={
+        data.companyName ? `Being prepared for ${data.companyName}` : undefined
+      }
+    >
       {(!loaded || (progress && !data.status)) && (
-        <div className="flex items-center gap-3 text-slate-500" role="status">
-          <Loader2 className="animate-spin" /> Loading your signup…
+        <div
+          className="flex items-center gap-3 text-sm text-slate-500"
+          role="status"
+        >
+          <Loader2 size={18} className="animate-spin" /> Loading your signup…
         </div>
       )}
       {verification && (
         <>
-          <span className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-            <ShieldCheck size={28} />
-          </span>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-blue-600">
-            Verify & secure
-          </p>
-          <h2 className="text-3xl font-semibold tracking-tight">
-            One last step to make it yours.
-          </h2>
-          <p className="mt-3 mb-7 leading-relaxed text-slate-500">
-            Secure your administrator account to confirm your email and start
-            creating your company workspace.
-          </p>
+          <StepHeading title="Set your password">
+            This confirms your email and starts creating your workspace.
+          </StepHeading>
           <form onSubmit={verify} className="space-y-5">
-            <label className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 text-sm text-slate-600">
+            <label className="flex items-start gap-3 rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={existingAccount}
@@ -241,9 +219,14 @@ export default function VerifySignupPage() {
                   setExistingAccount(e.target.checked);
                   setError("");
                 }}
-                className="h-4 w-4 accent-blue-600"
-              />{" "}
-              I already have a GembaPMS account
+                className="mt-0.5 h-4 w-4 accent-gemba-navy"
+              />
+              <span>
+                I already have a GembaPMS account
+                <span className="block text-xs text-slate-500">
+                  Link this workspace to it instead of creating a new password.
+                </span>
+              </span>
             </label>
             <PasswordField
               key={String(existingAccount)}
@@ -272,202 +255,175 @@ export default function VerifySignupPage() {
             />
             <p className="text-xs leading-relaxed text-slate-500">
               {existingAccount
-                ? "Use your current GembaPMS password to link this workspace to your existing account. Your password won't be changed."
-                : "Use at least 12 characters. A longer phrase with a mix of characters is easier to remember and harder to guess."}
+                ? "Your current password stays the same."
+                : "At least 12 characters. A short phrase is easier to remember and harder to guess."}
             </p>
             <button disabled={busy} className={`${buttonClass} w-full`}>
-              {busy ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <ArrowRight size={18} />
-              )}
-              {busy ? "Verifying your account…" : "Verify & create workspace"}
+              {busy && <Loader2 size={17} className="animate-spin" />}
+              {busy ? "Verifying…" : "Verify and create workspace"}
             </button>
           </form>
         </>
       )}
       {data.status === "PENDING_VERIFICATION" && (
         <>
-          <span className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-            <MailCheck size={32} />
-          </span>
-          <h2 className="text-3xl font-semibold tracking-tight">
-            Check your inbox.
-          </h2>
-          <p className="mt-4 leading-relaxed text-slate-500">
-            We’ve queued a verification link for your administrator email. Open
-            it to secure your account and finish setting up{" "}
-            {data.companyName || "your company"}.
-          </p>
-          <div className="my-7 rounded-2xl border border-slate-200 bg-white p-5 text-sm leading-relaxed text-slate-600">
-            The link expires after 30 minutes. If it hasn’t arrived, check your
-            spam folder. Keep this page open to follow your progress.
+          <StepHeading title="Verify your email">
+            We sent a verification link to your administrator email. Open it to
+            finish setting up {company}.
+          </StepHeading>
+          <ul className="mb-8 space-y-2 text-sm text-slate-600">
+            <li>The link expires after 30 minutes.</li>
+            <li>If it hasn&apos;t arrived, check your spam folder.</li>
+            <li>You can keep this page open to follow progress.</li>
+          </ul>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-slate-200 pt-6">
+            <button
+              disabled={busy}
+              onClick={() => void action("resend")}
+              className={secondaryButtonClass}
+            >
+              {busy ? "Sending…" : "Resend email"}
+            </button>
+            <Link
+              href="/signup"
+              className="text-sm text-slate-500 underline-offset-4 hover:text-gemba-navy hover:underline"
+            >
+              Wrong details? Start again
+            </Link>
           </div>
-          <button
-            disabled={busy}
-            onClick={() => void action("resend")}
-            className={buttonClass}
-          >
-            {busy ? "Requesting email…" : "Resend verification email"}
-          </button>
-          <Link
-            href="/signup"
-            className="mt-5 block text-sm text-slate-500 hover:text-blue-600"
-          >
-            Entered the wrong details? Start again
-          </Link>
         </>
       )}
       {data.status === "PROVISIONING" && (
         <>
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-            <Loader2 size={30} className="motion-safe:animate-spin" />
-          </div>
-          <h2 className="text-3xl font-semibold tracking-tight">
-            Making room for your team.
-          </h2>
-          <p className="mt-3 text-slate-500">
-            {data.companyName || "Your company"} is on its way. We’ll let you
-            know when everything is ready.
-          </p>
-          <ol className="my-8 space-y-3" aria-label="Workspace setup progress">
-            {stages.map(({ key, title, description, icon: Icon }, index) => {
+          <StepHeading title={`Setting up ${host || company}`}>
+            Your email is verified. This usually takes a few minutes.
+          </StepHeading>
+          <ol
+            className="mb-8 divide-y divide-slate-200 border-y border-slate-200"
+            aria-label="Workspace setup progress"
+          >
+            {stages.map(({ key, title }, index) => {
               const complete = stageIndex > index;
               const active = stageIndex === index;
               return (
                 <li
                   key={key}
                   aria-current={active ? "step" : undefined}
-                  className={`flex gap-4 rounded-2xl border p-5 ${active ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}
+                  className="flex items-center gap-3 py-3.5 text-sm"
                 >
-                  <span
-                    className={`mt-0.5 ${complete ? "text-emerald-600" : active ? "text-blue-600" : "text-slate-400"}`}
-                  >
-                    {complete ? <Check size={22} /> : <Icon size={22} />}
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                    {complete ? (
+                      <Check
+                        size={17}
+                        strokeWidth={3}
+                        className="text-gemba-lime-ink"
+                      />
+                    ) : active ? (
+                      <Loader2
+                        size={17}
+                        className="text-gemba-navy motion-safe:animate-spin"
+                      />
+                    ) : (
+                      <span className="h-2 w-2 rounded-full bg-slate-300" />
+                    )}
                   </span>
-                  <div>
-                    <p className="text-sm font-semibold">
-                      {title}
-                      <span className="ml-2 text-xs font-normal text-slate-500">
-                        {complete
-                          ? "Complete"
-                          : active
-                            ? "In progress"
-                            : "Waiting"}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-500">
-                      {description}
-                    </p>
-                  </div>
+                  <span
+                    className={`flex-1 ${complete || active ? "text-slate-900" : "text-slate-400"}`}
+                  >
+                    {title}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {complete ? "Done" : active ? "In progress" : "Waiting"}
+                  </span>
                 </li>
               );
             })}
           </ol>
           <p role="status" className="text-sm leading-relaxed text-slate-500">
             {data.retryScheduled
-              ? "Your company address is still being prepared. An automatic retry is scheduled; you don't need to submit again."
+              ? "The address isn't reachable yet. An automatic retry is scheduled; you don't need to submit again."
               : stageIndex < 0
-                ? "Your email is verified. Waiting for workspace setup to begin…"
+                ? "Waiting for setup to start…"
                 : slow
-                  ? "This is taking a little longer. We're still checking readiness; your setup is saved."
-                  : "Setup continues safely if you leave this page. We’ll also email you when it's ready."}
+                  ? "This is taking longer than usual. Your setup is saved and we're still checking."
+                  : "You can leave this page. We'll email you when it's ready."}
           </p>
         </>
       )}
       {ready && (
         <>
-          <span className="mb-7 flex h-20 w-20 items-center justify-center rounded-3xl bg-emerald-100 text-emerald-600">
-            <CheckCircle2 size={42} />
-          </span>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-blue-600">
-            Your next chapter starts here
-          </p>
-          <h2 className="text-4xl font-semibold tracking-tight">
-            Welcome to BEES<span className="text-blue-600">.</span>
-          </h2>
-          <p className="mt-2 text-sm font-medium text-slate-400">by GembaPMS</p>
-          <p className="mt-5 text-lg leading-relaxed text-slate-600">
-            {data.companyName || "Your company"} now has a space to work,
-            improve and grow together.
-          </p>
-          <div className="my-7 rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-xs uppercase tracking-wider text-slate-400">
-              Your workspace
+          <StepHeading title="Your workspace is ready">
+            Sign in with your administrator email and password. You&apos;ll be
+            offered a logo upload on the first sign-in.
+          </StepHeading>
+          <div className="mb-8 rounded-lg border border-slate-200 px-4 py-3">
+            <p className="text-xs text-slate-500">
+              {data.companyName || "Workspace"}
             </p>
-            <p className="mt-2 break-all text-sm font-medium text-blue-700">
-              {data.workspaceUrl
-                ?.replace(/^https?:\/\//, "")
-                .replace(/\/login$/, "")}
-            </p>
-            <p className="mt-4 text-sm leading-relaxed text-slate-500">
-              Sign in with your administrator credentials. Then add your company
-              logo and make yourself at home.
+            <p className="mt-1 flex items-center gap-2 font-mono text-sm break-all text-slate-900">
+              <span
+                aria-hidden="true"
+                className="h-2 w-2 shrink-0 rounded-full bg-gemba-lime"
+              />
+              {host}
             </p>
           </div>
           {continueUrl && (
             <a href={continueUrl} className={`${buttonClass} w-full`}>
-              Continue to your workspace <ArrowRight size={18} />
+              Go to sign in <ArrowRight size={17} />
             </a>
           )}
         </>
       )}
       {data.status === "FAILED" && (
         <>
-          <h2 className="text-3xl font-semibold">
-            Setup needs a little attention.
-          </h2>
-          <p className="my-5 leading-relaxed text-slate-500">
+          <StepHeading title="Workspace setup didn't finish">
             {data.canRetry
-              ? "We couldn't finish preparing your workspace. Your details are saved. Wait a minute, then retry."
-              : "We couldn't complete setup with these details. Contact your administrator for help resolving the signup."}
-          </p>
+              ? "Your details are saved. Wait a minute, then retry."
+              : "We couldn't complete setup with these details. Contact Gemba PMS support and quote the reference below."}
+          </StepHeading>
           {data.canRetry && (
             <button
               disabled={busy}
               onClick={() => void action("retry")}
               className={buttonClass}
             >
-              {busy ? "Retrying…" : "Retry workspace setup"}
+              {busy ? "Retrying…" : "Retry setup"}
             </button>
           )}
-          <p className="mt-4 break-all text-xs text-slate-500">
-            Support reference: {progress?.id}
+          <p className="mt-6 font-mono text-xs break-all text-slate-500">
+            Reference: {progress?.id}
           </p>
         </>
       )}
       {data.status === "EXPIRED" && (
         <>
-          <h2 className="text-3xl font-semibold">
-            Your verification link expired.
-          </h2>
-          <p className="my-5 text-slate-500">
-            Start a new signup to receive a fresh link.
-          </p>
+          <StepHeading title="Verification link expired">
+            Start a new signup to get a fresh link.
+          </StepHeading>
           <Link href="/signup" className={buttonClass}>
-            Start again <ArrowRight size={18} />
+            Start again <ArrowRight size={17} />
           </Link>
         </>
       )}
       {loaded && !verification && !progress && (
         <>
-          <h2 className="text-3xl font-semibold">Let’s verify your email.</h2>
-          <p className="my-5 text-slate-500">
+          <StepHeading title="Verify your email">
             Open the verification link from your email to continue, or start a
             new company signup.
-          </p>
+          </StepHeading>
           <Link href="/signup" className={buttonClass}>
             Create a workspace
           </Link>
         </>
       )}
       {error && (
-        <div className="mt-5">
+        <div className="mt-6">
           <Notice error>{error}</Notice>
         </div>
       )}
       {message && (
-        <div className="mt-5">
+        <div className="mt-6">
           <Notice>{message}</Notice>
         </div>
       )}

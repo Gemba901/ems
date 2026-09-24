@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Building2, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { AuthService } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth.store";
 import {
@@ -10,6 +10,7 @@ import {
   Notice,
   OnboardingShell,
   PasswordField,
+  StepHeading,
   buttonClass,
 } from "@/components/onboarding/OnboardingShell";
 import { CompanyLogoSetup } from "@/components/onboarding/CompanyLogoSetup";
@@ -63,23 +64,16 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
     }
   }
   return (
-    <OnboardingShell login>
+    <OnboardingShell login address={hostname} addressLabel="Signing in to">
       {logoSetup ? (
         <CompanyLogoSetup onContinue={() => router.replace("/")} />
       ) : (
         <>
-          <div className="mb-8 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700">
-            <Building2 size={15} className="shrink-0" />
-            <span className="break-all">{hostname}</span>
-          </div>
-          <h2 className="text-3xl font-semibold tracking-tight">
-            Welcome back.
-          </h2>
-          <p className="mt-3 mb-8 text-slate-500">
-            Sign in to your company workspace.
-          </p>
+          <StepHeading title="Sign in">
+            Use your email, phone number or employee code.
+          </StepHeading>
           <div
-            className="mb-6 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1"
+            className="mb-6 grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1"
             aria-label="Sign-in method"
           >
             {(["email", "phone", "employeeCode"] as const).map((value) => (
@@ -92,7 +86,7 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
                   setIdentifier("");
                   setError("");
                 }}
-                className={`rounded-lg px-2 py-2.5 text-xs font-semibold transition ${mode === value ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
+                className={`rounded-md px-2 py-2 text-xs font-medium transition ${mode === value ? "bg-white text-gemba-navy shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
               >
                 {value === "email"
                   ? "Email"
@@ -143,7 +137,7 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
             <div className="text-right">
               <Link
                 href="/forgot-password"
-                className="text-sm font-medium text-blue-600 hover:underline"
+                className="text-sm font-medium text-gemba-navy underline-offset-4 hover:underline"
               >
                 Forgot password?
               </Link>
@@ -153,17 +147,13 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
               disabled={busy || !identifier.trim() || !password}
               className={`${buttonClass} w-full`}
             >
-              {busy ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <ArrowRight size={18} />
-              )}
+              {busy && <Loader2 size={17} className="animate-spin" />}
               {busy ? "Signing in…" : "Sign in"}
             </button>
           </form>
-          <p className="mt-7 border-t border-slate-200 pt-6 text-xs leading-relaxed text-slate-500">
-            New team member? Use your account invitation to set a password, or
-            choose Forgot password to verify your email.
+          <p className="mt-8 border-t border-slate-200 pt-6 text-xs leading-relaxed text-slate-500">
+            New team member? Set your password from your invitation email, or
+            use Forgot password.
           </p>
         </>
       )}

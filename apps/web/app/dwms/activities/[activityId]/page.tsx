@@ -120,6 +120,8 @@ function ActivityDetailContent() {
                 <InfoGrid
                   rows={[
                     ["Company unit", activity.companyUnitName],
+                    ["Scope", activity.scope?.replaceAll("_", " ")],
+                    ["Scope target", activity.scopeTarget],
                     ["Main department", activity.mainDepartment?.name],
                     ["Sub department", activity.subDepartment],
                     ["Gemba section", activity.gembaSection],

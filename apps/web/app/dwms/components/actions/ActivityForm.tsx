@@ -9,7 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import {
-  ActivityIngestionAssignmentMode,
+  ActivityScope,
   DwmsService,
   getDwmsErrorMessage,
   type CreateActivityPayload,
@@ -17,10 +17,10 @@ import {
   type DwmsDepartmentOption,
   type DwmsFrequency,
   type IngestActivityRowPayload,
+  type PreviewActivitiesResponse,
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 import DwmsSelectDropdown from "../DwmsSelectDropdown";
-import { getOrganizationTodayKey } from "../../utils/organizationDate";
 
 const FREQUENCIES: DwmsFrequency[] = [
   "DAILY",
@@ -28,23 +28,22 @@ const FREQUENCIES: DwmsFrequency[] = [
   "MONTHLY",
   "QUARTERLY",
   "YEARLY",
-  "PLANNED",
 ];
 
 const EMPTY_FORM: CreateActivityPayload = {
-  mainDepartmentId: "",
-  subDepartment: "",
   name: "",
   workMethod: "",
   code: "",
-  completionDeadline: null,
-  purpose: "",
+  completionDeadline: 0,
   frequency: "DAILY",
   completionOutput: "",
-  primaryResponsibleDesignation: "",
+  scope: ActivityScope.ORGANISATION,
+  scopeTarget: "",
   parentActivityIds: [],
   evidenceRequired: "",
-  effectiveFrom: "",
+  gembaSection: "",
+  processArea: "",
+  remarks: "",
 };
 
 type ActivityFormProps = {
@@ -194,8 +193,62 @@ async function parseActivitySheets(file: File): Promise<ParsedActivitySheet[]> {
 function parseEstimatedHours(value: string): number | null {
   const raw = value.trim();
   if (!raw) return null;
-  const match = raw.match(/\d+/);
-  return match ? Number(match[0]) : null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+const ACTIVITY_TEMPLATE_CSV = rowsToCsv([
+  [
+    "Scope of Activity",
+    "Target",
+    "Activity Code",
+    "Process Name",
+    "Description / SOP",
+    "Frequency",
+    "Estimated Time (Hours)",
+    "Expected Output",
+    "Remarks",
+    "Documents Required",
+    "Gemba Section",
+    "Process Area",
+    "Parent Activity Code",
+  ],
+  [
+    "Organisation",
+    "NA",
+    "ORG-001",
+    "Daily workplace check",
+    "Follow the approved workplace checklist",
+    "DAILY",
+    "0.5",
+    "Completed checklist",
+    "Report abnormalities immediately",
+    "NA",
+    "NA",
+    "NA",
+    "NA",
+  ],
+  [
+    "Department", "Production", "DEP-001", "Shift handover", "Complete the handover checklist",
+    "DAILY", "0.25", "Signed handover", "Escalate open issues", "Handover sheet", "NA", "Shop floor", "NA",
+  ],
+  [
+    "Job Title", "Shift Supervisor", "JOB-001", "Team review", "Review team output and blockers",
+    "WEEKLY", "1", "Review notes", "Record actions", "NA", "NA", "Operations", "NA",
+  ],
+  [
+    "Employee", "EMP-001", "EMP-ACT-001", "Machine inspection", "Inspect the assigned machine",
+    "DAILY", "0.5", "Inspection recorded", "Use the approved checklist", "Inspection checklist", "Line 1", "Maintenance", "NA",
+  ],
+]);
+
+function parseScope(value: string): ActivityScope | undefined {
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  if (normalized === "organisation") return ActivityScope.ORGANISATION;
+  if (normalized === "department") return ActivityScope.DEPARTMENT;
+  if (normalized === "job title") return ActivityScope.JOB_TITLE;
+  if (normalized === "employee") return ActivityScope.EMPLOYEE;
+  return undefined;
 }
 function firstValue(row: Record<string, string>, keys: string[]) {
   for (const key of keys) {
@@ -203,6 +256,11 @@ function firstValue(row: Record<string, string>, keys: string[]) {
     if (value) return value;
   }
   return "";
+}
+
+function optionalValue(row: Record<string, string>, keys: string[]) {
+  const value = firstValue(row, keys);
+  return /^(na|n\/a)$/i.test(value.trim()) ? "" : value;
 }
 
 function cleanPayload(payload: CreateActivityPayload): CreateActivityPayload {
@@ -216,13 +274,7 @@ function cleanPayload(payload: CreateActivityPayload): CreateActivityPayload {
 
 export default function ActivityForm({ onCreated }: ActivityFormProps) {
   const { accessToken, user } = useAuthStore();
-  const organizationToday = getOrganizationTodayKey(
-    user?.organizationTimeZone,
-  );
-  const [form, setForm] = useState<CreateActivityPayload>(() => ({
-    ...EMPTY_FORM,
-    effectiveFrom: organizationToday,
-  }));
+  const [form, setForm] = useState<CreateActivityPayload>(EMPTY_FORM);
   const [departments, setDepartments] = useState<DwmsDepartmentOption[]>([]);
   const [activities, setActivities] = useState<DwmsActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -231,6 +283,12 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
   const [failedRowsCsv, setFailedRowsCsv] = useState<{
     fileName: string;
     content: string;
+  } | null>(null);
+  const [pendingImport, setPendingImport] = useState<{
+    fileName: string;
+    payloads: IngestActivityRowPayload[];
+    parsedRows: ParsedActivityRow[];
+    preview: PreviewActivitiesResponse;
   } | null>(null);
   const canManageActivities = [
     "MANAGEMENT",
@@ -264,7 +322,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
   const departmentOptions = useMemo(
     () =>
       departments.map((department) => ({
-        value: department.id,
+        value: department.name,
         label: department.name,
       })),
     [departments],
@@ -302,14 +360,8 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
     setLoading(true);
     setMessage(null);
     try {
-      await DwmsService.createActivity(
-        accessToken,
-        cleanPayload({
-          ...form,
-          effectiveFrom: form.effectiveFrom || organizationToday,
-        }),
-      );
-      setForm({ ...EMPTY_FORM, effectiveFrom: organizationToday });
+      await DwmsService.createActivity(accessToken, cleanPayload(form));
+      setForm({ ...EMPTY_FORM });
       setMessage("Activity created successfully.");
       onCreated?.();
     } catch (error) {
@@ -319,38 +371,25 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
     }
   }
 
-  function findDepartmentId(value: string) {
-    const normalized = value.trim().toLowerCase();
-    return departments.find(
-      (department) => department.name.toLowerCase() === normalized,
-    )?.id;
-  }
-
   function rowToPayload(row: Record<string, string>): CreateActivityPayload {
-    const departmentName = firstValue(row, ["Department", "Main Department"]);
     const rawFrequency = firstValue(row, ["Frequency"]).toUpperCase();
+    const scope = parseScope(firstValue(row, ["Scope of Activity"]));
 
     return cleanPayload({
-      mainDepartmentId: findDepartmentId(departmentName) ?? "",
-      subDepartment: firstValue(row, ["Sub - Department", "Sub Department"]),
       name: firstValue(row, PROCESS_NAME_HEADERS),
       workMethod: firstValue(row, DESCRIPTION_HEADERS),
       code: firstValue(row, ["Activity Code", "Code"]),
       completionDeadline: parseEstimatedHours(
-        firstValue(row, ["Estimated Time", "Estimated Duration"]),
-      ),
-      purpose: firstValue(row, ["Purpose"]),
-      frequency: rawFrequency || "DAILY",
-      completionOutput: firstValue(row, ["Expected Output", "Output"]),
-      primaryResponsibleDesignation: firstValue(row, [
-        "Responsible Job Designation",
-        "Responsible Job Role",
-        "Primary Responsible Designation",
-        "Responsible Designation",
-        "Job Role",
-      ]),
-      evidenceRequired: firstValue(row, ["Documents Required", "Documents"]),
-      effectiveFrom: organizationToday,
+        firstValue(row, ["Estimated Time (Hours)", "Estimated Time"]),
+      ) ?? Number.NaN,
+      frequency: rawFrequency,
+      completionOutput: firstValue(row, ["Expected Output"]),
+      scope: scope as ActivityScope,
+      scopeTarget: firstValue(row, ["Target"]),
+      evidenceRequired: optionalValue(row, ["Documents Required", "Documents"]),
+      gembaSection: optionalValue(row, ["Gemba Section"]),
+      processArea: optionalValue(row, ["Process Area"]),
+      remarks: firstValue(row, ["Remarks"]),
     });
   }
 
@@ -360,26 +399,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
   ): IngestActivityRowPayload {
     return {
       rowNumber,
-      assignmentMode:
-        (firstValue(row, [
-          "Assignment Mode",
-          "Assign To",
-          "Assignment Scope",
-        ]) as ActivityIngestionAssignmentMode) ||
-        ActivityIngestionAssignmentMode.INDIVIDUAL,
-      responsibleEmployeeCode: firstValue(row, [
-        "Emp ID",
-        "Employee ID",
-        "Employee Code",
-        "Responsible Emp ID",
-        "Responsible Employee Code",
-      ]),
-      parentActivityCode: firstValue(row, [
-        "Parent Activity Code",
-        "Parent Code",
-        "Prerequisite Activity Code",
-        "Prerequisite Code",
-      ]),
+      parentActivityCode: firstValue(row, ["Parent Activity Code"]),
       activity: rowToPayload(row),
     };
   }
@@ -437,27 +457,39 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         );
       }
 
-      const rowByNumber = new Map(
-        parsedRows.map((row) => [row.rowNumber, row]),
+      const payloads = parsedRows.map(({ row, rowNumber }) =>
+        rowToIngestPayload(row, rowNumber),
       );
-      const payloads = parsedRows
-        .map(({ row, rowNumber }) => rowToIngestPayload(row, rowNumber))
-        .filter(
-          (payload) => payload.activity.name && payload.activity.workMethod,
-        );
-
-      if (payloads.length === 0) {
-        throw new Error(
-          "No valid rows found. Process Name and Description / SOP are required.",
-        );
-      }
-
-      const result = await DwmsService.ingestActivities(
+      const preview = await DwmsService.previewActivityIngestion(
         accessToken,
         payloads,
         file.name,
       );
+      setPendingImport({ fileName: file.name, payloads, parsedRows, preview });
+      setMessage(
+        `Preview ready: ${preview.valid} valid, ${preview.failed} failed. Confirm to import valid rows.`,
+      );
+    } catch (error) {
+      setMessage(getDwmsErrorMessage(error, "Failed to preview activities"));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function confirmImport() {
+    if (!accessToken || !pendingImport) return;
+    setImporting(true);
+    setMessage(null);
+    try {
+      const result = await DwmsService.ingestActivities(
+        accessToken,
+        pendingImport.payloads,
+        pendingImport.fileName,
+      );
       const failures = result.results.filter((row) => !row.success);
+      const rowByNumber = new Map(
+        pendingImport.parsedRows.map((row) => [row.rowNumber, row]),
+      );
       if (failures.length > 0) {
         const failureByRowNumber = new Map(
           failures.map((failure) => [failure.rowNumber, failure.message]),
@@ -482,7 +514,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
           }),
         ];
         setFailedRowsCsv({
-          fileName: failedRowsFileName(file.name),
+          fileName: failedRowsFileName(pendingImport.fileName),
           content: rowsToCsv(failedCsvRows),
         });
       }
@@ -496,14 +528,12 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
           return `${location}: ${row.message}`;
         })
         .join(" ");
-      const skippedSummary = skippedSheets.length
-        ? ` Skipped sheets without activity headers: ${skippedSheets.join(", ")}.`
-        : "";
       setMessage(
         failures.length > 0
-          ? `Imported ${result.created} activities. ${result.failed} rows failed. ${failureSummary}${skippedSummary}`
-          : `Imported ${result.created} activities successfully.${skippedSummary}`,
+          ? `Imported ${result.created} activities. ${result.failed} rows failed. ${failureSummary}`
+          : `Imported ${result.created} activities successfully.`,
       );
+      setPendingImport(null);
       onCreated?.();
     } catch (error) {
       setMessage(getDwmsErrorMessage(error, "Failed to import activities"));
@@ -525,7 +555,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         >
           {message && (
             <div
-              className={`space-y-3 rounded-xl border p-4 text-xs ${message.includes("success") || message.includes("Imported") ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}
+              className={`space-y-3 rounded-xl border p-4 text-xs ${message.includes("success") || message.includes("Imported") || message.includes("Preview ready") ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}
             >
               <p>{message}</p>
               {failedRowsCsv && (
@@ -549,18 +579,47 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <SelectField
-              label="Department"
-              value={form.mainDepartmentId ?? ""}
-              options={departmentOptions}
-              placeholder="Choose department"
-              onChange={(value) => setField("mainDepartmentId", value)}
+              label="Scope of Activity"
+              required
+              value={form.scope}
+              options={Object.values(ActivityScope).map((value) => ({
+                value,
+                label: value.replaceAll("_", " "),
+              }))}
+              placeholder="Choose scope"
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  scope: value as ActivityScope,
+                  scopeTarget: "",
+                  parentActivityIds: [],
+                }))
+              }
             />
-            <TextField
-              label="Sub - Department"
-              placeholder="Assembly"
-              value={form.subDepartment ?? ""}
-              onChange={(value) => setField("subDepartment", value)}
-            />
+            {form.scope === ActivityScope.DEPARTMENT ? (
+              <SelectField
+                label="Target"
+                required
+                value={form.scopeTarget ?? ""}
+                options={departmentOptions}
+                placeholder="Choose department"
+                onChange={(value) => setField("scopeTarget", value)}
+              />
+            ) : form.scope === ActivityScope.ORGANISATION ? (
+              <div />
+            ) : (
+              <TextField
+                label="Target"
+                required
+                placeholder={
+                  form.scope === ActivityScope.EMPLOYEE
+                    ? "Employee ID"
+                    : "Exact job title"
+                }
+                value={form.scopeTarget ?? ""}
+                onChange={(value) => setField("scopeTarget", value)}
+              />
+            )}
             <TextField
               label="Process Name"
               placeholder="Daily line startup inspection"
@@ -570,21 +629,23 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
             />
             <TextField
               label="Activity Code"
-              placeholder="Optional code: PROD-001"
-              value={form.code ?? ""}
+              required
+              placeholder="PROD-001"
+              value={form.code}
               onChange={(value) => setField("code", value)}
             />
             <TextField
-              label="Estimated Time"
+              label="Estimated Time (Hours)"
+              required
               type="number"
               min={0}
-              step={1}
+              step={0.01}
               placeholder="2"
-              value={form.completionDeadline ?? ""}
+              value={form.completionDeadline}
               onChange={(value) =>
                 setField(
                   "completionDeadline",
-                  value === "" ? null : Math.max(0, Math.trunc(Number(value))),
+                  value === "" ? 0 : Math.max(0, Number(value)),
                 )
               }
             />
@@ -606,18 +667,23 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               }
             />
             <TextField
-              label="Responsible Job Designation"
-              placeholder="Shift supervisor"
-              value={form.primaryResponsibleDesignation ?? ""}
-              onChange={(value) =>
-                setField("primaryResponsibleDesignation", value)
-              }
-            />
-            <TextField
               label="Expected Output"
+              required
               placeholder="Checklist completed and abnormalities reported"
               value={form.completionOutput ?? ""}
               onChange={(value) => setField("completionOutput", value)}
+            />
+            <TextField
+              label="Gemba Section"
+              placeholder="Optional"
+              value={form.gembaSection ?? ""}
+              onChange={(value) => setField("gembaSection", value)}
+            />
+            <TextField
+              label="Process Area"
+              placeholder="Optional"
+              value={form.processArea ?? ""}
+              onChange={(value) => setField("processArea", value)}
             />
             <TextField
               label="Documents Required"
@@ -625,6 +691,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               value={form.evidenceRequired ?? ""}
               onChange={(value) => setField("evidenceRequired", value)}
             />
+            {form.scope === ActivityScope.EMPLOYEE && (
             <label className="block md:col-span-2">
               <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
                 Parent Activity
@@ -642,6 +709,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                 triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
               />
             </label>
+            )}
           </div>
 
           <TextArea
@@ -652,10 +720,11 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
             onChange={(value) => setField("workMethod", value)}
           />
           <TextArea
-            label="Purpose"
-            placeholder="Why this activity is performed and what risk or process it controls."
-            value={form.purpose ?? ""}
-            onChange={(value) => setField("purpose", value)}
+            label="Remarks"
+            required
+            placeholder="Add required operational remarks."
+            value={form.remarks}
+            onChange={(value) => setField("remarks", value)}
           />
 
           <button
@@ -687,6 +756,19 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() =>
+              downloadTextFile(
+                "dwms-activity-template.csv",
+                ACTIVITY_TEMPLATE_CSV,
+                "text/csv;charset=utf-8",
+              )
+            }
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Download className="h-4 w-4" /> Download template
+          </button>
           <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600 hover:bg-slate-100">
             <Upload className="h-5 w-5" />
             <span className="font-semibold">
@@ -704,6 +786,44 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               }}
             />
           </label>
+          {pendingImport && (
+            <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800">
+              <p className="font-bold">Import preview</p>
+              <p>
+                {pendingImport.preview.valid} valid rows · {pendingImport.preview.failed} failed rows
+              </p>
+              <p>
+                {pendingImport.preview.results.reduce(
+                  (total, row) => total + row.matchedEmployees,
+                  0,
+                )} employee assignments matched
+              </p>
+              {pendingImport.preview.results
+                .filter((row) => !row.valid)
+                .slice(0, 3)
+                .map((row) => (
+                  <p key={row.rowNumber}>Row {row.rowNumber}: {row.message}</p>
+                ))}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={importing || pendingImport.preview.valid === 0}
+                  onClick={() => void confirmImport()}
+                  className="rounded-lg bg-blue-600 px-3 py-2 font-semibold text-white disabled:opacity-50"
+                >
+                  Confirm import
+                </button>
+                <button
+                  type="button"
+                  disabled={importing}
+                  onClick={() => setPendingImport(null)}
+                  className="rounded-lg border border-blue-200 bg-white px-3 py-2 font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-600">
             <div>
               <p className="font-bold text-slate-700">Workbook import</p>
@@ -715,26 +835,24 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
             </div>
             <div>
               <p className="font-bold text-slate-700">Required columns</p>
-              <p>Process Name, Description / SOP, Frequency.</p>
+              <p>
+                Scope of Activity, Target (except Organisation), Activity Code,
+                Process Name, Description / SOP, Frequency, Estimated Time
+                (Hours), Expected Output, and Remarks.
+              </p>
             </div>
             <div>
               <p className="font-bold text-slate-700">Optional columns</p>
               <p>
-                Department, Sub - Department, Activity Code, Estimated Time,
-                Purpose, Responsible Job Designation (or Job Role), Expected
-                Output, Documents Required, Parent Activity Code, Assignment
-                Mode, Emp ID.
+                Documents Required, Gemba Section, Process Area, and Parent
+                Activity Code (Employee scope only).
               </p>
             </div>
             <p>
-              Assignment Mode must be Individual, Job Role, All Users, All
-              Management, or All HOD. Leave it blank for Individual. Job Role
-              associates the activity with Responsible Job Designation without
-              creating an individual assignment. Individual uses Emp ID and
-              does not associate the activity with a job role. Group modes
-              assign to every matching employee in the organization. Frequency
-              must be DAILY, WEEKLY, MONTHLY, QUARTERLY, or YEARLY. Activity
-              ingestion does not use due dates.
+              Scope of Activity must be Organisation, Department, Job Title, or
+              Employee. Target contains a department name, exact job title, or
+              employee ID; use blank or NA for Organisation. Frequency must be
+              DAILY, WEEKLY, MONTHLY, QUARTERLY, or YEARLY.
             </p>
           </div>
         </aside>

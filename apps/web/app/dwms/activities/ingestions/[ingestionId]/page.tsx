@@ -98,6 +98,8 @@ function ActivityIngestionDetailContent() {
         row.rowNumber,
         row.activityName,
         row.activityCode,
+        row.scope,
+        row.scopeTarget,
         row.responsibleJobRole,
         row.responsibleEmployeeCode,
         cleanDwmsMessage(row.message, "No message"),
@@ -227,9 +229,11 @@ function ActivityIngestionDetailContent() {
                       </p>
                     </td>
                     <td className="px-5 py-4 text-xs text-slate-600">
-                      {row.responsibleJobRole ||
-                        row.responsibleEmployeeCode ||
-                        "Organization group"}
+                      <p className="font-semibold">
+                        {row.scope?.replaceAll("_", " ") || "Legacy"}
+                      </p>
+                      <p>{row.scopeTarget || "Organisation"}</p>
+                      <p>{row.assignedCount ?? 0} matched</p>
                     </td>
                     <td className="px-5 py-4 text-slate-600">
                       {cleanDwmsMessage(row.message, "No message")}

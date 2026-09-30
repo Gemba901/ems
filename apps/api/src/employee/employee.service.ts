@@ -1,8 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AuthService } from 'src/auth/auth.service';
 import * as XLSX from 'xlsx';
 import { Prisma, RoleName } from 'db';
+import { DwmsService } from 'src/dwms/dwms.service';
 
 type EmployeeImportRow = {
     rowNumber: number;
@@ -38,7 +39,11 @@ const EMPTY_VALUES = new Set(['', 'no information available', 'not applicable', 
 
 @Injectable()
 export class EmployeeService {
-    constructor (private prisma: PrismaService, private authService: AuthService) {}
+    constructor (
+        private prisma: PrismaService,
+        private authService: AuthService,
+        @Optional() private dwmsService?: DwmsService,
+    ) {}
 
     private normalizePhoneForStorage(raw: string | undefined): string | undefined {
         if (!raw) return undefined;
@@ -133,6 +138,11 @@ export class EmployeeService {
             });
         });
 
+        await this.dwmsService?.synchronizeEmployeeActivities(
+            organizationId,
+            result.id,
+            { isNewEmployee: true },
+        );
         return result;
     }
 
@@ -341,6 +351,12 @@ export class EmployeeService {
                 phone: data.phone,
                 departmentId: data.departmentId,
             }
+        });
+
+        await this.dwmsService?.synchronizeEmployeeActivities(organizationId, id, {
+            previousDepartmentId: employee.departmentId,
+            previousJobTitle: employee.jobTitle,
+            previousEmploymentStatus: employee.employmentStatus,
         });
 
         return updatedEmployee;
@@ -626,11 +642,20 @@ export class EmployeeService {
                 trainingNeeded: row.trainingNeeded ?? null,
             };
 
-            if (existing) {
-                await db.employee.update({ where: { id: existing.id }, data: employeeData });
-            } else {
-                await db.employee.create({ data: employeeData });
-            }
+            const savedEmployee = existing
+                ? await db.employee.update({ where: { id: existing.id }, data: employeeData })
+                : await db.employee.create({ data: employeeData });
+            await this.dwmsService?.synchronizeEmployeeActivities(
+                organizationId,
+                savedEmployee.id,
+                existing
+                    ? {
+                          previousDepartmentId: existing.departmentId,
+                          previousJobTitle: existing.jobTitle,
+                          previousEmploymentStatus: existing.employmentStatus,
+                      }
+                    : { isNewEmployee: true },
+            );
         }
 
         for (const employee of toDelete) {

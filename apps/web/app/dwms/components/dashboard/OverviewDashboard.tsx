@@ -4,11 +4,13 @@ import { useState } from 'react';
 import type { DwmsOverviewDashboardResponse } from '@/services/dwms.service';
 import PerformanceKpiSelect from './PerformanceKpiSelect';
 import PerformanceSortSelect from './PerformanceSortSelect';
+import PerformanceScoreboardSearch from './PerformanceScoreboardSearch';
 import {
   comparePerformanceKpi,
   formatPerformanceKpiValue,
   getPerformanceKpi,
   getPerformanceKpiValue,
+  isPerformancePercentage,
   type PerformanceKpiKey,
   type PerformanceSortDirection,
 } from './performanceKpis';
@@ -17,6 +19,7 @@ type OverviewDashboardProps = {
   overviewData: DwmsOverviewDashboardResponse;
   onSelectDepartment: (deptId: string) => void;
   onSelectEmployee: (employeeId: string) => void;
+  canSelectEmployee: (employeeId: string) => boolean;
 };
 
 function rankingDescription(key: PerformanceKpiKey, direction = getPerformanceKpi(key).direction) {
@@ -24,12 +27,20 @@ function rankingDescription(key: PerformanceKpiKey, direction = getPerformanceKp
   return `${direction === 'desc' ? 'Highest to smallest' : 'Smallest to highest'} ${kpi.label.toLowerCase()}`;
 }
 
-export default function OverviewDashboard({ overviewData, onSelectDepartment, onSelectEmployee }: OverviewDashboardProps) {
-  const [heatmapKpi, setHeatmapKpi] = useState<PerformanceKpiKey>('completionRate');
-  const [scoreboardKpi, setScoreboardKpi] = useState<PerformanceKpiKey>('completionRate');
+export default function OverviewDashboard({ overviewData, onSelectDepartment, onSelectEmployee, canSelectEmployee }: OverviewDashboardProps) {
+  const [heatmapKpi, setHeatmapKpi] = useState<PerformanceKpiKey>('allTasksCompletionRate');
+  const [scoreboardKpi, setScoreboardKpi] = useState<PerformanceKpiKey>('allTasksCompletionRate');
   const [scoreboardSortDirection, setScoreboardSortDirection] = useState<PerformanceSortDirection>('desc');
+  const [scoreboardSearch, setScoreboardSearch] = useState('');
   const departments = [...(overviewData.departmentCompliance ?? [])].sort((a, b) => comparePerformanceKpi(a, b, heatmapKpi));
-  const employees = [...(overviewData.employeeScoreboard ?? [])].sort((a, b) => comparePerformanceKpi(a, b, scoreboardKpi, scoreboardSortDirection));
+  const normalizedScoreboardSearch = scoreboardSearch.trim().toLowerCase();
+  const employees = [...(overviewData.employeeScoreboard ?? [])]
+    .filter((employee) =>
+      !normalizedScoreboardSearch ||
+      employee.name.toLowerCase().includes(normalizedScoreboardSearch) ||
+      employee.role.toLowerCase().includes(normalizedScoreboardSearch),
+    )
+    .sort((a, b) => comparePerformanceKpi(a, b, scoreboardKpi, scoreboardSortDirection));
   const maxDepartmentValue = Math.max(0, ...departments.map((department) => {
     const value = getPerformanceKpiValue(department, heatmapKpi);
     return value != null && Number.isFinite(value) ? value : 0;
@@ -59,7 +70,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {departments.map((department) => {
             const value = getPerformanceKpiValue(department, heatmapKpi);
-            const percentage = heatmapKpi === 'completionRate' || heatmapKpi === 'completedOnTime';
+            const percentage = isPerformancePercentage(heatmapKpi);
             const barWidth = value == null || !Number.isFinite(value) ? 0 : percentage
               ? Math.min(100, Math.max(0, value))
               : maxDepartmentValue > 0 ? Math.min(100, (value / maxDepartmentValue) * 100) : 0;
@@ -90,9 +101,15 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
       </section>
 
       <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-app pb-3">
-          <h3 className="font-semibold text-text-app">Scoreboard &amp; Leaderboard</h3>
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="border-b border-border-app pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-semibold text-text-app">Scoreboard &amp; Leaderboard</h3>
+            <PerformanceScoreboardSearch
+              value={scoreboardSearch}
+              onChange={setScoreboardSearch}
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
             <PerformanceKpiSelect
               value={scoreboardKpi}
               onChange={selectScoreboardKpi}
@@ -108,16 +125,27 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
         <p className="mt-3 text-xs text-muted-app">{rankingDescription(scoreboardKpi, scoreboardSortDirection)}</p>
         <div className="mt-3 max-h-96 space-y-3 overflow-y-auto pr-1">
           {employees.length === 0 ? (
-            <div className="py-10 text-center text-xs text-muted-app">No active records.</div>
+            <div className="py-10 text-center text-xs text-muted-app">
+              {normalizedScoreboardSearch
+                ? 'No employees match this name or role.'
+                : 'No active records.'}
+            </div>
           ) : (
-            employees.map((employee, index) => (
-              <button
-                key={employee.id}
-                type="button"
-                onClick={() => onSelectEmployee(employee.id)}
-                aria-label={`View ${employee.name}'s employee performance`}
-                className="flex w-full flex-col gap-4 rounded-2xl border border-border-app bg-white p-3.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:flex-row sm:items-center sm:justify-between"
-              >
+            employees.map((employee, index) => {
+              const selectable = canSelectEmployee(employee.id);
+              return (
+                <button
+                  key={employee.id}
+                  type="button"
+                  disabled={!selectable}
+                  onClick={() => {
+                    if (selectable) onSelectEmployee(employee.id);
+                  }}
+                  aria-label={selectable
+                    ? `View ${employee.name}'s employee performance`
+                    : `${employee.name}'s employee performance is not available`}
+                  className={`flex w-full flex-col gap-4 rounded-2xl border border-border-app bg-white p-3.5 text-left transition-colors sm:flex-row sm:items-center sm:justify-between ${selectable ? 'hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : 'cursor-default'}`}
+                >
                 <span className="flex min-w-0 items-center gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bg-app text-[10px] font-bold text-muted-app">
                     {index + 1}
@@ -136,8 +164,9 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
                     {formatPerformanceKpiValue(getPerformanceKpiValue(employee, scoreboardKpi), scoreboardKpi)}
                   </span>
                 </span>
-              </button>
-            ))
+                </button>
+              );
+            })
           )}
         </div>
       </section>

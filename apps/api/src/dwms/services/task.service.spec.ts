@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   ValidationPipe,
 } from '@nestjs/common';
-import { TaskFrequency } from 'db';
+import { ActivityScope, TaskFrequency } from 'db';
 import { CreateAssignedTaskDto } from '../dto/dwms.dto';
 import { DwmsTaskService } from './task.service';
 
@@ -18,6 +18,84 @@ class TestTaskService extends DwmsTaskService {
     .fn()
     .mockResolvedValue({ users: [{ id: 'approver' }] });
 }
+
+describe('DWMS task category serialization', () => {
+  const service = new TestTaskService({} as any, {} as any);
+  const instance = {
+    id: 'instance',
+    status: 'PENDING',
+    completionPercent: 0,
+    scheduledFor: new Date('2026-09-23T00:00:00.000Z'),
+    dueAt: new Date('2026-09-23T23:59:59.999Z'),
+    completedAt: null,
+    completionNote: null,
+    completionAttachmentUrl: null,
+    completionAttachmentName: null,
+    createdAt: new Date('2026-09-23T00:00:00.000Z'),
+    updatedAt: new Date('2026-09-23T00:00:00.000Z'),
+    comments: [],
+    events: [],
+    alerts: [],
+  };
+  const task = {
+    id: 'task',
+    title: 'Task',
+    description: null,
+    frequency: TaskFrequency.DAILY,
+    ownerId: 'owner',
+    ownerName: 'Owner',
+    owner: { email: 'owner@example.com', organization: { timeZone: 'UTC' } },
+    assignedById: null,
+    approvedById: null,
+    completionNote: null,
+    completionAttachmentUrl: null,
+    completionAttachmentName: null,
+    requiresCompletionDocument: false,
+    completionDocumentName: null,
+    createdAt: new Date('2026-09-23T00:00:00.000Z'),
+    updatedAt: new Date('2026-09-23T00:00:00.000Z'),
+    isAdhoc: false,
+    acknowledgedAt: new Date('2026-09-23T00:00:00.000Z'),
+    priority: 'MEDIUM',
+    department: null,
+  };
+
+  it.each([
+    [ActivityScope.ORGANISATION, 'GOOD_PRACTICE'],
+    [ActivityScope.DEPARTMENT, 'GOOD_PRACTICE'],
+    [ActivityScope.JOB_TITLE, 'JOB_RESPONSIBILITY'],
+    [ActivityScope.EMPLOYEE, 'JOB_RESPONSIBILITY'],
+  ])('maps %s activities to %s', (scope, expected) => {
+    const result = service.serializeTaskInstance(
+      { ...task, activity: { id: 'activity', scope } },
+      instance,
+    );
+    expect(result.taskCategory).toBe(expected);
+  });
+
+  it('gives a manual assignment precedence over its linked activity', () => {
+    const result = service.serializeTaskInstance(
+      {
+        ...task,
+        assignedById: 'assigner',
+        assignedByName: 'Assigner',
+        assignedBy: { email: 'assigner@example.com' },
+        activity: { id: 'activity', scope: ActivityScope.DEPARTMENT },
+      },
+      instance,
+    );
+    expect(result.taskCategory).toBe('ASSIGNED_TASK');
+  });
+
+  it('rejects a task that has neither an assigner nor an activity scope', () => {
+    expect(() =>
+      service.serializeTaskInstance(
+        { ...task, activity: null },
+        instance,
+      ),
+    ).toThrow('Task category cannot be determined');
+  });
+});
 
 describe('DWMS task creation', () => {
   const user = { userId: 'user', organizationId: 'org', roleLevel: 'HOD' };
@@ -301,6 +379,16 @@ describe('DWMS task creation', () => {
       ).rejects.toThrow(BadRequestException);
     },
   );
+
+  it('strips activity linkage from manual task payloads at the API boundary', async () => {
+    const pipe = new ValidationPipe({ whitelist: true });
+    const payload = await pipe.transform(
+      { ...dto, activityId: 'activity' },
+      { type: 'body', metatype: CreateAssignedTaskDto },
+    );
+
+    expect(payload).not.toHaveProperty('activityId');
+  });
 });
 
 describe('DWMS occurrence progress and approval', () => {

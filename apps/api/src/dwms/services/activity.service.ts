@@ -4,23 +4,27 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  ActivityScope,
   ActivityStatus,
   EmployeeActivityStatus,
+  EmploymentStatus,
+  NotificationType,
   Priority,
-  RoleName,
   TaskFrequency,
+  TaskStatus,
 } from 'db';
 import {
-  ActivityIngestionAssignmentMode,
   CreateActivityDto,
   CreateTaskFromActivityDto,
   IngestActivitiesDto,
+  SearchDwmsEmployeesDto,
   UpdateActivityDto,
   UpdateEmployeeActivityAssignmentDto,
 } from '../dto/dwms.dto';
 import { UserPayload } from './base.service';
 import { DwmsTaskService } from './task.service';
 import {
+  addUtcDays,
   getUtcDateInTimeZone,
   parseDateOnly,
 } from '../utils/taskSchedule';
@@ -33,10 +37,19 @@ function assertSupportedActivityFrequency(
       'Every 5 minutes task frequency is no longer supported',
     );
   }
+  if (frequency === TaskFrequency.PLANNED) {
+    throw new BadRequestException(
+      'Scoped activities support Daily, Weekly, Monthly, Quarterly, or Yearly frequency only',
+    );
+  }
 }
 
 const ACTIVITY_INCLUDE = {
   mainDepartment: { select: { id: true, name: true } },
+  scopeDepartment: { select: { id: true, name: true } },
+  scopeEmployee: {
+    select: { id: true, employeeCode: true, firstName: true, lastName: true },
+  },
   primaryResponsibleEmployee: {
     select: {
       id: true,
@@ -98,8 +111,17 @@ export abstract class DwmsActivityService extends DwmsTaskService {
   }
 
   private serializeActivity(activity: any) {
+    const scopeTarget =
+      activity.scope === ActivityScope.DEPARTMENT
+        ? activity.scopeDepartment?.name ?? null
+        : activity.scope === ActivityScope.JOB_TITLE
+          ? activity.scopeJobTitleLabel ?? activity.scopeJobTitle ?? null
+          : activity.scope === ActivityScope.EMPLOYEE
+            ? activity.scopeEmployee?.employeeCode ?? null
+            : null;
     return {
       ...activity,
+      scopeTarget,
       status:
         activity.status === ARCHIVED_ACTIVITY_STATUS
           ? ARCHIVED_ACTIVITY_STATUS
@@ -436,32 +458,63 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     return activity as CreateActivityDto;
   }
 
-  private async resolveEmployeeByCodeOrId(
+  private isBlankImportValue(value?: string | null) {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    return !normalized || normalized === 'na' || normalized === 'n/a';
+  }
+
+  private assertScopedActivityPayload(dto: CreateActivityDto) {
+    if (!dto.code?.trim()) throw new BadRequestException('Activity Code is required');
+    if (!dto.name?.trim()) throw new BadRequestException('Process Name is required');
+    if (!dto.workMethod?.trim()) {
+      throw new BadRequestException('Description / SOP is required');
+    }
+    if (dto.completionDeadline === undefined || dto.completionDeadline === null) {
+      throw new BadRequestException('Estimated Time (Hours) is required');
+    }
+    if (!Number.isFinite(Number(dto.completionDeadline)) || Number(dto.completionDeadline) < 0) {
+      throw new BadRequestException('Estimated Time (Hours) must be a non-negative number');
+    }
+    if (!dto.completionOutput?.trim()) {
+      throw new BadRequestException('Expected Output is required');
+    }
+    if (!dto.remarks?.trim()) throw new BadRequestException('Remarks are required');
+    if (!dto.scope || !Object.values(ActivityScope).includes(dto.scope)) {
+      throw new BadRequestException(
+        'Scope of Activity must be Organisation, Department, Job Title, or Employee',
+      );
+    }
+    const supportedFrequencies: readonly TaskFrequency[] = [
+      TaskFrequency.DAILY,
+      TaskFrequency.WEEKLY,
+      TaskFrequency.MONTHLY,
+      TaskFrequency.QUARTERLY,
+      TaskFrequency.YEARLY,
+    ];
+    if (!supportedFrequencies.includes(dto.frequency)) {
+      throw new BadRequestException(
+        'Frequency must be Daily, Weekly, Monthly, Quarterly, or Yearly',
+      );
+    }
+  }
+
+  private async resolveEmployeeByCode(
     organizationId: string,
     employeeCode: string,
+    activeOnly = true,
   ) {
     const code = employeeCode.trim();
     if (!code) {
-      throw new BadRequestException('Responsible Emp ID is required');
-    }
-
-    const exactMatches = await this.prisma.employee.findMany({
-      where: {
-        organizationId,
-        OR: [{ id: code }, { employeeCode: code }],
-      },
-      select: { id: true, employeeCode: true },
-    });
-    if (exactMatches.length === 1) return exactMatches[0];
-    if (exactMatches.length > 1) {
-      throw new BadRequestException(
-        `Responsible Emp ID "${code}" matches multiple employees`,
-      );
+      throw new BadRequestException('Target Emp ID is required');
     }
 
     const candidates = await this.prisma.employee.findMany({
-      where: { organizationId, employeeCode: { not: null } },
-      select: { id: true, employeeCode: true },
+      where: {
+        organizationId,
+        employeeCode: { not: null },
+        ...(activeOnly ? { employmentStatus: EmploymentStatus.ACTIVE } : {}),
+      },
+      select: { id: true, employeeCode: true, employmentStatus: true },
     });
     const normalizedMatches = candidates.filter(
       (employee) => employee.employeeCode?.toLowerCase() === code.toLowerCase(),
@@ -469,60 +522,245 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     if (normalizedMatches.length === 1) return normalizedMatches[0];
     if (normalizedMatches.length > 1) {
       throw new BadRequestException(
-        `Responsible Emp ID "${code}" matches multiple employees`,
+        `Target Emp ID "${code}" matches multiple employees`,
       );
     }
 
     throw new BadRequestException(
-      `Responsible Emp ID "${code}" was not found in this organization`,
+      `Target Emp ID "${code}" was not found among active employees in this organization`,
     );
   }
 
-  private async resolveActivityIngestionRecipients(
+  private async resolveActivityScope(
     organizationId: string,
-    assignmentMode: ActivityIngestionAssignmentMode,
-    responsibleEmployeeCode?: string | null,
+    scope: ActivityScope,
+    rawTarget?: string | null,
   ) {
-    if (assignmentMode === ActivityIngestionAssignmentMode.INDIVIDUAL) {
-      return [
-        await this.resolveEmployeeByCodeOrId(
-          organizationId,
-          responsibleEmployeeCode ?? '',
-        ),
-      ];
+    const target = this.isBlankImportValue(rawTarget) ? '' : rawTarget!.trim();
+    if (scope === ActivityScope.ORGANISATION) {
+      if (target) {
+        throw new BadRequestException('Target must be blank or NA for Organisation scope');
+      }
+      const recipients = await this.prisma.employee.findMany({
+        where: { organizationId, employmentStatus: EmploymentStatus.ACTIVE },
+        select: { id: true, employeeCode: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      return { recipients, scopeData: {}, targetLabel: null };
     }
 
-    const roleName =
-      assignmentMode === ActivityIngestionAssignmentMode.ALL_HOD
-        ? RoleName.HOD
-        : assignmentMode === ActivityIngestionAssignmentMode.ALL_MANAGEMENT
-          ? RoleName.MANAGEMENT
-          : null;
+    if (!target) throw new BadRequestException('Target is required for this activity scope');
 
-    const recipients = await this.prisma.employee.findMany({
-      where: {
-        organizationId,
-        ...(roleName
-          ? {
-              user: {
-                organizations: {
-                  some: { organizationId, role: { name: roleName } },
-                },
-              },
-            }
-          : {}),
+    if (scope === ActivityScope.DEPARTMENT) {
+      const departments = await this.prisma.department.findMany({
+        where: { organizationId },
+        select: { id: true, name: true },
+      });
+      const matches = departments.filter(
+        (department) => department.name.trim().toLowerCase() === target.toLowerCase(),
+      );
+      if (matches.length !== 1) {
+        throw new BadRequestException(
+          matches.length ? `Department "${target}" is ambiguous` : `Department "${target}" was not found`,
+        );
+      }
+      const department = matches[0];
+      const recipients = await this.prisma.employee.findMany({
+        where: {
+          organizationId,
+          departmentId: department.id,
+          employmentStatus: EmploymentStatus.ACTIVE,
+        },
+        select: { id: true, employeeCode: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      return {
+        recipients,
+        scopeData: { scopeDepartmentId: department.id },
+        targetLabel: department.name,
+      };
+    }
+
+    if (scope === ActivityScope.JOB_TITLE) {
+      const normalizedTitle = this.normalizeJobTitle(target)!;
+      const employees = await this.prisma.employee.findMany({
+        where: {
+          organizationId,
+          employmentStatus: EmploymentStatus.ACTIVE,
+          jobTitle: { not: null },
+        },
+        select: { id: true, employeeCode: true, jobTitle: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      return {
+        recipients: employees.filter(
+          (employee) => this.normalizeJobTitle(employee.jobTitle) === normalizedTitle,
+        ),
+        scopeData: {
+          scopeJobTitle: normalizedTitle,
+          scopeJobTitleLabel: target.replace(/\s+/g, ' '),
+        },
+        targetLabel: target.replace(/\s+/g, ' '),
+      };
+    }
+
+    const employee = await this.resolveEmployeeByCode(organizationId, target);
+    return {
+      recipients: [employee],
+      scopeData: { scopeEmployeeId: employee.id },
+      targetLabel: employee.employeeCode,
+    };
+  }
+
+  private async activateActivityForEmployee(
+    user: UserPayload,
+    activity: any,
+    employeeId: string,
+  ) {
+    const now = new Date();
+    const assignment = await this.prisma.employeeActivityAssignment.upsert({
+      where: { employeeId_activityId: { employeeId, activityId: activity.id } },
+      update: { status: EmployeeActivityStatus.ACTIVE, activatedAt: now, deactivatedAt: null },
+      create: {
+        organizationId: user.organizationId,
+        employeeId,
+        activityId: activity.id,
+        status: EmployeeActivityStatus.ACTIVE,
+        activatedAt: now,
       },
-      select: { id: true, employeeCode: true },
-      orderBy: { createdAt: 'asc' },
     });
+    const existingTask = await this.prisma.task.findFirst({
+      where: { ownerId: employeeId, activityId: activity.id, isAdhoc: false },
+      select: { id: true },
+    });
+    if (existingTask) {
+      await this.prisma.task.update({ where: { id: existingTask.id }, data: { isActive: true } });
+      await this.generateUpcomingInstancesForTaskId(
+        existingTask.id,
+        user.organizationId,
+      );
+      return { assignment, taskId: existingTask.id };
+    }
 
-    if (recipients.length === 0) {
-      throw new BadRequestException(
-        `No employees found for assignment mode "${assignmentMode}"`,
+    const taskResult = (await this.createTaskFromActivity(
+      user,
+      activity.id,
+      {
+        assignedToId: employeeId,
+        frequency: activity.frequency,
+        priority: Priority.MEDIUM,
+        isAdhoc: false,
+        acknowledgeOnCreate: true,
+      },
+      { notifyAssignee: false, systemGenerated: true },
+    )) as { task?: { id?: string } };
+    return { assignment, taskId: taskResult.task?.id };
+  }
+
+  private async deactivateActivityForEmployee(
+    organizationId: string,
+    employeeId: string,
+    activityId: string,
+  ) {
+    const now = new Date();
+    const timeZone = await this.getOrganizationTimeZone(organizationId);
+    const today = getUtcDateInTimeZone(new Date(), timeZone);
+    const tomorrow = addUtcDays(today, 1);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.employeeActivityAssignment.updateMany({
+        where: { organizationId, employeeId, activityId },
+        data: {
+          status: EmployeeActivityStatus.INACTIVE,
+          deactivatedAt: now,
+        },
+      });
+      const tasks = await tx.task.findMany({
+        where: { ownerId: employeeId, activityId, isAdhoc: false },
+        select: { id: true },
+      });
+      if (!tasks.length) return { removedFutureInstances: 0 };
+
+      const taskIds = tasks.map((task) => task.id);
+      await tx.task.updateMany({
+        where: { id: { in: taskIds } },
+        data: { isActive: false },
+      });
+      const deletion = await tx.taskInstance.deleteMany({
+        where: {
+          taskId: { in: taskIds },
+          scheduledFor: { gte: tomorrow },
+          status: TaskStatus.PENDING,
+          completionPercent: 0,
+        },
+      });
+      return { removedFutureInstances: deletion.count };
+    });
+  }
+
+  async searchActivityEmployees(
+    user: UserPayload,
+    query: SearchDwmsEmployeesDto,
+  ) {
+    await this.getEmployee(user.userId, user.organizationId);
+    if (!this.canManageActivities(user.roleLevel)) {
+      throw new ForbiddenException(
+        'Only management, admin, HR, HOD, and super admin users can manage employee activities',
       );
     }
 
-    return recipients;
+    const page = query.page || 1;
+    const limit = Math.min(query.limit || 20, 100);
+    const tokens = String(query.search ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const where: any = {
+      organizationId: user.organizationId,
+      employmentStatus: EmploymentStatus.ACTIVE,
+      ...(tokens.length
+        ? {
+            AND: tokens.map((token) => ({
+              OR: [
+                { firstName: { contains: token, mode: 'insensitive' } },
+                { lastName: { contains: token, mode: 'insensitive' } },
+                { jobTitle: { contains: token, mode: 'insensitive' } },
+              ],
+            })),
+          }
+        : {}),
+    };
+
+    const [employees, total] = await Promise.all([
+      this.prisma.employee.findMany({
+        where,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          employeeCode: true,
+          jobTitle: true,
+          department: { select: { id: true, name: true } },
+        },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.employee.count({ where }),
+    ]);
+
+    return {
+      data: employees.map((employee) => ({
+        ...employee,
+        name: `${employee.firstName} ${employee.lastName}`.trim(),
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 
   async listActivities(user: UserPayload, status?: string) {
@@ -562,7 +800,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
   async createActivity(
     user: UserPayload,
     dto: CreateActivityDto,
-    options: { linkJobRole?: boolean } = { linkJobRole: true },
+    options: { assignScope?: boolean; notifyAssignees?: boolean } = {
+      assignScope: true,
+      notifyAssignees: true,
+    },
   ) {
     await this.getEmployee(user.userId, user.organizationId);
     if (!this.canManageActivities(user.roleLevel)) {
@@ -570,8 +811,21 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         'Only management, admin, HR, HOD, and super admin users can create activities',
       );
     }
+    this.assertScopedActivityPayload(dto);
+    if (
+      dto.scope !== ActivityScope.EMPLOYEE &&
+      (dto.parentActivityId || dto.parentActivityIds?.length)
+    ) {
+      throw new BadRequestException(
+        'Parent Activity is supported only for Employee scope',
+      );
+    }
     await this.validateActivityReferences(user.organizationId, dto);
-    assertSupportedActivityFrequency(dto.frequency);
+    const resolvedScope = await this.resolveActivityScope(
+      user.organizationId,
+      dto.scope,
+      dto.scopeTarget,
+    );
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
     const parentActivityIds = await this.validateParentActivities(
       user.organizationId,
@@ -594,6 +848,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           companyUnitName: organization?.name ?? null,
           mainDepartmentId: dto.mainDepartmentId ?? null,
           subDepartment: dto.subDepartment ?? null,
+          gembaSection: dto.gembaSection ?? null,
+          processArea: dto.processArea ?? null,
           name: dto.name,
           workMethod: dto.workMethod,
           code,
@@ -607,8 +863,11 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           primaryResponsibleDesignation:
             dto.primaryResponsibleDesignation ?? null,
           evidenceRequired: dto.evidenceRequired ?? null,
-          effectiveFrom: this.parseActivityDate(dto.effectiveFrom, timeZone),
-          status: this.normalizeActivityStatus(dto.status),
+          effectiveFrom: this.parseActivityDate(undefined, timeZone),
+          status: ACTIVE_ACTIVITY_STATUS,
+          remarks: dto.remarks ?? null,
+          scope: dto.scope,
+          ...resolvedScope.scopeData,
         },
         include: ACTIVITY_INCLUDE,
       });
@@ -618,21 +877,49 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         activity.id,
         parentActivityIds,
       );
-      if (options.linkJobRole !== false) {
-        await this.linkActivityToJobTitle(
-          user.organizationId,
-          activity.id,
-          dto.primaryResponsibleDesignation,
-        );
-      }
       const createdActivity = await this.prisma.activity.findUnique({
         where: { id: activity.id },
         include: ACTIVITY_INCLUDE,
       });
 
+      const assignedEmployeeIds: string[] = [];
+      const taskIds: string[] = [];
+      if (options.assignScope !== false && createdActivity) {
+        try {
+          for (const recipient of resolvedScope.recipients) {
+            const activated = await this.activateActivityForEmployee(
+              user,
+              createdActivity,
+              recipient.id,
+            );
+            assignedEmployeeIds.push(recipient.id);
+            if (activated.taskId) taskIds.push(activated.taskId);
+          }
+        } catch (assignmentError) {
+          await this.prisma.task.deleteMany({ where: { activityId: activity.id } }).catch(() => undefined);
+          await this.prisma.activity.delete({ where: { id: activity.id } }).catch(() => undefined);
+          throw assignmentError;
+        }
+      }
+      if (options.notifyAssignees !== false && assignedEmployeeIds.length) {
+        await this.notifications.createMany(
+          assignedEmployeeIds.map((employeeId) => ({
+            employeeId,
+            type: NotificationType.INFO,
+            module: 'DWMS',
+            title: 'DWMS activities updated',
+            message: '1 activity has been added to your DWMS profile.',
+            actionUrl: '/dwms/tasks',
+          })),
+        );
+      }
+
       return {
         message: 'Activity created',
         activity: this.serializeActivity(createdActivity),
+        assignedCount: assignedEmployeeIds.length,
+        assignedEmployeeIds,
+        taskIds,
       };
     } catch (error: any) {
       if (error?.code === 'P2002') {
@@ -673,6 +960,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       activityName: row.activityName,
       activityCode: row.activityCode,
       responsibleEmployeeCode: row.responsibleEmployeeCode,
+      scope: row.scope,
+      scopeTarget: row.scopeTarget,
+      assignedCount: row.assignedCount,
       responsibleJobRole:
         row.activity?.primaryResponsibleDesignation ?? null,
       message: row.message
@@ -744,6 +1034,104 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     };
   }
 
+  async previewActivityIngestion(user: UserPayload, dto: IngestActivitiesDto) {
+    await this.getEmployee(user.userId, user.organizationId);
+    if (!this.canManageActivities(user.roleLevel)) {
+      throw new ForbiddenException(
+        'Only management, admin, HR, HOD, and super admin users can ingest activities',
+      );
+    }
+    const rows = Array.isArray(dto.rows) ? dto.rows : [];
+    if (!rows.length) throw new BadRequestException('No activity rows supplied for ingestion');
+
+    const submittedByCode = new Map<string, IngestActivitiesDto['rows'][number]>();
+    for (const row of rows) {
+      const code = row.activity?.code?.trim().toLowerCase();
+      if (code && !submittedByCode.has(code)) submittedByCode.set(code, row);
+    }
+
+    const results = [] as Array<{
+      rowNumber: number;
+      valid: boolean;
+      activityCode?: string;
+      activityName?: string;
+      scope?: ActivityScope;
+      scopeTarget?: string;
+      matchedEmployees: number;
+      message: string;
+    }>;
+    const seenCodes = new Set<string>();
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const rowNumber = row.rowNumber ?? index + 2;
+      const code = row.activity?.code?.trim();
+      try {
+        this.assertScopedActivityPayload(row.activity);
+        const normalizedCode = code!.toLowerCase();
+        if (seenCodes.has(normalizedCode)) {
+          throw new BadRequestException(`Duplicate Activity Code "${code}" in this file`);
+        }
+        seenCodes.add(normalizedCode);
+        const existing = await this.prisma.activity.findFirst({
+          where: { organizationId: user.organizationId, code },
+          select: { id: true },
+        });
+        if (existing) throw new BadRequestException(`Activity Code "${code}" already exists`);
+
+        const resolved = await this.resolveActivityScope(
+          user.organizationId,
+          row.activity.scope,
+          row.activity.scopeTarget,
+        );
+        const parentCode = row.parentActivityCode?.trim();
+        if (parentCode && !this.isBlankImportValue(parentCode)) {
+          if (row.activity.scope !== ActivityScope.EMPLOYEE) {
+            throw new BadRequestException(
+              'Parent Activity Code is supported only for Employee scope',
+            );
+          }
+          const submittedParent = submittedByCode.get(parentCode.toLowerCase());
+          const existingParent = submittedParent
+            ? null
+            : await this.prisma.activity.findFirst({
+                where: { organizationId: user.organizationId, code: parentCode },
+                select: { frequency: true },
+              });
+          const parentFrequency = submittedParent?.activity.frequency ?? existingParent?.frequency;
+          if (!parentFrequency) {
+            throw new BadRequestException(`Parent Activity Code "${parentCode}" was not found`);
+          }
+          if (parentFrequency !== row.activity.frequency) {
+            throw new BadRequestException('Parent activity must have the same frequency');
+          }
+        }
+        results.push({
+          rowNumber,
+          valid: true,
+          activityCode: code,
+          activityName: row.activity.name,
+          scope: row.activity.scope,
+          scopeTarget: resolved.targetLabel ?? undefined,
+          matchedEmployees: resolved.recipients.length,
+          message: `Ready for ${resolved.recipients.length} ${resolved.recipients.length === 1 ? 'employee' : 'employees'}`,
+        });
+      } catch (error) {
+        results.push({
+          rowNumber,
+          valid: false,
+          activityCode: code,
+          activityName: row.activity?.name,
+          scope: row.activity?.scope,
+          scopeTarget: row.activity?.scopeTarget,
+          matchedEmployees: 0,
+          message: this.cleanActivityIngestionError(error),
+        });
+      }
+    }
+    const valid = results.filter((row) => row.valid).length;
+    return { count: results.length, valid, failed: results.length - valid, results };
+  }
+
   async ingestActivities(user: UserPayload, dto: IngestActivitiesDto) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     if (!this.canManageActivities(user.roleLevel)) {
@@ -786,6 +1174,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       activityName?: string | null;
       activityCode?: string | null;
       responsibleEmployeeCode?: string | null;
+      scope?: ActivityScope | null;
+      scopeTarget?: string | null;
+      assignedCount?: number;
       message?: string | null;
       activityId?: string | null;
       taskId?: string | null;
@@ -801,6 +1192,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       parentActivityCode: string | null;
       assignedCount: number;
       assignmentMessage: string;
+      assignedEmployeeIds: string[];
     }> = [];
 
     for (let index = 0; index < rows.length; index += 1) {
@@ -808,66 +1200,27 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       const rowNumber = row.rowNumber ?? index + 2;
       const activityName = row.activity?.name ?? null;
       const activityCode = row.activity?.code ?? null;
-      const assignmentMode =
-        row.assignmentMode ?? ActivityIngestionAssignmentMode.INDIVIDUAL;
+      const scope = row.activity?.scope ?? null;
+      const scopeTarget = row.activity?.scopeTarget?.trim() || null;
       const responsibleEmployeeCode =
-        assignmentMode === ActivityIngestionAssignmentMode.INDIVIDUAL
-          ? (row.responsibleEmployeeCode ?? null)
-          : null;
-      const parentActivityCode = row.parentActivityCode?.trim() || null;
+        scope === ActivityScope.EMPLOYEE ? scopeTarget : null;
+      const parentActivityCode = this.isBlankImportValue(row.parentActivityCode)
+        ? null
+        : row.parentActivityCode!.trim();
       try {
-        if (
-          !Object.values(ActivityIngestionAssignmentMode).includes(
-            assignmentMode,
-          )
-        ) {
-          throw new BadRequestException(
-            `Assignment Mode must be one of: ${Object.values(ActivityIngestionAssignmentMode).join(', ')}`,
-          );
-        }
         const activityPayload = this.stripActivityPersonReferences(
           row.activity,
         );
         activityPayload.parentActivityIds = undefined;
-        if (
-          !activityPayload?.name?.trim() ||
-          !activityPayload?.workMethod?.trim()
-        ) {
+        this.assertScopedActivityPayload(activityPayload);
+        if (parentActivityCode && activityPayload.scope !== ActivityScope.EMPLOYEE) {
           throw new BadRequestException(
-            'Process Name and Description / SOP are required',
+            'Parent Activity Code is supported only for Employee scope',
           );
         }
-        if (!activityPayload.frequency) {
-          throw new BadRequestException('Frequency is required');
-        }
-        if (activityPayload.frequency === TaskFrequency.PLANNED) {
-          throw new BadRequestException(
-            'Activity ingestion does not support planned one-time rows. Use a recurring frequency: Daily, Weekly, Monthly, Quarterly, or Yearly.',
-          );
-        }
-
-        const jobRole = activityPayload.primaryResponsibleDesignation?.trim();
-        if (
-          assignmentMode === ActivityIngestionAssignmentMode.JOB_ROLE &&
-          !jobRole
-        ) {
-          throw new BadRequestException(
-            'Responsible Job Designation is required for Job Role assignment mode',
-          );
-        }
-
-        const recipients =
-          assignmentMode === ActivityIngestionAssignmentMode.JOB_ROLE
-            ? []
-            : await this.resolveActivityIngestionRecipients(
-                user.organizationId,
-                assignmentMode,
-                row.responsibleEmployeeCode,
-              );
 
         const created = await this.createActivity(user, activityPayload, {
-          linkJobRole:
-            assignmentMode === ActivityIngestionAssignmentMode.JOB_ROLE,
+          notifyAssignees: false,
         });
         const activityId = created.activity?.id;
         if (!activityId) {
@@ -875,28 +1228,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         }
 
         try {
-          const taskIds: string[] = [];
-          for (const recipient of recipients) {
-            const taskResult = (await this.createTaskFromActivity(
-              user,
-              activityId,
-              {
-                assignedToId: recipient.id,
-                frequency: activityPayload.frequency,
-                priority: Priority.MEDIUM,
-                isAdhoc: false,
-                acknowledgeOnCreate: true,
-              },
-              { notifyAssignee: false, systemGenerated: true },
-            )) as { task?: { id?: string } };
-            if (taskResult.task?.id) taskIds.push(taskResult.task.id);
-          }
-          const taskId = taskIds[0];
-          const assignedCount = recipients.length;
-          const assignmentMessage =
-            assignmentMode === ActivityIngestionAssignmentMode.JOB_ROLE
-              ? `Activity associated with job role "${jobRole}"`
-              : `Activity assigned to ${assignedCount} ${assignedCount === 1 ? 'user' : 'users'}`;
+          const taskId = created.taskIds?.[0];
+          const assignedCount = created.assignedCount ?? 0;
+          const assignmentMessage = `Activity scoped to ${String(scope).replaceAll('_', ' ').toLowerCase()}${scopeTarget ? ` "${scopeTarget}"` : ''}; assigned to ${assignedCount} ${assignedCount === 1 ? 'employee' : 'employees'}`;
           const resultIndex = results.length;
           results.push({
             rowNumber,
@@ -904,7 +1238,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             activityId,
             taskId,
             responsibleEmployeeId:
-              assignedCount === 1 ? recipients[0]?.id : undefined,
+              assignedCount === 1 ? created.assignedEmployeeIds?.[0] : undefined,
             assignedCount,
             message: parentActivityCode
               ? `${assignmentMessage}; parent activity pending link`
@@ -919,6 +1253,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             activityName,
             activityCode: created.activity?.code ?? activityCode,
             responsibleEmployeeCode,
+            scope,
+            scopeTarget: created.activity?.scopeTarget ?? scopeTarget,
+            assignedCount,
             message: parentActivityCode
               ? `${assignmentMessage}; parent activity pending link`
               : assignmentMessage,
@@ -936,6 +1273,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             parentActivityCode,
             assignedCount,
             assignmentMessage,
+            assignedEmployeeIds: created.assignedEmployeeIds ?? [],
           });
         } catch (taskError) {
           await this.prisma.task
@@ -957,6 +1295,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           activityName,
           activityCode,
           responsibleEmployeeCode,
+          scope,
+          scopeTarget,
+          assignedCount: 0,
           message,
         });
       }
@@ -1070,6 +1411,27 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       },
     });
 
+    const activityCountByEmployee = new Map<string, number>();
+    for (const item of successfulImports) {
+      if (!results[item.resultIndex]?.success) continue;
+      for (const employeeId of item.assignedEmployeeIds) {
+        activityCountByEmployee.set(
+          employeeId,
+          (activityCountByEmployee.get(employeeId) ?? 0) + 1,
+        );
+      }
+    }
+    await this.notifications.createMany(
+      Array.from(activityCountByEmployee, ([employeeId, count]) => ({
+        employeeId,
+        type: NotificationType.INFO,
+        module: 'DWMS',
+        title: 'DWMS activities updated',
+        message: `${count} ${count === 1 ? 'activity has' : 'activities have'} been added to your DWMS profile.`,
+        actionUrl: '/dwms/tasks',
+      })),
+    );
+
     return {
       message: `Imported ${created} of ${results.length} activity rows`,
       ingestion: this.serializeActivityIngestion(updatedIngestion),
@@ -1080,36 +1442,77 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     };
   }
 
+  private activityMatchesEmployee(activity: any, employee: any) {
+    if (activity.scope === ActivityScope.ORGANISATION) return true;
+    if (activity.scope === ActivityScope.DEPARTMENT) {
+      return !!employee.departmentId && activity.scopeDepartmentId === employee.departmentId;
+    }
+    if (activity.scope === ActivityScope.JOB_TITLE) {
+      return (
+        !!activity.scopeJobTitle &&
+        activity.scopeJobTitle === this.normalizeJobTitle(employee.jobTitle)
+      );
+    }
+    if (activity.scope === ActivityScope.EMPLOYEE) {
+      return activity.scopeEmployeeId === employee.id;
+    }
+    return false;
+  }
+
   async listEmployeeRoleActivities(user: UserPayload, employeeId: string) {
     await this.getEmployee(user.userId, user.organizationId);
     const employee = await this.prisma.employee.findFirst({
       where: { id: employeeId, organizationId: user.organizationId },
-      select: { id: true, jobTitle: true },
+      select: {
+        id: true,
+        jobTitle: true,
+        departmentId: true,
+        employmentStatus: true,
+      },
     });
     if (!employee) throw new NotFoundException('Employee not found');
 
     const jobTitle = this.normalizeJobTitle(employee.jobTitle);
-    if (!jobTitle) {
-      return { jobTitle: null, count: 0, activities: [] };
+    const scopeFilters: any[] = [{ scope: ActivityScope.ORGANISATION }];
+    if (employee.departmentId) {
+      scopeFilters.push({
+        scope: ActivityScope.DEPARTMENT,
+        scopeDepartmentId: employee.departmentId,
+      });
     }
+    if (jobTitle) {
+      scopeFilters.push({ scope: ActivityScope.JOB_TITLE, scopeJobTitle: jobTitle });
+    }
+    scopeFilters.push({ scope: ActivityScope.EMPLOYEE, scopeEmployeeId: employee.id });
 
-    const [roleActivities, assignments] = await Promise.all([
-      this.prisma.jobTitleActivity.findMany({
-        where: { organizationId: user.organizationId, jobTitle },
-        include: { activity: { include: ACTIVITY_INCLUDE } },
-        orderBy: [{ activity: { name: 'asc' } }, { activity: { code: 'asc' } }],
+    const [applicableActivities, assignments] = await Promise.all([
+      this.prisma.activity.findMany({
+        where: {
+          organizationId: user.organizationId,
+          status: ActivityStatus.ACTIVE,
+          OR: scopeFilters,
+        },
+        include: ACTIVITY_INCLUDE,
       }),
       this.prisma.employeeActivityAssignment.findMany({
         where: { organizationId: user.organizationId, employeeId },
+        include: { activity: { include: ACTIVITY_INCLUDE } },
       }),
     ]);
 
     const assignmentByActivityId = new Map(
       assignments.map((assignment) => [assignment.activityId, assignment]),
     );
-    const activities = roleActivities.map((item) =>
-      this.serializeEmployeeRoleActivity(item, assignmentByActivityId),
-    );
+    const activityById = new Map<string, any>();
+    for (const activity of applicableActivities) activityById.set(activity.id, activity);
+    for (const assignment of assignments) {
+      activityById.set(assignment.activityId, assignment.activity);
+    }
+    const activities = Array.from(activityById.values())
+      .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code))
+      .map((activity) =>
+        this.serializeEmployeeRoleActivity(activity, assignmentByActivityId),
+      );
 
     return { jobTitle, count: activities.length, activities };
   }
@@ -1130,7 +1533,12 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     const [employee, activity] = await Promise.all([
       this.prisma.employee.findFirst({
         where: { id: employeeId, organizationId: user.organizationId },
-        select: { id: true, jobTitle: true },
+        select: {
+          id: true,
+          jobTitle: true,
+          departmentId: true,
+          employmentStatus: true,
+        },
       }),
       this.prisma.activity.findFirst({
         where: { id: activityId, organizationId: user.organizationId },
@@ -1140,67 +1548,39 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     if (!employee) throw new NotFoundException('Employee not found');
     if (!activity) throw new NotFoundException('Activity not found');
 
-    const jobTitle = this.normalizeJobTitle(employee.jobTitle);
-    if (!jobTitle) {
-      throw new BadRequestException('Employee does not have a job title');
-    }
-
-    const roleActivity = await this.prisma.jobTitleActivity.findFirst({
-      where: { organizationId: user.organizationId, jobTitle, activityId },
-      select: { id: true },
+    const existingAssignment = await this.prisma.employeeActivityAssignment.findUnique({
+      where: { employeeId_activityId: { employeeId, activityId } },
     });
-    if (!roleActivity) {
+    if (
+      dto.status === EmployeeActivityStatus.ACTIVE &&
+      (activity.status !== ActivityStatus.ACTIVE ||
+        employee.employmentStatus !== EmploymentStatus.ACTIVE ||
+        !this.activityMatchesEmployee(activity, employee))
+    ) {
       throw new BadRequestException(
-        'Activity is not linked to this employee job title',
+        'Activity does not currently apply to this active employee',
       );
     }
+    if (dto.status === EmployeeActivityStatus.INACTIVE && !existingAssignment) {
+      throw new BadRequestException('Employee activity assignment was not found');
+    }
 
-    const now = new Date();
-    const assignment = await this.prisma.employeeActivityAssignment.upsert({
-      where: { employeeId_activityId: { employeeId, activityId } },
-      update: {
-        status: dto.status,
-        activatedAt:
-          dto.status === EmployeeActivityStatus.ACTIVE ? now : undefined,
-        deactivatedAt:
-          dto.status === EmployeeActivityStatus.INACTIVE ? now : null,
-      },
-      create: {
-        organizationId: user.organizationId,
+    let assignment;
+    let removedFutureInstances = 0;
+    if (dto.status === EmployeeActivityStatus.ACTIVE) {
+      assignment = (
+        await this.activateActivityForEmployee(user, activity, employeeId)
+      ).assignment;
+    } else {
+      const result = await this.deactivateActivityForEmployee(
+        user.organizationId,
         employeeId,
         activityId,
-        status: dto.status,
-        activatedAt: dto.status === EmployeeActivityStatus.ACTIVE ? now : null,
-        deactivatedAt:
-          dto.status === EmployeeActivityStatus.INACTIVE ? now : null,
-      },
-    });
-
-    if (dto.status === EmployeeActivityStatus.ACTIVE) {
-      const existingTask = await this.prisma.task.findFirst({
-        where: {
-          ownerId: employeeId,
-          activityId,
-          frequency: activity.frequency,
-          isAdhoc: false,
-        },
-        select: { id: true },
+      );
+      removedFutureInstances = result.removedFutureInstances;
+      assignment = await this.prisma.employeeActivityAssignment.findUnique({
+        where: { employeeId_activityId: { employeeId, activityId } },
       });
-
-      if (!existingTask) {
-        await this.createTaskFromActivity(
-          user,
-          activityId,
-          {
-            assignedToId: employeeId,
-            frequency: activity.frequency,
-            priority: Priority.MEDIUM,
-            isAdhoc: false,
-            acknowledgeOnCreate: true,
-          },
-          { systemGenerated: true },
-        );
-      }
     }
 
     return {
@@ -1212,8 +1592,115 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         activity,
         new Map([[activityId, assignment]]),
       ),
+      removedFutureInstances,
     };
   }
+
+  async synchronizeEmployeeActivities(
+    organizationId: string,
+    employeeId: string,
+    options: {
+      isNewEmployee?: boolean;
+      previousDepartmentId?: string | null;
+      previousJobTitle?: string | null;
+      previousEmploymentStatus?: EmploymentStatus | null;
+    } = {},
+  ) {
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, organizationId },
+      select: {
+        id: true,
+        departmentId: true,
+        jobTitle: true,
+        employmentStatus: true,
+      },
+    });
+    if (!employee) return;
+
+    const activities = await this.prisma.activity.findMany({
+      where: { organizationId, scope: { not: null } },
+      include: ACTIVITY_INCLUDE,
+    });
+    const assignments = await this.prisma.employeeActivityAssignment.findMany({
+      where: { organizationId, employeeId },
+    });
+    const assignmentByActivityId = new Map(
+      assignments.map((assignment) => [assignment.activityId, assignment]),
+    );
+    const systemUser: UserPayload = {
+      userId: '',
+      organizationId,
+      roleLevel: 'SYSTEM',
+    };
+
+    if (employee.employmentStatus !== EmploymentStatus.ACTIVE) {
+      for (const assignment of assignments) {
+        if (assignment.status === EmployeeActivityStatus.ACTIVE) {
+          await this.deactivateActivityForEmployee(
+            organizationId,
+            employeeId,
+            assignment.activityId,
+          );
+        }
+      }
+      return;
+    }
+
+    if (options.isNewEmployee) {
+      for (const activity of activities) {
+        if (!this.activityMatchesEmployee(activity, employee)) continue;
+        await this.prisma.employeeActivityAssignment.upsert({
+          where: { employeeId_activityId: { employeeId, activityId: activity.id } },
+          update: {},
+          create: {
+            organizationId,
+            employeeId,
+            activityId: activity.id,
+            status: EmployeeActivityStatus.INACTIVE,
+            deactivatedAt: new Date(),
+          },
+        });
+      }
+      return;
+    }
+
+    if (
+      options.previousEmploymentStatus &&
+      options.previousEmploymentStatus !== EmploymentStatus.ACTIVE
+    ) {
+      for (const activity of activities) {
+        if (activity.status !== ActivityStatus.ACTIVE) continue;
+        if (this.activityMatchesEmployee(activity, employee)) {
+          await this.activateActivityForEmployee(systemUser, activity, employeeId);
+        }
+      }
+      return;
+    }
+
+    const previousEmployee = {
+      ...employee,
+      departmentId:
+        'previousDepartmentId' in options
+          ? options.previousDepartmentId
+          : employee.departmentId,
+      jobTitle:
+        'previousJobTitle' in options
+          ? options.previousJobTitle
+          : employee.jobTitle,
+    };
+    for (const activity of activities) {
+      const matchedBefore = this.activityMatchesEmployee(activity, previousEmployee);
+      const matchesNow =
+        activity.status === ActivityStatus.ACTIVE &&
+        this.activityMatchesEmployee(activity, employee);
+      if (!matchedBefore && matchesNow) {
+        await this.activateActivityForEmployee(systemUser, activity, employeeId);
+      } else if (matchedBefore && !matchesNow && assignmentByActivityId.has(activity.id)) {
+        await this.deactivateActivityForEmployee(organizationId, employeeId, activity.id);
+      }
+    }
+  }
+
   async updateActivity(
     user: UserPayload,
     activityId: string,
@@ -1246,6 +1733,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       data.mainDepartmentId = dto.mainDepartmentId || null;
     if (dto.subDepartment !== undefined)
       data.subDepartment = dto.subDepartment || null;
+    if (dto.gembaSection !== undefined)
+      data.gembaSection = dto.gembaSection || null;
+    if (dto.processArea !== undefined)
+      data.processArea = dto.processArea || null;
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.workMethod !== undefined) data.workMethod = dto.workMethod;
     if (dto.code !== undefined) data.code = dto.code.trim();
@@ -1263,6 +1754,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         dto.primaryResponsibleDesignation || null;
     if (dto.evidenceRequired !== undefined)
       data.evidenceRequired = dto.evidenceRequired || null;
+    if (dto.remarks !== undefined) data.remarks = dto.remarks || null;
     if (dto.status !== undefined)
       data.status = this.normalizeActivityStatus(dto.status);
     if (dto.effectiveFrom !== undefined) {
@@ -1282,13 +1774,6 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         activityId,
         parentActivityIds,
       );
-      if (dto.primaryResponsibleDesignation !== undefined) {
-        await this.linkActivityToJobTitle(
-          user.organizationId,
-          activityId,
-          dto.primaryResponsibleDesignation,
-        );
-      }
       const activity = await this.prisma.activity.findUnique({
         where: { id: activityId },
         include: ACTIVITY_INCLUDE,
@@ -1326,6 +1811,18 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       data: { status: ARCHIVED_ACTIVITY_STATUS },
       include: ACTIVITY_INCLUDE,
     });
+
+    const assignments = await this.prisma.employeeActivityAssignment.findMany({
+      where: { organizationId: user.organizationId, activityId },
+      select: { employeeId: true },
+    });
+    for (const assignment of assignments) {
+      await this.deactivateActivityForEmployee(
+        user.organizationId,
+        assignment.employeeId,
+        activityId,
+      );
+    }
 
     return {
       message: 'Activity archived',

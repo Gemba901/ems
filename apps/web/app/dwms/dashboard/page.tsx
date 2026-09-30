@@ -22,6 +22,12 @@ import EmployeeDwmsPanel from '../components/EmployeeDwmsPanel';
 import DwmsTabHeader from '../components/DwmsTabHeader';
 import DwmsSelectDropdown from '../components/DwmsSelectDropdown';
 import { addDaysToDateKey } from '../utils/organizationDate';
+import TaskCategoryPieCharts from '../components/dashboard/TaskCategoryPieCharts';
+import {
+  canShowEmployeePerformanceTab,
+  filterEmployeePerformanceOptions,
+  resolveEmployeePerformanceDestination,
+} from '../utils/employeePerformanceAccess';
 
 type GraphRange = '7d' | '1m' | '3m';
 
@@ -32,10 +38,12 @@ const graphRangeOptions: Array<{ value: GraphRange; label: string; days: number;
 ];
 
 const fixedTrendGraphs = [
+  { value: 'completionRate', label: 'All Tasks Completion Rate', suffix: '%', tooltipLabel: 'All Tasks' },
+  { value: 'goodPracticeCompletionRate', label: 'Good Practices Completion Rate', suffix: '%', tooltipLabel: 'Good Practices' },
+  { value: 'jobResponsibilityCompletionRate', label: 'Job Responsibility Completion Rate', suffix: '%', tooltipLabel: 'Job Responsibility' },
+  { value: 'assignedTaskCompletionRate', label: 'Assigned Tasks Completion Rate', suffix: '%', tooltipLabel: 'Assigned Tasks' },
   { value: 'alertsCount', label: 'Alerts', suffix: '', tooltipLabel: 'Alerts' },
-  { value: 'completionRate', label: 'Completion Rate', suffix: '%', tooltipLabel: 'Completion Rate' },
-  { value: 'completedOnTimeRate', label: 'Completed on Time', suffix: '%', tooltipLabel: 'Completed on Time' },
-  { value: 'avgAcknowledgeTimeMin', label: 'Avg. Acknowledgement', suffix: ' min', tooltipLabel: 'Avg. Acknowledgement' },
+  { value: 'abnormalitiesCount', label: 'Abnormalities', suffix: '', tooltipLabel: 'Abnormalities' },
 ] as const;
 
 function filterTrendByRange(trendData: DwmsDashboardTrendPoint[], days: number) {
@@ -141,8 +149,13 @@ function DashboardPage() {
   useEffect(() => {
     if (!access) return;
     if (activeTab === 'overview' && access.analyticsViewLevel !== 'ORGANIZATION') setActiveTab('employee');
-    if ((activeTab === 'department' || activeTab === 'team') && access.analyticsViewLevel === 'OWN') setActiveTab('employee');
-  }, [access, activeTab]);
+    if (activeTab === 'department' && access.analyticsViewLevel === 'OWN') setActiveTab('employee');
+    if (activeTab === 'team' && !access.canViewEmployeePerformance) {
+      setShowSelectedEmployeeInsights(false);
+      setActiveTab('employee');
+      if (user) setSelectedEmpId(user.userId);
+    }
+  }, [access, activeTab, user]);
 
   // Load lists when overview data or department scoreboard is fetched
   useEffect(() => {
@@ -157,9 +170,17 @@ function DashboardPage() {
   useEffect(() => {
     let list: Array<{ id: string; name: string; department?: string }> = [];
     if (overviewData?.employeeScoreboard) {
-      list = overviewData.employeeScoreboard.map((e) => ({ id: e.id, name: e.name, department: e.department }));
+      list = filterEmployeePerformanceOptions(
+        overviewData.employeeScoreboard,
+        access,
+      )
+        .map((e) => ({ id: e.id, name: e.name, department: e.department }));
     } else if (departmentData?.employeeScoreboard) {
-      list = departmentData.employeeScoreboard.map((e) => ({ id: e.id, name: e.name, department: departmentData.departmentName }));
+      list = filterEmployeePerformanceOptions(
+        departmentData.employeeScoreboard,
+        access,
+      )
+        .map((e) => ({ id: e.id, name: e.name, department: departmentData.departmentName }));
     }
 
     if (list.length > 0) {
@@ -172,7 +193,7 @@ function DashboardPage() {
         setHasDefaultedTeamEmp(true);
       }
     }
-  }, [overviewData, departmentData, activeTab, hasDefaultedTeamEmp]);
+  }, [overviewData, departmentData, activeTab, hasDefaultedTeamEmp, access]);
 
   // Fetch function
   const fetchData = useCallback(async () => {
@@ -215,7 +236,12 @@ function DashboardPage() {
         if (access?.analyticsViewLevel === 'ORGANIZATION' && !overviewDataRef.current) {
           const overview = await DwmsService.getDashboardOverview(token, days);
           updateOverviewData(overview);
-          const firstEmployee = overview.employeeScoreboard?.[0];
+          const permittedEmployeeIds = new Set(
+            access.employeePerformanceEmployeeIds,
+          );
+          const firstEmployee = overview.employeeScoreboard?.find((employee) =>
+            permittedEmployeeIds.has(employee.id),
+          );
           if (!empId && firstEmployee) {
             empId = firstEmployee.id;
             setSelectedEmpId(empId);
@@ -224,7 +250,12 @@ function DashboardPage() {
           const deptId = user.departmentId || '';
           const dept = await DwmsService.getDashboardDepartment(token, deptId, days);
           updateDepartmentData(dept);
-          const firstEmployee = dept.employeeScoreboard?.[0];
+          const permittedEmployeeIds = new Set(
+            access.employeePerformanceEmployeeIds,
+          );
+          const firstEmployee = dept.employeeScoreboard?.find((employee) =>
+            permittedEmployeeIds.has(employee.id),
+          );
           if (!empId && firstEmployee) {
             empId = firstEmployee.id;
             setSelectedEmpId(empId);
@@ -232,8 +263,11 @@ function DashboardPage() {
         }
 
         if (activeTab === 'team' && user) {
-          // If viewing reportee, fetch reportee's data, otherwise fetch user's own team data
-          empId = selectedEmpId && selectedEmpId !== user.userId ? selectedEmpId : user.userId;
+          const permittedEmployeeIds = access?.employeePerformanceEmployeeIds ?? [];
+          empId = permittedEmployeeIds.includes(selectedEmpId)
+            ? selectedEmpId
+            : (permittedEmployeeIds[0] ?? '');
+          if (empId && empId !== selectedEmpId) setSelectedEmpId(empId);
         }
 
         if (empId) {
@@ -278,6 +312,12 @@ function DashboardPage() {
     [completionTrends, selectedGraphRange.days]
   );
 
+  const canSelectEmployee = useCallback(
+    (employeeId: string) =>
+      resolveEmployeePerformanceDestination(employeeId, access) !== null,
+    [access],
+  );
+
   // Callback to instantly switch to Department tab when clicking on Heatmap
   const handleSelectDepartment = (deptId: string) => {
     setSelectedDeptId(deptId);
@@ -286,6 +326,15 @@ function DashboardPage() {
   };
 
   const handleSelectDepartmentEmployee = (employeeId: string) => {
+    const destination = resolveEmployeePerformanceDestination(employeeId, access);
+    if (!destination) return;
+    if (destination === 'my-performance') {
+      setShowSelectedEmployeeInsights(false);
+      setActiveTab('employee');
+      if (user) setSelectedEmpId(user.userId);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     setSelectedEmpId(employeeId);
     setHasDefaultedTeamEmp(true);
     setShowSelectedEmployeeInsights(true);
@@ -304,13 +353,14 @@ function DashboardPage() {
             setActiveTab('employee');
             if (user) setSelectedEmpId(user.userId);
           } else if (tab === 'team') {
+            if (!access?.canViewEmployeePerformance) return;
             setActiveTab('team');
             if (employeesList.length > 0) {
               setSelectedEmpId(employeesList[0].id);
               setHasDefaultedTeamEmp(true);
-            } else if (user) {
-              setSelectedEmpId(user.userId);
-              setHasDefaultedTeamEmp(false);
+            } else if (access.employeePerformanceEmployeeIds[0]) {
+              setSelectedEmpId(access.employeePerformanceEmployeeIds[0]);
+              setHasDefaultedTeamEmp(true);
             }
           } else if (tab === 'department') {
             setActiveTab('department');
@@ -320,9 +370,13 @@ function DashboardPage() {
         }}
         tabs={[
           { key: 'employee', label: 'My Performance', dotColor: 'bg-blue-500' },
-          ...(access?.analyticsViewLevel === 'DEPARTMENT' || access?.analyticsViewLevel === 'ORGANIZATION'
+          ...(canShowEmployeePerformanceTab(access)
             ? [
                 { key: 'team' as const, label: 'Employee Performance', dotColor: 'bg-indigo-500' },
+              ]
+            : []),
+          ...(access?.analyticsViewLevel === 'DEPARTMENT' || access?.analyticsViewLevel === 'ORGANIZATION'
+            ? [
                 { key: 'department' as const, label: 'Department Performance', dotColor: 'bg-violet-500' },
               ]
             : []),
@@ -347,7 +401,7 @@ function DashboardPage() {
               </div>
             )}
 
-            {activeTab === 'team' && access?.analyticsViewLevel !== 'OWN' && employeesList.length > 0 && (
+            {activeTab === 'team' && access?.canViewEmployeePerformance && employeesList.length > 0 && (
               <div className="flex items-center gap-2">
                 <div className="w-60">
                   <DwmsSelectDropdown
@@ -394,7 +448,7 @@ function DashboardPage() {
           {/* Render charts and cards only when we are NOT in the 'team' tab, OR when in 'team' tab but viewing a specific employee */}
           {(activeTab !== 'team' || selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && (
             <>
-              {/* 1. Visual Charts Row (Completion Trend & Acknowledgement Time) */}
+              {/* 1. Period controls and KPI summary */}
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className="text-xs font-semibold text-muted-app">Period:</span>
                 <div className="inline-flex rounded-xl border border-border-app bg-white p-1 shadow-sm">
@@ -415,7 +469,6 @@ function DashboardPage() {
                 </div>
               </div>
 
-              {/* 2. KPI Cards */}
               {stats && (
                 <KpiCards
                   stats={stats}
@@ -423,8 +476,26 @@ function DashboardPage() {
                   periodLabel={selectedGraphRange.metricLabel}
                 />
               )}
-                  <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-2">
-                    {fixedTrendGraphs.map((graph) => (
+
+              {stats?.taskCategoryBreakdown && (
+                <TaskCategoryPieCharts
+                  breakdown={stats.taskCategoryBreakdown}
+                  periodLabel={selectedGraphRange.label}
+                />
+              )}
+
+              {/* 2. Completion, alert, and abnormality timelines */}
+              <section aria-labelledby="report-trends-heading">
+                <div className="mb-3">
+                  <h2 id="report-trends-heading" className="font-semibold text-text-app">
+                    Performance Trends
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-app">
+                    Daily values for {selectedGraphRange.label.toLowerCase()}.
+                  </p>
+                </div>
+                <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-2">
+                  {fixedTrendGraphs.map((graph) => (
                     <div key={graph.value} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
                       <div className="mb-3 border-b border-border-app pb-2">
                         <h3 className="font-semibold text-text-app">{graph.label}</h3>
@@ -437,36 +508,39 @@ function DashboardPage() {
                         tooltipLabel={graph.tooltipLabel}
                         height={160}
                         variant="line"
+                        showTaskTotals={graph.value === 'completionRate'}
                       />
                     </div>
                   ))}
                 </div>
+              </section>
 
+              {/* 3. Scope comparison and ranking bars */}
+              {activeTab === 'overview' && overviewData && (
+                <OverviewDashboard
+                  overviewData={overviewData}
+                  onSelectDepartment={handleSelectDepartment}
+                  onSelectEmployee={handleSelectDepartmentEmployee}
+                  canSelectEmployee={canSelectEmployee}
+                />
+              )}
+
+              {activeTab === 'department' && departmentData && (
+                <DepartmentDashboard
+                  departmentData={departmentData}
+                  onSelectEmployee={handleSelectDepartmentEmployee}
+                  canSelectEmployee={canSelectEmployee}
+                />
+              )}
 
             </>
-          )}
-
-          {/* 3. Detailed Tab Dashboards */}
-          {activeTab === 'overview' && overviewData && (
-            <OverviewDashboard
-              overviewData={overviewData}
-              onSelectDepartment={handleSelectDepartment}
-              onSelectEmployee={handleSelectDepartmentEmployee}
-            />
-          )}
-
-          {activeTab === 'department' && departmentData && (
-            <DepartmentDashboard
-              departmentData={departmentData}
-              onSelectEmployee={handleSelectDepartmentEmployee}
-            />
           )}
 
           {activeTab === 'employee' && employeeData?.employee && (
             <EmployeeDashboard
               employeeData={{ ...employeeData, employee: employeeData.employee }}
               loggedInUserId={user?.userId || ''}
-              onSelectEmployee={setSelectedEmpId}
+              onSelectEmployee={handleSelectDepartmentEmployee}
               activeSubTab="insights"
             />
           )}
@@ -476,7 +550,7 @@ function DashboardPage() {
               <EmployeeDashboard
                 employeeData={{ ...employeeData, employee: employeeData.employee }}
                 loggedInUserId={user?.userId || ''}
-                onSelectEmployee={setSelectedEmpId}
+                onSelectEmployee={handleSelectDepartmentEmployee}
                 activeSubTab={selectedEmpId === user?.userId && !showSelectedEmployeeInsights ? 'team' : 'insights'}
               />
               {(selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && accessToken && (

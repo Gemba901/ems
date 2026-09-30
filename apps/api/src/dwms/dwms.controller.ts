@@ -17,12 +17,15 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ModuleType } from 'db';
+import { Role } from '../common/enum/role.enum';
 import { DwmsService, UserPayload } from './dwms.service';
 import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { RequiresModule } from '../auth/decorators/module.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import {
   CreateAssignedTaskDto,
   UpdateProgressDto,
@@ -34,8 +37,8 @@ import {
   AcknowledgeAlertOccurrenceDto,
   CreateActivityDto,
   UpdateActivityDto,
-  CreateTaskFromActivityDto,
   IngestActivitiesDto,
+  SearchDwmsEmployeesDto,
   UpdateEmployeeActivityAssignmentDto,
 } from './dto/dwms.dto';
 import { UpdateDwmsPermissionConfigDto } from './dto/dwmsSettings.dto';
@@ -232,6 +235,16 @@ export class DwmsController {
     return this.dwmsService.ingestActivities(user, dto);
   }
 
+  @Post('activities/ingest/preview')
+  @TenantRequired()
+  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  previewActivityIngestion(
+    @CurrentUser() user: UserPayload,
+    @Body() dto: IngestActivitiesDto,
+  ) {
+    return this.dwmsService.previewActivityIngestion(user, dto);
+  }
+
   @Patch('activities/:id')
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
@@ -250,15 +263,21 @@ export class DwmsController {
     return this.dwmsService.archiveActivity(user, id);
   }
 
-  @Post('activities/:id/tasks')
+  @Get('employees')
   @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  createTaskFromActivity(
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD)
+  @UseGuards(
+    TrustedTenantContextGuard,
+    JwtAuthGuard,
+    TenantGuard,
+    RolesGuard,
+    ModuleGuard,
+  )
+  searchActivityEmployees(
     @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-    @Body() dto: CreateTaskFromActivityDto,
+    @Query() query: SearchDwmsEmployeesDto,
   ) {
-    return this.dwmsService.createTaskFromActivity(user, id, dto);
+    return this.dwmsService.searchActivityEmployees(user, query);
   }
 
   @Get('employees/:employeeId/profile')
@@ -282,7 +301,14 @@ export class DwmsController {
   }
   @Get('employees/:employeeId/activities')
   @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD)
+  @UseGuards(
+    TrustedTenantContextGuard,
+    JwtAuthGuard,
+    TenantGuard,
+    RolesGuard,
+    ModuleGuard,
+  )
   @RequiresModule(ModuleType.DWMS)
   listEmployeeRoleActivities(
     @CurrentUser() user: UserPayload,
@@ -293,7 +319,14 @@ export class DwmsController {
 
   @Patch('employees/:employeeId/activities/:activityId')
   @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD)
+  @UseGuards(
+    TrustedTenantContextGuard,
+    JwtAuthGuard,
+    TenantGuard,
+    RolesGuard,
+    ModuleGuard,
+  )
   @RequiresModule(ModuleType.DWMS)
   updateEmployeeActivityAssignment(
     @CurrentUser() user: UserPayload,

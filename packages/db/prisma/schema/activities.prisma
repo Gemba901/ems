@@ -22,11 +22,18 @@ model Activity {
   effectiveFrom                 DateTime
   status                        ActivityStatus @default(ACTIVE)
   remarks                       String?
+  scope                         ActivityScope?
+  scopeDepartmentId             String?
+  scopeJobTitle                 String?
+  scopeJobTitleLabel            String?
+  scopeEmployeeId               String?
   createdAt                     DateTime       @default(now())
   updatedAt                     DateTime       @updatedAt
 
   organization               Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   mainDepartment             Department?                  @relation(fields: [mainDepartmentId], references: [id], onDelete: SetNull)
+  scopeDepartment            Department?                  @relation("ActivityScopeDepartment", fields: [scopeDepartmentId], references: [id], onDelete: SetNull)
+  scopeEmployee              Employee?                    @relation("ActivityScopeEmployee", fields: [scopeEmployeeId], references: [id], onDelete: SetNull)
   primaryResponsibleEmployee Employee?                    @relation("ActivityPrimaryResponsible", fields: [primaryResponsibleEmployeeId], references: [id], onDelete: SetNull)
   parentActivity             Activity?                    @relation("ActivityParent", fields: [parentActivityId], references: [id], onDelete: SetNull)
   childActivities            Activity[]                   @relation("ActivityParent")
@@ -40,6 +47,10 @@ model Activity {
   @@index([mainDepartmentId])
   @@index([primaryResponsibleEmployeeId])
   @@index([parentActivityId])
+  @@index([organizationId, scope])
+  @@index([scopeDepartmentId])
+  @@index([scopeEmployeeId])
+  @@index([organizationId, scopeJobTitle])
 }
 
 model JobTitleActivity {
@@ -110,6 +121,9 @@ model ActivityIngestionRow {
   activityName            String?
   activityCode            String?
   responsibleEmployeeCode String?
+  scope                   ActivityScope?
+  scopeTarget             String?
+  assignedCount           Int      @default(0)
   message                 String?
   activityId              String?
   taskId                  String?

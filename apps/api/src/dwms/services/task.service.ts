@@ -3,9 +3,11 @@ import { rethrowTaskConflict } from '../utils/taskConflict';
 import {
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  ActivityScope,
   AlertType,
   EmployeeActivityStatus,
   NotificationType,
@@ -41,6 +43,40 @@ import {
 
 export const TASK_INSTANCE_GENERATION_DAYS = 31;
 
+export const DWMS_TASK_CATEGORIES = {
+  GOOD_PRACTICE: 'GOOD_PRACTICE',
+  JOB_RESPONSIBILITY: 'JOB_RESPONSIBILITY',
+  ASSIGNED_TASK: 'ASSIGNED_TASK',
+} as const;
+
+export type DwmsTaskCategory =
+  (typeof DWMS_TASK_CATEGORIES)[keyof typeof DWMS_TASK_CATEGORIES];
+
+export function resolveTaskCategory(task: {
+  assignedById?: string | null;
+  activity?: { scope?: ActivityScope | null } | null;
+}): DwmsTaskCategory {
+  if (task.assignedById) return DWMS_TASK_CATEGORIES.ASSIGNED_TASK;
+
+  if (
+    task.activity?.scope === ActivityScope.ORGANISATION ||
+    task.activity?.scope === ActivityScope.DEPARTMENT
+  ) {
+    return DWMS_TASK_CATEGORIES.GOOD_PRACTICE;
+  }
+
+  if (
+    task.activity?.scope === ActivityScope.JOB_TITLE ||
+    task.activity?.scope === ActivityScope.EMPLOYEE
+  ) {
+    return DWMS_TASK_CATEGORIES.JOB_RESPONSIBILITY;
+  }
+
+  throw new InternalServerErrorException(
+    'Task category cannot be determined',
+  );
+}
+
 const recurringTaskFrequencies = new Set<TaskFrequency>([
   TaskFrequency.DAILY,
   TaskFrequency.WEEKLY,
@@ -56,6 +92,10 @@ type OfficeScheduledTask = {
   ownerId?: string | null;
   activityId?: string | null;
   owner?: { organizationId?: string | null } | null;
+};
+
+type CreateAssignedTaskInput = CreateAssignedTaskDto & {
+  activityId?: string;
 };
 
 function isRecurringTaskFrequency(frequency: TaskFrequency) {
@@ -744,6 +784,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       instanceCreatedAt: instance.createdAt.toISOString(),
       instanceUpdatedAt: instance.updatedAt.toISOString(),
       isAdhoc: task.isAdhoc,
+      taskCategory: resolveTaskCategory(task),
       acknowledgedAt: task.acknowledgedAt
         ? task.acknowledgedAt.toISOString()
         : null,
@@ -1595,9 +1636,26 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     return createdOrEnsured;
   }
 
+  protected async generateUpcomingInstancesForTaskId(
+    taskId: string,
+    organizationId: string,
+  ) {
+    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
+    if (!task || !task.isActive) return 0;
+    const timeZone = await this.getOrganizationTimeZone(organizationId);
+    return this.generateInstancesForTask(
+      task,
+      getCurrentUtcDateInTimeZone(timeZone),
+      TASK_INSTANCE_GENERATION_DAYS,
+      timeZone,
+      organizationId,
+    );
+  }
+
   async generateUpcomingTaskInstances(days = TASK_INSTANCE_GENERATION_DAYS) {
     const tasks = await this.prisma.task.findMany({
       where: {
+        isActive: true,
         owner: { organization: { status: 'ACTIVE', modules: { has: 'DWMS' } } },
         status: { notIn: nonOverdueStatusValues },
       },
@@ -1728,10 +1786,12 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
   async createAssignedTask(
     user: UserPayload,
-    dto: CreateAssignedTaskDto,
+    dto: CreateAssignedTaskInput,
     options: { notifyAssignee?: boolean; systemGenerated?: boolean } = {},
   ) {
-    const employee = await this.getEmployee(user.userId, user.organizationId);
+    const employee = options.systemGenerated
+      ? null
+      : await this.getEmployee(user.userId, user.organizationId);
 
     const title = dto.title?.trim();
     if (!title) throw new BadRequestException('Task title is required');
@@ -1819,7 +1879,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       `${ownerEmployee.firstName} ${ownerEmployee.lastName}`.trim();
     const assignedByName = options.systemGenerated
       ? null
-      : `${employee.firstName} ${employee.lastName}`.trim();
+      : `${employee!.firstName} ${employee!.lastName}`.trim();
 
     const isDailyOrWeekly =
       frequency === TaskFrequency.DAILY || frequency === TaskFrequency.WEEKLY;
@@ -1849,7 +1909,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         title,
         description: dto.description ?? null,
         ownerId: dto.assignedToId,
-        assignedById: options.systemGenerated ? null : employee.id,
+        assignedById: options.systemGenerated ? null : employee!.id,
         ownerName,
         assignedByName,
         frequency,
@@ -2122,6 +2182,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
                 email: true,
               },
             },
+            activity: { select: { scope: true } },
           },
         },
       },
@@ -2145,6 +2206,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           id: instance.id,
           instanceId: instance.id,
           taskId: task.id,
+          taskCategory: resolveTaskCategory(task),
           status: instance.status,
           completionPercent: instance.completionPercent,
           organizationTimeZone,

@@ -28,21 +28,35 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
 
   async getDwmsAccessCapabilities(user: UserPayload) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
-    const [config, reportee] = await Promise.all([
+    const hasEmployeePerformanceRole =
+      this.getDwmsRole(user.roleLevel) === 'MANAGEMENT';
+    const organizationEmployeesPromise: Promise<Array<{ id: string }>> =
+      hasEmployeePerformanceRole
+        ? this.prisma.employee.findMany({
+            where: {
+              organizationId: user.organizationId,
+              id: { not: employee.id },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve([]);
+    const [config, recursiveReportees, organizationEmployees] = await Promise.all([
       this.prisma.dwmsPermissionConfig.findUnique({
         where: { organizationId: user.organizationId },
         select: { alertViewLevel: true, analyticsViewLevel: true },
       }),
-      this.prisma.employee.findFirst({
-        where: {
-          organizationId: user.organizationId,
-          reportingManagerId: employee.id,
-        },
-        select: { id: true },
-      }),
+      this.listReporteesRecursive(employee.id),
+      organizationEmployeesPromise,
     ]);
+    const reporteeIds = recursiveReportees
+      .filter((reportee) => reportee.organizationId === user.organizationId)
+      .map((reportee) => reportee.id);
+    const employeePerformanceEmployeeIds = organizationEmployees.map(
+      (organizationEmployee) => organizationEmployee.id,
+    );
 
     return {
+      currentEmployeeId: employee.id,
       alertViewLevel: this.applyRoleMinimum(
         config?.alertViewLevel ?? ViewLevel.OWN,
         user.roleLevel,
@@ -51,7 +65,11 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
         config?.analyticsViewLevel ?? ViewLevel.DEPARTMENT,
         user.roleLevel,
       ),
-      hasReportees: Boolean(reportee),
+      hasReportees: reporteeIds.length > 0,
+      canViewEmployeePerformance:
+        hasEmployeePerformanceRole &&
+        employeePerformanceEmployeeIds.length > 0,
+      employeePerformanceEmployeeIds,
     };
   }
 

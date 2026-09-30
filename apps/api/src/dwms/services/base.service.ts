@@ -1,7 +1,7 @@
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { TaskPermissionRole, TaskStatus } from 'db';
+import { TaskPermissionRole, TaskStatus, type Prisma } from 'db';
 import { TASK_ROLE_VALUES } from '../dto/dwmsSettings.dto';
 import { parseTimeZone } from '../utils/taskSchedule';
 
@@ -26,6 +26,18 @@ export const nonOverdueStatusValues = [
   TaskStatus.NOT_APPLICABLE,
   APPROVAL_PENDING_STATUS,
 ];
+
+type DwmsReportee = Prisma.EmployeeGetPayload<{
+  include: {
+    user: {
+      include: {
+        organizations: {
+          include: { role: true };
+        };
+      };
+    };
+  };
+}>;
 
 export abstract class DwmsBaseService {
   protected constructor(
@@ -181,6 +193,41 @@ export abstract class DwmsBaseService {
     const days = Number(rawDays);
     if (!Number.isFinite(days)) return 7;
     return Math.min(90, Math.max(1, Math.trunc(days)));
+  }
+
+  protected async listReporteesRecursive(
+    managerId: string,
+  ): Promise<DwmsReportee[]> {
+    const seen = new Set<string>();
+    const result: DwmsReportee[] = [];
+    let queue = [managerId];
+
+    while (queue.length > 0) {
+      const batch = await this.prisma.employee.findMany({
+        where: { reportingManagerId: { in: queue } },
+        include: {
+          user: {
+            include: {
+              organizations: {
+                include: { role: true },
+              },
+            },
+          },
+        },
+      });
+      const nextQueue: string[] = [];
+
+      for (const employee of batch) {
+        if (seen.has(employee.id)) continue;
+        seen.add(employee.id);
+        result.push(employee);
+        nextQueue.push(employee.id);
+      }
+
+      queue = nextQueue;
+    }
+
+    return result;
   }
 
   async isSuperior(superiorId: string, employeeId: string, organizationId: string): Promise<boolean> {

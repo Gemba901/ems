@@ -15,8 +15,10 @@ import {
   NotEquals,
   IsBoolean,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import {
   ActivityStatus,
+  ActivityScope,
   EmployeeActivityStatus,
   TaskFrequency,
   TaskStatus,
@@ -25,10 +27,6 @@ import {
 } from 'db';
 
 export class CreateAssignedTaskDto {
-  @IsOptional()
-  @IsString()
-  activityId?: string;
-
   @IsNotEmpty()
   @IsString()
   @Matches(/\S/, { message: 'Task title must not be blank' })
@@ -121,6 +119,25 @@ export class UpdateEmployeeActivityAssignmentDto {
   status!: EmployeeActivityStatus;
 }
 
+export class SearchDwmsEmployeesDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  page: number = 1;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  limit: number = 20;
+}
+
 export class CreateActivityDto {
   @IsOptional()
   @IsString()
@@ -150,7 +167,7 @@ export class CreateActivityDto {
   @IsString()
   workMethod!: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   code?: string;
 
@@ -170,14 +187,22 @@ export class CreateActivityDto {
   @IsString()
   startTrigger?: string;
 
-  @IsOptional()
-  @IsInt()
+  @IsNotEmpty()
+  @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
   completionDeadline?: number;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   completionOutput?: string;
+
+  @IsNotEmpty()
+  @IsEnum(ActivityScope)
+  scope!: ActivityScope;
+
+  @IsOptional()
+  @IsString()
+  scopeTarget?: string;
 
   @IsOptional()
   @IsString()
@@ -199,7 +224,7 @@ export class CreateActivityDto {
   @IsEnum(ActivityStatus)
   status?: ActivityStatus;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   remarks?: string;
   @IsOptional()
@@ -264,7 +289,7 @@ export class UpdateActivityDto {
   startTrigger?: string;
 
   @IsOptional()
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
   completionDeadline?: number;
 
@@ -308,24 +333,8 @@ export class UpdateActivityDto {
   parentActivityId?: string;
 }
 
-export enum ActivityIngestionAssignmentMode {
-  INDIVIDUAL = 'Individual',
-  JOB_ROLE = 'Job Role',
-  ALL_USERS = 'All Users',
-  ALL_MANAGEMENT = 'All Management',
-  ALL_HOD = 'All HOD',
-}
-
 export class IngestActivityRowDto {
   activity!: CreateActivityDto;
-
-  @IsOptional()
-  @IsEnum(ActivityIngestionAssignmentMode)
-  assignmentMode?: ActivityIngestionAssignmentMode;
-
-  @IsOptional()
-  @IsString()
-  responsibleEmployeeCode?: string;
 
   @IsOptional()
   @IsString()

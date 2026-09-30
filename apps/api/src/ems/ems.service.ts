@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
+import { DwmsService } from 'src/dwms/dwms.service';
 
 // ── Field groups that define completeness ────────────────────────────────────
 export const EMS_GROUPS = {
@@ -96,7 +97,10 @@ const EMS_EMPLOYEE_SELECT = {
 
 @Injectable()
 export class EmsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private dwmsService?: DwmsService,
+  ) {}
 
   private async resolveEmployee(userId: string, organizationId: string) {
     const emp = await this.prisma.employee.findFirst({
@@ -192,7 +196,12 @@ export class EmsService {
   async updateEmployee(employeeId: string, organizationId: string, dto: UpdateEmployeeEmsDto) {
     const existing = await this.prisma.employee.findFirst({
       where: { id: employeeId, organizationId },
-      select: { id: true },
+      select: {
+        id: true,
+        departmentId: true,
+        jobTitle: true,
+        employmentStatus: true,
+      },
     });
     if (!existing) throw new NotFoundException('Employee not found');
 
@@ -216,6 +225,16 @@ export class EmsService {
       data: updateData,
       select: EMS_EMPLOYEE_SELECT,
     });
+
+    await this.dwmsService?.synchronizeEmployeeActivities(
+      organizationId,
+      employeeId,
+      {
+        previousDepartmentId: existing.departmentId,
+        previousJobTitle: existing.jobTitle,
+        previousEmploymentStatus: existing.employmentStatus,
+      },
+    );
 
     const { overall, groups } = calcEmployeeCompletion(updated as Record<string, unknown>);
     return { employee: updated, completion: { overall, groups } };

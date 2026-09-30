@@ -367,39 +367,4 @@ export abstract class DwmsDirectoryService extends DwmsSettingsService {
       ),
     };
   }
-
-
-  protected async listReporteesRecursive(managerId: string) {
-    const seen = new Set<string>();
-    const result: any[] = [];
-    let queue = [managerId];
-
-    while (queue.length > 0) {
-      const batch = await this.prisma.employee.findMany({
-        where: { reportingManagerId: { in: queue } },
-        include: {
-          user: {
-            include: {
-              organizations: {
-                include: { role: true },
-              },
-            },
-          },
-        },
-      });
-
-      const nextQueue: string[] = [];
-
-      for (const u of batch) {
-        if (seen.has(u.id)) continue;
-        seen.add(u.id);
-        result.push(u);
-        nextQueue.push(u.id);
-      }
-
-      queue = nextQueue;
-    }
-
-    return result;
-  }
 }

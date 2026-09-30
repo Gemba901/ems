@@ -9,6 +9,7 @@ type SVGLineChartProps = {
   tooltipLabel?: string;
   height?: number;
   variant?: 'line' | 'bar';
+  showTaskTotals?: boolean;
 };
 
 export default function SVGLineChart({
@@ -17,7 +18,8 @@ export default function SVGLineChart({
   ySuffix = '',
   tooltipLabel = 'Value',
   height = 220,
-  variant = 'line'
+  variant = 'line',
+  showTaskTotals = false,
 }: SVGLineChartProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -220,7 +222,7 @@ export default function SVGLineChart({
           <div className="font-semibold tabular-nums text-slate-950">
             {tooltipLabel}: {getValue(trendData[hoveredIdx]).toFixed(1)}{ySuffix}
           </div>
-          {trendData[hoveredIdx].total !== undefined && (
+          {showTaskTotals && trendData[hoveredIdx].total !== undefined && (
             <div className="text-[9px] text-muted-app">
               {trendData[hoveredIdx].completed} / {trendData[hoveredIdx].total} tasks
             </div>

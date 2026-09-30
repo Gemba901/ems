@@ -16,50 +16,80 @@ function formatDuration(minutes: number | undefined) {
     : `${Math.round(minutes)} min`;
 }
 
-export default function KpiCards({ stats, periodLabel }: KpiCardsProps) {
-  const completed = stats.completedTasks ?? stats.completedCount;
-  const total = stats.totalTasks;
-  const rate = getCompletionRate(stats);
-  const remaining =
-    total != null && completed != null
-      ? Math.max(0, total - completed)
-      : undefined;
+export default function KpiCards({ stats, activeTab, periodLabel }: KpiCardsProps) {
+  const total = stats.totalTasks ?? 0;
+  const completionRates = stats.completionRateByCategory;
+  const categoryTotals = stats.taskCategoryBreakdown;
+  const categoryRate = (
+    category: "GOOD_PRACTICE" | "JOB_RESPONSIBILITY" | "ASSIGNED_TASK",
+  ) =>
+    categoryTotals?.[category]?.total
+      ? `${completionRates?.[category] ?? 0}%`
+      : "—";
+  const scopeAlertCards =
+    activeTab === "department"
+      ? [
+          {
+            label: "Departmental Alerts",
+            value: stats.departmentAlertsCount,
+            detail: "Alerts raised directly to the selected department",
+          },
+        ]
+      : activeTab === "overview"
+        ? [
+            {
+              label: "Departmental Alerts",
+              value: stats.departmentAlertsCount,
+              detail: "Alerts raised directly to departments in the organization",
+            },
+            {
+              label: "Organisational Alerts",
+              value: stats.organizationAlertsCount,
+              detail: "Alerts raised directly to the entire organization",
+            },
+          ]
+        : [];
   const cards = [
     {
-      label: "All Tasks",
-      value: total,
-      detail: "In the selected period",
-    },
-    { label: "Completed", value: completed, detail: "Recorded as completed" },
-    {
-      label: "Not Completed",
-      value: remaining,
-      detail: "Includes work awaiting approval",
-    },
-    {
-      label: "Overdue",
-      value: stats.overdueTasks ?? stats.overdueCount,
-      detail: "Past due and still open",
-    },
-    {
-      label: "Alerts",
+      label: "Total Alerts",
       value: stats.alertsCount,
-      detail: "Raised for you",
+      detail: "Alerts raised in the selected period",
+    },
+    ...scopeAlertCards,
+    {
+      label: "Acknowledged Alerts",
+      value: stats.acknowledgedAlertsCount,
+      detail: "Selected-period alerts that were acknowledged",
     },
     {
-      label: "Completion Rate",
-      value: total === 0 ? "—" : `${rate}%`,
-      detail: "Weighted by task status",
+      label: "Total Abnormalities",
+      value: stats.abnormalitiesCount,
+      detail: "Abnormalities raised in the selected period",
     },
     {
-      label: "Completed on Time",
-      value: `${stats.completedOnTimeRate ?? 0}%`,
-      detail: "Of completed tasks",
+      label: "Avg. Assigned Task Acknowledgement",
+      value: formatDuration(stats.avgAssignedTaskAcknowledgeTimeMin),
+      detail: "Average time to acknowledge assigned tasks",
     },
     {
-      label: "Avg. Acknowledgement",
-      value: formatDuration(stats.avgAcknowledgeTimeMin),
-      detail: "From assignment",
+      label: "All Completion Rate",
+      value: total === 0 ? "—" : `${getCompletionRate(stats)}%`,
+      detail: "Completion rate across all task categories",
+    },
+    {
+      label: "Good Practices Completion",
+      value: categoryRate("GOOD_PRACTICE"),
+      detail: "Good Practices completion rate",
+    },
+    {
+      label: "Job Responsibility Completion",
+      value: categoryRate("JOB_RESPONSIBILITY"),
+      detail: "Job Responsibility completion rate",
+    },
+    {
+      label: "Assigned Tasks Completion",
+      value: categoryRate("ASSIGNED_TASK"),
+      detail: "Assigned Tasks completion rate",
     },
   ];
   return (

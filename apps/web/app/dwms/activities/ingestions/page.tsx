@@ -10,6 +10,7 @@ import {
   type DwmsActivityIngestionSummary,
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
+import ActivityTabs from "../ActivityTabs";
 
 function formatDateTime(value?: string | null, timeZone?: string | null) {
   if (!value) return "Not available";
@@ -157,35 +158,6 @@ function ActivityIngestionsContent() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function ActivityTabs({ active }: { active: "activities" | "ingestions" }) {
-  const tabs = [
-    { key: "activities", label: "All Activities", href: "/dwms/activities" },
-    {
-      key: "ingestions",
-      label: "Ingestion History",
-      href: "/dwms/activities/ingestions",
-    },
-  ] as const;
-
-  return (
-    <div className="flex gap-6 overflow-x-auto border-b border-border-app select-none">
-      {tabs.map((tab) => (
-        <Link
-          key={tab.key}
-          href={tab.href}
-          className={`relative flex items-center border-b-2 pb-3 text-sm font-semibold transition duration-150 ${
-            active === tab.key
-              ? "border-blue-500 text-blue-700"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          {tab.label}
-        </Link>
-      ))}
     </div>
   );
 }

@@ -18,6 +18,7 @@ model Task {
   completionDocumentName     String?
   dueDate                    DateTime?
   isAdhoc                    Boolean                @default(false)
+  isActive                   Boolean                @default(true)
   priority                   Priority?              @default(MEDIUM)
   departmentId               String?
   ownerName                  String?
@@ -210,6 +211,13 @@ enum TaskStatus {
 enum ActivityStatus {
   ACTIVE
   ARCHIVED
+}
+
+enum ActivityScope {
+  ORGANISATION
+  DEPARTMENT
+  JOB_TITLE
+  EMPLOYEE
 }
 
 enum EmployeeActivityStatus {

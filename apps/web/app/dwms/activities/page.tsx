@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Archive, Loader2, PlusCircle, Search } from "lucide-react";
@@ -12,6 +11,7 @@ import {
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 import DwmsSelectDropdown from "../components/DwmsSelectDropdown";
+import ActivityTabs from "./ActivityTabs";
 
 const MANAGEMENT_ROLES = new Set(["MANAGEMENT", "SUPER_ADMIN", "ADMIN", "HR"]);
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
@@ -37,7 +37,12 @@ function ActivitiesContent() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [message, setMessage] = useState<string | null>(null);
-  const canManage = MANAGEMENT_ROLES.has(String(user?.roleLevel ?? "").toUpperCase());
+  const role = String(user?.roleLevel ?? "").toUpperCase();
+  const canManage = MANAGEMENT_ROLES.has(role);
+
+  useEffect(() => {
+    if (role === "HOD") router.replace("/dwms/activities/employees");
+  }, [role, router]);
 
   const loadActivities = useCallback(async () => {
     if (!accessToken) return;
@@ -94,6 +99,14 @@ function ActivitiesContent() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  if (role === "HOD") {
+    return (
+      <div className="flex items-center justify-center gap-2 px-6 py-16 text-sm text-slate-500">
+        <Loader2 className="h-4 w-4 animate-spin" /> Opening employee activities...
+      </div>
+    );
   }
 
   if (!canManage) {
@@ -222,35 +235,6 @@ function ActivitiesContent() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function ActivityTabs({ active }: { active: "activities" | "ingestions" }) {
-  const tabs = [
-    { key: "activities", label: "All Activities", href: "/dwms/activities" },
-    {
-      key: "ingestions",
-      label: "Ingestion History",
-      href: "/dwms/activities/ingestions",
-    },
-  ] as const;
-
-  return (
-    <div className="flex gap-6 overflow-x-auto border-b border-border-app select-none">
-      {tabs.map((tab) => (
-        <Link
-          key={tab.key}
-          href={tab.href}
-          className={`relative flex items-center border-b-2 pb-3 text-sm font-semibold transition duration-150 ${
-            active === tab.key
-              ? "border-blue-500 text-blue-700"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          {tab.label}
-        </Link>
-      ))}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-# DWMS branch move and validation — 8 September 2026
+a# DWMS branch move and validation — 8 September 2026
 
 Work now belongs on `feature/dwms`. Merge commit `3dbc4ee` incorporates staging through `594d44e`; `main` remains at `d4cd100`. Two older feature migrations were removed during conflict resolution because staging contains identical migrations under newer timestamps.
 

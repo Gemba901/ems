@@ -14,6 +14,8 @@ import { RequiresModule } from 'src/auth/decorators/module.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
+import { Post } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
+import { AddOnboardingRecordsDto, CreateOnboardingBatchDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -64,5 +66,42 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.updateEmployee(id, user.organizationId, dto);
+  }
+    /** POST /ems/onboarding/batches — start a new import */
+  @Post('onboarding/batches')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async createOnboardingBatch(
+    @Body() dto: CreateOnboardingBatchDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.ems.createOnboardingBatch(user.userId, user.organizationId, dto);
+  }
+
+  /** GET /ems/onboarding/batches — list imports */
+  @Get('onboarding/batches')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async listOnboardingBatches(@CurrentUser() user: { organizationId: string }) {
+    return this.ems.listOnboardingBatches(user.organizationId);
+  }
+
+  /** GET /ems/onboarding/batches/:id — one import with its rows */
+  @Get('onboarding/batches/:id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.getOnboardingBatch(user.organizationId, id);
+  }
+
+  /** POST /ems/onboarding/batches/:id/records — load rows into an import */
+  @Post('onboarding/batches/:id/records')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async addOnboardingRecords(
+    @Param('id') id: string,
+    @Body() dto: AddOnboardingRecordsDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.ems.addOnboardingRecords(user.organizationId, id, dto);
   }
 }

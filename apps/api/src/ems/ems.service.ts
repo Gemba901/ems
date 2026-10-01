@@ -2,11 +2,12 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
+import { AddOnboardingRecordsDto, CreateOnboardingBatchDto } from './dto/onboarding.dto';
 
 // ── Field groups that define completeness ────────────────────────────────────
 export const EMS_GROUPS = {
   IDENTITY:            ['firstName', 'lastName', 'employeeCode', 'middleName', 'gender', 'nationalId', 'dateOfBirth', 'nationality'],
-  WORK_ALLOCATION:     ['departmentId', 'employmentStatus', 'employmentType', 'jobTitle', 'dateJoined', 'plantBranch', 'workStation', 'section', 'subSection', 'shift', 'reportingManagerId'],
+  WORK_ALLOCATION:     ['departmentId', 'employmentStatus', 'employmentType', 'jobTitle', 'dateJoined', 'plantBranch', 'workStation', 'section', 'subSection', 'shift', 'reportingManagerId', 'hodName', 'hodDesignation', 'beesAccessLevel'],
   ROLE_RESPONSIBILITY: ['jobDescription', 'level', 'grade', 'jobCategory', 'primaryWorkRole', 'machineProcess'],
   CONTACT:             ['phone', 'email', 'whatsappNumber', 'homeAddress', 'emergencyContactName', 'emergencyContactPhone'],
   SKILL:               ['skillLevel'],
@@ -69,6 +70,11 @@ const EMS_EMPLOYEE_SELECT = {
   plantBranch: true, workStation: true, section: true, subSection: true, shift: true,
   reportingManagerId: true,
   reportingManager: { select: { id: true, firstName: true, lastName: true } },
+
+  hodName: true, hodDesignation: true, beesAccessLevel: true,
+  companyCode: true,
+  firstRelieverId: true, secondRelieverId: true,
+
   hrRecordOwnerId: true,
   hrRecordOwner: { select: { id: true, firstName: true, lastName: true } },
 
@@ -91,6 +97,17 @@ const EMS_EMPLOYEE_SELECT = {
       committee: { select: { id: true, name: true, type: true } },
     },
   },
+};
+
+// ── Onboarding batch list shape
+const BATCH_LIST_SELECT = {          
+  id: true,
+  label: true,
+  sourceFileName: true,
+  status: true,
+  createdAt: true,
+  uploadedBy: { select: { id: true, name: true } },
+  _count: { select: { records: true } },
 };
 
 @Injectable()
@@ -340,5 +357,63 @@ export class EmsService {
       committeeSummary,
       priorityEmployees,
     };
+  }
+  // ── HR/Admin: onboarding import ──────────────────────────────────────────
+  async createOnboardingBatch(
+    userId: string,
+    organizationId: string,
+    dto: CreateOnboardingBatchDto,
+  ) {
+    return this.prisma.emsOnboardingBatch.create({
+      data: {
+        organizationId,
+        uploadedById: userId,
+        label: dto.label,
+        sourceFileName: dto.sourceFileName,
+      },
+      select: BATCH_LIST_SELECT,
+    });
+  }
+
+  async listOnboardingBatches(organizationId: string) {
+    return this.prisma.emsOnboardingBatch.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+      select: BATCH_LIST_SELECT,
+    });
+  }
+
+  async getOnboardingBatch(organizationId: string, batchId: string) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      include: {
+        uploadedBy: { select: { id: true, name: true } },
+        records: { orderBy: { rowNumber: 'asc' } },
+      },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+    return batch;
+  }
+
+  async addOnboardingRecords(
+    organizationId: string,
+    batchId: string,
+    dto: AddOnboardingRecordsDto,
+  ) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      select: { id: true },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+
+    await this.prisma.emsOnboardingRecord.createMany({
+      data: dto.records.map((record) => ({
+        ...record,
+        batchId,
+        organizationId,
+      })),
+    });
+
+    return this.getOnboardingBatch(organizationId, batchId);
   }
 }

@@ -113,7 +113,7 @@ enum TicketStatus {
 
 //organization
 model Organization {
-  files FileAsset[]
+  files        FileAsset[]
   id           String       @id @default(uuid())
   name         String
   shortName    String?
@@ -149,38 +149,40 @@ model Organization {
   tickets              Tickets[]
   kaizens              Kaizen[]
   sgas                 Sga[]
+  emsOnboardingBatches EmsOnboardingBatch[]
+  emsOnboardingRecords EmsOnboardingRecord[]
 
   // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
   sgaCommitteeId String?
   sgaCommittee   SteeringCommittee? @relation("OrgSgaCommittee", fields: [sgaCommitteeId], references: [id], onDelete: SetNull)
 
-  steelProductionPlans       SteelProductionPlan[]
-  steelSourcingOrders        SteelSourcingOrder[]
-  suppliers                  Supplier[]
-  steelMaterialIntakes       SteelMaterialIntake[]
-  steelChargePreparations    SteelChargePreparation[]
-  steelMeltings              SteelMelting[]
-  steelHeatApprovals         SteelHeatApproval[]
-  furnaces                   Furnace[]
-  furnaceLinings             FurnaceLining[]
-  heatMaterialCharges        HeatMaterialCharge[]
-  heatCycleEvents            HeatCycleEvent[]
-  activities                 Activity[]
-  jobTitleActivities    JobTitleActivity[]
+  steelProductionPlans        SteelProductionPlan[]
+  steelSourcingOrders         SteelSourcingOrder[]
+  suppliers                   Supplier[]
+  steelMaterialIntakes        SteelMaterialIntake[]
+  steelChargePreparations     SteelChargePreparation[]
+  steelMeltings               SteelMelting[]
+  steelHeatApprovals          SteelHeatApproval[]
+  furnaces                    Furnace[]
+  furnaceLinings              FurnaceLining[]
+  heatMaterialCharges         HeatMaterialCharge[]
+  heatCycleEvents             HeatCycleEvent[]
+  activities                  Activity[]
+  jobTitleActivities          JobTitleActivity[]
   employeeActivityAssignments EmployeeActivityAssignment[]
-  activityIngestions         ActivityIngestion[]
-  activityIngestionRows      ActivityIngestionRow[]
-  customers                  Customer[]
-  dealers                    Dealer[]
-  steelLookups               SteelLookup[]
-  steelSupplierMaterials     SteelSupplierMaterial[]
-  steelQcdCriteria           SteelQcdCriteria[]
-  stockFulfilmentItems       StockFulfilmentItem[]
-  steelProducts              SteelProduct[]
-  steelProductSpecifications SteelProductSpecification[]
-  steelProductionRoutes      SteelProductionRoute[]
-  steelMaterialMasters       SteelMaterialMaster[]
-  steelFinishedGoodsStocks   SteelFinishedGoodsStock[]
+  activityIngestions          ActivityIngestion[]
+  activityIngestionRows       ActivityIngestionRow[]
+  customers                   Customer[]
+  dealers                     Dealer[]
+  steelLookups                SteelLookup[]
+  steelSupplierMaterials      SteelSupplierMaterial[]
+  steelQcdCriteria            SteelQcdCriteria[]
+  stockFulfilmentItems        StockFulfilmentItem[]
+  steelProducts               SteelProduct[]
+  steelProductSpecifications  SteelProductSpecification[]
+  steelProductionRoutes       SteelProductionRoute[]
+  steelMaterialMasters        SteelMaterialMaster[]
+  steelFinishedGoodsStocks    SteelFinishedGoodsStock[]
 }
 
 //specific user
@@ -202,6 +204,8 @@ model User {
   reviewedLeaves      LeaveRequest[]       @relation("LeaveReviewer")
 
   createdAt DateTime @default(now())
+
+  emsBatchesUploaded EmsOnboardingBatch[] @relation("EmsBatchUploadedBy")
 }
 
 model RefreshToken {
@@ -288,6 +292,11 @@ model Employee {
   nationality  String?
   plantBranch  String?
 
+  companyCode     String?
+  beesAccessLevel String?
+  hodName         String?
+  hodDesignation  String?
+
   // EMS: Work Allocation group
   employmentStatus   EmploymentStatus @default(ACTIVE)
   employmentType     EmploymentType?
@@ -300,6 +309,15 @@ model Employee {
   reportingManagerId String?
   reportingManager   Employee?        @relation("ReportingManager", fields: [reportingManagerId], references: [id], onDelete: SetNull)
   directReports      Employee[]       @relation("ReportingManager")
+
+  firstRelieverId  String?
+  firstReliever    Employee?  @relation("EmsFirstReliever", fields: [firstRelieverId], references: [id], onDelete: SetNull)
+  relievesAsFirst  Employee[] @relation("EmsFirstReliever")
+  secondRelieverId String?
+  secondReliever   Employee?  @relation("EmsSecondReliever", fields: [secondRelieverId], references: [id], onDelete: SetNull)
+  relievesAsSecond Employee[] @relation("EmsSecondReliever")
+
+  emsOnboardingRecord EmsOnboardingRecord? @relation("EmsOnboardingRegisteredAs")
 
   // EMS: Role & Responsibility group
   jobDescription     String?
@@ -331,86 +349,86 @@ model Employee {
   hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)
   hrManagedEmployees Employee[] @relation("HRRecordOwner")
 
-  department            Department?               @relation(fields: [departmentId], references: [id])
-  organization          Organization              @relation(fields: [organizationId], references: [id])
-  user                  User?                     @relation(fields: [userId], references: [id])
-  suggestions           Suggestion[]              @relation("EmployeeSuggestions")
-  hodSuggestions        Suggestion[]              @relation("HODSuggestions")
-  suggestionReviews     SuggestionReview[]
-  committeeMembers      SteeringCommitteeMember[]
-  notifications         Notification[]
-  visitAttendances      VisitAttendee[]
-  leaveRequests         LeaveRequest[]
-  leaveBalances         LeaveBalance[]
-  handoverForLeaves     LeaveRequest[]            @relation("LeaveHandover")
-  handoverForLeaves2    LeaveRequest[]            @relation("LeaveHandover2")
-  createdCalendarEvents CalendarEvent[]           @relation("CalendarEventCreator")
-  receivedInvitations   EventInvitation[]         @relation("ReceivedInvitations")
-  eventParticipations   EventParticipant[]        @relation("EventParticipations")
-  oooBlocks             CalendarBlock[]
-  calendarFilters       CalendarFilter[]
-  assignedTasks         Task[]                    @relation("TaskAssignedBy")
-  tasks                 Task[]                    @relation("TaskOwner")
-  tasksToApprove        Task[]                    @relation("TaskApprovedBy")
-  backupTasks           Task[]                    @relation("TaskBackupOwner")
-  taskInstances         TaskInstance[]
-  taskInstanceComments  TaskInstanceComment[]
-  taskInstanceEvents    TaskInstanceEvent[]
-  activityAssignments       EmployeeActivityAssignment[]
-  activityIngestions    ActivityIngestion[]       @relation("ActivityIngestionUploader")
-  primaryActivities     Activity[]                @relation("ActivityPrimaryResponsible")
-  alertsRaised          Alert[]                   @relation("AlertsRaised")
-  alertsAgainst         Alert[]                   @relation("AlertsAgainst")
-  alertOccurrencesRaised AlertOccurrence[]        @relation("AlertOccurrencesRaised")
-  alertOccurrencesAcknowledged AlertOccurrence[] @relation("AlertOccurrencesAcknowledged")
-  ticketsRaised         Tickets[]                 @relation("ticketsRaisedBy")
-  ticketUpdates         TicketUpdate[]
-  kaizensRaised         Kaizen[]                  @relation("KaizenRaisedBy")
-  kaizensOwned          Kaizen[]                  @relation("KaizenOwner")
-  kaizenHodPreReviews   Kaizen[]                  @relation("KaizenHodPreReviewBy")
-  kaizenTeamMemberships Kaizen[]                  @relation("KaizenTeamMembers")
-  kaizenReviews         KaizenReview[]
-  kaizenVerifications   KaizenVerification[]      @relation("KaizenVerificationBy")
-  alertComments         AlertComment[]
-  sgasRaised            Sga[]                     @relation("SgaRaisedBy")
-  sgasOwned             Sga[]                     @relation("SgaOwner")
-  sgaTeamMemberships    Sga[]                     @relation("SgaTeamMembers")
-  sgaHodDecisions       Sga[]                     @relation("SgaHodDecisionBy")
-  sgaDepartmentRepFor   Sga[]                     @relation("SgaDepartmentRep")
-  sgaVerifications      SgaVerification[]         @relation("SgaVerificationBy")
-  sgaActionsResponsible SgaActionItem[]           @relation("SgaActionResponsible")
-  sgaReviews            SgaReview[]
+  department                   Department?                  @relation(fields: [departmentId], references: [id])
+  organization                 Organization                 @relation(fields: [organizationId], references: [id])
+  user                         User?                        @relation(fields: [userId], references: [id])
+  suggestions                  Suggestion[]                 @relation("EmployeeSuggestions")
+  hodSuggestions               Suggestion[]                 @relation("HODSuggestions")
+  suggestionReviews            SuggestionReview[]
+  committeeMembers             SteeringCommitteeMember[]
+  notifications                Notification[]
+  visitAttendances             VisitAttendee[]
+  leaveRequests                LeaveRequest[]
+  leaveBalances                LeaveBalance[]
+  handoverForLeaves            LeaveRequest[]               @relation("LeaveHandover")
+  handoverForLeaves2           LeaveRequest[]               @relation("LeaveHandover2")
+  createdCalendarEvents        CalendarEvent[]              @relation("CalendarEventCreator")
+  receivedInvitations          EventInvitation[]            @relation("ReceivedInvitations")
+  eventParticipations          EventParticipant[]           @relation("EventParticipations")
+  oooBlocks                    CalendarBlock[]
+  calendarFilters              CalendarFilter[]
+  assignedTasks                Task[]                       @relation("TaskAssignedBy")
+  tasks                        Task[]                       @relation("TaskOwner")
+  tasksToApprove               Task[]                       @relation("TaskApprovedBy")
+  backupTasks                  Task[]                       @relation("TaskBackupOwner")
+  taskInstances                TaskInstance[]
+  taskInstanceComments         TaskInstanceComment[]
+  taskInstanceEvents           TaskInstanceEvent[]
+  activityAssignments          EmployeeActivityAssignment[]
+  activityIngestions           ActivityIngestion[]          @relation("ActivityIngestionUploader")
+  primaryActivities            Activity[]                   @relation("ActivityPrimaryResponsible")
+  alertsRaised                 Alert[]                      @relation("AlertsRaised")
+  alertsAgainst                Alert[]                      @relation("AlertsAgainst")
+  alertOccurrencesRaised       AlertOccurrence[]            @relation("AlertOccurrencesRaised")
+  alertOccurrencesAcknowledged AlertOccurrence[]            @relation("AlertOccurrencesAcknowledged")
+  ticketsRaised                Tickets[]                    @relation("ticketsRaisedBy")
+  ticketUpdates                TicketUpdate[]
+  kaizensRaised                Kaizen[]                     @relation("KaizenRaisedBy")
+  kaizensOwned                 Kaizen[]                     @relation("KaizenOwner")
+  kaizenHodPreReviews          Kaizen[]                     @relation("KaizenHodPreReviewBy")
+  kaizenTeamMemberships        Kaizen[]                     @relation("KaizenTeamMembers")
+  kaizenReviews                KaizenReview[]
+  kaizenVerifications          KaizenVerification[]         @relation("KaizenVerificationBy")
+  alertComments                AlertComment[]
+  sgasRaised                   Sga[]                        @relation("SgaRaisedBy")
+  sgasOwned                    Sga[]                        @relation("SgaOwner")
+  sgaTeamMemberships           Sga[]                        @relation("SgaTeamMembers")
+  sgaHodDecisions              Sga[]                        @relation("SgaHodDecisionBy")
+  sgaDepartmentRepFor          Sga[]                        @relation("SgaDepartmentRep")
+  sgaVerifications             SgaVerification[]            @relation("SgaVerificationBy")
+  sgaActionsResponsible        SgaActionItem[]              @relation("SgaActionResponsible")
+  sgaReviews                   SgaReview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  steelPlansCreated             SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
-  steelPlansApproved            SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
-  steelActivityLogs             SteelPlanActivityLog[]
-  steelDepartmentAcks           SteelPlanDepartmentAck[]
-  steelSourcingOrdersCreated    SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
-  steelSourcingActivityLogs     SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
-  steelSourcingAttachmentsUploaded SteelSourcingAttachment[]        @relation("SteelSourcingAttachmentUploadedBy")
-  steelSuppliersCreated         Supplier[]                          @relation("SupplierCreatedBy")
-  steelSuppliersUpdated         Supplier[]                          @relation("SupplierUpdatedBy")
-  steelMaterialMastersCreated   SteelMaterialMaster[]                @relation("SteelMaterialMasterCreatedBy")
-  steelMaterialMastersUpdated   SteelMaterialMaster[]                @relation("SteelMaterialMasterUpdatedBy")
-  steelSupplierMaterialsCreated SteelSupplierMaterial[]              @relation("SteelSupplierMaterialCreatedBy")
-  steelSupplierMaterialsUpdated SteelSupplierMaterial[]              @relation("SteelSupplierMaterialUpdatedBy")
-  steelQcdCriteriaCreated       SteelQcdCriteria[]                   @relation("SteelQcdCriteriaCreatedBy")
-  steelQcdCriteriaUpdated       SteelQcdCriteria[]                   @relation("SteelQcdCriteriaUpdatedBy")
-  steelLookupsCreated           SteelLookup[]                        @relation("SteelLookupCreatedBy")
-  steelLookupsUpdated           SteelLookup[]                        @relation("SteelLookupUpdatedBy")
-  steelIntakesCreated           SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
-  steelIntakeActivityLogs       SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
-  steelChargePrepsCreated       SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
-  steelChargeActivityLogs       SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
-  steelMeltingsCreated          SteelMelting[]                      @relation("SteelMeltingCreatedBy")
-  steelHeatApprovalsCreated     SteelHeatApproval[]                 @relation("SteelHeatApprovalCreatedBy")
-  steelHeatApprovalActivityLogs SteelHeatApprovalActivityLog[]      @relation("SteelHeatApprovalPerformedBy")
-  steelMeltingActivityLogs      SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
-  heatMaterialChargesRecorded   HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
-  heatCycleEventsRecorded       HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
+  steelPlansCreated                SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
+  steelPlansApproved               SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
+  steelActivityLogs                SteelPlanActivityLog[]
+  steelDepartmentAcks              SteelPlanDepartmentAck[]
+  steelSourcingOrdersCreated       SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs        SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
+  steelSourcingAttachmentsUploaded SteelSourcingAttachment[]           @relation("SteelSourcingAttachmentUploadedBy")
+  steelSuppliersCreated            Supplier[]                          @relation("SupplierCreatedBy")
+  steelSuppliersUpdated            Supplier[]                          @relation("SupplierUpdatedBy")
+  steelMaterialMastersCreated      SteelMaterialMaster[]               @relation("SteelMaterialMasterCreatedBy")
+  steelMaterialMastersUpdated      SteelMaterialMaster[]               @relation("SteelMaterialMasterUpdatedBy")
+  steelSupplierMaterialsCreated    SteelSupplierMaterial[]             @relation("SteelSupplierMaterialCreatedBy")
+  steelSupplierMaterialsUpdated    SteelSupplierMaterial[]             @relation("SteelSupplierMaterialUpdatedBy")
+  steelQcdCriteriaCreated          SteelQcdCriteria[]                  @relation("SteelQcdCriteriaCreatedBy")
+  steelQcdCriteriaUpdated          SteelQcdCriteria[]                  @relation("SteelQcdCriteriaUpdatedBy")
+  steelLookupsCreated              SteelLookup[]                       @relation("SteelLookupCreatedBy")
+  steelLookupsUpdated              SteelLookup[]                       @relation("SteelLookupUpdatedBy")
+  steelIntakesCreated              SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
+  steelIntakeActivityLogs          SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
+  steelChargePrepsCreated          SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
+  steelChargeActivityLogs          SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
+  steelMeltingsCreated             SteelMelting[]                      @relation("SteelMeltingCreatedBy")
+  steelHeatApprovalsCreated        SteelHeatApproval[]                 @relation("SteelHeatApprovalCreatedBy")
+  steelHeatApprovalActivityLogs    SteelHeatApprovalActivityLog[]      @relation("SteelHeatApprovalPerformedBy")
+  steelMeltingActivityLogs         SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
+  heatMaterialChargesRecorded      HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
+  heatCycleEventsRecorded          HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
@@ -424,16 +442,16 @@ model Department {
   minLeaveHeadcount Int     @default(1)
   isPlatformTeam    Boolean @default(false)
 
-  employees    Employee[]
-  organization Organization @relation(fields: [organizationId], references: [id])
-  suggestions  Suggestion[]
-  tasks        Task[]
-  alerts       Alert[]
-  kaizens      Kaizen[]
-  activities   Activity[]
-  sgasMain      Sga[] @relation("SgaMainDepartment")
-  sgasOther     Sga[] @relation("SgaOtherDepartments")
-  sgasVerifying Sga[] @relation("SgaVerifyingDepartment")
+  employees     Employee[]
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  suggestions   Suggestion[]
+  tasks         Task[]
+  alerts        Alert[]
+  kaizens       Kaizen[]
+  activities    Activity[]
+  sgasMain      Sga[]        @relation("SgaMainDepartment")
+  sgasOther     Sga[]        @relation("SgaOtherDepartments")
+  sgasVerifying Sga[]        @relation("SgaVerifyingDepartment")
 }
 
 model SteeringCommittee {
@@ -985,11 +1003,11 @@ model Activity {
   createdAt                     DateTime       @default(now())
   updatedAt                     DateTime       @updatedAt
 
-  organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  mainDepartment             Department?            @relation(fields: [mainDepartmentId], references: [id], onDelete: SetNull)
-  primaryResponsibleEmployee Employee?              @relation("ActivityPrimaryResponsible", fields: [primaryResponsibleEmployeeId], references: [id], onDelete: SetNull)
-  parentActivity             Activity?              @relation("ActivityParent", fields: [parentActivityId], references: [id], onDelete: SetNull)
-  childActivities            Activity[]             @relation("ActivityParent")
+  organization               Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mainDepartment             Department?                  @relation(fields: [mainDepartmentId], references: [id], onDelete: SetNull)
+  primaryResponsibleEmployee Employee?                    @relation("ActivityPrimaryResponsible", fields: [primaryResponsibleEmployeeId], references: [id], onDelete: SetNull)
+  parentActivity             Activity?                    @relation("ActivityParent", fields: [parentActivityId], references: [id], onDelete: SetNull)
+  childActivities            Activity[]                   @relation("ActivityParent")
   tasks                      Task[]
   jobTitleActivities         JobTitleActivity[]
   employeeAssignments        EmployeeActivityAssignment[]
@@ -1342,33 +1360,33 @@ model SteelProductionRouteStep {
 }
 
 model SteelMaterialMaster {
-  id             String   @id @default(uuid())
+  id             String  @id @default(uuid())
   organizationId String
   code           String
   name           String
   unit           String
-  isActive       Boolean  @default(true)
+  isActive       Boolean @default(true)
 
   // Steel Configuration — procurement master-data fields (P02 data foundation).
   // materialType reuses the P02 enum so a material can be filtered by the same
   // classification P02-A02 records against the sourcing order.
-  category          String?
-  materialType      SteelMaterialType?
-  procurementType   SteelProcurementType?
-  frequentlySourced Boolean               @default(false)
+  category               String?
+  materialType           SteelMaterialType?
+  procurementType        SteelProcurementType?
+  frequentlySourced      Boolean               @default(false)
   specificationReference String?
-  requiredDocuments String[]              @default([])
-  notes             String?
-  createdById       String?
-  updatedById       String?
+  requiredDocuments      String[]              @default([])
+  notes                  String?
+  createdById            String?
+  updatedById            String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization              @relation(fields: [organizationId], references: [id])
+  organization      Organization            @relation(fields: [organizationId], references: [id])
   eligibleSuppliers SteelSupplierMaterial[]
-  createdBy    Employee?                 @relation("SteelMaterialMasterCreatedBy", fields: [createdById], references: [id])
-  updatedBy    Employee?                 @relation("SteelMaterialMasterUpdatedBy", fields: [updatedById], references: [id])
+  createdBy         Employee?               @relation("SteelMaterialMasterCreatedBy", fields: [createdById], references: [id])
+  updatedBy         Employee?               @relation("SteelMaterialMasterUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -1462,17 +1480,17 @@ model SteelLookup {
 // this material?"). Distinct from Supplier.materialTypes (coarse category match) —
 // this is a specific, admin-curated per-material approval.
 model SteelSupplierMaterial {
-  id             String   @id @default(uuid())
-  organizationId String
-  supplierId     String
-  materialId     String
-  isEligible     Boolean  @default(true)
+  id                     String   @id @default(uuid())
+  organizationId         String
+  supplierId             String
+  materialId             String
+  isEligible             Boolean  @default(true)
   specificationReference String?
-  isActive       Boolean  @default(true)
-  createdById    String?
-  updatedById    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive               Boolean  @default(true)
+  createdById            String?
+  updatedById            String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   organization Organization        @relation(fields: [organizationId], references: [id])
   supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -1632,12 +1650,12 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization    Organization             @relation(fields: [organizationId], references: [id])
-  sourcingOrders  SteelSourcingOrder[]
-  quotations      SteelSourcingQuotation[]
+  organization      Organization             @relation(fields: [organizationId], references: [id])
+  sourcingOrders    SteelSourcingOrder[]
+  quotations        SteelSourcingQuotation[]
   eligibleMaterials SteelSupplierMaterial[]
-  createdBy       Employee?                @relation("SupplierCreatedBy", fields: [createdById], references: [id])
-  updatedBy       Employee?                @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
+  createdBy         Employee?                @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  updatedBy         Employee?                @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -2776,27 +2794,27 @@ model TaskInstanceEvent {
 }
 
 model Alert {
-  id                       String                     @id @default(uuid())
-  type                     AlertType
-  title                    String
-  description              String
-  raisedById               String
-  organizationId           String?
-  severity                 Severity
-  raiseCount               Int                        @default(1)
-  taskInstanceId           String?
-  departmentId             String?
-  againstUserId            String?
-  isAbnormality            Boolean                    @default(false)
-  deduplicationKey         String?                    @unique
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @updatedAt
+  id               String    @id @default(uuid())
+  type             AlertType
+  title            String
+  description      String
+  raisedById       String
+  organizationId   String?
+  severity         Severity
+  raiseCount       Int       @default(1)
+  taskInstanceId   String?
+  departmentId     String?
+  againstUserId    String?
+  isAbnormality    Boolean   @default(false)
+  deduplicationKey String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  raisedBy     Employee       @relation("AlertsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
-  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  taskInstance TaskInstance?  @relation(fields: [taskInstanceId], references: [id], onDelete: SetNull)
-  department   Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  againstUser  Employee?      @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
+  raisedBy     Employee          @relation("AlertsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskInstance TaskInstance?     @relation(fields: [taskInstanceId], references: [id], onDelete: SetNull)
+  department   Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  againstUser  Employee?         @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
   comments     AlertComment[]
   occurrences  AlertOccurrence[]
 
@@ -2861,7 +2879,6 @@ enum Severity {
   CRITICAL
 }
 
-
 enum TaskFrequency {
   DAILY
   WEEKLY
@@ -2899,13 +2916,11 @@ enum Priority {
   CRITICAL
 }
 
-
 enum ViewLevel {
   OWN
   DEPARTMENT
   ORGANIZATION
 }
-
 
 enum TaskPermissionRole {
   ADMIN
@@ -3344,7 +3359,7 @@ model Sga {
   targetCompletionDate DateTime?
   mainDepartmentId     String?
   workArea             String?
-  beforeFileUrls       String[] @default([])
+  beforeFileUrls       String[]  @default([])
 
   // Step 2 / Section 4 — team
   ownerId String?
@@ -3361,7 +3376,7 @@ model Sga {
   // Step 2 / Section 6 — resources, investment, HOD approval
   requiredResources             String?
   expectedBenefitSummary        String?
-  approximateInvestmentAmount   Decimal? @db.Decimal(14, 2)
+  approximateInvestmentAmount   Decimal?       @db.Decimal(14, 2)
   approximateInvestmentCurrency String?
   hodDecision                   SgaHodDecision @default(PENDING)
   hodRemarks                    String?
@@ -3373,27 +3388,27 @@ model Sga {
   immediateControlNeeded Boolean @default(false)
 
   // Step 3 / Section 8 — root cause analysis
-  rootCauseTools       SgaRootCauseTool[] @default([])
-  otherAnalysisNotes   String?
-  otherAnalysisFileUrls String[] @default([])
+  rootCauseTools        SgaRootCauseTool[] @default([])
+  otherAnalysisNotes    String?
+  otherAnalysisFileUrls String[]           @default([])
 
   // Step 4 / Section 11 — implementation
   implementationSummary            String?
-  afterFileUrls                    String[] @default([])
-  actualImplementationCost         Decimal? @db.Decimal(14, 2)
+  afterFileUrls                    String[]                @default([])
+  actualImplementationCost         Decimal?                @db.Decimal(14, 2)
   actualImplementationCostCurrency String?
   implementationStatus             SgaImplementationStatus @default(NOT_STARTED)
 
   // Step 5 / Section 13 — benefits and sustainability
   wasteReductionAchieved          String?
-  financialLossBeforeImprovement  Decimal? @db.Decimal(14, 2)
-  verifiedGrossBenefit            Decimal? @db.Decimal(14, 2)
+  financialLossBeforeImprovement  Decimal?          @db.Decimal(14, 2)
+  verifiedGrossBenefit            Decimal?          @db.Decimal(14, 2)
   benefitPeriod                   SgaBenefitPeriod?
   effectivenessConfirmationPeriod String?
-  sopUpdated                      Boolean @default(false)
-  employeesTrained                Boolean @default(false)
-  followUpCheckPlanned            Boolean @default(false)
-  appliedElsewhere                Boolean @default(false)
+  sopUpdated                      Boolean           @default(false)
+  employeesTrained                Boolean           @default(false)
+  followUpCheckPlanned            Boolean           @default(false)
+  appliedElsewhere                Boolean           @default(false)
   lessonsLearned                  String?
 
   // Step 6 / Section 14 — verify and close
@@ -3454,15 +3469,15 @@ model SgaWasteImpact {
 
 // Step 3 / Section 8 Why-Why sub-panel — one row per independent 5-whys chain
 model SgaWhyWhyChain {
-  id                 String            @id @default(uuid())
+  id                 String               @id @default(uuid())
   sgaId              String
   causeToInvestigate String
   linked5mCategory   SgaFishboneCategory?
-  whys               String[]          @default([])
+  whys               String[]             @default([])
   evidence           String?
-  finalDecision      SgaWhyWhyDecision @default(MORE_INVESTIGATION_REQUIRED)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  finalDecision      SgaWhyWhyDecision    @default(MORE_INVESTIGATION_REQUIRED)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -3471,12 +3486,12 @@ model SgaWhyWhyChain {
 
 // Step 5 / Section 13 "Benefits" QCDSMT tab — one row per selected category
 model SgaQcdsmtBenefit {
-  id               String            @id @default(uuid())
-  sgaId            String
-  category         SgaQcdsmtCategory
-  whatWasAchieved  String
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id              String            @id @default(uuid())
+  sgaId           String
+  category        SgaQcdsmtCategory
+  whatWasAchieved String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -3496,8 +3511,8 @@ model SgaQcdsmtImpact {
   otherUnitLabel  String?
   currency        String?
   expectedBenefit String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -3516,8 +3531,8 @@ model SgaMeasure {
   otherUnitLabel   String?
   linkedQcdsmt     SgaQcdsmtCategory?
   linkedWaste      SgaWaste?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -3529,7 +3544,7 @@ model SgaFishboneCause {
   sgaId       String
   category    SgaFishboneCategory
   description String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime            @default(now())
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -3554,7 +3569,7 @@ model SgaMeetingReport {
 }
 
 model SgaActionItem {
-  id                  String    @id @default(uuid())
+  id                  String          @id @default(uuid())
   sgaId               String
   confirmedRootCause  String
   improvementAction   String
@@ -3562,8 +3577,8 @@ model SgaActionItem {
   dueDate             DateTime?
   status              SgaActionStatus @default(OPEN)
   completedAt         DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   sga               Sga       @relation(fields: [sgaId], references: [id], onDelete: Cascade)
   responsiblePerson Employee? @relation("SgaActionResponsible", fields: [responsiblePersonId], references: [id], onDelete: SetNull)
@@ -3579,8 +3594,8 @@ model SgaVerification {
   remarks      String?
   verifiedById String?
   verifiedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
 
   sga        Sga       @relation(fields: [sgaId], references: [id], onDelete: Cascade)
   verifiedBy Employee? @relation("SgaVerificationBy", fields: [verifiedById], references: [id], onDelete: SetNull)
@@ -3595,7 +3610,7 @@ model SgaReview {
   reviewerId    String
   statusChanged SgaStatus
   note          String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   sga      Sga      @relation(fields: [sgaId], references: [id], onDelete: Cascade)
   reviewer Employee @relation(fields: [reviewerId], references: [id])
@@ -3603,10 +3618,10 @@ model SgaReview {
 
 // Durable signup reservation. Identity is verified before a company is created.
 model OnboardingRequest {
-  id                String   @id @default(uuid())
-  requestKeyHash    String   @unique
+  id                String              @id @default(uuid())
+  requestKeyHash    String              @unique
   fingerprint       String
-  slug              String?  @unique
+  slug              String?             @unique
   requestedSlug     String
   companyName       String
   shortName         String?
@@ -3620,18 +3635,18 @@ model OnboardingRequest {
   email             String
   phone             String
   timeZone          String
-  status            String   @default("PENDING_VERIFICATION")
+  status            String              @default("PENDING_VERIFICATION")
   verificationHash  String
   expiresAt         DateTime
   verifiedAt        DateTime?
   passwordHash      String?
   existingUserId    String?
-  organizationId    String?  @unique
-  attempts          Int      @default(0)
-  nextAttemptAt     DateTime @default(now())
+  organizationId    String?             @unique
+  attempts          Int                 @default(0)
+  nextAttemptAt     DateTime            @default(now())
   failureCode       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
   messages          OnboardingMessage[]
 
   @@index([status, nextAttemptAt])
@@ -3640,46 +3655,136 @@ model OnboardingRequest {
 
 // Lease-based delivery; sending is at-least-once and outside company transactions.
 model OnboardingMessage {
-  id          String   @id @default(uuid())
+  id          String            @id @default(uuid())
   requestId   String
   kind        String
   request     OnboardingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  attempts    Int      @default(0)
-  availableAt DateTime @default(now())
+  attempts    Int               @default(0)
+  availableAt DateTime          @default(now())
   leaseId     String?
   leaseUntil  DateTime?
   sentAt      DateTime?
   failedAt    DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime          @default(now())
 
   @@unique([requestId, kind])
   @@index([sentAt, failedAt, availableAt])
 }
 
-
 // Metadata is the authorization boundary; storage buckets must also remain private.
 model FileAsset {
-  id String @id @default(uuid())
+  id             String       @id @default(uuid())
   organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  uploadedBy String
-  key String
-  fileName String
-  contentType String
-  size Int
-  folder String
-  status String @default("PENDING")
-  createdAt DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy     String
+  key            String
+  fileName       String
+  contentType    String
+  size           Int
+  folder         String
+  status         String       @default("PENDING")
+  createdAt      DateTime     @default(now())
+
   @@index([organizationId, status])
 }
 
 model ScheduledJobRun {
-  key String @id
-  window String
-  leaseId String
-  leaseUntil DateTime
+  key         String    @id
+  window      String
+  leaseId     String
+  leaseUntil  DateTime
   completedAt DateTime?
-  attempts Int @default(1)
-  failedAt DateTime?
+  attempts    Int       @default(1)
+  failedAt    DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+// EMS Standalone: Onboarding (Module 1 imports)
+enum EmsOnboardingBatchStatus {
+  DRAFT
+  VALIDATING
+  READY
+  PARTIALLY_REGISTERED
+  REGISTERED
+  CANCELLED
+}
+
+enum EmsOnboardingRecordStatus {
+  DRAFT
+  NEEDS_FIXING
+  READY
+  REGISTERED
+  EXCLUDED
+}
+
+model EmsOnboardingBatch {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  label          String?
+  sourceFileName String?
+  status         EmsOnboardingBatchStatus @default(DRAFT)
+
+  uploadedById String?
+  uploadedBy   User?   @relation("EmsBatchUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  records EmsOnboardingRecord[]
+
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model EmsOnboardingRecord {
+  id             String             @id @default(uuid())
+  batchId        String
+  batch          EmsOnboardingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+
+  rowNumber Int?
+
+  // Module 1 — raw as imported, validated at promotion
+  companyCode     String?
+  plantBranchCode String?
+  employeeCode    String?
+  firstName       String?
+  middleName      String?
+  lastName        String?
+  mobileNumber           String?
+  workEmail       String?
+  gender                 String?
+  nationality            String?
+  currentDepartment      String?
+  hodName                String?
+  hodDesignation         String?
+  workArea               String?
+  subSection             String?
+  jobDesignation         String?
+  beesAccessLevel        String?
+  shift                  String?
+  reportingToName        String?
+  reportingToDesignation String?
+  employmentStatus       String?
+  employmentType         String?
+  reliever1Name          String?
+  reliever1Designation   String?
+  reliever2Name          String?
+  reliever2Designation   String?
+
+  status           EmsOnboardingRecordStatus @default(DRAFT)
+  validationErrors Json?
+  exclusionReason  String?
+
+  employeeId   String?   @unique
+  employee     Employee? @relation("EmsOnboardingRegisteredAs", fields: [employeeId], references: [id])
+  registeredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+  @@index([organizationId])
 }

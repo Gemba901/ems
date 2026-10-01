@@ -215,6 +215,81 @@ export interface UpdateEmployeeEmsPayload {
   trainingNeeded?: boolean;
 }
 
+//standalone onboarding front
+export type OnboardingBatchStatus =
+  | "DRAFT" | "VALIDATING" | "READY" | "PARTIALLY_REGISTERED" | "REGISTERED" | "CANCELLED";
+
+export type OnboardingRecordStatus =
+  | "DRAFT" | "NEEDS_FIXING" | "READY" | "REGISTERED" | "EXCLUDED";
+
+export const BATCH_STATUS_LABELS: Record<OnboardingBatchStatus, string> = {
+  DRAFT:                "Draft",
+  VALIDATING:           "Validating",
+  READY:                "Ready",
+  PARTIALLY_REGISTERED: "Partially registered",
+  REGISTERED:           "Registered",
+  CANCELLED:            "Cancelled",
+};
+
+export const RECORD_STATUS_LABELS: Record<OnboardingRecordStatus, string> = {
+  DRAFT:        "Draft",
+  NEEDS_FIXING: "Needs fixing",
+  READY:        "Ready",
+  REGISTERED:   "Registered",
+  EXCLUDED:     "Excluded",
+};
+
+export interface OnboardingBatchSummary {
+  id: string;
+  label: string | null;
+  sourceFileName: string | null;
+  status: OnboardingBatchStatus;
+  createdAt: string;
+  uploadedBy: { id: string; name: string } | null;
+  _count: { records: number };
+}
+
+export interface OnboardingRecord {
+  id: string;
+  rowNumber: number | null;
+  companyCode: string | null;
+  plantBranchCode: string | null;
+  employeeCode: string | null;
+  firstName: string | null;
+  middleName: string | null;
+  lastName: string | null;
+  mobileNumber: string | null;
+  workEmail: string | null;
+  gender: string | null;
+  nationality: string | null;
+  currentDepartment: string | null;
+  hodName: string | null;
+  hodDesignation: string | null;
+  workArea: string | null;
+  subSection: string | null;
+  jobDesignation: string | null;
+  beesAccessLevel: string | null;
+  shift: string | null;
+  reportingToName: string | null;
+  reportingToDesignation: string | null;
+  employmentStatus: string | null;
+  employmentType: string | null;
+  reliever1Name: string | null;
+  reliever1Designation: string | null;
+  reliever2Name: string | null;
+  reliever2Designation: string | null;
+  status: OnboardingRecordStatus;
+  validationErrors: { field: string; message: string }[] | null;
+  exclusionReason: string | null;
+  employeeId: string | null;
+  registeredAt: string | null;
+}
+
+export interface OnboardingBatchDetail extends OnboardingBatchSummary {
+  organizationId: string;
+  records: OnboardingRecord[];
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export const EmsService = {
@@ -252,6 +327,28 @@ export const EmsService = {
   ): Promise<{ employee: EmployeeProfile; completion: CompletionResult }> {
     const res = await apiClient(`${API_URL}/ems/employees/${id}`, {
       method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+  
+  async listOnboardingBatches(token: string): Promise<OnboardingBatchSummary[]> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async getOnboardingBatch(id: string, token: string): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async createOnboardingBatch(
+    data: { label?: string; sourceFileName?: string },
+    token: string,
+  ): Promise<OnboardingBatchSummary> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches`, {
+      method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(data),
     }, token);

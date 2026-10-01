@@ -23,7 +23,8 @@ import {
   Ticket,
   Factory,
   Sparkles,
-  Users2
+  Users2,
+  ClipboardList
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -70,6 +71,14 @@ const NAV_ITEMS = [
     icon: Users,
     exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR],
+  },
+  {
+    name: "Employee Master Data",
+    href: "/ems",
+    icon: ClipboardList,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR],
+    module: "EMS",
   },
   {
     name: "Committees",

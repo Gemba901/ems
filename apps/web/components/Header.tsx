@@ -60,6 +60,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/ems": "Employee Master Data",
   "/ems/employees": "Employee Master Data",
   "/ems/my-profile": "My Profile",
+  "/ems/onboarding": "Onboarding Imports", 
   "/sims": "Suggestions",
   "/sims/new": "New Suggestion",
   "/sims/my-suggestions": "My Suggestions",
@@ -101,6 +102,7 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/operations/employees/me")) return "My Profile";
   if (pathname.startsWith("/operations/employees/")) return "Employee Profile";
   if (pathname.startsWith("/ems/employees/")) return "Employee Details";
+  if (pathname.startsWith("/ems/onboarding/")) return "Import Details";
   if (pathname.startsWith("/leave/employees/")) return "Employee Leave Profile";
   if (pathname.startsWith("/dwms/alerts/")) return "Alert Details";
   if (pathname.startsWith("/docs/dwms/")) return "Documentation";

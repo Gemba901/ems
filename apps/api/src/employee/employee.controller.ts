@@ -242,7 +242,7 @@ export class EmployeeController {
 
   // PATCH /employee/:id/avatar — update avatar URL
   @Patch(':id/avatar')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE)
   async updateAvatar(
     @Param('id') id: string,
     @Body() dto: UpdateAvatarDto,

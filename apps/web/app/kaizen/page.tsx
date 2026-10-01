@@ -8,35 +8,35 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { KaizenService, Kaizen, KaizenStatus } from "@/services/kaizen.service";
 import { EmployeeService } from "@/services/employee.service";
-import { StatusBadge, KpiCard, Thumbnail, KaizenPagination, STATUS_LABELS, formatDate } from "@/components/kaizen/kaizen-ui";
+import { KpiCard, KaizenPagination, STATUS_BADGE, STATUS_LABELS, formatDate } from "@/components/kaizen/kaizen-ui";
+import { CoverCard, CoverCardGrid } from "@/components/ui/CoverCard";
 import { Plus, Lightbulb, Loader2, ShieldCheck, CheckCircle2, Search, X } from "lucide-react";
 
 type TabKey = "mine" | "department" | "verification";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12;
 
-function KaizenRow({ k, showOwner }: { k: Kaizen; showOwner?: boolean }) {
-  const title = k.title || k.conditionDescription;
+const RAISER_EDITABLE_STATUSES: KaizenStatus[] = ["DRAFT", "RETURNED_FOR_REVISION"];
+
+function KaizenCard({ k, showOwner, myEmployeeId }: { k: Kaizen; showOwner?: boolean; myEmployeeId?: string }) {
+  const title = k.title || k.conditionDescription || "Untitled kaizen";
+  const canContinue = !!myEmployeeId && k.employeeId === myEmployeeId && RAISER_EDITABLE_STATUSES.includes(k.status);
   return (
-    <Link
+    <CoverCard
       href={`/kaizen/${k.id}`}
-      className="flex items-center gap-3 px-4 py-3 sm:px-6 hover:bg-slate-50 transition-colors"
-    >
-      <Thumbnail src={k.conditionEvidenceUrls[0]} alt={title} />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900 truncate">{title}</p>
-        <p className="text-xs text-slate-500 mt-1">
-          {showOwner && `${k.employee.firstName} ${k.employee.lastName} · `}
-          {k.department?.name ?? "No department"} · {formatDate(k.createdAt)}
-        </p>
-      </div>
-      <StatusBadge status={k.status} />
-    </Link>
+      title={title}
+      meta={`${showOwner ? `${k.employee.firstName} ${k.employee.lastName} · ` : ""}${k.department?.name ?? "No department"} · ${formatDate(k.createdAt)}`}
+      coverSrc={k.conditionEvidenceUrls[0]}
+      coverIcon={<Lightbulb />}
+      tone={STATUS_BADGE[k.status]}
+      statusLabel={STATUS_LABELS[k.status]}
+      cta={canContinue ? (k.status === "DRAFT" ? "Continue draft" : "Update & resubmit") : undefined}
+    />
   );
 }
 
-function KaizenListCard({ kaizens, isLoading, emptyText, showOwner }: {
-  kaizens: Kaizen[]; isLoading: boolean; emptyText: string; showOwner?: boolean;
+function KaizenListCard({ kaizens, isLoading, emptyText, showOwner, myEmployeeId }: {
+  kaizens: Kaizen[]; isLoading: boolean; emptyText: string; showOwner?: boolean; myEmployeeId?: string;
 }) {
   if (isLoading) {
     return <p className="text-sm text-slate-400 py-10 text-center flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading...</p>;
@@ -49,9 +49,9 @@ function KaizenListCard({ kaizens, isLoading, emptyText, showOwner }: {
     );
   }
   return (
-    <div className="bg-white border border-slate-100 rounded-xl shadow-sm divide-y divide-slate-50">
-      {kaizens.map((k) => <KaizenRow key={k.id} k={k} showOwner={showOwner} />)}
-    </div>
+    <CoverCardGrid>
+      {kaizens.map((k) => <KaizenCard key={k.id} k={k} showOwner={showOwner} myEmployeeId={myEmployeeId} />)}
+    </CoverCardGrid>
   );
 }
 
@@ -66,6 +66,12 @@ export default function KaizenOverviewPage() {
   const role = user?.roleLevel;
   const isPrivileged = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
   const canSeeDepartment = !!user?.departmentId;
+
+  const { data: me } = useQuery({
+    queryKey: ["employee-me"],
+    queryFn: () => EmployeeService.getMe(accessToken!),
+    enabled: !!accessToken,
+  });
 
   const { data: mine = [], isLoading: mineLoading } = useQuery({
     queryKey: ["kaizen-my"],
@@ -144,12 +150,12 @@ export default function KaizenOverviewPage() {
     <ProtectedRoute
       allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}
     >
-      <div className="mx-5 space-y-5">
+      <div className="space-y-6">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold text-slate-900">Daily Gemba Kaizen</h1>
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">Daily Gemba Kaizen</h1>
           <Link
             href="/kaizen/new"
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#52618a] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174]"
           >
             <Plus className="h-3.5 w-3.5" />
             New Kaizen
@@ -157,21 +163,22 @@ export default function KaizenOverviewPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiCard label="My Kaizens" value={mine.length} icon={<Lightbulb className="h-4 w-4 text-blue-600" />} accent="bg-blue-50" />
+          <KpiCard label="My Kaizens" value={mine.length} icon={<Lightbulb className="h-4 w-4 text-indigo-600" />} accent="bg-indigo-50" />
           <KpiCard label="In Implementation" value={inImplementationCount} icon={<Loader2 className="h-4 w-4 text-amber-600" />} accent="bg-amber-50" />
           <KpiCard label="Pending My Review" value={pendingMyVerificationCount} icon={<ShieldCheck className="h-4 w-4 text-purple-600" />} accent="bg-purple-50" />
           <KpiCard label="Verified This Month" value={verifiedThisMonthCount} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" />
         </div>
 
-        <div className="flex items-center gap-1 border-b border-slate-200">
+        <div className="flex gap-6 overflow-x-auto whitespace-nowrap border-b border-slate-200">
           {TABS.filter((t) => t.visible).map((t) => (
             <button
               key={t.key}
+              type="button"
               onClick={() => setTab(t.key)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`border-b-2 pb-3 text-sm font-semibold transition duration-150 ${
                 tab === t.key
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
+                  ? "border-indigo-500 text-indigo-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               {t.label}
@@ -187,13 +194,13 @@ export default function KaizenOverviewPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title..."
-              className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as KaizenStatus | "ALL")}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
           >
             <option value="ALL">All Statuses</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
@@ -204,7 +211,7 @@ export default function KaizenOverviewPage() {
             <select
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
             >
               <option value="ALL">All Departments</option>
               {departments.map((d) => (
@@ -228,6 +235,7 @@ export default function KaizenOverviewPage() {
           isLoading={activeLoading}
           emptyText={emptyText}
           showOwner={tab !== "mine"}
+          myEmployeeId={me?.id}
         />
 
         <KaizenPagination page={page} totalPages={totalPages} onChange={setPage} />

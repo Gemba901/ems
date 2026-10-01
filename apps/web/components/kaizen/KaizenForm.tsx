@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Clock, Loader2, Save, Send, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Loader2, Send, XCircle } from "lucide-react";
 import { Kaizen, KaizenService, KaizenStatus } from "@/services/kaizen.service";
 import { EmployeeApiResponse } from "@/services/employee.service";
 import { Role } from "@/types/role";
@@ -17,6 +17,8 @@ import {
   SummaryPanel,
 } from "@/components/kaizen/kaizen-ui";
 import { getKaizenGating, getStageStates, KaizenAccessContext } from "@/components/kaizen/gating";
+import KaizenDraftWizard from "@/components/kaizen/KaizenDraftWizard";
+import NextActionBanner from "@/components/kaizen/NextActionBanner";
 
 import ReasonSection from "./sections/01-Reason";
 import ReferenceSection from "./sections/02-Reference";
@@ -65,66 +67,10 @@ export default function KaizenForm({
   const gating = getKaizenGating(kaizen, ctx);
   const stageStates = getStageStates(kaizen);
 
-  const [hodReviewError, setHodReviewError] = useState<string | null>(null);
   const [verificationError, setVerificationError] = useState<string | null>(null);
-  const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [submittingHodReview, setSubmittingHodReview] = useState(false);
   const [submittingVerification, setSubmittingVerification] = useState(false);
 
-  const reasonRef = useRef<KaizenSectionHandle>(null);
-  const referenceRef = useRef<KaizenSectionHandle>(null);
-  const conditionRef = useRef<KaizenSectionHandle>(null);
-  const basicInfoRef = useRef<KaizenSectionHandle>(null);
-  const qcdsmtImpactRef = useRef<KaizenSectionHandle>(null);
-  const wasteRef = useRef<KaizenSectionHandle>(null);
-  const implementationPlanRef = useRef<KaizenSectionHandle>(null);
   const implementationRef = useRef<KaizenSectionHandle>(null);
-
-  const saveAllSections = async (): Promise<boolean> => {
-    const refs = [reasonRef, referenceRef, conditionRef, basicInfoRef, qcdsmtImpactRef, wasteRef, implementationPlanRef];
-    let allOk = true;
-    for (const sectionRef of refs) {
-      if (!sectionRef.current) continue;
-      const ok = await sectionRef.current.save();
-      if (!ok) allOk = false;
-    }
-    return allOk;
-  };
-
-  const handleSaveDraft = async () => {
-    setSaveDraftError(null);
-    setSavingDraft(true);
-    try {
-      const ok = await saveAllSections();
-      if (!ok) setSaveDraftError("Some sections failed to save. Check the errors above and try again.");
-    } finally {
-      setSavingDraft(false);
-    }
-  };
-
-  const submitForHodReview = useMutation({
-    mutationFn: () => KaizenService.submitForHodPreReview(kaizen.id, token),
-    onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setHodReviewError(err instanceof Error ? err.message : "Failed to submit"),
-  });
-
-  const handleSubmitForHodReview = async () => {
-    setHodReviewError(null);
-    setSubmittingHodReview(true);
-    try {
-      const ok = await saveAllSections();
-      if (!ok) {
-        setHodReviewError("Some sections failed to save. Check the errors above and try again.");
-        return;
-      }
-      await submitForHodReview.mutateAsync();
-    } catch {
-      // handled by the mutation's onError
-    } finally {
-      setSubmittingHodReview(false);
-    }
-  };
 
   const submitForVerification = useMutation({
     mutationFn: () => KaizenService.submitForVerification(kaizen.id, token),
@@ -153,7 +99,9 @@ export default function KaizenForm({
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 leading-snug mb-2">{kaizen.title || kaizen.conditionDescription}</h1>
+          <h1 className="text-xl font-bold text-slate-900 leading-snug mb-2">
+            {kaizen.title || kaizen.conditionDescription || "Untitled kaizen"}
+          </h1>
           <div className="flex flex-wrap gap-2 items-center">
             <StatusBadge status={kaizen.status} />
             <span className="text-xs text-slate-400">
@@ -165,44 +113,26 @@ export default function KaizenForm({
 
       <KaizenProgress states={stageStates} />
 
+      {/* On phones the side column falls below the page, so the card shows here instead. */}
+      <NextActionBanner kaizen={kaizen} ctx={ctx} gating={gating} className="lg:hidden" />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         <div className="lg:col-span-2 space-y-5">
-          <ReasonSection ref={reasonRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-          <ReferenceSection ref={referenceRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-          <ConditionSection ref={conditionRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-          <BasicInfoSection ref={basicInfoRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-          <QcdsmtImpactSection ref={qcdsmtImpactRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-          <WasteSection ref={wasteRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-          <ImplementationPlanSection ref={implementationPlanRef} kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-
-          {gating.initialSubmission.editable && (
-            <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-              {(saveDraftError || hodReviewError) && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
-                  {saveDraftError || hodReviewError}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  disabled={savingDraft || submittingHodReview}
-                  onClick={handleSaveDraft}
-                  className="flex items-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-                >
-                  {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save as Draft
-                </button>
-                <button
-                  type="button"
-                  disabled={savingDraft || submittingHodReview}
-                  onClick={handleSubmitForHodReview}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-                >
-                  {submittingHodReview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Submit for HOD Pre-Review
-                </button>
-              </div>
-            </div>
+          {gating.initialSubmission.editable ? (
+            // The raiser fills the draft step by step; everyone else sees the read-only stacked view.
+            <Suspense fallback={null}>
+              <KaizenDraftWizard kaizen={kaizen} gating={gating} token={token} onSaved={onSaved} />
+            </Suspense>
+          ) : (
+            <>
+              <ReasonSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
+              <ReferenceSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
+              <ConditionSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
+              <BasicInfoSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
+              <QcdsmtImpactSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
+              <WasteSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
+              <ImplementationPlanSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
+            </>
           )}
 
           {gating.hodPreReview.visible ? (
@@ -226,7 +156,7 @@ export default function KaizenForm({
                 type="button"
                 disabled={submittingVerification || submitForVerification.isPending}
                 onClick={handleSubmitForVerification}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                className="flex items-center gap-2 bg-[#52618a] hover:bg-[#445174] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
               >
                 {submittingVerification || submitForVerification.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Submit for Verification
@@ -286,6 +216,7 @@ export default function KaizenForm({
           </div>
         </div>
 
+        <div className="space-y-5 lg:sticky lg:top-20">
         <SummaryPanel
           title="Kaizen Summary"
           rows={[
@@ -299,6 +230,8 @@ export default function KaizenForm({
             { label: "Status", value: <StatusBadge status={kaizen.status} /> },
           ]}
         />
+        <NextActionBanner kaizen={kaizen} ctx={ctx} gating={gating} className="hidden lg:block" />
+        </div>
       </div>
     </div>
   );

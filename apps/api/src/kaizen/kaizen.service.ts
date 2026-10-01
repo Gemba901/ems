@@ -15,7 +15,7 @@ import {
 } from './dto/kaizen.dto';
 import { Role } from 'src/common/enum/role.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { KaizenStatus, KaizenVerificationStage, KaizenReferenceApplicability } from 'db';
+import { Prisma, KaizenStatus, KaizenVerificationStage, KaizenReferenceApplicability } from 'db';
 
 const employeeSelect = {
     id: true,
@@ -41,7 +41,37 @@ const kaizenInclude = {
     },
 };
 
+export type KaizenWithInclude = Prisma.KaizenGetPayload<{ include: typeof kaizenInclude }>;
+
 const EDITABLE_STATUSES: KaizenStatus[] = ['DRAFT', 'RETURNED_FOR_REVISION'];
+
+// `step` matches the guided draft wizard on the web (1 Problem, 2 What will improve, 3 Owner & plan),
+// so the client can link each missing item to where it is filled in.
+export interface KaizenDraftMissingItem {
+    key: string;
+    label: string;
+    step: number;
+}
+
+export function getKaizenDraftMissingItems(kaizen: KaizenWithInclude): KaizenDraftMissingItem[] {
+    const missing: KaizenDraftMissingItem[] = [];
+    if (!kaizen.trigger) missing.push({ key: 'trigger', label: 'Why this kaizen was started', step: 1 });
+    if (kaizen.trigger === 'OTHER' && !kaizen.triggerOther?.trim()) {
+        missing.push({ key: 'triggerOther', label: 'Explain the "Other" reason', step: 1 });
+    }
+    if (!kaizen.title) missing.push({ key: 'title', label: 'Title', step: 1 });
+    if (!kaizen.conditionDescription?.trim()) {
+        missing.push({ key: 'conditionDescription', label: 'What you saw (the problem or idea)', step: 1 });
+    }
+    if (kaizen.qcdsmtImpacts.length === 0) missing.push({ key: 'impacts', label: 'At least one thing that will improve', step: 2 });
+    if (!kaizen.startDate) missing.push({ key: 'startDate', label: 'Start date', step: 3 });
+    if (!kaizen.targetCompletionDate) missing.push({ key: 'targetCompletionDate', label: 'Target completion date', step: 3 });
+    if (!kaizen.kaizenOwnerId) missing.push({ key: 'kaizenOwnerId', label: 'Kaizen owner', step: 3 });
+    if (!kaizen.requiredMaterials?.trim()) missing.push({ key: 'requiredMaterials', label: 'What you need to do it', step: 3 });
+    return missing;
+}
+
+const MAX_DURATION_DAYS = 30;
 
 @Injectable()
 export class KaizenService {
@@ -138,10 +168,31 @@ export class KaizenService {
         });
     }
 
-    // Part 1: create a kaizen from just the reason
+    // Part 1: "New Kaizen" creates an empty draft that the raiser fills in through the guided wizard.
+    // It starts today and the raiser owns it until they pick someone else.
     async createKaizen(userId: string, dto: CreateKaizenReasonDto, organizationId: string) {
         const employee = await this.resolveEmployee(userId, organizationId);
-        return this.createKaizenRecord(employee, dto, organizationId);
+        return this.createKaizenRecord(employee, dto, organizationId, {
+            startDate: new Date().toISOString(),
+            kaizenOwnerId: employee.id,
+        });
+    }
+
+    // Raiser (or admin/management/superadmin) can discard a kaizen that was never submitted
+    async deleteKaizen(kaizenId: string, userId: string, organizationId: string) {
+        const kaizen = await this.findKaizenOrThrow(kaizenId, organizationId);
+        const employee = await this.resolveEmployee(userId, organizationId);
+        const roles = await this.getUserRoles(userId, organizationId);
+
+        if (kaizen.employeeId !== employee.id && !this.isPrivileged(roles)) {
+            throw new ForbiddenException('You can only delete your own kaizen');
+        }
+        if (kaizen.status !== 'DRAFT') {
+            throw new BadRequestException('Only drafts that have not been submitted can be deleted');
+        }
+
+        await this.prisma.kaizen.delete({ where: { id: kaizenId } });
+        return { id: kaizenId };
     }
 
     private async createKaizenRecord(
@@ -181,6 +232,7 @@ export class KaizenService {
                 status: overrides?.status ?? 'DRAFT',
                 kaizenOwnerId: overrides?.kaizenOwnerId,
             },
+            include: kaizenInclude,
         });
 
         return kaizen;
@@ -347,8 +399,10 @@ export class KaizenService {
         return this.prisma.kaizen.update({
             where: { id: kaizenId },
             data: {
-                trigger: dto.trigger,
-                triggerOther: dto.trigger === 'OTHER' ? dto.triggerOther : null,
+                ...(dto.trigger && {
+                    trigger: dto.trigger,
+                    triggerOther: dto.trigger === 'OTHER' ? dto.triggerOther : null,
+                }),
             },
             include: kaizenInclude,
         });
@@ -383,6 +437,7 @@ export class KaizenService {
             data: {
                 conditionDescription: dto.conditionDescription,
                 conditionEvidenceUrls: dto.conditionEvidenceUrls,
+                title: dto.title,
             },
             include: kaizenInclude,
         });
@@ -398,19 +453,22 @@ export class KaizenService {
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertEditable(kaizen, employee.id);
 
-        const start = new Date(dto.startDate);
-        const target = new Date(dto.targetCompletionDate);
-        const diffDays = (target.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-        if (diffDays < 0 || diffDays > 30) {
-            throw new BadRequestException('Target completion date must be within 30 days of the start date');
+        // Check the window against whatever the draft will hold after this save
+        const startDate = dto.startDate ? new Date(dto.startDate) : kaizen.startDate;
+        const targetCompletionDate = dto.targetCompletionDate ? new Date(dto.targetCompletionDate) : kaizen.targetCompletionDate;
+        if (startDate && targetCompletionDate) {
+            const diffDays = (targetCompletionDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+            if (diffDays < 0 || diffDays > MAX_DURATION_DAYS) {
+                throw new BadRequestException(`Target completion date must be within ${MAX_DURATION_DAYS} days of the start date`);
+            }
         }
 
         const updated = await this.prisma.kaizen.update({
             where: { id: kaizenId },
             data: {
                 title: dto.title,
-                startDate: new Date(dto.startDate),
-                targetCompletionDate: new Date(dto.targetCompletionDate),
+                startDate: dto.startDate ? startDate : undefined,
+                targetCompletionDate: dto.targetCompletionDate ? targetCompletionDate : undefined,
                 kaizenOwnerId: dto.kaizenOwnerId,
                 ...(dto.teamMemberIds && {
                     teamMembers: { set: dto.teamMemberIds.map((id) => ({ id })) },
@@ -419,16 +477,18 @@ export class KaizenService {
             include: kaizenInclude,
         });
 
-        if (dto.teamMemberIds?.length) {
+        // Draft steps are saved repeatedly, so only people newly added to the team are notified
+        const previousMemberIds = new Set(kaizen.teamMembers.map((m) => m.id));
+        const addedMemberIds = (dto.teamMemberIds ?? []).filter((id) => id !== employee.id && !previousMemberIds.has(id));
+        if (addedMemberIds.length) {
             await this.notifications.createMany(
-                dto.teamMemberIds
-                    .filter((id) => id !== employee.id)
+                addedMemberIds
                     .map((memberId) => ({
                         employeeId: memberId,
                         type: 'INFO' as const,
                         module: 'KAIZEN',
                         title: 'Added to a kaizen team',
-                        message: `You were added as a team member on the kaizen "${dto.title}".`,
+                        message: `You were added as a team member on the kaizen "${updated.title ?? 'Untitled'}".`,
                         actionUrl: `/kaizen/${kaizenId}`,
                         metadata: { kaizenId },
                     }))
@@ -510,8 +570,14 @@ export class KaizenService {
         const employee = await this.resolveEmployee(userId, organizationId);
         this.assertEditable(kaizen, employee.id);
 
-        if (!kaizen.title || !kaizen.startDate || !kaizen.targetCompletionDate || !kaizen.kaizenOwnerId || !kaizen.requiredMaterials) {
-            throw new BadRequestException('Complete parts 1-7 before submitting for HOD review');
+        const missing = getKaizenDraftMissingItems(kaizen);
+        if (missing.length) {
+            throw new BadRequestException({
+                statusCode: 400,
+                error: 'Bad Request',
+                message: 'Complete the missing items before submitting for HOD review',
+                missing,
+            });
         }
 
         const updated = await this.prisma.$transaction(async (tx) => {

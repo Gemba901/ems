@@ -8,9 +8,25 @@ function authHeaders(token: string) {
   };
 }
 
+export interface KaizenDraftMissingItem {
+  key: string;
+  label: string;
+  step: number;
+}
+
+// Thrown when submitting a draft that still has gaps; `missing` feeds the wizard's checklist.
+export class KaizenIncompleteError extends Error {
+  constructor(message: string, public missing: KaizenDraftMissingItem[]) {
+    super(message);
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
+    if (Array.isArray(error.missing)) {
+      throw new KaizenIncompleteError(error.message, error.missing);
+    }
     throw new Error(error.message || `Request failed with status ${res.status}`);
   }
   return res.json();
@@ -195,7 +211,7 @@ export interface CreateKaizenReasonPayload {
 }
 
 export interface UpdateKaizenReasonPayload {
-  trigger: KaizenTrigger;
+  trigger?: KaizenTrigger;
   triggerOther?: string;
 }
 
@@ -207,16 +223,17 @@ export interface UpdateKaizenReferencePayload {
 
 // Part 3
 export interface UpdateKaizenConditionPayload {
-  conditionDescription: string;
-  conditionEvidenceUrls: string[];
+  title?: string;
+  conditionDescription?: string;
+  conditionEvidenceUrls?: string[];
 }
 
 // Part 4
 export interface UpdateKaizenBasicInfoPayload {
-  title: string;
-  startDate: string;
-  targetCompletionDate: string;
-  kaizenOwnerId: string;
+  title?: string;
+  startDate?: string;
+  targetCompletionDate?: string;
+  kaizenOwnerId?: string;
   teamMemberIds?: string[];
 }
 
@@ -252,7 +269,7 @@ export interface UpdateKaizenWastePayload {
 
 // Part 7
 export interface UpdateKaizenImplementationPlanPayload {
-  requiredMaterials: string;
+  requiredMaterials?: string;
   estimatedCost?: string;
   estimatedCostCurrency?: string;
 }
@@ -287,6 +304,14 @@ export const KaizenService = {
       body: JSON.stringify(data),
     }, token);
     return handleResponse<Kaizen>(res);
+  },
+
+  async delete(id: string, token: string): Promise<{ id: string }> {
+    const res = await apiClient(`${API_URL}/kaizen/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse<{ id: string }>(res);
   },
 
   async getAll(token: string): Promise<Kaizen[]> {

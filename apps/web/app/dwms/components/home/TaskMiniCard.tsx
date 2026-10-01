@@ -100,7 +100,7 @@ function formatWindowDate(value: Date, timeZone: string) {
   );
 }
 
-function getStatusLockReason(task: TaskItem) {
+export function getStatusLockReason(task: TaskItem) {
   if (task.frequency === "PLANNED") return null;
 
   const windowStart = getCompletionWindowStart(task);
@@ -118,6 +118,53 @@ function getStatusLockReason(task: TaskItem) {
 
   return `Status can no longer be changed after the due date, ${formatWindowDate(dueAt, timeZone)}.`;
 }
+export function isTaskOverdue(task: TaskItem) {
+  return task.isOverdue || task.status === "OVERDUE";
+}
+
+/** Statuses the assignee may move a task to, or [] when its status is locked. */
+export function getSelectableStatuses(task: TaskItem): TaskStatus[] {
+  const isOverdue = isTaskOverdue(task);
+  const isStatusLockedBySchedule = !!getStatusLockReason(task) && !isOverdue;
+  if (
+    task.prerequisiteBlocked ||
+    isStatusLockedBySchedule ||
+    task.status === "DONE" ||
+    task.status === "NOT_APPLICABLE" ||
+    task.status === "APPROVAL_PENDING"
+  ) {
+    return [];
+  }
+  const statusOrder: Record<TaskStatus, number> = {
+    PENDING: 0,
+    OVERDUE: 0,
+    IN_PROGRESS: 1,
+    PARTLY_DONE: 3,
+    DONE: 4,
+    APPROVAL_PENDING: 4,
+    LESS_THAN_50: 2,
+    NOT_APPLICABLE: 4,
+  };
+  if (isOverdue) {
+    return ["DONE"];
+  }
+  const allOptions: TaskStatus[] = [
+    "PENDING",
+    "IN_PROGRESS",
+    "PARTLY_DONE",
+    "DONE",
+  ];
+  const currentOrder = statusOrder[task.status] ?? 0;
+  return allOptions.filter((status) => statusOrder[status] >= currentOrder);
+}
+
+export function formatTaskStatus(status: TaskStatus) {
+  return status
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export default function TaskMiniCard({
   task,
   onClick,
@@ -126,7 +173,7 @@ export default function TaskMiniCard({
   saving,
 }: Props) {
   const isCompleted = task.status === "DONE";
-  const isOverdue = task.isOverdue || task.status === "OVERDUE";
+  const isOverdue = isTaskOverdue(task);
   const wasOverdue = !!task.wasOverdue && !isOverdue;
   const isPrerequisiteBlocked = !!task.prerequisiteBlocked;
   const statusLockReason = getStatusLockReason(task);
@@ -155,48 +202,8 @@ export default function TaskMiniCard({
     onStatusChange(task.instanceId, nextStatus);
   };
 
-  const getSelectableStatuses = (): TaskStatus[] => {
-    if (
-      isPrerequisiteBlocked ||
-      isStatusLockedBySchedule ||
-      task.status === "DONE" ||
-      task.status === "NOT_APPLICABLE" ||
-      task.status === "APPROVAL_PENDING"
-    ) {
-      return [];
-    }
-    const statusOrder: Record<TaskStatus, number> = {
-      PENDING: 0,
-      OVERDUE: 0,
-      IN_PROGRESS: 1,
-      PARTLY_DONE: 3,
-      DONE: 4,
-      APPROVAL_PENDING: 4,
-      LESS_THAN_50: 2,
-      NOT_APPLICABLE: 4,
-    };
-    if (isOverdue) {
-      return ["DONE"];
-    }
-    const allOptions: TaskStatus[] = [
-      "PENDING",
-      "IN_PROGRESS",
-      "PARTLY_DONE",
-      "DONE",
-    ];
-    const currentOrder = statusOrder[task.status] ?? 0;
-    return allOptions.filter((status) => statusOrder[status] >= currentOrder);
-  };
-
   const handleAckSelect = () => {
     onAcknowledgement(task.taskId);
-  };
-
-  const formatStatus = (status: TaskStatus) => {
-    return status
-      .replace(/_/g, " ")
-      .toLowerCase()
-      .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
   // Priority element matching mockup with extra light stroke, color-free SVG icons
@@ -415,7 +422,7 @@ export default function TaskMiniCard({
                 }
                 className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span>{formatStatus(task.status)}</span>
+                <span>{formatTaskStatus(task.status)}</span>
                 {!isPrerequisiteBlocked &&
                   !isStatusLockedBySchedule &&
                   task.status !== "DONE" &&
@@ -431,7 +438,7 @@ export default function TaskMiniCard({
                 !isPrerequisiteBlocked &&
                 !isStatusLockedBySchedule && (
                   <div className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-                    {getSelectableStatuses().map((status) => (
+                    {getSelectableStatuses(task).map((status) => (
                       <button
                         key={status}
                         type="button"
@@ -441,7 +448,7 @@ export default function TaskMiniCard({
                         }}
                         className={`w-full px-4 py-2.5 text-left text-sm transition hover:bg-blue-50 ${task.status === status ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-700"}`}
                       >
-                        {formatStatus(status)}
+                        {formatTaskStatus(status)}
                       </button>
                     ))}
                   </div>

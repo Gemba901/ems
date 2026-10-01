@@ -10,7 +10,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-import { RequiresModule } from 'src/auth/decorators/module.decorator';
+import { RequiresModule, SkipModuleCheck } from 'src/auth/decorators/module.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
@@ -22,8 +22,9 @@ import { ModuleType } from 'db';
 export class EmsController {
   constructor(private ems: EmsService) {}
 
-  /** GET /ems/me — employee's own profile + completion */
+  /** GET /ems/me — employee's own profile + completion. Every user has a profile, so this isn't EMS-gated. */
   @Get('me')
+  @SkipModuleCheck()
   async getMyProfile(@CurrentUser() user: { userId: string; organizationId: string }) {
     return this.ems.getMyProfile(user.userId, user.organizationId);
   }

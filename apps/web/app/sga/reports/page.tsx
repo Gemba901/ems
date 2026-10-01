@@ -9,6 +9,7 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SgaService, type Sga, type SgaStatus, type SgaQcdsmtCategory } from "@/services/sga.service";
 import { STATUS_LABELS, QCDSMT_LABELS, STARTING_REASONS } from "@/components/sga/sga-ui";
+import { FinancialImpact, toAmount, type FinancialEntry } from "@/components/ui/FinancialImpact";
 
 type Scope = "organisation" | "department" | "mine";
 type Period = "90d" | "12m" | "all";
@@ -60,6 +61,35 @@ function closedAt(sga: Sga): Date | null {
 
 function isOverdue(sga: Sga, now: number) {
   return ACTIVE_STATUSES.has(sga.status) && !!sga.targetCompletionDate && new Date(sga.targetCompletionDate).getTime() < now;
+}
+
+// SGAs the HOD has approved, so their investment is committed.
+const APPROVED_STATUSES = new Set<SgaStatus>(["IN_PROGRESS", "PENDING_VERIFICATION", "RETURNED_FOR_REWORK", "VERIFIED_CLOSED"]);
+
+// Recurring benefits are scaled to one year so SGAs can be added up; one-time benefits count once.
+const BENEFIT_PER_YEAR: Record<NonNullable<Sga["benefitPeriod"]>, number> = {
+  PER_DAY: 365,
+  PER_WEEK: 52,
+  PER_MONTH: 12,
+  PER_YEAR: 1,
+  ONE_TIME: 1,
+};
+
+// The benefit field has no currency of its own, so it takes the SGA's cost currency.
+function financialEntry(sga: Sga): FinancialEntry | null {
+  const gross = sga.status === "VERIFIED_CLOSED" ? toAmount(sga.verifiedGrossBenefit) : null;
+  const benefit = gross == null ? null : gross * BENEFIT_PER_YEAR[sga.benefitPeriod ?? "ONE_TIME"];
+  const actual = toAmount(sga.actualImplementationCost);
+  const cost = APPROVED_STATUSES.has(sga.status) ? actual ?? toAmount(sga.approximateInvestmentAmount) : null;
+  if (benefit == null && cost == null) return null;
+  return {
+    id: sga.id,
+    title: sga.title || sga.problemDescription || "Untitled SGA",
+    department: sga.mainDepartment?.name ?? "No department",
+    currency: (actual != null ? sga.actualImplementationCostCurrency : sga.approximateInvestmentCurrency) ?? sga.approximateInvestmentCurrency ?? "",
+    benefit,
+    cost,
+  };
 }
 
 function countBy<T extends string>(items: T[]) {
@@ -240,6 +270,7 @@ function SgaReportsPage() {
       reasons: countBy(submitted.flatMap((s) => (s.startingReason ? [s.startingReason] : [])))
         .slice(0, 5)
         .map(([reason, value]) => ({ label: reason === "OTHER" ? "Other" : REASON_LABELS.get(reason) ?? reason, value })),
+      financial: sgas.flatMap((s) => financialEntry(s) ?? []),
       months,
       departments: [...departments.values()].sort((a, b) => b.total - a.total),
     };
@@ -318,6 +349,18 @@ function SgaReportsPage() {
               <BarList rows={report.reasons} color="bg-[#52618a]" empty="No reasons recorded yet." />
             </Card>
           </div>
+
+          <Card title="Financial impact" subtitle="Yearly benefit of closed SGAs against what approved SGAs cost">
+            <FinancialImpact
+              entries={report.financial}
+              benefitLabel="Verified benefit (yearly)"
+              benefitDetail="Closed SGAs, scaled to one year"
+              costLabel="Investment"
+              costDetail="Actual cost, or the estimate if not yet recorded"
+              linkBase="/sga"
+              emptyText="No investment or verified benefits recorded in this period."
+            />
+          </Card>
 
           {scope !== "mine" && (
             <Card title="By department" subtitle="Submitted SGAs grouped by main department">

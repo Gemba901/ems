@@ -14,7 +14,7 @@ import {
 } from "@/components/sga/sga-ui";
 import { SgaSectionHandle, SgaSectionProps } from "./types";
 
-const REFERENCE_APPLICABILITY_OPTIONS: SgaReferenceApplicability[] = ["APPLICABLE", "NOT_APPLICABLE", "REFERENCE_NOT_FOUND"];
+const REFERENCE_APPLICABILITY_OPTIONS: SgaReferenceApplicability[] = ["APPLICABLE", "NOT_APPLICABLE"];
 
 const EXPLANATION_MIN = 10;
 const EXPLANATION_MAX = 1000;

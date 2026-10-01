@@ -88,6 +88,11 @@ const PAGE_TITLES: Record<string, string> = {
   "/sga/new": "New SGA",
   "/sga/reports": "SGA Reports",
   "/docs/sga": "Documentation",
+  "/kaizen": "Daily Gemba Kaizen",
+  "/kaizen/all": "All Kaizens",
+  "/kaizen/new": "New Kaizen",
+  "/kaizen/reports": "Kaizen Reports",
+  "/docs/kaizen": "Documentation",
   "/leave": "Leave Management",
   "/leave/apply": "Apply for Leave",
   "/leave/calendar": "Company Leave Calendar",
@@ -106,6 +111,8 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/docs/dwms/")) return "Documentation";
   if (pathname.startsWith("/docs/sga/")) return "Documentation";
   if (pathname.startsWith("/sga/")) return "SGA Details";
+  if (pathname.startsWith("/docs/kaizen/")) return "Documentation";
+  if (pathname.startsWith("/kaizen/")) return "Kaizen Details";
   if (pathname.startsWith("/dwms/activities/ingestions/")) return "Activity Import Details";
   if (pathname.startsWith("/dwms/")) return "Daily Work";
   if (pathname.startsWith("/sims/")) return "Suggestions";

@@ -146,3 +146,32 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+/* Thin, unobtrusive scrollbar (sidebars and other narrow panels).
+   Chrome ignores ::-webkit-scrollbar styles once scrollbar-width is set, so the
+   standard properties are only applied where the webkit pseudo-elements aren't supported (Firefox). */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.thin-scrollbar::-webkit-scrollbar-button {
+  display: none;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+}
+.thin-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgb(203 213 225);
+}
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(148 163 184);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(203 213 225) transparent;
+  }
+}

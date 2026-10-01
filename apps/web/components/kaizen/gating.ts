@@ -1,4 +1,4 @@
-import { Kaizen, KaizenStatus, KaizenVerificationStage } from "@/services/kaizen.service";
+import { Kaizen, KaizenDraftMissingItem, KaizenStatus, KaizenVerificationStage } from "@/services/kaizen.service";
 import { KaizenStageKey, KaizenStageState } from "./kaizen-ui";
 
 export interface KaizenAccessContext {
@@ -69,6 +69,25 @@ export function getKaizenGating(kaizen: Kaizen, ctx: KaizenAccessContext): Kaize
     canSubmitForHodReview: raiserEditable,
     canSubmitForVerification: ctx.isKaizenOwner && IMPLEMENTATION_EDITABLE_STATUSES.includes(kaizen.status),
   };
+}
+
+/** Mirrors getKaizenDraftMissingItems on the API so the wizard can show gaps before submitting. */
+export function getDraftChecklist(kaizen: Kaizen): KaizenDraftMissingItem[] {
+  const missing: KaizenDraftMissingItem[] = [];
+  if (!kaizen.trigger) missing.push({ key: "trigger", label: "Why this kaizen was started", step: 1 });
+  if (kaizen.trigger === "OTHER" && !kaizen.triggerOther?.trim()) {
+    missing.push({ key: "triggerOther", label: 'Explain the "Other" reason', step: 1 });
+  }
+  if (!kaizen.title) missing.push({ key: "title", label: "Title", step: 1 });
+  if (!kaizen.conditionDescription?.trim()) {
+    missing.push({ key: "conditionDescription", label: "What you saw (the problem or idea)", step: 1 });
+  }
+  if (kaizen.qcdsmtImpacts.length === 0) missing.push({ key: "impacts", label: "At least one thing that will improve", step: 2 });
+  if (!kaizen.startDate) missing.push({ key: "startDate", label: "Start date", step: 3 });
+  if (!kaizen.targetCompletionDate) missing.push({ key: "targetCompletionDate", label: "Target completion date", step: 3 });
+  if (!kaizen.kaizenOwnerId) missing.push({ key: "kaizenOwnerId", label: "Kaizen owner", step: 3 });
+  if (!kaizen.requiredMaterials?.trim()) missing.push({ key: "requiredMaterials", label: "What you need to do it", step: 3 });
+  return missing;
 }
 
 export function canActOnVerificationStage(

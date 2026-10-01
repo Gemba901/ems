@@ -2,9 +2,9 @@
 
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Plus, Trash2 } from "lucide-react";
 import { KaizenService, KaizenWaste, KaizenWasteImpactItemPayload, KaizenUnit } from "@/services/kaizen.service";
-import { CurrencySelect, SectionLabel, UNIT_LABELS, UNIT_OPTIONS, WASTE_LABELS, WASTE_OPTIONS } from "@/components/kaizen/kaizen-ui";
+import { CurrencySelect, SectionLabel, UNIT_LABELS, UNIT_OPTIONS, WASTE_HINTS, WASTE_LABELS, WASTE_OPTIONS } from "@/components/kaizen/kaizen-ui";
 import { KaizenSectionHandle, KaizenSectionProps } from "./types";
 
 type Row = KaizenWasteImpactItemPayload;
@@ -53,10 +53,9 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (rows.length === 0) throw new Error("Add at least one waste, or 'Not applicable'.");
       for (const r of rows) {
         if (r.waste === "NOT_APPLICABLE") continue;
-        if (!r.whatIsMeasured.trim()) throw new Error("Every waste row needs a measurement description.");
+        if (!r.whatIsMeasured.trim()) throw new Error(`Say what you will measure for ${WASTE_LABELS[r.waste]}.`);
         if (r.unit === "OTHER" && !r.otherUnitLabel?.trim()) throw new Error("Specify the unit label for 'Other'.");
         if (r.unit === "CURRENCY" && !r.currency) throw new Error("Select a currency for the currency-unit row.");
       }
@@ -87,7 +86,7 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
           <div className="space-y-3">
             {kaizen.wasteImpacts.map((i) => (
               <div key={i.id} className="border border-slate-100 rounded-lg p-3">
-                <p className="text-xs font-semibold text-blue-600 mb-1">{WASTE_LABELS[i.waste]}</p>
+                <p className="text-xs font-semibold text-indigo-600 mb-1">{WASTE_LABELS[i.waste]}</p>
                 {i.waste !== "NOT_APPLICABLE" && (
                   <>
                     <p className="text-sm text-slate-700">{i.whatIsMeasured}</p>
@@ -106,16 +105,24 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
   }
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="1.6">Waste Reduced</SectionLabel>
-      <p className="text-xs text-slate-400 mb-4">
-        Which of the 7 wastes does this kaizen reduce? Record a before/after measurement for each.
+    <details open={rows.length > 0} className="group bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+        <span>
+          Does it cut any waste? <span className="text-xs font-normal text-slate-400">(optional)</span>
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <p className="text-xs text-slate-400 mt-3 mb-4">
+        Waste is effort that adds no value, like walking, waiting or rework. Add any this kaizen reduces.
       </p>
       <div className="space-y-4">
         {rows.map((row, index) => (
           <div key={row.waste} className="border border-slate-200 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-blue-600">{WASTE_LABELS[row.waste]}</p>
+              <p className="text-xs font-semibold text-indigo-600">
+                {WASTE_LABELS[row.waste]}
+                {WASTE_HINTS[row.waste] && <span className="font-normal text-slate-400"> · {WASTE_HINTS[row.waste]}</span>}
+              </p>
               <button type="button" onClick={() => removeRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -128,26 +135,26 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
                     type="text"
                     value={row.whatIsMeasured}
                     onChange={(e) => updateRow(index, { whatIsMeasured: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Before</label>
+                    <label className="text-xs font-medium text-slate-500 block mb-1">Now</label>
                     <input
                       type="text"
                       value={row.beforeValue ?? ""}
                       onChange={(e) => updateRow(index, { beforeValue: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">After</label>
+                    <label className="text-xs font-medium text-slate-500 block mb-1">Goal</label>
                     <input
                       type="text"
                       value={row.afterValue ?? ""}
                       onChange={(e) => updateRow(index, { afterValue: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                     />
                   </div>
                   <div>
@@ -155,7 +162,7 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
                     <select
                       value={row.unit}
                       onChange={(e) => updateRow(index, { unit: e.target.value as KaizenUnit })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                     >
                       {UNIT_OPTIONS.map((u) => (
                         <option key={u.value} value={u.value}>
@@ -172,7 +179,7 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
                       type="text"
                       value={row.otherUnitLabel ?? ""}
                       onChange={(e) => updateRow(index, { otherUnitLabel: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                     />
                   </div>
                 )}
@@ -194,7 +201,7 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
                 key={w.value}
                 type="button"
                 onClick={() => addRow(w.value)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" /> {w.label}
               </button>
@@ -209,7 +216,7 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
           </p>
         )}
       </div>
-    </div>
+    </details>
   );
 });
 

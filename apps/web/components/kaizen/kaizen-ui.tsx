@@ -1,3 +1,6 @@
+"use client";
+
+import { createContext, useContext } from "react";
 import { TenantImage } from "@/components/files/TenantImage";
 import {
   KaizenStatus,
@@ -30,18 +33,18 @@ export const STATUS_BADGE: Record<KaizenStatus, string> = {
   RETURNED_FOR_REVISION: "bg-orange-100 text-orange-700",
   REJECTED: "bg-red-100 text-red-700",
   MOVED_TO_SGA: "bg-purple-100 text-purple-700",
-  IN_IMPLEMENTATION: "bg-blue-100 text-blue-700",
+  IN_IMPLEMENTATION: "bg-indigo-100 text-indigo-700",
   PENDING_VERIFICATION: "bg-amber-100 text-amber-700",
   RETURNED_FOR_REWORK: "bg-orange-100 text-orange-700",
   VERIFIED_CLOSED: "bg-emerald-100 text-emerald-700",
 };
 
 export const KAIZEN_TRIGGERS: { value: KaizenTrigger; label: string }[] = [
+  { value: "EMPLOYEE_SUGGESTION_OR_IDEA", label: "Employee suggestion or idea" },
   { value: "PROBLEM_NOTICED", label: "Problem noticed" },
   { value: "IMPROVEMENT_OPPORTUNITY_NOTICED", label: "Improvement opportunity noticed" },
   { value: "ALERT_ACTION_REQUIRED", label: "Action required from an alert" },
   { value: "ABNORMALITY_ACTION_REQUIRED", label: "Action required from an abnormality" },
-  { value: "EMPLOYEE_SUGGESTION_OR_IDEA", label: "Employee suggestion or idea" },
   { value: "AUDIT_OBSERVATION", label: "Audit observation" },
   { value: "GEMBA_WALK_OBSERVATION", label: "Gemba walk observation" },
   { value: "CUSTOMER_COMPLAINT_OR_FEEDBACK", label: "Customer complaint or feedback" },
@@ -50,10 +53,25 @@ export const KAIZEN_TRIGGERS: { value: KaizenTrigger; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
+// Listed on their own at the top of the dropdown, before the groups below.
+export const KAIZEN_TOP_TRIGGERS: KaizenTrigger[] = ["EMPLOYEE_SUGGESTION_OR_IDEA"];
+
+// The remaining triggers, grouped so the dropdown is scannable (rendered as <optgroup>s).
+export const KAIZEN_TRIGGER_GROUPS: { label: string; triggers: KaizenTrigger[] }[] = [
+  {
+    label: "I spotted it myself",
+    triggers: ["PROBLEM_NOTICED", "IMPROVEMENT_OPPORTUNITY_NOTICED", "REPEAT_PROBLEM"],
+  },
+  { label: "From an alert or abnormality", triggers: ["ALERT_ACTION_REQUIRED", "ABNORMALITY_ACTION_REQUIRED"] },
+  { label: "From an audit or Gemba walk", triggers: ["AUDIT_OBSERVATION", "GEMBA_WALK_OBSERVATION"] },
+  { label: "From customers or management", triggers: ["CUSTOMER_COMPLAINT_OR_FEEDBACK", "MANAGEMENT_INSTRUCTION_OR_FEEDBACK"] },
+  { label: "Something else", triggers: ["OTHER"] },
+];
+
 export const REFERENCE_APPLICABILITY_LABELS: Record<KaizenReferenceApplicability, string> = {
-  APPLICABLE: "Applicable",
-  NOT_APPLICABLE: "Not applicable",
-  REFERENCE_NOT_FOUND: "Reference not found",
+  APPLICABLE: "Yes, there is a reference",
+  NOT_APPLICABLE: "No reference applies",
+  REFERENCE_NOT_FOUND: "There should be one, but it can't be found",
 };
 
 export const QCDSMT_CATEGORIES: { value: KaizenQcdsmtCategory; label: string }[] = [
@@ -72,6 +90,15 @@ export const QCDSMT_LABELS: Record<KaizenQcdsmtCategory, string> = {
   SAFETY: "Safety",
   MORALE: "Morale",
   TECHNOLOGY: "Technology",
+};
+
+export const QCDSMT_HINTS: Record<KaizenQcdsmtCategory, string> = {
+  QUALITY: "defects, rework, complaints",
+  COST: "money, material, energy",
+  DELIVERY: "lead time, delays, output",
+  SAFETY: "injuries, near misses, environment",
+  MORALE: "teamwork, workload, attendance",
+  TECHNOLOGY: "automation, systems, data",
 };
 
 export const UNIT_OPTIONS: { value: KaizenUnit; label: string }[] = [
@@ -124,6 +151,16 @@ export const WASTE_LABELS: Record<KaizenWaste, string> = {
   NOT_APPLICABLE: "Not applicable",
 };
 
+export const WASTE_HINTS: Partial<Record<KaizenWaste, string>> = {
+  TRANSPORTATION: "moving materials or products more than needed",
+  INVENTORY: "stock or work waiting to be used",
+  MOTION: "people walking, reaching or searching",
+  WAITING: "people or machines idle",
+  OVERPRODUCTION: "making more, or sooner, than needed",
+  OVERPROCESSING: "extra steps the customer doesn't need",
+  DEFECTS: "scrap, rework, mistakes",
+};
+
 const FALLBACK_CURRENCIES = ["KES", "USD", "EUR", "GBP", "UGX", "TZS", "RWF", "ZAR", "NGN"];
 
 function buildCurrencyCodes(): string[] {
@@ -150,6 +187,27 @@ export const CURRENCY_OPTIONS: { value: string; label: string }[] = buildCurrenc
   .map((code) => ({ value: code, label: currencyLabel(code) }))
   .sort((a, b) => a.value.localeCompare(b.value));
 
+const COMMON_CURRENCIES = ["KES", "USD", "EUR", "GBP", "UGX", "TZS", "RWF"];
+const COMMON_CURRENCY_OPTIONS = COMMON_CURRENCIES.map((code) => ({ value: code, label: currencyLabel(code) }));
+const PREFERRED_CURRENCY_KEY = "kaizen:preferred-currency";
+
+// The currency this viewer picked last, so repeat entries don't need the long list.
+export function getPreferredCurrency(): string {
+  try {
+    return window.localStorage.getItem(PREFERRED_CURRENCY_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function setPreferredCurrency(code: string) {
+  try {
+    if (code) window.localStorage.setItem(PREFERRED_CURRENCY_KEY, code);
+  } catch {
+    // storage unavailable; the preference just isn't remembered
+  }
+}
+
 export function CurrencySelect({ value, onChange, disabled, className }: {
   value: string | undefined | null;
   onChange: (value: string) => void;
@@ -159,14 +217,24 @@ export function CurrencySelect({ value, onChange, disabled, className }: {
   return (
     <select
       value={value ?? ""}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => {
+        setPreferredCurrency(e.target.value);
+        onChange(e.target.value);
+      }}
       disabled={disabled}
-      className={`border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-400 ${className ?? ""}`}
+      className={`border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400 ${className ?? ""}`}
     >
       <option value="">Currency</option>
-      {CURRENCY_OPTIONS.map((c) => (
-        <option key={c.value} value={c.value}>{c.label}</option>
-      ))}
+      <optgroup label="Common">
+        {COMMON_CURRENCY_OPTIONS.map((c) => (
+          <option key={c.value} value={c.value}>{c.label}</option>
+        ))}
+      </optgroup>
+      <optgroup label="All currencies">
+        {CURRENCY_OPTIONS.filter((c) => !COMMON_CURRENCIES.includes(c.value)).map((c) => (
+          <option key={c.value} value={c.value}>{c.label}</option>
+        ))}
+      </optgroup>
     </select>
   );
 }
@@ -223,12 +291,14 @@ export function KpiCard({ label, value, icon, accent }: {
   label: string; value: string | number; icon: React.ReactNode; accent: string;
 }) {
   return (
-    <div className="bg-white border border-slate-100 rounded-lg sm:rounded-xl p-3 sm:p-5 shadow-sm">
-      <div className={`h-7 w-7 sm:h-10 sm:w-10 rounded-md sm:rounded-lg flex items-center justify-center shrink-0 mb-1.5 sm:mb-3 ${accent}`}>
-        <span className="scale-75 sm:scale-100">{icon}</span>
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-slate-500 line-clamp-1">{label}</p>
+        <span className={`hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:flex [&_svg]:h-4 [&_svg]:w-4 ${accent}`}>
+          {icon}
+        </span>
       </div>
-      <p className="text-lg sm:text-2xl font-bold text-slate-900 leading-none">{value}</p>
-      <p className="text-[11px] sm:text-xs font-medium text-slate-500 mt-1 sm:mt-0.5 line-clamp-1">{label}</p>
+      <p className="my-1 text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
     </div>
   );
 }
@@ -268,7 +338,7 @@ export function KaizenPagination({ page, totalPages, onChange }: {
           type="button"
           onClick={() => onChange(p)}
           className={`h-8 w-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
-            p === page ? "bg-blue-600 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+            p === page ? "bg-[#52618a] text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50"
           }`}
         >
           {p}
@@ -314,7 +384,7 @@ export function KaizenProgress({ states }: { states: Record<KaizenStageKey, Kaiz
                     isDone
                       ? "bg-emerald-500 text-white"
                       : isActive
-                      ? "bg-blue-600 text-white"
+                      ? "bg-[#52618a] text-white"
                       : isReturned
                       ? "bg-orange-500 text-white"
                       : "border-2 border-slate-200 text-slate-400"
@@ -324,7 +394,7 @@ export function KaizenProgress({ states }: { states: Record<KaizenStageKey, Kaiz
                 </div>
                 <span
                   className={`hidden lg:inline text-xs font-medium whitespace-nowrap ${
-                    isDone ? "text-emerald-600" : isActive ? "text-blue-600" : isReturned ? "text-orange-600" : "text-slate-400"
+                    isDone ? "text-emerald-600" : isActive ? "text-indigo-600" : isReturned ? "text-orange-600" : "text-slate-400"
                   }`}
                 >
                   {stage.label}
@@ -354,12 +424,20 @@ export function LockedSection({ n, label }: { n: number | string; label: string 
   );
 }
 
+// The draft wizard shows one step at a time, so it hides the 1.1–1.7 numbering used in the stacked view.
+export const SectionNumberingContext = createContext(true);
+
 export function SectionLabel({ n, children }: { n: number | string; children: React.ReactNode }) {
+  const showNumber = useContext(SectionNumberingContext);
   return (
-    <h3 className="text-sm font-semibold text-blue-600 pb-2 mb-4 border-b border-blue-100">
-      {n}. {children}
+    <h3 className="text-sm font-semibold text-indigo-600 pb-2 mb-4 border-b border-indigo-100">
+      {showNumber && `${n}. `}{children}
     </h3>
   );
+}
+
+export function HelpText({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-slate-400 mb-1.5 -mt-0.5">{children}</p>;
 }
 
 export function SummaryPanel({ title, rows, children }: {
@@ -369,7 +447,7 @@ export function SummaryPanel({ title, rows, children }: {
 }) {
   return (
     <div className="bg-white border border-slate-100 rounded-xl shadow-sm p-5 space-y-4 h-fit">
-      <h3 className="text-sm font-semibold text-blue-600 pb-2 border-b border-blue-100">{title}</h3>
+      <h3 className="text-sm font-semibold text-indigo-600 pb-2 border-b border-indigo-100">{title}</h3>
       <dl className="space-y-2.5">
         {rows.map((r) => (
           <div key={r.label} className="flex items-center justify-between gap-3">
@@ -385,9 +463,9 @@ export function SummaryPanel({ title, rows, children }: {
 
 export function TipCallout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex gap-2">
-      <Lightbulb className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-      <p className="text-xs text-blue-700 leading-relaxed">{children}</p>
+    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 flex gap-2">
+      <Lightbulb className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+      <p className="text-xs text-indigo-700 leading-relaxed">{children}</p>
     </div>
   );
 }

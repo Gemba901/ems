@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
       "./content/dwms-docs-images/**/*.png",
     ],
     "/api/docs/sga/*": ["./content/sga-docs/*.md"],
+    "/api/docs/kaizen/*": ["./content/kaizen-docs/*.md"],
   },
 };
 

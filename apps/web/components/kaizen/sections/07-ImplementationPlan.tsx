@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { KaizenService } from "@/services/kaizen.service";
-import { CurrencySelect, SectionLabel } from "@/components/kaizen/kaizen-ui";
+import { CurrencySelect, getPreferredCurrency, HelpText, SectionLabel } from "@/components/kaizen/kaizen-ui";
 import { KaizenSectionHandle, KaizenSectionProps } from "./types";
 
 const ImplementationPlanSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(function ImplementationPlanSection(
@@ -13,17 +13,16 @@ const ImplementationPlanSection = forwardRef<KaizenSectionHandle, KaizenSectionP
 ) {
   const [requiredMaterials, setRequiredMaterials] = useState(kaizen.requiredMaterials ?? "");
   const [estimatedCost, setEstimatedCost] = useState(kaizen.estimatedCost ?? "");
-  const [estimatedCostCurrency, setEstimatedCostCurrency] = useState(kaizen.estimatedCostCurrency ?? "");
+  const [estimatedCostCurrency, setEstimatedCostCurrency] = useState(() => kaizen.estimatedCostCurrency ?? getPreferredCurrency());
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (!requiredMaterials.trim()) throw new Error("Describe the materials required.");
       if (estimatedCost && !estimatedCostCurrency) throw new Error("Select a currency for the estimated cost.");
       return KaizenService.updateImplementationPlan(
         kaizen.id,
         {
-          requiredMaterials: requiredMaterials.trim(),
+          requiredMaterials: requiredMaterials.trim() || undefined,
           estimatedCost: estimatedCost ? String(estimatedCost) : undefined,
           estimatedCostCurrency: estimatedCost ? estimatedCostCurrency : undefined,
         },
@@ -64,24 +63,24 @@ const ImplementationPlanSection = forwardRef<KaizenSectionHandle, KaizenSectionP
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="1.7">Required Materials &amp; Estimated Cost</SectionLabel>
+      <SectionLabel n="1.7">What you need</SectionLabel>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Required materials <span className="text-red-500">*</span>
-          </label>
+          <label className="text-sm font-semibold text-slate-700 block mb-1.5">What do you need to do it?</label>
+          <HelpText>Materials, tools or help. Write &quot;Nothing&quot; if you need nothing.</HelpText>
           <textarea
             rows={3}
             value={requiredMaterials}
             onChange={(e) => setRequiredMaterials(e.target.value)}
             placeholder="What materials, tools, or resources are needed to implement this kaizen?"
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none"
           />
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
             Estimated cost <span className="text-xs font-normal text-slate-400">(optional)</span>
           </label>
+          <HelpText>Leave blank if it costs nothing or you don&apos;t know yet.</HelpText>
           <div className="flex gap-2 min-w-0">
             <input
               type="number"
@@ -89,7 +88,7 @@ const ImplementationPlanSection = forwardRef<KaizenSectionHandle, KaizenSectionP
               step="0.01"
               value={estimatedCost}
               onChange={(e) => setEstimatedCost(e.target.value)}
-              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="flex-1 min-w-0 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
             />
             <CurrencySelect value={estimatedCostCurrency} onChange={setEstimatedCostCurrency} className="w-32 shrink-0" />
           </div>

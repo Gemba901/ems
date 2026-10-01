@@ -104,4 +104,14 @@ export class EmsController {
   ) {
     return this.ems.addOnboardingRecords(user.organizationId, id, dto);
   }
+    
+  /** POST /ems/onboarding/batches/:id/validate — check every record */
+  @Post('onboarding/batches/:id/validate')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async validateOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.validateOnboardingBatch(user.organizationId, id);
+  }
 }

@@ -110,6 +110,28 @@ const BATCH_LIST_SELECT = {
   _count: { select: { records: true } },
 };
 
+// ── Onboarding validation ────────────────────────────────────────────────────
+type ValidationFinding = { field: string; message: string };
+
+const GENDER_VALUES: Record<string, string> = {
+  male: "MALE", m: "MALE",
+  female: "FEMALE", f: "FEMALE",
+  other: "OTHER",
+};
+
+const EMPLOYMENT_STATUS_VALUES = new Set([
+  "ACTIVE", "PROBATION", "RESIGNED", "TERMINATED",
+  "RETIRED", "SUSPENDED", "ABSCONDED", "CONTRACT_ENDED",
+]);
+
+const EMPLOYMENT_TYPE_VALUES = new Set([
+  "FULL_TIME", "PART_TIME", "CONTRACT", "INTERN", "CASUAL",
+]);
+
+function normaliseKey(value: string | null): string {
+  return (value ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
 @Injectable()
 export class EmsService {
   constructor(private prisma: PrismaService) {}
@@ -412,6 +434,102 @@ export class EmsService {
         batchId,
         organizationId,
       })),
+    });
+
+    return this.getOnboardingBatch(organizationId, batchId);
+  }
+    async validateOnboardingBatch(organizationId: string, batchId: string) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      include: { records: true },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+
+    // Existing values in this org, to detect clashes
+    const existing = await this.prisma.employee.findMany({
+      where: { organizationId },
+      select: { employeeCode: true, phone: true, email: true },
+    });
+    const takenCodes  = new Set(existing.map((e) => normaliseKey(e.employeeCode)).filter(Boolean));
+    const takenPhones = new Set(existing.map((e) => normaliseKey(e.phone)).filter(Boolean));
+    const takenEmails = new Set(existing.map((e) => normaliseKey(e.email)).filter(Boolean));
+
+    const departments = await this.prisma.department.findMany({
+      where: { organizationId },
+      select: { name: true },
+    });
+    const knownDepartments = new Set(departments.map((d) => normaliseKey(d.name)));
+
+    // Codes seen within this batch, to detect internal duplicates
+    const seenCodes = new Set<string>();
+
+    let readyCount = 0;
+
+    for (const record of batch.records) {
+      if (record.status === 'EXCLUDED' || record.status === 'REGISTERED') continue;
+
+      const findings: ValidationFinding[] = [];
+
+      if (!record.employeeCode?.trim()) {
+        findings.push({ field: 'employeeCode', message: 'Required' });
+      } else {
+        const key = normaliseKey(record.employeeCode);
+        if (takenCodes.has(key)) {
+          findings.push({ field: 'employeeCode', message: 'Already used by an existing employee' });
+        }
+        if (seenCodes.has(key)) {
+          findings.push({ field: 'employeeCode', message: 'Duplicated within this import' });
+        }
+        seenCodes.add(key);
+      }
+
+      if (!record.firstName?.trim()) findings.push({ field: 'firstName', message: 'Required' });
+      if (!record.lastName?.trim())  findings.push({ field: 'lastName',  message: 'Required' });
+
+      if (record.gender?.trim() && !GENDER_VALUES[normaliseKey(record.gender)]) {
+        findings.push({ field: 'gender', message: `Unrecognised value "${record.gender}"` });
+      }
+
+      if (record.employmentStatus?.trim()) {
+        const key = normaliseKey(record.employmentStatus).toUpperCase();
+        const match = [...EMPLOYMENT_STATUS_VALUES].find((v) => normaliseKey(v).toUpperCase() === key);
+        if (!match) findings.push({ field: 'employmentStatus', message: `Unrecognised value "${record.employmentStatus}"` });
+      }
+
+      if (record.employmentType?.trim()) {
+        const key = normaliseKey(record.employmentType).toUpperCase();
+        const match = [...EMPLOYMENT_TYPE_VALUES].find((v) => normaliseKey(v).toUpperCase() === key);
+        if (!match) findings.push({ field: 'employmentType', message: `Unrecognised value "${record.employmentType}"` });
+      }
+
+      if (record.currentDepartment?.trim() && !knownDepartments.has(normaliseKey(record.currentDepartment))) {
+        findings.push({ field: 'currentDepartment', message: `No department named "${record.currentDepartment}" in this organisation` });
+      }
+
+      if (record.mobileNumber?.trim() && takenPhones.has(normaliseKey(record.mobileNumber))) {
+        findings.push({ field: 'mobileNumber', message: 'Already used by an existing employee' });
+      }
+
+      if (record.workEmail?.trim() && takenEmails.has(normaliseKey(record.workEmail))) {
+        findings.push({ field: 'workEmail', message: 'Already used by an existing employee' });
+      }
+
+      const status = findings.length > 0 ? 'NEEDS_FIXING' : 'READY';
+      if (status === 'READY') readyCount++;
+
+      await this.prisma.emsOnboardingRecord.update({
+        where: { id: record.id },
+        data: { status, validationErrors: findings.length > 0 ? findings : undefined },
+      });
+    }
+
+    const pending = batch.records.filter(
+      (r) => r.status !== 'EXCLUDED' && r.status !== 'REGISTERED',
+    ).length;
+
+    await this.prisma.emsOnboardingBatch.update({
+      where: { id: batchId },
+      data: { status: readyCount === pending && pending > 0 ? 'READY' : 'DRAFT' },
     });
 
     return this.getOnboardingBatch(organizationId, batchId);

@@ -1,0 +1,304 @@
+enum DemandSource {
+  CUSTOMER_ORDER
+  DEALER_REQUIREMENT
+  PROJECT_REQUIREMENT
+  FORECAST
+  INTERNAL_STOCK_PLAN
+}
+
+enum OrderPriority {
+  NORMAL
+  URGENT
+  EXPORT
+  PROJECT
+  STOCK_REPLENISHMENT
+}
+
+enum CreditStatus {
+  APPROVED
+  ON_HOLD
+  PENDING
+}
+
+enum ProductType {
+  TMT_BAR
+  BILLET
+  WIRE_ROD
+  SECTION
+  OTHER
+}
+
+enum StockDecision {
+  DISPATCH_FROM_STOCK
+  PRODUCTION_REQUIRED
+}
+
+enum PlantRoute {
+  INTEGRATED_PLANT
+  SCRAP_BASED_FURNACE_PLANT
+  RE_ROLLER_PLANT
+  OWN_CCM_BILLET_ROUTE
+  LOCAL_PURCHASED_BILLET_ROUTE
+  IMPORTED_BILLET_ROUTE
+  HOT_CHARGE_ROUTE
+  COLD_CHARGE_ROUTE
+  MULTIPLE_ROUTES
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  PARTIAL
+  NOT_AVAILABLE
+}
+
+// Tracks how far the plan has progressed through P01-A01..A12
+enum SteelPlanStage {
+  A01_DEMAND_CAPTURED
+  A02_PRIORITY_CONFIRMED
+  A03_PRODUCT_CONFIRMED
+  A04_SPEC_CONFIRMED
+  A05_STOCK_CHECKED
+  A06_STOCK_DECISION_MADE
+  A07_ROUTE_SELECTED
+  A08_MATERIAL_CHECKED
+  A09_CAPACITY_CHECKED
+  A10_PLAN_DRAFTED
+  A11_PLAN_COMMUNICATED
+  A12_PLAN_RELEASED
+}
+
+enum SteelPlanOverallStatus {
+  DRAFT
+  IN_PROGRESS
+  ON_HOLD
+  RELEASED
+  CANCELLED
+}
+
+// Identifies each of the 12 planning activities for the audit trail
+enum SteelPlanActivity {
+  A01
+  A02
+  A03
+  A04
+  A05
+  A06
+  A07
+  A08
+  A09
+  A10
+  A11
+  A12
+  STATUS_OVERRIDE
+}
+
+// Departments that must acknowledge the released plan (P01-A11)
+enum SteelDepartment {
+  PROCUREMENT
+  YARD
+  FURNACE
+  CCM
+  ROLLING
+  QUALITY
+  MAINTENANCE
+  STORES
+  DISPATCH
+}
+
+// ── Steel P01 master data ─────────────────────────────────────────────────
+
+// Pre-existing master table (applied to staging ahead of this schema; introspected
+// and reconciled here). Covers both customer and dealer records — `dealerName` is
+// populated for dealer-sourced demand instead of a separate dealer table.
+model Customer {
+  id                      String        @id @default(uuid())
+  organizationId          String
+  name                    String
+  dealerName              String?
+  contactPerson           String?
+  phone                   String?
+  email                   String?
+  creditStatus            CreditStatus?
+  defaultDeliveryLocation String?
+  isActive                Boolean       @default(true)
+  notes                   String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id])
+  plans        SteelProductionPlan[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+// Steel Configuration master data — admin-defined dealer records used by P01
+// demand capture for dealer-sourced orders. Distinct from Customer.dealerName
+// (legacy free text on older plans) but not backfilled onto existing plans.
+model Dealer {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  code           String
+  region         String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+// Pre-existing table (applied to staging ahead of this schema; introspected and
+// reconciled here). Per-plan record of the certified stock items pulled in at
+// P01-A05, as opposed to SteelFinishedGoodsStock which is the master catalog of
+// certified stock available to search against.
+model StockFulfilmentItem {
+  id             String   @id @default(uuid())
+  organizationId String
+  planId         String
+  material       String?
+  bundleId       String?
+  heatNumber     String?
+  certificateRef String?
+  quantityTonnes Float?
+  unit           String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  plan         SteelProductionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([planId])
+}
+
+model SteelProduct {
+  id             String      @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  productType    ProductType
+  isActive       Boolean     @default(true)
+
+  organization   Organization                @relation(fields: [organizationId], references: [id])
+  specifications SteelProductSpecification[]
+  plans          SteelProductionPlan[]
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model SteelProductSpecification {
+  id             String   @id @default(uuid())
+  organizationId String
+  productId      String
+  code           String
+  standard       String
+  grade          String
+  size           String
+  length         String?
+  toleranceNotes String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization              @relation(fields: [organizationId], references: [id])
+  product      SteelProduct              @relation(fields: [productId], references: [id])
+  plans        SteelProductionPlan[]
+  fgStock      SteelFinishedGoodsStock[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([productId])
+}
+
+model SteelProductionRoute {
+  id             String     @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  plantRoute     PlantRoute
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization               @relation(fields: [organizationId], references: [id])
+  steps        SteelProductionRouteStep[]
+  plans        SteelProductionPlan[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model SteelProductionRouteStep {
+  id          String          @id @default(uuid())
+  routeId     String
+  sequence    Int
+  processName String
+  department  SteelDepartment
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  route SteelProductionRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, sequence])
+  @@index([routeId])
+}
+
+model SteelMaterialMaster {
+  id             String   @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  unit           String
+  isActive       Boolean  @default(true)
+
+  // Steel Configuration — procurement master-data fields (P02 data foundation).
+  // materialType reuses the P02 enum so a material can be filtered by the same
+  // classification P02-A02 records against the sourcing order.
+  category          String?
+  materialType      SteelMaterialType?
+  procurementType   SteelProcurementType?
+  frequentlySourced Boolean               @default(false)
+  specificationReference String?
+  requiredDocuments String[]              @default([])
+  notes             String?
+  createdById       String?
+  updatedById       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization              @relation(fields: [organizationId], references: [id])
+  eligibleSuppliers SteelSupplierMaterial[]
+  createdBy    Employee?                 @relation("SteelMaterialMasterCreatedBy", fields: [createdById], references: [id])
+  updatedBy    Employee?                 @relation("SteelMaterialMasterUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+// Certified finished-goods stock available against a product specification,
+// consulted read-only by P01-A05 to auto-fill stock availability.
+model SteelFinishedGoodsStock {
+  id                     String   @id @default(uuid())
+  organizationId         String
+  productSpecificationId String
+  certifiedQtyTonnes     Float
+  bundleIds              String[] @default([])
+  heatNumbers            String[] @default([])
+  certificateRefs        String[] @default([])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  organization         Organization              @relation(fields: [organizationId], references: [id])
+  productSpecification SteelProductSpecification @relation(fields: [productSpecificationId], references: [id])
+
+  @@index([organizationId])
+  @@index([productSpecificationId])
+}

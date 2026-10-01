@@ -1,0 +1,266 @@
+model Employee {
+  id             String  @id @default(uuid())
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  departmentId   String?
+  organizationId String
+  userId         String?
+  avatarUrl      String?
+
+  // EMS: Identity group
+  employeeCode String?
+  middleName   String?
+  gender       Gender?
+  dateOfBirth  DateTime?
+  nationalId   String?
+  nationality  String?
+  plantBranch  String?
+
+  // EMS: Work Allocation group
+  employmentStatus   EmploymentStatus @default(ACTIVE)
+  employmentType     EmploymentType?
+  jobTitle           String?
+  dateJoined         DateTime?
+  workStation        String?
+  section            String?
+  subSection         String?
+  shift              String?
+  reportingManagerId String?
+  reportingManager   Employee?        @relation("ReportingManager", fields: [reportingManagerId], references: [id], onDelete: SetNull)
+  directReports      Employee[]       @relation("ReportingManager")
+
+  // EMS: Role & Responsibility group
+  jobDescription     String?
+  level              String?
+  grade              String?
+  jobCategory        String?
+  primaryWorkRole    String?
+  machineProcess     String?
+  canBeAssignedTasks Boolean @default(true)
+  canBeMember        Boolean @default(true)
+  canBeLeader        Boolean @default(false)
+
+  // EMS: Contact group (phone + email above; extras below)
+  whatsappNumber               String?
+  homeAddress                  String?
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
+
+  // EMS: Skill group
+  skillLevel     SkillLevel?
+  trainingNeeded Boolean?
+
+  // Notification preferences: { email: true, sms: false, whatsapp: false }
+  notificationPreferences Json?
+
+  // EMS: Record control
+  hrRecordOwnerId    String?
+  hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)
+  hrManagedEmployees Employee[] @relation("HRRecordOwner")
+
+  department            Department?               @relation(fields: [departmentId], references: [id])
+  organization          Organization              @relation(fields: [organizationId], references: [id])
+  user                  User?                     @relation(fields: [userId], references: [id])
+  suggestions           Suggestion[]              @relation("EmployeeSuggestions")
+  hodSuggestions        Suggestion[]              @relation("HODSuggestions")
+  suggestionReviews     SuggestionReview[]
+  committeeMembers      SteeringCommitteeMember[]
+  notifications         Notification[]
+  visitAttendances      VisitAttendee[]
+  leaveRequests         LeaveRequest[]
+  leaveBalances         LeaveBalance[]
+  handoverForLeaves     LeaveRequest[]            @relation("LeaveHandover")
+  handoverForLeaves2    LeaveRequest[]            @relation("LeaveHandover2")
+  createdCalendarEvents CalendarEvent[]           @relation("CalendarEventCreator")
+  receivedInvitations   EventInvitation[]         @relation("ReceivedInvitations")
+  eventParticipations   EventParticipant[]        @relation("EventParticipations")
+  oooBlocks             CalendarBlock[]
+  calendarFilters       CalendarFilter[]
+  assignedTasks         Task[]                    @relation("TaskAssignedBy")
+  tasks                 Task[]                    @relation("TaskOwner")
+  tasksToApprove        Task[]                    @relation("TaskApprovedBy")
+  backupTasks           Task[]                    @relation("TaskBackupOwner")
+  taskInstances         TaskInstance[]
+  taskInstanceComments  TaskInstanceComment[]
+  taskInstanceEvents    TaskInstanceEvent[]
+  activityAssignments       EmployeeActivityAssignment[]
+  activityIngestions    ActivityIngestion[]       @relation("ActivityIngestionUploader")
+  primaryActivities     Activity[]                @relation("ActivityPrimaryResponsible")
+  alertsRaised          Alert[]                   @relation("AlertsRaised")
+  alertsAgainst         Alert[]                   @relation("AlertsAgainst")
+  alertOccurrencesRaised AlertOccurrence[]        @relation("AlertOccurrencesRaised")
+  alertOccurrencesAcknowledged AlertOccurrence[] @relation("AlertOccurrencesAcknowledged")
+  ticketsRaised         Tickets[]                 @relation("ticketsRaisedBy")
+  ticketUpdates         TicketUpdate[]
+  kaizensRaised         Kaizen[]                  @relation("KaizenRaisedBy")
+  kaizensOwned          Kaizen[]                  @relation("KaizenOwner")
+  kaizenHodPreReviews   Kaizen[]                  @relation("KaizenHodPreReviewBy")
+  kaizenTeamMemberships Kaizen[]                  @relation("KaizenTeamMembers")
+  kaizenReviews         KaizenReview[]
+  kaizenVerifications   KaizenVerification[]      @relation("KaizenVerificationBy")
+  alertComments         AlertComment[]
+  sgasRaised            Sga[]                     @relation("SgaRaisedBy")
+  sgasOwned             Sga[]                     @relation("SgaOwner")
+  sgaTeamMemberships    Sga[]                     @relation("SgaTeamMembers")
+  sgaHodDecisions       Sga[]                     @relation("SgaHodDecisionBy")
+  sgaDepartmentRepFor   Sga[]                     @relation("SgaDepartmentRep")
+  sgaVerifications      SgaVerification[]         @relation("SgaVerificationBy")
+  sgaActionsResponsible SgaActionItem[]           @relation("SgaActionResponsible")
+  sgaReviews            SgaReview[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  steelPlansCreated             SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
+  steelPlansApproved            SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
+  steelActivityLogs             SteelPlanActivityLog[]
+  steelDepartmentAcks           SteelPlanDepartmentAck[]
+  steelSourcingOrdersCreated    SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs     SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
+  steelSourcingAttachmentsUploaded SteelSourcingAttachment[]        @relation("SteelSourcingAttachmentUploadedBy")
+  steelSuppliersCreated         Supplier[]                          @relation("SupplierCreatedBy")
+  steelSuppliersUpdated         Supplier[]                          @relation("SupplierUpdatedBy")
+  steelMaterialMastersCreated   SteelMaterialMaster[]                @relation("SteelMaterialMasterCreatedBy")
+  steelMaterialMastersUpdated   SteelMaterialMaster[]                @relation("SteelMaterialMasterUpdatedBy")
+  steelSupplierMaterialsCreated SteelSupplierMaterial[]              @relation("SteelSupplierMaterialCreatedBy")
+  steelSupplierMaterialsUpdated SteelSupplierMaterial[]              @relation("SteelSupplierMaterialUpdatedBy")
+  steelQcdCriteriaCreated       SteelQcdCriteria[]                   @relation("SteelQcdCriteriaCreatedBy")
+  steelQcdCriteriaUpdated       SteelQcdCriteria[]                   @relation("SteelQcdCriteriaUpdatedBy")
+  steelLookupsCreated           SteelLookup[]                        @relation("SteelLookupCreatedBy")
+  steelLookupsUpdated           SteelLookup[]                        @relation("SteelLookupUpdatedBy")
+  steelIntakesCreated           SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
+  steelIntakeActivityLogs       SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
+  steelChargePrepsCreated       SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
+  steelChargeActivityLogs       SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
+  steelMeltingsCreated          SteelMelting[]                      @relation("SteelMeltingCreatedBy")
+  steelHeatApprovalsCreated     SteelHeatApproval[]                 @relation("SteelHeatApprovalCreatedBy")
+  steelHeatApprovalActivityLogs SteelHeatApprovalActivityLog[]      @relation("SteelHeatApprovalPerformedBy")
+  steelMeltingActivityLogs      SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
+  heatMaterialChargesRecorded   HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
+  heatCycleEventsRecorded       HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
+
+  @@unique([email, organizationId])
+  @@unique([phone, organizationId])
+  @@unique([employeeCode, organizationId])
+}
+
+model Department {
+  id                String  @id @default(uuid())
+  name              String
+  organizationId    String
+  minLeaveHeadcount Int     @default(1)
+  isPlatformTeam    Boolean @default(false)
+
+  employees    Employee[]
+  organization Organization @relation(fields: [organizationId], references: [id])
+  suggestions  Suggestion[]
+  tasks        Task[]
+  alerts       Alert[]
+  kaizens      Kaizen[]
+  activities   Activity[]
+  sgasMain      Sga[] @relation("SgaMainDepartment")
+  sgasOther     Sga[] @relation("SgaOtherDepartments")
+  sgasVerifying Sga[] @relation("SgaVerifyingDepartment")
+}
+
+model SteeringCommittee {
+  id             String        @id @default(uuid())
+  name           String
+  type           CommitteeType
+  organizationId String
+  createdAt      DateTime      @default(now())
+
+  organization      Organization              @relation(fields: [organizationId], references: [id])
+  members           SteeringCommitteeMember[]
+  suggestions       Suggestion[]
+  designatedForOrgs Organization[]            @relation("OrgSgaCommittee")
+}
+
+model SteeringCommitteeMember {
+  committeeId     String
+  employeeId      String
+  roleInCommittee String?
+
+  committee SteeringCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  employee  Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([committeeId, employeeId])
+}
+
+model Quotes {
+  id   String @id @default(uuid())
+  text String
+
+  category QuoteCategory?
+  mood     String?
+
+  timeOfDay TimeOfDay[]
+  tags      String[]
+
+  author String
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("quotes")
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       NotificationType
+  module     String // "SIMS", "LEAVE", "ATTENDANCE", "HR"
+  title      String
+  message    String
+  isRead     Boolean          @default(false)
+  actionUrl  String?
+  metadata   Json? // any extra structured data the module wants to attach
+  createdAt  DateTime         @default(now())
+
+  @@index([employeeId, isRead])
+  @@index([employeeId, createdAt])
+  @@index([employeeId, module])
+}
+
+// TICKETING SYSTEM
+
+model Tickets {
+  id             String         @id @default(uuid())
+  organizationId String
+  raisedById     String
+  type           TicketType
+  module         String // "SIMS", "LEAVE", "ATTENDANCE", "HR"
+  subject        String
+  message        String
+  department     String?
+  status         TicketStatus   @default(OPEN)
+  updates        TicketUpdate[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  raisedBy     Employee     @relation("ticketsRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([raisedById, createdAt])
+}
+
+model TicketUpdate {
+  id            String        @id @default(uuid())
+  ticketId      String
+  updatedById   String
+  statusChanged TicketStatus?
+  typeChanged   TicketType?
+  note          String?
+  createdAt     DateTime      @default(now())
+
+  ticket    Tickets  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  updatedBy Employee @relation(fields: [updatedById], references: [id])
+}
+
+// SIMS: Suggestions and Idea Management System

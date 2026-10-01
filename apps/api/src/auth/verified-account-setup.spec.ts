@@ -42,7 +42,6 @@ describe('Verified account setup', () => {
       jwt,
       new ConfigService(),
       { send: jest.fn() } as any,
-      { get: jest.fn().mockResolvedValue(undefined), set: jest.fn() } as any,
     );
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed');
   });
@@ -65,14 +64,14 @@ describe('Verified account setup', () => {
   });
   it('reset replay losing atomic consumption cannot update a password', async () => {
     await expect(
-      service.resetPassword('secret', 'new-password', 'test'),
+      service.resetPassword('secret', 'new-password'),
     ).rejects.toMatchObject({ status: 401 });
     expect(db.user.update).not.toHaveBeenCalled();
     expect(db.refreshToken.deleteMany).not.toHaveBeenCalled();
   });
   it('temporary-password replay cannot clear an existing password', async () => {
     await expect(
-      service.verifyTempPassword('secret', 'test'),
+      service.verifyTempPassword('secret'),
     ).rejects.toMatchObject({ status: 401 });
     expect(db.user.update).not.toHaveBeenCalled();
   });

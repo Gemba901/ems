@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
+import { apiClient } from "@/lib/api-client";
 import DocsViewer from "@/components/docs/DocsViewer";
 import type { DocsChapter } from "@/components/docs/types";
 
@@ -25,11 +26,8 @@ export default function ModuleDocsPage({ slug, apiPath, ...viewer }: ViewerProps
   useEffect(() => {
     if (!token) return;
     const controller = new AbortController();
-    void fetch(`${apiPath}/${encodeURIComponent(slug)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal: controller.signal,
-    })
+    // apiClient refreshes an expired access token once before giving up.
+    void apiClient(`${apiPath}/${encodeURIComponent(slug)}`, { signal: controller.signal }, token)
       .then(async (response) => {
         if (response.status === 401) {
           router.replace("/login");

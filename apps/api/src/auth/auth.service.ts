@@ -1,9 +1,7 @@
-import { HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Role } from 'src/common/enum/role.enum';
@@ -53,7 +51,6 @@ export class AuthService {
         private jwtService: JwtService,
         private config: ConfigService,
         private emailService: EmailService,
-        @Inject(CACHE_MANAGER) private cache: Cache,
     ) { }
 
     private hashToken(raw: string): string {
@@ -62,16 +59,6 @@ export class AuthService {
 
     private get webAppUrl(): string {
         return this.config.get<string>('WEB_APP_URL') || 'http://localhost:3000';
-    }
-
-    // Best-effort in-memory rate limit (per API instance) — the reset token itself is the real
-    // security boundary (256-bit random, hashed at rest); this just blunts spam/brute-force noise.
-    private async checkRateLimit(key: string, max: number, windowMs: number): Promise<void> {
-        const current = (await this.cache.get<number>(key)) ?? 0;
-        if (current >= max) {
-            throw new HttpException('Too many requests. Please try again later.', HttpStatus.TOO_MANY_REQUESTS);
-        }
-        await this.cache.set(key, current + 1, windowMs);
     }
 
     // Kept in sync with COUNTRY_CODES in apps/web/components/auth/IdentifierStep.tsx
@@ -638,11 +625,8 @@ export class AuthService {
         }
     }
 
-    async forgotPassword(email: string, ip: string) {
+    async forgotPassword(email: string) {
         const normalized = email.trim().toLowerCase();
-
-        await this.checkRateLimit(`pwreset:req:email:${normalized}`, 5, 60 * 60 * 1000);
-        await this.checkRateLimit(`pwreset:req:ip:${ip}`, 20, 60 * 60 * 1000);
 
         const user = await this.prisma.user.findFirst({ where: { email: normalized } });
 
@@ -672,9 +656,7 @@ export class AuthService {
         return { message: 'If an account with that email exists, a reset link has been sent to it.' };
     }
 
-    async resetPassword(rawToken: string, newPassword: string, ip: string) {
-        await this.checkRateLimit(`pwreset:attempt:ip:${ip}`, 10, 15 * 60 * 1000);
-
+    async resetPassword(rawToken: string, newPassword: string) {
         const tokenHash = this.hashToken(rawToken);
         const stored = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
 
@@ -737,9 +719,7 @@ export class AuthService {
     // Employee-facing redemption of an admin-issued temp password. On success the employee's
     // real password is cleared and every session killed (so the temp password itself is never a
     // usable login credential), then a setup token is issued for them to pick a new password.
-    async verifyTempPassword(tempPassword: string, ip: string) {
-        await this.checkRateLimit(`temppwd:attempt:ip:${ip}`, 10, 15 * 60 * 1000);
-
+    async verifyTempPassword(tempPassword: string) {
         const tokenHash = this.hashToken(tempPassword.trim());
         const stored = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
 

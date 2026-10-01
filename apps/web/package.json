@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:onboarding": "node --import ../../packages/db/node_modules/tsx/dist/loader.mjs tests/onboarding.test.ts",
     "test:proxy": "node tests/api-proxy.test.mjs",
+    "test:slugs": "node tests/reserved-slugs.test.mjs",
     "test:session": "../../packages/db/node_modules/.bin/tsx tests/session.test.ts",
     "test:proxy-integration": "node tests/proxy-route.integration.mjs"
   },

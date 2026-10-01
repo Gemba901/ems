@@ -69,6 +69,7 @@ describe('Onboarding public boundary', () => {
       {} as any,
       new ConfigService({ ONBOARDING_TOKEN_SECRET: secret }),
       new WorkspaceDomainService(new ConfigService()),
+      { consume: jest.fn() } as any,
     );
     expect(service.token('id', 'verify')).not.toBe(
       service.token('id', 'progress'),
@@ -123,6 +124,7 @@ describe('Onboarding public boundary', () => {
       } as any,
       new ConfigService(),
       {} as any,
+      { consume: jest.fn() } as any,
     );
     const result = await service.status({ id: 'id', token: 'key' });
     expect(result).toEqual(

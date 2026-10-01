@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import type { Cache } from 'cache-manager';
 import { createHash } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
 import { OrgStatus, Prisma } from 'db';
@@ -49,7 +48,7 @@ describe('Company authentication service', () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-    service = new AuthService(db as unknown as PrismaService, jwt, new ConfigService(), {} as EmailService, {} as Cache);
+    service = new AuthService(db as unknown as PrismaService, jwt, new ConfigService(), {} as EmailService);
   });
 
   it('limits first-time email discovery to active membership in this company', async () => {

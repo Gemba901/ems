@@ -7,6 +7,7 @@ import { OnboardingService } from './onboarding.service';
 import { WorkspaceDomainService } from './workspace-domain.service';
 import { OnboardingWorker } from './onboarding.worker';
 import { PrismaService } from '../prisma/prisma.service';
+import { RateLimitService } from '../common/rate-limit/rate-limit.service';
 import { EmailService } from '../notifications/channels/email.service';
 import * as bcrypt from 'bcrypt';
 
@@ -56,6 +57,7 @@ const url = process.env.MILESTONE5_TEST_DATABASE_URL;
         db as PrismaService,
         config,
         new WorkspaceDomainService(config),
+        new RateLimitService(db as PrismaService),
       );
       worker = new OnboardingWorker(
         db as PrismaService,
@@ -69,6 +71,7 @@ const url = process.env.MILESTONE5_TEST_DATABASE_URL;
       // This database is exclusively owned by this test suite.
       await db.onboardingMessage.deleteMany();
       await db.onboardingRequest.deleteMany();
+      await db.rateLimitBucket.deleteMany();
       await db.employee.deleteMany();
       await db.userOrganization.deleteMany();
       await db.user.deleteMany();
@@ -317,6 +320,137 @@ const url = process.env.MILESTONE5_TEST_DATABASE_URL;
       expect(
         (await db.onboardingMessage.findFirstOrThrow()).leaseId,
       ).toBeNull();
+    });
+
+    const verifiedRequest = async () => {
+      const { id } = await service.signup(signup());
+      const { progressToken } = await service.verify({
+        id,
+        token: service.token(id, 'verify'),
+        password: 'safe-password-123',
+      });
+      return { id, token: progressToken };
+    };
+    const failRequest = (id: string, data: object = {}) =>
+      db.onboardingRequest.update({
+        where: { id },
+        data: {
+          status: 'FAILED',
+          failureCode: 'PROVISIONING_FAILED',
+          updatedAt: new Date(0),
+          ...data,
+        },
+      });
+
+    it('refuses reserved terms and look-alikes of existing companies with the taken-slug message', async () => {
+      await db.organization.create({
+        data: { name: 'KBCL', slug: 'kbcl', timeZone: 'Africa/Nairobi' },
+      });
+      for (const slug of ['kbcl-hr', 'gemba-plastics', 'login']) {
+        await expect(
+          service.signup({ ...signup(), slug }),
+        ).rejects.toMatchObject({ status: expect.any(Number) });
+      }
+      await expect(
+        service.signup({ ...signup(), slug: 'kbcl-hr' }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(await db.onboardingRequest.count()).toBe(0);
+    });
+    it('caps manual retries per request', async () => {
+      const access = await verifiedRequest();
+      for (let i = 0; i < 3; i++) {
+        await failRequest(access.id);
+        await service.retry(access);
+      }
+      await failRequest(access.id);
+      await expect(service.retry(access)).rejects.toMatchObject({
+        status: 409,
+      });
+    });
+    it('stops accepting progress links a day after the workspace is ready', async () => {
+      const access = await verifiedRequest();
+      await service.provisionOne();
+      expect((await service.status(access)).status).toBe('READY');
+      await db.onboardingRequest.update({
+        where: { id: access.id },
+        data: { updatedAt: new Date(Date.now() - 25 * 3600_000) },
+      });
+      await expect(service.status(access)).rejects.toMatchObject({
+        status: 404,
+      });
+    });
+    it('counts existing-password checks toward the platform login lockout', async () => {
+      const dto = signup();
+      await db.user.create({
+        data: {
+          name: 'Existing',
+          email: dto.email,
+          phone: dto.phone,
+          password: await bcrypt.hash('oldpass', 4),
+        },
+      });
+      const limits = new RateLimitService(db as PrismaService);
+      for (let i = 0; i < 10; i++)
+        await limits.consume(`login:acct:platform:${dto.email}`, 10, 900_000);
+      const { id } = await service.signup(dto);
+      await expect(
+        service.verify({
+          id,
+          token: service.token(id, 'verify'),
+          password: 'oldpass',
+        }),
+      ).rejects.toMatchObject({ status: 429 });
+    });
+    it('pauses verification once the daily workspace limit is reached', async () => {
+      const capped = new OnboardingService(
+        db as PrismaService,
+        new ConfigService({
+          ONBOARDING_TOKEN_SECRET: 'test'.repeat(16),
+          ONBOARDING_ORIGIN: 'http://localhost:3000',
+          TENANT_BASE_DOMAIN: 'localhost',
+          ONBOARDING_DAILY_VERIFIED_LIMIT: '1',
+        }),
+        new WorkspaceDomainService(config),
+        new RateLimitService(db as PrismaService),
+      );
+      await verifiedRequest();
+      const { id } = await capped.signup(signup());
+      await expect(
+        capped.verify({
+          id,
+          token: capped.token(id, 'verify'),
+          password: 'safe-password-123',
+        }),
+      ).rejects.toMatchObject({ status: 429 });
+    });
+    it('releases the domain of a failed request after the retry window, and only then', async () => {
+      const access = await verifiedRequest();
+      await failRequest(access.id, { updatedAt: new Date() });
+      expect(await service.removeOneOrphanDomain()).toBe(false);
+      await failRequest(access.id);
+      expect(await service.removeOneOrphanDomain()).toBe(true);
+      const request = await db.onboardingRequest.findUniqueOrThrow({
+        where: { id: access.id },
+      });
+      expect(request.domainRemovedAt).not.toBeNull();
+      expect(request.slug).toBeNull();
+      await expect(service.retry(access)).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(await service.removeOneOrphanDomain()).toBe(false);
+    });
+    it('caps verification emails per recipient across signups and resends', async () => {
+      const dto = signup();
+      const { id } = await service.signup(dto);
+      const limits = new RateLimitService(db as PrismaService);
+      for (let i = 0; i < 10; i++)
+        await limits.consume(`mail-recipient:email:${dto.email}`, 10, 86_400_000);
+      await db.onboardingMessage.updateMany({
+        data: { availableAt: new Date(0) },
+      });
+      await expect(
+        service.resend({ id, token: dto.requestKey }),
+      ).rejects.toMatchObject({ status: 429 });
     });
   },
 );

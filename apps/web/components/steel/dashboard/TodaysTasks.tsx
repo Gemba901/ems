@@ -3,7 +3,7 @@
 import { ListChecks } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// The Task/TaskInstance models (packages/db/prisma/schema.prisma) are
+// The Task/TaskInstance models (packages/db/prisma/schema/dwms.prisma) are
 // generic DWMS-style tasks assigned to an Employee — they carry no
 // reference to a steel process, plan, or record, so there is nothing real
 // to show here yet. Left as an explicit empty state rather than forcing a

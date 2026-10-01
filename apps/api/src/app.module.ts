@@ -1,6 +1,7 @@
 import { OperationsModule } from './operations/operations.module';
 import { OnboardingModule } from "./onboarding/onboarding.module";
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -27,6 +28,7 @@ import { SteelDomainModule } from './steel/steel-domain.module';
 import { KaizenModule } from './kaizen/kaizen.module';
 import { SgaModule } from './sga/sga.module';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
 
 @Module({
   imports: [
@@ -65,6 +67,10 @@ import { TenancyModule } from './tenancy/tenancy.module';
     SgaModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Runs before every controller guard; see ProxySecretGuard.
+    { provide: APP_GUARD, useClass: ProxySecretGuard },
+  ],
 })
 export class AppModule {}

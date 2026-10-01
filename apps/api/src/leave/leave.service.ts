@@ -34,7 +34,7 @@ export class LeaveService {
     // ── Settings ─────────────────────────────────────────────────────────────
 
     async getLeaveSettings(organizationId: string) {
-        const settings = await (this.prisma as any).leaveSettings.findUnique({
+        const settings = await this.prisma.leaveSettings.findUnique({
             where: { organizationId },
         });
         if (!settings) {
@@ -52,18 +52,20 @@ export class LeaveService {
     }
 
     async updateLeaveSettings(organizationId: string, dto: UpdateLeaveSettingsDto) {
-        return (this.prisma as any).leaveSettings.upsert({
+        // Plain objects, so the Json column gets only the validated fields.
+        const customLeaveTypes = dto.customLeaveTypes?.map(({ code, name }) => ({ code, name }));
+        return this.prisma.leaveSettings.upsert({
             where: { organizationId },
             create: {
                 organizationId,
                 workingDays:      dto.workingDays      ?? [1, 2, 3, 4, 5],
                 enabledTypes:     dto.enabledTypes     ?? [],
-                customLeaveTypes: dto.customLeaveTypes ?? [],
+                customLeaveTypes: customLeaveTypes ?? [],
             },
             update: {
                 ...(dto.workingDays      !== undefined ? { workingDays:      dto.workingDays }      : {}),
                 ...(dto.enabledTypes     !== undefined ? { enabledTypes:     dto.enabledTypes }     : {}),
-                ...(dto.customLeaveTypes !== undefined ? { customLeaveTypes: dto.customLeaveTypes } : {}),
+                ...(customLeaveTypes !== undefined ? { customLeaveTypes } : {}),
             },
         });
     }
@@ -73,14 +75,14 @@ export class LeaveService {
             where: { id: deptId, organizationId },
         });
         if (!dept) throw new NotFoundException('Department not found');
-        return (this.prisma.department as any).update({
+        return this.prisma.department.update({
             where: { id: deptId },
             data: { minLeaveHeadcount: dto.minLeaveHeadcount },
         });
     }
 
     async getDepartments(organizationId: string) {
-        return (this.prisma.department as any).findMany({
+        return this.prisma.department.findMany({
             where: { organizationId },
             select: { id: true, name: true, minLeaveHeadcount: true },
             orderBy: { name: 'asc' },
@@ -157,7 +159,7 @@ export class LeaveService {
             if (!handover2) throw new BadRequestException('Second cover person not found in this organisation');
         }
 
-        const request = await (this.prisma.leaveRequest as any).create({
+        const request = await this.prisma.leaveRequest.create({
             data: {
                 employeeId: employee.id,
                 organizationId,
@@ -406,7 +408,7 @@ export class LeaveService {
             where.startDate = { gte: new Date(`${y}-01-01`), lte: new Date(`${y}-12-31`) };
         }
 
-        return (this.prisma.leaveRequest as any).findMany({
+        return this.prisma.leaveRequest.findMany({
             where,
             orderBy: { createdAt: 'desc' },
             include: {
@@ -425,7 +427,7 @@ export class LeaveService {
     // ── Get single request ────────────────────────────────────────────────────
 
     async getRequest(id: string, organizationId: string) {
-        const req = await (this.prisma.leaveRequest as any).findFirst({
+        const req = await this.prisma.leaveRequest.findFirst({
             where: { id, organizationId },
             include: {
                 employee: {
@@ -464,7 +466,7 @@ export class LeaveService {
 
         // Dept minimum headcount check on approval
         if (dto.status === 'APPROVED' && req.employee?.departmentId) {
-            const dept = await (this.prisma.department as any).findUnique({
+            const dept = await this.prisma.department.findUnique({
                 where: { id: req.employee.departmentId },
                 select: { minLeaveHeadcount: true },
             });
@@ -699,7 +701,7 @@ export class LeaveService {
             departmentIds = [hodEmployee.departmentId];
         }
 
-        const departments = await (this.prisma.department as any).findMany({
+        const departments = await this.prisma.department.findMany({
             where: { organizationId, ...(departmentIds ? { id: { in: departmentIds } } : {}) },
             select: { id: true, name: true, minLeaveHeadcount: true },
         });

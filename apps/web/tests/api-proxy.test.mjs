@@ -151,3 +151,15 @@ test('workspace previews expose only public host metadata, including the configu
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.deepEqual(await response.json(), { kind: 'platform', hostname: 'admin.example.test', baseDomain: 'example.test', slug: null });
 });
+test('forwards the platform-set client IP and never a caller-supplied one', async () => {
+  const forwarded = async (headers) => {
+    let seen;
+    await proxyRequest(req('employee', { headers }), ['employee'], config, async (url, options) => { seen = options.headers.get('x-gemba-client-ip'); return json({}); });
+    return seen;
+  };
+  assert.equal(await forwarded({ 'x-real-ip': '203.0.113.7' }), '203.0.113.7');
+  assert.equal(await forwarded({ 'x-real-ip': '2001:db8::1' }), '2001:db8::1');
+  assert.equal(await forwarded({ 'x-gemba-client-ip': '198.51.100.1' }), null);
+  assert.equal(await forwarded({ 'x-real-ip': 'not-an-ip' }), null);
+  assert.equal(await forwarded({ 'x-real-ip': '203.0.113.7, 198.51.100.1' }), null);
+});

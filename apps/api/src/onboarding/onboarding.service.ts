@@ -13,9 +13,17 @@ import * as bcrypt from 'bcrypt';
 import { Prisma, ModuleType } from 'db';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  getOrganizationSlugError,
+  getSignupOrganizationSlugError,
+  isLookalikeOrganizationSlug,
   normalizeOrganizationSlug,
 } from '../common/utils/organization-slug';
+import { RateLimitService } from '../common/rate-limit/rate-limit.service';
+import {
+  AUTH_LIMITS,
+  MAIL_RECIPIENT_LIMIT,
+  accountKey,
+  emailKey,
+} from '../auth/auth-rate-limits';
 import {
   OnboardingAccessDto,
   SignupDto,
@@ -31,6 +39,12 @@ export const digest = (value: string) =>
 export const backoff = (attempt: number) =>
   Math.min(3600, 30 * 2 ** Math.min(attempt, 7)) * 1000;
 
+export const MAX_MANUAL_RETRIES = 3;
+// Progress links stop working this long after a request finishes.
+export const PROGRESS_TOKEN_TTL_MS = 24 * 3600_000;
+// Failed requests keep their domain this long so the user can still retry.
+export const ORPHAN_DOMAIN_GRACE_MS = 7 * 24 * 3600_000;
+
 @Injectable()
 export class OnboardingService {
   private readonly logger = new Logger(OnboardingService.name);
@@ -38,6 +52,7 @@ export class OnboardingService {
     private readonly db: PrismaService,
     private readonly config: ConfigService,
     private readonly domains: WorkspaceDomainService,
+    private readonly limits: RateLimitService,
   ) {}
 
   onModuleInit() {
@@ -117,7 +132,7 @@ export class OnboardingService {
       companyPhone: dto.companyPhone?.trim(),
       companyAddress: dto.companyAddress?.trim(),
     };
-    const error = getOrganizationSlugError(data.requestedSlug);
+    const error = getSignupOrganizationSlugError(data.requestedSlug);
     if (error) throw new BadRequestException(error);
     if (!data.companyName || !data.firstName || !data.lastName)
       throw new BadRequestException('Names cannot be blank');
@@ -166,6 +181,24 @@ export class OnboardingService {
         }))
       )
         throw new ConflictException('This company address is unavailable');
+      // Same message as a taken slug: don't reveal which companies exist.
+      const [organizations, reservations] = await Promise.all([
+        tx.organization.findMany({
+          where: { slug: { not: null } },
+          select: { slug: true },
+        }),
+        tx.onboardingRequest.findMany({
+          where: { slug: { not: null } },
+          select: { slug: true },
+        }),
+      ]);
+      if (
+        isLookalikeOrganizationSlug(
+          data.requestedSlug,
+          [...organizations, ...reservations].map((row) => row.slug!),
+        )
+      )
+        throw new ConflictException('This company address is unavailable');
       const id = randomUUID();
       await tx.onboardingRequest.create({
         data: {
@@ -207,6 +240,15 @@ export class OnboardingService {
       };
     if (request.status !== 'PENDING_VERIFICATION')
       throw new UnauthorizedException('Verification is no longer available');
+    // Each verified signup registers a Vercel domain; slots are limited.
+    const verifiedToday = await this.db.onboardingRequest.count({
+      where: { verifiedAt: { gte: new Date(Date.now() - 24 * 3600_000) } },
+    });
+    if (verifiedToday >= this.dailyVerifiedLimit())
+      throw new HttpException(
+        'New workspaces are paused for today. Try again tomorrow.',
+        429,
+      );
     // Persist a bounded attempt budget before expensive password comparison.
     const attempt = await this.db.onboardingRequest.updateMany({
       where: {
@@ -224,6 +266,16 @@ export class OnboardingService {
     const existing = await this.db.user.findFirst({
       where: { email: { equals: request.email, mode: 'insensitive' } },
     });
+    // Checking an existing password here shares the platform login lockout,
+    // so signups can't be used to guess passwords around it.
+    if (existing) {
+      const [, perAccount] = AUTH_LIMITS.login;
+      await this.limits.consume(
+        `${perAccount.name}:${accountKey(undefined, request.email)}`,
+        perAccount.max,
+        perAccount.windowMs,
+      );
+    }
     if (
       existing &&
       (!existing.password ||
@@ -263,6 +315,13 @@ export class OnboardingService {
     };
   }
 
+  private dailyVerifiedLimit() {
+    const value = Number(
+      this.config.get('ONBOARDING_DAILY_VERIFIED_LIMIT') ?? 20,
+    );
+    return Number.isInteger(value) && value > 0 ? value : 20;
+  }
+
   private async authorized(dto: OnboardingAccessDto) {
     const request = await this.db.onboardingRequest.findUnique({
       where: { id: dto.id },
@@ -272,6 +331,13 @@ export class OnboardingService {
       (digest(dto.token) !== request.requestKeyHash &&
         (!request.verifiedAt ||
           digest(dto.token) !== digest(this.token(request.id, 'progress'))))
+    )
+      throw new NotFoundException();
+    // Links leak through history, screenshots and support tickets, so they
+    // stop working a day after the workspace is ready.
+    if (
+      request.status === 'READY' &&
+      request.updatedAt.getTime() < Date.now() - PROGRESS_TOKEN_TTL_MS
     )
       throw new NotFoundException();
     return request;
@@ -302,14 +368,21 @@ export class OnboardingService {
     if (
       !request.verifiedAt ||
       request.status !== 'FAILED' ||
-      request.failureCode !== 'PROVISIONING_FAILED'
+      request.failureCode !== 'PROVISIONING_FAILED' ||
+      request.domainRemovedAt
     )
       throw new ConflictException('This request cannot be retried');
     if (request.updatedAt.getTime() > Date.now() - 60_000)
       throw new HttpException('Wait a minute before retrying', 429);
-    await this.db.onboardingRequest.updateMany({
-      where: { id: request.id, status: 'FAILED' },
+    const retried = await this.db.onboardingRequest.updateMany({
+      where: {
+        id: request.id,
+        status: 'FAILED',
+        domainRemovedAt: null,
+        manualRetries: { lt: MAX_MANUAL_RETRIES },
+      },
       data: {
+        manualRetries: { increment: 1 },
         status: 'PROVISIONING',
         attempts: 0,
         nextAttemptAt: new Date(),
@@ -317,6 +390,10 @@ export class OnboardingService {
         provisioningStage: null,
       },
     });
+    if (!retried.count)
+      throw new ConflictException(
+        'This request cannot be retried again. Contact support.',
+      );
     return this.status(dto);
   }
 
@@ -329,6 +406,11 @@ export class OnboardingService {
       throw new ConflictException(
         'Start a new signup after this reservation expires',
       );
+    await this.limits.consume(
+      `${MAIL_RECIPIENT_LIMIT.name}:${emailKey(request.email)}`,
+      MAIL_RECIPIENT_LIMIT.max,
+      MAIL_RECIPIENT_LIMIT.windowMs,
+    );
     const result = await this.db.onboardingMessage.updateMany({
       where: {
         requestId: request.id,
@@ -485,5 +567,32 @@ export class OnboardingService {
         },
       });
     }
+  }
+
+  // Removes the Vercel domain of one failed request that never became a
+  // company, once its retry window has passed. Returns false when none is due.
+  async removeOneOrphanDomain(): Promise<boolean> {
+    const request = await this.db.onboardingRequest.findFirst({
+      where: {
+        status: 'FAILED',
+        verifiedAt: { not: null },
+        organizationId: null,
+        domainRemovedAt: null,
+        updatedAt: { lt: new Date(Date.now() - ORPHAN_DOMAIN_GRACE_MS) },
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
+    if (!request) return false;
+    // A company may have been created with this address some other way.
+    const owner = await this.db.organization.findUnique({
+      where: { slug: request.requestedSlug },
+      select: { id: true },
+    });
+    if (!owner) await this.domains.removeDomain(request.requestedSlug);
+    await this.db.onboardingRequest.updateMany({
+      where: { id: request.id, status: 'FAILED', domainRemovedAt: null },
+      data: { domainRemovedAt: new Date(), slug: null },
+    });
+    return true;
   }
 }

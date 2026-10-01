@@ -8,7 +8,7 @@ import {
   CreateVisitDto, UpdateVisitDto, CreateVisitRequestDto, RespondToRequestDto,
   CreateCalendarBlockDto, AddVisitAttendeeDto,
   CreateCalendarEventDto, UpdateCalendarEventDto,
-  InvitationStatusDto, DeleteModeDto, CreateCalendarFilterDto,
+  InvitationStatusDto, DeleteModeDto, CreateCalendarFilterDto, VisitStatusDto,
 } from './dto/calendar.dto';
 import { randomUUID } from 'crypto';
 import { getKenyaPublicHolidays } from './kenya-holidays';
@@ -62,7 +62,7 @@ export class CalendarService {
     if (!inviteeIds.length) return;
     const dayStart = new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate());
     const dayEnd   = new Date(endAt.getFullYear(), endAt.getMonth(), endAt.getDate(), 23, 59, 59);
-    const blocks = await (this.prisma as any).calendarBlock.findMany({
+    const blocks = await this.prisma.calendarBlock.findMany({
       where: { type: 'BUSY_DAY', employeeId: { in: inviteeIds }, date: { gte: dayStart, lte: dayEnd } },
       select: { employeeId: true },
     });
@@ -82,7 +82,7 @@ export class CalendarService {
     const date = new Date(dateStr);
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const dayEnd   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-    const conflict = await (this.prisma as any).consultancyVisit.findFirst({
+    const conflict = await this.prisma.consultancyVisit.findFirst({
       where: {
         clientOrgId,
         date: { gte: dayStart, lte: dayEnd },
@@ -126,7 +126,7 @@ export class CalendarService {
     // Out of Office is internal staff scheduling info — partner org users
     // must not see who on the admin org's staff is off and why.
     const blocks = isAdmin
-      ? await (this.prisma as any).calendarBlock.findMany({
+      ? await this.prisma.calendarBlock.findMany({
           where: { date: { gte: start, lte: end }, type: 'BUSY_DAY' },
           select: {
             id: true, date: true, type: true, label: true, employeeId: true,
@@ -141,7 +141,7 @@ export class CalendarService {
       : { clientOrgId: organizationId };
 
     // Include visits that start in the month OR span into the month (multi-day)
-    const visits = await (this.prisma as any).consultancyVisit.findMany({
+    const visits = await this.prisma.consultancyVisit.findMany({
       where: {
         AND: [
           { date: { lte: end } },
@@ -230,7 +230,7 @@ export class CalendarService {
     // We return only dates (no titles, no client names) so their data stays private.
     let busyDates: string[] = [];
     if (!isAdmin) {
-      const otherVisits = await (this.prisma as any).consultancyVisit.findMany({
+      const otherVisits = await this.prisma.consultancyVisit.findMany({
         where: {
           AND: [
             { date: { lte: end } },
@@ -264,14 +264,14 @@ export class CalendarService {
       endDate:       dto.endDate ? new Date(dto.endDate) : null,
       startTime:     dto.startTime,
       endTime:       dto.endTime,
-      status:        dto.status ?? 'TENTATIVE',
+      status:        dto.status ?? VisitStatusDto.TENTATIVE,
       notes:         dto.notes,
       internalNotes: dto.internalNotes,
       completionNote: dto.completionNote,
       createdById:   userId,
     };
 
-    const visit = await (this.prisma as any).consultancyVisit.create({
+    const visit = await this.prisma.consultancyVisit.create({
       data: baseData,
       select: VISIT_SELECT,
     });
@@ -299,7 +299,7 @@ export class CalendarService {
       }
 
       if (instances.length > 0) {
-        await (this.prisma as any).consultancyVisit.update({
+        await this.prisma.consultancyVisit.update({
           where: { id: (visit as any).id },
           data: {
             recurrencePattern: dto.recurrencePattern as any,
@@ -307,7 +307,7 @@ export class CalendarService {
             recurrenceGroupId: groupId,
           },
         });
-        await (this.prisma as any).consultancyVisit.createMany({ data: instances });
+        await this.prisma.consultancyVisit.createMany({ data: instances });
       }
     }
 
@@ -317,7 +317,7 @@ export class CalendarService {
   // ── Update visit ──────────────────────────────────────────────────────────
 
   async updateVisit(id: string, dto: UpdateVisitDto) {
-    const visit = await (this.prisma as any).consultancyVisit.findUnique({
+    const visit = await this.prisma.consultancyVisit.findUnique({
       where: { id },
       select: { id: true, clientOrgId: true, date: true },
     });
@@ -346,7 +346,7 @@ export class CalendarService {
       if (dto.date !== currentDate) data.rescheduleCount = { increment: 1 };
     }
 
-    return (this.prisma as any).consultancyVisit.update({
+    return this.prisma.consultancyVisit.update({
       where: { id },
       data,
       select: VISIT_SELECT,
@@ -356,16 +356,16 @@ export class CalendarService {
   // ── Delete visit ──────────────────────────────────────────────────────────
 
   async deleteVisit(id: string) {
-    const visit = await (this.prisma as any).consultancyVisit.findUnique({ where: { id }, select: { id: true } });
+    const visit = await this.prisma.consultancyVisit.findUnique({ where: { id }, select: { id: true } });
     if (!visit) throw new NotFoundException('Visit not found');
-    await (this.prisma as any).consultancyVisit.delete({ where: { id } });
+    await this.prisma.consultancyVisit.delete({ where: { id } });
     return { message: 'Visit deleted' };
   }
 
   // ── Attendees ─────────────────────────────────────────────────────────────
 
   async addAttendee(visitId: string, dto: AddVisitAttendeeDto) {
-    const visit = await (this.prisma as any).consultancyVisit.findUnique({
+    const visit = await this.prisma.consultancyVisit.findUnique({
       where: { id: visitId },
       select: { id: true, clientOrgId: true },
     });
@@ -377,12 +377,12 @@ export class CalendarService {
     });
     if (!employee) throw new NotFoundException('Employee not found in the client organization');
 
-    const existing = await (this.prisma as any).visitAttendee.findFirst({
+    const existing = await this.prisma.visitAttendee.findFirst({
       where: { visitId, employeeId: dto.employeeId },
     });
     if (existing) throw new BadRequestException('Employee is already an attendee');
 
-    return (this.prisma as any).visitAttendee.create({
+    return this.prisma.visitAttendee.create({
       data: { visitId, employeeId: dto.employeeId, role: dto.role },
       select: {
         id: true, role: true,
@@ -392,11 +392,11 @@ export class CalendarService {
   }
 
   async removeAttendee(visitId: string, employeeId: string) {
-    const attendee = await (this.prisma as any).visitAttendee.findFirst({
+    const attendee = await this.prisma.visitAttendee.findFirst({
       where: { visitId, employeeId },
     });
     if (!attendee) throw new NotFoundException('Attendee not found');
-    await (this.prisma as any).visitAttendee.delete({ where: { id: attendee.id } });
+    await this.prisma.visitAttendee.delete({ where: { id: attendee.id } });
     return { message: 'Attendee removed' };
   }
 
@@ -449,7 +449,7 @@ export class CalendarService {
     // visit directly. Skip if it's already been converted (idempotent).
     let visitId = req.visitId;
     if (dto.status === 'APPROVED' && !visitId) {
-      const visit = await (this.prisma as any).consultancyVisit.create({
+      const visit = await this.prisma.consultancyVisit.create({
         data: {
           title: `${displayOrgName(req.organization)} — Requested Visit`,
           clientOrgId: req.organizationId,
@@ -493,7 +493,7 @@ export class CalendarService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const visits = await (this.prisma as any).consultancyVisit.findMany({
+    const visits = await this.prisma.consultancyVisit.findMany({
       where: {
         date: { gte: today },
         status: { in: ['TENTATIVE', 'CONFIRMED'] },
@@ -545,7 +545,7 @@ export class CalendarService {
       };
     }
 
-    const visits = await (this.prisma as any).consultancyVisit.findMany({
+    const visits = await this.prisma.consultancyVisit.findMany({
       where: { date: dateFilter, ...orgFilter },
       select: {
         id: true, title: true, date: true, endDate: true,
@@ -593,17 +593,17 @@ export class CalendarService {
     const orgFilter = isAdmin ? {} : { clientOrgId: organizationId };
 
     const [visits, requests, completedVisits, rescheduleAgg] = await Promise.all([
-      (this.prisma as any).consultancyVisit.findMany({
+      this.prisma.consultancyVisit.findMany({
         where: { date: { gte: new Date(year, 0, 1), lte: new Date(year, 11, 31, 23, 59, 59) }, ...orgFilter },
         select: { date: true, status: true, clientOrgId: true, clientOrg: { select: ORG_SELECT } },
       }),
       this.prisma.visitRequest.count({
         where: { status: 'PENDING', ...(isAdmin ? {} : { organizationId }) },
       }),
-      (this.prisma as any).consultancyVisit.count({
+      this.prisma.consultancyVisit.count({
         where: { status: 'COMPLETED', date: { gte: new Date(year, 0, 1) }, ...orgFilter },
       }),
-      (this.prisma as any).consultancyVisit.aggregate({
+      this.prisma.consultancyVisit.aggregate({
         where: { date: { gte: new Date(year, 0, 1), lte: new Date(year, 11, 31, 23, 59, 59) }, ...orgFilter },
         _sum: { rescheduleCount: true },
       }),
@@ -664,28 +664,28 @@ export class CalendarService {
     const dayEnd   = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
     // Scoped per employee, so different employees may each take OOO the same day.
-    const existing = await (this.prisma as any).calendarBlock.findFirst({
+    const existing = await this.prisma.calendarBlock.findFirst({
       where: { date: { gte: dayStart, lte: dayEnd }, type: 'BUSY_DAY', employeeId: dto.employeeId },
     });
     if (existing) throw new BadRequestException('This employee is already marked Out of Office on this day');
 
-    return (this.prisma as any).calendarBlock.create({
+    return this.prisma.calendarBlock.create({
       data: { date: dayStart, type: 'BUSY_DAY', label: dto.label, employeeId: dto.employeeId, createdById: userId },
       select: { id: true, date: true, type: true, label: true, employeeId: true },
     });
   }
 
   async deleteBlock(id: string) {
-    const block = await (this.prisma as any).calendarBlock.findUnique({ where: { id }, select: { id: true } });
+    const block = await this.prisma.calendarBlock.findUnique({ where: { id }, select: { id: true } });
     if (!block) throw new NotFoundException('Block not found');
-    await (this.prisma as any).calendarBlock.delete({ where: { id } });
+    await this.prisma.calendarBlock.delete({ where: { id } });
     return { message: 'Block removed' };
   }
 
   // ── Org helpers ───────────────────────────────────────────────────────────
 
   async getPartnerOrganizations() {
-    return (this.prisma.organization as any).findMany({
+    return this.prisma.organization.findMany({
       where:   { isAdminOrg: false },
       select:  ORG_SELECT,
       orderBy: { name: 'asc' },
@@ -693,7 +693,7 @@ export class CalendarService {
   }
 
   async getAdminOrg() {
-    return (this.prisma.organization as any).findFirst({
+    return this.prisma.organization.findFirst({
       where:  { isAdminOrg: true },
       select: { ...ORG_SELECT, isAdminOrg: true },
     });
@@ -987,7 +987,7 @@ export class CalendarService {
 
     const interval = dto.recurrenceInterval ?? 1;
 
-    const event = await (this.prisma.calendarEvent as any).create({
+    const event = await this.prisma.calendarEvent.create({
       data: {
         title: dto.title,
         description: dto.description,
@@ -1348,7 +1348,7 @@ export class CalendarService {
 
   async getFilters(userId: string, organizationId: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
-    return (this.prisma as any).calendarFilter.findMany({
+    return this.prisma.calendarFilter.findMany({
       where: { employeeId: employee.id },
       orderBy: { createdAt: 'asc' },
     });
@@ -1356,7 +1356,7 @@ export class CalendarService {
 
   async createFilter(dto: CreateCalendarFilterDto, userId: string, organizationId: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
-    return (this.prisma as any).calendarFilter.create({
+    return this.prisma.calendarFilter.create({
       data: {
         employeeId: employee.id,
         name: dto.name,
@@ -1369,9 +1369,9 @@ export class CalendarService {
 
   async deleteFilter(id: string, userId: string, organizationId: string) {
     const employee = await this.resolveEmployee(userId, organizationId);
-    const filter = await (this.prisma as any).calendarFilter.findUnique({ where: { id }, select: { id: true, employeeId: true } });
+    const filter = await this.prisma.calendarFilter.findUnique({ where: { id }, select: { id: true, employeeId: true } });
     if (!filter || filter.employeeId !== employee.id) throw new NotFoundException('Filter not found');
-    await (this.prisma as any).calendarFilter.delete({ where: { id } });
+    await this.prisma.calendarFilter.delete({ where: { id } });
     return { message: 'Filter removed' };
   }
 }

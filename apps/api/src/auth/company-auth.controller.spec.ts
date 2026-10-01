@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TENANT_REQUIRED_KEY } from '../tenancy/tenant-route.decorator';
 import type { TenantRequest } from '../tenancy/tenant-context';
 import { OrgStatus } from 'db';
+import { RateLimitService } from '../common/rate-limit/rate-limit.service';
 
 describe('CompanyAuthController and tenant guard wiring', () => {
   const secret = 'a'.repeat(64);
@@ -36,7 +37,7 @@ describe('CompanyAuthController and tenant guard wiring', () => {
     module = await Test.createTestingModule({
       imports: [ConfigModule, TenancyModule],
       controllers: [CompanyAuthController],
-      providers: [{ provide: AuthService, useValue: auth }],
+      providers: [{ provide: AuthService, useValue: auth }, { provide: RateLimitService, useValue: { consume: jest.fn() } }],
     })
       .overrideProvider(PrismaService).useValue({ organization: { findUnique } })
       .overrideProvider(ConfigService).useValue(new ConfigService({ TENANT_BASE_DOMAIN: 'gembapms.co.in', TENANT_PROXY_SECRET: secret }))

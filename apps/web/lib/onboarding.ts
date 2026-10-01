@@ -1,3 +1,4 @@
+import { isReservedSignupSlug } from "./reserved-slugs.mjs";
 export const industries = [
   "Agriculture & Food",
   "Automotive",
@@ -32,9 +33,7 @@ export function companySlug(name: string) {
 export function slugError(slug: string) {
   if (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug))
     return "Use 3–40 lowercase letters, numbers or hyphens, with no hyphen at either end.";
-  if (
-    ["www", "api", "admin", "app", "auth", "staging", "support"].includes(slug)
-  )
+  if (isReservedSignupSlug(slug))
     return "This address is reserved. Choose another company slug.";
   return "";
 }

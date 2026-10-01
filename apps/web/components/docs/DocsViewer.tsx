@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { ArrowLeft, BookOpenText, ChevronRight, X, ZoomIn } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
+import { apiClient } from "@/lib/api-client";
 import type { DocsChapter } from "./types";
 
 type ProtectedImages = { sourcePrefix: string; endpointPrefix: string };
@@ -37,11 +38,7 @@ function MarkdownImage({ src, alt, protectedImages }: { src: string; alt: string
     if (!imagePath || !token || !endpointPrefix) return;
     const controller = new AbortController();
     let objectUrl: string | null = null;
-    void fetch(`${endpointPrefix}/${imagePath}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal: controller.signal,
-    })
+    void apiClient(`${endpointPrefix}/${imagePath}`, { signal: controller.signal }, token)
       .then(async (response) => {
         if (!response.ok) throw new Error("Image unavailable");
         const blob = await response.blob();

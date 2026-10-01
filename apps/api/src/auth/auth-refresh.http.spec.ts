@@ -9,6 +9,7 @@ import { PlatformAdminGuard } from '../tenancy/platform-admin.guard';
 import { TrustedTenantContextGuard } from '../tenancy/trusted-tenant-context.guard';
 import { TenantGuard } from '../tenancy/tenant.guard';
 import { SafeExceptionFilter } from '../operations/safe-exception.filter';
+import { RateLimitService } from '../common/rate-limit/rate-limit.service';
 
 describe('Central refresh without a session', () => {
   let app: INestApplication;
@@ -17,7 +18,7 @@ describe('Central refresh without a session', () => {
   beforeAll(async () => {
     let builder = Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: { refresh } }],
+      providers: [{ provide: AuthService, useValue: { refresh } }, { provide: RateLimitService, useValue: { consume: jest.fn() } }],
     });
     // These guards belong to other routes, not the public refresh endpoint.
     for (const guard of [JwtAuthGuard, PlatformAdminGuard, TrustedTenantContextGuard, TenantGuard]) {

@@ -1,0 +1,130 @@
+model Activity {
+  id                            String         @id @default(uuid())
+  organizationId                String
+  companyUnitName               String?
+  mainDepartmentId              String?
+  subDepartment                 String?
+  gembaSection                  String?
+  processArea                   String?
+  name                          String
+  workMethod                    String?
+  code                          String
+  purpose                       String?
+  category                      String?
+  frequency                     TaskFrequency
+  startTrigger                  String?
+  completionDeadline            String?
+  completionOutput              String?
+  primaryResponsibleDesignation String?
+  primaryResponsibleEmployeeId  String?
+  parentActivityId              String?
+  evidenceRequired              String?
+  effectiveFrom                 DateTime
+  status                        ActivityStatus @default(ACTIVE)
+  remarks                       String?
+  createdAt                     DateTime       @default(now())
+  updatedAt                     DateTime       @updatedAt
+
+  organization               Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mainDepartment             Department?            @relation(fields: [mainDepartmentId], references: [id], onDelete: SetNull)
+  primaryResponsibleEmployee Employee?              @relation("ActivityPrimaryResponsible", fields: [primaryResponsibleEmployeeId], references: [id], onDelete: SetNull)
+  parentActivity             Activity?              @relation("ActivityParent", fields: [parentActivityId], references: [id], onDelete: SetNull)
+  childActivities            Activity[]             @relation("ActivityParent")
+  tasks                      Task[]
+  jobTitleActivities         JobTitleActivity[]
+  employeeAssignments        EmployeeActivityAssignment[]
+  ingestionRows              ActivityIngestionRow[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([mainDepartmentId])
+  @@index([primaryResponsibleEmployeeId])
+  @@index([parentActivityId])
+}
+
+model JobTitleActivity {
+  id             String   @id @default(uuid())
+  organizationId String
+  jobTitle       String
+  activityId     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, jobTitle, activityId])
+  @@index([organizationId, jobTitle])
+  @@index([activityId])
+}
+
+model EmployeeActivityAssignment {
+  id             String                 @id @default(uuid())
+  organizationId String
+  employeeId     String
+  activityId     String
+  status         EmployeeActivityStatus @default(ACTIVE)
+  activatedAt    DateTime?
+  deactivatedAt  DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, activityId])
+  @@index([organizationId, status])
+  @@index([employeeId, status])
+  @@index([activityId])
+}
+
+model ActivityIngestion {
+  id             String    @id @default(uuid())
+  organizationId String
+  fileName       String
+  uploadedById   String
+  status         String    @default("COMPLETED")
+  totalRows      Int       @default(0)
+  successfulRows Int       @default(0)
+  failedRows     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  completedAt    DateTime?
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy   Employee               @relation("ActivityIngestionUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  rows         ActivityIngestionRow[]
+
+  @@index([organizationId, createdAt])
+  @@index([uploadedById])
+  @@index([status])
+}
+
+model ActivityIngestionRow {
+  id                      String   @id @default(uuid())
+  ingestionId             String
+  organizationId          String
+  rowNumber               Int
+  status                  String
+  activityName            String?
+  activityCode            String?
+  responsibleEmployeeCode String?
+  message                 String?
+  activityId              String?
+  taskId                  String?
+  createdAt               DateTime @default(now())
+
+  ingestion    ActivityIngestion @relation(fields: [ingestionId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  activity     Activity?         @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  task         Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([ingestionId, rowNumber])
+  @@index([organizationId, status])
+  @@index([activityId])
+  @@index([taskId])
+}
+
+// ── Steel ──────────────────────────────────────────────────────────
+// ── Steel Manufacturing: Process 1 — Planning (P01-A01..A12) ─────────────────

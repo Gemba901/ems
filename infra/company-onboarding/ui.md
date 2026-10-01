@@ -38,7 +38,7 @@ Logo upload still depends on the existing S3 CORS policy allowing company origin
 | `apps/api/src/onboarding/onboarding.dto.ts` | Validates optional company profile values for rolling compatibility. |
 | `apps/api/src/onboarding/onboarding.service.ts` | Stores profile, copies it to the organization, exposes safe progress and retry eligibility. |
 | `apps/api/src/onboarding/workspace-domain.service.ts` | Reports domain and HTTPS phases around actual provider operations. |
-| `packages/db/prisma/schema.prisma` and additive migration | Durable profile and setup-stage fields. |
+| `packages/db/prisma/schema/` (per-module files) and additive migration | Durable profile and setup-stage fields. |
 
 ## Acceptance checks
 

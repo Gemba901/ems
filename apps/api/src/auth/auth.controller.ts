@@ -6,6 +6,8 @@ import { Controller, Post, Get, Body, Request, Response, UseGuards, Unauthorized
 import { AuthService } from './auth.service';
 import { LoginDto, VerifyFirstTimeDto, CreatePasswordDto, SelectOrgDto, ForgotPasswordDto, ResetPasswordDto, VerifyTempPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RateLimit } from '../common/rate-limit/rate-limit.guard';
+import { AUTH_LIMITS } from './auth-rate-limits';
 
 const REFRESH_COOKIE = 'refresh_token';
 
@@ -30,6 +32,7 @@ export class AuthController {
     constructor(private authService: AuthService) {}
 
     @Post('login')
+    @RateLimit(...AUTH_LIMITS.login)
     async login(@Body() loginDto: LoginDto, @Response({ passthrough: true }) res: any) {
         const result = await this.authService.login(loginDto.phoneOrEmail, loginDto.password, loginDto.employeeCode);
 
@@ -43,6 +46,7 @@ export class AuthController {
     }
 
     @Post('select-org')
+    @RateLimit(...AUTH_LIMITS.selectOrg)
     async selectOrg(@Body() dto: SelectOrgDto, @Response({ passthrough: true }) res: any) {
         const result = await this.authService.selectOrg(dto.selectionToken, dto.organizationId);
         setRefreshCookie(res, result.refreshToken);
@@ -51,6 +55,7 @@ export class AuthController {
     }
 
     @Post('refresh')
+    @RateLimit(...AUTH_LIMITS.refresh)
     async refresh(@Request() req: any, @Response({ passthrough: true }) res: any) {
         const rawToken = req.cookies?.[REFRESH_COOKIE];
         if (!rawToken) {
@@ -75,11 +80,13 @@ export class AuthController {
     }
 
     @Post('verify-first-time')
+    @RateLimit(...AUTH_LIMITS.verifyFirstTime)
     verifyFirstTime(@Body() verifyDto: VerifyFirstTimeDto){
         return this.authService.verifyFirstTimeUser(verifyDto.phoneOrEmail, verifyDto.employeeCode);
     }
 
     @Post('create-password')
+    @RateLimit(...AUTH_LIMITS.createPassword)
     createPassword(@Body() createPasswordDto: CreatePasswordDto){
         return this.authService.createPassword(
             createPasswordDto.setupToken,
@@ -88,18 +95,21 @@ export class AuthController {
     }
 
     @Post('forgot-password')
-    forgotPassword(@Body() dto: ForgotPasswordDto, @Request() req: any) {
-        return this.authService.forgotPassword(dto.email, req.ip);
+    @RateLimit(...AUTH_LIMITS.forgotPassword)
+    forgotPassword(@Body() dto: ForgotPasswordDto) {
+        return this.authService.forgotPassword(dto.email);
     }
 
     @Post('reset-password')
-    resetPassword(@Body() dto: ResetPasswordDto, @Request() req: any) {
-        return this.authService.resetPassword(dto.token, dto.newPassword, req.ip);
+    @RateLimit(...AUTH_LIMITS.resetPassword)
+    resetPassword(@Body() dto: ResetPasswordDto) {
+        return this.authService.resetPassword(dto.token, dto.newPassword);
     }
 
     @Post('verify-temp-password')
-    verifyTempPassword(@Body() dto: VerifyTempPasswordDto, @Request() req: any) {
-        return this.authService.verifyTempPassword(dto.tempPassword, req.ip);
+    @RateLimit(...AUTH_LIMITS.verifyTempPassword)
+    verifyTempPassword(@Body() dto: VerifyTempPasswordDto) {
+        return this.authService.verifyTempPassword(dto.tempPassword);
     }
 
     @Get('platform/my-org')

@@ -52,6 +52,7 @@ describe('Onboarding domain readiness gate', () => {
       db as any,
       new ConfigService(),
       domains as unknown as WorkspaceDomainService,
+      { consume: jest.fn() } as any,
     );
     return { service, db, tx, domains };
   }

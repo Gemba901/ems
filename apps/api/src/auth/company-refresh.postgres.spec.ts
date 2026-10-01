@@ -4,7 +4,6 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, RoleName } from 'db';
 import { randomUUID, createHash } from 'node:crypto';
-import type { Cache } from 'cache-manager';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../notifications/channels/email.service';
@@ -50,7 +49,7 @@ suite('Company refresh on PostgreSQL', () => {
   }
 
   function service(client: unknown = db) {
-    return new AuthService(client as PrismaService, new JwtService({ secret: 'postgres-integration-test', signOptions: { expiresIn: '7d' } }), new ConfigService(), {} as EmailService, {} as Cache);
+    return new AuthService(client as PrismaService, new JwtService({ secret: 'postgres-integration-test', signOptions: { expiresIn: '7d' } }), new ConfigService(), {} as EmailService);
   }
 
   it('persists a replacement and rejects replay of the old token', async () => {

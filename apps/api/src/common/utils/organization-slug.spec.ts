@@ -1,4 +1,9 @@
-import { getOrganizationSlugError, normalizeOrganizationSlug } from './organization-slug';
+import {
+  getOrganizationSlugError,
+  getSignupOrganizationSlugError,
+  isLookalikeOrganizationSlug,
+  normalizeOrganizationSlug,
+} from './organization-slug';
 
 describe('organization slug rules', () => {
   it('normalizes whitespace and case without silently replacing characters', () => {
@@ -13,5 +18,20 @@ describe('organization slug rules', () => {
   });
   it.each(['www', 'api', 'admin', 'app', 'auth', 'staging', 'support'])('rejects reserved address %s after normalization', (slug) => {
     expect(getOrganizationSlugError(normalizeOrganizationSlug(` ${slug.toUpperCase()} `))).toContain('reserved');
+  });
+
+  it.each(['login', 'billing', 'gembapms', 'gemba-plastics', 'bees-admin', 'test'])('refuses %s for new signups but keeps it valid for existing companies', (slug) => {
+    expect(getSignupOrganizationSlugError(slug)).toContain('reserved');
+    expect(getOrganizationSlugError(slug)).toBeNull();
+  });
+  it('flags addresses that imitate an existing company', () => {
+    const existing = ['kbcl', 'acme-steel'];
+    expect(isLookalikeOrganizationSlug('kbcl-hr', existing)).toBe(true);
+    expect(isLookalikeOrganizationSlug('hr-kbcl', existing)).toBe(true);
+    expect(isLookalikeOrganizationSlug('acme-stee1', existing)).toBe(true);
+    expect(isLookalikeOrganizationSlug('acme-steels', existing)).toBe(true);
+    expect(isLookalikeOrganizationSlug('kbclx', existing)).toBe(false);
+    expect(isLookalikeOrganizationSlug('kbcl', existing)).toBe(false);
+    expect(isLookalikeOrganizationSlug('northwind', existing)).toBe(false);
   });
 });

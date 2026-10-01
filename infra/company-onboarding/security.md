@@ -5,7 +5,9 @@ Scope: public self-service signup, company sign-in, and the auth routes they dep
 on. This is a code and configuration review, not a penetration test. Recheck each
 item against current code before acting on it.
 
-**Status:** nothing below is fixed yet. Items marked **Must fix** block opening
+**Status (2026-10-01):** #1, #2, #5 and #8 are fixed in code, and #3, #4, #6 and #7
+are partly fixed. None of it is deployed yet. Each section ends with a status note
+saying what's left. #9 and #10 are console changes, and #11 is still open. Items marked **Must fix** block opening
 public signup in production. **Should fix** items can follow shortly after launch
 but need an owner and a date.
 
@@ -13,16 +15,16 @@ but need an owner and a date.
 
 | # | Priority | Risk | Main location |
 | --- | --- | --- | --- |
-| 1 | Must fix | The API can be called directly, and the `/auth/*` routes skip the proxy check | `apps/api/src/auth/auth.controller.ts`, nginx |
-| 2 | Must fix | Rate limits share one IP bucket, reset on restart, and don't cover login | `apps/api/src/auth/auth.service.ts`, `apps/api/src/main.ts` |
-| 3 | Must fix | Anyone can use up the global signup quota and block all real signups | `onboarding.service.ts` `signup` |
-| 4 | Must fix | Vercel domain slots can be used up, and orphaned domains are never cleaned up | `onboarding.service.ts`, `workspace-domain.service.ts` |
-| 5 | Must fix | Look-alike company addresses on our own domain can be used for phishing | `common/utils/organization-slug.ts` plus two web copies |
-| 6 | Should fix | Signup email can be used to spam third parties and damage SES reputation | Onboarding outbox, SES |
-| 7 | Should fix | Business tables have no row-level security | Database |
-| 8 | Should fix | Progress tokens never expire | `onboarding.service.ts` `token` |
-| 9 | Should fix | Static AWS keys and broad provider tokens | API environment |
-| 10 | Should fix | Vercel Deployment Protection is off for the whole project | Vercel project settings |
+| 1 | Must fix (code fixed, network layer open) | The API can be called directly, and the `/auth/*` routes skip the proxy check | `apps/api/src/auth/auth.controller.ts`, nginx |
+| 2 | Must fix (code fixed) | Rate limits share one IP bucket, reset on restart, and don't cover login | `apps/api/src/auth/auth.service.ts`, `apps/api/src/main.ts` |
+| 3 | Must fix (per-IP limit done; Turnstile open) | Anyone can use up the global signup quota and block all real signups | `onboarding.service.ts` `signup` |
+| 4 | Must fix (retry cap, daily cap, cleanup done; disposable block, approval flag open) | Vercel domain slots can be used up, and orphaned domains are never cleaned up | `onboarding.service.ts`, `workspace-domain.service.ts` |
+| 5 | Must fix (code fixed; new-workspace notification open) | Look-alike company addresses on our own domain can be used for phishing | `common/utils/organization-slug.ts` plus two web copies |
+| 6 | Should fix (recipient cap done; SES suppression open) | Signup email can be used to spam third parties and damage SES reputation | Onboarding outbox, SES |
+| 7 | Should fix (audit and static check done; RLS planned) | Business tables have no row-level security | Database |
+| 8 | Should fix (code fixed) | Progress tokens never expire | `onboarding.service.ts` `token` |
+| 9 | Should fix (console) | Static AWS keys and broad provider tokens | API environment |
+| 10 | Should fix (console) | Vercel Deployment Protection is off for the whole project | Vercel project settings |
 | 11 | Must fix | Anyone who knows an employee's email, phone or code can set that employee's first password | `auth.service.ts` `verifyFirstTimeUser`, `employee.service.ts` |
 
 ## Exposed endpoints
@@ -65,6 +67,13 @@ proxy's host, origin and path checks.
 **Done when.** A direct `curl` to the API host returns `403` for every route
 except health, and the web app still works.
 
+**Status (2026-10-01).** `ProxySecretGuard` (`apps/api/src/common/guards/`) is
+registered as `APP_GUARD` and rejects every route without the secret except
+`GET /`, which is exempted with `@PublicHealth()`. A coverage test in
+`proxy-secret.guard.spec.ts` fails if any other route opts out. Still open: the
+security-group or nginx restriction. Vercel egress IPs aren't static without
+Secure Compute, so plan secret rotation and alerting instead.
+
 ## 2. Rate limiting doesn't work as intended
 
 **Problem.**
@@ -95,6 +104,15 @@ except health, and the web app still works.
 **Done when.** Tests show that one IP can't block another, that limits survive
 an API restart, and that login returns `429` after the threshold.
 
+**Status (2026-10-01).** The proxy forwards `x-real-ip` as `x-gemba-client-ip`.
+Counters live in the `RateLimitBucket` table (atomic upsert, hashed keys, hourly
+purge) via `RateLimitService` and `@RateLimit()` (`apps/api/src/common/rate-limit/`).
+Limits for every auth route are in `apps/api/src/auth/auth-rate-limits.ts`. Login
+allows 10 attempts per account per 15 minutes and 300 per IP; the IP limit is set
+high for factory NAT. Onboarding `verify` now consumes the same per-account
+login bucket (`login:acct:platform:<email>`), so it can't be used to guess past
+the login limit. There is a fixed lockout window rather than exponential backoff.
+
 ## 3. Global signup quota can be used to block signups
 
 **Problem.** `signup` rejects new requests once there are 100 signups per hour
@@ -110,6 +128,12 @@ for an hour, and can repeat that every hour.
 
 **Done when.** A scripted burst from one source is rejected before it affects
 the global count, and reaching the global cap triggers an alert.
+
+**Status (2026-10-01).** Done: per-IP limits on signup (10/hour), verify
+(30/15 min), resend and retry (30/hour), from `ONBOARDING_LIMITS` in
+`auth-rate-limits.ts`. The global and per-email caps stay as safety limits. Still
+open: Turnstile (needs a Cloudflare site key and secret), the Vercel Firewall
+rule (console), and an alert when the global cap is reached.
 
 ## 4. Vercel domain slots can be used up
 
@@ -137,6 +161,19 @@ the global count, and reaching the global cap triggers an alert.
 **Done when.** A failed or expired signup leaves no domain behind after cleanup,
 and retries stop after the cap.
 
+**Status (2026-10-01).** Done:
+- `manualRetries` is capped at 3, using an atomic `updateMany`.
+- There is a daily cap on verified signups: `ONBOARDING_DAILY_VERIFIED_LIMIT`,
+  default 20, which returns `429`.
+- An hourly worker job (`removeOrphanDomains`) removes the Vercel domain of
+  `FAILED` requests that never became a company after 7 days. It sets
+  `domainRemovedAt` and frees the slug, and retry is refused afterwards.
+- Migration `20261001110000_onboarding_hardening`.
+
+Still open: blocking disposable email domains (needs a maintained list), the
+`ONBOARDING_REQUIRE_APPROVAL` flag (a product decision), and the 70% domain-usage
+alert.
+
 ## 5. Look-alike addresses on our domain
 
 **Problem.** Only 7 slugs are reserved (`www`, `api`, `admin`, `app`, `auth`,
@@ -162,6 +199,20 @@ enough to phish customers' staff. The list is also copied in three places
 **Done when.** Reserved and look-alike slugs are rejected or held in both the
 API and the web app from one source list.
 
+**Status (2026-10-01).** Done:
+- The shared reserved list (7 platform hosts) is unchanged, so existing
+  companies keep resolving.
+- A signup-only list adds the infrastructure, auth and billing terms. Any
+  address containing `gemba` or `bees` is refused
+  (`getSignupOrganizationSlugError`).
+- Look-alikes of existing companies or pending reservations are refused with a
+  generic `409`. That covers the existing slug with a hyphenated prefix or
+  suffix, and slugs within one edit of a name of 5+ characters.
+- The web app imports one list from `apps/web/lib/reserved-slugs.mjs`, and
+  `apps/web/tests/reserved-slugs.test.mjs` fails if it drifts from the API.
+
+Still open: notifying the platform team about each new workspace.
+
 ## 6. Signup email can be used to spam third parties
 
 **Problem.**
@@ -185,6 +236,11 @@ API and the web app from one source list.
 **Done when.** An address can't receive more than the daily cap, and a complaint
 suppresses further sends.
 
+**Status (2026-10-01).** Done: every signup, resend and forgot-password email
+counts toward a cap of 10 per recipient address per day (`MAIL_RECIPIENT_LIMIT`).
+Still open: subscribing to SES bounce and complaint events (SNS topic in the AWS
+console) and a suppression check before sending.
+
 ## 7. No row-level security on business tables
 
 Tenant isolation for business data relies on guards and on service code
@@ -197,6 +253,17 @@ across companies.
 - Until then, add a CI test that lists every route and fails if a tenant route
   lacks `TrustedTenantContextGuard` + `JwtAuthGuard` + `TenantGuard`.
 
+**Status (2026-10-01).**
+- Audit done. Every lookup by bare id on the 47 tenant models is scoped by
+  organization, compared after fetching, checked by its caller, or restricted to
+  platform admins. Foreign keys copied from DTOs are checked against the
+  organization. No cross-tenant access was found.
+- All `prisma as any` casts were removed from services, and
+  `apps/api/src/prisma/typed-prisma.static.spec.ts` stops new ones.
+- Still planned: enabling RLS on business tables. Every query must go through
+  `tenantTransaction`, with an explicit bypass for platform-admin, auth and cron
+  paths, so it needs its own rollout and staging validation.
+
 ## 8. Progress tokens never expire
 
 `token(id, 'progress')` is an HMAC of the request ID with no expiry. Anyone who
@@ -207,6 +274,9 @@ allowed.
 **Fix.** Include an expiry in the signed value, or refuse progress tokens once a
 request has been `READY` for more than a day.
 
+**Status (2026-10-01).** Done: progress tokens are refused (`404`) once a
+request has been `READY` for more than 24 hours.
+
 ## 9. Credentials and token scope
 
 - Replace static SES access keys in the API environment with the EC2 instance
@@ -215,6 +285,10 @@ request has been `READY` for more than a day.
   domains, and store it only in the API environment.
 - Rotate `ONBOARDING_TOKEN_SECRET` and the proxy secret on a documented schedule,
   and plan how in-flight signups behave when they change.
+
+**Status (2026-10-01).** Console work, not yet done: move SES to the EC2
+instance role, scope the Vercel token, and set a rotation schedule. The API now
+refuses to start if `JWT_SECRET` matches `TENANT_PROXY_SECRET` (`validateEnv`).
 
 ## 10. Vercel Deployment Protection is off
 
@@ -225,6 +299,10 @@ exposes preview deployments.
 **Fix.** Turn protection back on for previews, and exempt only the production and
 staging domains that serve tenants. Alternatively, let the readiness check through
 with a protection-bypass secret.
+
+**Status (2026-10-01).** Console work, not yet done. The web app now sends
+security headers (CSP, HSTS, frame denial), but that doesn't replace Deployment
+Protection on previews.
 
 ## 11. First-time account setup
 
@@ -270,6 +348,8 @@ with a protection-bypass secret.
 - Knowing an identifier alone can no longer set a password.
 - An expired or used invite link is rejected.
 - Sign-in no longer reveals whether an account exists or has a password.
+
+**Status (2026-10-01).** Still open. This is the highest remaining risk.
 
 ## Suggested order
 

@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AuthService } from 'src/auth/auth.service';
 import * as XLSX from 'xlsx';
-import { RoleName } from 'db';
+import { Prisma, RoleName } from 'db';
 
 type EmployeeImportRow = {
     rowNumber: number;
@@ -412,7 +412,7 @@ export class EmployeeService {
 
     // admin updates their org's theme color
     async updateCompanyTheme(organizationId: string, primaryColor: string) {
-        return (this.prisma.organization as any).update({
+        return this.prisma.organization.update({
             where: { id: organizationId },
             data: { primaryColor },
             select: { id: true, primaryColor: true },
@@ -470,7 +470,7 @@ export class EmployeeService {
         if (employee.userId !== userId && !['ADMIN', 'SUPER_ADMIN'].includes(roleLevel)) {
             throw new ForbiddenException('You can only update your own avatar');
         }
-        return (this.prisma.employee as any).update({
+        return this.prisma.employee.update({
             where: { id, organizationId },
             data: { avatarUrl },
             include: { department: true, user: { omit: { password: true }, include: { organizations: { where: { organizationId }, include: { role: true } } } } },
@@ -578,7 +578,7 @@ export class EmployeeService {
 
         // Process each row directly — no wrapping transaction so large imports never time out.
         // The import is idempotent: re-running it will reconcile any partially-applied state.
-        const db = this.prisma as any;
+        const db = this.prisma;
 
         for (const row of normalizedRows) {
             const departmentId = row.department
@@ -743,7 +743,7 @@ export class EmployeeService {
     }
 
     private async getOrCreateImportUser(
-        tx: any,
+        tx: Prisma.TransactionClient,
         row: EmployeeImportRow,
         organizationId: string,
         defaultRoleId: number,
@@ -771,7 +771,7 @@ export class EmployeeService {
         return user;
     }
 
-    private async getOrCreateDepartment(tx: any, organizationId: string, name: string, departmentMap: Map<string, string>) {
+    private async getOrCreateDepartment(tx: Prisma.TransactionClient, organizationId: string, name: string, departmentMap: Map<string, string>) {
         const key = this.normalizeKey(name);
         const existing = departmentMap.get(key);
         if (existing) return existing;
@@ -781,7 +781,7 @@ export class EmployeeService {
     }
 
     private async deleteEmployeeInTransaction(
-        tx: any,
+        tx: Prisma.TransactionClient,
         id: string,
         preloaded?: { id: string; userId: string | null; organizationId: string },
     ) {

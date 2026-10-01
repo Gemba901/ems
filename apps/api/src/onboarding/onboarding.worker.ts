@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Interval } from '@nestjs/schedule';
+import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../notifications/channels/email.service';
@@ -16,6 +16,19 @@ export class OnboardingWorker {
     private readonly onboarding: OnboardingService,
     private readonly email: EmailService,
   ) {}
+
+  // Hourly and bounded, so a failing Vercel API isn't called every tick.
+  @Cron(CronExpression.EVERY_HOUR)
+  async removeOrphanDomains() {
+    if (this.config.get('ONBOARDING_WORKER_ENABLED') !== 'true') return;
+    try {
+      for (let i = 0; i < 10; i++) {
+        if (!(await this.onboarding.removeOneOrphanDomain())) break;
+      }
+    } catch {
+      this.logger.error('Orphan domain cleanup failed; it will run again next hour');
+    }
+  }
 
   @Interval(10_000)
   async tick() {

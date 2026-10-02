@@ -5,6 +5,7 @@ import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 import { 
   AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto,
 } from './dto/onboarding.dto';
+import { Prisma } from 'db';
 
 // ── Field groups that define completeness ────────────────────────────────────
 export const EMS_GROUPS = {
@@ -521,7 +522,7 @@ export class EmsService {
 
       await this.prisma.emsOnboardingRecord.update({
         where: { id: record.id },
-        data: { status, validationErrors: findings.length > 0 ? findings : undefined },
+        data: { status, validationErrors: findings.length > 0 ? findings : Prisma.DbNull },
       });
     }
 
@@ -559,7 +560,11 @@ export class EmsService {
 
     await this.prisma.emsOnboardingRecord.update({
       where: { id: recordId },
-      data: { ...data, status: 'DRAFT', validationErrors: undefined },
+      data: {
+        ...data,
+        status: record.status === 'EXCLUDED' ? 'EXCLUDED' : 'DRAFT',
+        validationErrors: Prisma.DbNull,
+      },
     });
 
     return this.validateOnboardingBatch(organizationId, record.batchId);
@@ -584,7 +589,7 @@ export class EmsService {
       data: {
         status: 'EXCLUDED',
         exclusionReason: dto.reason?.trim() || null,
-        validationErrors: undefined,
+        validationErrors: Prisma.DbNull,
       },
     });
 

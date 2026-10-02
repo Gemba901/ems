@@ -290,6 +290,35 @@ export interface OnboardingBatchDetail extends OnboardingBatchSummary {
   records: OnboardingRecord[];
 }
 
+export interface UpdateOnboardingRecordPayload {
+  companyCode?: string;
+  plantBranchCode?: string;
+  employeeCode?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  mobileNumber?: string;
+  workEmail?: string;
+  gender?: string;
+  nationality?: string;
+  currentDepartment?: string;
+  hodName?: string;
+  hodDesignation?: string;
+  workArea?: string;
+  subSection?: string;
+  jobDesignation?: string;
+  beesAccessLevel?: string;
+  shift?: string;
+  reportingToName?: string;
+  reportingToDesignation?: string;
+  employmentStatus?: string;
+  employmentType?: string;
+  reliever1Name?: string;
+  reliever1Designation?: string;
+  reliever2Name?: string;
+  reliever2Designation?: string;
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export const EmsService = {
@@ -351,6 +380,48 @@ export const EmsService = {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+    async validateOnboardingBatch(id: string, token: string): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/validate`, {
+      method: "POST",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async updateOnboardingRecord(
+    id: string,
+    data: UpdateOnboardingRecordPayload,
+    token: string,
+  ): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/records/${id}`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async excludeOnboardingRecord(
+    id: string,
+    reason: string,
+    token: string,
+  ): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/records/${id}/exclude`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify({ reason }),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async includeOnboardingRecord(id: string, token: string): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/records/${id}/include`, {
+      method: "PATCH",
+      headers: authHeaders(token),
     }, token);
     return handleResponse(res);
   },

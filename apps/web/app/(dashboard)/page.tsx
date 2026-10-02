@@ -94,6 +94,7 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     actions: [
       // { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
       { label: "My Profile",             href: "/ems/my-profile", icon: UserCircle, roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
+      { label: "Onboarding Imports", href: "/ems/onboarding",  icon: ClipboardList,   roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
     ],
   },
   CALENDAR: {

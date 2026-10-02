@@ -44,5 +44,44 @@ export class AddOnboardingRecordsDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OnboardingRecordInputDto)
-  records: OnboardingRecordInputDto[];
+  records!: OnboardingRecordInputDto[];
 }
+
+export class UpdateOnboardingRecordDto {
+  @IsString() @IsOptional() companyCode?: string;
+  @IsString() @IsOptional() plantBranchCode?: string;
+  @IsString() @IsOptional() employeeCode?: string;
+  @IsString() @IsOptional() firstName?: string;
+  @IsString() @IsOptional() middleName?: string;
+  @IsString() @IsOptional() lastName?: string;
+  @IsString() @IsOptional() mobileNumber?: string;
+  @IsString() @IsOptional() workEmail?: string;
+  @IsString() @IsOptional() gender?: string;
+  @IsString() @IsOptional() nationality?: string;
+  @IsString() @IsOptional() currentDepartment?: string;
+  @IsString() @IsOptional() hodName?: string;
+  @IsString() @IsOptional() hodDesignation?: string;
+  @IsString() @IsOptional() workArea?: string;
+  @IsString() @IsOptional() subSection?: string;
+  @IsString() @IsOptional() jobDesignation?: string;
+  @IsString() @IsOptional() beesAccessLevel?: string;
+  @IsString() @IsOptional() shift?: string;
+  @IsString() @IsOptional() reportingToName?: string;
+  @IsString() @IsOptional() reportingToDesignation?: string;
+  @IsString() @IsOptional() employmentStatus?: string;
+  @IsString() @IsOptional() employmentType?: string;
+  @IsString() @IsOptional() reliever1Name?: string;
+  @IsString() @IsOptional() reliever1Designation?: string;
+  @IsString() @IsOptional() reliever2Name?: string;
+  @IsString() @IsOptional() reliever2Designation?: string;
+}
+// TODO: replace with OmitType(OnboardingRecordInputDto, ['rowNumber'])
+// once @nestjs/mapped-types is confirmed available — removes this duplication.
+//export class UpdateOnboardingRecordDto {
+  // ...the 26 fields
+//}
+
+export class ExcludeOnboardingRecordDto {
+  @IsString() @IsOptional() @MaxLength(300) reason?: string;
+}
+

@@ -2,7 +2,9 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
-import { AddOnboardingRecordsDto, CreateOnboardingBatchDto } from './dto/onboarding.dto';
+import { 
+  AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto,
+} from './dto/onboarding.dto';
 
 // ── Field groups that define completeness ────────────────────────────────────
 export const EMS_GROUPS = {
@@ -533,5 +535,77 @@ export class EmsService {
     });
 
     return this.getOnboardingBatch(organizationId, batchId);
+  }
+
+    async updateOnboardingRecord(
+    organizationId: string,
+    recordId: string,
+    dto: UpdateOnboardingRecordDto,
+  ) {
+    const record = await this.prisma.emsOnboardingRecord.findFirst({
+      where: { id: recordId, organizationId },
+      select: { id: true, batchId: true, status: true },
+    });
+    if (!record) throw new NotFoundException('Onboarding record not found');
+    if (record.status === 'REGISTERED') {
+      throw new BadRequestException('This record has already been registered');
+    }
+
+    const data: Record<string, string | null> = {};
+    for (const [key, value] of Object.entries(dto)) {
+      if (value === undefined) continue;
+      data[key] = value.trim() === '' ? null : value.trim();
+    }
+
+    await this.prisma.emsOnboardingRecord.update({
+      where: { id: recordId },
+      data: { ...data, status: 'DRAFT', validationErrors: undefined },
+    });
+
+    return this.validateOnboardingBatch(organizationId, record.batchId);
+  }
+
+  async excludeOnboardingRecord(
+    organizationId: string,
+    recordId: string,
+    dto: ExcludeOnboardingRecordDto,
+  ) {
+    const record = await this.prisma.emsOnboardingRecord.findFirst({
+      where: { id: recordId, organizationId },
+      select: { id: true, batchId: true, status: true },
+    });
+    if (!record) throw new NotFoundException('Onboarding record not found');
+    if (record.status === 'REGISTERED') {
+      throw new BadRequestException('This record has already been registered');
+    }
+
+    await this.prisma.emsOnboardingRecord.update({
+      where: { id: recordId },
+      data: {
+        status: 'EXCLUDED',
+        exclusionReason: dto.reason?.trim() || null,
+        validationErrors: undefined,
+      },
+    });
+
+    return this.validateOnboardingBatch(organizationId, record.batchId);
+  }
+
+  async includeOnboardingRecord(organizationId: string, recordId: string) {
+    const record = await this.prisma.emsOnboardingRecord.findFirst({
+      where: { id: recordId, organizationId },
+      select: { id: true, batchId: true, status: true },
+    });
+    if (!record) throw new NotFoundException('Onboarding record not found');
+    if (record.status !== 'EXCLUDED') {
+      throw new BadRequestException('Only excluded records can be restored');
+    }
+
+    await this.prisma.emsOnboardingRecord.update({
+      where: { id: recordId },
+      data: { status: 'DRAFT', exclusionReason: null },
+    });
+
+    return this.validateOnboardingBatch(organizationId, record.batchId);
   }
 }

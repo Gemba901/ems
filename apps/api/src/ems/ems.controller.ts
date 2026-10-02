@@ -15,7 +15,8 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
 import { Post } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
-import { AddOnboardingRecordsDto, CreateOnboardingBatchDto } from './dto/onboarding.dto';
+import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, 
+  UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -113,5 +114,37 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.validateOnboardingBatch(user.organizationId, id);
+  }
+
+    /** PATCH /ems/onboarding/records/:id — correct a record's fields */
+  @Patch('onboarding/records/:id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async updateOnboardingRecord(
+    @Param('id') id: string,
+    @Body() dto: UpdateOnboardingRecordDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.updateOnboardingRecord(user.organizationId, id, dto);
+  }
+
+  /** PATCH /ems/onboarding/records/:id/exclude — leave this row out */
+  @Patch('onboarding/records/:id/exclude')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async excludeOnboardingRecord(
+    @Param('id') id: string,
+    @Body() dto: ExcludeOnboardingRecordDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.excludeOnboardingRecord(user.organizationId, id, dto);
+  }
+
+  /** PATCH /ems/onboarding/records/:id/include — undo an exclusion */
+  @Patch('onboarding/records/:id/include')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async includeOnboardingRecord(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.includeOnboardingRecord(user.organizationId, id);
   }
 }

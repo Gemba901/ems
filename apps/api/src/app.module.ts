@@ -1,3 +1,5 @@
+import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
+import { APP_FILTER } from '@nestjs/core';
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -25,6 +27,7 @@ import { KaizenModule } from './kaizen/kaizen.module';
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -55,6 +58,10 @@ import { KaizenModule } from './kaizen/kaizen.module';
     KaizenModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // No custom catch-all filter on this branch: report unexpected errors here.
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
+  ],
 })
 export class AppModule {}

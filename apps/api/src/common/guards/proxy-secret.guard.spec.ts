@@ -90,6 +90,7 @@ describe('Proxy secret route coverage', () => {
         .map(name => `${controller.name}.${name}`);
     });
 
-    expect(exempt).toEqual(['AppController.getHello']);
+    expect(exempt).toEqual(['AppController.health']);
+
   });
 });

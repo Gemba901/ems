@@ -1,3 +1,4 @@
+import { SentryModule } from '@sentry/nestjs/setup';
 import { OperationsModule } from './operations/operations.module';
 import { OnboardingModule } from "./onboarding/onboarding.module";
 import { Module } from '@nestjs/common';
@@ -32,6 +33,7 @@ import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),

@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 import withPWA from "next-pwa";
 
@@ -40,4 +41,12 @@ const pwaConfig = withPWA({
   runtimeCaching: [{ urlPattern: /\/api\//, handler: "NetworkOnly" }],
 });
 
-export default pwaConfig(nextConfig);
+export default withSentryConfig(pwaConfig(nextConfig), {
+  org: "gemba-pms",
+  project: "gemba-web",
+  // Only present in Vercel builds; without it the source map upload is skipped.
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  // Send browser events via this app so ad blockers don't drop them.
+  tunnelRoute: "/monitoring",
+});

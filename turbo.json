@@ -6,7 +6,9 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "generated/**"],
-      "env": ["DOCKER_BUILD", "NEXT_PUBLIC_API_URL", "PORT", "DATABASE_URL", "JWT_SECRET"]
+      "env": ["DOCKER_BUILD", "NEXT_PUBLIC_API_URL", "PORT", "DATABASE_URL", "JWT_SECRET",
+              "NEXT_PUBLIC_SENTRY_DSN", "NEXT_PUBLIC_SENTRY_ENVIRONMENT"],
+      "passThroughEnv": ["SENTRY_AUTH_TOKEN", "CI"]
     },
     "lint": {
       "dependsOn": ["^lint"]

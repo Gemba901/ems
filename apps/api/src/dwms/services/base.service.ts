@@ -192,7 +192,7 @@ export abstract class DwmsBaseService {
   protected normalizeDashboardDays(rawDays?: string) {
     const days = Number(rawDays);
     if (!Number.isFinite(days)) return 7;
-    return Math.min(90, Math.max(1, Math.trunc(days)));
+    return Math.min(365, Math.max(1, Math.trunc(days)));
   }
 
   protected async listReporteesRecursive(

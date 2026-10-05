@@ -29,12 +29,20 @@ import {
   resolveEmployeePerformanceDestination,
 } from '../utils/employeePerformanceAccess';
 
-type GraphRange = '7d' | '1m' | '3m';
+type GraphRange = '7d' | '1m' | '3m' | '1y' | 'all';
 
-const graphRangeOptions: Array<{ value: GraphRange; label: string; days: number; metricLabel: string }> = [
-  { value: '7d', label: 'Last 7 days', days: 7, metricLabel: 'Tasks Performed Last 7 Days' },
-  { value: '1m', label: 'Last 30 days', days: 30, metricLabel: 'Tasks Performed Last 30 Days' },
-  { value: '3m', label: 'Last 90 days', days: 90, metricLabel: 'Tasks Performed Last 90 Days' },
+const graphRangeOptions: Array<{
+  value: GraphRange;
+  label: string;
+  days: number | 'all';
+  metricLabel: string;
+  timelineLabel: string;
+}> = [
+  { value: '7d', label: 'Last 7 days', days: 7, metricLabel: 'Tasks Performed Last 7 Days', timelineLabel: '7-day timeline' },
+  { value: '1m', label: 'Last 30 days', days: 30, metricLabel: 'Tasks Performed Last 30 Days', timelineLabel: '30-day timeline' },
+  { value: '3m', label: 'Last 90 days', days: 90, metricLabel: 'Tasks Performed Last 90 Days', timelineLabel: '90-day timeline' },
+  { value: '1y', label: 'Last 1 year', days: 365, metricLabel: 'Tasks Performed Last 1 Year', timelineLabel: '1-year timeline' },
+  { value: 'all', label: 'All time', days: 'all', metricLabel: 'Tasks Performed All Time', timelineLabel: 'All-time timeline' },
 ];
 
 const fixedTrendGraphs = [
@@ -46,8 +54,12 @@ const fixedTrendGraphs = [
   { value: 'abnormalitiesCount', label: 'Abnormalities', suffix: '', tooltipLabel: 'Abnormalities' },
 ] as const;
 
-function filterTrendByRange(trendData: DwmsDashboardTrendPoint[], days: number) {
+function filterTrendByRange(
+  trendData: DwmsDashboardTrendPoint[],
+  days: number | 'all',
+) {
   if (!trendData || trendData.length === 0) return [];
+  if (days === 'all') return trendData;
 
   const pointsWithDates = trendData
     .map((point) => ({ point, date: point?.date?.slice(0, 10) ?? null }))
@@ -451,21 +463,18 @@ function DashboardPage() {
               {/* 1. Period controls and KPI summary */}
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className="text-xs font-semibold text-muted-app">Period:</span>
-                <div className="inline-flex rounded-xl border border-border-app bg-white p-1 shadow-sm">
-                  {graphRangeOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setGraphRange(option.value)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        graphRange === option.value
-                          ? 'bg-[#52618a] text-white'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                <div className="w-44">
+                  <DwmsSelectDropdown
+                    value={graphRange}
+                    options={graphRangeOptions.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                    onChange={(value) => setGraphRange(value as GraphRange)}
+                    placeholder="Select period"
+                    ariaLabel="Dashboard period"
+                    triggerClassName="h-10 rounded-xl border-border-app bg-white px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-accent-app"
+                  />
                 </div>
               </div>
 
@@ -495,23 +504,31 @@ function DashboardPage() {
                   </p>
                 </div>
                 <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-2">
-                  {fixedTrendGraphs.map((graph) => (
-                    <div key={graph.value} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-                      <div className="mb-3 border-b border-border-app pb-2">
-                        <h3 className="font-semibold text-text-app">{graph.label}</h3>
-                        <p className="text-xs text-muted-app">{selectedGraphRange.days}-day timeline</p>
+                  {fixedTrendGraphs.map((graph) => {
+                    const graphTrendData = graph.suffix === '%'
+                      ? filteredCompletionTrends.filter(
+                        (point) => point[graph.value] !== null && point[graph.value] !== undefined,
+                      )
+                      : filteredCompletionTrends;
+
+                    return (
+                      <div key={graph.value} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+                        <div className="mb-3 border-b border-border-app pb-2">
+                          <h3 className="font-semibold text-text-app">{graph.label}</h3>
+                          <p className="text-xs text-muted-app">{selectedGraphRange.timelineLabel}</p>
+                        </div>
+                        <SVGLineChart
+                          trendData={graphTrendData}
+                          valueKey={graph.value}
+                          ySuffix={graph.suffix}
+                          tooltipLabel={graph.tooltipLabel}
+                          height={160}
+                          variant="line"
+                          showTaskTotals={graph.value === 'completionRate'}
+                        />
                       </div>
-                      <SVGLineChart
-                        trendData={filteredCompletionTrends}
-                        valueKey={graph.value}
-                        ySuffix={graph.suffix}
-                        tooltipLabel={graph.tooltipLabel}
-                        height={160}
-                        variant="line"
-                        showTaskTotals={graph.value === 'completionRate'}
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
 

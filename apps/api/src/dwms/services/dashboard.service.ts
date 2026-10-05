@@ -5,9 +5,11 @@ import {
   addUtcDays,
   endOfDayInTimeZone,
   getOrganizationDateRange,
+  getUtcDateInTimeZone,
   startOfDayInTimeZone,
   toIsoDate,
 } from '../utils/taskSchedule';
+import { getKenyaPublicHolidays } from '../../calendar/kenya-holidays';
 import { calculateDoneTaskMetrics } from '../utils/taskMetrics';
 import {
   completedStatuses,
@@ -43,6 +45,35 @@ const TASK_BREAKDOWN_LABELS: Record<TaskBreakdownStatus, string> = {
 };
 
 export abstract class DwmsDashboardService extends DwmsAlertsService {
+  private async resolveDashboardDays(
+    organizationId: string,
+    timeZone: string,
+    rawDays?: string,
+  ) {
+    if (rawDays?.trim().toLowerCase() !== 'all') {
+      return this.normalizeDashboardDays(rawDays);
+    }
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { createdAt: true },
+    });
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const firstDay = getUtcDateInTimeZone(organization.createdAt, timeZone);
+    const today = getUtcDateInTimeZone(new Date(), timeZone);
+    return (
+      Math.max(
+        0,
+        Math.round(
+          (today.getTime() - firstDay.getTime()) / (24 * 60 * 60 * 1000),
+        ),
+      ) + 1
+    );
+  }
+
   // Dashboard calculations
   async getOverviewStats(user: UserPayload, rawDays?: string) {
     await this.getEmployee(user.userId, user.organizationId);
@@ -50,8 +81,12 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     if (access.analyticsViewLevel !== ViewLevel.ORGANIZATION) {
       throw new ForbiddenException('Organization analytics access is required');
     }
-    const days = this.normalizeDashboardDays(rawDays);
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const days = await this.resolveDashboardDays(
+      user.organizationId,
+      timeZone,
+      rawDays,
+    );
 
     const members = await this.prisma.employee.findMany({
       where: { organizationId: user.organizationId },
@@ -142,16 +177,30 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     deptId: string,
     rawDays?: string,
   ) {
-    const currentEmployee = await this.getEmployee(user.userId, user.organizationId);
+    const currentEmployee = await this.getEmployee(
+      user.userId,
+      user.organizationId,
+    );
     const access = await this.getDwmsAccessCapabilities(user);
-    if (!this.viewLevelAtLeast(access.analyticsViewLevel, ViewLevel.DEPARTMENT)) {
+    if (
+      !this.viewLevelAtLeast(access.analyticsViewLevel, ViewLevel.DEPARTMENT)
+    ) {
       throw new ForbiddenException('Department analytics access is required');
     }
-    if (access.analyticsViewLevel === ViewLevel.DEPARTMENT && currentEmployee.departmentId !== deptId) {
-      throw new ForbiddenException('You can only view analytics for your department');
+    if (
+      access.analyticsViewLevel === ViewLevel.DEPARTMENT &&
+      currentEmployee.departmentId !== deptId
+    ) {
+      throw new ForbiddenException(
+        'You can only view analytics for your department',
+      );
     }
-    const days = this.normalizeDashboardDays(rawDays);
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const days = await this.resolveDashboardDays(
+      user.organizationId,
+      timeZone,
+      rawDays,
+    );
 
     const members = await this.prisma.employee.findMany({
       where: { departmentId: deptId, organizationId: user.organizationId },
@@ -202,9 +251,16 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     employeeId: string,
     rawDays?: string,
   ) {
-    const currentEmployee = await this.getEmployee(user.userId, user.organizationId);
-    const days = this.normalizeDashboardDays(rawDays);
+    const currentEmployee = await this.getEmployee(
+      user.userId,
+      user.organizationId,
+    );
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const days = await this.resolveDashboardDays(
+      user.organizationId,
+      timeZone,
+      rawDays,
+    );
 
     const employee = await this.prisma.employee.findFirst({
       where: {
@@ -395,7 +451,9 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
               percentage:
                 total === 0
                   ? 0
-                  : Number(((counts[category][status] / total) * 100).toFixed(1)),
+                  : Number(
+                      ((counts[category][status] / total) * 100).toFixed(1),
+                    ),
             })),
           },
         ];
@@ -420,10 +478,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       // (including task alerts) and alerts raised directly to the department.
       return {
         organizationId: orgId,
-        OR: [
-          { againstUser: { departmentId } },
-          { departmentId },
-        ],
+        OR: [{ againstUser: { departmentId } }, { departmentId }],
       };
     }
 
@@ -461,6 +516,36 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     return occurrences.filter(
       (occurrence) => occurrence.alert.againstUserId !== null,
     );
+  }
+
+  private splitAlertOccurrencesBySequence<
+    T extends { id: string; alertId: string; raisedAt: Date },
+  >(occurrences: T[]) {
+    const occurrencesByAlert = new Map<string, T[]>();
+
+    occurrences.forEach((occurrence) => {
+      const existing = occurrencesByAlert.get(occurrence.alertId) ?? [];
+      existing.push(occurrence);
+      occurrencesByAlert.set(occurrence.alertId, existing);
+    });
+
+    const alerts: T[] = [];
+    const abnormalities: T[] = [];
+
+    occurrencesByAlert.forEach((alertOccurrences) => {
+      alertOccurrences
+        .sort(
+          (a, b) =>
+            a.raisedAt.getTime() - b.raisedAt.getTime() ||
+            a.id.localeCompare(b.id),
+        )
+        .forEach((occurrence, index) => {
+          if (index < 2) alerts.push(occurrence);
+          else abnormalities.push(occurrence);
+        });
+    });
+
+    return { alerts, abnormalities };
   }
 
   private async getPerformanceMetrics(
@@ -604,12 +689,16 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       },
       select: { completedAt: true, dueAt: true },
     });
-    const completedOnTimeRate = completedAssignedInstances.length === 0
-      ? null
-      : Math.round(
-        (completedAssignedInstances.filter((task) => task.completedAt! <= task.dueAt).length
-          / completedAssignedInstances.length) * 100,
-      );
+    const completedOnTimeRate =
+      completedAssignedInstances.length === 0
+        ? null
+        : Math.round(
+            (completedAssignedInstances.filter(
+              (task) => task.completedAt! <= task.dueAt,
+            ).length /
+              completedAssignedInstances.length) *
+              100,
+          );
 
     // Alert occurrences for this scope. Every raise is counted, even after acknowledgment.
     const alertScopeWhere = this.getAlertPerformanceScope(
@@ -620,15 +709,16 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     );
     const alertOccurrences = await this.prisma.alertOccurrence.findMany({
       where: {
-        raisedAt: { gte: instantStart, lte: instantEnd },
+        raisedAt: { lte: instantEnd },
         alert: alertScopeWhere,
       },
       select: {
+        id: true,
+        alertId: true,
         raisedAt: true,
         acknowledgedAt: true,
         alert: {
           select: {
-            isAbnormality: true,
             departmentId: true,
             againstUserId: true,
             taskInstanceId: true,
@@ -640,12 +730,15 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     // organization targets are reported separately below.
     const employeeTargetOccurrences =
       this.employeeTargetOccurrences(alertOccurrences);
-    const alertRows = employeeTargetOccurrences.filter(
-      (occurrence) => !occurrence.alert.isAbnormality,
+    const classifiedEmployeeOccurrences = this.splitAlertOccurrencesBySequence(
+      employeeTargetOccurrences,
     );
-    const abnormalityRows = employeeTargetOccurrences.filter(
-      (occurrence) => occurrence.alert.isAbnormality,
-    );
+    const isInReportRange = (occurrence: { raisedAt: Date }) =>
+      occurrence.raisedAt >= instantStart && occurrence.raisedAt <= instantEnd;
+    const alertRows =
+      classifiedEmployeeOccurrences.alerts.filter(isInReportRange);
+    const abnormalityRows =
+      classifiedEmployeeOccurrences.abnormalities.filter(isInReportRange);
     const alertsCount = alertRows.length;
     const acknowledgedAlertsCount = alertRows.filter(
       (occurrence) => occurrence.acknowledgedAt !== null,
@@ -724,7 +817,8 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     });
 
     const completedTaskOnlyRows = taskOnlyRows.filter(
-      (task) => completedStatuses.has(task.status) && task.assignedById !== null,
+      (task) =>
+        completedStatuses.has(task.status) && task.assignedById !== null,
     );
     let avgCloseTimeMin = 0;
     const closeDurations = [
@@ -787,6 +881,32 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         (scheduleEnd.getTime() - scheduleStart.getTime()) /
           (24 * 60 * 60 * 1000),
       ) + 1;
+    const leaveSettingsDelegate = this.prisma.leaveSettings as unknown as {
+      findUnique(args: {
+        where: { organizationId: string };
+        select: { workingDays: true };
+      }): Promise<{ workingDays: number[] } | null>;
+    };
+    const leaveSettings = await leaveSettingsDelegate.findUnique({
+      where: { organizationId: orgId },
+      select: { workingDays: true },
+    });
+    const configuredWorkingDays = leaveSettings?.workingDays ?? [];
+    const workingDays = new Set(
+      configuredWorkingDays.length > 0
+        ? configuredWorkingDays
+        : [1, 2, 3, 4, 5],
+    );
+    const holidayDates = new Set<string>();
+    for (
+      let year = scheduleStart.getUTCFullYear();
+      year <= scheduleEnd.getUTCFullYear();
+      year += 1
+    ) {
+      for (const holiday of getKenyaPublicHolidays(year)) {
+        holidayDates.add(holiday.date);
+      }
+    }
 
     let userIds: string[] = [];
     if (entityType === 'employee') {
@@ -835,17 +955,20 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const allAlerts = await this.prisma.alertOccurrence.findMany({
       where: alertsWhere,
       select: {
+        id: true,
+        alertId: true,
         raisedAt: true,
         acknowledgedAt: true,
         alert: {
           select: {
-            isAbnormality: true,
             againstUserId: true,
           },
         },
       },
     });
     const employeeTargetAlerts = this.employeeTargetOccurrences(allAlerts);
+    const classifiedEmployeeAlerts =
+      this.splitAlertOccurrencesBySequence(employeeTargetAlerts);
 
     const allTasks = await this.prisma.task.findMany({
       where: {
@@ -873,8 +996,8 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     const tasksPerformedToday: Array<{
       date: string;
       label: string;
-      value: number;
-      completionRate: number;
+      value: number | null;
+      completionRate: number | null;
       completed: number;
       total: number;
       allTasks: number;
@@ -884,13 +1007,16 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       alertsCount: number;
       completedOnTimeRate: number;
       avgAcknowledgeTimeMin: number;
-      goodPracticeCompletionRate: number;
-      jobResponsibilityCompletionRate: number;
-      assignedTaskCompletionRate: number;
+      goodPracticeCompletionRate: number | null;
+      jobResponsibilityCompletionRate: number | null;
+      assignedTaskCompletionRate: number | null;
       abnormalitiesCount: number;
     }> = [];
-    const pendingAlertAcknowledgments: Array<{ date: string; label: string; value: number }> =
-      [];
+    const pendingAlertAcknowledgments: Array<{
+      date: string;
+      label: string;
+      value: number;
+    }> = [];
     const timeToAcknowledge: Array<{
       date: string;
       label: string;
@@ -915,44 +1041,50 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       });
       const date = toIsoDate(scheduleDay);
 
+      if (!workingDays.has(scheduleDay.getUTCDay()) || holidayDates.has(date)) {
+        continue;
+      }
+
       const dayInsts = allInstances.filter(
         (inst) => inst.scheduledFor.getTime() === scheduleDay.getTime(),
       );
       const completionMetrics = calculateDoneTaskMetrics(dayInsts);
       const totalInsts = completionMetrics.total;
       const completedInsts = completionMetrics.completed;
-      const tasksVal = completionMetrics.percentage;
+      const tasksVal =
+        completionMetrics.total > 0 ? completionMetrics.percentage : null;
       const categoryCompletionRates = Object.fromEntries(
         (Object.values(DWMS_TASK_CATEGORIES) as DwmsTaskCategory[]).map(
-          (category) => [
-            category,
-            calculateDoneTaskMetrics(
+          (category) => {
+            const metrics = calculateDoneTaskMetrics(
               dayInsts.filter(
-                (instance) =>
-                  resolveTaskCategory(instance.task) === category,
+                (instance) => resolveTaskCategory(instance.task) === category,
               ),
-            ).percentage,
-          ],
+            );
+            return [category, metrics.total > 0 ? metrics.percentage : null];
+          },
         ),
-      ) as Record<DwmsTaskCategory, number>;
+      ) as Record<DwmsTaskCategory, number | null>;
       const overdueDayTasks = dayInsts.filter(
         (task) => !completedStatuses.has(task.status) && task.dueAt < now,
       ).length;
       const completedOnTime = dayInsts.filter(
-        (task) => task.status === TaskStatus.DONE && task.completedAt && task.completedAt <= task.dueAt,
+        (task) =>
+          task.status === TaskStatus.DONE &&
+          task.completedAt &&
+          task.completedAt <= task.dueAt,
       );
-      const completedOnTimeRate = completedInsts === 0
-        ? 0
-        : Math.round((completedOnTime.length / completedInsts) * 100);
-      const dayAlertsCount = employeeTargetAlerts.filter(
+      const completedOnTimeRate =
+        completedInsts === 0
+          ? 0
+          : Math.round((completedOnTime.length / completedInsts) * 100);
+      const dayAlertsCount = classifiedEmployeeAlerts.alerts.filter(
         (alert) => alert.raisedAt >= dayStart && alert.raisedAt <= dayEnd,
-      ).filter((alert) => !alert.alert.isAbnormality).length;
-      const dayAbnormalitiesCount = employeeTargetAlerts.filter(
-        (alert) =>
-          alert.raisedAt >= dayStart &&
-          alert.raisedAt <= dayEnd &&
-          alert.alert.isAbnormality,
       ).length;
+      const dayAbnormalitiesCount =
+        classifiedEmployeeAlerts.abnormalities.filter(
+          (alert) => alert.raisedAt >= dayStart && alert.raisedAt <= dayEnd,
+        ).length;
       tasksPerformedToday.push({
         date,
         label,
@@ -967,12 +1099,10 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         alertsCount: dayAlertsCount,
         completedOnTimeRate,
         avgAcknowledgeTimeMin: 0,
-        goodPracticeCompletionRate:
-          categoryCompletionRates.GOOD_PRACTICE,
+        goodPracticeCompletionRate: categoryCompletionRates.GOOD_PRACTICE,
         jobResponsibilityCompletionRate:
           categoryCompletionRates.JOB_RESPONSIBILITY,
-        assignedTaskCompletionRate:
-          categoryCompletionRates.ASSIGNED_TASK,
+        assignedTaskCompletionRate: categoryCompletionRates.ASSIGNED_TASK,
         abnormalitiesCount: dayAbnormalitiesCount,
       });
 
@@ -981,7 +1111,11 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
           a.raisedAt <= dayEnd &&
           (a.acknowledgedAt === null || a.acknowledgedAt >= dayStart),
       );
-      pendingAlertAcknowledgments.push({ date, label, value: activeAlerts.length });
+      pendingAlertAcknowledgments.push({
+        date,
+        label,
+        value: activeAlerts.length,
+      });
 
       const monthTasks = allTasks.filter(
         (t) =>
@@ -1009,7 +1143,9 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         value: ackVal,
         avgAcknowledgeTimeMin: ackVal,
       });
-      tasksPerformedToday[tasksPerformedToday.length - 1].avgAcknowledgeTimeMin = ackVal;
+      tasksPerformedToday[
+        tasksPerformedToday.length - 1
+      ].avgAcknowledgeTimeMin = ackVal;
 
       const monthCompletedInsts = allInstances.filter(
         (inst) =>

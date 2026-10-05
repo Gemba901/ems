@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Download,
   FileSpreadsheet,
@@ -17,7 +18,6 @@ import {
   type DwmsDepartmentOption,
   type DwmsFrequency,
   type IngestActivityRowPayload,
-  type PreviewActivitiesResponse,
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 import DwmsSelectDropdown from "../DwmsSelectDropdown";
@@ -108,10 +108,6 @@ function downloadTextFile(fileName: string, content: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-function failedRowsFileName(fileName: string) {
-  const baseName = fileName.replace(/\.[^.]+$/, "") || "activity-import";
-  return `${baseName}-failed-rows.csv`;
-}
 function parseDelimited(text: string) {
   const rows: string[][] = [];
   let current = "";
@@ -229,21 +225,57 @@ const ACTIVITY_TEMPLATE_CSV = rowsToCsv([
     "NA",
   ],
   [
-    "Department", "Production", "DEP-001", "Shift handover", "Complete the handover checklist",
-    "DAILY", "0.25", "Signed handover", "Escalate open issues", "Handover sheet", "NA", "Shop floor", "NA",
+    "Department",
+    "Production",
+    "DEP-001",
+    "Shift handover",
+    "Complete the handover checklist",
+    "DAILY",
+    "0.25",
+    "Signed handover",
+    "Escalate open issues",
+    "Handover sheet",
+    "NA",
+    "Shop floor",
+    "NA",
   ],
   [
-    "Job Title", "Shift Supervisor", "JOB-001", "Team review", "Review team output and blockers",
-    "WEEKLY", "1", "Review notes", "Record actions", "NA", "NA", "Operations", "NA",
+    "Job Title",
+    "Shift Supervisor",
+    "JOB-001",
+    "Team review",
+    "Review team output and blockers",
+    "WEEKLY",
+    "1",
+    "Review notes",
+    "Record actions",
+    "NA",
+    "NA",
+    "Operations",
+    "NA",
   ],
   [
-    "Employee", "EMP-001", "EMP-ACT-001", "Machine inspection", "Inspect the assigned machine",
-    "DAILY", "0.5", "Inspection recorded", "Use the approved checklist", "Inspection checklist", "Line 1", "Maintenance", "NA",
+    "Employee",
+    "EMP-001",
+    "EMP-ACT-001",
+    "Machine inspection",
+    "Inspect the assigned machine",
+    "DAILY",
+    "0.5",
+    "Inspection recorded",
+    "Use the approved checklist",
+    "Inspection checklist",
+    "Line 1",
+    "Maintenance",
+    "NA",
   ],
 ]);
 
 function parseScope(value: string): ActivityScope | undefined {
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, " ");
   if (normalized === "organisation") return ActivityScope.ORGANISATION;
   if (normalized === "department") return ActivityScope.DEPARTMENT;
   if (normalized === "job title") return ActivityScope.JOB_TITLE;
@@ -280,16 +312,9 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [failedRowsCsv, setFailedRowsCsv] = useState<{
-    fileName: string;
-    content: string;
-  } | null>(null);
-  const [pendingImport, setPendingImport] = useState<{
-    fileName: string;
-    payloads: IngestActivityRowPayload[];
-    parsedRows: ParsedActivityRow[];
-    preview: PreviewActivitiesResponse;
-  } | null>(null);
+  const [queuedIngestionId, setQueuedIngestionId] = useState<string | null>(
+    null,
+  );
   const canManageActivities = [
     "MANAGEMENT",
     "SUPER_ADMIN",
@@ -379,9 +404,10 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
       name: firstValue(row, PROCESS_NAME_HEADERS),
       workMethod: firstValue(row, DESCRIPTION_HEADERS),
       code: firstValue(row, ["Activity Code", "Code"]),
-      completionDeadline: parseEstimatedHours(
-        firstValue(row, ["Estimated Time (Hours)", "Estimated Time"]),
-      ) ?? Number.NaN,
+      completionDeadline:
+        parseEstimatedHours(
+          firstValue(row, ["Estimated Time (Hours)", "Estimated Time"]),
+        ) ?? Number.NaN,
       frequency: rawFrequency,
       completionOutput: firstValue(row, ["Expected Output"]),
       scope: scope as ActivityScope,
@@ -408,7 +434,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
     if (!accessToken) return;
     setImporting(true);
     setMessage(null);
-    setFailedRowsCsv(null);
+    setQueuedIngestionId(null);
     try {
       const sheets = await parseActivitySheets(file);
       if (sheets.length === 0) {
@@ -460,83 +486,20 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
       const payloads = parsedRows.map(({ row, rowNumber }) =>
         rowToIngestPayload(row, rowNumber),
       );
-      const preview = await DwmsService.previewActivityIngestion(
+      const result = await DwmsService.ingestActivities(
         accessToken,
         payloads,
         file.name,
       );
-      setPendingImport({ fileName: file.name, payloads, parsedRows, preview });
+      setQueuedIngestionId(result.ingestion?.id ?? null);
       setMessage(
-        `Preview ready: ${preview.valid} valid, ${preview.failed} failed. Confirm to import valid rows.`,
+        result.ingestion?.id
+          ? `Queued ${payloads.length} activity rows for background import.`
+          : result.message,
       );
     } catch (error) {
-      setMessage(getDwmsErrorMessage(error, "Failed to preview activities"));
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  async function confirmImport() {
-    if (!accessToken || !pendingImport) return;
-    setImporting(true);
-    setMessage(null);
-    try {
-      const result = await DwmsService.ingestActivities(
-        accessToken,
-        pendingImport.payloads,
-        pendingImport.fileName,
-      );
-      const failures = result.results.filter((row) => !row.success);
-      const rowByNumber = new Map(
-        pendingImport.parsedRows.map((row) => [row.rowNumber, row]),
-      );
-      if (failures.length > 0) {
-        const failureByRowNumber = new Map(
-          failures.map((failure) => [failure.rowNumber, failure.message]),
-        );
-        const failedCsvRows = [
-          ["Sheet", "Row", "Import Error", "Original Row Values"],
-          ...failures.map((failure) => {
-            const original = rowByNumber.get(failure.rowNumber);
-            return [
-              original?.sheetName ?? "",
-              String(original?.sourceRowNumber ?? failure.rowNumber),
-              failureByRowNumber.get(failure.rowNumber) ?? failure.message,
-              original
-                ? original.headers
-                    .map(
-                      (header, columnIndex) =>
-                        `${header}: ${original.values[columnIndex] ?? ""}`,
-                    )
-                    .join(" | ")
-                : "",
-            ];
-          }),
-        ];
-        setFailedRowsCsv({
-          fileName: failedRowsFileName(pendingImport.fileName),
-          content: rowsToCsv(failedCsvRows),
-        });
-      }
-      const failureSummary = failures
-        .slice(0, 3)
-        .map((row) => {
-          const original = rowByNumber.get(row.rowNumber);
-          const location = original
-            ? `${original.sheetName} row ${original.sourceRowNumber}`
-            : `Row ${row.rowNumber}`;
-          return `${location}: ${row.message}`;
-        })
-        .join(" ");
-      setMessage(
-        failures.length > 0
-          ? `Imported ${result.created} activities. ${result.failed} rows failed. ${failureSummary}`
-          : `Imported ${result.created} activities successfully.`,
-      );
-      setPendingImport(null);
-      onCreated?.();
-    } catch (error) {
-      setMessage(getDwmsErrorMessage(error, "Failed to import activities"));
+      setQueuedIngestionId(null);
+      setMessage(getDwmsErrorMessage(error, "Failed to queue activities"));
     } finally {
       setImporting(false);
     }
@@ -555,24 +518,16 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         >
           {message && (
             <div
-              className={`space-y-3 rounded-xl border p-4 text-xs ${message.includes("success") || message.includes("Imported") || message.includes("Preview ready") ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}
+              className={`space-y-3 rounded-xl border p-4 text-xs ${queuedIngestionId || message.includes("success") ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}
             >
               <p>{message}</p>
-              {failedRowsCsv && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadTextFile(
-                      failedRowsCsv.fileName,
-                      failedRowsCsv.content,
-                      "text/csv;charset=utf-8",
-                    )
-                  }
-                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50"
+              {queuedIngestionId && (
+                <Link
+                  href={`/dwms/activities/ingestions/${queuedIngestionId}`}
+                  className="inline-flex rounded-lg border border-emerald-200 bg-white px-3 py-2 font-semibold text-emerald-700 hover:bg-emerald-50"
                 >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>Download failed rows</span>
-                </button>
+                  View ingestion status
+                </Link>
               )}
             </div>
           )}
@@ -692,23 +647,23 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               onChange={(value) => setField("evidenceRequired", value)}
             />
             {form.scope === ActivityScope.EMPLOYEE && (
-            <label className="block md:col-span-2">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
-                Parent Activity
-              </span>
-              <DwmsSelectDropdown
-                value={form.parentActivityIds?.[0] ?? ""}
-                options={parentActivityOptions}
-                placeholder="Select prerequisite activity"
-                searchEnabled
-                allowClear
-                emptyMessage="No same-frequency activities found."
-                onChange={(value) =>
-                  setField("parentActivityIds", value ? [value] : [])
-                }
-                triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-              />
-            </label>
+              <label className="block md:col-span-2">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                  Parent Activity
+                </span>
+                <DwmsSelectDropdown
+                  value={form.parentActivityIds?.[0] ?? ""}
+                  options={parentActivityOptions}
+                  placeholder="Select prerequisite activity"
+                  searchEnabled
+                  allowClear
+                  emptyMessage="No same-frequency activities found."
+                  onChange={(value) =>
+                    setField("parentActivityIds", value ? [value] : [])
+                  }
+                  triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                />
+              </label>
             )}
           </div>
 
@@ -786,51 +741,13 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               }}
             />
           </label>
-          {pendingImport && (
-            <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800">
-              <p className="font-bold">Import preview</p>
-              <p>
-                {pendingImport.preview.valid} valid rows · {pendingImport.preview.failed} failed rows
-              </p>
-              <p>
-                {pendingImport.preview.results.reduce(
-                  (total, row) => total + row.matchedEmployees,
-                  0,
-                )} employee assignments matched
-              </p>
-              {pendingImport.preview.results
-                .filter((row) => !row.valid)
-                .slice(0, 3)
-                .map((row) => (
-                  <p key={row.rowNumber}>Row {row.rowNumber}: {row.message}</p>
-                ))}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={importing || pendingImport.preview.valid === 0}
-                  onClick={() => void confirmImport()}
-                  className="rounded-lg bg-blue-600 px-3 py-2 font-semibold text-white disabled:opacity-50"
-                >
-                  Confirm import
-                </button>
-                <button
-                  type="button"
-                  disabled={importing}
-                  onClick={() => setPendingImport(null)}
-                  className="rounded-lg border border-blue-200 bg-white px-3 py-2 font-semibold"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-600">
             <div>
               <p className="font-bold text-slate-700">Workbook import</p>
               <p>
                 XLSX and XLS imports read every worksheet in the workbook. Each
-                worksheet should have its own header row; sheets without activity
-                headers are skipped.
+                worksheet should have its own header row; sheets without
+                activity headers are skipped.
               </p>
             </div>
             <div>
@@ -963,6 +880,3 @@ function SelectField({
     </label>
   );
 }
-
-
-

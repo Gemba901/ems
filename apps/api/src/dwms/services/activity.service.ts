@@ -28,6 +28,7 @@ import {
   getUtcDateInTimeZone,
   parseDateOnly,
 } from '../utils/taskSchedule';
+import { randomUUID } from 'node:crypto';
 
 function assertSupportedActivityFrequency(
   frequency: TaskFrequency | null | undefined,
@@ -113,11 +114,11 @@ export abstract class DwmsActivityService extends DwmsTaskService {
   private serializeActivity(activity: any) {
     const scopeTarget =
       activity.scope === ActivityScope.DEPARTMENT
-        ? activity.scopeDepartment?.name ?? null
+        ? (activity.scopeDepartment?.name ?? null)
         : activity.scope === ActivityScope.JOB_TITLE
-          ? activity.scopeJobTitleLabel ?? activity.scopeJobTitle ?? null
+          ? (activity.scopeJobTitleLabel ?? activity.scopeJobTitle ?? null)
           : activity.scope === ActivityScope.EMPLOYEE
-            ? activity.scopeEmployee?.employeeCode ?? null
+            ? (activity.scopeEmployee?.employeeCode ?? null)
             : null;
     return {
       ...activity,
@@ -156,6 +157,37 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       role === 'HR' ||
       role === 'HOD'
     );
+  }
+
+  private canEditActivityContent(roleLevel: string) {
+    const role = String(roleLevel).toUpperCase().trim();
+    return (
+      role === 'SUPER_ADMIN' ||
+      role === 'ADMIN' ||
+      role === 'MANAGEMENT' ||
+      role === 'HR'
+    );
+  }
+
+  private formatActivityTaskDescription(activity: {
+    workMethod?: string | null;
+    purpose?: string | null;
+    startTrigger?: string | null;
+    completionOutput?: string | null;
+    remarks?: string | null;
+  }) {
+    return [
+      ['Description / SOP', activity.workMethod],
+      ['Purpose', activity.purpose],
+      ['Start trigger', activity.startTrigger],
+      ['Expected output', activity.completionOutput],
+      ['Remarks', activity.remarks],
+    ]
+      .filter((section): section is [string, string] =>
+        Boolean(section[1]?.trim()),
+      )
+      .map(([label, value]) => `${label}:\n${value.trim()}`)
+      .join('\n\n');
   }
 
   private normalizeActivityStatus(status?: string | null) {
@@ -257,6 +289,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     return cleaned || 'Failed to ingest activity row';
   }
 
+  private isActivityIngestionRowError(error: unknown) {
+    return error instanceof BadRequestException;
+  }
+
   private async generateActivityCode(organizationId: string) {
     const count = await this.prisma.activity.count({
       where: { organizationId },
@@ -284,7 +320,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     return this.generateActivityCode(organizationId);
   }
 
-  private parseActivityDate(value: string | null | undefined, timeZone: string) {
+  private parseActivityDate(
+    value: string | null | undefined,
+    timeZone: string,
+  ) {
     const raw = value?.trim();
     if (!raw) {
       return getUtcDateInTimeZone(new Date(), timeZone);
@@ -318,7 +357,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
 
   private async validateActivityReferences(
     organizationId: string,
-    dto: CreateActivityDto | UpdateActivityDto,
+    dto: CreateActivityDto,
   ) {
     if (dto.mainDepartmentId) {
       const department = await this.prisma.department.findFirst({
@@ -459,26 +498,39 @@ export abstract class DwmsActivityService extends DwmsTaskService {
   }
 
   private isBlankImportValue(value?: string | null) {
-    const normalized = String(value ?? '').trim().toLowerCase();
+    const normalized = String(value ?? '')
+      .trim()
+      .toLowerCase();
     return !normalized || normalized === 'na' || normalized === 'n/a';
   }
 
   private assertScopedActivityPayload(dto: CreateActivityDto) {
-    if (!dto.code?.trim()) throw new BadRequestException('Activity Code is required');
-    if (!dto.name?.trim()) throw new BadRequestException('Process Name is required');
+    if (!dto.code?.trim())
+      throw new BadRequestException('Activity Code is required');
+    if (!dto.name?.trim())
+      throw new BadRequestException('Process Name is required');
     if (!dto.workMethod?.trim()) {
       throw new BadRequestException('Description / SOP is required');
     }
-    if (dto.completionDeadline === undefined || dto.completionDeadline === null) {
+    if (
+      dto.completionDeadline === undefined ||
+      dto.completionDeadline === null
+    ) {
       throw new BadRequestException('Estimated Time (Hours) is required');
     }
-    if (!Number.isFinite(Number(dto.completionDeadline)) || Number(dto.completionDeadline) < 0) {
-      throw new BadRequestException('Estimated Time (Hours) must be a non-negative number');
+    if (
+      !Number.isFinite(Number(dto.completionDeadline)) ||
+      Number(dto.completionDeadline) < 0
+    ) {
+      throw new BadRequestException(
+        'Estimated Time (Hours) must be a non-negative number',
+      );
     }
     if (!dto.completionOutput?.trim()) {
       throw new BadRequestException('Expected Output is required');
     }
-    if (!dto.remarks?.trim()) throw new BadRequestException('Remarks are required');
+    if (!dto.remarks?.trim())
+      throw new BadRequestException('Remarks are required');
     if (!dto.scope || !Object.values(ActivityScope).includes(dto.scope)) {
       throw new BadRequestException(
         'Scope of Activity must be Organisation, Department, Job Title, or Employee',
@@ -539,7 +591,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     const target = this.isBlankImportValue(rawTarget) ? '' : rawTarget!.trim();
     if (scope === ActivityScope.ORGANISATION) {
       if (target) {
-        throw new BadRequestException('Target must be blank or NA for Organisation scope');
+        throw new BadRequestException(
+          'Target must be blank or NA for Organisation scope',
+        );
       }
       const recipients = await this.prisma.employee.findMany({
         where: { organizationId, employmentStatus: EmploymentStatus.ACTIVE },
@@ -549,7 +603,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       return { recipients, scopeData: {}, targetLabel: null };
     }
 
-    if (!target) throw new BadRequestException('Target is required for this activity scope');
+    if (!target)
+      throw new BadRequestException(
+        'Target is required for this activity scope',
+      );
 
     if (scope === ActivityScope.DEPARTMENT) {
       const departments = await this.prisma.department.findMany({
@@ -557,11 +614,14 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         select: { id: true, name: true },
       });
       const matches = departments.filter(
-        (department) => department.name.trim().toLowerCase() === target.toLowerCase(),
+        (department) =>
+          department.name.trim().toLowerCase() === target.toLowerCase(),
       );
       if (matches.length !== 1) {
         throw new BadRequestException(
-          matches.length ? `Department "${target}" is ambiguous` : `Department "${target}" was not found`,
+          matches.length
+            ? `Department "${target}" is ambiguous`
+            : `Department "${target}" was not found`,
         );
       }
       const department = matches[0];
@@ -594,7 +654,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       });
       return {
         recipients: employees.filter(
-          (employee) => this.normalizeJobTitle(employee.jobTitle) === normalizedTitle,
+          (employee) =>
+            this.normalizeJobTitle(employee.jobTitle) === normalizedTitle,
         ),
         scopeData: {
           scopeJobTitle: normalizedTitle,
@@ -620,7 +681,11 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     const now = new Date();
     const assignment = await this.prisma.employeeActivityAssignment.upsert({
       where: { employeeId_activityId: { employeeId, activityId: activity.id } },
-      update: { status: EmployeeActivityStatus.ACTIVE, activatedAt: now, deactivatedAt: null },
+      update: {
+        status: EmployeeActivityStatus.ACTIVE,
+        activatedAt: now,
+        deactivatedAt: null,
+      },
       create: {
         organizationId: user.organizationId,
         employeeId,
@@ -634,7 +699,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       select: { id: true },
     });
     if (existingTask) {
-      await this.prisma.task.update({ where: { id: existingTask.id }, data: { isActive: true } });
+      await this.prisma.task.update({
+        where: { id: existingTask.id },
+        data: { isActive: true },
+      });
       await this.generateUpcomingInstancesForTaskId(
         existingTask.id,
         user.organizationId,
@@ -800,7 +868,11 @@ export abstract class DwmsActivityService extends DwmsTaskService {
   async createActivity(
     user: UserPayload,
     dto: CreateActivityDto,
-    options: { assignScope?: boolean; notifyAssignees?: boolean } = {
+    options: {
+      assignScope?: boolean;
+      notifyAssignees?: boolean;
+      activityId?: string;
+    } = {
       assignScope: true,
       notifyAssignees: true,
     },
@@ -842,35 +914,47 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         user.organizationId,
         dto.code,
       );
-      const activity = await this.prisma.activity.create({
-        data: {
-          organizationId: user.organizationId,
-          companyUnitName: organization?.name ?? null,
-          mainDepartmentId: dto.mainDepartmentId ?? null,
-          subDepartment: dto.subDepartment ?? null,
-          gembaSection: dto.gembaSection ?? null,
-          processArea: dto.processArea ?? null,
-          name: dto.name,
-          workMethod: dto.workMethod,
-          code,
-          completionDeadline:
-            dto.completionDeadline !== undefined
-              ? String(dto.completionDeadline)
-              : null,
-          purpose: dto.purpose ?? null,
-          frequency: dto.frequency,
-          completionOutput: dto.completionOutput ?? null,
-          primaryResponsibleDesignation:
-            dto.primaryResponsibleDesignation ?? null,
-          evidenceRequired: dto.evidenceRequired ?? null,
-          effectiveFrom: this.parseActivityDate(undefined, timeZone),
-          status: ACTIVE_ACTIVITY_STATUS,
-          remarks: dto.remarks ?? null,
-          scope: dto.scope,
-          ...resolvedScope.scopeData,
-        },
-        include: ACTIVITY_INCLUDE,
-      });
+      const resumedActivity = options.activityId
+        ? await this.prisma.activity.findFirst({
+            where: {
+              id: options.activityId,
+              organizationId: user.organizationId,
+            },
+            include: ACTIVITY_INCLUDE,
+          })
+        : null;
+      const activity =
+        resumedActivity ??
+        (await this.prisma.activity.create({
+          data: {
+            ...(options.activityId ? { id: options.activityId } : {}),
+            organizationId: user.organizationId,
+            companyUnitName: organization?.name ?? null,
+            mainDepartmentId: dto.mainDepartmentId ?? null,
+            subDepartment: dto.subDepartment ?? null,
+            gembaSection: dto.gembaSection ?? null,
+            processArea: dto.processArea ?? null,
+            name: dto.name,
+            workMethod: dto.workMethod,
+            code,
+            completionDeadline:
+              dto.completionDeadline !== undefined
+                ? String(dto.completionDeadline)
+                : null,
+            purpose: dto.purpose ?? null,
+            frequency: dto.frequency,
+            completionOutput: dto.completionOutput ?? null,
+            primaryResponsibleDesignation:
+              dto.primaryResponsibleDesignation ?? null,
+            evidenceRequired: dto.evidenceRequired ?? null,
+            effectiveFrom: this.parseActivityDate(undefined, timeZone),
+            status: ACTIVE_ACTIVITY_STATUS,
+            remarks: dto.remarks ?? null,
+            scope: dto.scope,
+            ...resolvedScope.scopeData,
+          },
+          include: ACTIVITY_INCLUDE,
+        }));
 
       await this.replaceParentActivities(
         user.organizationId,
@@ -896,8 +980,12 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             if (activated.taskId) taskIds.push(activated.taskId);
           }
         } catch (assignmentError) {
-          await this.prisma.task.deleteMany({ where: { activityId: activity.id } }).catch(() => undefined);
-          await this.prisma.activity.delete({ where: { id: activity.id } }).catch(() => undefined);
+          await this.prisma.task
+            .deleteMany({ where: { activityId: activity.id } })
+            .catch(() => undefined);
+          await this.prisma.activity
+            .delete({ where: { id: activity.id } })
+            .catch(() => undefined);
           throw assignmentError;
         }
       }
@@ -939,6 +1027,18 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       totalRows: ingestion.totalRows,
       successfulRows: ingestion.successfulRows,
       failedRows: ingestion.failedRows,
+      attempts: ingestion.attempts,
+      availableAt:
+        ingestion.availableAt?.toISOString?.() ?? ingestion.availableAt ?? null,
+      startedAt:
+        ingestion.startedAt?.toISOString?.() ?? ingestion.startedAt ?? null,
+      failedAt:
+        ingestion.failedAt?.toISOString?.() ?? ingestion.failedAt ?? null,
+      failureMessage: ingestion.failureMessage
+        ? this.cleanActivityIngestionError({
+            message: ingestion.failureMessage,
+          })
+        : null,
       createdAt: ingestion.createdAt?.toISOString?.() ?? ingestion.createdAt,
       completedAt:
         ingestion.completedAt?.toISOString?.() ?? ingestion.completedAt ?? null,
@@ -956,15 +1056,16 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     return {
       id: row.id,
       rowNumber: row.rowNumber,
-      status: row.status,
+      status: row.status === 'AWAITING_PARENT' ? 'PROCESSING' : row.status,
       activityName: row.activityName,
       activityCode: row.activityCode,
+      parentActivityCode: row.parentActivityCode,
+      sourcePayload: row.status === 'FAILED' ? row.payload : undefined,
       responsibleEmployeeCode: row.responsibleEmployeeCode,
       scope: row.scope,
       scopeTarget: row.scopeTarget,
       assignedCount: row.assignedCount,
-      responsibleJobRole:
-        row.activity?.primaryResponsibleDesignation ?? null,
+      responsibleJobRole: row.activity?.primaryResponsibleDesignation ?? null,
       message: row.message
         ? this.cleanActivityIngestionError({ message: row.message })
         : row.message,
@@ -1042,9 +1143,13 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       );
     }
     const rows = Array.isArray(dto.rows) ? dto.rows : [];
-    if (!rows.length) throw new BadRequestException('No activity rows supplied for ingestion');
+    if (!rows.length)
+      throw new BadRequestException('No activity rows supplied for ingestion');
 
-    const submittedByCode = new Map<string, IngestActivitiesDto['rows'][number]>();
+    const submittedByCode = new Map<
+      string,
+      IngestActivitiesDto['rows'][number]
+    >();
     for (const row of rows) {
       const code = row.activity?.code?.trim().toLowerCase();
       if (code && !submittedByCode.has(code)) submittedByCode.set(code, row);
@@ -1069,14 +1174,19 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         this.assertScopedActivityPayload(row.activity);
         const normalizedCode = code!.toLowerCase();
         if (seenCodes.has(normalizedCode)) {
-          throw new BadRequestException(`Duplicate Activity Code "${code}" in this file`);
+          throw new BadRequestException(
+            `Duplicate Activity Code "${code}" in this file`,
+          );
         }
         seenCodes.add(normalizedCode);
         const existing = await this.prisma.activity.findFirst({
           where: { organizationId: user.organizationId, code },
           select: { id: true },
         });
-        if (existing) throw new BadRequestException(`Activity Code "${code}" already exists`);
+        if (existing)
+          throw new BadRequestException(
+            `Activity Code "${code}" already exists`,
+          );
 
         const resolved = await this.resolveActivityScope(
           user.organizationId,
@@ -1094,15 +1204,23 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           const existingParent = submittedParent
             ? null
             : await this.prisma.activity.findFirst({
-                where: { organizationId: user.organizationId, code: parentCode },
+                where: {
+                  organizationId: user.organizationId,
+                  code: parentCode,
+                },
                 select: { frequency: true },
               });
-          const parentFrequency = submittedParent?.activity.frequency ?? existingParent?.frequency;
+          const parentFrequency =
+            submittedParent?.activity.frequency ?? existingParent?.frequency;
           if (!parentFrequency) {
-            throw new BadRequestException(`Parent Activity Code "${parentCode}" was not found`);
+            throw new BadRequestException(
+              `Parent Activity Code "${parentCode}" was not found`,
+            );
           }
           if (parentFrequency !== row.activity.frequency) {
-            throw new BadRequestException('Parent activity must have the same frequency');
+            throw new BadRequestException(
+              'Parent activity must have the same frequency',
+            );
           }
         }
         results.push({
@@ -1129,7 +1247,12 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       }
     }
     const valid = results.filter((row) => row.valid).length;
-    return { count: results.length, valid, failed: results.length - valid, results };
+    return {
+      count: results.length,
+      valid,
+      failed: results.length - valid,
+      results,
+    };
   }
 
   async ingestActivities(user: UserPayload, dto: IngestActivitiesDto) {
@@ -1144,196 +1267,199 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     if (rows.length === 0) {
       throw new BadRequestException('No activity rows supplied for ingestion');
     }
+    const rowNumbers = rows.map((row, index) => row.rowNumber ?? index + 2);
+    if (new Set(rowNumbers).size !== rowNumbers.length) {
+      throw new BadRequestException('Activity row numbers must be unique');
+    }
 
-    const ingestion = await this.prisma.activityIngestion.create({
-      data: {
-        organizationId: user.organizationId,
-        uploadedById: employee.id,
-        fileName: dto.fileName?.trim() || 'Activity Sheet',
-        status: 'PROCESSING',
-        totalRows: rows.length,
-        successfulRows: 0,
-        failedRows: 0,
-      },
+    const ingestion = await this.prisma.$transaction(async (tx) => {
+      const queued = await tx.activityIngestion.create({
+        data: {
+          organizationId: user.organizationId,
+          uploadedById: employee.id,
+          requestedByUserId: user.userId,
+          requestedRoleLevel: user.roleLevel,
+          fileName: dto.fileName?.trim() || 'Activity Sheet',
+          status: 'QUEUED',
+          totalRows: rows.length,
+        },
+      });
+      await tx.activityIngestionRow.createMany({
+        data: rows.map((row, index) => {
+          const scope = row.activity?.scope ?? null;
+          const scopeTarget = row.activity?.scopeTarget?.trim() || null;
+          const parentActivityCode = this.isBlankImportValue(
+            row.parentActivityCode,
+          )
+            ? null
+            : row.parentActivityCode!.trim();
+          return {
+            ingestionId: queued.id,
+            organizationId: user.organizationId,
+            rowNumber: rowNumbers[index],
+            status: 'QUEUED',
+            payload: row as any,
+            targetActivityId: randomUUID(),
+            parentActivityCode,
+            activityName: row.activity?.name ?? null,
+            activityCode: row.activity?.code ?? null,
+            responsibleEmployeeCode:
+              scope === ActivityScope.EMPLOYEE ? scopeTarget : null,
+            scope,
+            scopeTarget,
+          };
+        }),
+      });
+      return tx.activityIngestion.findUniqueOrThrow({
+        where: { id: queued.id },
+        include: {
+          uploadedBy: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+        },
+      });
     });
 
-    const results: Array<{
-      rowNumber: number;
-      success: boolean;
-      activityId?: string;
-      taskId?: string;
-      responsibleEmployeeId?: string;
-      assignedCount?: number;
-      message: string;
-    }> = [];
-    const rowRecords: Array<{
-      organizationId: string;
-      ingestionId: string;
-      rowNumber: number;
-      status: string;
-      activityName?: string | null;
-      activityCode?: string | null;
-      responsibleEmployeeCode?: string | null;
-      scope?: ActivityScope | null;
-      scopeTarget?: string | null;
-      assignedCount?: number;
-      message?: string | null;
-      activityId?: string | null;
-      taskId?: string | null;
-    }> = [];
-    const successfulImports: Array<{
-      rowNumber: number;
-      resultIndex: number;
-      rowRecordIndex: number;
-      activityId: string;
-      activityCode: string | null;
-      activityName: string | null;
-      frequency: TaskFrequency;
-      parentActivityCode: string | null;
-      assignedCount: number;
-      assignmentMessage: string;
-      assignedEmployeeIds: string[];
-    }> = [];
+    return {
+      message: `Queued ${rows.length} activity rows for import`,
+      ingestion: this.serializeActivityIngestion(ingestion),
+    };
+  }
 
-    for (let index = 0; index < rows.length; index += 1) {
-      const row = rows[index];
-      const rowNumber = row.rowNumber ?? index + 2;
-      const activityName = row.activity?.name ?? null;
-      const activityCode = row.activity?.code ?? null;
-      const scope = row.activity?.scope ?? null;
-      const scopeTarget = row.activity?.scopeTarget?.trim() || null;
-      const responsibleEmployeeCode =
-        scope === ActivityScope.EMPLOYEE ? scopeTarget : null;
-      const parentActivityCode = this.isBlankImportValue(row.parentActivityCode)
-        ? null
-        : row.parentActivityCode!.trim();
+  private async refreshActivityIngestionProgress(ingestionId: string) {
+    const [successfulRows, failedRows] = await Promise.all([
+      this.prisma.activityIngestionRow.count({
+        where: { ingestionId, status: 'CREATED' },
+      }),
+      this.prisma.activityIngestionRow.count({
+        where: { ingestionId, status: 'FAILED' },
+      }),
+    ]);
+    await this.prisma.activityIngestion.update({
+      where: { id: ingestionId },
+      data: { successfulRows, failedRows },
+    });
+    return { successfulRows, failedRows };
+  }
+
+  async processQueuedActivityIngestion(ingestionId: string, leaseId: string) {
+    const ingestion = await this.prisma.activityIngestion.findFirst({
+      where: { id: ingestionId, leaseId, status: 'PROCESSING' },
+      include: { rows: { orderBy: { rowNumber: 'asc' } } },
+    });
+    if (!ingestion) throw new Error('Activity ingestion lease was lost');
+    if (!ingestion.requestedByUserId || !ingestion.requestedRoleLevel) {
+      throw new Error('Activity ingestion requester context is unavailable');
+    }
+    const user: UserPayload = {
+      userId: ingestion.requestedByUserId,
+      organizationId: ingestion.organizationId,
+      roleLevel: ingestion.requestedRoleLevel,
+    };
+
+    for (const queuedRow of ingestion.rows) {
+      if (!['QUEUED', 'PROCESSING'].includes(queuedRow.status)) continue;
+      const row = queuedRow.payload as
+        | IngestActivitiesDto['rows'][number]
+        | null;
+      if (!row || !queuedRow.targetActivityId) {
+        await this.prisma.activityIngestionRow.update({
+          where: { id: queuedRow.id },
+          data: {
+            status: 'FAILED',
+            message: 'The queued row payload is unavailable.',
+          },
+        });
+        continue;
+      }
+      await this.prisma.activityIngestionRow.update({
+        where: { id: queuedRow.id },
+        data: { status: 'PROCESSING' },
+      });
       try {
         const activityPayload = this.stripActivityPersonReferences(
           row.activity,
         );
         activityPayload.parentActivityIds = undefined;
         this.assertScopedActivityPayload(activityPayload);
-        if (parentActivityCode && activityPayload.scope !== ActivityScope.EMPLOYEE) {
+        if (
+          queuedRow.parentActivityCode &&
+          activityPayload.scope !== ActivityScope.EMPLOYEE
+        ) {
           throw new BadRequestException(
             'Parent Activity Code is supported only for Employee scope',
           );
         }
-
         const created = await this.createActivity(user, activityPayload, {
           notifyAssignees: false,
+          activityId: queuedRow.targetActivityId,
         });
-        const activityId = created.activity?.id;
-        if (!activityId) {
+        if (!created.activity?.id) {
           throw new BadRequestException('Activity could not be created');
         }
-
-        try {
-          const taskId = created.taskIds?.[0];
-          const assignedCount = created.assignedCount ?? 0;
-          const assignmentMessage = `Activity scoped to ${String(scope).replaceAll('_', ' ').toLowerCase()}${scopeTarget ? ` "${scopeTarget}"` : ''}; assigned to ${assignedCount} ${assignedCount === 1 ? 'employee' : 'employees'}`;
-          const resultIndex = results.length;
-          results.push({
-            rowNumber,
-            success: true,
-            activityId,
-            taskId,
-            responsibleEmployeeId:
-              assignedCount === 1 ? created.assignedEmployeeIds?.[0] : undefined,
+        const assignedCount = created.assignedCount ?? 0;
+        const scopeTarget =
+          created.activity.scopeTarget ?? queuedRow.scopeTarget;
+        const assignmentMessage = `Activity scoped to ${String(queuedRow.scope).replaceAll('_', ' ').toLowerCase()}${scopeTarget ? ` "${scopeTarget}"` : ''}; assigned to ${assignedCount} ${assignedCount === 1 ? 'employee' : 'employees'}`;
+        await this.prisma.activityIngestionRow.update({
+          where: { id: queuedRow.id },
+          data: {
+            status: 'AWAITING_PARENT',
+            activityId: created.activity.id,
+            activityCode: created.activity.code ?? queuedRow.activityCode,
+            scopeTarget,
             assignedCount,
-            message: parentActivityCode
+            taskId: created.taskIds?.[0] ?? null,
+            message: queuedRow.parentActivityCode
               ? `${assignmentMessage}; parent activity pending link`
               : assignmentMessage,
-          });
-          const rowRecordIndex = rowRecords.length;
-          rowRecords.push({
-            organizationId: user.organizationId,
-            ingestionId: ingestion.id,
-            rowNumber,
-            status: 'CREATED',
-            activityName,
-            activityCode: created.activity?.code ?? activityCode,
-            responsibleEmployeeCode,
-            scope,
-            scopeTarget: created.activity?.scopeTarget ?? scopeTarget,
-            assignedCount,
-            message: parentActivityCode
-              ? `${assignmentMessage}; parent activity pending link`
-              : assignmentMessage,
-            activityId,
-            taskId,
-          });
-          successfulImports.push({
-            rowNumber,
-            resultIndex,
-            rowRecordIndex,
-            activityId,
-            activityCode: created.activity?.code ?? activityCode,
-            activityName,
-            frequency: activityPayload.frequency,
-            parentActivityCode,
-            assignedCount,
-            assignmentMessage,
-            assignedEmployeeIds: created.assignedEmployeeIds ?? [],
-          });
-        } catch (taskError) {
-          await this.prisma.task
-            .deleteMany({ where: { activityId } })
-            .catch(() => undefined);
-          await this.prisma.activity
-            .delete({ where: { id: activityId } })
-            .catch(() => undefined);
-          throw taskError;
-        }
-      } catch (error: any) {
-        const message = this.cleanActivityIngestionError(error);
-        results.push({ rowNumber, success: false, message });
-        rowRecords.push({
-          organizationId: user.organizationId,
-          ingestionId: ingestion.id,
-          rowNumber,
-          status: 'FAILED',
-          activityName,
-          activityCode,
-          responsibleEmployeeCode,
-          scope,
-          scopeTarget,
-          assignedCount: 0,
-          message,
+          },
+        });
+      } catch (error) {
+        if (!this.isActivityIngestionRowError(error)) throw error;
+        await this.prisma.activityIngestionRow.update({
+          where: { id: queuedRow.id },
+          data: {
+            status: 'FAILED',
+            assignedCount: 0,
+            activityId: null,
+            taskId: null,
+            message: this.cleanActivityIngestionError(error),
+          },
         });
       }
+      await this.refreshActivityIngestionProgress(ingestionId);
     }
 
-    const createdActivityByCode = new Map<
-      string,
-      { id: string; name: string | null; frequency: TaskFrequency }
-    >();
-    for (const item of successfulImports) {
-      const code = item.activityCode?.trim().toLowerCase();
-      if (!code) continue;
-      createdActivityByCode.set(code, {
-        id: item.activityId,
-        name: item.activityName,
-        frequency: item.frequency,
-      });
-    }
-
+    const pendingParents = await this.prisma.activityIngestionRow.findMany({
+      where: { ingestionId, status: 'AWAITING_PARENT' },
+      orderBy: { rowNumber: 'asc' },
+    });
+    const createdActivityIdByCode = new Map(
+      pendingParents
+        .filter((row) => row.activityId && row.activityCode)
+        .map((row) => [
+          row.activityCode!.trim().toLowerCase(),
+          row.activityId!,
+        ]),
+    );
     const parentCodes = Array.from(
       new Set(
-        successfulImports
-          .map((item) => item.parentActivityCode?.trim())
+        pendingParents
+          .map((row) => row.parentActivityCode?.trim())
           .filter((code): code is string => !!code),
       ),
     );
     const externalParentCodes = parentCodes.filter(
-      (code) => !createdActivityByCode.has(code.toLowerCase()),
+      (code) => !createdActivityIdByCode.has(code.toLowerCase()),
     );
     const existingParents = externalParentCodes.length
       ? await this.prisma.activity.findMany({
           where: {
-            organizationId: user.organizationId,
+            organizationId: ingestion.organizationId,
             code: { in: externalParentCodes },
           },
-          select: { id: true, name: true, code: true, frequency: true },
+          select: { id: true, code: true, frequency: true },
         })
       : [];
     const existingParentByCode = new Map(
@@ -1343,109 +1469,129 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       ]),
     );
 
-    for (const item of successfulImports) {
-      const parentCode = item.parentActivityCode?.trim();
-      if (!parentCode) continue;
-
+    for (const rowRecord of pendingParents) {
+      if (!rowRecord.activityId) continue;
       try {
-        const parent =
-          createdActivityByCode.get(parentCode.toLowerCase()) ??
-          existingParentByCode.get(parentCode.toLowerCase());
-        if (!parent) {
-          throw new BadRequestException(
-            `Parent Activity Code "${parentCode}" was not found`,
+        if (rowRecord.parentActivityCode) {
+          const parentActivityId =
+            createdActivityIdByCode.get(
+              rowRecord.parentActivityCode.toLowerCase(),
+            ) ??
+            existingParentByCode.get(
+              rowRecord.parentActivityCode.toLowerCase(),
+            )?.id;
+          if (!parentActivityId) {
+            throw new BadRequestException(
+              `Parent Activity Code "${rowRecord.parentActivityCode}" was not found`,
+            );
+          }
+          const activityPayload = rowRecord.payload as
+            | IngestActivitiesDto['rows'][number]
+            | null;
+          const parentActivityIds = await this.validateParentActivities(
+            ingestion.organizationId,
+            activityPayload!.activity.frequency,
+            [parentActivityId],
+            rowRecord.activityId,
+          );
+          await this.replaceParentActivities(
+            ingestion.organizationId,
+            rowRecord.activityId,
+            parentActivityIds,
           );
         }
-
-        const parentActivityIds = await this.validateParentActivities(
-          user.organizationId,
-          item.frequency,
-          [parent.id],
-          item.activityId,
-        );
-        await this.replaceParentActivities(
-          user.organizationId,
-          item.activityId,
-          parentActivityIds,
-        );
-
-        const message = `${item.assignmentMessage} and parent activity linked`;
-        results[item.resultIndex].message = message;
-        rowRecords[item.rowRecordIndex].message = message;
-      } catch (error: any) {
+        await this.prisma.activityIngestionRow.update({
+          where: { id: rowRecord.id },
+          data: {
+            status: 'CREATED',
+            message: rowRecord.parentActivityCode
+              ? `${rowRecord.message?.replace('; parent activity pending link', '')} and parent activity linked`
+              : rowRecord.message,
+          },
+        });
+      } catch (error) {
+        if (!this.isActivityIngestionRowError(error)) throw error;
         await this.prisma.task
-          .deleteMany({ where: { activityId: item.activityId } })
+          .deleteMany({ where: { activityId: rowRecord.activityId } })
           .catch(() => undefined);
         await this.prisma.activity
-          .delete({ where: { id: item.activityId } })
+          .delete({ where: { id: rowRecord.activityId } })
           .catch(() => undefined);
-        const message = this.cleanActivityIngestionError(error);
-        results[item.resultIndex].success = false;
-        results[item.resultIndex].message = message;
-        results[item.resultIndex].activityId = undefined;
-        results[item.resultIndex].taskId = undefined;
-        rowRecords[item.rowRecordIndex].status = 'FAILED';
-        rowRecords[item.rowRecordIndex].message = message;
-        rowRecords[item.rowRecordIndex].activityId = null;
-        rowRecords[item.rowRecordIndex].taskId = null;
+        await this.prisma.activityIngestionRow.update({
+          where: { id: rowRecord.id },
+          data: {
+            status: 'FAILED',
+            activityId: null,
+            taskId: null,
+            assignedCount: 0,
+            message: this.cleanActivityIngestionError(error),
+          },
+        });
       }
+      await this.refreshActivityIngestionProgress(ingestionId);
     }
 
-    if (rowRecords.length > 0) {
-      await this.prisma.activityIngestionRow.createMany({ data: rowRecords });
-    }
-
-    const created = results.filter((result) => result.success).length;
-    const updatedIngestion = await this.prisma.activityIngestion.update({
-      where: { id: ingestion.id },
-      data: {
-        status: 'COMPLETED',
-        successfulRows: created,
-        failedRows: results.length - created,
-        completedAt: new Date(),
-      },
-      include: {
-        uploadedBy: {
-          select: { id: true, firstName: true, lastName: true, email: true },
-        },
-      },
+    const successfulRows = await this.prisma.activityIngestionRow.findMany({
+      where: { ingestionId, status: 'CREATED', activityId: { not: null } },
+      select: { activityId: true },
     });
-
+    const assignments = successfulRows.length
+      ? await this.prisma.employeeActivityAssignment.findMany({
+          where: {
+            activityId: {
+              in: successfulRows.map((row) => row.activityId!),
+            },
+            status: EmployeeActivityStatus.ACTIVE,
+          },
+          select: { employeeId: true },
+        })
+      : [];
     const activityCountByEmployee = new Map<string, number>();
-    for (const item of successfulImports) {
-      if (!results[item.resultIndex]?.success) continue;
-      for (const employeeId of item.assignedEmployeeIds) {
-        activityCountByEmployee.set(
-          employeeId,
-          (activityCountByEmployee.get(employeeId) ?? 0) + 1,
-        );
-      }
+    for (const assignment of assignments) {
+      activityCountByEmployee.set(
+        assignment.employeeId,
+        (activityCountByEmployee.get(assignment.employeeId) ?? 0) + 1,
+      );
     }
-    await this.notifications.createMany(
-      Array.from(activityCountByEmployee, ([employeeId, count]) => ({
+    const assignmentNotifications = Array.from(
+      activityCountByEmployee,
+      ([employeeId, count]) => ({
         employeeId,
         type: NotificationType.INFO,
         module: 'DWMS',
         title: 'DWMS activities updated',
         message: `${count} ${count === 1 ? 'activity has' : 'activities have'} been added to your DWMS profile.`,
         actionUrl: '/dwms/tasks',
-      })),
+      }),
     );
 
-    return {
-      message: `Imported ${created} of ${results.length} activity rows`,
-      ingestion: this.serializeActivityIngestion(updatedIngestion),
-      count: results.length,
-      created,
-      failed: results.length - created,
-      results,
-    };
+    const progress = await this.refreshActivityIngestionProgress(ingestionId);
+    const completed = await this.prisma.activityIngestion.updateMany({
+      where: { id: ingestionId, leaseId, status: 'PROCESSING' },
+      data: {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        failedAt: null,
+        failureMessage: null,
+        leaseId: null,
+        leaseUntil: null,
+      },
+    });
+    if (completed.count !== 1)
+      throw new Error('Activity ingestion lease was lost');
+    await this.notifications
+      .createMany(assignmentNotifications)
+      .catch(() => undefined);
+    return progress;
   }
 
   private activityMatchesEmployee(activity: any, employee: any) {
     if (activity.scope === ActivityScope.ORGANISATION) return true;
     if (activity.scope === ActivityScope.DEPARTMENT) {
-      return !!employee.departmentId && activity.scopeDepartmentId === employee.departmentId;
+      return (
+        !!employee.departmentId &&
+        activity.scopeDepartmentId === employee.departmentId
+      );
     }
     if (activity.scope === ActivityScope.JOB_TITLE) {
       return (
@@ -1481,9 +1627,15 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       });
     }
     if (jobTitle) {
-      scopeFilters.push({ scope: ActivityScope.JOB_TITLE, scopeJobTitle: jobTitle });
+      scopeFilters.push({
+        scope: ActivityScope.JOB_TITLE,
+        scopeJobTitle: jobTitle,
+      });
     }
-    scopeFilters.push({ scope: ActivityScope.EMPLOYEE, scopeEmployeeId: employee.id });
+    scopeFilters.push({
+      scope: ActivityScope.EMPLOYEE,
+      scopeEmployeeId: employee.id,
+    });
 
     const [applicableActivities, assignments] = await Promise.all([
       this.prisma.activity.findMany({
@@ -1504,12 +1656,15 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       assignments.map((assignment) => [assignment.activityId, assignment]),
     );
     const activityById = new Map<string, any>();
-    for (const activity of applicableActivities) activityById.set(activity.id, activity);
+    for (const activity of applicableActivities)
+      activityById.set(activity.id, activity);
     for (const assignment of assignments) {
       activityById.set(assignment.activityId, assignment.activity);
     }
     const activities = Array.from(activityById.values())
-      .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code))
+      .sort(
+        (a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code),
+      )
       .map((activity) =>
         this.serializeEmployeeRoleActivity(activity, assignmentByActivityId),
       );
@@ -1548,9 +1703,10 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     if (!employee) throw new NotFoundException('Employee not found');
     if (!activity) throw new NotFoundException('Activity not found');
 
-    const existingAssignment = await this.prisma.employeeActivityAssignment.findUnique({
-      where: { employeeId_activityId: { employeeId, activityId } },
-    });
+    const existingAssignment =
+      await this.prisma.employeeActivityAssignment.findUnique({
+        where: { employeeId_activityId: { employeeId, activityId } },
+      });
     if (
       dto.status === EmployeeActivityStatus.ACTIVE &&
       (activity.status !== ActivityStatus.ACTIVE ||
@@ -1562,7 +1718,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       );
     }
     if (dto.status === EmployeeActivityStatus.INACTIVE && !existingAssignment) {
-      throw new BadRequestException('Employee activity assignment was not found');
+      throw new BadRequestException(
+        'Employee activity assignment was not found',
+      );
     }
 
     let assignment;
@@ -1650,7 +1808,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       for (const activity of activities) {
         if (!this.activityMatchesEmployee(activity, employee)) continue;
         await this.prisma.employeeActivityAssignment.upsert({
-          where: { employeeId_activityId: { employeeId, activityId: activity.id } },
+          where: {
+            employeeId_activityId: { employeeId, activityId: activity.id },
+          },
           update: {},
           create: {
             organizationId,
@@ -1671,7 +1831,11 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       for (const activity of activities) {
         if (activity.status !== ActivityStatus.ACTIVE) continue;
         if (this.activityMatchesEmployee(activity, employee)) {
-          await this.activateActivityForEmployee(systemUser, activity, employeeId);
+          await this.activateActivityForEmployee(
+            systemUser,
+            activity,
+            employeeId,
+          );
         }
       }
       return;
@@ -1689,14 +1853,29 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           : employee.jobTitle,
     };
     for (const activity of activities) {
-      const matchedBefore = this.activityMatchesEmployee(activity, previousEmployee);
+      const matchedBefore = this.activityMatchesEmployee(
+        activity,
+        previousEmployee,
+      );
       const matchesNow =
         activity.status === ActivityStatus.ACTIVE &&
         this.activityMatchesEmployee(activity, employee);
       if (!matchedBefore && matchesNow) {
-        await this.activateActivityForEmployee(systemUser, activity, employeeId);
-      } else if (matchedBefore && !matchesNow && assignmentByActivityId.has(activity.id)) {
-        await this.deactivateActivityForEmployee(organizationId, employeeId, activity.id);
+        await this.activateActivityForEmployee(
+          systemUser,
+          activity,
+          employeeId,
+        );
+      } else if (
+        matchedBefore &&
+        !matchesNow &&
+        assignmentByActivityId.has(activity.id)
+      ) {
+        await this.deactivateActivityForEmployee(
+          organizationId,
+          employeeId,
+          activity.id,
+        );
       }
     }
   }
@@ -1707,81 +1886,97 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     dto: UpdateActivityDto,
   ) {
     await this.getEmployee(user.userId, user.organizationId);
-    if (!this.canManageActivities(user.roleLevel)) {
+    if (!this.canEditActivityContent(user.roleLevel)) {
       throw new ForbiddenException(
-        'Only management, admin, HR, HOD, and super admin users can update activities',
+        'Only management, admin, HR, and super admin users can edit activity content',
       );
     }
-    await this.validateActivityReferences(user.organizationId, dto);
-    assertSupportedActivityFrequency(dto.frequency);
 
     const existing = await this.prisma.activity.findFirst({
       where: { id: activityId, organizationId: user.organizationId },
-      select: { id: true, frequency: true },
+      include: ACTIVITY_INCLUDE,
     });
     if (!existing) throw new NotFoundException('Activity not found');
+    if (existing.status === ARCHIVED_ACTIVITY_STATUS) {
+      throw new BadRequestException('Archived activities cannot be edited');
+    }
 
-    const parentActivityIds = await this.validateParentActivities(
-      user.organizationId,
-      dto.frequency ?? existing.frequency,
-      dto.parentActivityId ? [dto.parentActivityId] : dto.parentActivityIds,
-      activityId,
+    const content = {
+      workMethod:
+        dto.workMethod !== undefined
+          ? dto.workMethod.trim()
+          : existing.workMethod,
+      purpose:
+        dto.purpose !== undefined ? dto.purpose.trim() || null : existing.purpose,
+      startTrigger:
+        dto.startTrigger !== undefined
+          ? dto.startTrigger.trim() || null
+          : existing.startTrigger,
+      completionOutput:
+        dto.completionOutput !== undefined
+          ? dto.completionOutput.trim()
+          : existing.completionOutput,
+      evidenceRequired:
+        dto.evidenceRequired !== undefined
+          ? dto.evidenceRequired.trim() || null
+          : existing.evidenceRequired,
+      remarks:
+        dto.remarks !== undefined ? dto.remarks.trim() : existing.remarks,
+    };
+
+    if (!content.workMethod?.trim()) {
+      throw new BadRequestException('Description / SOP is required');
+    }
+    if (!content.completionOutput?.trim()) {
+      throw new BadRequestException('Expected Output is required');
+    }
+    if (!content.remarks?.trim()) {
+      throw new BadRequestException('Remarks are required');
+    }
+
+    const description = this.formatActivityTaskDescription(content);
+    const requiresCompletionDocument = Boolean(
+      content.evidenceRequired?.trim(),
     );
-
-    const data: any = {};
-    if (dto.mainDepartmentId !== undefined)
-      data.mainDepartmentId = dto.mainDepartmentId || null;
-    if (dto.subDepartment !== undefined)
-      data.subDepartment = dto.subDepartment || null;
-    if (dto.gembaSection !== undefined)
-      data.gembaSection = dto.gembaSection || null;
-    if (dto.processArea !== undefined)
-      data.processArea = dto.processArea || null;
-    if (dto.name !== undefined) data.name = dto.name;
-    if (dto.workMethod !== undefined) data.workMethod = dto.workMethod;
-    if (dto.code !== undefined) data.code = dto.code.trim();
-    if (dto.completionDeadline !== undefined)
-      data.completionDeadline = String(dto.completionDeadline);
-    if (dto.purpose !== undefined) data.purpose = dto.purpose || null;
-    if (dto.frequency !== undefined) {
-      assertSupportedActivityFrequency(dto.frequency);
-      data.frequency = dto.frequency;
-    }
-    if (dto.completionOutput !== undefined)
-      data.completionOutput = dto.completionOutput || null;
-    if (dto.primaryResponsibleDesignation !== undefined)
-      data.primaryResponsibleDesignation =
-        dto.primaryResponsibleDesignation || null;
-    if (dto.evidenceRequired !== undefined)
-      data.evidenceRequired = dto.evidenceRequired || null;
-    if (dto.remarks !== undefined) data.remarks = dto.remarks || null;
-    if (dto.status !== undefined)
-      data.status = this.normalizeActivityStatus(dto.status);
-    if (dto.effectiveFrom !== undefined) {
-      data.effectiveFrom = this.parseActivityDate(
-        dto.effectiveFrom,
-        await this.getOrganizationTimeZone(user.organizationId),
-      );
-    }
+    const timeZone = await this.getOrganizationTimeZone(user.organizationId);
+    const tomorrow = addUtcDays(getUtcDateInTimeZone(new Date(), timeZone), 1);
 
     try {
-      await this.prisma.activity.update({
-        where: { id: activityId },
-        data,
-      });
-      await this.replaceParentActivities(
-        user.organizationId,
-        activityId,
-        parentActivityIds,
-      );
-      const activity = await this.prisma.activity.findUnique({
-        where: { id: activityId },
-        include: ACTIVITY_INCLUDE,
+      const result = await this.prisma.$transaction(async (tx) => {
+        const activity = await tx.activity.update({
+          where: { id: activityId },
+          data: content,
+          include: ACTIVITY_INCLUDE,
+        });
+        const tasks = await tx.task.updateMany({
+          where: { activityId, isAdhoc: false },
+          data: {
+            description,
+            requiresCompletionDocument,
+            completionDocumentName: content.evidenceRequired,
+          },
+        });
+        const futureInstances = await tx.taskInstance.updateMany({
+          where: {
+            task: { activityId, isAdhoc: false },
+            scheduledFor: { gte: tomorrow },
+            status: TaskStatus.PENDING,
+            completionPercent: 0,
+          },
+          data: {
+            descriptionSnapshot: description,
+            requiresDocumentSnapshot: requiresCompletionDocument,
+            documentNameSnapshot: content.evidenceRequired,
+          },
+        });
+        return { activity, tasks, futureInstances };
       });
 
       return {
         message: 'Activity updated',
-        activity: this.serializeActivity(activity),
+        activity: this.serializeActivity(result.activity),
+        updatedTaskDefinitions: result.tasks.count,
+        updatedFutureTasks: result.futureInstances.count,
       };
     } catch (error: any) {
       if (error?.code === 'P2002') {
@@ -1860,7 +2055,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       {
         activityId: activity.id,
         title: activity.name,
-        description: activity.workMethod ?? activity.purpose ?? undefined,
+        description: this.formatActivityTaskDescription(activity),
         assignedToId,
         dueDate: dto.dueDate,
         priority: dto.priority ?? Priority.MEDIUM,

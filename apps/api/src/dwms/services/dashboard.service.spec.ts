@@ -13,10 +13,9 @@ describe('DWMS employee performance access', () => {
   beforeEach(() => {
     prisma = {
       employee: {
-        findMany: jest.fn().mockResolvedValue([
-          { id: 'target' },
-          { id: 'peer' },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'target' }, { id: 'peer' }]),
         findFirst: jest.fn().mockImplementation(({ where }) => {
           if (where.userId === 'viewer-user') {
             return {
@@ -62,29 +61,23 @@ describe('DWMS employee performance access', () => {
     jest
       .spyOn(service as any, 'getTaskCategoryStatusBreakdown')
       .mockResolvedValue({});
-    jest
-      .spyOn(service as any, 'getTrendsForEntity')
-      .mockResolvedValue({});
-    jest
-      .spyOn(service as any, 'listReporteesRecursive')
-      .mockResolvedValue([]);
-    jest
-      .spyOn(service as any, 'getEmployeeScoreboard')
-      .mockResolvedValue([]);
+    jest.spyOn(service as any, 'getTrendsForEntity').mockResolvedValue({});
+    jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([]);
+    jest.spyOn(service as any, 'getEmployeeScoreboard').mockResolvedValue([]);
   }
 
   it.each(['MANAGEMENT', 'ADMIN', 'SUPER_ADMIN', 'HR'])(
     'allows %s to view any employee in the organization',
     async (roleLevel) => {
-    mockSuccessfulEmployeeReport();
+      mockSuccessfulEmployeeReport();
 
-    await expect(
-      service.getEmployeeStats({ ...baseUser, roleLevel }, 'target', '7'),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        employee: expect.objectContaining({ id: 'target' }),
-      }),
-    );
+      await expect(
+        service.getEmployeeStats({ ...baseUser, roleLevel }, 'target', '7'),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          employee: expect.objectContaining({ id: 'target' }),
+        }),
+      );
     },
   );
 
@@ -136,7 +129,9 @@ describe('DWMS employee performance access', () => {
         '7',
       ),
     ).resolves.toEqual(
-      expect.objectContaining({ employee: expect.objectContaining({ id: 'viewer' }) }),
+      expect.objectContaining({
+        employee: expect.objectContaining({ id: 'viewer' }),
+      }),
     );
   });
 
@@ -163,9 +158,9 @@ describe('DWMS employee performance access', () => {
   });
 
   it('does not expose employee performance ids to an ineligible role', async () => {
-    jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([
-      { id: 'direct', organizationId: 'org' },
-    ]);
+    jest
+      .spyOn(service as any, 'listReporteesRecursive')
+      .mockResolvedValue([{ id: 'direct', organizationId: 'org' }]);
 
     await expect(
       service.getDwmsAccessCapabilities({ ...baseUser, roleLevel: 'HOD' }),
@@ -232,12 +227,42 @@ describe('DWMS performance alert scopes', () => {
       { id: 'organization', alert: { againstUserId: null } },
     ];
 
-    expect(
-      (service as any).employeeTargetOccurrences(occurrences),
-    ).toEqual([
+    expect((service as any).employeeTargetOccurrences(occurrences)).toEqual([
       occurrences[0],
       occurrences[1],
     ]);
+  });
+
+  it('counts the third and later occurrences as abnormalities', () => {
+    const occurrences = [
+      {
+        id: 'fourth',
+        alertId: 'alert-1',
+        raisedAt: new Date('2026-01-04T00:00:00Z'),
+      },
+      {
+        id: 'second',
+        alertId: 'alert-1',
+        raisedAt: new Date('2026-01-02T00:00:00Z'),
+      },
+      {
+        id: 'first',
+        alertId: 'alert-1',
+        raisedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+      {
+        id: 'third',
+        alertId: 'alert-1',
+        raisedAt: new Date('2026-01-03T00:00:00Z'),
+      },
+    ];
+
+    expect(
+      (service as any).splitAlertOccurrencesBySequence(occurrences),
+    ).toEqual({
+      alerts: [occurrences[2], occurrences[1]],
+      abnormalities: [occurrences[3], occurrences[0]],
+    });
   });
 
   it('counts direct department and organization targets separately', () => {

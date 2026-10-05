@@ -579,12 +579,12 @@ export interface DwmsAlertTargetTask {
 export interface DwmsDashboardTrendPoint {
   date?: string;
   label?: string;
-  value?: number;
-  completionRate?: number;
+  value?: number | null;
+  completionRate?: number | null;
   avgAcknowledgeTimeMin?: number;
-  goodPracticeCompletionRate?: number;
-  jobResponsibilityCompletionRate?: number;
-  assignedTaskCompletionRate?: number;
+  goodPracticeCompletionRate?: number | null;
+  jobResponsibilityCompletionRate?: number | null;
+  assignedTaskCompletionRate?: number | null;
   abnormalitiesCount?: number;
   completed?: number;
   total?: number;
@@ -783,6 +783,15 @@ export interface CreateActivityPayload {
   remarks: string;
 }
 
+export interface UpdateActivityContentPayload {
+  workMethod?: string;
+  purpose?: string | null;
+  startTrigger?: string | null;
+  completionOutput?: string;
+  evidenceRequired?: string | null;
+  remarks?: string;
+}
+
 export type DwmsTaskCategory =
   | "GOOD_PRACTICE"
   | "JOB_RESPONSIBILITY"
@@ -830,6 +839,11 @@ export interface DwmsActivityIngestionSummary {
   totalRows: number;
   successfulRows: number;
   failedRows: number;
+  attempts?: number;
+  availableAt?: string | null;
+  startedAt?: string | null;
+  failedAt?: string | null;
+  failureMessage?: string | null;
   createdAt: string;
   completedAt?: string | null;
   uploadedBy?: DwmsUserRef | null;
@@ -841,6 +855,8 @@ export interface DwmsActivityIngestionRow {
   status: string;
   activityName?: string | null;
   activityCode?: string | null;
+  parentActivityCode?: string | null;
+  sourcePayload?: IngestActivityRowPayload | null;
   responsibleEmployeeCode?: string | null;
   scope?: ActivityScope | null;
   scopeTarget?: string | null;
@@ -855,18 +871,6 @@ export interface DwmsActivityIngestionRow {
 export interface IngestActivitiesResponse {
   message: string;
   ingestion?: DwmsActivityIngestionSummary;
-  count: number;
-  created: number;
-  failed: number;
-  results: Array<{
-    rowNumber: number;
-    success: boolean;
-    activityId?: string;
-    taskId?: string;
-    responsibleEmployeeId?: string;
-    assignedCount?: number;
-    message: string;
-  }>;
 }
 
 export interface PreviewActivitiesResponse {
@@ -967,7 +971,7 @@ export const DwmsService = {
 
   async getDashboardOverview(
     token: string,
-    days: number,
+    days: number | "all",
   ): Promise<DwmsOverviewDashboardResponse> {
     return getJson<DwmsOverviewDashboardResponse>(
       `/dwms/dashboard/overview${buildQuery({ days })}`,
@@ -978,7 +982,7 @@ export const DwmsService = {
   async getDashboardDepartment(
     token: string,
     deptId: string,
-    days: number,
+    days: number | "all",
   ): Promise<DwmsDepartmentDashboardResponse> {
     return getJson<DwmsDepartmentDashboardResponse>(
       `/dwms/dashboard/department/${encodeURIComponent(deptId)}${buildQuery({ days })}`,
@@ -989,7 +993,7 @@ export const DwmsService = {
   async getDashboardEmployee(
     token: string,
     empId: string,
-    days: number,
+    days: number | "all",
   ): Promise<DwmsEmployeeDashboardResponse> {
     return getJson<DwmsEmployeeDashboardResponse>(
       `/dwms/dashboard/employee/${encodeURIComponent(empId)}${buildQuery({ days })}`,
@@ -1197,8 +1201,12 @@ export const DwmsService = {
   async updateActivity(
     token: string,
     activityId: string,
-    body: Partial<CreateActivityPayload>,
-  ): Promise<{ activity?: DwmsActivityItem }> {
+    body: UpdateActivityContentPayload,
+  ): Promise<{
+    activity?: DwmsActivityItem;
+    updatedTaskDefinitions?: number;
+    updatedFutureTasks?: number;
+  }> {
     return sendJson(
       `/dwms/activities/${encodeURIComponent(activityId)}`,
       token,

@@ -15,6 +15,7 @@ import TaskDateSeparator, { getDateSeparatorMeta } from "../TaskDateSeparator";
 import {
   DwmsService,
   getDwmsErrorMessage,
+  type DwmsTaskCategory,
   type DwmsTaskItem as TaskItem,
   type DwmsTaskStatus as TaskStatus,
   type DwmsTaskSource,
@@ -22,6 +23,14 @@ import {
 import { uploadImage } from "@/services/uploads.service";
 
 const TASK_PAGE_SIZE = 20;
+
+const ROUTINE_TASK_CATEGORIES: Array<{
+  key: Exclude<DwmsTaskCategory, "ASSIGNED_TASK">;
+  label: string;
+}> = [
+  { key: "GOOD_PRACTICE", label: "Good Practices" },
+  { key: "JOB_RESPONSIBILITY", label: "Job Responsibility" },
+];
 
 const frequencyBasedTaskFrequencies = new Set([
   "DAILY",
@@ -434,6 +443,60 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
     assigneeFilter,
   ]);
 
+  const routineTasksByCategory = useMemo(() => {
+    return ROUTINE_TASK_CATEGORIES.reduce<
+      Record<Exclude<DwmsTaskCategory, "ASSIGNED_TASK">, TaskItem[]>
+    >(
+      (groupedTasks, category) => {
+        groupedTasks[category.key] = filteredTasks.filter(
+          (task) => task.taskCategory === category.key,
+        );
+        return groupedTasks;
+      },
+      {
+        GOOD_PRACTICE: [],
+        JOB_RESPONSIBILITY: [],
+      },
+    );
+  }, [filteredTasks]);
+
+  const routineTaskDateGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        label: string;
+        tasks: Record<
+          Exclude<DwmsTaskCategory, "ASSIGNED_TASK">,
+          TaskItem[]
+        >;
+      }
+    >();
+
+    filteredTasks.forEach((task) => {
+      if (task.taskCategory === "ASSIGNED_TASK") return;
+
+      const dateMeta = getDateSeparatorMeta(
+        getDashboardTaskDateValue(task, activeTab),
+        task.organizationTimeZone,
+        activeTab !== "COMPLETED" && activeTab !== "OVERDUE",
+      );
+      const dateKey = dateMeta?.key ?? "unscheduled";
+      const existingGroup = groups.get(dateKey);
+      const group = existingGroup ?? {
+        label: dateMeta?.label ?? "Unscheduled",
+        tasks: {
+          GOOD_PRACTICE: [],
+          JOB_RESPONSIBILITY: [],
+        },
+      };
+
+      group.tasks[task.taskCategory].push(task);
+      if (!existingGroup) groups.set(dateKey, group);
+    });
+
+    return Array.from(groups, ([key, group]) => ({ key, ...group }));
+  }, [activeTab, filteredTasks]);
+
   return (
     <div className="relative">
       <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-none flex-col gap-6 px-4 pb-8 pt-0 sm:px-6 lg:px-8">
@@ -627,6 +690,147 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
             {activeTab === "APPROVAL_PENDING" && "No approval pending tasks."}
             {activeTab === "COMPLETED" && "No completed tasks."}
           </div>
+        ) : source === "routine" ? (
+          <>
+            <div className="space-y-6 lg:hidden">
+              {ROUTINE_TASK_CATEGORIES.map((category) => (
+                <section
+                  key={category.key}
+                  aria-labelledby={`routine-mobile-${category.key}`}
+                  className="min-w-0"
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                    <h2
+                      id={`routine-mobile-${category.key}`}
+                      className="text-sm font-bold text-slate-800"
+                    >
+                      {category.label}
+                    </h2>
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500">
+                      {routineTasksByCategory[category.key].length}
+                    </span>
+                  </div>
+
+                  {routineTasksByCategory[category.key].length === 0 ? (
+                    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white py-8 text-center text-sm italic text-slate-500">
+                      No tasks in this section.
+                    </div>
+                  ) : (
+                    <div className="mt-1 grid grid-cols-1 gap-3">
+                      {(() => {
+                        let previousDateKey: string | null = null;
+                        return routineTasksByCategory[category.key].map((t) => {
+                          const itemKey =
+                            activeTab === "NOT_ACKNOWLEDGED" &&
+                            isFrequencyBasedTask(t)
+                              ? t.taskId
+                              : t.instanceId;
+                          const dateMeta = getDateSeparatorMeta(
+                            getDashboardTaskDateValue(t, activeTab),
+                            t.organizationTimeZone,
+                            activeTab !== "COMPLETED" &&
+                              activeTab !== "OVERDUE",
+                          );
+                          const showSeparator =
+                            !!dateMeta && dateMeta.key !== previousDateKey;
+                          if (dateMeta) previousDateKey = dateMeta.key;
+
+                          return (
+                            <React.Fragment key={itemKey}>
+                              {dateMeta && showSeparator && (
+                                <TaskDateSeparator label={dateMeta.label} />
+                              )}
+                              <TaskMiniCard
+                                task={t}
+                                onClick={() =>
+                                  router.push(`/dwms/tasks/${t.instanceId}`)
+                                }
+                                onStatusChange={handleStatusChange}
+                                onAcknowledgement={handleAcknowledgement}
+                                saving={
+                                  savingId === t.instanceId ||
+                                  savingId === t.taskId
+                                }
+                              />
+                            </React.Fragment>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
+                </section>
+              ))}
+            </div>
+
+            <div className="hidden lg:block">
+              <div className="grid grid-cols-2 gap-4">
+                {ROUTINE_TASK_CATEGORIES.map((category) => (
+                  <div
+                    key={category.key}
+                    className="flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-2"
+                  >
+                    <h2 className="text-sm font-bold text-slate-800">
+                      {category.label}
+                    </h2>
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500">
+                      {routineTasksByCategory[category.key].length}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-8">
+                {routineTaskDateGroups.map((dateGroup) => (
+                  <section
+                    key={dateGroup.key}
+                    aria-labelledby={`routine-date-${dateGroup.key}`}
+                    className="pt-4"
+                  >
+                    <div className="mb-4 border-b border-slate-200 pb-2">
+                      <h3
+                        id={`routine-date-${dateGroup.key}`}
+                        className="text-xs font-semibold text-slate-500"
+                      >
+                        {dateGroup.label}
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 items-start gap-4">
+                      {ROUTINE_TASK_CATEGORIES.map((category) => (
+                        <div
+                          key={category.key}
+                          className="grid min-w-0 grid-cols-1 gap-3"
+                        >
+                          {dateGroup.tasks[category.key].map((t) => {
+                            const itemKey =
+                              activeTab === "NOT_ACKNOWLEDGED" &&
+                              isFrequencyBasedTask(t)
+                                ? t.taskId
+                                : t.instanceId;
+                            return (
+                              <TaskMiniCard
+                                key={itemKey}
+                                task={t}
+                                onClick={() =>
+                                  router.push(`/dwms/tasks/${t.instanceId}`)
+                                }
+                                onStatusChange={handleStatusChange}
+                                onAcknowledgement={handleAcknowledgement}
+                                saving={
+                                  savingId === t.instanceId ||
+                                  savingId === t.taskId
+                                }
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
+          </>
         ) : (
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {(() => {

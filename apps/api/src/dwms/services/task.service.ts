@@ -474,6 +474,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           frequency: task.frequency,
           scheduledFor: effectiveScheduledFor,
           dueAt,
+          titleSnapshot: task.title,
+          descriptionSnapshot: task.description,
+          requiresDocumentSnapshot:
+            task.requiresCompletionDocument ?? false,
+          documentNameSnapshot: task.completionDocumentName ?? null,
           status: initialStatus,
           completionPercent: initialCompletionPercent,
         },
@@ -722,8 +727,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       id: instance.id,
       instanceId: instance.id,
       taskId: task.id,
-      title: task.title,
-      description: task.description,
+      title: instance.titleSnapshot ?? task.title,
+      description:
+        instance.descriptionSnapshot === undefined
+          ? task.description
+          : instance.descriptionSnapshot,
       frequency: task.frequency,
       organizationTimeZone:
         task.organizationTimeZone ?? task.owner?.organization?.timeZone,
@@ -772,8 +780,14 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         this.serializeTaskInstanceComment(comment),
       ),
       events,
-      requiresCompletionDocument: task.requiresCompletionDocument ?? false,
-      completionDocumentName: task.completionDocumentName ?? null,
+      requiresCompletionDocument:
+        instance.requiresDocumentSnapshot ??
+        task.requiresCompletionDocument ??
+        false,
+      completionDocumentName:
+        instance.documentNameSnapshot === undefined
+          ? (task.completionDocumentName ?? null)
+          : instance.documentNameSnapshot,
       wasOverdue,
       isOverdue:
         instance.dueAt.getTime() < Date.now() &&
@@ -1523,7 +1537,8 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
     if (
       shouldCaptureAttachment &&
-      task.requiresCompletionDocument &&
+      (existingInstance.requiresDocumentSnapshot ??
+        task.requiresCompletionDocument) &&
       !dto.completionAttachmentUrl?.trim()
     ) {
       throw new BadRequestException(
@@ -2599,7 +2614,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
 
     if (
       shouldCaptureAttachment &&
-      task.requiresCompletionDocument &&
+      (instance.requiresDocumentSnapshot ?? task.requiresCompletionDocument) &&
       !dto.completionAttachmentUrl?.trim()
     ) {
       throw new BadRequestException(
@@ -2691,7 +2706,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     );
 
     if (
-      task.requiresCompletionDocument &&
+      (instance.requiresDocumentSnapshot ?? task.requiresCompletionDocument) &&
       !dto.completionAttachmentUrl?.trim()
     ) {
       throw new BadRequestException(

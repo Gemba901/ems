@@ -87,6 +87,33 @@ describe('DWMS task category serialization', () => {
     expect(result.taskCategory).toBe('ASSIGNED_TASK');
   });
 
+  it('serializes immutable task content from the occurrence snapshot', () => {
+    const result = service.serializeTaskInstance(
+      {
+        ...task,
+        title: 'Updated shared title',
+        description: 'Updated shared description',
+        requiresCompletionDocument: true,
+        completionDocumentName: 'Updated evidence',
+        activity: { id: 'activity', scope: ActivityScope.ORGANISATION },
+      },
+      {
+        ...instance,
+        titleSnapshot: 'Original title',
+        descriptionSnapshot: 'Original description',
+        requiresDocumentSnapshot: false,
+        documentNameSnapshot: null,
+      },
+    );
+
+    expect(result).toMatchObject({
+      title: 'Original title',
+      description: 'Original description',
+      requiresCompletionDocument: false,
+      completionDocumentName: null,
+    });
+  });
+
   it('rejects a task that has neither an assigner nor an activity scope', () => {
     expect(() =>
       service.serializeTaskInstance(
@@ -482,6 +509,25 @@ describe('DWMS occurrence progress and approval', () => {
     expect(notifications.create).toHaveBeenCalledWith(
       expect.objectContaining({ employeeId: 'approver' }),
     );
+  });
+
+  it('uses the occurrence snapshot when an old task did not require a document', async () => {
+    instance.requiresDocumentSnapshot = false;
+    instance.task.requiresCompletionDocument = true;
+
+    await expect(
+      service.completeAssignedTask(user, 'instance', {}),
+    ).resolves.toMatchObject({ instance: { status: 'APPROVAL_PENDING' } });
+  });
+
+  it('requires a document when the occurrence snapshot requires one', async () => {
+    instance.requiresDocumentSnapshot = true;
+    instance.task.requiresCompletionDocument = false;
+
+    await expect(
+      service.completeAssignedTask(user, 'instance', {}),
+    ).rejects.toThrow('Completion document is required');
+    expect(prisma.taskInstance.update).not.toHaveBeenCalled();
   });
 
   it.each(['approveTask', 'rejectTask'] as const)(

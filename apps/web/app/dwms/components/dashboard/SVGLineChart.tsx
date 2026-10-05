@@ -41,15 +41,14 @@ export default function SVGLineChart({
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const getValue = (d: DwmsDashboardTrendPoint) => {
-    if (!d) return 0;
-    const rawValue = d[valueKey] ?? d.value ?? d.completionRate ?? d.avgAcknowledgeTimeMin ?? 0;
-    return typeof rawValue === 'number' ? rawValue : 0;
+  const getValue = (d: DwmsDashboardTrendPoint): number | null => {
+    const rawValue = d[valueKey];
+    return typeof rawValue === 'number' ? rawValue : null;
   };
 
   const maxValInData = trendData.reduce((max, d) => {
     const val = getValue(d);
-    return val > max ? val : max;
+    return val !== null && val > max ? val : max;
   }, 0);
 
   const maxScale = ySuffix.trim() === '%' ? 100 : (maxValInData > 0 ? Math.ceil(maxValInData * 1.1) : 10);
@@ -63,12 +62,19 @@ export default function SVGLineChart({
   const barWidth = Math.max(3, Math.min(24, (chartWidth / Math.max(pointsCount, 1)) * 0.62));
 
   let pathD = '';
+  let pathStarted = false;
 
   trendData.forEach((d, i) => {
+    const value = getValue(d);
+    if (value === null) {
+      pathStarted = false;
+      return;
+    }
     const x = getX(i);
-    const y = getY(getValue(d));
-    if (i === 0) {
-      pathD = `M ${x} ${y}`;
+    const y = getY(value);
+    if (!pathStarted) {
+      pathD += ` M ${x} ${y}`;
+      pathStarted = true;
     } else {
       pathD += ` L ${x} ${y}`;
     }
@@ -115,7 +121,7 @@ export default function SVGLineChart({
           );
         })}
 
-        {variant === 'line' && trendData.length > 0 && (
+        {variant === 'line' && pathD && (
           <path
             d={pathD}
             fill="none"
@@ -128,6 +134,7 @@ export default function SVGLineChart({
 
         {variant === 'bar' && trendData.map((d, i) => {
           const value = getValue(d);
+          if (value === null) return null;
           const y = getY(value);
           const baseline = paddingTop + chartHeight;
           return (
@@ -146,7 +153,8 @@ export default function SVGLineChart({
         {/* Hotspots / Labels */}
         {trendData.map((d, i) => {
           const x = getX(i);
-          const y = getY(getValue(d));
+          const value = getValue(d);
+          const y = value === null ? null : getY(value);
           
           let label = '';
           if (d.date) {
@@ -172,43 +180,47 @@ export default function SVGLineChart({
                 </text>
               )}
 
-              {/* Invisible interactive circle */}
-              <circle
-                cx={x}
-                cy={y}
-                r="12"
-                className="fill-transparent cursor-pointer"
-                tabIndex={0}
-                aria-label={`${label}: ${getValue(d).toFixed(1)}${ySuffix}`}
-                onMouseEnter={() => setHoveredIdx(i)}
-                onMouseLeave={() => setHoveredIdx(null)}
-                onFocus={() => setHoveredIdx(i)}
-                onBlur={() => setHoveredIdx(null)}
-              />
+              {value !== null && y !== null && (
+                <>
+                  {/* Invisible interactive circle */}
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r="12"
+                    className="fill-transparent cursor-pointer"
+                    tabIndex={0}
+                    aria-label={`${label}: ${value.toFixed(1)}${ySuffix}`}
+                    onMouseEnter={() => setHoveredIdx(i)}
+                    onMouseLeave={() => setHoveredIdx(null)}
+                    onFocus={() => setHoveredIdx(i)}
+                    onBlur={() => setHoveredIdx(null)}
+                  />
 
-              {/* Data point / active point */}
-              <circle
-                cx={x}
-                cy={y}
-                r={hoveredIdx === i ? "5" : "3"}
-                className={`transition-all duration-150 pointer-events-none ${
-                  hoveredIdx === i || pointsCount <= 12 || i === pointsCount - 1
-                    ? 'fill-white stroke-blue-600 stroke-2'
-                    : 'fill-blue-600 opacity-0'
-                }`}
-              />
+                  {/* Data point / active point */}
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={hoveredIdx === i ? "5" : "3"}
+                    className={`transition-all duration-150 pointer-events-none ${
+                      hoveredIdx === i || pointsCount <= 12 || i === pointsCount - 1
+                        ? 'fill-white stroke-blue-600 stroke-2'
+                        : 'fill-blue-600 opacity-0'
+                    }`}
+                  />
+                </>
+              )}
             </g>
           );
         })}
       </svg>
 
       {/* Tooltip */}
-      {hoveredIdx !== null && trendData[hoveredIdx] && (
+      {hoveredIdx !== null && trendData[hoveredIdx] && getValue(trendData[hoveredIdx]) !== null && (
         <div
           className="pointer-events-none absolute z-10 min-w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-lg transition-all duration-150"
           style={{
             left: `${(getX(hoveredIdx) / width) * 100}%`,
-            top: `${(getY(getValue(trendData[hoveredIdx])) / height) * 100 - 16}%`,
+            top: `${(getY(getValue(trendData[hoveredIdx])!) / height) * 100 - 16}%`,
             transform: 'translate(-50%, -100%)',
           }}
         >
@@ -220,7 +232,7 @@ export default function SVGLineChart({
             )}
           </div>
           <div className="font-semibold tabular-nums text-slate-950">
-            {tooltipLabel}: {getValue(trendData[hoveredIdx]).toFixed(1)}{ySuffix}
+            {tooltipLabel}: {getValue(trendData[hoveredIdx])!.toFixed(1)}{ySuffix}
           </div>
           {showTaskTotals && trendData[hoveredIdx].total !== undefined && (
             <div className="text-[9px] text-muted-app">

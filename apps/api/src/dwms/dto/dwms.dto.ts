@@ -242,35 +242,8 @@ export class CreateActivityDto {
 export class UpdateActivityDto {
   @IsOptional()
   @IsString()
-  companyUnitName?: string;
-
-  @IsOptional()
-  @IsString()
-  mainDepartmentId?: string;
-
-  @IsOptional()
-  @IsString()
-  subDepartment?: string;
-
-  @IsOptional()
-  @IsString()
-  gembaSection?: string;
-
-  @IsOptional()
-  @IsString()
-  processArea?: string;
-
-  @IsOptional()
-  @IsString()
-  name?: string;
-
-  @IsOptional()
-  @IsString()
+  @Matches(/\S/, { message: 'Description / SOP must not be blank' })
   workMethod?: string;
-
-  @IsOptional()
-  @IsString()
-  code?: string;
 
   @IsOptional()
   @IsString()
@@ -278,32 +251,12 @@ export class UpdateActivityDto {
 
   @IsOptional()
   @IsString()
-  category?: string;
-
-  @IsOptional()
-  @IsEnum(TaskFrequency)
-  frequency?: TaskFrequency;
-
-  @IsOptional()
-  @IsString()
   startTrigger?: string;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
-  @Min(0)
-  completionDeadline?: number;
-
-  @IsOptional()
   @IsString()
+  @Matches(/\S/, { message: 'Expected Output must not be blank' })
   completionOutput?: string;
-
-  @IsOptional()
-  @IsString()
-  primaryResponsibleDesignation?: string;
-
-  @IsOptional()
-  @IsString()
-  primaryResponsibleEmployeeId?: string;
 
   @IsOptional()
   @IsString()
@@ -311,26 +264,8 @@ export class UpdateActivityDto {
 
   @IsOptional()
   @IsString()
-  effectiveFrom?: string;
-
-  @IsOptional()
-  @IsEnum(ActivityStatus)
-  status?: ActivityStatus;
-
-  @IsOptional()
-  @IsString()
+  @Matches(/\S/, { message: 'Remarks must not be blank' })
   remarks?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @ArrayMaxSize(1)
-  @IsString({ each: true })
-  parentActivityIds?: string[];
-
-  @IsOptional()
-  @IsString()
-  parentActivityId?: string;
 }
 
 export class IngestActivityRowDto {

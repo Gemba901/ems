@@ -14,6 +14,8 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ModuleType } from 'db';
@@ -79,7 +81,10 @@ export class DwmsController {
       throw new UnauthorizedException('No refresh token');
     }
 
-    const result = await this.authService.refreshForTenant(req.tenant!, rawToken);
+    const result = await this.authService.refreshForTenant(
+      req.tenant!,
+      rawToken,
+    );
     res.cookie(REFRESH_COOKIE, result.refreshToken, cookieOptions);
     const { refreshToken: _, ...safeResult } = result;
     return safeResult;
@@ -88,7 +93,10 @@ export class DwmsController {
   @Post('auth/logout')
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard)
-  async logout(@Req() req: TenantRequest, @Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Req() req: TenantRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const rawToken = req.cookies?.[REFRESH_COOKIE];
     if (rawToken) {
       await this.authService.revokeRefreshTokenForTenant(req.tenant!, rawToken);
@@ -226,13 +234,22 @@ export class DwmsController {
   }
 
   @Post('activities/ingest')
+  @HttpCode(HttpStatus.ACCEPTED)
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  ingestActivities(
+  async ingestActivities(
     @CurrentUser() user: UserPayload,
     @Body() dto: IngestActivitiesDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.dwmsService.ingestActivities(user, dto);
+    const result = await this.dwmsService.ingestActivities(user, dto);
+    if (result.ingestion?.id) {
+      res.setHeader(
+        'Location',
+        `/dwms/activities/ingestions/${result.ingestion.id}`,
+      );
+    }
+    return result;
   }
 
   @Post('activities/ingest/preview')
@@ -537,7 +554,12 @@ export class DwmsController {
     @Param('occurrenceId') occurrenceId: string,
     @Body() dto: AcknowledgeAlertOccurrenceDto,
   ) {
-    return this.dwmsService.acknowledgeAlertOccurrence(user, id, occurrenceId, dto);
+    return this.dwmsService.acknowledgeAlertOccurrence(
+      user,
+      id,
+      occurrenceId,
+      dto,
+    );
   }
 
   // --- Users Endpoints ---
@@ -567,7 +589,6 @@ export class DwmsController {
   ) {
     return this.dwmsService.listApproverCandidates(user, assignedToId);
   }
-
 
   // --- Dashboard Endpoints ---
   @Get('dashboard/overview')

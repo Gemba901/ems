@@ -49,6 +49,10 @@ model TaskInstance {
   frequency                TaskFrequency
   scheduledFor             DateTime
   dueAt                    DateTime
+  titleSnapshot            String
+  descriptionSnapshot      String?
+  requiresDocumentSnapshot Boolean
+  documentNameSnapshot     String?
   status                   TaskStatus            @default(PENDING)
   completionPercent        Int                   @default(0)
   completionNote           String?

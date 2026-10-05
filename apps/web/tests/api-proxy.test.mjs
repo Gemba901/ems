@@ -163,3 +163,10 @@ test('forwards the platform-set client IP and never a caller-supplied one', asyn
   assert.equal(await forwarded({ 'x-real-ip': 'not-an-ip' }), null);
   assert.equal(await forwarded({ 'x-real-ip': '203.0.113.7, 198.51.100.1' }), null);
 });
+test('forwards Team Workspace routes with their query', async () => {
+  const response = await proxyRequest(req('work/attendance/me?from=2026-10-01'), ['work', 'attendance', 'me'], config, async (url) => {
+    assert.equal(url.href, 'https://internal.example.test/work/attendance/me?from=2026-10-01');
+    return json({ items: [] });
+  });
+  assert.equal(response.status, 200);
+});

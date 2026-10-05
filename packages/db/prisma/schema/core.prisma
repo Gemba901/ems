@@ -29,6 +29,7 @@ enum ModuleType {
   STEEL
   KAIZEN
   SGA
+  WORK
 }
 
 enum CommitteeType {
@@ -140,6 +141,9 @@ model Organization {
   tickets              Tickets[]
   kaizens              Kaizen[]
   sgas                 Sga[]
+  workProjects          WorkProject[]
+  attendanceRecords     AttendanceRecord[]
+  attendanceCorrections AttendanceCorrection[]
 
   // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
   sgaCommitteeId String?

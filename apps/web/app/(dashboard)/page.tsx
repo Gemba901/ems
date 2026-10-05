@@ -41,7 +41,7 @@ import MyDayPanel from "@/components/dashboard/MyDayPanel";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "WORK" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -176,6 +176,20 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     href: "/sga",
     actions: [
       { label: "New SGA", href: "/sga/new", icon: FileEdit },
+    ],
+  },
+  WORK: {
+    key: "WORK",
+    label: "Team Workspace",
+    tagline: "Attendance & Project Tasks",
+    description: "Clock in and out, see your tasks across projects, and plan team work in simple sprints.",
+    icon: Clock,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    ring: "ring-blue-200",
+    href: "/work",
+    actions: [
+      { label: "Open my day", href: "/work", icon: ArrowRight },
     ],
   },
 };

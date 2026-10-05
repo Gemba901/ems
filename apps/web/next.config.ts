@@ -25,8 +25,8 @@ const nextConfig: NextConfig = {
         { key: "X-Content-Type-Options", value: "nosniff" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         { key: "Strict-Transport-Security", value: "max-age=31536000" },
-        // SIMS photo inputs use the camera; nothing uses the microphone or location.
-        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=()" },
+        // SIMS photo inputs use the camera and Team Workspace clock-in reads location; nothing uses the microphone.
+        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self), payment=(), usb=()" },
       ],
     }];
   },

@@ -17,7 +17,8 @@ import {
   Ticket,
   Factory,
   Sparkles,
-  Users2
+  Users2,
+  Briefcase
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -77,6 +78,14 @@ const NAV_ITEMS: MainNavItem[] = [
     label: "Tickets",
     href: "/tickets",
     icon: Ticket,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+  },
+  {
+    label: "Team Workspace",
+    shortLabel: "Work",
+    href: "/work",
+    icon: Briefcase,
+    module: "WORK",
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
   },
   {

@@ -110,6 +110,14 @@ model Employee {
   sgaVerifications      SgaVerification[]         @relation("SgaVerificationBy")
   sgaActionsResponsible SgaActionItem[]           @relation("SgaActionResponsible")
   sgaReviews            SgaReview[]
+  workProjectsCreated   WorkProject[]             @relation("WorkProjectCreatedBy")
+  workProjectMembership WorkProjectMember[]
+  workTasksAssigned     WorkTask[]                @relation("WorkTaskAssignee")
+  workTasksCreated      WorkTask[]                @relation("WorkTaskCreatedBy")
+  workTaskComments      WorkTaskComment[]         @relation("WorkTaskCommentAuthor")
+  workSprintsCreated    WorkSprint[]              @relation("WorkSprintCreatedBy")
+  attendanceRecords     AttendanceRecord[]        @relation("AttendanceEmployee")
+  attendanceCorrections AttendanceCorrection[]    @relation("AttendanceCorrectionActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

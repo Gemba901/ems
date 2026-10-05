@@ -28,6 +28,7 @@ import { TicketsModule } from './tickets/tickets.module';
 import { SteelDomainModule } from './steel/steel-domain.module';
 import { KaizenModule } from './kaizen/kaizen.module';
 import { SgaModule } from './sga/sga.module';
+import { WorkModule } from './work/work.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
 
@@ -67,6 +68,7 @@ import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
     SteelDomainModule,
     KaizenModule,
     SgaModule,
+    WorkModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,4 +1,3 @@
-import { ForbiddenException } from '@nestjs/common';
 import { DwmsService } from '../dwms.service';
 
 describe('DWMS employee performance access', () => {
@@ -16,6 +15,7 @@ describe('DWMS employee performance access', () => {
         findMany: jest
           .fn()
           .mockResolvedValue([{ id: 'target' }, { id: 'peer' }]),
+        findUnique: jest.fn().mockResolvedValue({ reportingManagerId: null }),
         findFirst: jest.fn().mockImplementation(({ where }) => {
           if (where.userId === 'viewer-user') {
             return {
@@ -89,18 +89,41 @@ describe('DWMS employee performance access', () => {
         '7',
       ),
     ).rejects.toThrow(
-      'Employee performance requires management, admin, super admin, or HR access',
+      'You can only view performance for employees in your reporting line',
     );
   });
 
-  it('rejects HOD access to another employee even when they are a reportee', async () => {
+  it('allows HOD access to another employee in their department', async () => {
+    mockSuccessfulEmployeeReport();
+
     await expect(
       service.getEmployeeStats(
         { ...baseUser, roleLevel: 'HOD' },
         'descendant',
         '7',
       ),
-    ).rejects.toThrow(ForbiddenException);
+    ).resolves.toEqual(
+      expect.objectContaining({
+        employee: expect.objectContaining({ id: 'descendant' }),
+      }),
+    );
+  });
+
+  it('allows a normal employee to view a recursive reportee', async () => {
+    mockSuccessfulEmployeeReport();
+    jest.spyOn(service as any, 'isSuperior').mockResolvedValue(true);
+
+    await expect(
+      service.getEmployeeStats(
+        { ...baseUser, roleLevel: 'EMPLOYEE' },
+        'descendant',
+        '7',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        employee: expect.objectContaining({ id: 'descendant' }),
+      }),
+    );
   });
 
   it('allows every role to view their own performance', async () => {
@@ -136,11 +159,9 @@ describe('DWMS employee performance access', () => {
   });
 
   it('returns every other organization employee to eligible roles', async () => {
-    jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([
-      { id: 'direct', organizationId: 'org' },
-      { id: 'indirect', organizationId: 'org' },
-      { id: 'foreign', organizationId: 'other-org' },
-    ]);
+    jest
+      .spyOn(service as any, 'listTeamEmployeeIds')
+      .mockResolvedValue(['direct', 'indirect']);
     prisma.employee.findMany.mockResolvedValue([
       { id: 'direct' },
       { id: 'indirect' },
@@ -151,6 +172,7 @@ describe('DWMS employee performance access', () => {
       expect.objectContaining({
         currentEmployeeId: 'viewer',
         hasReportees: true,
+        teamPerformanceEmployeeIds: ['direct', 'indirect'],
         canViewEmployeePerformance: true,
         employeePerformanceEmployeeIds: ['direct', 'indirect', 'peer'],
       }),
@@ -159,16 +181,60 @@ describe('DWMS employee performance access', () => {
 
   it('does not expose employee performance ids to an ineligible role', async () => {
     jest
-      .spyOn(service as any, 'listReporteesRecursive')
-      .mockResolvedValue([{ id: 'direct', organizationId: 'org' }]);
+      .spyOn(service as any, 'listTeamEmployeeIds')
+      .mockResolvedValue(['direct']);
 
     await expect(
       service.getDwmsAccessCapabilities({ ...baseUser, roleLevel: 'HOD' }),
     ).resolves.toEqual(
       expect.objectContaining({
         hasReportees: true,
+        teamPerformanceEmployeeIds: ['direct'],
         canViewEmployeePerformance: false,
         employeePerformanceEmployeeIds: [],
+      }),
+    );
+  });
+
+  it('uses every other organization employee as the management team scope', async () => {
+    await expect(service.getDwmsAccessCapabilities(baseUser)).resolves.toEqual(
+      expect.objectContaining({
+        teamPerformanceEmployeeIds: ['target', 'peer'],
+      }),
+    );
+  });
+
+  it('uses every other department employee as the HOD team scope', async () => {
+    await expect(
+      service.getDwmsAccessCapabilities({ ...baseUser, roleLevel: 'HOD' }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        teamPerformanceEmployeeIds: ['target', 'peer'],
+      }),
+    );
+    expect(prisma.employee.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: 'org',
+          departmentId: 'department',
+          id: { not: 'viewer' },
+        }),
+      }),
+    );
+  });
+
+  it('uses recursive reportees as the normal employee team scope', async () => {
+    jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([
+      { id: 'direct', organizationId: 'org' },
+      { id: 'indirect', organizationId: 'org' },
+      { id: 'foreign', organizationId: 'other-org' },
+    ]);
+
+    await expect(
+      service.getDwmsAccessCapabilities({ ...baseUser, roleLevel: 'EMPLOYEE' }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        teamPerformanceEmployeeIds: ['direct', 'indirect'],
       }),
     );
   });

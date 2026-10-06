@@ -40,17 +40,14 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
             select: { id: true },
           })
         : Promise.resolve([]);
-    const [config, recursiveReportees, organizationEmployees] = await Promise.all([
+    const [config, teamEmployeeIds, organizationEmployees] = await Promise.all([
       this.prisma.dwmsPermissionConfig.findUnique({
         where: { organizationId: user.organizationId },
         select: { alertViewLevel: true, analyticsViewLevel: true },
       }),
-      this.listReporteesRecursive(employee.id),
+      this.listTeamEmployeeIds(employee, user.organizationId, user.roleLevel),
       organizationEmployeesPromise,
     ]);
-    const reporteeIds = recursiveReportees
-      .filter((reportee) => reportee.organizationId === user.organizationId)
-      .map((reportee) => reportee.id);
     const employeePerformanceEmployeeIds = organizationEmployees.map(
       (organizationEmployee) => organizationEmployee.id,
     );
@@ -65,7 +62,8 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
         config?.analyticsViewLevel ?? ViewLevel.DEPARTMENT,
         user.roleLevel,
       ),
-      hasReportees: reporteeIds.length > 0,
+      hasReportees: teamEmployeeIds.length > 0,
+      teamPerformanceEmployeeIds: teamEmployeeIds,
       canViewEmployeePerformance:
         hasEmployeePerformanceRole &&
         employeePerformanceEmployeeIds.length > 0,

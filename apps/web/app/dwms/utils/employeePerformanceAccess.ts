@@ -2,6 +2,7 @@ export type EmployeePerformanceAccess = {
   currentEmployeeId: string;
   canViewEmployeePerformance: boolean;
   employeePerformanceEmployeeIds: string[];
+  teamPerformanceEmployeeIds?: string[];
 };
 
 export type EmployeePerformanceDestination =
@@ -30,7 +31,8 @@ export function resolveEmployeePerformanceDestination(
 ): EmployeePerformanceDestination | null {
   if (!access) return null;
   if (employeeId === access.currentEmployeeId) return "my-performance";
-  return access.employeePerformanceEmployeeIds.includes(employeeId)
+  return access.employeePerformanceEmployeeIds.includes(employeeId) ||
+    (access.teamPerformanceEmployeeIds ?? []).includes(employeeId)
     ? "employee-performance"
     : null;
 }

@@ -276,9 +276,24 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     if (employee.id !== currentEmployee.id) {
       const hasEmployeePerformanceRole =
         this.getDwmsRole(user.roleLevel) === 'MANAGEMENT';
-      if (!hasEmployeePerformanceRole) {
+      const isHodDepartmentMember =
+        this.getDwmsRole(user.roleLevel) === 'HOD' &&
+        !!currentEmployee.departmentId &&
+        employee.departmentId === currentEmployee.departmentId;
+      const isInReportingLine = hasEmployeePerformanceRole || isHodDepartmentMember
+        ? false
+        : await this.isSuperior(
+            currentEmployee.id,
+            employee.id,
+            user.organizationId,
+          );
+      if (
+        !hasEmployeePerformanceRole &&
+        !isHodDepartmentMember &&
+        !isInReportingLine
+      ) {
         throw new ForbiddenException(
-          'Employee performance requires management, admin, super admin, or HR access',
+          'You can only view performance for employees in your reporting line',
         );
       }
     }
@@ -303,10 +318,15 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       timeZone,
       days,
     );
-    const reportees = await this.listReporteesRecursive(resolvedEmployeeId);
-    const reporteeIds = reportees
-      .filter((reportee) => reportee.organizationId === user.organizationId)
-      .map((reportee) => reportee.id);
+    const reporteeIds = employee.id === currentEmployee.id
+      ? await this.listTeamEmployeeIds(
+          currentEmployee,
+          user.organizationId,
+          user.roleLevel,
+        )
+      : (await this.listReporteesRecursive(resolvedEmployeeId))
+          .filter((reportee) => reportee.organizationId === user.organizationId)
+          .map((reportee) => reportee.id);
     const reporteesPerformance = await this.getEmployeeScoreboard(
       reporteeIds,
       user.organizationId,

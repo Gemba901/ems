@@ -95,8 +95,8 @@ export default function DashboardRoute() {
 function DashboardPage() {
   const { user, accessToken } = useAuthStore();
 
-  // Tab: 'overview' | 'department' | 'employee' | 'team'
-  const [activeTab, setActiveTab] = useState<'overview' | 'department' | 'employee' | 'team'>('employee');
+  // Tab: 'overview' | 'department' | 'employee' | 'my-team' | 'team'
+  const [activeTab, setActiveTab] = useState<'overview' | 'department' | 'employee' | 'my-team' | 'team'>('employee');
   const [graphRange, setGraphRange] = useState<GraphRange>('7d');
   const [access, setAccess] = useState<DwmsAccessCapabilities | null>(null);
 
@@ -162,12 +162,13 @@ function DashboardPage() {
     if (!access) return;
     if (activeTab === 'overview' && access.analyticsViewLevel !== 'ORGANIZATION') setActiveTab('employee');
     if (activeTab === 'department' && access.analyticsViewLevel === 'OWN') setActiveTab('employee');
-    if (activeTab === 'team' && !access.canViewEmployeePerformance) {
+    const canViewSelectedTeamMember = (access.teamPerformanceEmployeeIds ?? []).includes(selectedEmpId);
+    if (activeTab === 'team' && !access.canViewEmployeePerformance && !canViewSelectedTeamMember) {
       setShowSelectedEmployeeInsights(false);
       setActiveTab('employee');
       if (user) setSelectedEmpId(user.userId);
     }
-  }, [access, activeTab, user]);
+  }, [access, activeTab, selectedEmpId, user]);
 
   // Load lists when overview data or department scoreboard is fetched
   useEffect(() => {
@@ -241,11 +242,11 @@ function DashboardPage() {
         } else {
           setError('No department selected or assigned.');
         }
-      } else if (activeTab === 'employee' || activeTab === 'team') {
-        let empId = selectedEmpId;
+      } else if (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team') {
+        let empId = activeTab === 'my-team' ? user.userId : selectedEmpId;
 
         // Ensure lists are loaded for role-based dropdown filter
-        if (access?.analyticsViewLevel === 'ORGANIZATION' && !overviewDataRef.current) {
+        if (activeTab !== 'my-team' && access?.analyticsViewLevel === 'ORGANIZATION' && !overviewDataRef.current) {
           const overview = await DwmsService.getDashboardOverview(token, days);
           updateOverviewData(overview);
           const permittedEmployeeIds = new Set(
@@ -258,7 +259,7 @@ function DashboardPage() {
             empId = firstEmployee.id;
             setSelectedEmpId(empId);
           }
-        } else if (access?.analyticsViewLevel === 'DEPARTMENT' && !departmentDataRef.current) {
+        } else if (activeTab !== 'my-team' && access?.analyticsViewLevel === 'DEPARTMENT' && !departmentDataRef.current) {
           const deptId = user.departmentId || '';
           const dept = await DwmsService.getDashboardDepartment(token, deptId, days);
           updateDepartmentData(dept);
@@ -275,7 +276,9 @@ function DashboardPage() {
         }
 
         if (activeTab === 'team' && user) {
-          const permittedEmployeeIds = access?.employeePerformanceEmployeeIds ?? [];
+          const permittedEmployeeIds = access?.canViewEmployeePerformance
+            ? access.employeePerformanceEmployeeIds
+            : (access?.teamPerformanceEmployeeIds ?? []);
           empId = permittedEmployeeIds.includes(selectedEmpId)
             ? selectedEmpId
             : (permittedEmployeeIds[0] ?? '');
@@ -306,14 +309,14 @@ function DashboardPage() {
   const stats = useMemo(() => {
     if (activeTab === 'overview') return overviewData?.summary;
     if (activeTab === 'department') return departmentData?.summary;
-    if (activeTab === 'employee' || activeTab === 'team') return employeeData?.summary;
+    if (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team') return employeeData?.summary;
     return null;
   }, [activeTab, overviewData, departmentData, employeeData]);
 
   const completionTrends = useMemo(() => {
     if (activeTab === 'overview') return overviewData?.trends?.tasksPerformedToday ?? [];
     if (activeTab === 'department') return departmentData?.trends?.tasksPerformedToday ?? [];
-    if (activeTab === 'employee' || activeTab === 'team') return employeeData?.trends?.tasksPerformedToday ?? [];
+    if (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team') return employeeData?.trends?.tasksPerformedToday ?? [];
     return [];
   }, [activeTab, overviewData, departmentData, employeeData]);
 
@@ -364,6 +367,9 @@ function DashboardPage() {
           if (tab === 'employee') {
             setActiveTab('employee');
             if (user) setSelectedEmpId(user.userId);
+          } else if (tab === 'my-team') {
+            setActiveTab('my-team');
+            if (user) setSelectedEmpId(user.userId);
           } else if (tab === 'team') {
             if (!access?.canViewEmployeePerformance) return;
             setActiveTab('team');
@@ -382,6 +388,11 @@ function DashboardPage() {
         }}
         tabs={[
           { key: 'employee', label: 'My Performance', dotColor: 'bg-blue-500' },
+          {
+            key: 'my-team' as const,
+            label: 'My Team Performance',
+            dotColor: 'bg-cyan-500',
+          },
           ...(canShowEmployeePerformanceTab(access)
             ? [
                 { key: 'team' as const, label: 'Employee Performance', dotColor: 'bg-indigo-500' },
@@ -458,7 +469,7 @@ function DashboardPage() {
         <div className="space-y-6">
 
           {/* Render charts and cards only when we are NOT in the 'team' tab, OR when in 'team' tab but viewing a specific employee */}
-          {(activeTab !== 'team' || selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && (
+          {activeTab !== 'my-team' && (activeTab !== 'team' || selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && (
             <>
               {/* 1. Period controls and KPI summary */}
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -556,17 +567,35 @@ function DashboardPage() {
           {activeTab === 'employee' && employeeData?.employee && (
             <EmployeeDashboard
               employeeData={{ ...employeeData, employee: employeeData.employee }}
-              loggedInUserId={user?.userId || ''}
+              loggedInUserId={access?.currentEmployeeId || user?.userId || ''}
               onSelectEmployee={handleSelectDepartmentEmployee}
               activeSubTab="insights"
             />
+          )}
+
+          {activeTab === 'my-team' && employeeData?.employee && (
+            employeeData.reporteesPerformance?.length ? (
+              <EmployeeDashboard
+                employeeData={{ ...employeeData, employee: employeeData.employee }}
+                loggedInUserId={access?.currentEmployeeId || employeeData.employee.id}
+                onSelectEmployee={handleSelectDepartmentEmployee}
+                activeSubTab="team"
+              />
+            ) : (
+              <div className="rounded-3xl border border-dashed border-border-app bg-white px-5 py-20 text-center">
+                <h3 className="font-semibold text-text-app">No team members linked</h3>
+                <p className="mt-2 text-sm text-muted-app">
+                  Employees assigned to you through the reporting-manager hierarchy will appear here.
+                </p>
+              </div>
+            )
           )}
 
           {activeTab === 'team' && employeeData?.employee && (
             <>
               <EmployeeDashboard
                 employeeData={{ ...employeeData, employee: employeeData.employee }}
-                loggedInUserId={user?.userId || ''}
+                loggedInUserId={access?.currentEmployeeId || user?.userId || ''}
                 onSelectEmployee={handleSelectDepartmentEmployee}
                 activeSubTab={selectedEmpId === user?.userId && !showSelectedEmployeeInsights ? 'team' : 'insights'}
               />

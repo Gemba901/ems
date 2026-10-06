@@ -29,8 +29,8 @@ export default function EmployeeDashboard({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {(activeSubTab === 'team' && isSelf) && employeeData.reporteesPerformance && employeeData.reporteesPerformance.length > 0 && (
         <div className="rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6 lg:col-span-3">
-          <h3 className="font-semibold text-text-app mb-1">My Reportees Performance</h3>
-          <p className="text-xs text-muted-app mb-4">Click on any reportee to view their detailed performance insights, trends, and tasks.</p>
+          <h3 className="font-semibold text-text-app mb-1">My Team Performance</h3>
+          <p className="text-xs text-muted-app mb-4">All direct and indirect reportees. Click any team member to view their detailed performance insights, trends, and tasks.</p>
           <div className="overflow-x-auto">
             <table className="min-w-[42rem] w-full border-collapse text-left text-xs">
               <thead>

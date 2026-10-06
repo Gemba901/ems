@@ -280,6 +280,7 @@ export interface DwmsAccessCapabilities {
   alertViewLevel: ViewLevel;
   analyticsViewLevel: ViewLevel;
   hasReportees: boolean;
+  teamPerformanceEmployeeIds: string[];
   canViewEmployeePerformance: boolean;
   employeePerformanceEmployeeIds: string[];
 }

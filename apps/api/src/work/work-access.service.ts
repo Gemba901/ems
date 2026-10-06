@@ -83,6 +83,22 @@ export class WorkAccessService {
         return access;
     }
 
+    // Employees whose reporting manager is the caller (direct reports only, not the whole chain).
+    async directReportIds(actor: WorkActor): Promise<string[]> {
+        const reports = await this.prisma.employee.findMany({
+            where: { reportingManagerId: actor.employeeId, organizationId: actor.organizationId },
+            select: { id: true },
+        });
+        return reports.map((r) => r.id);
+    }
+
+    async isReportingManagerOf(actor: WorkActor, employeeId: string): Promise<boolean> {
+        const count = await this.prisma.employee.count({
+            where: { id: employeeId, reportingManagerId: actor.employeeId, organizationId: actor.organizationId },
+        });
+        return count > 0;
+    }
+
     async assertCompanyEmployees(organizationId: string, employeeIds: string[]): Promise<void> {
         const ids = [...new Set(employeeIds)];
         if (ids.length === 0) return;

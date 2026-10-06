@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, Loader2, MapPin, MapPinOff } from "lucide-react";
 import { useAttendanceStatus, useClockIn, useClockOut } from "@/hooks/work/useWork";
 import { formatDateOnly, formatDuration, formatTime } from "@/lib/work/format";
-import { WorkApiError, type AttendanceRecord, type CapturedLocation } from "@/services/work.service";
+import { readLocation } from "@/lib/work/location";
+import { WorkApiError, type AttendanceRecord, type AttendanceStatus, type CapturedLocation } from "@/services/work.service";
 import { ErrorNote, Field, Surface, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
 
 type Phase =
@@ -12,37 +13,6 @@ type Phase =
   | { kind: "locating" }
   | { kind: "saving" }
   | { kind: "needs-reason"; problem: string };
-
-// Location is read once, only after the person presses Clock in, and is sent straight to the
-// backend. It is never stored in component state longer than the request, logged or reported.
-function readLocation(): Promise<CapturedLocation> {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      reject(new Error("This browser cannot share your location."));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        resolve({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracyMeters: Math.max(pos.coords.accuracy || 0, 0.001),
-          capturedAt: new Date(pos.timestamp || Date.now()).toISOString(),
-        }),
-      (err) =>
-        reject(
-          new Error(
-            err.code === err.PERMISSION_DENIED
-              ? "Location permission was denied."
-              : err.code === err.TIMEOUT
-                ? "Getting your location took too long."
-                : "Your location is unavailable right now.",
-          ),
-        ),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
-  });
-}
 
 function newRequestId(): string {
   return crypto.randomUUID();
@@ -67,6 +37,21 @@ function LocationLine({ record }: { record: AttendanceRecord }) {
     <span className="inline-flex items-center gap-1.5 text-sm text-slate-600">
       <MapPinOff className="h-4 w-4 text-slate-400" aria-hidden="true" /> Location missing (reason given)
     </span>
+  );
+}
+
+function ScheduleLine({ schedule, timeZone }: { schedule: AttendanceStatus["todaySchedule"]; timeZone: string }) {
+  if (schedule.dayType === "HOLIDAY") {
+    return <p className="-mt-2 mb-4 text-sm text-slate-600">{schedule.holidayName ?? "Holiday"}: no one is expected in today.</p>;
+  }
+  if (schedule.dayType === "NON_WORKING" || !schedule.startsAt || !schedule.endsAt) {
+    return <p className="-mt-2 mb-4 text-sm text-slate-600">Not a working day. Clock in only if you are working.</p>;
+  }
+  return (
+    <p className="-mt-2 mb-4 text-sm text-slate-600">
+      Work hours {formatTime(schedule.startsAt, timeZone)} – {formatTime(schedule.endsAt, timeZone)}
+      {schedule.lateAfter && schedule.lateAfter !== schedule.startsAt && ` · late after ${formatTime(schedule.lateAfter, timeZone)}`}
+    </p>
   );
 }
 
@@ -307,6 +292,7 @@ export function ClockCard() {
         </h2>
         {data && <span className="text-xs text-slate-500">{formatDateOnly(data.today, { weekday: "long" })}</span>}
       </div>
+      {data && <ScheduleLine schedule={data.todaySchedule} timeZone={data.timeZone} />}
       <div aria-live="polite">{body}</div>
       {error && (
         <div className="mt-3">

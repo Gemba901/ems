@@ -3,11 +3,11 @@ import { Prisma, WorkSprintStatus, WorkTaskStatus } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Page, pageArgs } from '../dto/common.dto';
-import { CreateSprintDto, SprintQueryDto, UpdateSprintDto } from '../dto/sprint.dto';
+import { CreateSprintDto, SprintQueryDto, UpdateSprintDto, UpdateSprintTeamDto } from '../dto/sprint.dto';
 import { WorkAccessService, WorkActor } from '../work-access.service';
 import { fromDbDate, toDbDate } from '../work-date';
-import { WorkErrorCode, isUniqueViolation, workBadRequest, workConflict } from '../work-errors';
-import { EMPLOYEE_SUMMARY_SELECT, toEmployeeSummary } from '../work-people';
+import { WorkErrorCode, workBadRequest, workConflict } from '../work-errors';
+import { EMPLOYEE_SUMMARY_SELECT, EmployeeSummary, toEmployeeSummary } from '../work-people';
 import { SprintCompletionSnapshot, buildSprintSnapshot, completionPercent } from './sprint-snapshot';
 
 const SPRINT_SELECT = {
@@ -23,6 +23,8 @@ const SPRINT_SELECT = {
     completionSnapshot: true,
     createdAt: true,
     updatedAt: true,
+    lead: { select: EMPLOYEE_SUMMARY_SELECT },
+    members: { select: { employee: { select: EMPLOYEE_SUMMARY_SELECT } } },
 } satisfies Prisma.WorkSprintSelect;
 
 type SprintRow = Prisma.WorkSprintGetPayload<{ select: typeof SPRINT_SELECT }>;
@@ -37,6 +39,8 @@ export type SprintView = {
     status: WorkSprintStatus;
     startedAt: Date | null;
     completedAt: Date | null;
+    lead: EmployeeSummary | null;
+    members: EmployeeSummary[];
     taskCounts: { total: number; done: number; percent: number };
 };
 
@@ -76,6 +80,7 @@ export class SprintsService {
         const actor = await this.access.resolveActor(user);
         await this.access.assertCanManageProject(actor, projectId);
         this.assertDateOrder(dto.startDate, dto.endDate);
+        const memberIds = await this.assertProjectMembers(projectId, dto.leadId ?? null, dto.memberIds ?? []);
 
         const sprint = await this.prisma.workSprint.create({
             data: {
@@ -85,6 +90,8 @@ export class SprintsService {
                 startDate: toDbDate(dto.startDate),
                 endDate: toDbDate(dto.endDate),
                 createdById: actor.employeeId,
+                leadId: dto.leadId ?? null,
+                members: { createMany: { data: memberIds.map((employeeId) => ({ employeeId })) } },
             },
             select: SPRINT_SELECT,
         });
@@ -114,24 +121,44 @@ export class SprintsService {
         return this.reload(sprintId);
     }
 
-    // The partial unique index allows one ACTIVE sprint per project, so a concurrent start fails with P2002.
+    // Lead and members of a planned or active sprint. Completed sprints keep the team they finished with.
+    async updateTeam(user: AccessTokenPayload, sprintId: string, dto: UpdateSprintTeamDto): Promise<SprintDetail> {
+        const actor = await this.access.resolveActor(user);
+        const sprint = await this.loadSprint(actor, sprintId, true);
+        if (sprint.status === WorkSprintStatus.COMPLETED) {
+            throw workConflict(WorkErrorCode.SPRINT_NOT_ACTIVE, 'A completed sprint cannot be changed');
+        }
+        const leadId = dto.leadId === undefined ? (sprint.lead?.id ?? null) : dto.leadId;
+        const memberIds = await this.assertProjectMembers(sprint.projectId, leadId, dto.memberIds ?? []);
+
+        await this.prisma.$transaction(async (tx) => {
+            const { count } = await tx.workSprint.updateMany({
+                where: { id: sprintId, status: { not: WorkSprintStatus.COMPLETED } },
+                data: { leadId },
+            });
+            if (count === 0) throw workConflict(WorkErrorCode.SPRINT_NOT_ACTIVE, 'A completed sprint cannot be changed');
+            if (dto.memberIds) {
+                await tx.workSprintMember.deleteMany({ where: { sprintId, employeeId: { notIn: memberIds } } });
+                await tx.workSprintMember.createMany({
+                    data: memberIds.map((employeeId) => ({ sprintId, employeeId })),
+                    skipDuplicates: true,
+                });
+            }
+        });
+        return this.reload(sprintId);
+    }
+
+    // Several sprints can run at once in one project, so a large team can work on parts in parallel.
     async start(user: AccessTokenPayload, sprintId: string): Promise<SprintDetail> {
         const actor = await this.access.resolveActor(user);
         const sprint = await this.loadSprint(actor, sprintId, true);
         if (sprint.status !== WorkSprintStatus.PLANNED) throw this.notPlanned();
 
-        try {
-            const { count } = await this.prisma.workSprint.updateMany({
-                where: { id: sprintId, status: WorkSprintStatus.PLANNED },
-                data: { status: WorkSprintStatus.ACTIVE, startedAt: new Date() },
-            });
-            if (count === 0) throw this.notPlanned();
-        } catch (error) {
-            if (isUniqueViolation(error)) {
-                throw workConflict(WorkErrorCode.SPRINT_ALREADY_ACTIVE, 'This project already has an active sprint; complete it first');
-            }
-            throw error;
-        }
+        const { count } = await this.prisma.workSprint.updateMany({
+            where: { id: sprintId, status: WorkSprintStatus.PLANNED },
+            data: { status: WorkSprintStatus.ACTIVE, startedAt: new Date() },
+        });
+        if (count === 0) throw this.notPlanned();
         return this.reload(sprintId);
     }
 
@@ -215,6 +242,8 @@ export class SprintsService {
             status: sprint.status,
             startedAt: sprint.startedAt,
             completedAt: sprint.completedAt,
+            lead: sprint.lead && toEmployeeSummary(sprint.lead),
+            members: sprint.members.map((m) => toEmployeeSummary(m.employee)).sort((a, b) => a.name.localeCompare(b.name)),
             taskCounts: {
                 ...counts,
                 percent: completionPercent({ totalCount: counts.total, completedCount: counts.done }),
@@ -244,6 +273,17 @@ export class SprintsService {
             counts.set(g.sprintId, entry);
         }
         return counts;
+    }
+
+    // The lead is always counted as a member. Everyone must belong to the project.
+    private async assertProjectMembers(projectId: string, leadId: string | null, memberIds: string[]): Promise<string[]> {
+        const ids = [...new Set(leadId ? [...memberIds, leadId] : memberIds)];
+        if (!ids.length) return ids;
+        const found = await this.prisma.workProjectMember.count({ where: { projectId, employeeId: { in: ids } } });
+        if (found !== ids.length) {
+            throw workBadRequest(WorkErrorCode.SPRINT_MEMBER_NOT_IN_PROJECT, 'Sprint lead and members must be members of the project');
+        }
+        return ids;
     }
 
     private assertDateOrder(startDate: string, endDate: string): void {

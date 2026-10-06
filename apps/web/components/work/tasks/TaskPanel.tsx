@@ -16,7 +16,7 @@ import {
 } from "@/services/work.service";
 import { useToast } from "@/contexts/toast.context";
 import { TaskComments } from "@/components/work/tasks/TaskComments";
-import { ErrorNote, Field, Loading, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import { ErrorNote, Field, Loading, SPRINT_TERM, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
 
 function TaskEditor({
   task,
@@ -121,7 +121,7 @@ function TaskEditor({
           <input id="panel-due" type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
         <Field
-          label="Sprint"
+          label={SPRINT_TERM}
           htmlFor="panel-sprint"
           hint={
             !canManage

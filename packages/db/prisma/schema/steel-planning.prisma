@@ -251,33 +251,33 @@ model SteelProductionRouteStep {
 }
 
 model SteelMaterialMaster {
-  id             String   @id @default(uuid())
+  id             String  @id @default(uuid())
   organizationId String
   code           String
   name           String
   unit           String
-  isActive       Boolean  @default(true)
+  isActive       Boolean @default(true)
 
   // Steel Configuration — procurement master-data fields (P02 data foundation).
   // materialType reuses the P02 enum so a material can be filtered by the same
   // classification P02-A02 records against the sourcing order.
-  category          String?
-  materialType      SteelMaterialType?
-  procurementType   SteelProcurementType?
-  frequentlySourced Boolean               @default(false)
+  category               String?
+  materialType           SteelMaterialType?
+  procurementType        SteelProcurementType?
+  frequentlySourced      Boolean               @default(false)
   specificationReference String?
-  requiredDocuments String[]              @default([])
-  notes             String?
-  createdById       String?
-  updatedById       String?
+  requiredDocuments      String[]              @default([])
+  notes                  String?
+  createdById            String?
+  updatedById            String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization              @relation(fields: [organizationId], references: [id])
+  organization      Organization            @relation(fields: [organizationId], references: [id])
   eligibleSuppliers SteelSupplierMaterial[]
-  createdBy    Employee?                 @relation("SteelMaterialMasterCreatedBy", fields: [createdById], references: [id])
-  updatedBy    Employee?                 @relation("SteelMaterialMasterUpdatedBy", fields: [updatedById], references: [id])
+  createdBy         Employee?               @relation("SteelMaterialMasterCreatedBy", fields: [createdById], references: [id])
+  updatedBy         Employee?               @relation("SteelMaterialMasterUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([organizationId, code])
   @@index([organizationId])

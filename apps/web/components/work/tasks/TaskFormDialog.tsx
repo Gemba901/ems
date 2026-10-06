@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useCreateTask } from "@/hooks/work/useWork";
 import { TASK_STATUS_LABELS, TASK_STATUSES, type ProjectMember, type Sprint, type WorkTaskStatus } from "@/services/work.service";
-import { ErrorNote, Field, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import { ErrorNote, Field, SPRINT_TERM, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
 
 /** Add a task. Only project managers can place it in a sprint; others always add to Unscheduled. Mount only while open. */
 export function TaskFormDialog({
@@ -130,7 +130,7 @@ export function TaskFormDialog({
             <input id="task-due" type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </Field>
           {canManage && (
-            <Field label="Sprint" htmlFor="task-sprint">
+            <Field label={SPRINT_TERM} htmlFor="task-sprint">
               <select id="task-sprint" className={inputClass} value={sprintId} onChange={(e) => setSprintId(e.target.value)}>
                 <option value="">Unscheduled</option>
                 {assignable.map((s) => (

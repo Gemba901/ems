@@ -11,8 +11,8 @@ import {
     ValidateIf,
     ValidateNested,
 } from 'class-validator';
-import { WorkProjectRole } from 'db';
-import { Trim } from './common.dto';
+import { WorkProjectRole, WorkProjectStatus } from 'db';
+import { IsDateOnly, Trim } from './common.dto';
 
 export class ProjectMemberDto {
     @IsString()
@@ -37,6 +37,11 @@ export class CreateProjectDto {
     @MaxLength(2000)
     description?: string;
 
+    // Deadline for on-time reporting.
+    @IsOptional()
+    @IsDateOnly()
+    targetDate?: string;
+
     // The creator is always added as MANAGER by the service; listing them here is allowed.
     @IsOptional()
     @IsArray()
@@ -60,6 +65,16 @@ export class UpdateProjectDto {
     @IsString()
     @MaxLength(2000)
     description?: string | null;
+
+    // null clears the deadline.
+    @ValidateIf((_, value) => value !== undefined && value !== null)
+    @IsDateOnly()
+    targetDate?: string | null;
+
+    // COMPLETED records completedAt; ACTIVE reopens the project and clears it.
+    @IsOptional()
+    @IsEnum(WorkProjectStatus)
+    status?: WorkProjectStatus;
 
     // Full replacement of the member list when present.
     @IsOptional()

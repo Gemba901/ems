@@ -102,27 +102,27 @@ model TaskInstanceEvent {
 }
 
 model Alert {
-  id                       String                     @id @default(uuid())
-  type                     AlertType
-  title                    String
-  description              String
-  raisedById               String
-  organizationId           String?
-  severity                 Severity
-  raiseCount               Int                        @default(1)
-  taskInstanceId           String?
-  departmentId             String?
-  againstUserId            String?
-  isAbnormality            Boolean                    @default(false)
-  deduplicationKey         String?                    @unique
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @updatedAt
+  id               String    @id @default(uuid())
+  type             AlertType
+  title            String
+  description      String
+  raisedById       String
+  organizationId   String?
+  severity         Severity
+  raiseCount       Int       @default(1)
+  taskInstanceId   String?
+  departmentId     String?
+  againstUserId    String?
+  isAbnormality    Boolean   @default(false)
+  deduplicationKey String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  raisedBy     Employee       @relation("AlertsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
-  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  taskInstance TaskInstance?  @relation(fields: [taskInstanceId], references: [id], onDelete: SetNull)
-  department   Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  againstUser  Employee?      @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
+  raisedBy     Employee          @relation("AlertsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskInstance TaskInstance?     @relation(fields: [taskInstanceId], references: [id], onDelete: SetNull)
+  department   Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  againstUser  Employee?         @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
   comments     AlertComment[]
   occurrences  AlertOccurrence[]
 
@@ -187,7 +187,6 @@ enum Severity {
   CRITICAL
 }
 
-
 enum TaskFrequency {
   DAILY
   WEEKLY
@@ -225,13 +224,11 @@ enum Priority {
   CRITICAL
 }
 
-
 enum ViewLevel {
   OWN
   DEPARTMENT
   ORGANIZATION
 }
-
 
 enum TaskPermissionRole {
   ADMIN

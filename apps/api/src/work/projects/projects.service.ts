@@ -1,10 +1,11 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { Prisma, WorkProjectRole, WorkSprintStatus, WorkTaskStatus } from 'db';
+import { Prisma, WorkProjectRole, WorkProjectStatus, WorkSprintStatus, WorkTaskStatus } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Page, PageQueryDto, pageArgs } from '../dto/common.dto';
 import { CreateProjectDto, ProjectMemberDto, UpdateProjectDto } from '../dto/project.dto';
 import { WorkAccessService } from '../work-access.service';
+import { fromDbDate, toDbDate } from '../work-date';
 import { WorkErrorCode, workBadRequest, workConflict } from '../work-errors';
 import { EMPLOYEE_SUMMARY_SELECT, EmployeeSummary, toEmployeeSummary } from '../work-people';
 
@@ -12,7 +13,11 @@ export type ProjectSummary = {
     id: string;
     name: string;
     description: string | null;
-    activeSprint: { id: string; name: string } | null;
+    status: WorkProjectStatus;
+    targetDate: string | null;
+    completedAt: Date | null;
+    // Several sprints can run at once; oldest-started first.
+    activeSprints: { id: string; name: string }[];
     taskCounts: { total: number; done: number };
     memberCount: number;
     myRole: WorkProjectRole | null;
@@ -30,9 +35,16 @@ const PROJECT_SELECT = {
     id: true,
     name: true,
     description: true,
+    status: true,
+    targetDate: true,
+    completedAt: true,
     createdAt: true,
     updatedAt: true,
-    sprints: { where: { status: WorkSprintStatus.ACTIVE }, select: { id: true, name: true }, take: 1 },
+    sprints: {
+        where: { status: WorkSprintStatus.ACTIVE },
+        select: { id: true, name: true },
+        orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+    },
     _count: { select: { members: true } },
 } satisfies Prisma.WorkProjectSelect;
 
@@ -83,6 +95,7 @@ export class ProjectsService {
                 organizationId: actor.organizationId,
                 name: dto.name,
                 description: dto.description || null,
+                targetDate: dto.targetDate ? toDbDate(dto.targetDate) : null,
                 createdById: actor.employeeId,
                 members: { createMany: { data: members } },
             },
@@ -130,12 +143,21 @@ export class ProjectsService {
             await this.access.assertCompanyEmployees(actor.organizationId, members.map((m) => m.employeeId));
         }
 
+        // Completing twice keeps the first completedAt, so on-time reporting is stable.
+        if (dto.status !== undefined) {
+            const current = await this.prisma.workProject.findUniqueOrThrow({ where: { id: projectId }, select: { status: true } });
+            if (current.status === dto.status) dto = { ...dto, status: undefined };
+        }
+
         await this.prisma.$transaction(async (tx) => {
             await tx.workProject.update({
                 where: { id: projectId },
                 data: {
                     ...(dto.name != null && { name: dto.name }),
                     ...(dto.description !== undefined && { description: dto.description || null }),
+                    ...(dto.targetDate !== undefined && { targetDate: dto.targetDate && toDbDate(dto.targetDate) }),
+                    ...(dto.status === WorkProjectStatus.COMPLETED && { status: dto.status, completedAt: new Date() }),
+                    ...(dto.status === WorkProjectStatus.ACTIVE && { status: dto.status, completedAt: null }),
                 },
             });
             if (members) await this.replaceMembers(tx, projectId, members);
@@ -168,6 +190,10 @@ export class ProjectsService {
                 );
             }
             await tx.workProjectMember.deleteMany({ where: { projectId, employeeId: { in: removed } } });
+            // Completed sprints keep the team they finished with.
+            const open = { projectId, status: { not: WorkSprintStatus.COMPLETED } };
+            await tx.workSprintMember.deleteMany({ where: { sprint: open, employeeId: { in: removed } } });
+            await tx.workSprint.updateMany({ where: { ...open, leadId: { in: removed } }, data: { leadId: null } });
         }
 
         const currentRoles = new Map(current.map((m) => [m.employeeId, m.role]));
@@ -221,7 +247,10 @@ export class ProjectsService {
             id: project.id,
             name: project.name,
             description: project.description,
-            activeSprint: project.sprints[0] ?? null,
+            status: project.status,
+            targetDate: project.targetDate ? fromDbDate(project.targetDate) : null,
+            completedAt: project.completedAt,
+            activeSprints: project.sprints,
             taskCounts: counts ?? { total: 0, done: 0 },
             memberCount: project._count.members,
             myRole,

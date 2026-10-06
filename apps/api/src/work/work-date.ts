@@ -45,3 +45,54 @@ export function monthRange(value: string): { from: string; to: string } {
         to: fromDbDate(new Date(Date.UTC(year, month + 1, 0))),
     };
 }
+
+// YYYY-MM-DD shifted by a number of days.
+export function addDays(value: string, days: number): string {
+    const date = toDbDate(value);
+    date.setUTCDate(date.getUTCDate() + days);
+    return fromDbDate(date);
+}
+
+// 0 = Sunday … 6 = Saturday, matching LeaveSettings.workingDays and Date#getDay.
+export function weekdayOf(value: string): number {
+    return toDbDate(value).getUTCDay();
+}
+
+// Every date from `from` to `to`, inclusive.
+export function eachDate(from: string, to: string): string[] {
+    const dates: string[] = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) dates.push(d);
+    return dates;
+}
+
+// Whole days from `from` to `to` (0 when equal, negative when `to` is earlier).
+export function daysBetween(from: string, to: string): number {
+    return Math.round((toDbDate(to).getTime() - toDbDate(from).getTime()) / 86_400_000);
+}
+
+// Offset of `timeZone` from UTC at `instant`, in minutes.
+function zoneOffsetMinutes(instant: Date, timeZone: string): number {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    }).formatToParts(instant);
+    const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+    const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+    return Math.round((asUtc - instant.getTime()) / 60_000);
+}
+
+// The instant at which the wall clock in `timeZone` reads `time` (HH:mm) on `date`.
+export function zonedInstant(date: string, time: string, timeZone: string): Date {
+    const [h, m] = time.split(':').map(Number);
+    const wall = toDbDate(date).getTime() + (h * 60 + m) * 60_000;
+    // Two passes settle the offset around daylight-saving changes.
+    let instant = wall - zoneOffsetMinutes(new Date(wall), timeZone) * 60_000;
+    instant = wall - zoneOffsetMinutes(new Date(instant), timeZone) * 60_000;
+    return new Date(instant);
+}

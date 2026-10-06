@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { useMyAttendance, usePeopleSearch, useTeamAttendance, useWorkPermissions } from "@/hooks/work/useWork";
+import { useMyAttendance, usePeopleSearch, useTeam, useTeamAttendance, useWorkContext, useWorkPermissions } from "@/hooks/work/useWork";
 import { useAuthStore } from "@/store/auth.store";
-import { monthRangeIn } from "@/lib/work/format";
+import { RANGE_PRESET_LABELS, toDateRange, type RangePreset } from "@/lib/work/format";
 import type { AttendanceRecord, EmployeeSummary, TeamAttendanceRecord } from "@/services/work.service";
 import { AttendanceTable } from "@/components/work/attendance/AttendanceTable";
 import { CorrectTimeDialog } from "@/components/work/attendance/CorrectTimeDialog";
@@ -85,17 +85,49 @@ function EmployeeFilter({ value, onChange }: { value: EmployeeSummary | null; on
   );
 }
 
+// A reporting manager without attendance-manager rights picks from their direct reports only.
+function ReportFilter({ value, onChange }: { value: EmployeeSummary | null; onChange: (e: EmployeeSummary | null) => void }) {
+  const team = useTeam();
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor="report-filter" className="block text-sm font-medium text-slate-700">
+        Employee
+      </label>
+      <select
+        id="report-filter"
+        className={`${inputClass} sm:w-56`}
+        value={value?.id ?? ""}
+        onChange={(e) => {
+          const member = team.data?.find((m) => m.id === e.target.value);
+          onChange(member ? { id: member.id, name: member.name } : null);
+        }}
+      >
+        <option value="">All my direct reports</option>
+        {(team.data ?? []).map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function AttendancePage() {
   const { canManageAttendance } = useWorkPermissions();
+  const { data: context } = useWorkContext();
+  const hasReports = (context?.directReportCount ?? 0) > 0;
+  const canSeeTeam = canManageAttendance || hasReports;
   const timeZone = useAuthStore((s) => s.user?.organizationTimeZone) || "UTC";
   const [scope, setScope] = useState<"me" | "team">("me");
-  const [range, setRange] = useState(() => monthRangeIn(timeZone));
+  const [preset, setPreset] = useState<RangePreset>("month");
+  const [range, setRange] = useState(() => toDateRange("month", timeZone));
   const [page, setPage] = useState(1);
   const [employee, setEmployee] = useState<EmployeeSummary | null>(null);
   const [details, setDetails] = useState<(AttendanceRecord & { employee?: EmployeeSummary }) | null>(null);
   const [correcting, setCorrecting] = useState<TeamAttendanceRecord | null>(null);
 
-  const team = scope === "team" && canManageAttendance;
+  const team = scope === "team" && canSeeTeam;
   const rangeValid = !!range.from && !!range.to && range.from <= range.to;
   const query = { ...range, page, pageSize: PAGE_SIZE };
   const mine = useMyAttendance(query, !team && rangeValid);
@@ -109,6 +141,12 @@ export default function AttendancePage() {
     setPage(1);
   }
 
+  function choosePreset(next: RangePreset) {
+    setPreset(next);
+    if (next !== "custom") setRange(toDateRange(next, timeZone));
+    setPage(1);
+  }
+
   return (
     <div className="space-y-5">
       <header>
@@ -116,7 +154,7 @@ export default function AttendancePage() {
         <p className="mt-1 text-sm text-slate-500">Clock-in and clock-out history. Location is recorded only at clock-in.</p>
       </header>
 
-      {canManageAttendance && (
+      {canSeeTeam && (
         <div role="group" aria-label="Whose attendance" className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
           {(["me", "team"] as const).map((s) => (
             <button
@@ -131,7 +169,7 @@ export default function AttendancePage() {
                 scope === s ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              {s === "me" ? "My attendance" : "Team attendance"}
+              {s === "me" ? "My attendance" : canManageAttendance ? "Team attendance" : "My team"}
             </button>
           ))}
         </div>
@@ -139,26 +177,51 @@ export default function AttendancePage() {
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <label htmlFor="range-from" className="block text-sm font-medium text-slate-700">
-            From
+          <label htmlFor="range-preset" className="block text-sm font-medium text-slate-700">
+            Period
           </label>
-          <input id="range-from" type="date" className={inputClass} value={range.from} max={range.to || undefined} onChange={(e) => updateRange("from", e.target.value)} />
+          <select id="range-preset" className={`${inputClass} sm:w-44`} value={preset} onChange={(e) => choosePreset(e.target.value as RangePreset)}>
+            {(Object.keys(RANGE_PRESET_LABELS) as RangePreset[]).map((p) => (
+              <option key={p} value={p}>
+                {RANGE_PRESET_LABELS[p]}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="space-y-1.5">
-          <label htmlFor="range-to" className="block text-sm font-medium text-slate-700">
-            To
-          </label>
-          <input id="range-to" type="date" className={inputClass} value={range.to} min={range.from || undefined} onChange={(e) => updateRange("to", e.target.value)} />
-        </div>
-        {team && (
-          <EmployeeFilter
-            value={employee}
-            onChange={(e) => {
-              setEmployee(e);
-              setPage(1);
-            }}
-          />
+        {preset === "custom" && (
+          <>
+            <div className="space-y-1.5">
+              <label htmlFor="range-from" className="block text-sm font-medium text-slate-700">
+                From
+              </label>
+              <input id="range-from" type="date" className={inputClass} value={range.from} max={range.to || undefined} onChange={(e) => updateRange("from", e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="range-to" className="block text-sm font-medium text-slate-700">
+                To
+              </label>
+              <input id="range-to" type="date" className={inputClass} value={range.to} min={range.from || undefined} onChange={(e) => updateRange("to", e.target.value)} />
+            </div>
+          </>
         )}
+        {team &&
+          (canManageAttendance ? (
+            <EmployeeFilter
+              value={employee}
+              onChange={(e) => {
+                setEmployee(e);
+                setPage(1);
+              }}
+            />
+          ) : (
+            <ReportFilter
+              value={employee}
+              onChange={(e) => {
+                setEmployee(e);
+                setPage(1);
+              }}
+            />
+          ))}
       </div>
 
       <Surface className="overflow-hidden">
@@ -182,7 +245,7 @@ export default function AttendancePage() {
             records={data.items}
             showEmployee={team}
             onDetails={setDetails}
-            onCorrect={team ? setCorrecting : undefined}
+            onCorrect={team && canManageAttendance ? setCorrecting : undefined}
           />
         )}
       </Surface>

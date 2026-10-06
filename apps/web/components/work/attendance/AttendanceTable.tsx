@@ -1,8 +1,9 @@
 "use client";
 
 import { MapPin, MapPinOff, Pencil } from "lucide-react";
-import { formatDateOnly, formatDuration, formatTime } from "@/lib/work/format";
+import { formatDateOnly, formatDuration, formatMinutes, formatTime } from "@/lib/work/format";
 import type { AttendanceRecord, TeamAttendanceRecord } from "@/services/work.service";
+import { LocationCheckBadge, needsLocationAttention } from "@/components/work/attendance/LocationCheckBadge";
 
 type Row = AttendanceRecord & { employee?: { id: string; name: string } };
 
@@ -24,6 +25,32 @@ function LocationButton({ record, onOpen }: { record: Row; onOpen: () => void })
 function ClockOut({ record }: { record: Row }) {
   if (record.clockOutAt) return <>{formatTime(record.clockOutAt, record.timezoneAtClockIn)}</>;
   return <span className="font-medium text-amber-700">Still clocked in</span>;
+}
+
+function LocationFlag({ record }: { record: Row }) {
+  if (!needsLocationAttention(record.locationCheck)) return null;
+  return <LocationCheckBadge check={record.locationCheck} distanceMeters={record.distanceMeters} placeName={record.checkedPlaceName} compact />;
+}
+
+// Against the schedule saved when the person clocked in.
+function Punctuality({ record }: { record: Row }) {
+  if (record.lateMinutes > 0) {
+    return (
+      <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+        Late {formatMinutes(record.lateMinutes)}
+      </span>
+    );
+  }
+  return null;
+}
+
+function LeftEarly({ record }: { record: Row }) {
+  if (record.earlyLeaveMinutes <= 0) return null;
+  return (
+    <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
+      Left {formatMinutes(record.earlyLeaveMinutes)} early
+    </span>
+  );
 }
 
 function Edited({ record }: { record: Row }) {
@@ -72,13 +99,20 @@ export function AttendanceTable({
                   {formatDateOnly(r.workDate, { weekday: "short" })}
                   <Edited record={r} />
                 </td>
-                <td className="whitespace-nowrap px-4 py-2.5 text-slate-800">{formatTime(r.clockInAt, r.timezoneAtClockIn)}</td>
+                <td className="whitespace-nowrap px-4 py-2.5 text-slate-800">
+                  {formatTime(r.clockInAt, r.timezoneAtClockIn)}
+                  <Punctuality record={r} />
+                </td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-slate-800">
                   <ClockOut record={r} />
+                  <LeftEarly record={r} />
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-slate-800">{duration(r)}</td>
                 <td className="whitespace-nowrap px-4 py-2.5">
-                  <LocationButton record={r} onOpen={() => onDetails(r)} />
+                  <div className="flex flex-col items-start gap-1">
+                    <LocationButton record={r} onOpen={() => onDetails(r)} />
+                    <LocationFlag record={r} />
+                  </div>
                 </td>
                 {onCorrect && (
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
@@ -114,6 +148,13 @@ export function AttendanceTable({
               </div>
               <LocationButton record={r} onOpen={() => onDetails(r)} />
             </div>
+            {(r.lateMinutes > 0 || r.earlyLeaveMinutes > 0) && (
+              <p className="-ml-1.5">
+                <Punctuality record={r} />
+                <LeftEarly record={r} />
+              </p>
+            )}
+            <LocationFlag record={r} />
             <dl className="grid grid-cols-3 gap-2 text-sm">
               <div>
                 <dt className="text-xs text-slate-500">In</dt>

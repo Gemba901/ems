@@ -56,8 +56,8 @@ export class AttendanceController {
     return this.attendance.clockOut(user, recordId, dto);
   }
 
+  // Attendance managers, or anyone with direct reports; checked in the service.
   @Get('team')
-  @Roles(...ATTENDANCE_MANAGER_ROLES)
   @Header('Cache-Control', 'no-store')
   listTeam(@CurrentUser() user: AccessTokenPayload, @Query() query: TeamAttendanceQueryDto) {
     return this.attendance.listTeam(user, query);

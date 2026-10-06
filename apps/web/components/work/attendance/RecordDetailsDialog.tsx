@@ -1,20 +1,28 @@
 "use client";
 
-import { MapPin, MapPinOff } from "lucide-react";
+import { MapPinOff } from "lucide-react";
 import { useAttendanceCorrections, useAttendanceLocation } from "@/hooks/work/useWork";
 import { formatDateOnly, formatDateTime } from "@/lib/work/format";
-import type { AttendanceRecord } from "@/services/work.service";
+import type { AttendanceRecord, WorkArrangement } from "@/services/work.service";
+import { LocationMap, MapLegend } from "@/components/work/LocationMap";
+import { LocationCheckBadge } from "@/components/work/attendance/LocationCheckBadge";
 import { ErrorNote, Loading, WorkDialog, errorMessage, secondaryButton } from "@/components/work/ui";
 
-// Coordinates are requested only while this dialog is open and are shown as text only:
-// no map embed or third-party map link, so they never leave this page.
+const ARRANGEMENT_SENTENCE: Record<WorkArrangement, string> = {
+  ON_SITE: "On-site: compared with company locations.",
+  REMOTE: "Remote: compared with their approved home.",
+  HYBRID: "Hybrid: compared with company locations and their approved home.",
+};
+
+// Coordinates are requested only while this dialog is open. The map draws them on
+// OpenStreetMap tiles: the tile server sees the map area viewed, not the coordinates.
 function LocationSection({ recordId }: { recordId: string }) {
   const location = useAttendanceLocation(recordId);
   if (location.isLoading) return <Loading label="Loading location…" />;
   if (location.isError || !location.data) return <ErrorNote>{errorMessage(location.error, "Location could not be loaded.")}</ErrorNote>;
   const l = location.data;
 
-  if (l.locationStatus === "MISSING") {
+  if (l.locationStatus === "MISSING" || l.latitude == null || l.longitude == null) {
     return (
       <div className="space-y-1">
         <p className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
@@ -26,18 +34,31 @@ function LocationSection({ recordId }: { recordId: string }) {
       </div>
     );
   }
+  const place = l.checkedPlace;
   return (
-    <div className="space-y-1">
-      <p className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
-        <MapPin className="h-4 w-4 text-slate-500" aria-hidden="true" /> Location captured at clock-in
-      </p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-slate-500">Latitude</dt>
-        <dd className="font-mono text-slate-800">{l.latitude?.toFixed(6)}</dd>
-        <dt className="text-slate-500">Longitude</dt>
-        <dd className="font-mono text-slate-800">{l.longitude?.toFixed(6)}</dd>
+    <div className="space-y-3">
+      {l.locationCheck && (
+        <div className="space-y-1">
+          <LocationCheckBadge check={l.locationCheck} distanceMeters={l.distanceMeters} placeName={place?.name} />
+          {l.arrangementAtClockIn && <p className="text-xs text-slate-500">{ARRANGEMENT_SENTENCE[l.arrangementAtClockIn]}</p>}
+          {l.locationCheck === "OUTSIDE" && (
+            <p className="text-xs text-slate-500">Phone locations can drift or be faked, so treat this as something to ask about, not proof.</p>
+          )}
+        </div>
+      )}
+      <LocationMap
+        label="Map of the clock-in location"
+        point={{ latitude: l.latitude, longitude: l.longitude, accuracyMeters: l.accuracyMeters, label: "Clock-in location" }}
+        places={place ? [{ ...place, name: place.kind === "HOME" ? "Approved home" : place.name }] : []}
+      />
+      <MapLegend point="Clock-in (dashed ring: GPS accuracy)" site={place?.kind === "SITE"} home={place?.kind === "HOME"} />
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+        <dt className="text-slate-500">Coordinates</dt>
+        <dd className="font-mono text-slate-700">
+          {l.latitude.toFixed(6)}, {l.longitude.toFixed(6)}
+        </dd>
         <dt className="text-slate-500">Accuracy</dt>
-        <dd className="text-slate-800">{l.accuracyMeters != null ? `± ${Math.round(l.accuracyMeters)} m` : "—"}</dd>
+        <dd className="text-slate-700">{l.accuracyMeters != null ? `± ${Math.round(l.accuracyMeters)} m` : "—"}</dd>
       </dl>
     </div>
   );

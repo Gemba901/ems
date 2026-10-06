@@ -61,94 +61,99 @@ model Employee {
   hrRecordOwner      Employee?  @relation("HRRecordOwner", fields: [hrRecordOwnerId], references: [id], onDelete: SetNull)
   hrManagedEmployees Employee[] @relation("HRRecordOwner")
 
-  department            Department?               @relation(fields: [departmentId], references: [id])
-  organization          Organization              @relation(fields: [organizationId], references: [id])
-  user                  User?                     @relation(fields: [userId], references: [id])
-  suggestions           Suggestion[]              @relation("EmployeeSuggestions")
-  hodSuggestions        Suggestion[]              @relation("HODSuggestions")
-  suggestionReviews     SuggestionReview[]
-  committeeMembers      SteeringCommitteeMember[]
-  notifications         Notification[]
-  visitAttendances      VisitAttendee[]
-  leaveRequests         LeaveRequest[]
-  leaveBalances         LeaveBalance[]
-  handoverForLeaves     LeaveRequest[]            @relation("LeaveHandover")
-  handoverForLeaves2    LeaveRequest[]            @relation("LeaveHandover2")
-  createdCalendarEvents CalendarEvent[]           @relation("CalendarEventCreator")
-  receivedInvitations   EventInvitation[]         @relation("ReceivedInvitations")
-  eventParticipations   EventParticipant[]        @relation("EventParticipations")
-  oooBlocks             CalendarBlock[]
-  calendarFilters       CalendarFilter[]
-  assignedTasks         Task[]                    @relation("TaskAssignedBy")
-  tasks                 Task[]                    @relation("TaskOwner")
-  tasksToApprove        Task[]                    @relation("TaskApprovedBy")
-  backupTasks           Task[]                    @relation("TaskBackupOwner")
-  taskInstances         TaskInstance[]
-  taskInstanceComments  TaskInstanceComment[]
-  taskInstanceEvents    TaskInstanceEvent[]
-  activityAssignments       EmployeeActivityAssignment[]
-  activityIngestions    ActivityIngestion[]       @relation("ActivityIngestionUploader")
-  primaryActivities     Activity[]                @relation("ActivityPrimaryResponsible")
-  alertsRaised          Alert[]                   @relation("AlertsRaised")
-  alertsAgainst         Alert[]                   @relation("AlertsAgainst")
-  alertOccurrencesRaised AlertOccurrence[]        @relation("AlertOccurrencesRaised")
-  alertOccurrencesAcknowledged AlertOccurrence[] @relation("AlertOccurrencesAcknowledged")
-  ticketsRaised         Tickets[]                 @relation("ticketsRaisedBy")
-  ticketUpdates         TicketUpdate[]
-  kaizensRaised         Kaizen[]                  @relation("KaizenRaisedBy")
-  kaizensOwned          Kaizen[]                  @relation("KaizenOwner")
-  kaizenHodPreReviews   Kaizen[]                  @relation("KaizenHodPreReviewBy")
-  kaizenTeamMemberships Kaizen[]                  @relation("KaizenTeamMembers")
-  kaizenReviews         KaizenReview[]
-  kaizenVerifications   KaizenVerification[]      @relation("KaizenVerificationBy")
-  alertComments         AlertComment[]
-  sgasRaised            Sga[]                     @relation("SgaRaisedBy")
-  sgasOwned             Sga[]                     @relation("SgaOwner")
-  sgaTeamMemberships    Sga[]                     @relation("SgaTeamMembers")
-  sgaHodDecisions       Sga[]                     @relation("SgaHodDecisionBy")
-  sgaDepartmentRepFor   Sga[]                     @relation("SgaDepartmentRep")
-  sgaVerifications      SgaVerification[]         @relation("SgaVerificationBy")
-  sgaActionsResponsible SgaActionItem[]           @relation("SgaActionResponsible")
-  sgaReviews            SgaReview[]
-  workProjectsCreated   WorkProject[]             @relation("WorkProjectCreatedBy")
-  workProjectMembership WorkProjectMember[]
-  workTasksAssigned     WorkTask[]                @relation("WorkTaskAssignee")
-  workTasksCreated      WorkTask[]                @relation("WorkTaskCreatedBy")
-  workTaskComments      WorkTaskComment[]         @relation("WorkTaskCommentAuthor")
-  workSprintsCreated    WorkSprint[]              @relation("WorkSprintCreatedBy")
-  attendanceRecords     AttendanceRecord[]        @relation("AttendanceEmployee")
-  attendanceCorrections AttendanceCorrection[]    @relation("AttendanceCorrectionActor")
+  department                   Department?                  @relation(fields: [departmentId], references: [id])
+  organization                 Organization                 @relation(fields: [organizationId], references: [id])
+  user                         User?                        @relation(fields: [userId], references: [id])
+  suggestions                  Suggestion[]                 @relation("EmployeeSuggestions")
+  hodSuggestions               Suggestion[]                 @relation("HODSuggestions")
+  suggestionReviews            SuggestionReview[]
+  committeeMembers             SteeringCommitteeMember[]
+  notifications                Notification[]
+  visitAttendances             VisitAttendee[]
+  leaveRequests                LeaveRequest[]
+  leaveBalances                LeaveBalance[]
+  handoverForLeaves            LeaveRequest[]               @relation("LeaveHandover")
+  handoverForLeaves2           LeaveRequest[]               @relation("LeaveHandover2")
+  createdCalendarEvents        CalendarEvent[]              @relation("CalendarEventCreator")
+  receivedInvitations          EventInvitation[]            @relation("ReceivedInvitations")
+  eventParticipations          EventParticipant[]           @relation("EventParticipations")
+  oooBlocks                    CalendarBlock[]
+  calendarFilters              CalendarFilter[]
+  assignedTasks                Task[]                       @relation("TaskAssignedBy")
+  tasks                        Task[]                       @relation("TaskOwner")
+  tasksToApprove               Task[]                       @relation("TaskApprovedBy")
+  backupTasks                  Task[]                       @relation("TaskBackupOwner")
+  taskInstances                TaskInstance[]
+  taskInstanceComments         TaskInstanceComment[]
+  taskInstanceEvents           TaskInstanceEvent[]
+  activityAssignments          EmployeeActivityAssignment[]
+  activityIngestions           ActivityIngestion[]          @relation("ActivityIngestionUploader")
+  primaryActivities            Activity[]                   @relation("ActivityPrimaryResponsible")
+  alertsRaised                 Alert[]                      @relation("AlertsRaised")
+  alertsAgainst                Alert[]                      @relation("AlertsAgainst")
+  alertOccurrencesRaised       AlertOccurrence[]            @relation("AlertOccurrencesRaised")
+  alertOccurrencesAcknowledged AlertOccurrence[]            @relation("AlertOccurrencesAcknowledged")
+  ticketsRaised                Tickets[]                    @relation("ticketsRaisedBy")
+  ticketUpdates                TicketUpdate[]
+  kaizensRaised                Kaizen[]                     @relation("KaizenRaisedBy")
+  kaizensOwned                 Kaizen[]                     @relation("KaizenOwner")
+  kaizenHodPreReviews          Kaizen[]                     @relation("KaizenHodPreReviewBy")
+  kaizenTeamMemberships        Kaizen[]                     @relation("KaizenTeamMembers")
+  kaizenReviews                KaizenReview[]
+  kaizenVerifications          KaizenVerification[]         @relation("KaizenVerificationBy")
+  alertComments                AlertComment[]
+  sgasRaised                   Sga[]                        @relation("SgaRaisedBy")
+  sgasOwned                    Sga[]                        @relation("SgaOwner")
+  sgaTeamMemberships           Sga[]                        @relation("SgaTeamMembers")
+  sgaHodDecisions              Sga[]                        @relation("SgaHodDecisionBy")
+  sgaDepartmentRepFor          Sga[]                        @relation("SgaDepartmentRep")
+  sgaVerifications             SgaVerification[]            @relation("SgaVerificationBy")
+  sgaActionsResponsible        SgaActionItem[]              @relation("SgaActionResponsible")
+  sgaReviews                   SgaReview[]
+  workProjectsCreated          WorkProject[]                @relation("WorkProjectCreatedBy")
+  workProjectMembership        WorkProjectMember[]
+  workTasksAssigned            WorkTask[]                   @relation("WorkTaskAssignee")
+  workTasksCreated             WorkTask[]                   @relation("WorkTaskCreatedBy")
+  workTaskComments             WorkTaskComment[]            @relation("WorkTaskCommentAuthor")
+  workSprintsCreated           WorkSprint[]                 @relation("WorkSprintCreatedBy")
+  workSprintsLed               WorkSprint[]                 @relation("WorkSprintLead")
+  workSprintMembership         WorkSprintMember[]           @relation("WorkSprintMember")
+  workProfile                  WorkEmployeeProfile?         @relation("WorkEmployeeProfile")
+  workHomeRequests             WorkHomeLocationRequest[]    @relation("WorkHomeLocationRequester")
+  workHomeReviews              WorkHomeLocationRequest[]    @relation("WorkHomeLocationReviewer")
+  attendanceRecords            AttendanceRecord[]           @relation("AttendanceEmployee")
+  attendanceCorrections        AttendanceCorrection[]       @relation("AttendanceCorrectionActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  steelPlansCreated             SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
-  steelPlansApproved            SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
-  steelActivityLogs             SteelPlanActivityLog[]
-  steelDepartmentAcks           SteelPlanDepartmentAck[]
-  steelSourcingOrdersCreated    SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
-  steelSourcingActivityLogs     SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
-  steelSourcingAttachmentsUploaded SteelSourcingAttachment[]        @relation("SteelSourcingAttachmentUploadedBy")
-  steelSuppliersCreated         Supplier[]                          @relation("SupplierCreatedBy")
-  steelSuppliersUpdated         Supplier[]                          @relation("SupplierUpdatedBy")
-  steelMaterialMastersCreated   SteelMaterialMaster[]                @relation("SteelMaterialMasterCreatedBy")
-  steelMaterialMastersUpdated   SteelMaterialMaster[]                @relation("SteelMaterialMasterUpdatedBy")
-  steelSupplierMaterialsCreated SteelSupplierMaterial[]              @relation("SteelSupplierMaterialCreatedBy")
-  steelSupplierMaterialsUpdated SteelSupplierMaterial[]              @relation("SteelSupplierMaterialUpdatedBy")
-  steelQcdCriteriaCreated       SteelQcdCriteria[]                   @relation("SteelQcdCriteriaCreatedBy")
-  steelQcdCriteriaUpdated       SteelQcdCriteria[]                   @relation("SteelQcdCriteriaUpdatedBy")
-  steelLookupsCreated           SteelLookup[]                        @relation("SteelLookupCreatedBy")
-  steelLookupsUpdated           SteelLookup[]                        @relation("SteelLookupUpdatedBy")
-  steelIntakesCreated           SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
-  steelIntakeActivityLogs       SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
-  steelChargePrepsCreated       SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
-  steelChargeActivityLogs       SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
-  steelMeltingsCreated          SteelMelting[]                      @relation("SteelMeltingCreatedBy")
-  steelHeatApprovalsCreated     SteelHeatApproval[]                 @relation("SteelHeatApprovalCreatedBy")
-  steelHeatApprovalActivityLogs SteelHeatApprovalActivityLog[]      @relation("SteelHeatApprovalPerformedBy")
-  steelMeltingActivityLogs      SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
-  heatMaterialChargesRecorded   HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
-  heatCycleEventsRecorded       HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
+  steelPlansCreated                SteelProductionPlan[]               @relation("SteelPlanCreatedBy")
+  steelPlansApproved               SteelProductionPlan[]               @relation("SteelPlanApprovedBy")
+  steelActivityLogs                SteelPlanActivityLog[]
+  steelDepartmentAcks              SteelPlanDepartmentAck[]
+  steelSourcingOrdersCreated       SteelSourcingOrder[]                @relation("SteelSourcingCreatedBy")
+  steelSourcingActivityLogs        SteelSourcingActivityLog[]          @relation("SteelSourcingPerformedBy")
+  steelSourcingAttachmentsUploaded SteelSourcingAttachment[]           @relation("SteelSourcingAttachmentUploadedBy")
+  steelSuppliersCreated            Supplier[]                          @relation("SupplierCreatedBy")
+  steelSuppliersUpdated            Supplier[]                          @relation("SupplierUpdatedBy")
+  steelMaterialMastersCreated      SteelMaterialMaster[]               @relation("SteelMaterialMasterCreatedBy")
+  steelMaterialMastersUpdated      SteelMaterialMaster[]               @relation("SteelMaterialMasterUpdatedBy")
+  steelSupplierMaterialsCreated    SteelSupplierMaterial[]             @relation("SteelSupplierMaterialCreatedBy")
+  steelSupplierMaterialsUpdated    SteelSupplierMaterial[]             @relation("SteelSupplierMaterialUpdatedBy")
+  steelQcdCriteriaCreated          SteelQcdCriteria[]                  @relation("SteelQcdCriteriaCreatedBy")
+  steelQcdCriteriaUpdated          SteelQcdCriteria[]                  @relation("SteelQcdCriteriaUpdatedBy")
+  steelLookupsCreated              SteelLookup[]                       @relation("SteelLookupCreatedBy")
+  steelLookupsUpdated              SteelLookup[]                       @relation("SteelLookupUpdatedBy")
+  steelIntakesCreated              SteelMaterialIntake[]               @relation("SteelIntakeCreatedBy")
+  steelIntakeActivityLogs          SteelMaterialIntakeActivityLog[]    @relation("SteelIntakePerformedBy")
+  steelChargePrepsCreated          SteelChargePreparation[]            @relation("SteelChargePrepCreatedBy")
+  steelChargeActivityLogs          SteelChargePreparationActivityLog[] @relation("SteelChargePrepPerformedBy")
+  steelMeltingsCreated             SteelMelting[]                      @relation("SteelMeltingCreatedBy")
+  steelHeatApprovalsCreated        SteelHeatApproval[]                 @relation("SteelHeatApprovalCreatedBy")
+  steelHeatApprovalActivityLogs    SteelHeatApprovalActivityLog[]      @relation("SteelHeatApprovalPerformedBy")
+  steelMeltingActivityLogs         SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
+  heatMaterialChargesRecorded      HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
+  heatCycleEventsRecorded          HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
 
   @@unique([email, organizationId])
   @@unique([phone, organizationId])
@@ -162,16 +167,16 @@ model Department {
   minLeaveHeadcount Int     @default(1)
   isPlatformTeam    Boolean @default(false)
 
-  employees    Employee[]
-  organization Organization @relation(fields: [organizationId], references: [id])
-  suggestions  Suggestion[]
-  tasks        Task[]
-  alerts       Alert[]
-  kaizens      Kaizen[]
-  activities   Activity[]
-  sgasMain      Sga[] @relation("SgaMainDepartment")
-  sgasOther     Sga[] @relation("SgaOtherDepartments")
-  sgasVerifying Sga[] @relation("SgaVerifyingDepartment")
+  employees     Employee[]
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  suggestions   Suggestion[]
+  tasks         Task[]
+  alerts        Alert[]
+  kaizens       Kaizen[]
+  activities    Activity[]
+  sgasMain      Sga[]        @relation("SgaMainDepartment")
+  sgasOther     Sga[]        @relation("SgaOtherDepartments")
+  sgasVerifying Sga[]        @relation("SgaVerifyingDepartment")
 }
 
 model SteeringCommittee {

@@ -66,17 +66,17 @@ model SteelLookup {
 // this material?"). Distinct from Supplier.materialTypes (coarse category match) —
 // this is a specific, admin-curated per-material approval.
 model SteelSupplierMaterial {
-  id             String   @id @default(uuid())
-  organizationId String
-  supplierId     String
-  materialId     String
-  isEligible     Boolean  @default(true)
+  id                     String   @id @default(uuid())
+  organizationId         String
+  supplierId             String
+  materialId             String
+  isEligible             Boolean  @default(true)
   specificationReference String?
-  isActive       Boolean  @default(true)
-  createdById    String?
-  updatedById    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive               Boolean  @default(true)
+  createdById            String?
+  updatedById            String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   organization Organization        @relation(fields: [organizationId], references: [id])
   supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -236,12 +236,12 @@ model Supplier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization    Organization             @relation(fields: [organizationId], references: [id])
-  sourcingOrders  SteelSourcingOrder[]
-  quotations      SteelSourcingQuotation[]
+  organization      Organization             @relation(fields: [organizationId], references: [id])
+  sourcingOrders    SteelSourcingOrder[]
+  quotations        SteelSourcingQuotation[]
   eligibleMaterials SteelSupplierMaterial[]
-  createdBy       Employee?                @relation("SupplierCreatedBy", fields: [createdById], references: [id])
-  updatedBy       Employee?                @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
+  createdBy         Employee?                @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  updatedBy         Employee?                @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([organizationId, code])
   @@index([organizationId])

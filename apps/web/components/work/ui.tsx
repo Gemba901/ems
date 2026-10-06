@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { Loader2, X } from "lucide-react";
+import { HelpCircle, Loader2, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { TASK_STATUS_LABELS, TASK_STATUSES, type WorkTaskStatus } from "@/services/work.service";
 
@@ -181,6 +182,41 @@ export function WorkDialog({
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/** A "?" that explains a term on hover, and on tap or keyboard focus for touch and keyboard users. */
+export function HelpTip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        openOnHover
+        delay={100}
+        aria-label={label}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      >
+        <HelpCircle className="h-4 w-4" aria-hidden="true" />
+      </PopoverTrigger>
+      <PopoverContent className="text-sm leading-relaxed text-slate-600">{children}</PopoverContent>
+    </Popover>
+  );
+}
+
+/** The term used across the app; teams outside software often call it a phase. */
+export const SPRINT_TERM = "Sprint / Phase";
+
+export function SprintHelp() {
+  return (
+    <HelpTip label="What is a sprint or phase?">
+      <p className="font-semibold text-slate-800">Sprint / Phase</p>
+      <p className="mt-1">
+        A fixed stretch of time (often 1–4 weeks) in which part of the project&apos;s work is planned and finished. Tasks are
+        scheduled into it, and when it ends, unfinished tasks go back to the backlog.
+      </p>
+      <p className="mt-1">
+        Several can run at once, so a large team can split up and work on different parts of a project in parallel.
+      </p>
+    </HelpTip>
   );
 }
 

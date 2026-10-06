@@ -2,6 +2,7 @@
 
 import { useAuthStore } from "@/store/auth.store";
 import { ClockCard } from "@/components/work/attendance/ClockCard";
+import { MyWorkLocation } from "@/components/work/locations/MyWorkLocation";
 import { MyTasksList } from "@/components/work/tasks/MyTasksList";
 
 // Attendance and tasks load independently, so an attendance failure never hides tasks.
@@ -15,8 +16,9 @@ export default function WorkHomePage() {
         <p className="mt-1 text-sm text-slate-500">Your attendance for today and the tasks assigned to you.</p>
       </header>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-        <div className="lg:order-2">
+        <div className="space-y-4 lg:order-2">
           <ClockCard />
+          <MyWorkLocation />
         </div>
         <div className="lg:order-1">
           <MyTasksList />

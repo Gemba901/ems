@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FolderKanban, Plus } from "lucide-react";
 import { useProjects, useWorkPermissions } from "@/hooks/work/useWork";
+import { useAuthStore } from "@/store/auth.store";
+import { formatDateOnly, todayIn } from "@/lib/work/format";
 import { ProjectFormDialog } from "@/components/work/projects/ProjectFormDialog";
 import { EmptyState, ErrorNote, Loading, Surface, errorMessage, primaryButton, secondaryButton } from "@/components/work/ui";
 
@@ -13,6 +15,8 @@ export default function ProjectsPage() {
   const projects = useProjects();
   const { canCreateProjects } = useWorkPermissions();
   const [creating, setCreating] = useState(false);
+  const timeZone = useAuthStore((s) => s.user?.organizationTimeZone) || "UTC";
+  const today = todayIn(timeZone);
   const items = projects.data?.items ?? [];
 
   return (
@@ -20,7 +24,7 @@ export default function ProjectsPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
-          <p className="mt-1 text-sm text-slate-500">Projects you belong to. Open one to see its tasks and sprints.</p>
+          <p className="mt-1 text-sm text-slate-500">Projects you belong to. Open one to see its tasks and sprints / phases.</p>
         </div>
         {canCreateProjects && (
           <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
@@ -61,13 +65,23 @@ export default function ProjectsPage() {
                 </span>
                 <span className="mt-4 flex flex-1 flex-col justify-end gap-1 text-sm text-slate-600">
                   <span>
-                    {p.activeSprint ? (
+                    {p.status === "COMPLETED" ? (
+                      <span className="font-medium text-emerald-700">Completed</span>
+                    ) : p.activeSprints.length > 0 ? (
                       <>
-                        Active sprint: <span className="font-medium text-slate-800">{p.activeSprint.name}</span>
+                        Active: <span className="font-medium text-slate-800">{p.activeSprints.map((s) => s.name).join(", ")}</span>
                       </>
                     ) : (
-                      <span className="text-slate-500">No active sprint</span>
+                      <span className="text-slate-500">No active sprint / phase</span>
                     )}
+                  </span>
+                  {p.targetDate && p.status !== "COMPLETED" && (
+                    <span className={p.targetDate < today ? "font-medium text-amber-700" : undefined}>
+                      {p.targetDate < today ? "Overdue · target " : "Target "}
+                      {formatDateOnly(p.targetDate, { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  )}
+                  <span>
                   </span>
                   <span>
                     {p.taskCounts.done} of {p.taskCounts.total} tasks done

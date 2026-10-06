@@ -1,10 +1,16 @@
-// TEAM WORKSPACE: projects, tasks, simple sprints and daily attendance.
+// TEAM WORKSPACE: projects, tasks, sprints (shown as "Sprint / Phase"), daily attendance,
+// and the organization's work schedule and holidays.
 // Attendance is independent of task work: no model here links the two.
 //
 // Rules Prisma cannot express live in the migration SQL:
 //   - one open AttendanceRecord per employee (partial unique index)
-//   - one ACTIVE WorkSprint per project (partial unique index)
 //   - location / time / text-length CHECK constraints
+// A project may run several ACTIVE sprints at once (e.g. one per sub-team).
+//
+// Clock-in locations are checked once, at clock-in, against the places the employee was
+// allowed to use then (company sites, an approved home, or both). The result is saved on the
+// record and never recomputed, like the schedule snapshot. GPS can be faked, so OUTSIDE is a
+// flag for review, not proof.
 
 enum WorkTaskStatus {
   TODO
@@ -24,19 +30,62 @@ enum WorkProjectRole {
   MEMBER
 }
 
+enum WorkProjectStatus {
+  ACTIVE
+  COMPLETED
+}
+
 enum AttendanceLocationStatus {
   CAPTURED
   MISSING
 }
 
+enum WorkHolidaySource {
+  PUBLIC
+  COMPANY
+}
+
+// ON_SITE: company sites only. REMOTE: approved home only. HYBRID: either.
+enum WorkArrangement {
+  ON_SITE
+  REMOTE
+  HYBRID
+}
+
+enum WorkPlaceKind {
+  SITE
+  HOME
+}
+
+// NO_LOCATION: clock-in without GPS. NO_APPROVED_PLACE: nothing to compare against (no
+// sites, or no approved home yet). LOW_ACCURACY: GPS too vague to tell either way.
+enum AttendanceLocationCheck {
+  INSIDE
+  OUTSIDE
+  NO_LOCATION
+  NO_APPROVED_PLACE
+  LOW_ACCURACY
+}
+
+enum HomeLocationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 model WorkProject {
-  id             String   @id @default(uuid())
+  id             String            @id @default(uuid())
   organizationId String
   name           String
   description    String?
+  status         WorkProjectStatus @default(ACTIVE)
+  // Optional deadline; on-time reporting compares completedAt's local date against it.
+  targetDate     DateTime?         @db.Date
+  completedAt    DateTime?
   createdById    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    Employee?           @relation("WorkProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -68,6 +117,8 @@ model WorkTask {
   assigneeId  String?
   status      WorkTaskStatus @default(TODO)
   dueDate     DateTime?      @db.Date
+  // Set when the task moves to DONE, cleared when it leaves DONE.
+  completedAt DateTime?
   sprintId    String?
   createdById String?
   createdAt   DateTime       @default(now())
@@ -82,6 +133,7 @@ model WorkTask {
   @@index([projectId, status])
   @@index([projectId, sprintId])
   @@index([assigneeId, status, dueDate])
+  @@index([assigneeId, completedAt])
 }
 
 model WorkTaskComment {
@@ -109,15 +161,31 @@ model WorkSprint {
   completedAt        DateTime?
   // Written once, in the completing transaction; never recalculated.
   completionSnapshot Json?
+  // Optional lead and sub-team, so a large project team can split across parallel sprints.
+  leadId             String?
   createdById        String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
-  project   WorkProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy Employee?   @relation("WorkSprintCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  project   WorkProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lead      Employee?          @relation("WorkSprintLead", fields: [leadId], references: [id], onDelete: SetNull)
+  createdBy Employee?          @relation("WorkSprintCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   tasks     WorkTask[]
+  members   WorkSprintMember[]
 
   @@index([projectId, status])
+}
+
+// Always a subset of the project's members; removing someone from the project removes them here.
+model WorkSprintMember {
+  sprintId   String
+  employeeId String
+
+  sprint   WorkSprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  employee Employee   @relation("WorkSprintMember", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([sprintId, employeeId])
+  @@index([employeeId])
 }
 
 // Open while clockOutAt is null; there is deliberately no separate status column.
@@ -131,6 +199,13 @@ model AttendanceRecord {
   clockInAt         DateTime
   clockOutAt        DateTime?
 
+  // The schedule in force at clock-in, so later settings changes never rewrite
+  // past punctuality. All null when the day was not a scheduled working day.
+  scheduledStartAt      DateTime?
+  scheduledEndAt        DateTime?
+  scheduledBreakMinutes Int?
+  lateGraceMinutes      Int?
+
   locationStatus        AttendanceLocationStatus
   latitude              Float?
   longitude             Float?
@@ -138,6 +213,19 @@ model AttendanceRecord {
   // Device-reported capture time, separate from the server clockInAt.
   locationCapturedAt    DateTime?
   locationMissingReason String?
+
+  // The location check at clock-in, against the nearest place the employee was allowed to use.
+  // Null on records from before checks existed. The place is copied so later edits to sites or
+  // homes never change past results.
+  locationCheck            AttendanceLocationCheck?
+  arrangementAtClockIn     WorkArrangement?
+  checkedPlaceKind         WorkPlaceKind?
+  checkedPlaceName         String?
+  checkedPlaceLatitude     Float?
+  checkedPlaceLongitude    Float?
+  checkedPlaceRadiusMeters Int?
+  // From the clock-in point to the checked place's centre.
+  distanceMeters           Int?
 
   // Client-generated keys so retried requests return the original result.
   clockInRequestId  String
@@ -178,4 +266,104 @@ model AttendanceCorrection {
   actor            Employee         @relation("AttendanceCorrectionActor", fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([attendanceRecordId, createdAt])
+}
+
+// One row per organization; missing means the defaults below. Working days are shared
+// with Leave and live in LeaveSettings.workingDays (0 = Sunday).
+// Times are HH:mm wall-clock in Organization.timeZone.
+model WorkSettings {
+  organizationId          String   @id
+  workStartTime           String   @default("09:00")
+  workEndTime             String   @default("17:00")
+  lateGraceMinutes        Int      @default(0)
+  lunchBreakEnabled       Boolean  @default(false)
+  lunchStartTime          String?
+  lunchEndTime            String?
+  // ISO 3166-1 alpha-2 country whose public holidays are imported; null = none.
+  holidayCountry          String?
+  // A holiday on a non-working day is also given on the next working day.
+  observeOnNextWorkingDay Boolean  @default(true)
+  // How far from an approved home a clock-in still counts as at home.
+  homeRadiusMeters        Int      @default(150)
+  updatedAt               DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// PUBLIC rows are imported from the country calendar and can be switched off but not deleted,
+// so a re-import never brings back a holiday the company chose not to observe.
+model WorkHoliday {
+  id             String            @id @default(uuid())
+  organizationId String
+  date           DateTime          @db.Date
+  name           String
+  source         WorkHolidaySource
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date, source])
+  @@index([organizationId, date])
+}
+
+// A company location where people may clock in.
+model WorkSite {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  latitude       Float
+  longitude      Float
+  radiusMeters   Int      @default(150)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+// Per-employee attendance setup, set by HR. A missing row means ON_SITE with no home.
+// The home here is the approved one; it stays in force until another request is approved.
+model WorkEmployeeProfile {
+  employeeId     String          @id
+  organizationId String
+  arrangement    WorkArrangement @default(ON_SITE)
+  homeLatitude   Float?
+  homeLongitude  Float?
+  homeApprovedAt DateTime?
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation("WorkEmployeeProfile", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, arrangement])
+}
+
+// An employee's home location, captured on their device while at home, waiting for HR or
+// their reporting manager to approve it. Kept after review as an audit trail.
+model WorkHomeLocationRequest {
+  id             String                    @id @default(uuid())
+  organizationId String
+  employeeId     String
+  latitude       Float
+  longitude      Float
+  accuracyMeters Float
+  capturedAt     DateTime
+  note           String?
+  status         HomeLocationRequestStatus @default(PENDING)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime                  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation("WorkHomeLocationRequester", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewedBy   Employee?    @relation("WorkHomeLocationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([employeeId, createdAt])
 }

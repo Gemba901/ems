@@ -128,6 +128,7 @@ export function ProjectFormDialog({
   const update = useUpdateProject(project?.id ?? "");
   const [name, setName] = useState(project?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? "");
+  const [targetDate, setTargetDate] = useState(project?.targetDate ?? "");
   const [members, setMembers] = useState<MemberRow[]>(
     project?.members.map((m) => ({ employee: m.employee, role: m.role })) ?? [],
   );
@@ -147,8 +148,8 @@ export function ProjectFormDialog({
     const memberInput = members.map((m) => ({ employeeId: m.employee.id, role: m.role }));
     try {
       const saved = project
-        ? await update.mutateAsync({ name: trimmed, description: description.trim() || null, members: memberInput })
-        : await create.mutateAsync({ name: trimmed, description: description.trim() || undefined, members: memberInput });
+        ? await update.mutateAsync({ name: trimmed, description: description.trim() || null, targetDate: targetDate || null, members: memberInput })
+        : await create.mutateAsync({ name: trimmed, description: description.trim() || undefined, targetDate: targetDate || undefined, members: memberInput });
       onSaved?.(saved);
       onOpenChange(false);
     } catch (err) {
@@ -163,7 +164,7 @@ export function ProjectFormDialog({
       onOpenChange={onOpenChange}
       size="lg"
       title={project ? "Edit project" : "New project"}
-      description={project ? "Change the name, description or members." : "You will be added as a project manager."}
+      description={project ? "Change the name, description, target date or members." : "You will be added as a project manager."}
       footer={
         <>
           <button type="button" className={secondaryButton} onClick={() => onOpenChange(false)}>
@@ -196,6 +197,16 @@ export function ProjectFormDialog({
             maxLength={2000}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+          />
+        </Field>
+        <Field label="Target date (optional)" htmlFor="project-target" hint="Used to report whether the project finished on time.">
+          <input
+            id="project-target"
+            type="date"
+            className={`${inputClass} sm:w-56`}
+            value={targetDate}
+            onChange={(e) => setTargetDate(e.target.value)}
+            aria-describedby="project-target-hint"
           />
         </Field>
         <MemberPicker members={members} onChange={setMembers} />

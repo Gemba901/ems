@@ -111,3 +111,31 @@ export function isOverdue(task: WorkTask, today: string): boolean {
 export function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "?";
 }
+
+/** "1h 05m" / "45m" from whole minutes. */
+export function formatMinutes(minutes: number): string {
+  return formatDuration(minutes * 60);
+}
+
+export type RangePreset = "week" | "month" | "year" | "custom";
+
+export const RANGE_PRESET_LABELS: Record<RangePreset, string> = {
+  week: "Week to date",
+  month: "Month to date",
+  year: "Year to date",
+  custom: "Custom range",
+};
+
+/** Start of the week (Monday), month or year through today, in the organization's zone. */
+export function toDateRange(preset: Exclude<RangePreset, "custom">, timeZone: string, now = new Date()): { from: string; to: string } {
+  const today = todayIn(timeZone, now);
+  if (preset === "year") return { from: `${today.slice(0, 4)}-01-01`, to: today };
+  if (preset === "month") return { from: `${today.slice(0, 8)}01`, to: today };
+  const [y, m, d] = today.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const back = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - back);
+  return { from: date.toISOString().slice(0, 10), to: today };
+}
+
+export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

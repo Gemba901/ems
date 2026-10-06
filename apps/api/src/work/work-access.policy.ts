@@ -26,3 +26,19 @@ export const ATTENDANCE_MANAGER_ROLES: readonly Role[] = [
     Role.MANAGEMENT,
     Role.HR,
 ];
+
+// Edit the work schedule, working days and holidays. Everyone can read them.
+export const WORK_SETTINGS_ROLES: readonly Role[] = [
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.HR,
+];
+
+// Organisation-wide analytics, and department analytics for any department.
+// A HOD sees department analytics for their own department only.
+export const ORG_ANALYTICS_ROLES: readonly Role[] = [
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.MANAGEMENT,
+    Role.HR,
+];

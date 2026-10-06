@@ -184,7 +184,7 @@ model Sga {
   targetCompletionDate DateTime?
   mainDepartmentId     String?
   workArea             String?
-  beforeFileUrls       String[] @default([])
+  beforeFileUrls       String[]  @default([])
 
   // Step 2 / Section 4 — team
   ownerId String?
@@ -201,7 +201,7 @@ model Sga {
   // Step 2 / Section 6 — resources, investment, HOD approval
   requiredResources             String?
   expectedBenefitSummary        String?
-  approximateInvestmentAmount   Decimal? @db.Decimal(14, 2)
+  approximateInvestmentAmount   Decimal?       @db.Decimal(14, 2)
   approximateInvestmentCurrency String?
   hodDecision                   SgaHodDecision @default(PENDING)
   hodRemarks                    String?
@@ -213,27 +213,27 @@ model Sga {
   immediateControlNeeded Boolean @default(false)
 
   // Step 3 / Section 8 — root cause analysis
-  rootCauseTools       SgaRootCauseTool[] @default([])
-  otherAnalysisNotes   String?
-  otherAnalysisFileUrls String[] @default([])
+  rootCauseTools        SgaRootCauseTool[] @default([])
+  otherAnalysisNotes    String?
+  otherAnalysisFileUrls String[]           @default([])
 
   // Step 4 / Section 11 — implementation
   implementationSummary            String?
-  afterFileUrls                    String[] @default([])
-  actualImplementationCost         Decimal? @db.Decimal(14, 2)
+  afterFileUrls                    String[]                @default([])
+  actualImplementationCost         Decimal?                @db.Decimal(14, 2)
   actualImplementationCostCurrency String?
   implementationStatus             SgaImplementationStatus @default(NOT_STARTED)
 
   // Step 5 / Section 13 — benefits and sustainability
   wasteReductionAchieved          String?
-  financialLossBeforeImprovement  Decimal? @db.Decimal(14, 2)
-  verifiedGrossBenefit            Decimal? @db.Decimal(14, 2)
+  financialLossBeforeImprovement  Decimal?          @db.Decimal(14, 2)
+  verifiedGrossBenefit            Decimal?          @db.Decimal(14, 2)
   benefitPeriod                   SgaBenefitPeriod?
   effectivenessConfirmationPeriod String?
-  sopUpdated                      Boolean @default(false)
-  employeesTrained                Boolean @default(false)
-  followUpCheckPlanned            Boolean @default(false)
-  appliedElsewhere                Boolean @default(false)
+  sopUpdated                      Boolean           @default(false)
+  employeesTrained                Boolean           @default(false)
+  followUpCheckPlanned            Boolean           @default(false)
+  appliedElsewhere                Boolean           @default(false)
   lessonsLearned                  String?
 
   // Step 6 / Section 14 — verify and close
@@ -294,15 +294,15 @@ model SgaWasteImpact {
 
 // Step 3 / Section 8 Why-Why sub-panel — one row per independent 5-whys chain
 model SgaWhyWhyChain {
-  id                 String            @id @default(uuid())
+  id                 String               @id @default(uuid())
   sgaId              String
   causeToInvestigate String
   linked5mCategory   SgaFishboneCategory?
-  whys               String[]          @default([])
+  whys               String[]             @default([])
   evidence           String?
-  finalDecision      SgaWhyWhyDecision @default(MORE_INVESTIGATION_REQUIRED)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  finalDecision      SgaWhyWhyDecision    @default(MORE_INVESTIGATION_REQUIRED)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -311,12 +311,12 @@ model SgaWhyWhyChain {
 
 // Step 5 / Section 13 "Benefits" QCDSMT tab — one row per selected category
 model SgaQcdsmtBenefit {
-  id               String            @id @default(uuid())
-  sgaId            String
-  category         SgaQcdsmtCategory
-  whatWasAchieved  String
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id              String            @id @default(uuid())
+  sgaId           String
+  category        SgaQcdsmtCategory
+  whatWasAchieved String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -336,8 +336,8 @@ model SgaQcdsmtImpact {
   otherUnitLabel  String?
   currency        String?
   expectedBenefit String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -356,8 +356,8 @@ model SgaMeasure {
   otherUnitLabel   String?
   linkedQcdsmt     SgaQcdsmtCategory?
   linkedWaste      SgaWaste?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -369,7 +369,7 @@ model SgaFishboneCause {
   sgaId       String
   category    SgaFishboneCategory
   description String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime            @default(now())
 
   sga Sga @relation(fields: [sgaId], references: [id], onDelete: Cascade)
 
@@ -394,7 +394,7 @@ model SgaMeetingReport {
 }
 
 model SgaActionItem {
-  id                  String    @id @default(uuid())
+  id                  String          @id @default(uuid())
   sgaId               String
   confirmedRootCause  String
   improvementAction   String
@@ -402,8 +402,8 @@ model SgaActionItem {
   dueDate             DateTime?
   status              SgaActionStatus @default(OPEN)
   completedAt         DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   sga               Sga       @relation(fields: [sgaId], references: [id], onDelete: Cascade)
   responsiblePerson Employee? @relation("SgaActionResponsible", fields: [responsiblePersonId], references: [id], onDelete: SetNull)
@@ -419,8 +419,8 @@ model SgaVerification {
   remarks      String?
   verifiedById String?
   verifiedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
 
   sga        Sga       @relation(fields: [sgaId], references: [id], onDelete: Cascade)
   verifiedBy Employee? @relation("SgaVerificationBy", fields: [verifiedById], references: [id], onDelete: SetNull)
@@ -435,7 +435,7 @@ model SgaReview {
   reviewerId    String
   statusChanged SgaStatus
   note          String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   sga      Sga      @relation(fields: [sgaId], references: [id], onDelete: Cascade)
   reviewer Employee @relation(fields: [reviewerId], references: [id])

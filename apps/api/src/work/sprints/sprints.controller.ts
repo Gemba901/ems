@@ -10,7 +10,7 @@ import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import { workValidationPipe } from '../dto/common.dto';
-import { CreateSprintDto, SprintQueryDto, UpdateSprintDto } from '../dto/sprint.dto';
+import { CreateSprintDto, SprintQueryDto, UpdateSprintDto, UpdateSprintTeamDto } from '../dto/sprint.dto';
 import { SprintsService } from './sprints.service';
 
 // Members can read sprints; changes need a project manager, checked in the service.
@@ -40,6 +40,11 @@ export class SprintsController {
   @Patch('sprints/:sprintId')
   update(@CurrentUser() user: AccessTokenPayload, @Param('sprintId') sprintId: string, @Body() dto: UpdateSprintDto) {
     return this.sprints.update(user, sprintId, dto);
+  }
+
+  @Patch('sprints/:sprintId/team')
+  updateTeam(@CurrentUser() user: AccessTokenPayload, @Param('sprintId') sprintId: string, @Body() dto: UpdateSprintTeamDto) {
+    return this.sprints.updateTeam(user, sprintId, dto);
   }
 
   @Post('sprints/:sprintId/start')

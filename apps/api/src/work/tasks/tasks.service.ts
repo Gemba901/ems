@@ -16,6 +16,7 @@ const TASK_SELECT = {
     description: true,
     status: true,
     dueDate: true,
+    completedAt: true,
     createdAt: true,
     updatedAt: true,
     project: { select: { id: true, name: true } },
@@ -39,6 +40,7 @@ export type TaskView = {
     description: string | null;
     status: WorkTaskStatus;
     dueDate: string | null;
+    completedAt: Date | null;
     assignee: EmployeeSummary | null;
     sprint: { id: string; name: string; status: WorkSprintStatus } | null;
     createdBy: EmployeeSummary | null;
@@ -57,6 +59,7 @@ function toTaskView(task: Prisma.WorkTaskGetPayload<{ select: typeof TASK_SELECT
         description: task.description,
         status: task.status,
         dueDate: task.dueDate ? fromDbDate(task.dueDate) : null,
+        completedAt: task.completedAt,
         assignee: toEmployeeSummary(task.assignee),
         sprint: task.sprint,
         createdBy: toEmployeeSummary(task.createdBy),
@@ -108,6 +111,7 @@ export class TasksService {
                 description: dto.description || null,
                 assigneeId: dto.assigneeId ?? null,
                 status: dto.status ?? WorkTaskStatus.TODO,
+                completedAt: dto.status === WorkTaskStatus.DONE ? new Date() : null,
                 dueDate: dto.dueDate ? toDbDate(dto.dueDate) : null,
                 sprintId: dto.sprintId ?? null,
                 createdById: actor.employeeId,
@@ -132,7 +136,11 @@ export class TasksService {
 
         if (dto.title !== undefined) data.title = dto.title;
         if (dto.description !== undefined) data.description = dto.description || null;
-        if (dto.status !== undefined) data.status = dto.status;
+        if (dto.status !== undefined && dto.status !== task.status) {
+            data.status = dto.status;
+            // Drives on-time reporting; cleared again if the task is reopened.
+            data.completedAt = dto.status === WorkTaskStatus.DONE ? new Date() : null;
+        }
         if (dto.dueDate !== undefined) data.dueDate = dto.dueDate === null ? null : toDbDate(dto.dueDate);
 
         if (dto.assigneeId !== undefined && dto.assigneeId !== task.assigneeId) {

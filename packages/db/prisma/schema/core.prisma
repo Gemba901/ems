@@ -105,7 +105,7 @@ enum TicketStatus {
 
 //organization
 model Organization {
-  files FileAsset[]
+  files        FileAsset[]
   id           String       @id @default(uuid())
   name         String
   shortName    String?
@@ -123,59 +123,64 @@ model Organization {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  userOrganizations    UserOrganization[]
-  employees            Employee[]
-  departments          Department[]
-  suggestions          Suggestion[]
-  committees           SteeringCommittee[]
-  consultancyVisits    ConsultancyVisit[]
-  visitRequests        VisitRequest[]
-  visitMonthPlans      VisitMonthPlan[]
-  leaveRequests        LeaveRequest[]
-  leavePolicies        LeavePolicy[]
-  leaveSettings        LeaveSettings?
-  dwmsPermissionConfig DwmsPermissionConfig?
-  calendarEvents       CalendarEvent[]
-  notices              Notice[]
-  alerts               Alert[]
-  tickets              Tickets[]
-  kaizens              Kaizen[]
-  sgas                 Sga[]
+  userOrganizations     UserOrganization[]
+  employees             Employee[]
+  departments           Department[]
+  suggestions           Suggestion[]
+  committees            SteeringCommittee[]
+  consultancyVisits     ConsultancyVisit[]
+  visitRequests         VisitRequest[]
+  visitMonthPlans       VisitMonthPlan[]
+  leaveRequests         LeaveRequest[]
+  leavePolicies         LeavePolicy[]
+  leaveSettings         LeaveSettings?
+  dwmsPermissionConfig  DwmsPermissionConfig?
+  calendarEvents        CalendarEvent[]
+  notices               Notice[]
+  alerts                Alert[]
+  tickets               Tickets[]
+  kaizens               Kaizen[]
+  sgas                  Sga[]
   workProjects          WorkProject[]
   attendanceRecords     AttendanceRecord[]
   attendanceCorrections AttendanceCorrection[]
+  workSettings          WorkSettings?
+  workHolidays          WorkHoliday[]
+  workSites             WorkSite[]
+  workEmployeeProfiles  WorkEmployeeProfile[]
+  workHomeRequests      WorkHomeLocationRequest[]
 
   // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
   sgaCommitteeId String?
   sgaCommittee   SteeringCommittee? @relation("OrgSgaCommittee", fields: [sgaCommitteeId], references: [id], onDelete: SetNull)
 
-  steelProductionPlans       SteelProductionPlan[]
-  steelSourcingOrders        SteelSourcingOrder[]
-  suppliers                  Supplier[]
-  steelMaterialIntakes       SteelMaterialIntake[]
-  steelChargePreparations    SteelChargePreparation[]
-  steelMeltings              SteelMelting[]
-  steelHeatApprovals         SteelHeatApproval[]
-  furnaces                   Furnace[]
-  furnaceLinings             FurnaceLining[]
-  heatMaterialCharges        HeatMaterialCharge[]
-  heatCycleEvents            HeatCycleEvent[]
-  activities                 Activity[]
-  jobTitleActivities    JobTitleActivity[]
+  steelProductionPlans        SteelProductionPlan[]
+  steelSourcingOrders         SteelSourcingOrder[]
+  suppliers                   Supplier[]
+  steelMaterialIntakes        SteelMaterialIntake[]
+  steelChargePreparations     SteelChargePreparation[]
+  steelMeltings               SteelMelting[]
+  steelHeatApprovals          SteelHeatApproval[]
+  furnaces                    Furnace[]
+  furnaceLinings              FurnaceLining[]
+  heatMaterialCharges         HeatMaterialCharge[]
+  heatCycleEvents             HeatCycleEvent[]
+  activities                  Activity[]
+  jobTitleActivities          JobTitleActivity[]
   employeeActivityAssignments EmployeeActivityAssignment[]
-  activityIngestions         ActivityIngestion[]
-  activityIngestionRows      ActivityIngestionRow[]
-  customers                  Customer[]
-  dealers                    Dealer[]
-  steelLookups               SteelLookup[]
-  steelSupplierMaterials     SteelSupplierMaterial[]
-  steelQcdCriteria           SteelQcdCriteria[]
-  stockFulfilmentItems       StockFulfilmentItem[]
-  steelProducts              SteelProduct[]
-  steelProductSpecifications SteelProductSpecification[]
-  steelProductionRoutes      SteelProductionRoute[]
-  steelMaterialMasters       SteelMaterialMaster[]
-  steelFinishedGoodsStocks   SteelFinishedGoodsStock[]
+  activityIngestions          ActivityIngestion[]
+  activityIngestionRows       ActivityIngestionRow[]
+  customers                   Customer[]
+  dealers                     Dealer[]
+  steelLookups                SteelLookup[]
+  steelSupplierMaterials      SteelSupplierMaterial[]
+  steelQcdCriteria            SteelQcdCriteria[]
+  stockFulfilmentItems        StockFulfilmentItem[]
+  steelProducts               SteelProduct[]
+  steelProductSpecifications  SteelProductSpecification[]
+  steelProductionRoutes       SteelProductionRoute[]
+  steelMaterialMasters        SteelMaterialMaster[]
+  steelFinishedGoodsStocks    SteelFinishedGoodsStock[]
 }
 
 //specific user

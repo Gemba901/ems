@@ -14,11 +14,19 @@ import { SprintsController } from './sprints/sprints.controller';
 import { SprintsService } from './sprints/sprints.service';
 import { TasksController } from './tasks/tasks.controller';
 import { TasksService } from './tasks/tasks.service';
+import { AnalyticsService } from './analytics/analytics.service';
+import { TeamController } from './team/team.controller';
+import { TeamService } from './team/team.service';
+import { SettingsController } from './settings/settings.controller';
+import { SettingsService } from './settings/settings.service';
+import { LocationsController } from './locations/locations.controller';
+import { LocationsService } from './locations/locations.service';
 import { WorkAccessService } from './work-access.service';
+import { WorkScheduleService } from './work-schedule';
 
 @Module({
   imports: [TenancyModule, ConfigModule, PrismaModule, AuthModule],
-  controllers: [ProjectsController, TasksController, SprintsController, AttendanceController, PeopleController],
-  providers: [WorkAccessService, ModuleGuard, ProjectsService, TasksService, SprintsService, AttendanceService, PeopleService],
+  controllers: [ProjectsController, TasksController, SprintsController, AttendanceController, PeopleController, SettingsController, TeamController, LocationsController],
+  providers: [WorkAccessService, ModuleGuard, ProjectsService, TasksService, SprintsService, AttendanceService, PeopleService, WorkScheduleService, SettingsService, AnalyticsService, TeamService, LocationsService],
 })
 export class WorkModule {}

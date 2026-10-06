@@ -11,10 +11,17 @@ import {
   type CorrectAttendancePayload,
   type CreateProjectPayload,
   type CreateTaskPayload,
+  type AnalyticsQuery,
   type SprintPayload,
+  type SprintTeamPayload,
   type TaskView,
+  type UpdateWorkSettingsPayload,
   type UpdateProjectPayload,
   type UpdateTaskPayload,
+  type CapturedLocation,
+  type HomeRequestStatus,
+  type SitePayload,
+  type WorkArrangement,
 } from "@/services/work.service";
 
 // Mirrors apps/api/src/work/work-access.policy.ts. These only decide what the UI offers;
@@ -227,7 +234,7 @@ export function useCreateSprint(projectId: string) {
   const { token } = useScope();
   const invalidate = useInvalidateSprints();
   return useMutation({
-    mutationFn: (data: SprintPayload) => WorkService.createSprint(projectId, data, token),
+    mutationFn: (data: SprintPayload & SprintTeamPayload) => WorkService.createSprint(projectId, data, token),
     onSuccess: invalidate,
   });
 }
@@ -256,6 +263,16 @@ export function useCompleteSprint() {
   const invalidate = useInvalidateSprints();
   return useMutation({
     mutationFn: (sprintId: string) => WorkService.completeSprint(sprintId, token),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateSprintTeam() {
+  const { token } = useScope();
+  const invalidate = useInvalidateSprints();
+  return useMutation({
+    mutationFn: ({ sprintId, data }: { sprintId: string; data: SprintTeamPayload }) =>
+      WorkService.updateSprintTeam(sprintId, data, token),
     onSuccess: invalidate,
   });
 }
@@ -353,6 +370,274 @@ export function useCorrectAttendance() {
   return useMutation({
     mutationFn: ({ recordId, data }: { recordId: string; data: CorrectAttendancePayload }) =>
       WorkService.correctAttendance(recordId, data, token),
+    onSettled: invalidate,
+  });
+}
+
+// ── Context, team & analytics ─────────────────────────────────────────────────
+
+// What the caller can see in Team Workspace (direct reports, analytics scopes, settings).
+export function useWorkContext() {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "context"],
+    queryFn: () => WorkService.context(token),
+    retry: retryTransient,
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useTeam(enabledFlag = true) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "team"],
+    queryFn: () => WorkService.team(token),
+    retry: retryTransient,
+    enabled: enabled && enabledFlag,
+    gcTime: 0,
+  });
+}
+
+export function useTeamMember(employeeId: string | null) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "team", employeeId],
+    queryFn: () => WorkService.teamMember(employeeId!, token),
+    enabled: enabled && !!employeeId,
+    retry: false,
+    gcTime: 0,
+  });
+}
+
+export function useAnalytics(params: AnalyticsQuery, enabledFlag = true) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "analytics", params],
+    queryFn: () => WorkService.analytics(params, token),
+    retry: retryTransient,
+    enabled: enabled && enabledFlag,
+    placeholderData: (previous) => previous,
+  });
+}
+
+// ── Settings & holidays ───────────────────────────────────────────────────────
+
+export function useWorkSettings() {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "settings"],
+    queryFn: () => WorkService.workSettings(token),
+    retry: retryTransient,
+    enabled,
+  });
+}
+
+// Settings change punctuality, holidays and the clock card, so refresh what depends on them.
+function useInvalidateSchedule() {
+  const { scope } = useScope();
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: [...scope, "settings"] });
+    qc.invalidateQueries({ queryKey: [...scope, "holidays"] });
+    qc.invalidateQueries({ queryKey: [...scope, "attendance"] });
+    qc.invalidateQueries({ queryKey: [...scope, "analytics"] });
+  };
+}
+
+export function useUpdateWorkSettings() {
+  const { token, scope } = useScope();
+  const qc = useQueryClient();
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: (data: UpdateWorkSettingsPayload) => WorkService.updateWorkSettings(data, token),
+    onSuccess: (settings) => {
+      qc.setQueryData([...scope, "settings"], settings);
+      invalidate();
+    },
+  });
+}
+
+export function useHolidayCountries(enabledFlag = true) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "holiday-countries"],
+    queryFn: () => WorkService.holidayCountries(token),
+    enabled: enabled && enabledFlag,
+    staleTime: Infinity,
+  });
+}
+
+export function useHolidays(year: number) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "holidays", year],
+    queryFn: () => WorkService.holidays(year, token),
+    retry: retryTransient,
+    enabled,
+  });
+}
+
+export function useCreateHoliday() {
+  const { token } = useScope();
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: (data: { date: string; name: string }) => WorkService.createHoliday(data, token),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateHoliday() {
+  const { token } = useScope();
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: ({ holidayId, data }: { holidayId: string; data: { date?: string; name?: string; isActive?: boolean } }) =>
+      WorkService.updateHoliday(holidayId, data, token),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteHoliday() {
+  const { token } = useScope();
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: (holidayId: string) => WorkService.deleteHoliday(holidayId, token),
+    onSuccess: invalidate,
+  });
+}
+
+export function useImportHolidays() {
+  const { token } = useScope();
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: (year: number) => WorkService.importHolidays(year, token),
+    onSuccess: invalidate,
+  });
+}
+
+// ── Locations ─────────────────────────────────────────────────────────────────
+
+export function useLocationSettings(enabledFlag = true) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "locations", "settings"],
+    queryFn: () => WorkService.locationSettings(token),
+    retry: retryTransient,
+    enabled: enabled && enabledFlag,
+  });
+}
+
+function useInvalidateLocations() {
+  const { scope } = useScope();
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: [...scope, "locations"] });
+}
+
+export function useUpdateLocationSettings() {
+  const { token } = useScope();
+  const invalidate = useInvalidateLocations();
+  return useMutation({
+    mutationFn: (homeRadiusMeters: number) => WorkService.updateLocationSettings({ homeRadiusMeters }, token),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateSite() {
+  const { token } = useScope();
+  const invalidate = useInvalidateLocations();
+  return useMutation({
+    mutationFn: (data: SitePayload) => WorkService.createSite(data, token),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateSite() {
+  const { token } = useScope();
+  const invalidate = useInvalidateLocations();
+  return useMutation({
+    mutationFn: ({ siteId, data }: { siteId: string; data: Partial<SitePayload> & { isActive?: boolean } }) => WorkService.updateSite(siteId, data, token),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteSite() {
+  const { token } = useScope();
+  const invalidate = useInvalidateLocations();
+  return useMutation({
+    mutationFn: (siteId: string) => WorkService.deleteSite(siteId, token),
+    onSuccess: invalidate,
+  });
+}
+
+export function useArrangements(params: { search?: string; arrangement?: WorkArrangement; page?: number }, enabledFlag = true) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "locations", "arrangements", params],
+    queryFn: () => WorkService.arrangements(params, token),
+    retry: retryTransient,
+    enabled: enabled && enabledFlag,
+    placeholderData: (previous) => previous,
+    gcTime: 0,
+  });
+}
+
+export function useSetArrangement() {
+  const { token } = useScope();
+  const invalidate = useInvalidateLocations();
+  return useMutation({
+    mutationFn: ({ employeeId, arrangement, clearHome }: { employeeId: string; arrangement: WorkArrangement; clearHome?: boolean }) =>
+      WorkService.setArrangement(employeeId, { arrangement, clearHome }, token),
+    onSuccess: invalidate,
+  });
+}
+
+// The caller's own arrangement and home. Never cached after the screen closes: it holds a home address.
+export function useMyLocation() {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "locations", "me"],
+    queryFn: () => WorkService.myLocation(token),
+    retry: retryTransient,
+    enabled,
+    gcTime: 0,
+  });
+}
+
+export function useRequestHome() {
+  const { token, scope } = useScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { location: CapturedLocation; note?: string }) => WorkService.requestHome(data, token),
+    onSuccess: (mine) => qc.setQueryData([...scope, "locations", "me"], mine),
+  });
+}
+
+export function useCancelHomeRequest() {
+  const { token, scope } = useScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => WorkService.cancelHomeRequest(token),
+    onSuccess: (mine) => qc.setQueryData([...scope, "locations", "me"], mine),
+  });
+}
+
+export function useHomeRequests(status: HomeRequestStatus, enabledFlag = true) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "locations", "home-requests", status],
+    queryFn: () => WorkService.homeRequests(status, token),
+    retry: retryTransient,
+    enabled: enabled && enabledFlag,
+    gcTime: 0,
+  });
+}
+
+export function useReviewHomeRequest() {
+  const { token } = useScope();
+  const invalidate = useInvalidateLocations();
+  return useMutation({
+    mutationFn: ({ requestId, decision, note }: { requestId: string; decision: "APPROVED" | "REJECTED"; note?: string }) =>
+      WorkService.reviewHomeRequest(requestId, { decision, note }, token),
     onSettled: invalidate,
   });
 }

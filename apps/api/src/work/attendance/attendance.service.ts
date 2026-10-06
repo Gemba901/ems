@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { AttendanceLocationStatus, Prisma } from 'db';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { AttendanceLocationCheck, AttendanceLocationStatus, Prisma, WorkPlaceKind } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Page, pageArgs } from '../dto/common.dto';
@@ -10,13 +10,17 @@ import {
     CorrectAttendanceDto,
     TeamAttendanceQueryDto,
 } from '../dto/attendance.dto';
+import { LocationsService } from '../locations/locations.service';
 import { WorkAccessService, WorkActor } from '../work-access.service';
 import { fromDbDate, localDateIn, monthRange, toDbDate } from '../work-date';
 import { WorkErrorCode, isUniqueViolation, workBadRequest, workConflict } from '../work-errors';
 import { EMPLOYEE_SUMMARY_SELECT, EmployeeSummary, toEmployeeSummary } from '../work-people';
+import { checkLocation } from '../work-location';
+import { DayType, WorkScheduleService, punctuality } from '../work-schedule';
 
-// Everything a list or status response may show. Coordinates and the missing-location
-// reason are deliberately absent; they are only returned by the location endpoint.
+// Everything a list or status response may show. Coordinates (the employee's and the
+// checked place's) and the missing-location reason are deliberately absent; they are only
+// returned by the location endpoint. The check result, place name and distance are shown.
 const RECORD_SELECT = {
     id: true,
     employeeId: true,
@@ -27,6 +31,15 @@ const RECORD_SELECT = {
     locationStatus: true,
     version: true,
     lastCorrectedAt: true,
+    scheduledStartAt: true,
+    scheduledEndAt: true,
+    lateGraceMinutes: true,
+    locationCheck: true,
+    checkedPlaceKind: true,
+    checkedPlaceName: true,
+    distanceMeters: true,
+    // Not shown; lets a retry recognise the record its own first attempt created.
+    clockInRequestId: true,
 } satisfies Prisma.AttendanceRecordSelect;
 
 type RecordRow = Prisma.AttendanceRecordGetPayload<{ select: typeof RECORD_SELECT }>;
@@ -44,6 +57,16 @@ export type AttendanceView = {
     edited: boolean;
     lastCorrectedAt: Date | null;
     version: number;
+    // Against the schedule saved at clock-in; scheduledStartAt is null on unscheduled days.
+    scheduledStartAt: Date | null;
+    scheduledEndAt: Date | null;
+    lateMinutes: number;
+    earlyLeaveMinutes: number;
+    // Null on records from before location checks existed.
+    locationCheck: AttendanceLocationCheck | null;
+    checkedPlaceKind: WorkPlaceKind | null;
+    checkedPlaceName: string | null;
+    distanceMeters: number | null;
 };
 
 export type AttendanceStatusView = {
@@ -52,9 +75,17 @@ export type AttendanceStatusView = {
     timeZone: string;
     openRecord: AttendanceView | null;
     todayRecord: AttendanceView | null;
+    todaySchedule: {
+        dayType: DayType;
+        holidayName: string | null;
+        startsAt: Date | null;
+        endsAt: Date | null;
+        lateAfter: Date | null;
+    };
 };
 
 function toView(record: RecordRow): AttendanceView {
+    const { lateMinutes, earlyLeaveMinutes } = punctuality(record);
     return {
         id: record.id,
         employeeId: record.employeeId,
@@ -70,12 +101,25 @@ function toView(record: RecordRow): AttendanceView {
         edited: record.lastCorrectedAt !== null,
         lastCorrectedAt: record.lastCorrectedAt,
         version: record.version,
+        scheduledStartAt: record.scheduledStartAt,
+        scheduledEndAt: record.scheduledEndAt,
+        lateMinutes,
+        earlyLeaveMinutes,
+        locationCheck: record.locationCheck,
+        checkedPlaceKind: record.checkedPlaceKind,
+        checkedPlaceName: record.checkedPlaceName,
+        distanceMeters: record.distanceMeters,
     };
 }
 
 @Injectable()
 export class AttendanceService {
-    constructor(private prisma: PrismaService, private access: WorkAccessService) {}
+    constructor(
+        private prisma: PrismaService,
+        private access: WorkAccessService,
+        private schedules: WorkScheduleService,
+        private locations: LocationsService,
+    ) {}
 
     // Today is the organization-local date; an open record from an earlier day is reported too,
     // since nothing closes records automatically at midnight.
@@ -84,16 +128,25 @@ export class AttendanceService {
         const serverNow = new Date();
         const today = localDateIn(serverNow, actor.timeZone);
 
-        const [openRecord, todayRecord] = await Promise.all([
+        const [openRecord, todayRecord, calendar] = await Promise.all([
             this.findOpen(actor),
             this.findForDay(actor, today),
+            this.schedules.calendar(actor.organizationId, today, today),
         ]);
+        const plan = calendar.snapshotFor(today, actor.timeZone);
         return {
             serverNow,
             today,
             timeZone: actor.timeZone,
             openRecord: openRecord && toView(openRecord),
             todayRecord: todayRecord && toView(todayRecord),
+            todaySchedule: {
+                dayType: calendar.dayType(today),
+                holidayName: calendar.holidayName(today),
+                startsAt: plan.scheduledStartAt,
+                endsAt: plan.scheduledEndAt,
+                lateAfter: plan.scheduledStartAt && new Date(plan.scheduledStartAt.getTime() + plan.lateGraceMinutes! * 60_000),
+            },
         };
     }
 
@@ -127,6 +180,13 @@ export class AttendanceService {
         const existing = await this.resolveClockInConflict(actor, dto.requestId, workDate);
         if (existing) return toView(existing);
 
+        // Snapshot today's schedule so later settings changes never rewrite this record's punctuality.
+        const calendar = await this.schedules.calendar(actor.organizationId, workDate, workDate);
+        const schedule = calendar.snapshotFor(workDate, actor.timeZone);
+        // Checked once against the places allowed now and saved; an OUTSIDE result is allowed but flagged.
+        const { arrangement, places } = await this.locations.placesFor(actor.organizationId, actor.employeeId);
+        const check = checkLocation(dto.location ?? null, places);
+
         try {
             const record = await this.prisma.attendanceRecord.create({
                 data: {
@@ -136,7 +196,10 @@ export class AttendanceService {
                     timezoneAtClockIn: actor.timeZone,
                     clockInAt: now,
                     clockInRequestId: dto.requestId,
+                    ...schedule,
                     ...location,
+                    ...check,
+                    arrangementAtClockIn: arrangement,
                 },
                 select: RECORD_SELECT,
             });
@@ -167,18 +230,19 @@ export class AttendanceService {
         return toView(closed);
     }
 
-    // HR, management and admins only. Project roles never grant this.
+    // HR, management and admins see everyone; a reporting manager sees their direct reports.
+    // Project roles never grant this.
     async listTeam(
         user: AccessTokenPayload,
         query: TeamAttendanceQueryDto,
     ): Promise<Page<AttendanceView & { employee: EmployeeSummary }>> {
         const actor = await this.access.resolveActor(user);
-        this.access.assertAttendanceManager(actor);
+        const employeeFilter = await this.teamFilter(actor, query.employeeId);
 
         const where: Prisma.AttendanceRecordWhereInput = {
             organizationId: actor.organizationId,
             workDate: this.dateRange(actor, query),
-            ...(query.employeeId && { employeeId: query.employeeId }),
+            employeeId: employeeFilter,
         };
         const [records, total] = await this.prisma.$transaction([
             this.prisma.attendanceRecord.findMany({
@@ -193,11 +257,12 @@ export class AttendanceService {
         return { items, page: query.page, pageSize: query.pageSize, total };
     }
 
-    // The only response that carries coordinates: the record's owner or an attendance manager.
+    // The only response that carries coordinates: the record's owner, their reporting manager
+    // or an attendance manager. Includes the place it was checked against, for the map.
     async location(user: AccessTokenPayload, recordId: string) {
         const actor = await this.access.resolveActor(user);
         const record = await this.prisma.attendanceRecord.findFirst({
-            where: this.visibleRecord(actor, recordId),
+            where: await this.visibleRecord(actor, recordId),
             select: {
                 id: true,
                 locationStatus: true,
@@ -206,10 +271,28 @@ export class AttendanceService {
                 accuracyMeters: true,
                 locationCapturedAt: true,
                 locationMissingReason: true,
+                locationCheck: true,
+                arrangementAtClockIn: true,
+                checkedPlaceKind: true,
+                checkedPlaceName: true,
+                checkedPlaceLatitude: true,
+                checkedPlaceLongitude: true,
+                checkedPlaceRadiusMeters: true,
+                distanceMeters: true,
             },
         });
         if (!record) throw new NotFoundException('Attendance record not found');
 
+        const place =
+            record.checkedPlaceKind && record.checkedPlaceName && record.checkedPlaceLatitude !== null && record.checkedPlaceLongitude !== null && record.checkedPlaceRadiusMeters !== null
+                ? {
+                      kind: record.checkedPlaceKind,
+                      name: record.checkedPlaceName,
+                      latitude: record.checkedPlaceLatitude,
+                      longitude: record.checkedPlaceLongitude,
+                      radiusMeters: record.checkedPlaceRadiusMeters,
+                  }
+                : null;
         return {
             recordId: record.id,
             locationStatus: record.locationStatus,
@@ -218,13 +301,17 @@ export class AttendanceService {
             accuracyMeters: record.accuracyMeters,
             capturedAt: record.locationCapturedAt,
             missingReason: record.locationMissingReason,
+            locationCheck: record.locationCheck,
+            arrangementAtClockIn: record.arrangementAtClockIn,
+            checkedPlace: place,
+            distanceMeters: record.distanceMeters,
         };
     }
 
     async listCorrections(user: AccessTokenPayload, recordId: string) {
         const actor = await this.access.resolveActor(user);
         const record = await this.prisma.attendanceRecord.findFirst({
-            where: this.visibleRecord(actor, recordId),
+            where: await this.visibleRecord(actor, recordId),
             select: { id: true },
         });
         if (!record) throw new NotFoundException('Attendance record not found');
@@ -342,7 +429,9 @@ export class AttendanceService {
         });
         if (replay) return replay;
 
+        // A concurrent first attempt may have committed since the lookup above.
         const open = await this.findOpen(actor);
+        if (open?.clockInRequestId === requestId) return open;
         if (open) {
             throw workConflict(WorkErrorCode.ATTENDANCE_ALREADY_OPEN, 'You are already clocked in; clock out first', {
                 recordId: open.id,
@@ -350,6 +439,7 @@ export class AttendanceService {
             });
         }
         const today = await this.findForDay(actor, workDate);
+        if (today?.clockInRequestId === requestId) return today;
         if (today) {
             throw workConflict(WorkErrorCode.ATTENDANCE_DAY_COMPLETED, 'You have already clocked in and out today', {
                 recordId: today.id,
@@ -378,13 +468,28 @@ export class AttendanceService {
         });
     }
 
-    // Owners see their own records; attendance managers see everyone's in the organization.
-    private visibleRecord(actor: WorkActor, recordId: string): Prisma.AttendanceRecordWhereInput {
+    // Owners see their own records, reporting managers their direct reports', and
+    // attendance managers everyone's in the organization.
+    private async visibleRecord(actor: WorkActor, recordId: string): Promise<Prisma.AttendanceRecordWhereInput> {
+        if (this.access.canManageAttendance(actor)) return { id: recordId, organizationId: actor.organizationId };
         return {
             id: recordId,
             organizationId: actor.organizationId,
-            ...(!this.access.canManageAttendance(actor) && { employeeId: actor.employeeId }),
+            OR: [{ employeeId: actor.employeeId }, { employee: { reportingManagerId: actor.employeeId } }],
         };
+    }
+
+    // Which employees a team listing may include, or a 403 when the caller manages nobody.
+    private async teamFilter(actor: WorkActor, employeeId?: string): Promise<Prisma.StringFilter | string | undefined> {
+        if (this.access.canManageAttendance(actor)) return employeeId;
+
+        const reports = await this.access.directReportIds(actor);
+        if (reports.length === 0) throw new ForbiddenException('You cannot view team attendance');
+        if (employeeId) {
+            if (!reports.includes(employeeId)) throw new NotFoundException('Employee not found in your team');
+            return employeeId;
+        }
+        return { in: reports };
     }
 
     private locationFields(dto: ClockInDto) {

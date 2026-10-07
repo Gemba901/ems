@@ -57,7 +57,9 @@ export function LocationMap({
         const L = ((mod as unknown as { default?: Leaflet }).default ?? mod) as Leaflet;
         const el = containerRef.current;
         if (cancelled || !el) return;
-        const map = L.map(el, { scrollWheelZoom: false });
+        // Leaflet attaches and projects layers only after the first view is set.
+        // Circle.getBounds() needs that projection, even before fitBounds runs.
+        const map = L.map(el, { scrollWheelZoom: false }).setView([0, 20], 2);
         L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_ATTRIBUTION }).addTo(map);
         const layer = L.layerGroup().addTo(map);
         map.on("click", (e) => onPickRef.current?.(e.latlng.lat, e.latlng.lng));

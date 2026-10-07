@@ -104,7 +104,7 @@ export class ReadinessService {
         this.db.activityIngestion.count({
           where: {
             status: 'PROCESSING',
-            OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }],
+            updatedAt: { lt: new Date(Date.now() - 10 * 60_000) },
           },
         }),
         this.db.activityIngestion.count({ where: { status: 'FAILED' } }),
@@ -129,7 +129,7 @@ export class ReadinessService {
       if (scheduled.some((job) => job.failedAt && !job.completedAt))
         blockers.push('Resolve failed scheduled jobs before acceptance');
       if (staleActivityIngestions)
-        blockers.push('Activity ingestion worker has stale processing jobs');
+        blockers.push('Activity ingestion processor has stale processing jobs');
       if (failedActivityIngestions)
         blockers.push('Resolve failed activity ingestions before acceptance');
     } catch {

@@ -8,7 +8,7 @@ import { DwmsTaskInstanceSchedulerService } from './task-instance-scheduler.serv
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
-import { ActivityIngestionWorker } from './activity-ingestion.worker';
+import { ActivityIngestionProcessor } from './activity-ingestion.processor';
 
 @Module({
   imports: [TenancyModule, ConfigModule, PrismaModule, AuthModule, NotificationsModule],
@@ -17,7 +17,7 @@ import { ActivityIngestionWorker } from './activity-ingestion.worker';
     DwmsService,
     DwmsOverdueAlertService,
     DwmsTaskInstanceSchedulerService,
-    ActivityIngestionWorker,
+    ActivityIngestionProcessor,
   ],
   exports: [DwmsService],
 })

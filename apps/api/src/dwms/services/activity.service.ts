@@ -1342,12 +1342,12 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     return { successfulRows, failedRows };
   }
 
-  async processQueuedActivityIngestion(ingestionId: string, leaseId: string) {
+  async processQueuedActivityIngestion(ingestionId: string) {
     const ingestion = await this.prisma.activityIngestion.findFirst({
-      where: { id: ingestionId, leaseId, status: 'PROCESSING' },
+      where: { id: ingestionId, status: 'PROCESSING' },
       include: { rows: { orderBy: { rowNumber: 'asc' } } },
     });
-    if (!ingestion) throw new Error('Activity ingestion lease was lost');
+    if (!ingestion) throw new Error('Activity ingestion is not processing');
     if (!ingestion.requestedByUserId || !ingestion.requestedRoleLevel) {
       throw new Error('Activity ingestion requester context is unavailable');
     }
@@ -1567,18 +1567,16 @@ export abstract class DwmsActivityService extends DwmsTaskService {
 
     const progress = await this.refreshActivityIngestionProgress(ingestionId);
     const completed = await this.prisma.activityIngestion.updateMany({
-      where: { id: ingestionId, leaseId, status: 'PROCESSING' },
+      where: { id: ingestionId, status: 'PROCESSING' },
       data: {
         status: 'COMPLETED',
         completedAt: new Date(),
         failedAt: null,
         failureMessage: null,
-        leaseId: null,
-        leaseUntil: null,
       },
     });
     if (completed.count !== 1)
-      throw new Error('Activity ingestion lease was lost');
+      throw new Error('Activity ingestion completion state changed');
     await this.notifications
       .createMany(assignmentNotifications)
       .catch(() => undefined);

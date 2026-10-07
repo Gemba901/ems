@@ -44,6 +44,7 @@ import {
   UpdateEmployeeActivityAssignmentDto,
 } from './dto/dwms.dto';
 import { UpdateDwmsPermissionConfigDto } from './dto/dwmsSettings.dto';
+import { ActivityIngestionProcessor } from './activity-ingestion.processor';
 
 const REFRESH_COOKIE = 'refresh_token';
 const cookieOptions = {
@@ -60,6 +61,7 @@ export class DwmsController {
   constructor(
     private dwmsService: DwmsService,
     private authService: AuthService,
+    private activityIngestionProcessor: ActivityIngestionProcessor,
   ) {}
 
   @Get('status')
@@ -248,6 +250,7 @@ export class DwmsController {
         'Location',
         `/dwms/activities/ingestions/${result.ingestion.id}`,
       );
+      void this.activityIngestionProcessor.enqueue(result.ingestion.id);
     }
     return result;
   }

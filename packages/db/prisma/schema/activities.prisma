@@ -103,8 +103,6 @@ model ActivityIngestion {
   failedRows         Int       @default(0)
   attempts           Int       @default(0)
   availableAt        DateTime  @default(now())
-  leaseId            String?
-  leaseUntil         DateTime?
   startedAt          DateTime?
   failedAt           DateTime?
   failureMessage     String?
@@ -120,7 +118,7 @@ model ActivityIngestion {
   @@index([uploadedById])
   @@index([status])
   @@index([status, availableAt])
-  @@index([status, leaseUntil])
+  @@index([status, updatedAt])
 }
 
 model ActivityIngestionRow {

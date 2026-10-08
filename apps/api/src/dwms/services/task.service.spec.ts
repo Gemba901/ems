@@ -418,6 +418,72 @@ describe('DWMS task creation', () => {
   });
 });
 
+describe('DWMS assigned task acknowledgement', () => {
+  const user = {
+    userId: 'owner-user',
+    organizationId: 'org',
+    roleLevel: 'OPERATOR',
+  };
+
+  it.each([TaskFrequency.PLANNED, TaskFrequency.DAILY])(
+    'acknowledges the parent %s task without resolving an occurrence',
+    async (frequency) => {
+      const task = {
+        id: 'task',
+        title: 'Inspect equipment',
+        ownerId: 'owner',
+        assignedById: null,
+        isAdhoc: true,
+        frequency,
+        status: 'PENDING',
+        acknowledgedAt: null,
+        updatedAt: new Date('2026-10-08T00:00:00.000Z'),
+      };
+      const prisma = {
+        employee: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'owner',
+            firstName: 'Task',
+            lastName: 'Owner',
+          }),
+        },
+        task: {
+          findFirst: jest.fn().mockResolvedValue(task),
+          update: jest.fn().mockResolvedValue({
+            ...task,
+            acknowledgedAt: new Date('2026-10-08T01:00:00.000Z'),
+          }),
+        },
+        taskInstance: {
+          findFirst: jest.fn(),
+        },
+      };
+      const service = new TestTaskService(prisma, {
+        create: jest.fn(),
+      });
+
+      const result = await service.acknowledgeAssignedTask(user, 'task');
+
+      expect(prisma.task.findFirst).toHaveBeenCalledWith({
+        where: { id: 'task', ownerId: 'owner', isAdhoc: true },
+      });
+      expect(prisma.task.update).toHaveBeenCalledWith({
+        where: {
+          id: 'task',
+          status: 'PENDING',
+          updatedAt: task.updatedAt,
+        },
+        data: { acknowledgedAt: expect.any(Date) },
+      });
+      expect(prisma.taskInstance.findFirst).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        message: 'Task acknowledged successfully',
+        task: { id: 'task', acknowledgedAt: expect.any(Date) },
+      });
+    },
+  );
+});
+
 describe('DWMS occurrence progress and approval', () => {
   const user = {
     userId: 'owner',

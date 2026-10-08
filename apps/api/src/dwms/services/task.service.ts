@@ -2499,16 +2499,22 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     return { ...currentInstance, task };
   }
 
-  async acknowledgeAssignedTask(user: UserPayload, instanceId: string) {
+  async acknowledgeAssignedTask(user: UserPayload, taskId: string) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
-    const instance = await this.getAssignedTaskInstanceForUser(
-      employee,
-      instanceId,
-    );
-    const task = instance.task;
+    const task = await this.prisma.task.findFirst({
+      where: {
+        id: taskId,
+        ownerId: employee.id,
+        isAdhoc: true,
+      },
+    });
+
+    if (!task) {
+      throw new NotFoundException('Task not found or not assigned to you');
+    }
 
     if (task.acknowledgedAt) {
-      return { message: 'Task already acknowledged', task, instance };
+      return { message: 'Task already acknowledged', task };
     }
 
     const updatedTask = await this.prisma.task
@@ -2532,7 +2538,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     return {
       message: 'Task acknowledged successfully',
       task: updatedTask,
-      instance,
     };
   }
 

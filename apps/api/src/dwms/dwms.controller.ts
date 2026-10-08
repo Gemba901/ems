@@ -185,9 +185,9 @@ export class DwmsController {
   @RequiresModule(ModuleType.DWMS)
   acknowledgeMyDwmsTask(
     @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
+    @Param('id') taskId: string,
   ) {
-    return this.dwmsService.acknowledgeAssignedTask(user, id);
+    return this.dwmsService.acknowledgeAssignedTask(user, taskId);
   }
 
   // --- Activities Endpoints ---
@@ -430,9 +430,9 @@ export class DwmsController {
   @RequiresModule(ModuleType.DWMS)
   acknowledgeAssignedTask(
     @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
+    @Param('id') taskId: string,
   ) {
-    return this.dwmsService.acknowledgeAssignedTask(user, id);
+    return this.dwmsService.acknowledgeAssignedTask(user, taskId);
   }
 
   @Patch('assignedTasks/:id/progress')

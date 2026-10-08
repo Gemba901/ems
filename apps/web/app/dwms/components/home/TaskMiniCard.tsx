@@ -175,6 +175,9 @@ export default function TaskMiniCard({
   const isCompleted = task.status === "DONE";
   const isOverdue = isTaskOverdue(task);
   const wasOverdue = !!task.wasOverdue && !isOverdue;
+  const requiresAcknowledgement = task.taskCategory === "ASSIGNED_TASK";
+  const isAcknowledged =
+    !requiresAcknowledgement || Boolean(task.acknowledgedAt);
   const isPrerequisiteBlocked = !!task.prerequisiteBlocked;
   const statusLockReason = getStatusLockReason(task);
   const isStatusLockedBySchedule = !!statusLockReason && !isOverdue;
@@ -364,31 +367,32 @@ export default function TaskMiniCard({
             {task.title}
           </h4>
 
-          {/* Acknowledged status */}
-          {task.acknowledgedAt ? (
-            <div className="flex items-center gap-1.5 text-xs text-muted-app mt-1">
-              <CheckCircle
-                className="h-3.5 w-3.5 text-emerald-500 shrink-0"
-                strokeWidth={1.5}
-              />
-              <span className="text-emerald-600 font-normal text-xs">
-                Acknowledged
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-xs text-rose-500/80 mt-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
-              <span className="font-normal text-xs">Not Acknowledged</span>
-            </div>
-          )}
-          {isPrerequisiteBlocked && task.acknowledgedAt && (
+          {/* Acknowledgement only applies to directly assigned tasks. */}
+          {requiresAcknowledgement &&
+            (task.acknowledgedAt ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted-app mt-1">
+                <CheckCircle
+                  className="h-3.5 w-3.5 text-emerald-500 shrink-0"
+                  strokeWidth={1.5}
+                />
+                <span className="text-emerald-600 font-normal text-xs">
+                  Acknowledged
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-rose-500/80 mt-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
+                <span className="font-normal text-xs">Not Acknowledged</span>
+              </div>
+            ))}
+          {isPrerequisiteBlocked && isAcknowledged && (
             <p className="mt-1 text-xs font-medium text-slate-500">
               {prerequisiteLabel}
             </p>
           )}
           {!isPrerequisiteBlocked &&
             isStatusLockedBySchedule &&
-            task.acknowledgedAt && (
+            isAcknowledged && (
               <p className="mt-1 text-xs font-medium text-slate-500">
                 {statusLockReason}
               </p>
@@ -397,7 +401,7 @@ export default function TaskMiniCard({
 
         {/* Status Dropdown Pill */}
         <div className="relative shrink-0" ref={statusMenuRef}>
-          {task.acknowledgedAt ? (
+          {isAcknowledged ? (
             <>
               <button
                 type="button"

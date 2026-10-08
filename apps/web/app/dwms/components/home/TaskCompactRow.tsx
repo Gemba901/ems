@@ -39,6 +39,9 @@ export default function TaskCompactRow({ task, onOpen, onStatusChange, onAcknowl
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const overdue = isTaskOverdue(task);
+  const requiresAcknowledgement = task.taskCategory === "ASSIGNED_TASK";
+  const isAcknowledged =
+    !requiresAcknowledgement || Boolean(task.acknowledgedAt);
   const options = getSelectableStatuses(task);
   const lockReason = task.prerequisiteBlocked
     ? task.prerequisiteActivityNames?.length
@@ -80,12 +83,14 @@ export default function TaskCompactRow({ task, onOpen, onStatusChange, onAcknowl
           {frequency}
           {" · "}
           {overdue ? <span className="font-medium text-rose-600">Overdue</span> : `Due ${dueLabel(task)}`}
-          {!task.acknowledgedAt && <span className="text-rose-600"> · Not acknowledged</span>}
+          {requiresAcknowledgement && !task.acknowledgedAt && (
+            <span className="text-rose-600"> · Not acknowledged</span>
+          )}
         </p>
       </div>
 
       <div className="relative shrink-0" ref={menuRef}>
-        {task.acknowledgedAt ? (
+        {isAcknowledged ? (
           <>
             <button
               type="button"

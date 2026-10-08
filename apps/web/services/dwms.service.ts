@@ -681,6 +681,8 @@ export interface DwmsDepartmentDashboardResponse {
 export interface DwmsEmployeeDashboardResponse {
   summary?: DwmsDashboardMetrics;
   trends?: DwmsDashboardTrends;
+  teamSummary?: DwmsDashboardMetrics | null;
+  teamTrends?: DwmsDashboardTrends | null;
   employee: (DwmsUserRef & { role: string; departmentName: string }) | null;
   reporteesPerformance?: DwmsEmployeeScore[];
 }

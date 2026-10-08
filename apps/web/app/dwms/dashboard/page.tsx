@@ -162,6 +162,7 @@ function DashboardPage() {
     if (!access) return;
     if (activeTab === 'overview' && access.analyticsViewLevel !== 'ORGANIZATION') setActiveTab('employee');
     if (activeTab === 'department' && access.analyticsViewLevel === 'OWN') setActiveTab('employee');
+    if (activeTab === 'my-team' && !access.hasReportees) setActiveTab('employee');
     const canViewSelectedTeamMember = (access.teamPerformanceEmployeeIds ?? []).includes(selectedEmpId);
     if (activeTab === 'team' && !access.canViewEmployeePerformance && !canViewSelectedTeamMember) {
       setShowSelectedEmployeeInsights(false);
@@ -309,14 +310,16 @@ function DashboardPage() {
   const stats = useMemo(() => {
     if (activeTab === 'overview') return overviewData?.summary;
     if (activeTab === 'department') return departmentData?.summary;
-    if (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team') return employeeData?.summary;
+    if (activeTab === 'my-team') return employeeData?.teamSummary;
+    if (activeTab === 'employee' || activeTab === 'team') return employeeData?.summary;
     return null;
   }, [activeTab, overviewData, departmentData, employeeData]);
 
   const completionTrends = useMemo(() => {
     if (activeTab === 'overview') return overviewData?.trends?.tasksPerformedToday ?? [];
     if (activeTab === 'department') return departmentData?.trends?.tasksPerformedToday ?? [];
-    if (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team') return employeeData?.trends?.tasksPerformedToday ?? [];
+    if (activeTab === 'my-team') return employeeData?.teamTrends?.tasksPerformedToday ?? [];
+    if (activeTab === 'employee' || activeTab === 'team') return employeeData?.trends?.tasksPerformedToday ?? [];
     return [];
   }, [activeTab, overviewData, departmentData, employeeData]);
 
@@ -388,11 +391,13 @@ function DashboardPage() {
         }}
         tabs={[
           { key: 'employee', label: 'My Performance', dotColor: 'bg-blue-500' },
-          {
-            key: 'my-team' as const,
-            label: 'My Team Performance',
-            dotColor: 'bg-cyan-500',
-          },
+          ...(access?.hasReportees
+            ? [{
+                key: 'my-team' as const,
+                label: 'My Team Performance',
+                dotColor: 'bg-cyan-500',
+              }]
+            : []),
           ...(canShowEmployeePerformanceTab(access)
             ? [
                 { key: 'team' as const, label: 'Employee Performance', dotColor: 'bg-indigo-500' },
@@ -468,8 +473,9 @@ function DashboardPage() {
       ) : (
         <div className="space-y-6">
 
-          {/* Render charts and cards only when we are NOT in the 'team' tab, OR when in 'team' tab but viewing a specific employee */}
-          {activeTab !== 'my-team' && (activeTab !== 'team' || selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && (
+          {/* Show the shared report layout for every populated performance scope. */}
+          {(activeTab !== 'my-team' || !!employeeData?.reporteesPerformance?.length) &&
+            (activeTab !== 'team' || selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && (
             <>
               {/* 1. Period controls and KPI summary */}
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -492,7 +498,7 @@ function DashboardPage() {
               {stats && (
                 <KpiCards
                   stats={stats}
-                  activeTab={activeTab === 'team' ? 'employee' : activeTab}
+                  activeTab={activeTab === 'team' || activeTab === 'my-team' ? 'employee' : activeTab}
                   periodLabel={selectedGraphRange.metricLabel}
                 />
               )}

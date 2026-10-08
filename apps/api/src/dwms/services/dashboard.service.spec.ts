@@ -126,6 +126,52 @@ describe('DWMS employee performance access', () => {
     );
   });
 
+  it('returns aggregate KPI and trend data for the employee reporting scope', async () => {
+    const performanceMetrics = jest
+      .spyOn(service as any, 'getPerformanceMetrics')
+      .mockResolvedValueOnce({ completionRate: 25 })
+      .mockResolvedValueOnce({ completionRate: 80 });
+    jest
+      .spyOn(service as any, 'getTaskCategoryStatusBreakdown')
+      .mockResolvedValueOnce({ ASSIGNED_TASK: { total: 1 } })
+      .mockResolvedValueOnce({ ASSIGNED_TASK: { total: 4 } });
+    const trends = jest
+      .spyOn(service as any, 'getTrendsForEntity')
+      .mockResolvedValueOnce({ tasksPerformedToday: [{ value: 25 }] })
+      .mockResolvedValueOnce({ tasksPerformedToday: [{ value: 80 }] });
+    jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([
+      { id: 'direct', organizationId: 'org' },
+      { id: 'indirect', organizationId: 'org' },
+    ]);
+    jest
+      .spyOn(service as any, 'getEmployeeScoreboard')
+      .mockResolvedValue([{ id: 'direct', completionRate: 80 }]);
+
+    const result = await service.getEmployeeStats(baseUser, 'target', '7');
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        teamSummary: expect.objectContaining({
+          completionRate: 80,
+          taskCategoryBreakdown: { ASSIGNED_TASK: { total: 4 } },
+        }),
+        teamTrends: { tasksPerformedToday: [{ value: 80 }] },
+      }),
+    );
+    expect(performanceMetrics).toHaveBeenNthCalledWith(
+      2,
+      ['direct', 'indirect'],
+      'org',
+      'UTC',
+      undefined,
+      7,
+    );
+    expect(trends).toHaveBeenNthCalledWith(2, 'team', null, 'org', 'UTC', 7, [
+      'direct',
+      'indirect',
+    ]);
+  });
+
   it('allows every role to view their own performance', async () => {
     prisma.employee.findFirst.mockImplementation(({ where }) => {
       if (where.userId === 'viewer-user' || where.OR) {

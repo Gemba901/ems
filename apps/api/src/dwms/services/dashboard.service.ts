@@ -280,13 +280,14 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         this.getDwmsRole(user.roleLevel) === 'HOD' &&
         !!currentEmployee.departmentId &&
         employee.departmentId === currentEmployee.departmentId;
-      const isInReportingLine = hasEmployeePerformanceRole || isHodDepartmentMember
-        ? false
-        : await this.isSuperior(
-            currentEmployee.id,
-            employee.id,
-            user.organizationId,
-          );
+      const isInReportingLine =
+        hasEmployeePerformanceRole || isHodDepartmentMember
+          ? false
+          : await this.isSuperior(
+              currentEmployee.id,
+              employee.id,
+              user.organizationId,
+            );
       if (
         !hasEmployeePerformanceRole &&
         !isHodDepartmentMember &&
@@ -318,25 +319,54 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       timeZone,
       days,
     );
-    const reporteeIds = employee.id === currentEmployee.id
-      ? await this.listTeamEmployeeIds(
-          currentEmployee,
-          user.organizationId,
-          user.roleLevel,
-        )
-      : (await this.listReporteesRecursive(resolvedEmployeeId))
-          .filter((reportee) => reportee.organizationId === user.organizationId)
-          .map((reportee) => reportee.id);
+    const reporteeIds =
+      employee.id === currentEmployee.id
+        ? await this.listTeamEmployeeIds(
+            currentEmployee,
+            user.organizationId,
+            user.roleLevel,
+          )
+        : (await this.listReporteesRecursive(resolvedEmployeeId))
+            .filter(
+              (reportee) => reportee.organizationId === user.organizationId,
+            )
+            .map((reportee) => reportee.id);
     const reporteesPerformance = await this.getEmployeeScoreboard(
       reporteeIds,
       user.organizationId,
       timeZone,
       days,
     );
+    const teamSummary = reporteeIds.length
+      ? await this.getPerformanceMetrics(
+          reporteeIds,
+          user.organizationId,
+          timeZone,
+          undefined,
+          days,
+        )
+      : null;
+    const teamTaskCategoryBreakdown = reporteeIds.length
+      ? await this.getTaskCategoryStatusBreakdown(reporteeIds, timeZone, days)
+      : null;
+    const teamTrends = reporteeIds.length
+      ? await this.getTrendsForEntity(
+          'team',
+          null,
+          user.organizationId,
+          timeZone,
+          days,
+          reporteeIds,
+        )
+      : null;
 
     return {
       summary: { ...summary, taskCategoryBreakdown },
       trends,
+      teamSummary: teamSummary
+        ? { ...teamSummary, taskCategoryBreakdown: teamTaskCategoryBreakdown }
+        : null,
+      teamTrends,
       employee: {
         id: employee.id,
         name: `${employee.firstName} ${employee.lastName}`.trim(),
@@ -887,11 +917,12 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
   }
 
   private async getTrendsForEntity(
-    entityType: 'employee' | 'department' | 'overview',
+    entityType: 'employee' | 'department' | 'overview' | 'team',
     entityId: string | null,
     orgId: string,
     timeZone: string,
     daysCount: number,
+    scopedUserIds?: string[],
   ) {
     const now = new Date();
     const dateRange = getOrganizationDateRange(now, timeZone, daysCount);
@@ -928,8 +959,10 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       }
     }
 
-    let userIds: string[] = [];
-    if (entityType === 'employee') {
+    let userIds: string[] = scopedUserIds ?? [];
+    if (scopedUserIds) {
+      userIds = scopedUserIds;
+    } else if (entityType === 'employee') {
       userIds = [entityId!];
     } else if (entityType === 'department') {
       const members = await this.prisma.employee.findMany({

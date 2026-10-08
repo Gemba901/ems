@@ -11,6 +11,7 @@ Select **Reports** in Daily Work Management. The initial tab is **My Performance
 ## 2. Available views
 
 - **My Performance:** Available to every user and limited to the signed-in employee.
+- **My Team Performance:** Available to users with reportees and aggregates the task KPIs and trends for their full reporting scope.
 - **Employee Performance:** Available to HOD and Management users. It starts with the user's reportees and lets the viewer inspect an employee.
 - **Department Performance:** Available to HOD and Management. HOD users see their department; Management can select a department.
 - **Organisational Performance:** Available to Management and covers the entire organization.
@@ -52,17 +53,21 @@ If 10 tasks were scheduled and 8 were completed, the completion rate is 80%. The
 
 Use the chart points to inspect the value for a date. A gap can mean there was no applicable data for that day.
 
-## 6. Employee Performance
+## 6. My Team Performance
+
+The team view uses the same KPI cards, task-category charts, and daily performance trends as the department and organisational views. Its figures aggregate all employees in the signed-in user's reporting scope. The performance scoreboard below the charts can be searched and sorted by any available KPI.
+
+## 7. Employee Performance
 
 The team-level view lists reportees with role, department, completion percentage, and average acknowledgement time. Select a reportee to inspect that employee's metrics and trends. Use **Inspect Employee** to search or return to **Show All Reportees**.
 
-## 7. Department Performance
+## 8. Department Performance
 
 The department view shows its summary, trends, and an employee performance scoreboard. Management can switch departments from the selector. HOD users are directed to their own department.
 
 The scoreboard shows each employee's task-completion percentage and acknowledgement speed for comparison within the selected period.
 
-## 8. Organisational Performance
+## 9. Organisational Performance
 
 The organization view includes:
 
@@ -74,7 +79,7 @@ The organization view includes:
 
 Select a department in the heatmap to open its Department Performance view. Heatmap colors summarize rate bands: at least 80%, 50-79%, and below 50%.
 
-## 9. Interpreting results
+## 10. Interpreting results
 
 - Approval-pending work counts as not completed until approved.
 - Not Applicable work does not count as completed performance.

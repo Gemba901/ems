@@ -6,7 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
+  Download,
   Loader2,
+  RefreshCw,
   Search,
   XCircle,
 } from "lucide-react";
@@ -25,7 +27,67 @@ const STATUS_OPTIONS = [
   { value: "ALL", label: "All rows" },
   { value: "FAILED", label: "Declined" },
   { value: "CREATED", label: "Created" },
+  { value: "QUEUED", label: "Queued" },
+  { value: "PROCESSING", label: "Processing" },
 ];
+
+function csvCell(value: unknown) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function downloadFailedRows(
+  fileName: string,
+  rows: DwmsActivityIngestionRow[],
+) {
+  const content = [
+    [
+      "Row",
+      "Scope of Activity",
+      "Target",
+      "Activity Code",
+      "Process Name",
+      "Description / SOP",
+      "Frequency",
+      "Estimated Time (Hours)",
+      "Expected Output",
+      "Remarks",
+      "Documents Required",
+      "Gemba Section",
+      "Process Area",
+      "Parent Activity Code",
+      "Import Error",
+    ],
+    ...rows
+      .filter((row) => row.status === "FAILED")
+      .map((row) => [
+        row.rowNumber,
+        row.sourcePayload?.activity.scope ?? row.scope,
+        row.sourcePayload?.activity.scopeTarget ?? row.scopeTarget,
+        row.sourcePayload?.activity.code ?? row.activityCode,
+        row.sourcePayload?.activity.name ?? row.activityName,
+        row.sourcePayload?.activity.workMethod,
+        row.sourcePayload?.activity.frequency,
+        row.sourcePayload?.activity.completionDeadline,
+        row.sourcePayload?.activity.completionOutput,
+        row.sourcePayload?.activity.remarks,
+        row.sourcePayload?.activity.evidenceRequired,
+        row.sourcePayload?.activity.gembaSection,
+        row.sourcePayload?.activity.processArea,
+        row.sourcePayload?.parentActivityCode ?? row.parentActivityCode,
+        cleanDwmsMessage(row.message, "Import failed"),
+      ]),
+  ]
+    .map((row) => row.map(csvCell).join(","))
+    .join("\r\n");
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${fileName.replace(/\.[^.]+$/, "") || "activity-import"}-failed-rows.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 function formatDateTime(value?: string | null, timeZone?: string | null) {
   if (!value) return "Not available";
@@ -57,6 +119,7 @@ function ActivityIngestionDetailContent() {
   const [message, setMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -86,7 +149,7 @@ function ActivityIngestionDetailContent() {
     return () => {
       mounted = false;
     };
-  }, [accessToken, ingestionId]);
+  }, [accessToken, ingestionId, refreshKey]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -98,6 +161,8 @@ function ActivityIngestionDetailContent() {
         row.rowNumber,
         row.activityName,
         row.activityCode,
+        row.scope,
+        row.scopeTarget,
         row.responsibleJobRole,
         row.responsibleEmployeeCode,
         cleanDwmsMessage(row.message, "No message"),
@@ -126,16 +191,43 @@ function ActivityIngestionDetailContent() {
               {ingestion?.fileName ?? "Activity ingestion"}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Uploaded {formatDateTime(ingestion?.createdAt, user?.organizationTimeZone)} by{" "}
-              {ingestion?.uploadedBy?.name ?? "Unknown"}
+              Uploaded{" "}
+              {formatDateTime(ingestion?.createdAt, user?.organizationTimeZone)}{" "}
+              by {ingestion?.uploadedBy?.name ?? "Unknown"}
             </p>
           </div>
+        </div>
+        <div className="flex gap-2">
+          {ingestion && ingestion.failedRows > 0 && (
+            <button
+              type="button"
+              onClick={() => downloadFailedRows(ingestion.fileName, rows)}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <Download className="h-4 w-4" />
+              Failed rows
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => setRefreshKey((value) => value + 1)}
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
         </div>
       </div>
 
       {message && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
           {message}
+        </div>
+      )}
+      {ingestion?.failureMessage && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+          {cleanDwmsMessage(ingestion.failureMessage, "The ingestion failed")}
         </div>
       )}
 
@@ -208,12 +300,14 @@ function ActivityIngestionDetailContent() {
                     </td>
                     <td className="px-5 py-4">
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === "CREATED" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === "CREATED" ? "bg-emerald-50 text-emerald-700" : row.status === "FAILED" ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700"}`}
                       >
                         {row.status === "CREATED" ? (
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                        ) : (
+                        ) : row.status === "FAILED" ? (
                           <XCircle className="h-3.5 w-3.5" />
+                        ) : (
+                          <Loader2 className="h-3.5 w-3.5" />
                         )}
                         {row.status}
                       </span>
@@ -227,9 +321,11 @@ function ActivityIngestionDetailContent() {
                       </p>
                     </td>
                     <td className="px-5 py-4 text-xs text-slate-600">
-                      {row.responsibleJobRole ||
-                        row.responsibleEmployeeCode ||
-                        "Organization group"}
+                      <p className="font-semibold">
+                        {row.scope?.replaceAll("_", " ") || "Legacy"}
+                      </p>
+                      <p>{row.scopeTarget || "Organisation"}</p>
+                      <p>{row.assignedCount ?? 0} matched</p>
                     </td>
                     <td className="px-5 py-4 text-slate-600">
                       {cleanDwmsMessage(row.message, "No message")}

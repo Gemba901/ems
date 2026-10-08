@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { KaizenService, KaizenQcdsmtCategory, KaizenQcdsmtImpactItemPayload, KaizenUnit } from "@/services/kaizen.service";
-import { CurrencySelect, QCDSMT_CATEGORIES, QCDSMT_LABELS, SectionLabel, UNIT_LABELS, UNIT_OPTIONS } from "@/components/kaizen/kaizen-ui";
+import { CurrencySelect, HelpText, QCDSMT_CATEGORIES, QCDSMT_HINTS, QCDSMT_LABELS, SectionLabel, UNIT_LABELS, UNIT_OPTIONS } from "@/components/kaizen/kaizen-ui";
 import { KaizenSectionHandle, KaizenSectionProps } from "./types";
 
 type Row = KaizenQcdsmtImpactItemPayload;
@@ -44,9 +44,8 @@ const QcdsmtImpactSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (rows.length === 0) throw new Error("Add at least one QCDSMT impact.");
       for (const r of rows) {
-        if (!r.whatIsMeasured.trim()) throw new Error("Every impact needs a measurement description.");
+        if (!r.whatIsMeasured.trim()) throw new Error(`Say what you will measure for ${QCDSMT_LABELS[r.category]}.`);
         if (r.unit === "OTHER" && !r.otherUnitLabel?.trim()) throw new Error("Specify the unit label for 'Other'.");
         if (r.unit === "CURRENCY" && !r.currency) throw new Error("Select a currency for the currency-unit impact.");
       }
@@ -77,7 +76,7 @@ const QcdsmtImpactSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(
           <div className="space-y-3">
             {kaizen.qcdsmtImpacts.map((i) => (
               <div key={i.id} className="border border-slate-100 rounded-lg p-3">
-                <p className="text-xs font-semibold text-blue-600 mb-1">{QCDSMT_LABELS[i.category]}</p>
+                <p className="text-xs font-semibold text-indigo-600 mb-1">{QCDSMT_LABELS[i.category]}</p>
                 <p className="text-sm text-slate-700">{i.whatIsMeasured}</p>
                 <p className="text-xs text-slate-500 mt-1">
                   {i.beforeValue ?? "-"} → {i.afterValue ?? "-"}{" "}
@@ -93,45 +92,48 @@ const QcdsmtImpactSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="1.5">QCDSMT Impact</SectionLabel>
-      <p className="text-xs text-slate-400 mb-4">
-        Record the Quality / Cost / Delivery / Safety / Morale / Technology dimensions this kaizen affects.
-      </p>
+      <SectionLabel n="1.5">What will improve?</SectionLabel>
+      <HelpText>Tap at least one area below, then say how you&apos;ll measure it now and after the change.</HelpText>
+      <div className="mb-4" />
       <div className="space-y-4">
         {rows.map((row, index) => (
           <div key={row.category} className="border border-slate-200 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-blue-600">{QCDSMT_LABELS[row.category]}</p>
+              <p className="text-xs font-semibold text-indigo-600">
+                {QCDSMT_LABELS[row.category]}{" "}
+                <span className="font-normal text-slate-400">· {QCDSMT_HINTS[row.category]}</span>
+              </p>
               <button type="button" onClick={() => removeRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-500 block mb-1">What is measured?</label>
+              <label className="text-xs font-medium text-slate-500 block mb-1">What will you measure?</label>
               <input
                 type="text"
+                placeholder="e.g. Time to find the spill kit"
                 value={row.whatIsMeasured}
                 onChange={(e) => updateRow(index, { whatIsMeasured: e.target.value })}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-medium text-slate-500 block mb-1">Before</label>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Now</label>
                 <input
                   type="text"
                   value={row.beforeValue ?? ""}
                   onChange={(e) => updateRow(index, { beforeValue: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-500 block mb-1">After</label>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Goal</label>
                 <input
                   type="text"
                   value={row.afterValue ?? ""}
                   onChange={(e) => updateRow(index, { afterValue: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                 />
               </div>
               <div>
@@ -139,7 +141,7 @@ const QcdsmtImpactSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(
                 <select
                   value={row.unit}
                   onChange={(e) => updateRow(index, { unit: e.target.value as KaizenUnit })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                 >
                   {UNIT_OPTIONS.map((u) => (
                     <option key={u.value} value={u.value}>
@@ -156,7 +158,7 @@ const QcdsmtImpactSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(
                   type="text"
                   value={row.otherUnitLabel ?? ""}
                   onChange={(e) => updateRow(index, { otherUnitLabel: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                 />
               </div>
             )}
@@ -176,9 +178,10 @@ const QcdsmtImpactSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(
                 key={c.value}
                 type="button"
                 onClick={() => addRow(c.value)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" /> {c.label}
+                <span className="hidden font-normal text-slate-400 sm:inline">· {QCDSMT_HINTS[c.value]}</span>
               </button>
             ))}
           </div>

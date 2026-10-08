@@ -32,9 +32,11 @@ export class CreateKaizenReasonDto {
 }
 
 // Part 1: update reason on an existing draft
+// Draft saves are lenient; submitForHodPreReview checks that everything required is filled in.
 export class UpdateKaizenReasonDto {
+  @IsOptional()
   @IsEnum(KaizenTrigger)
-  trigger!: KaizenTrigger;
+  trigger?: KaizenTrigger;
 
   @ValidateIf((o) => o.trigger === KaizenTrigger.OTHER)
   @IsString()
@@ -54,28 +56,40 @@ export class UpdateKaizenReferenceDto {
 
 // Part 3: condition or opportunity
 export class UpdateKaizenConditionDto {
+  @IsOptional()
   @IsString()
-  conditionDescription!: string;
+  conditionDescription?: string;
 
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  conditionEvidenceUrls!: string[];
+  conditionEvidenceUrls?: string[];
+
+  // The draft wizard asks for the short title alongside the problem
+  @IsOptional()
+  @IsString()
+  @MinLength(5, { message: "Title must be at least 5 characters" })
+  title?: string;
 }
 
 // Part 4: basic daily kaizen information
 export class UpdateKaizenBasicInfoDto {
+  @IsOptional()
   @IsString()
   @MinLength(5, { message: "Title must be at least 5 characters" })
-  title!: string;
+  title?: string;
 
+  @IsOptional()
   @IsDateString()
-  startDate!: string;
+  startDate?: string;
 
+  @IsOptional()
   @IsDateString()
-  targetCompletionDate!: string;
+  targetCompletionDate?: string;
 
+  @IsOptional()
   @IsString()
-  kaizenOwnerId!: string;
+  kaizenOwnerId?: string;
 
   @IsOptional()
   @IsArray()
@@ -156,8 +170,9 @@ export class UpdateKaizenWasteDto {
 
 // Part 7: required materials and estimated cost
 export class UpdateKaizenImplementationPlanDto {
+  @IsOptional()
   @IsString()
-  requiredMaterials!: string;
+  requiredMaterials?: string;
 
   @IsOptional()
   @IsNumberString()

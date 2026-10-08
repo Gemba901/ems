@@ -95,11 +95,30 @@ export class ReadinessService {
           leaseUntil: true,
         },
       });
+      const [
+        queuedActivityIngestions,
+        staleActivityIngestions,
+        failedActivityIngestions,
+      ] = await Promise.all([
+        this.db.activityIngestion.count({ where: { status: 'QUEUED' } }),
+        this.db.activityIngestion.count({
+          where: {
+            status: 'PROCESSING',
+            updatedAt: { lt: new Date(Date.now() - 10 * 60_000) },
+          },
+        }),
+        this.db.activityIngestion.count({ where: { status: 'FAILED' } }),
+      ]);
       jobs = {
         failedProvisioning,
         failedEmail,
         overdueProvisioning,
         scheduled,
+        activityIngestions: {
+          queued: queuedActivityIngestions,
+          staleProcessing: staleActivityIngestions,
+          failed: failedActivityIngestions,
+        },
       };
       if (overdueProvisioning)
         blockers.push('Onboarding worker has overdue work');
@@ -109,6 +128,10 @@ export class ReadinessService {
         );
       if (scheduled.some((job) => job.failedAt && !job.completedAt))
         blockers.push('Resolve failed scheduled jobs before acceptance');
+      if (staleActivityIngestions)
+        blockers.push('Activity ingestion processor has stale processing jobs');
+      if (failedActivityIngestions)
+        blockers.push('Resolve failed activity ingestions before acceptance');
     } catch {
       blockers.push(
         'Database readiness inspection failed: verify connectivity and migrations',

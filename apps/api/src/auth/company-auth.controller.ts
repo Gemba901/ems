@@ -12,6 +12,8 @@ import {
 import type { CookieOptions, Response } from 'express';
 
 import { AuthService } from './auth.service';
+import { AUTH_LIMITS } from './auth-rate-limits';
+import { RateLimit } from '../common/rate-limit/rate-limit.guard';
 import { LoginDto, VerifyFirstTimeDto, CreatePasswordDto } from './dto/auth.dto';
 import { TenantRequired } from '../tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from '../tenancy/trusted-tenant-context.guard';
@@ -49,18 +51,21 @@ export class CompanyAuthController {
     }
 
     @Post('verify-first-time')
+    @RateLimit(...AUTH_LIMITS.verifyFirstTime)
     @HttpCode(HttpStatus.OK)
     verify(@Body() dto: VerifyFirstTimeDto, @Req() request: TenantRequest) {
         return this.authService.verifyFirstTimeForTenant(this.requireTenant(request), dto.phoneOrEmail, dto.employeeCode);
     }
 
     @Post('create-password')
+    @RateLimit(...AUTH_LIMITS.createPassword)
     @HttpCode(HttpStatus.OK)
     setup(@Body() dto: CreatePasswordDto, @Req() request: TenantRequest) {
         return this.authService.createPasswordForTenant(this.requireTenant(request), dto.setupToken, dto.newPassword);
     }
 
     @Post('login')
+    @RateLimit(...AUTH_LIMITS.login)
     @HttpCode(HttpStatus.OK)
     async login(
         @Body() dto: LoginDto,
@@ -90,6 +95,7 @@ export class CompanyAuthController {
     }
 
     @Post('refresh')
+    @RateLimit(...AUTH_LIMITS.refresh)
     @HttpCode(HttpStatus.OK)
     async refresh(
         @Req() request: TenantRequest,

@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { EmployeeService } from "@/services/employee.service";
 import { KaizenService } from "@/services/kaizen.service";
-import { formatDate, SectionLabel } from "@/components/kaizen/kaizen-ui";
+import { formatDate, HelpText, SectionLabel } from "@/components/kaizen/kaizen-ui";
 import { KaizenSectionHandle, KaizenSectionProps } from "./types";
 
 const MAX_DURATION_DAYS = 30;
@@ -35,7 +35,6 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
   { kaizen, access, token, onSaved },
   ref,
 ) {
-  const [title, setTitle] = useState(kaizen.title ?? "");
   const [startDate, setStartDate] = useState(toIsoDateInput(kaizen.startDate) || todayIsoDate());
   const [targetCompletionDate, setTargetCompletionDate] = useState(toIsoDateInput(kaizen.targetCompletionDate));
   const [kaizenOwnerId, setKaizenOwnerId] = useState(kaizen.kaizenOwnerId ?? "");
@@ -68,9 +67,7 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (title.trim().length < 5) throw new Error("Title must be at least 5 characters.");
-      if (!startDate) throw new Error("Please set a start date.");
-      if (!targetCompletionDate) throw new Error("Please set a target completion date.");
+      // Drafts may be saved half-filled; submit checks what is still missing.
       if (duration !== null && (duration < 0 || duration > MAX_DURATION_DAYS)) {
         throw new Error(`Target completion date must be within ${MAX_DURATION_DAYS} days of the start date.`);
       }
@@ -79,10 +76,9 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
       return KaizenService.updateBasicInfo(
         kaizen.id,
         {
-          title: title.trim(),
-          startDate: new Date(startDate).toISOString(),
-          targetCompletionDate: new Date(targetCompletionDate).toISOString(),
-          kaizenOwnerId,
+          startDate: startDate ? new Date(startDate).toISOString() : undefined,
+          targetCompletionDate: targetCompletionDate ? new Date(targetCompletionDate).toISOString() : undefined,
+          kaizenOwnerId: kaizenOwnerId || undefined,
           teamMemberIds: teamMemberIds.length ? teamMemberIds : undefined,
         },
         token,
@@ -147,35 +143,23 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="1.4">Basic Daily Kaizen Information</SectionLabel>
+      <SectionLabel n="1.4">Owner &amp; dates</SectionLabel>
       <div className="space-y-4">
-        <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Kaizen Title <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="A short, descriptive title"
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-          />
-        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-              Start Date <span className="text-red-500">*</span>
+              Start date
             </label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
             />
           </div>
           <div>
             <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-              Target Completion Date <span className="text-red-500">*</span>
+              Finish by
             </label>
             <input
               type="date"
@@ -183,10 +167,11 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
               min={startDate}
               max={maxTargetDate}
               onChange={(e) => setTargetCompletionDate(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
             />
           </div>
         </div>
+        <p className="text-xs text-slate-400 -mt-2">A daily kaizen should be finished within {MAX_DURATION_DAYS} days.</p>
         {duration !== null && (
           <div>
             <label className="text-sm font-semibold text-slate-700 block mb-1.5">Duration</label>
@@ -203,12 +188,13 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
         )}
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Kaizen Owner <span className="text-red-500">*</span>
+            Kaizen owner
           </label>
+          <HelpText>The person who does the work and reports the result. Usually you.</HelpText>
           <select
             value={kaizenOwnerId}
             onChange={(e) => setKaizenOwnerId(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
           >
             <option value="">Select an owner...</option>
             {ownerOptions.map((o) => (
@@ -247,7 +233,7 @@ const BasicInfoSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
                       checked={checked}
                       disabled={disabled}
                       onChange={() => toggleTeamMember(c.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
                     />
                     <span>
                       {c.firstName} {c.lastName}

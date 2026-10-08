@@ -1,21 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import {
   DwmsService,
   getDwmsErrorMessage,
-  type DwmsTaskItem,
   type DwmsTaskStatus,
 } from "@/services/dwms.service";
-import TaskMiniCard from "./TaskMiniCard";
+import TaskCompactRow from "./TaskCompactRow";
 import { uploadImage } from "@/services/uploads.service";
 
 type Props = {
   maxItems?: number;
-  className?: string;
 };
 
 const statusCompletion: Record<DwmsTaskStatus, number> = {
@@ -29,11 +28,34 @@ const statusCompletion: Record<DwmsTaskStatus, number> = {
   OVERDUE: 0,
 };
 
-export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: Props) {
-  const router = useRouter();
+export const TODAY_TASKS_QUERY_KEY = ["dwms-today-tasks"] as const;
+
+/** Today's tasks plus the open (not done) ones, earliest due first. */
+export function useOpenTodayTasks(enabled = true) {
   const accessToken = useAuthStore((state) => state.accessToken);
-  const [tasks, setTasks] = useState<DwmsTaskItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery({
+    queryKey: TODAY_TASKS_QUERY_KEY,
+    queryFn: () => DwmsService.getTodayTasks(accessToken!),
+    enabled: enabled && !!accessToken,
+  });
+  const openTasks = useMemo(() => {
+    return [...(query.data?.tasks ?? [])]
+      .filter((task) => task.status !== "DONE")
+      .sort((a, b) => {
+        const dueA = new Date(a.dueAt).getTime();
+        const dueB = new Date(b.dueAt).getTime();
+        return (Number.isNaN(dueA) ? 0 : dueA) - (Number.isNaN(dueB) ? 0 : dueB);
+      });
+  }, [query.data]);
+  return { ...query, tasks: query.data?.tasks ?? [], openTasks };
+}
+
+/** Compact list of today's DWMS tasks with inline status changes; rendered inside the dashboard's My day panel. */
+export default function DwmsTodayTasksList({ maxItems = 3 }: Props) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const { tasks, openTasks, isLoading: loading, error: loadError } = useOpenTodayTasks();
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completionTask, setCompletionTask] = useState<{
@@ -46,39 +68,8 @@ export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: P
   const [completionFile, setCompletionFile] = useState<File | null>(null);
   const [completionError, setCompletionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadTasks() {
-      if (!accessToken) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await DwmsService.getTodayTasks(accessToken);
-        if (!cancelled) setTasks(response.tasks ?? []);
-      } catch (err: unknown) {
-        if (!cancelled) {
-          setError(getDwmsErrorMessage(err, "Failed to load today's tasks."));
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void loadTasks();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken]);
-
-  async function reloadTasks(token: string) {
-    const response = await DwmsService.getTodayTasks(token);
-    setTasks(response.tasks ?? []);
+  async function reloadTasks() {
+    await queryClient.invalidateQueries({ queryKey: TODAY_TASKS_QUERY_KEY });
   }
 
   async function handleStatusChange(instanceId: string, nextStatus: DwmsTaskStatus) {
@@ -106,7 +97,7 @@ export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: P
         status: nextStatus,
         completionPercent: statusCompletion[nextStatus],
       });
-      await reloadTasks(accessToken);
+      await reloadTasks();
     } catch (err: unknown) {
       setError(getDwmsErrorMessage(err, "Failed to update task status."));
     } finally {
@@ -121,13 +112,14 @@ export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: P
     setError(null);
     try {
       await DwmsService.acknowledgeTask(accessToken, taskId);
-      await reloadTasks(accessToken);
+      await reloadTasks();
     } catch (err: unknown) {
       setError(getDwmsErrorMessage(err, "Failed to acknowledge task."));
     } finally {
       setSavingId(null);
     }
   }
+
   async function handleCompletionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!completionTask || !accessToken) return;
@@ -154,75 +146,60 @@ export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: P
       setCompletionNote("");
       setCompletionFile(null);
       setCompletionError(null);
-      await reloadTasks(accessToken);
+      await reloadTasks();
     } catch (err: unknown) {
       setCompletionError(getDwmsErrorMessage(err, "Failed to complete task."));
     } finally {
       setSavingId(null);
     }
   }
-  const visibleTasks = useMemo(() => {
-    return [...tasks]
-      .filter((task) => task.status !== "DONE")
-      .sort((a, b) => {
-        const dueA = new Date(a.dueAt).getTime();
-        const dueB = new Date(b.dueAt).getTime();
-        return (Number.isNaN(dueA) ? 0 : dueA) - (Number.isNaN(dueB) ? 0 : dueB);
-      })
-      .slice(0, maxItems);
-  }, [maxItems, tasks]);
 
   if (!accessToken) return null;
 
-  return (
-    <section className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-3">
-         
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">{"Today's Tasks"}</h2>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => router.push("/dwms")}
-          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-        >
-          Show my all tasks
-          <ArrowRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
+  const visibleTasks = openTasks.slice(0, maxItems);
+  const shownError = error ?? (loadError ? getDwmsErrorMessage(loadError, "Failed to load today's tasks.") : null);
 
-      {error && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+  return (
+    <div className="flex flex-col">
+      {shownError && (
+        <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
+          <span>{shownError}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="mt-4 space-y-3">
+        <div className="space-y-2 p-4">
           {[0, 1, 2].map((item) => (
-            <div key={item} className="h-14 animate-pulse rounded-lg bg-slate-100" />
+            <div key={item} className="h-8 animate-pulse rounded-md bg-slate-100" />
           ))}
         </div>
       ) : visibleTasks.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-          No tasks due today.
-        </div>
+        <p className="px-4 py-6 text-center text-sm text-slate-400">No tasks due today.</p>
       ) : (
-        <div className="mt-4 space-y-3">
-          {visibleTasks.map((task) => (
-            <TaskMiniCard
-              key={task.instanceId}
-              task={task}
-              onClick={() => router.push(`/dwms/tasks/${task.instanceId}`)}
-              onStatusChange={handleStatusChange}
-              onAcknowledgement={handleAcknowledgement}
-              saving={savingId === task.instanceId || savingId === task.taskId}
-            />
-          ))}
-        </div>
+        <>
+          <ul className="divide-y divide-slate-100">
+            {visibleTasks.map((task) => (
+              <TaskCompactRow
+                key={task.instanceId}
+                task={task}
+                onOpen={() => router.push(`/dwms/tasks/${task.instanceId}`)}
+                onStatusChange={handleStatusChange}
+                onAcknowledgement={handleAcknowledgement}
+                saving={savingId === task.instanceId || savingId === task.taskId}
+              />
+            ))}
+          </ul>
+          {openTasks.length > visibleTasks.length && (
+            <button
+              type="button"
+              onClick={() => router.push("/dwms")}
+              className="border-t border-slate-100 px-4 py-2 text-left text-xs text-slate-500 transition hover:text-slate-900"
+            >
+              +{openTasks.length - visibleTasks.length} more tasks
+            </button>
+          )}
+        </>
       )}
       {completionTask && (
         <div
@@ -323,6 +300,6 @@ export default function DwmsTodayTasksWidget({ maxItems = 3, className = "" }: P
           </form>
         </div>
       )}
-    </section>
+    </div>
   );
 }

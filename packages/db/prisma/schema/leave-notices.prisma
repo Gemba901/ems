@@ -1,0 +1,93 @@
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model LeaveRequest {
+  id                  String      @id @default(uuid())
+  employeeId          String
+  organizationId      String
+  type                String
+  status              LeaveStatus @default(PENDING)
+  startDate           DateTime
+  endDate             DateTime
+  days                Int
+  reason              String?
+  handoverEmployeeId  String?
+  handoverNotes       String?
+  handoverEmployee2Id String?
+  handoverNotes2      String?
+  reviewedById        String?
+  reviewedAt          DateTime?
+  reviewNote          String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  employee          Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  handoverEmployee  Employee?    @relation("LeaveHandover", fields: [handoverEmployeeId], references: [id], onDelete: SetNull)
+  handoverEmployee2 Employee?    @relation("LeaveHandover2", fields: [handoverEmployee2Id], references: [id], onDelete: SetNull)
+  reviewedBy        User?        @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, status])
+  @@index([organizationId, status])
+  @@index([organizationId, startDate])
+}
+
+model LeaveBalance {
+  id         String @id @default(uuid())
+  employeeId String
+  year       Int
+  type       String
+  allocated  Int    @default(0)
+  used       Int    @default(0)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year, type])
+  @@index([employeeId, year])
+}
+
+model LeavePolicy {
+  id             String   @id @default(uuid())
+  organizationId String
+  year           Int
+  type           String
+  allocated      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, year, type])
+  @@index([organizationId, year])
+}
+
+model LeaveSettings {
+  id               String   @id @default(uuid())
+  organizationId   String   @unique
+  workingDays      Int[]    @default([1, 2, 3, 4, 5])
+  enabledTypes     String[] @default([])
+  customLeaveTypes Json     @default("[]")
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+model Notice {
+  id             String    @id @default(cuid())
+  organizationId String
+  type           String    @default("INFO")
+  title          String
+  body           String
+  pinned         Boolean   @default(false)
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+}

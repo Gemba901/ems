@@ -2,12 +2,13 @@
 
 import { TenantFileLink } from "@/components/files/TenantFileLink";
 import { TenantImage } from "@/components/files/TenantImage";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { FileIcon, ImagePlus, Loader2, X } from "lucide-react";
 import { KaizenService } from "@/services/kaizen.service";
 import { uploadImage } from "@/services/uploads.service";
-import { SectionLabel } from "@/components/kaizen/kaizen-ui";
+import { HelpText, SectionLabel } from "@/components/kaizen/kaizen-ui";
+import { SpeechToTextButton } from "@/components/ui/SpeechToTextButton";
 import { KaizenSectionHandle, KaizenSectionProps } from "./types";
 
 const MAX_FILES = 8;
@@ -20,6 +21,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
   { kaizen, access, token, onSaved },
   ref,
 ) {
+  const [title, setTitle] = useState(kaizen.title ?? "");
   const [description, setDescription] = useState(kaizen.conditionDescription ?? "");
   const [evidenceUrls, setEvidenceUrls] = useState<string[]>(kaizen.conditionEvidenceUrls ?? []);
   const [uploading, setUploading] = useState(false);
@@ -46,16 +48,31 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
     }
   };
 
+  const appendToDescription = useCallback((transcript: string) => {
+    setDescription((prev) => (prev ? `${prev} ${transcript}` : transcript));
+  }, []);
+
   const removeFile = (index: number) => {
     setEvidenceUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (description.trim().length < 10) {
-        throw new Error("Describe the condition or opportunity in at least 10 characters.");
+      const trimmedTitle = title.trim();
+      const trimmedDescription = description.trim();
+      if (trimmedTitle && trimmedTitle.length < 5) throw new Error("Title must be at least 5 characters.");
+      if (trimmedDescription && trimmedDescription.length < 10) {
+        throw new Error("Describe what you saw in at least 10 characters.");
       }
-      return KaizenService.updateCondition(kaizen.id, { conditionDescription: description.trim(), conditionEvidenceUrls: evidenceUrls }, token);
+      return KaizenService.updateCondition(
+        kaizen.id,
+        {
+          title: trimmedTitle || undefined,
+          conditionDescription: trimmedDescription || undefined,
+          conditionEvidenceUrls: evidenceUrls,
+        },
+        token,
+      );
     },
     onSuccess: (updated) => onSaved(updated),
     onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
@@ -91,7 +108,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
                   href={url}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-lg border border-slate-200 aspect-square flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-blue-500 hover:border-blue-300 transition-colors"
+                  className="rounded-lg border border-slate-200 aspect-square flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-colors"
                 >
                   <FileIcon className="h-6 w-6" />
                   <span className="text-[10px]">File {i + 1}</span>
@@ -106,24 +123,37 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="1.3">Condition or Opportunity</SectionLabel>
+      <SectionLabel n="1.3">What you saw</SectionLabel>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Describe the condition or improvement opportunity <span className="text-red-500">*</span>
-          </label>
+          <label className="text-sm font-semibold text-slate-700 block mb-1.5">Short title</label>
+          <HelpText>A few words someone can recognise in a list, e.g. &quot;Label the spill kit&quot;.</HelpText>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="A short, descriptive title"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+          />
+        </div>
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <label className="text-sm font-semibold text-slate-700">What is the problem or idea?</label>
+            <SpeechToTextButton onResult={appendToDescription} />
+          </div>
+          <HelpText>What you saw, where, and why it matters. Type or tap the mic to speak.</HelpText>
           <textarea
             rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe what was observed..."
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+            placeholder="e.g. The spill kit is behind boxes, so it takes minutes to find during a spill."
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none"
           />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-sm font-semibold text-slate-700">
-              Evidence <span className="text-xs font-normal text-slate-400">(any file type, optional)</span>
+              Photos or files <span className="text-xs font-normal text-slate-400">(optional)</span>
             </label>
             <span className="text-xs text-slate-400">{evidenceUrls.length}/{MAX_FILES}</span>
           </div>
@@ -153,7 +183,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
                 type="button"
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
-                className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all disabled:opacity-50"
+                className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all disabled:opacity-50"
               >
                 {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
                 {uploading ? "Uploading..." : "Add file"}

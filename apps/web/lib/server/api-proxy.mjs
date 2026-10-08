@@ -1,6 +1,7 @@
 // Imported only by the server route. Configuration is supplied at request time.
-const RESERVED = new Set(['www', 'api', 'admin', 'app', 'auth', 'staging', 'support']);
-const ROOTS = new Set(['operations', 'onboarding', 'auth', 'organizations', 'company', 'employee', 'departments', 'committees', 'notices', 'notifications', 'tickets', 'sims', 'kaizen', 'sga', 'ems', 'leave', 'calendar', 'dwms', 'uploads', 'chat', 'quotes', 'steel']);
+import { isIP } from 'node:net';
+import { RESERVED_SLUGS as RESERVED } from '../reserved-slugs.mjs';
+const ROOTS = new Set(['operations', 'onboarding', 'auth', 'organizations', 'company', 'employee', 'departments', 'committees', 'notices', 'notifications', 'tickets', 'sims', 'kaizen', 'sga', 'ems', 'leave', 'calendar', 'dwms', 'uploads', 'chat', 'quotes', 'steel', 'work']);
 const AUTH = new Set(['login', 'refresh', 'logout', 'select-org', 'verify-first-time', 'create-password', 'forgot-password', 'reset-password', 'verify-temp-password', 'my-org']);
 const COMPANY_AUTH = new Set(['login', 'refresh', 'logout', 'verify-first-time', 'create-password']);
 const LIMIT = 20 * 1024 * 1024;
@@ -114,6 +115,10 @@ export async function proxyRequest(request, parts, config, fetcher = fetch) {
     // Never copy caller-provided forwarding headers, Host, or unrelated cookies.
     headers.set('x-gemba-proxy-secret', config.secret);
     if (scope.tenantHostname) headers.set('x-gemba-tenant-hostname', scope.tenantHostname);
+    // Vercel and our nginx both set x-real-ip from the TCP peer, overwriting any caller value.
+    // The API trusts x-gemba-client-ip only because it arrives with the proxy secret.
+    const clientIp = request.headers.get('x-real-ip')?.trim();
+    if (clientIp && isIP(clientIp)) headers.set('x-gemba-client-ip', clientIp);
     const cookie = upstreamCookie(request.headers.get('cookie'), config.production);
     if (cookie) headers.set('cookie', cookie);
     const upstream = await fetcher(target, {

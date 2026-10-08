@@ -28,21 +28,32 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
 
   async getDwmsAccessCapabilities(user: UserPayload) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
-    const [config, reportee] = await Promise.all([
+    const hasEmployeePerformanceRole =
+      this.getDwmsRole(user.roleLevel) === 'MANAGEMENT';
+    const organizationEmployeesPromise: Promise<Array<{ id: string }>> =
+      hasEmployeePerformanceRole
+        ? this.prisma.employee.findMany({
+            where: {
+              organizationId: user.organizationId,
+              id: { not: employee.id },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve([]);
+    const [config, teamEmployeeIds, organizationEmployees] = await Promise.all([
       this.prisma.dwmsPermissionConfig.findUnique({
         where: { organizationId: user.organizationId },
         select: { alertViewLevel: true, analyticsViewLevel: true },
       }),
-      this.prisma.employee.findFirst({
-        where: {
-          organizationId: user.organizationId,
-          reportingManagerId: employee.id,
-        },
-        select: { id: true },
-      }),
+      this.listTeamEmployeeIds(employee, user.organizationId, user.roleLevel),
+      organizationEmployeesPromise,
     ]);
+    const employeePerformanceEmployeeIds = organizationEmployees.map(
+      (organizationEmployee) => organizationEmployee.id,
+    );
 
     return {
+      currentEmployeeId: employee.id,
       alertViewLevel: this.applyRoleMinimum(
         config?.alertViewLevel ?? ViewLevel.OWN,
         user.roleLevel,
@@ -51,7 +62,12 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
         config?.analyticsViewLevel ?? ViewLevel.DEPARTMENT,
         user.roleLevel,
       ),
-      hasReportees: Boolean(reportee),
+      hasReportees: teamEmployeeIds.length > 0,
+      teamPerformanceEmployeeIds: teamEmployeeIds,
+      canViewEmployeePerformance:
+        hasEmployeePerformanceRole &&
+        employeePerformanceEmployeeIds.length > 0,
+      employeePerformanceEmployeeIds,
     };
   }
 

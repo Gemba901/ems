@@ -6,13 +6,14 @@ import request from 'supertest';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingGuard } from './onboarding.guard';
 import { OnboardingService } from './onboarding.service';
+import { RateLimitService } from '../common/rate-limit/rate-limit.service';
 
 describe('Onboarding HTTP boundary', () => {
   let app: INestApplication;
   const secret = 's'.repeat(64);
   const handlers = { signup: jest.fn(), verify: jest.fn(), status: jest.fn(), retry: jest.fn(), resend: jest.fn() };
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ controllers: [OnboardingController], providers: [OnboardingGuard, { provide: ConfigService, useValue: new ConfigService({ ONBOARDING_ENABLED: 'true', TENANT_PROXY_SECRET: secret }) }, { provide: OnboardingService, useValue: handlers }] }).compile();
+    const module = await Test.createTestingModule({ controllers: [OnboardingController], providers: [OnboardingGuard, { provide: ConfigService, useValue: new ConfigService({ ONBOARDING_ENABLED: 'true', TENANT_PROXY_SECRET: secret }) }, { provide: OnboardingService, useValue: handlers }, { provide: RateLimitService, useValue: { consume: jest.fn() } }] }).compile();
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
     await app.init();

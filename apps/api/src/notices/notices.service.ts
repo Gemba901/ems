@@ -8,7 +8,7 @@ export class NoticesService {
 
     async getNotices(organizationId: string) {
         const now = new Date();
-        return (this.prisma as any).notice.findMany({
+        return this.prisma.notice.findMany({
             where: {
                 organizationId,
                 OR: [
@@ -24,7 +24,7 @@ export class NoticesService {
     }
 
     async createNotice(organizationId: string, dto: CreateNoticeDto) {
-        return (this.prisma as any).notice.create({
+        return this.prisma.notice.create({
             data: {
                 organizationId,
                 type:      dto.type,
@@ -37,11 +37,11 @@ export class NoticesService {
     }
 
     async updateNotice(id: string, organizationId: string, dto: UpdateNoticeDto) {
-        const notice = await (this.prisma as any).notice.findUnique({ where: { id, organizationId } });
+        const notice = await this.prisma.notice.findUnique({ where: { id, organizationId } });
         if (!notice)                                throw new NotFoundException('Notice not found');
         if (notice.organizationId !== organizationId) throw new ForbiddenException();
 
-        return (this.prisma as any).notice.update({
+        return this.prisma.notice.update({
             where: { id, organizationId },
             data: {
                 ...(dto.type      !== undefined ? { type:      dto.type }      : {}),
@@ -56,9 +56,9 @@ export class NoticesService {
     }
 
     async deleteNotice(id: string, organizationId: string) {
-        const notice = await (this.prisma as any).notice.findUnique({ where: { id, organizationId } });
+        const notice = await this.prisma.notice.findUnique({ where: { id, organizationId } });
         if (!notice)                                throw new NotFoundException('Notice not found');
         if (notice.organizationId !== organizationId) throw new ForbiddenException();
-        return (this.prisma as any).notice.delete({ where: { id, organizationId } });
+        return this.prisma.notice.delete({ where: { id, organizationId } });
     }
 }

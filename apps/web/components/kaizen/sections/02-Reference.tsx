@@ -2,12 +2,12 @@
 
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { KaizenService, KaizenReferenceApplicability } from "@/services/kaizen.service";
 import { REFERENCE_APPLICABILITY_LABELS, SectionLabel } from "@/components/kaizen/kaizen-ui";
 import { KaizenSectionHandle, KaizenSectionProps } from "./types";
 
-const APPLICABILITY_OPTIONS: KaizenReferenceApplicability[] = ["APPLICABLE", "NOT_APPLICABLE", "REFERENCE_NOT_FOUND"];
+const APPLICABILITY_OPTIONS: KaizenReferenceApplicability[] = ["APPLICABLE", "NOT_APPLICABLE"];
 
 const ReferenceSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(function ReferenceSection(
   { kaizen, access, token, onSaved },
@@ -65,14 +65,20 @@ const ReferenceSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
   }
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <SectionLabel n="1.2">Reference</SectionLabel>
-      <p className="text-xs text-slate-400 mb-4">
-        If this kaizen was triggered by an alert, abnormality, audit finding, or other record, reference it here.
-      </p>
-      <div className="space-y-4">
+    <details
+      open={!!(kaizen.referenceValue || kaizen.referenceApplicability)}
+      className="group bg-white border border-slate-100 rounded-xl p-6 shadow-sm"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+        <span>
+          Linked to an alert, audit or other record?{" "}
+          <span className="text-xs font-normal text-slate-400">(optional)</span>
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="space-y-4 mt-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">Is a reference applicable?</label>
+          <label className="text-sm font-semibold text-slate-700 block mb-1.5">Is there a reference?</label>
           <div className="flex flex-wrap gap-1.5">
             {APPLICABILITY_OPTIONS.map((opt) => (
               <button
@@ -81,7 +87,7 @@ const ReferenceSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
                 onClick={() => setApplicability(opt)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   applicability === opt
-                    ? "bg-blue-600 border-blue-600 text-white"
+                    ? "bg-[#52618a] border-[#52618a] text-white"
                     : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
               >
@@ -92,14 +98,14 @@ const ReferenceSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Reference value <span className="text-xs font-normal text-slate-400">(optional)</span>
+            Reference number or name <span className="text-xs font-normal text-slate-400">(optional)</span>
           </label>
           <input
             type="text"
             value={referenceValue}
             onChange={(e) => setReferenceValue(e.target.value)}
             placeholder="e.g. Alert #123, Abnormality ref, audit finding ID..."
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
           />
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
@@ -109,7 +115,7 @@ const ReferenceSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
           </p>
         )}
       </div>
-    </div>
+    </details>
   );
 });
 

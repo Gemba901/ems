@@ -1,6 +1,8 @@
+import { SentryModule } from '@sentry/nestjs/setup';
 import { OperationsModule } from './operations/operations.module';
 import { OnboardingModule } from "./onboarding/onboarding.module";
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -26,10 +28,13 @@ import { TicketsModule } from './tickets/tickets.module';
 import { SteelDomainModule } from './steel/steel-domain.module';
 import { KaizenModule } from './kaizen/kaizen.module';
 import { SgaModule } from './sga/sga.module';
+import { WorkModule } from './work/work.module';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -63,8 +68,13 @@ import { TenancyModule } from './tenancy/tenancy.module';
     SteelDomainModule,
     KaizenModule,
     SgaModule,
+    WorkModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Runs before every controller guard; see ProxySecretGuard.
+    { provide: APP_GUARD, useClass: ProxySecretGuard },
+  ],
 })
 export class AppModule {}

@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   ValidationPipe,
 } from '@nestjs/common';
-import { TaskFrequency } from 'db';
+import { ActivityScope, TaskFrequency } from 'db';
 import { CreateAssignedTaskDto } from '../dto/dwms.dto';
 import { DwmsTaskService } from './task.service';
 
@@ -18,6 +18,111 @@ class TestTaskService extends DwmsTaskService {
     .fn()
     .mockResolvedValue({ users: [{ id: 'approver' }] });
 }
+
+describe('DWMS task category serialization', () => {
+  const service = new TestTaskService({} as any, {} as any);
+  const instance = {
+    id: 'instance',
+    status: 'PENDING',
+    completionPercent: 0,
+    scheduledFor: new Date('2026-09-23T00:00:00.000Z'),
+    dueAt: new Date('2026-09-23T23:59:59.999Z'),
+    completedAt: null,
+    completionNote: null,
+    completionAttachmentUrl: null,
+    completionAttachmentName: null,
+    createdAt: new Date('2026-09-23T00:00:00.000Z'),
+    updatedAt: new Date('2026-09-23T00:00:00.000Z'),
+    comments: [],
+    events: [],
+    alerts: [],
+  };
+  const task = {
+    id: 'task',
+    title: 'Task',
+    description: null,
+    frequency: TaskFrequency.DAILY,
+    ownerId: 'owner',
+    ownerName: 'Owner',
+    owner: { email: 'owner@example.com', organization: { timeZone: 'UTC' } },
+    assignedById: null,
+    approvedById: null,
+    completionNote: null,
+    completionAttachmentUrl: null,
+    completionAttachmentName: null,
+    requiresCompletionDocument: false,
+    completionDocumentName: null,
+    createdAt: new Date('2026-09-23T00:00:00.000Z'),
+    updatedAt: new Date('2026-09-23T00:00:00.000Z'),
+    isAdhoc: false,
+    acknowledgedAt: new Date('2026-09-23T00:00:00.000Z'),
+    priority: 'MEDIUM',
+    department: null,
+  };
+
+  it.each([
+    [ActivityScope.ORGANISATION, 'GOOD_PRACTICE'],
+    [ActivityScope.DEPARTMENT, 'GOOD_PRACTICE'],
+    [ActivityScope.JOB_TITLE, 'JOB_RESPONSIBILITY'],
+    [ActivityScope.EMPLOYEE, 'JOB_RESPONSIBILITY'],
+  ])('maps %s activities to %s', (scope, expected) => {
+    const result = service.serializeTaskInstance(
+      { ...task, activity: { id: 'activity', scope } },
+      instance,
+    );
+    expect(result.taskCategory).toBe(expected);
+  });
+
+  it('gives a manual assignment precedence over its linked activity', () => {
+    const result = service.serializeTaskInstance(
+      {
+        ...task,
+        assignedById: 'assigner',
+        assignedByName: 'Assigner',
+        assignedBy: { email: 'assigner@example.com' },
+        activity: { id: 'activity', scope: ActivityScope.DEPARTMENT },
+      },
+      instance,
+    );
+    expect(result.taskCategory).toBe('ASSIGNED_TASK');
+  });
+
+  it('serializes immutable task content from the occurrence snapshot', () => {
+    const result = service.serializeTaskInstance(
+      {
+        ...task,
+        title: 'Updated shared title',
+        description: 'Updated shared description',
+        requiresCompletionDocument: true,
+        completionDocumentName: 'Updated evidence',
+        activity: { id: 'activity', scope: ActivityScope.ORGANISATION },
+      },
+      {
+        ...instance,
+        titleSnapshot: 'Original title',
+        descriptionSnapshot: 'Original description',
+        requiresDocumentSnapshot: false,
+        documentNameSnapshot: null,
+      },
+    );
+
+    expect(result).toMatchObject({
+      title: 'Original title',
+      description: 'Original description',
+      requiresCompletionDocument: false,
+      completionDocumentName: null,
+    });
+  });
+
+  it('rejects a task that has neither an assigner nor an activity scope', () => {
+    expect(() =>
+      service.serializeTaskInstance(
+        { ...task, activity: null },
+        instance,
+      ),
+    ).toThrow('Task category cannot be determined');
+  });
+});
 
 describe('DWMS task creation', () => {
   const user = { userId: 'user', organizationId: 'org', roleLevel: 'HOD' };
@@ -301,6 +406,82 @@ describe('DWMS task creation', () => {
       ).rejects.toThrow(BadRequestException);
     },
   );
+
+  it('strips activity linkage from manual task payloads at the API boundary', async () => {
+    const pipe = new ValidationPipe({ whitelist: true });
+    const payload = await pipe.transform(
+      { ...dto, activityId: 'activity' },
+      { type: 'body', metatype: CreateAssignedTaskDto },
+    );
+
+    expect(payload).not.toHaveProperty('activityId');
+  });
+});
+
+describe('DWMS assigned task acknowledgement', () => {
+  const user = {
+    userId: 'owner-user',
+    organizationId: 'org',
+    roleLevel: 'OPERATOR',
+  };
+
+  it.each([TaskFrequency.PLANNED, TaskFrequency.DAILY])(
+    'acknowledges the parent %s task without resolving an occurrence',
+    async (frequency) => {
+      const task = {
+        id: 'task',
+        title: 'Inspect equipment',
+        ownerId: 'owner',
+        assignedById: null,
+        isAdhoc: true,
+        frequency,
+        status: 'PENDING',
+        acknowledgedAt: null,
+        updatedAt: new Date('2026-10-08T00:00:00.000Z'),
+      };
+      const prisma = {
+        employee: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'owner',
+            firstName: 'Task',
+            lastName: 'Owner',
+          }),
+        },
+        task: {
+          findFirst: jest.fn().mockResolvedValue(task),
+          update: jest.fn().mockResolvedValue({
+            ...task,
+            acknowledgedAt: new Date('2026-10-08T01:00:00.000Z'),
+          }),
+        },
+        taskInstance: {
+          findFirst: jest.fn(),
+        },
+      };
+      const service = new TestTaskService(prisma, {
+        create: jest.fn(),
+      });
+
+      const result = await service.acknowledgeAssignedTask(user, 'task');
+
+      expect(prisma.task.findFirst).toHaveBeenCalledWith({
+        where: { id: 'task', ownerId: 'owner', isAdhoc: true },
+      });
+      expect(prisma.task.update).toHaveBeenCalledWith({
+        where: {
+          id: 'task',
+          status: 'PENDING',
+          updatedAt: task.updatedAt,
+        },
+        data: { acknowledgedAt: expect.any(Date) },
+      });
+      expect(prisma.taskInstance.findFirst).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        message: 'Task acknowledged successfully',
+        task: { id: 'task', acknowledgedAt: expect.any(Date) },
+      });
+    },
+  );
 });
 
 describe('DWMS occurrence progress and approval', () => {
@@ -394,6 +575,25 @@ describe('DWMS occurrence progress and approval', () => {
     expect(notifications.create).toHaveBeenCalledWith(
       expect.objectContaining({ employeeId: 'approver' }),
     );
+  });
+
+  it('uses the occurrence snapshot when an old task did not require a document', async () => {
+    instance.requiresDocumentSnapshot = false;
+    instance.task.requiresCompletionDocument = true;
+
+    await expect(
+      service.completeAssignedTask(user, 'instance', {}),
+    ).resolves.toMatchObject({ instance: { status: 'APPROVAL_PENDING' } });
+  });
+
+  it('requires a document when the occurrence snapshot requires one', async () => {
+    instance.requiresDocumentSnapshot = true;
+    instance.task.requiresCompletionDocument = false;
+
+    await expect(
+      service.completeAssignedTask(user, 'instance', {}),
+    ).rejects.toThrow('Completion document is required');
+    expect(prisma.taskInstance.update).not.toHaveBeenCalled();
   });
 
   it.each(['approveTask', 'rejectTask'] as const)(

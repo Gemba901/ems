@@ -14,15 +14,20 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ModuleType } from 'db';
+import { Role } from '../common/enum/role.enum';
 import { DwmsService, UserPayload } from './dwms.service';
 import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ModuleGuard } from '../auth/guards/module.guard';
 import { RequiresModule } from '../auth/decorators/module.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import {
   CreateAssignedTaskDto,
   UpdateProgressDto,
@@ -34,11 +39,12 @@ import {
   AcknowledgeAlertOccurrenceDto,
   CreateActivityDto,
   UpdateActivityDto,
-  CreateTaskFromActivityDto,
   IngestActivitiesDto,
+  SearchDwmsEmployeesDto,
   UpdateEmployeeActivityAssignmentDto,
 } from './dto/dwms.dto';
 import { UpdateDwmsPermissionConfigDto } from './dto/dwmsSettings.dto';
+import { ActivityIngestionProcessor } from './activity-ingestion.processor';
 
 const REFRESH_COOKIE = 'refresh_token';
 const cookieOptions = {
@@ -55,6 +61,7 @@ export class DwmsController {
   constructor(
     private dwmsService: DwmsService,
     private authService: AuthService,
+    private activityIngestionProcessor: ActivityIngestionProcessor,
   ) {}
 
   @Get('status')
@@ -76,7 +83,10 @@ export class DwmsController {
       throw new UnauthorizedException('No refresh token');
     }
 
-    const result = await this.authService.refreshForTenant(req.tenant!, rawToken);
+    const result = await this.authService.refreshForTenant(
+      req.tenant!,
+      rawToken,
+    );
     res.cookie(REFRESH_COOKIE, result.refreshToken, cookieOptions);
     const { refreshToken: _, ...safeResult } = result;
     return safeResult;
@@ -85,7 +95,10 @@ export class DwmsController {
   @Post('auth/logout')
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard)
-  async logout(@Req() req: TenantRequest, @Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Req() req: TenantRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const rawToken = req.cookies?.[REFRESH_COOKIE];
     if (rawToken) {
       await this.authService.revokeRefreshTokenForTenant(req.tenant!, rawToken);
@@ -172,9 +185,9 @@ export class DwmsController {
   @RequiresModule(ModuleType.DWMS)
   acknowledgeMyDwmsTask(
     @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
+    @Param('id') taskId: string,
   ) {
-    return this.dwmsService.acknowledgeAssignedTask(user, id);
+    return this.dwmsService.acknowledgeAssignedTask(user, taskId);
   }
 
   // --- Activities Endpoints ---
@@ -223,13 +236,33 @@ export class DwmsController {
   }
 
   @Post('activities/ingest')
+  @HttpCode(HttpStatus.ACCEPTED)
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  ingestActivities(
+  async ingestActivities(
+    @CurrentUser() user: UserPayload,
+    @Body() dto: IngestActivitiesDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.dwmsService.ingestActivities(user, dto);
+    if (result.ingestion?.id) {
+      res.setHeader(
+        'Location',
+        `/dwms/activities/ingestions/${result.ingestion.id}`,
+      );
+      void this.activityIngestionProcessor.enqueue(result.ingestion.id);
+    }
+    return result;
+  }
+
+  @Post('activities/ingest/preview')
+  @TenantRequired()
+  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  previewActivityIngestion(
     @CurrentUser() user: UserPayload,
     @Body() dto: IngestActivitiesDto,
   ) {
-    return this.dwmsService.ingestActivities(user, dto);
+    return this.dwmsService.previewActivityIngestion(user, dto);
   }
 
   @Patch('activities/:id')
@@ -250,15 +283,21 @@ export class DwmsController {
     return this.dwmsService.archiveActivity(user, id);
   }
 
-  @Post('activities/:id/tasks')
+  @Get('employees')
   @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
-  createTaskFromActivity(
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD)
+  @UseGuards(
+    TrustedTenantContextGuard,
+    JwtAuthGuard,
+    TenantGuard,
+    RolesGuard,
+    ModuleGuard,
+  )
+  searchActivityEmployees(
     @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
-    @Body() dto: CreateTaskFromActivityDto,
+    @Query() query: SearchDwmsEmployeesDto,
   ) {
-    return this.dwmsService.createTaskFromActivity(user, id, dto);
+    return this.dwmsService.searchActivityEmployees(user, query);
   }
 
   @Get('employees/:employeeId/profile')
@@ -282,7 +321,14 @@ export class DwmsController {
   }
   @Get('employees/:employeeId/activities')
   @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD)
+  @UseGuards(
+    TrustedTenantContextGuard,
+    JwtAuthGuard,
+    TenantGuard,
+    RolesGuard,
+    ModuleGuard,
+  )
   @RequiresModule(ModuleType.DWMS)
   listEmployeeRoleActivities(
     @CurrentUser() user: UserPayload,
@@ -293,7 +339,14 @@ export class DwmsController {
 
   @Patch('employees/:employeeId/activities/:activityId')
   @TenantRequired()
-  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD)
+  @UseGuards(
+    TrustedTenantContextGuard,
+    JwtAuthGuard,
+    TenantGuard,
+    RolesGuard,
+    ModuleGuard,
+  )
   @RequiresModule(ModuleType.DWMS)
   updateEmployeeActivityAssignment(
     @CurrentUser() user: UserPayload,
@@ -377,9 +430,9 @@ export class DwmsController {
   @RequiresModule(ModuleType.DWMS)
   acknowledgeAssignedTask(
     @CurrentUser() user: UserPayload,
-    @Param('id') id: string,
+    @Param('id') taskId: string,
   ) {
-    return this.dwmsService.acknowledgeAssignedTask(user, id);
+    return this.dwmsService.acknowledgeAssignedTask(user, taskId);
   }
 
   @Patch('assignedTasks/:id/progress')
@@ -504,7 +557,12 @@ export class DwmsController {
     @Param('occurrenceId') occurrenceId: string,
     @Body() dto: AcknowledgeAlertOccurrenceDto,
   ) {
-    return this.dwmsService.acknowledgeAlertOccurrence(user, id, occurrenceId, dto);
+    return this.dwmsService.acknowledgeAlertOccurrence(
+      user,
+      id,
+      occurrenceId,
+      dto,
+    );
   }
 
   // --- Users Endpoints ---
@@ -534,7 +592,6 @@ export class DwmsController {
   ) {
     return this.dwmsService.listApproverCandidates(user, assignedToId);
   }
-
 
   // --- Dashboard Endpoints ---
   @Get('dashboard/overview')

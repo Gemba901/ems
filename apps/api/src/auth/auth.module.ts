@@ -9,6 +9,7 @@ import { PassportModule } from '@nestjs/passport';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { CompanyAuthController } from './company-auth.controller';
 import { TenancyModule } from '../tenancy/tenancy.module';
+import { RateLimitModule } from '../common/rate-limit/rate-limit.module';
 
 @Module({
   imports: [
@@ -16,13 +17,16 @@ import { TenancyModule } from '../tenancy/tenancy.module';
     PassportModule,
     NotificationsModule,
     TenancyModule,
+    RateLimitModule,
     // use registerAsync to inject ConfigService for dynamic JWT configuration
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get('JWT_SECRET') || process.env.JWT_SECRET,
-        signOptions: { expiresIn: '7d' },
+        // Access tokens are short-lived; the web client refreshes on 401 using the
+        // rotating refresh cookie. Other tokens set their own expiry.
+        signOptions: { expiresIn: '15m' },
       }),
     }),
   ],

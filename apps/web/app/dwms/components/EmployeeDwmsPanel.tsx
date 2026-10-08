@@ -2,9 +2,8 @@
 
 import { type ElementType, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
-  Activity,
   AlertTriangle,
   Bell,
   ChevronLeft,
@@ -14,13 +13,14 @@ import {
 } from "lucide-react";
 import {
   DwmsService,
-  type EmployeeActivityAssignmentStatus,
   type DwmsAlertItem,
+  type DwmsAllocatedRoutineTask,
   type DwmsPaginationMeta,
   type DwmsTaskItem,
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 import { formatOrganizationDate } from "../utils/organizationDate";
+import EmployeeActivityManager from "./EmployeeActivityManager";
 
 type EmployeeDwmsPanelProps = {
   employeeId: string;
@@ -84,7 +84,7 @@ function PaginationControls({
   return (
     <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
       <p className="text-xs text-slate-500">
-        {firstItem}-{lastItem} of {pagination.totalItems}
+        Showing {firstItem}-{lastItem} of {pagination.totalItems} tasks
       </p>
       <div className="flex items-center gap-2">
         <button
@@ -159,6 +159,42 @@ function TaskList({
   );
 }
 
+function RoutineTaskList({ tasks }: { tasks?: DwmsAllocatedRoutineTask[] }) {
+  return (
+    <div className="divide-y divide-slate-100">
+      {tasks?.length ? (
+        tasks.map((task) => {
+          const category =
+            task.taskCategory === "GOOD_PRACTICE"
+              ? "Good Practice"
+              : "Job Responsibility";
+
+          return (
+            <div key={task.taskId} className="p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-semibold text-slate-900">
+                    {task.title}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {task.activity?.code ? `${task.activity.code} · ` : ""}
+                    {String(task.frequency).replace(/_/g, " ")}
+                  </p>
+                </div>
+                <span className="w-fit shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
+                  {category}
+                </span>
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <EmptyState>No routine work allocated to this employee.</EmptyState>
+      )}
+    </div>
+  );
+}
+
 function AlertList({
   alerts,
   emptyMessage,
@@ -214,18 +250,15 @@ function AlertList({
 export default function EmployeeDwmsPanel({
   employeeId,
   accessToken,
-  jobTitle,
   canManageActivities,
   showApplicableActivities = true,
 }: EmployeeDwmsPanelProps) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [pages, setPages] = useState({
     routineWork: 1,
     assignedTasks: 1,
     currentAlerts: 1,
     abnormalities: 1,
-    activities: 1,
   });
   const organizationTimeZone = useAuthStore(
     (state) => state.user?.organizationTimeZone,
@@ -251,52 +284,6 @@ export default function EmployeeDwmsPanel({
     enabled: !!accessToken && !!employeeId,
   });
 
-  const { data: roleActivities, isLoading: roleActivitiesLoading } = useQuery({
-    queryKey: ["dwms-employee-role-activities", employeeId, jobTitle],
-    queryFn: () =>
-      DwmsService.getEmployeeRoleActivities(accessToken, employeeId),
-    enabled: showApplicableActivities && !!accessToken && !!employeeId && !!jobTitle,
-  });
-
-  const activityStatusMutation = useMutation({
-    mutationFn: ({
-      activityId,
-      status,
-    }: {
-      activityId: string;
-      status: EmployeeActivityAssignmentStatus;
-    }) =>
-      DwmsService.updateEmployeeActivityStatus(
-        accessToken,
-        employeeId,
-        activityId,
-        status,
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["dwms-employee-profile", employeeId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["dwms-employee-role-activities", employeeId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["calendar-employee-stats", employeeId],
-      });
-    },
-  });
-
-  const activityPageSize = 5;
-  const activityItems = roleActivities?.activities ?? [];
-  const activityPagination: DwmsPaginationMeta = {
-    page: pages.activities,
-    pageSize: activityPageSize,
-    totalItems: activityItems.length,
-    totalPages: Math.max(1, Math.ceil(activityItems.length / activityPageSize)),
-  };
-  const paginatedActivities = activityItems.slice(
-    (pages.activities - 1) * activityPageSize,
-    pages.activities * activityPageSize,
-  );
   const changePage = (section: keyof typeof pages, page: number) => {
     setPages((current) => ({ ...current, [section]: page }));
   };
@@ -338,11 +325,7 @@ export default function EmployeeDwmsPanel({
                 iconColor="text-indigo-500"
                 iconBg="bg-indigo-50"
               />
-              <TaskList
-                tasks={dwmsProfile?.routineWork}
-                timeZone={organizationTimeZone}
-                onOpen={(task) => router.push(`/dwms/tasks/${task.instanceId}`)}
-              />
+              <RoutineTaskList tasks={dwmsProfile?.routineWork} />
               <PaginationControls
                 pagination={dwmsProfile?.pagination?.routineWork}
                 onPageChange={(page) => changePage("routineWork", page)}
@@ -413,117 +396,13 @@ export default function EmployeeDwmsPanel({
           </div>
 
           {showApplicableActivities && (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-            <CardHeader
-              icon={Activity}
-              title="Applicable Activities"
-              iconColor="text-blue-500"
-              iconBg="bg-blue-50"
+            <EmployeeActivityManager
+              key={employeeId}
+              employeeId={employeeId}
+              accessToken={accessToken}
+              canManageActivities={canManageActivities}
+              pageSize={5}
             />
-            <div className="space-y-4 p-4 sm:p-5">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {jobTitle || "No job title"}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Activities linked to this job title stay inactive until an
-                    admin activates them for this employee.
-                  </p>
-                </div>
-                {roleActivities?.count !== undefined && (
-                  <span className="inline-flex w-fit rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                    {roleActivities.count} activities
-                  </span>
-                )}
-              </div>
-
-              {!jobTitle ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                  Add a job title in Master Data to show applicable DWMS
-                  activities.
-                </div>
-              ) : roleActivitiesLoading ? (
-                <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-500">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading
-                  activities...
-                </div>
-              ) : !roleActivities?.activities?.length ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                  No DWMS activities are linked to this job title yet.
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
-                  {paginatedActivities.map(({ activity, status }) => {
-                    const nextStatus: EmployeeActivityAssignmentStatus =
-                      status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-                    const isUpdating =
-                      activityStatusMutation.isPending &&
-                      activityStatusMutation.variables?.activityId ===
-                        activity.id;
-
-                    return (
-                      <div
-                        key={activity.id}
-                        className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="min-w-0 break-words text-sm font-semibold text-slate-900">
-                              {activity.name}
-                            </p>
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
-                              {activity.frequency}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {activity.code}
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                          <span
-                            className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-bold ${
-                              status === "ACTIVE"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            {status === "ACTIVE" ? "Active" : "Inactive"}
-                          </span>
-                          {canManageActivities && (
-                            <button
-                              type="button"
-                              disabled={isUpdating}
-                              onClick={() =>
-                                activityStatusMutation.mutate({
-                                  activityId: activity.id,
-                                  status: nextStatus,
-                                })
-                              }
-                              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-60 sm:w-auto sm:min-w-24 ${
-                                status === "ACTIVE"
-                                  ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                                  : "bg-blue-600 text-white hover:bg-blue-700"
-                              }`}
-                            >
-                              {isUpdating && (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              )}
-                              {status === "ACTIVE" ? "Deactivate" : "Activate"}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <PaginationControls
-                pagination={activityPagination}
-                onPageChange={(page) => changePage("activities", page)}
-              />
-            </div>
-          </div>
           )}
         </>
       )}

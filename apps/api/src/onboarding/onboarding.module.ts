@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
+import { RateLimitModule } from '../common/rate-limit/rate-limit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
@@ -8,7 +9,7 @@ import { OnboardingGuard } from './onboarding.guard';
 import { OnboardingWorker } from './onboarding.worker';
 import { WorkspaceDomainService } from './workspace-domain.service';
 @Module({
-  imports: [ConfigModule, PrismaModule, NotificationsModule],
+  imports: [ConfigModule, PrismaModule, NotificationsModule, RateLimitModule],
   controllers: [OnboardingController],
   providers: [
     OnboardingService,

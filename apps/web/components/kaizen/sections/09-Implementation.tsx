@@ -131,7 +131,7 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
             value={actionTaken}
             onChange={(e) => setActionTaken(e.target.value)}
             placeholder="Describe what was implemented..."
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none"
           />
         </div>
         <div>
@@ -160,7 +160,7 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
                 type="button"
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
-                className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all disabled:opacity-50"
+                className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all disabled:opacity-50"
               >
                 {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
                 {uploading ? "Uploading..." : "Add photo"}
@@ -177,7 +177,7 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
             type="text"
             value={resultSaving}
             onChange={(e) => setResultSaving(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
           />
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}

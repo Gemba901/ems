@@ -1,6 +1,6 @@
 # Employee DWMS details
 
-Employee DWMS details adds an operational DWMS panel to an employee's EMS profile. It brings together the employee's current work, alert responsibility, abnormalities, raised alerts, and activities applicable to their job title.
+Employee DWMS details adds an operational DWMS panel to an employee's EMS profile. It brings together the employee's current work, alert responsibility, abnormalities, and activities applicable through organization, department, job-title, or employee scope.
 
 > Use this page when supporting one employee. It answers “What work and issues currently involve this person?” without searching several DWMS pages separately.
 
@@ -45,20 +45,20 @@ Raised Alerts shows histories initially raised by the employee. The entry identi
 
 ## 7. Applicable Activities
 
-Applicable Activities is based on the employee's job title and active Activity master records. Each item shows activity name, code, frequency, and assignment state.
+Applicable Activities combines currently scoped Activity master records with previously assigned activities, so inactive or archived assignment history remains visible. Each item shows activity name, code, scope, frequency, and assignment state.
 
 - **Inactive:** The activity matches the job title but does not yet generate routine work for this employee.
 - **Active:** The activity is enabled for the employee and can generate scheduled task occurrences.
 
 ![Applicable Activities lists the job-title activities, frequency, assignment state, and activation action.](../../public/dwms-docs/employee-dwms-details/04-applicable-activities.png)
 
-If the employee has no job title, update Master Data first. If no activity matches the job title, create or update the responsible designation in Activities.
+If an expected activity is missing, confirm the activity scope and target against the employee's organization, department, job title, or employee code.
 
 ## 8. Activate or deactivate an activity
 
 Authorized activity managers can select **Activate** or **Deactivate** beside an applicable activity.
 
-Activating stores the employee-activity assignment and enables routine task generation according to the activity frequency and effective rules. Deactivating stops the assignment from producing future routine work; it does not erase previously created task history.
+Activating stores the employee-activity assignment and enables routine task generation according to the activity frequency and effective rules. Deactivating requires confirmation, disables recurrence, and deletes untouched pending instances scheduled after today in the organization's timezone. Today's work, started work, and historical instances remain available.
 
 ## 9. Effects across DWMS
 

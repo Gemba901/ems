@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, FileSpreadsheet, Loader2, Search } from "lucide-react";
+import {
+  ArrowRight,
+  FileSpreadsheet,
+  Loader2,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import {
   DwmsService,
@@ -10,6 +16,7 @@ import {
   type DwmsActivityIngestionSummary,
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
+import ActivityTabs from "../ActivityTabs";
 
 function formatDateTime(value?: string | null, timeZone?: string | null) {
   if (!value) return "Not available";
@@ -23,9 +30,9 @@ function formatDateTime(value?: string | null, timeZone?: string | null) {
 }
 
 function statusClass(status: string) {
-  return status === "COMPLETED"
-    ? "bg-emerald-50 text-emerald-700"
-    : "bg-blue-50 text-blue-700";
+  if (status === "COMPLETED") return "bg-emerald-50 text-emerald-700";
+  if (status === "FAILED") return "bg-rose-50 text-rose-700";
+  return "bg-blue-50 text-blue-700";
 }
 
 export default function ActivityIngestionsPage() {
@@ -38,10 +45,13 @@ export default function ActivityIngestionsPage() {
 
 function ActivityIngestionsContent() {
   const { accessToken, user } = useAuthStore();
-  const [ingestions, setIngestions] = useState<DwmsActivityIngestionSummary[]>([]);
+  const [ingestions, setIngestions] = useState<DwmsActivityIngestionSummary[]>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -53,7 +63,10 @@ function ActivityIngestionsContent() {
         const result = await DwmsService.getActivityIngestions(accessToken);
         if (mounted) setIngestions(result.ingestions ?? []);
       } catch (error) {
-        if (mounted) setMessage(getDwmsErrorMessage(error, "Failed to load ingestion history"));
+        if (mounted)
+          setMessage(
+            getDwmsErrorMessage(error, "Failed to load ingestion history"),
+          );
       } finally {
         if (mounted) setLoading(false);
       }
@@ -62,7 +75,7 @@ function ActivityIngestionsContent() {
     return () => {
       mounted = false;
     };
-  }, [accessToken]);
+  }, [accessToken, refreshKey]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -95,13 +108,24 @@ function ActivityIngestionsContent() {
             className="w-full rounded-full border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
           />
         </div>
-        <Link
-          href="/dwms/actions/new?mode=ACTIVITY"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-        >
-          <FileSpreadsheet className="h-4 w-4" />
-          <span>Import sheet</span>
-        </Link>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => setRefreshKey((value) => value + 1)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+          <Link
+            href="/dwms/actions/new?mode=ACTIVITY"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            <span>Import sheet</span>
+          </Link>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border-app bg-white shadow-sm">
@@ -111,7 +135,9 @@ function ActivityIngestionsContent() {
             Loading ingestion history...
           </div>
         ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-sm text-slate-500">No ingestion history found.</div>
+          <div className="py-16 text-center text-sm text-slate-500">
+            No ingestion history found.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
@@ -130,17 +156,34 @@ function ActivityIngestionsContent() {
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((ingestion) => (
                   <tr key={ingestion.id} className="hover:bg-slate-50/70">
-                    <td className="px-5 py-4 font-semibold text-slate-900">{ingestion.fileName}</td>
-                    <td className="px-5 py-4 text-slate-600">{ingestion.uploadedBy?.name ?? "Unknown"}</td>
-                    <td className="px-5 py-4 text-slate-600">{ingestion.totalRows}</td>
-                    <td className="px-5 py-4 text-emerald-700">{ingestion.successfulRows}</td>
-                    <td className="px-5 py-4 text-rose-700">{ingestion.failedRows}</td>
+                    <td className="px-5 py-4 font-semibold text-slate-900">
+                      {ingestion.fileName}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {ingestion.uploadedBy?.name ?? "Unknown"}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {ingestion.totalRows}
+                    </td>
+                    <td className="px-5 py-4 text-emerald-700">
+                      {ingestion.successfulRows}
+                    </td>
+                    <td className="px-5 py-4 text-rose-700">
+                      {ingestion.failedRows}
+                    </td>
                     <td className="px-5 py-4">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(ingestion.status)}`}>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(ingestion.status)}`}
+                      >
                         {ingestion.status}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-slate-600">{formatDateTime(ingestion.createdAt, user?.organizationTimeZone)}</td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {formatDateTime(
+                        ingestion.createdAt,
+                        user?.organizationTimeZone,
+                      )}
+                    </td>
                     <td className="px-5 py-4 text-right">
                       <Link
                         href={`/dwms/activities/ingestions/${ingestion.id}`}
@@ -157,35 +200,6 @@ function ActivityIngestionsContent() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function ActivityTabs({ active }: { active: "activities" | "ingestions" }) {
-  const tabs = [
-    { key: "activities", label: "All Activities", href: "/dwms/activities" },
-    {
-      key: "ingestions",
-      label: "Ingestion History",
-      href: "/dwms/activities/ingestions",
-    },
-  ] as const;
-
-  return (
-    <div className="flex gap-6 overflow-x-auto border-b border-border-app select-none">
-      {tabs.map((tab) => (
-        <Link
-          key={tab.key}
-          href={tab.href}
-          className={`relative flex items-center border-b-2 pb-3 text-sm font-semibold transition duration-150 ${
-            active === tab.key
-              ? "border-blue-500 text-blue-700"
-              : "border-transparent text-slate-500 hover:text-slate-800"
-          }`}
-        >
-          {tab.label}
-        </Link>
-      ))}
     </div>
   );
 }

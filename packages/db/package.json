@@ -14,7 +14,7 @@
     "backfill:approved-visits": "tsx scripts/backfill-approved-visit-requests.ts"
   },
   "prisma": {
-    "seed": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "keywords": [],
   "author": "",

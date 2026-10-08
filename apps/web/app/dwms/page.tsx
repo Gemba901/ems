@@ -5,13 +5,11 @@ import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import TaskMiniCard from "./components/home/TaskMiniCard";
 import TaskCalendar from "./components/home/TaskCalendar";
-import TaskDateSeparator, {
-  getDateSeparatorMeta,
-} from "./components/TaskDateSeparator";
 import { useAuthStore } from "@/store/auth.store";
 import {
   DwmsService,
   getDwmsErrorMessage,
+  type DwmsTaskCategory,
   type DwmsTaskItem as TaskItem,
   type DwmsTaskStatus as TaskStatus,
 } from "@/services/dwms.service";
@@ -26,6 +24,16 @@ import {
 } from "lucide-react";
 
 type HomeTaskView = "TODAY" | "WEEK" | "MONTH" | "CALENDAR";
+type MobileTaskCategory = "ALL" | DwmsTaskCategory;
+
+const TASK_CATEGORIES: Array<{
+  key: DwmsTaskCategory;
+  label: string;
+}> = [
+  { key: "GOOD_PRACTICE", label: "Good Practices" },
+  { key: "JOB_RESPONSIBILITY", label: "Job Responsibility" },
+  { key: "ASSIGNED_TASK", label: "Assigned Tasks" },
+];
 
 const statusCompletion: Record<TaskStatus, number> = {
   PENDING: 0,
@@ -52,18 +60,30 @@ function calculateCompletionRate(tasks: TaskItem[]) {
 }
 
 function getTaskWindow(view: HomeTaskView, start: string) {
-  if (view === "CALENDAR") {
+  if (view === "CALENDAR" || view === "MONTH") {
     const monthStart = `${start.slice(0, 7)}-01`;
     const end = addMonthsToDateKey(monthStart, 1);
     return { start: monthStart, end, days: 31 };
   }
-  const days = view === "TODAY" ? 1 : view === "WEEK" ? 7 : 30;
+  const days = view === "TODAY" ? 1 : 7;
   const end = addDaysToDateKey(start, days) ?? start;
   return { start, end, days };
 }
 
+function getTaskPeriodStart(view: HomeTaskView, referenceDate: string) {
+  if (view === "MONTH" || view === "CALENDAR") {
+    return `${referenceDate.slice(0, 7)}-01`;
+  }
+  if (view !== "WEEK") return referenceDate;
+
+  const date = new Date(`${referenceDate}T00:00:00.000Z`);
+  const mondayOffset = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - mondayOffset);
+  return date.toISOString().slice(0, 10);
+}
+
 function getPreviousTaskWindow(view: HomeTaskView, currentStart: string) {
-  if (view === "CALENDAR") {
+  if (view === "CALENDAR" || view === "MONTH") {
     const start = addMonthsToDateKey(`${currentStart.slice(0, 7)}-01`, -1);
     return { start, end: addMonthsToDateKey(start, 1) };
   }
@@ -86,6 +106,47 @@ function isTaskScheduledInWindow(task: TaskItem, start: string, end: string) {
   return scheduledDateKey >= start && scheduledDateKey < end;
 }
 
+function isTaskFrequencyVisibleInView(task: TaskItem, view: HomeTaskView) {
+  if (view === "CALENDAR") return true;
+  const expectedFrequency =
+    view === "TODAY" ? "DAILY" : view === "WEEK" ? "WEEKLY" : "MONTHLY";
+  if (task.frequency === expectedFrequency) return true;
+
+  return (
+    task.taskCategory === "ASSIGNED_TASK" && task.frequency === "PLANNED"
+  );
+}
+
+function selectTasksForView(
+  taskItems: TaskItem[],
+  view: HomeTaskView,
+  start: string,
+  end: string,
+) {
+  const selected = new Map<string, TaskItem>();
+
+  taskItems.forEach((task) => {
+    if (
+      !isTaskScheduledInWindow(task, start, end) ||
+      !isTaskFrequencyVisibleInView(task, view)
+    ) {
+      return;
+    }
+
+    const key = view === "CALENDAR" ? task.instanceId : task.taskId;
+    const existing = selected.get(key);
+    if (
+      !existing ||
+      (task.scheduledFor ?? task.dueAt) <
+        (existing.scheduledFor ?? existing.dueAt)
+    ) {
+      selected.set(key, task);
+    }
+  });
+
+  return Array.from(selected.values());
+}
+
 function isHomeVisibleTask(task: TaskItem) {
   return (
     !task.isOverdue &&
@@ -93,10 +154,6 @@ function isHomeVisibleTask(task: TaskItem) {
     task.status !== "DONE" &&
     task.status !== "NOT_APPLICABLE"
   );
-}
-
-function getHomeTaskDateValue(task: TaskItem) {
-  return task.scheduledFor ?? task.dueAt;
 }
 
 function formatCalendarSelection(dateKey: string) {
@@ -109,6 +166,36 @@ function formatCalendarSelection(dateKey: string) {
     year: "numeric",
   }).format(date);
 }
+
+function HomeTaskCardList({
+  tasks,
+  savingId,
+  onOpenTask,
+  onStatusChange,
+  onAcknowledgement,
+}: {
+  tasks: TaskItem[];
+  savingId: string | null;
+  onOpenTask: (task: TaskItem) => void;
+  onStatusChange: (instanceId: string, nextStatus: TaskStatus) => void;
+  onAcknowledgement: (taskId: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3">
+      {tasks.map((task) => (
+        <TaskMiniCard
+          key={task.instanceId}
+          task={task}
+          onClick={() => onOpenTask(task)}
+          onStatusChange={onStatusChange}
+          onAcknowledgement={onAcknowledgement}
+          saving={savingId === task.instanceId || savingId === task.taskId}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
     <ProtectedRoute>
@@ -123,6 +210,8 @@ function HomeContent() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [previousTasks, setPreviousTasks] = useState<TaskItem[]>([]);
   const [taskView, setTaskView] = useState<HomeTaskView>("TODAY");
+  const [mobileTaskCategory, setMobileTaskCategory] =
+    useState<MobileTaskCategory>("ALL");
   const [organizationDate, setOrganizationDate] = useState<string | null>(null);
   const [calendarMonthStart, setCalendarMonthStart] = useState<string | null>(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
@@ -148,22 +237,40 @@ function HomeContent() {
       setError(null);
       try {
         const token = useAuthStore.getState().accessToken ?? "";
-        const requestedDate =
-          view === "CALENDAR" ? (calendarMonthStart ?? undefined) : undefined;
-        const [taskResponse, alertsRes] = await Promise.all([
+        const requestedDate = view === "CALENDAR"
+          ? (calendarMonthStart ?? undefined)
+          : organizationDate
+            ? getTaskPeriodStart(view, organizationDate)
+            : undefined;
+        const [initialTaskResponse, alertsRes] = await Promise.all([
           DwmsService.getTodayTasks(token, requestedDate, "scheduled"),
           DwmsService.getMyAlertCount(token),
         ]);
+        let taskResponse = initialTaskResponse;
         if (!taskResponse?.date) {
           throw new Error("The server did not provide the organization date");
         }
-        setOrganizationDate((current) => current ?? taskResponse.date!);
-        if (view === "CALENDAR" && !calendarMonthStart) {
-          setCalendarMonthStart(`${taskResponse.date.slice(0, 7)}-01`);
-          setSelectedCalendarDate(taskResponse.date);
+
+        const organizationToday = organizationDate ?? taskResponse.date;
+        const periodStart = view === "CALENDAR"
+          ? (calendarMonthStart ?? getTaskPeriodStart(view, organizationToday))
+          : getTaskPeriodStart(view, organizationToday);
+
+        if (taskResponse.date !== periodStart) {
+          taskResponse = await DwmsService.getTodayTasks(
+            token,
+            periodStart,
+            "scheduled",
+          );
         }
-        const { start, end } = getTaskWindow(view, taskResponse.date);
-        const previousWindow = getPreviousTaskWindow(view, taskResponse.date);
+
+        setOrganizationDate((current) => current ?? organizationToday);
+        if (view === "CALENDAR" && !calendarMonthStart) {
+          setCalendarMonthStart(periodStart);
+          setSelectedCalendarDate(organizationToday);
+        }
+        const { start, end } = getTaskWindow(view, periodStart);
+        const previousWindow = getPreviousTaskWindow(view, periodStart);
         const previousTaskResponse = await DwmsService.getTodayTasks(
           token,
           previousWindow.start,
@@ -171,31 +278,17 @@ function HomeContent() {
           undefined,
           undefined,
         );
-        const byInstanceId = new Map<string, TaskItem>();
-        const previousByInstanceId = new Map<string, TaskItem>();
-
-        (taskResponse?.tasks ?? []).forEach((task) => {
-          if (
-            isTaskScheduledInWindow(task, start, end)
-          ) {
-            byInstanceId.set(task.instanceId, task);
-          }
-        });
-
-        (previousTaskResponse?.tasks ?? []).forEach((task) => {
-          if (
-            isTaskScheduledInWindow(
-              task,
-              previousWindow.start,
-              previousWindow.end,
-            )
-          ) {
-            previousByInstanceId.set(task.instanceId, task);
-          }
-        });
-
-        setTasks(Array.from(byInstanceId.values()));
-        setPreviousTasks(Array.from(previousByInstanceId.values()));
+        setTasks(
+          selectTasksForView(taskResponse?.tasks ?? [], view, start, end),
+        );
+        setPreviousTasks(
+          selectTasksForView(
+            previousTaskResponse?.tasks ?? [],
+            view,
+            previousWindow.start,
+            previousWindow.end,
+          ),
+        );
         setAlertsCount(Number(alertsRes?.count ?? 0));
       } catch (err: unknown) {
         setError(getDwmsErrorMessage(err, "Failed to load home page data"));
@@ -203,7 +296,7 @@ function HomeContent() {
         setLoading(false);
       }
     },
-    [calendarMonthStart, taskView],
+    [calendarMonthStart, organizationDate, taskView],
   );
 
   useEffect(() => {
@@ -225,6 +318,30 @@ function HomeContent() {
       return a.title.localeCompare(b.title);
     });
   }, [tasks]);
+
+  const tasksByCategory = useMemo(() => {
+    return TASK_CATEGORIES.reduce<Record<DwmsTaskCategory, TaskItem[]>>(
+      (groupedTasks, category) => {
+        groupedTasks[category.key] = visibleTasks.filter(
+          (task) => task.taskCategory === category.key,
+        );
+        return groupedTasks;
+      },
+      {
+        GOOD_PRACTICE: [],
+        JOB_RESPONSIBILITY: [],
+        ASSIGNED_TASK: [],
+      },
+    );
+  }, [visibleTasks]);
+
+  const mobileVisibleTasks = useMemo(
+    () =>
+      mobileTaskCategory === "ALL"
+        ? visibleTasks
+        : tasksByCategory[mobileTaskCategory],
+    [mobileTaskCategory, tasksByCategory, visibleTasks],
+  );
 
   const stats = useMemo(() => {
     const applicableTasks = tasks.filter(
@@ -256,8 +373,10 @@ function HomeContent() {
       taskView === "CALENDAR"
         ? "vs previous month"
         : taskView === "MONTH"
-          ? "vs previous 30 days"
-          : "vs last week";
+          ? "vs previous month"
+          : taskView === "WEEK"
+            ? "vs previous week"
+            : "vs last week";
 
     if (change === null) {
       return {
@@ -607,40 +726,87 @@ function HomeContent() {
                 : "No assigned or monthly tasks due this month."}
           </div>
         ) : (
-          <div className="mt-2 grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {(() => {
-              let previousDateKey: string | null = null;
-              return visibleTasks.map((task) => {
-                const dateMeta = getDateSeparatorMeta(
-                  getHomeTaskDateValue(task),
-                  task.organizationTimeZone,
-                  true,
-                );
-                const showSeparator =
-                  !!dateMeta && dateMeta.key !== previousDateKey;
-                if (dateMeta) previousDateKey = dateMeta.key;
+          <>
+            <div className="mt-3 lg:hidden">
+              <label
+                htmlFor="mobile-task-category"
+                className="mb-1.5 block text-xs font-semibold text-slate-600"
+              >
+                Filter tasks
+              </label>
+              <select
+                id="mobile-task-category"
+                value={mobileTaskCategory}
+                onChange={(event) =>
+                  setMobileTaskCategory(
+                    event.target.value as MobileTaskCategory,
+                  )
+                }
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition focus:border-[#52618a] focus:ring-2 focus:ring-[#52618a]/15"
+              >
+                <option value="ALL">All</option>
+                {TASK_CATEGORIES.map((category) => (
+                  <option key={category.key} value={category.key}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
 
-                return (
-                  <React.Fragment key={task.instanceId}>
-                    {taskView !== "TODAY" && dateMeta && showSeparator && (
-                      <TaskDateSeparator label={dateMeta.label} />
+              {mobileVisibleTasks.length === 0 ? (
+                <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white py-10 text-center text-sm italic text-slate-500">
+                  No tasks in this category.
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <HomeTaskCardList
+                    tasks={mobileVisibleTasks}
+                    savingId={savingId}
+                    onOpenTask={(task) =>
+                      router.push(`/dwms/tasks/${task.instanceId}`)
+                    }
+                    onStatusChange={handleStatusChange}
+                    onAcknowledgement={handleAcknowledgement}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 hidden lg:block">
+              <div className="grid grid-cols-3 gap-4">
+                {TASK_CATEGORIES.map((category) => (
+                  <div
+                    key={category.key}
+                    className="flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-2"
+                  >
+                    <h3 className="text-sm font-bold text-slate-800">
+                      {category.label}
+                    </h3>
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500">
+                      {tasksByCategory[category.key].length}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-3 items-start gap-4 pt-4">
+                {TASK_CATEGORIES.map((category) => (
+                  <div key={category.key} className="min-w-0">
+                    {tasksByCategory[category.key].length > 0 && (
+                      <HomeTaskCardList
+                        tasks={tasksByCategory[category.key]}
+                        savingId={savingId}
+                        onOpenTask={(task) =>
+                          router.push(`/dwms/tasks/${task.instanceId}`)
+                        }
+                        onStatusChange={handleStatusChange}
+                        onAcknowledgement={handleAcknowledgement}
+                      />
                     )}
-                    <TaskMiniCard
-                      task={task}
-                      onClick={() =>
-                        router.push(`/dwms/tasks/${task.instanceId}`)
-                      }
-                      onStatusChange={handleStatusChange}
-                      onAcknowledgement={handleAcknowledgement}
-                      saving={
-                        savingId === task.instanceId || savingId === task.taskId
-                      }
-                    />
-                  </React.Fragment>
-                );
-              });
-            })()}
-          </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </section>
 

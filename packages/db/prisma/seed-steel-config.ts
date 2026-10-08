@@ -11,10 +11,11 @@ import {
 } from 'db';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+import { scriptSsl } from '../scripts/db-ssl';
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
+  ssl: scriptSsl(process.env.DATABASE_URL!),
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });

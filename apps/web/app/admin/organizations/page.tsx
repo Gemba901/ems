@@ -4,6 +4,7 @@ import { TenantImage } from "@/components/files/TenantImage";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
+import { RESERVED_SLUGS } from "@/lib/reserved-slugs.mjs";
 import {
   AdminService,
   type CreateOrganizationPayload,
@@ -104,8 +105,6 @@ function Field({
 const inputCls =
   "w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all";
 
-// Mirror the API's reserved names; server validation remains authoritative.
-const RESERVED_SLUGS = new Set(["www", "api", "admin", "app", "auth", "staging", "support"]);
 
 function validateSlug(value: string): string | null {
   const slug = value.trim().toLowerCase();

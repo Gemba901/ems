@@ -84,6 +84,19 @@ docker stop gemba-m3-postgres-test
 
 These tests prove persistence/replay rejection, wrong-company token preservation, rollback of the old-token deletion on replacement failure, and exactly one replacement when two real transactions read the same token. Without the explicit test URL this suite is skipped. Tests clean up their own records; the container is disposable.
 
+The Team Workspace suite (`src/work/work.postgres.spec.ts`) drives the `/work/*` HTTP routes through the real guards against PostgreSQL. It needs `prisma migrate deploy`, not `db push`, because the one-open-attendance and one-active-sprint rules are partial unique indexes in the migration SQL:
+
+```bash
+docker run --detach --rm --name gemba-work-postgres-test -e POSTGRES_PASSWORD=local-test-only -e POSTGRES_DB=work_test -p 127.0.0.1:55443:5432 postgres:16-alpine
+# From packages/db, after PostgreSQL is ready:
+DATABASE_URL=postgresql://postgres:local-test-only@127.0.0.1:55443/work_test pnpm exec prisma migrate deploy
+# From apps/api:
+NODE_OPTIONS=--experimental-vm-modules WORK_TEST_DATABASE_URL=postgresql://postgres:local-test-only@127.0.0.1:55443/work_test pnpm exec jest --runInBand work/work.postgres.spec.ts
+docker stop gemba-work-postgres-test
+```
+
+It covers project, task and sprint permissions; sprint completion snapshots; clock-in idempotency under concurrent retries; the one-open-record and one-record-per-day rules; who can see coordinates; and correction validation, history and optimistic locking.
+
 Milestone 4 covers browser/proxy integration, cookie forwarding, frontend endpoint updates and end-to-end company-hostname tests. DNS/TLS rollout and operational/database isolation hardening remain later deployment work.
 
 ```bash

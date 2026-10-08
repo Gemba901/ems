@@ -6,17 +6,22 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { KaizenService } from "@/services/kaizen.service";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
 export default function NewKaizenPage() {
   const router = useRouter();
   const { accessToken } = useAuthStore();
+  const queryClient = useQueryClient();
   const started = useRef(false);
 
   const createMutation = useMutation({
     mutationFn: () => KaizenService.create({}, accessToken!),
-    onSuccess: (created) => router.replace(`/kaizen/${created.id}`),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["kaizen-my"] });
+      queryClient.setQueryData(["kaizen-detail", created.id], created);
+      router.replace(`/kaizen/${created.id}?step=1`);
+    },
   });
 
   useEffect(() => {
@@ -37,14 +42,14 @@ export default function NewKaizenPage() {
             <button
               type="button"
               onClick={() => createMutation.mutate()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-lg bg-[#52618a] px-4 py-2 text-sm font-medium text-white hover:bg-[#445174]"
             >
               Try again
             </button>
           </>
         ) : (
           <>
-            <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
+            <Loader2 className="h-6 w-6 text-indigo-600 animate-spin" />
             <p className="text-sm text-slate-500">Starting your Daily Kaizen...</p>
           </>
         )}

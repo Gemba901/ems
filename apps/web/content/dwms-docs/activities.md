@@ -15,6 +15,7 @@ Open **Activities** from the DWMS Manage menu. Use:
 ![The activity master provides search, status filtering, ingestion history, and activity records.](../../public/dwms-docs/activities/01-activity-master.png)
 
 - **All Activities** to search and maintain master records;
+- **Employee Activities** to search active employees by name or job role and manage their scoped activities;
 - **Ingestion History** to audit bulk imports;
 - the status filter for Active or Archived records;
 - search across process name, code, department, SOP, output, purpose, and required documents.
@@ -95,11 +96,11 @@ Up to 500 rows can be submitted in one ingestion.
 
 ### Activate an activity for one particular employee
 
-Open **People**, select the employee, open the **DWMS** tab, and find **Applicable Activities**. Select **Activate** beside the required activity. The activity must first be linked to the employee's job title through **Responsible Job Designation** or a **Job Role** import; if it is missing, confirm the employee's job title in **Master Data** and update the activity's designation. Management, Admin, Super Admin, HR, and HOD users can manage this status.
+Open **DWMS → Activities → Employee Activities**. Search active employees by name or job role, select the employee, and then use **Activate** or **Deactivate** beside the required activity. The same controls remain available in the employee's EMS **DWMS** tab. Management, Admin, Super Admin, HR, and HOD users can manage this status.
 
 ![Applicable Activities shows which job-role activities are active or inactive for the selected employee.](../../public/dwms-docs/activities/06-activate-employee-activity.png)
 
-Activation enables routine task generation for that employee according to the activity's frequency and effective rules. **Deactivate** stops future routine work without deleting existing task history.
+The list combines activities currently applicable through organization, department, job-title, or employee scope with activities previously assigned to the employee. Activation enables routine task generation according to the activity's frequency and effective rules. **Deactivate** disables recurrence and removes only untouched pending instances scheduled after the organization's current day. Today's work, completed history, and any instance that has already started are preserved. Deactivation asks for confirmation and can later be reversed with **Activate**.
 
 Parent Activity Code connects imported work to an existing or imported prerequisite code. Codes and employee identifiers should be unique and accurate.
 

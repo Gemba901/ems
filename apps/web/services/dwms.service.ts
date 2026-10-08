@@ -199,6 +199,8 @@ export interface DwmsActivityItem {
   effectiveFrom: string;
   status: "ACTIVE" | "ARCHIVED" | string;
   remarks?: string | null;
+  scope?: ActivityScope | null;
+  scopeTarget?: string | null;
 }
 
 export type EmployeeActivityAssignmentStatus = "ACTIVE" | "INACTIVE";
@@ -245,7 +247,7 @@ export interface DwmsEmployeeProfileResponse {
     currentAlerts: DwmsPaginationMeta;
     abnormalities: DwmsPaginationMeta;
   };
-  routineWork?: DwmsTaskItem[];
+  routineWork?: DwmsAllocatedRoutineTask[];
   assignedTasks?: DwmsTaskItem[];
   currentAlerts?: DwmsAlertItem[];
   abnormalities?: DwmsAlertItem[];
@@ -274,9 +276,47 @@ export interface DwmsSettingsPayload {
 }
 
 export interface DwmsAccessCapabilities {
+  currentEmployeeId: string;
   alertViewLevel: ViewLevel;
   analyticsViewLevel: ViewLevel;
   hasReportees: boolean;
+  teamPerformanceEmployeeIds: string[];
+  canViewEmployeePerformance: boolean;
+  employeePerformanceEmployeeIds: string[];
+}
+
+export interface DwmsActivityEmployee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  employeeCode?: string | null;
+  jobTitle?: string | null;
+  department?: { id: string; name: string } | null;
+}
+
+export interface DwmsActivityEmployeeSearchResponse {
+  data: DwmsActivityEmployee[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export interface DwmsAllocatedRoutineTask {
+  taskId: string;
+  title: string;
+  description?: string | null;
+  frequency: DwmsFrequency | string;
+  taskCategory: Exclude<DwmsTaskCategory, "ASSIGNED_TASK">;
+  activity?: {
+    id: string;
+    name: string;
+    code: string;
+    scope?: ActivityScope | null;
+  } | null;
 }
 
 export const DEFAULT_DWMS_SETTINGS: DwmsSettingsState = {
@@ -427,6 +467,7 @@ export interface DwmsTaskItem {
   instanceCreatedAt?: string;
   instanceUpdatedAt?: string;
   isAdhoc: boolean;
+  taskCategory: DwmsTaskCategory;
   priority?: DwmsPriority | string | null;
   department?: DwmsDepartmentOption | null;
   activity?: DwmsActivityItem | null;
@@ -454,6 +495,7 @@ export interface DwmsAssignedTaskHistoryItem {
   id: string;
   instanceId: string;
   taskId: string;
+  taskCategory: DwmsTaskCategory;
   title: string;
   description?: string | null;
   frequency?: DwmsFrequency | string;
@@ -538,9 +580,13 @@ export interface DwmsAlertTargetTask {
 export interface DwmsDashboardTrendPoint {
   date?: string;
   label?: string;
-  value?: number;
-  completionRate?: number;
+  value?: number | null;
+  completionRate?: number | null;
   avgAcknowledgeTimeMin?: number;
+  goodPracticeCompletionRate?: number | null;
+  jobResponsibilityCompletionRate?: number | null;
+  assignedTaskCompletionRate?: number | null;
+  abnormalitiesCount?: number;
   completed?: number;
   total?: number;
   allTasks?: number;
@@ -561,9 +607,45 @@ export interface DwmsDashboardMetrics {
   completedCount?: number;
   tasksPerformedTodayPercent?: number;
   alertsCount?: number;
+  departmentAlertsCount?: number;
+  organizationAlertsCount?: number;
+  acknowledgedAlertsCount?: number;
+  abnormalitiesCount?: number;
+  alertAcknowledgementTimeMin?: number | null;
+  abnormalityAcknowledgementTimeMin?: number | null;
   completedOnTimeRate?: number | null;
   avgAcknowledgeTimeMin?: number;
+  avgAssignedTaskAcknowledgeTimeMin?: number;
   avgCloseTimeMin?: number;
+  completionRateByCategory?: Record<DwmsTaskCategory, number>;
+  taskCategoryMetrics?: Record<
+    DwmsTaskCategory,
+    {
+      pending: number;
+      completed: number;
+      overdue: number;
+      notAcknowledged: number;
+      completionRate: number;
+    }
+  >;
+  taskCategoryBreakdown?: Record<
+    DwmsTaskCategory,
+    {
+      total: number;
+      statuses: Array<{
+        key:
+          | "NOT_ACKNOWLEDGED"
+          | "PENDING"
+          | "APPROVAL_PENDING"
+          | "OVERDUE"
+          | "OVERDUE_COMPLETED"
+          | "COMPLETED";
+        label: string;
+        count: number;
+        percentage: number;
+      }>;
+    }
+  >;
 }
 
 export interface DwmsEmployeeScore extends DwmsDashboardMetrics {
@@ -599,6 +681,8 @@ export interface DwmsDepartmentDashboardResponse {
 export interface DwmsEmployeeDashboardResponse {
   summary?: DwmsDashboardMetrics;
   trends?: DwmsDashboardTrends;
+  teamSummary?: DwmsDashboardMetrics | null;
+  teamTrends?: DwmsDashboardTrends | null;
   employee: (DwmsUserRef & { role: string; departmentName: string }) | null;
   reporteesPerformance?: DwmsEmployeeScore[];
 }
@@ -666,7 +750,6 @@ export interface CreateDwmsAlertPayload {
 }
 
 export interface CreateAssignedTaskPayload {
-  activityId?: string | null;
   title: string;
   description?: string | null;
   assignedToId: string;
@@ -680,37 +763,45 @@ export interface CreateAssignedTaskPayload {
   isAdhoc?: boolean;
 }
 
-export interface CreateTaskFromActivityPayload {
-  assignedToId?: string | null;
-  dueDate?: string | null;
-  frequency?: string;
-  priority?: string;
-  approvedById?: string | null;
-  backupOwnerId?: string | null;
-}
-
 export interface CreateActivityPayload {
   mainDepartmentId?: string | null;
   subDepartment?: string | null;
+  gembaSection?: string | null;
+  processArea?: string | null;
   name: string;
   workMethod: string;
-  code?: string | null;
-  completionDeadline?: number | null;
+  code: string;
+  completionDeadline: number;
   purpose?: string | null;
   frequency: string;
-  completionOutput?: string | null;
+  completionOutput: string;
+  scope: ActivityScope;
+  scopeTarget?: string | null;
   primaryResponsibleDesignation?: string | null;
   parentActivityIds?: string[];
   parentActivityId?: string | null;
   evidenceRequired?: string | null;
   effectiveFrom?: string;
   status?: string;
+  remarks: string;
 }
+
+export interface UpdateActivityContentPayload {
+  workMethod?: string;
+  purpose?: string | null;
+  startTrigger?: string | null;
+  completionOutput?: string;
+  evidenceRequired?: string | null;
+  remarks?: string;
+}
+
+export type DwmsTaskCategory =
+  | "GOOD_PRACTICE"
+  | "JOB_RESPONSIBILITY"
+  | "ASSIGNED_TASK";
 
 export interface IngestActivityRowPayload {
   rowNumber?: number;
-  assignmentMode?: ActivityIngestionAssignmentMode;
-  responsibleEmployeeCode?: string;
   parentActivityCode?: string | null;
   activity: CreateActivityPayload;
 }
@@ -737,12 +828,11 @@ export interface DwmsTaskSummaryResponse {
   };
 }
 
-export enum ActivityIngestionAssignmentMode {
-  INDIVIDUAL = "Individual",
-  JOB_ROLE = "Job Role",
-  ALL_USERS = "All Users",
-  ALL_MANAGEMENT = "All Management",
-  ALL_HOD = "All HOD",
+export enum ActivityScope {
+  ORGANISATION = "ORGANISATION",
+  DEPARTMENT = "DEPARTMENT",
+  JOB_TITLE = "JOB_TITLE",
+  EMPLOYEE = "EMPLOYEE",
 }
 
 export interface DwmsActivityIngestionSummary {
@@ -752,6 +842,11 @@ export interface DwmsActivityIngestionSummary {
   totalRows: number;
   successfulRows: number;
   failedRows: number;
+  attempts?: number;
+  availableAt?: string | null;
+  startedAt?: string | null;
+  failedAt?: string | null;
+  failureMessage?: string | null;
   createdAt: string;
   completedAt?: string | null;
   uploadedBy?: DwmsUserRef | null;
@@ -763,7 +858,12 @@ export interface DwmsActivityIngestionRow {
   status: string;
   activityName?: string | null;
   activityCode?: string | null;
+  parentActivityCode?: string | null;
+  sourcePayload?: IngestActivityRowPayload | null;
   responsibleEmployeeCode?: string | null;
+  scope?: ActivityScope | null;
+  scopeTarget?: string | null;
+  assignedCount?: number;
   responsibleJobRole?: string | null;
   message?: string | null;
   activityId?: string | null;
@@ -774,16 +874,20 @@ export interface DwmsActivityIngestionRow {
 export interface IngestActivitiesResponse {
   message: string;
   ingestion?: DwmsActivityIngestionSummary;
+}
+
+export interface PreviewActivitiesResponse {
   count: number;
-  created: number;
+  valid: number;
   failed: number;
   results: Array<{
     rowNumber: number;
-    success: boolean;
-    activityId?: string;
-    taskId?: string;
-    responsibleEmployeeId?: string;
-    assignedCount?: number;
+    valid: boolean;
+    activityCode?: string;
+    activityName?: string;
+    scope?: ActivityScope;
+    scopeTarget?: string;
+    matchedEmployees: number;
     message: string;
   }>;
 }
@@ -870,7 +974,7 @@ export const DwmsService = {
 
   async getDashboardOverview(
     token: string,
-    days: number,
+    days: number | "all",
   ): Promise<DwmsOverviewDashboardResponse> {
     return getJson<DwmsOverviewDashboardResponse>(
       `/dwms/dashboard/overview${buildQuery({ days })}`,
@@ -881,7 +985,7 @@ export const DwmsService = {
   async getDashboardDepartment(
     token: string,
     deptId: string,
-    days: number,
+    days: number | "all",
   ): Promise<DwmsDepartmentDashboardResponse> {
     return getJson<DwmsDepartmentDashboardResponse>(
       `/dwms/dashboard/department/${encodeURIComponent(deptId)}${buildQuery({ days })}`,
@@ -892,7 +996,7 @@ export const DwmsService = {
   async getDashboardEmployee(
     token: string,
     empId: string,
-    days: number,
+    days: number | "all",
   ): Promise<DwmsEmployeeDashboardResponse> {
     return getJson<DwmsEmployeeDashboardResponse>(
       `/dwms/dashboard/employee/${encodeURIComponent(empId)}${buildQuery({ days })}`,
@@ -1067,6 +1171,17 @@ export const DwmsService = {
     });
   },
 
+  async previewActivityIngestion(
+    token: string,
+    rows: IngestActivityRowPayload[],
+    fileName?: string,
+  ): Promise<PreviewActivitiesResponse> {
+    return sendJson("/dwms/activities/ingest/preview", token, "POST", {
+      fileName,
+      rows,
+    });
+  },
+
   async getActivityIngestions(
     token: string,
   ): Promise<{ ingestions?: DwmsActivityIngestionSummary[] }> {
@@ -1089,8 +1204,12 @@ export const DwmsService = {
   async updateActivity(
     token: string,
     activityId: string,
-    body: Partial<CreateActivityPayload>,
-  ): Promise<{ activity?: DwmsActivityItem }> {
+    body: UpdateActivityContentPayload,
+  ): Promise<{
+    activity?: DwmsActivityItem;
+    updatedTaskDefinitions?: number;
+    updatedFutureTasks?: number;
+  }> {
     return sendJson(
       `/dwms/activities/${encodeURIComponent(activityId)}`,
       token,
@@ -1133,6 +1252,20 @@ export const DwmsService = {
       token,
     );
   },
+  async searchActivityEmployees(
+    token: string,
+    params: { search?: string; page?: number; limit?: number },
+  ): Promise<DwmsActivityEmployeeSearchResponse> {
+    const query = new URLSearchParams();
+    if (params.search?.trim()) query.set("search", params.search.trim());
+    if (params.page) query.set("page", String(params.page));
+    if (params.limit) query.set("limit", String(params.limit));
+    const queryString = query.toString();
+    return getJson(
+      `/dwms/employees${queryString ? `?${queryString}` : ""}`,
+      token,
+    );
+  },
   async getEmployeeRoleActivities(
     token: string,
     employeeId: string,
@@ -1148,7 +1281,11 @@ export const DwmsService = {
     employeeId: string,
     activityId: string,
     status: EmployeeActivityAssignmentStatus,
-  ): Promise<{ item?: DwmsEmployeeRoleActivityItem; message?: string }> {
+  ): Promise<{
+    item?: DwmsEmployeeRoleActivityItem;
+    message?: string;
+    removedFutureInstances?: number;
+  }> {
     return sendJson(
       `/dwms/employees/${encodeURIComponent(employeeId)}/activities/${encodeURIComponent(activityId)}`,
       token,
@@ -1161,19 +1298,6 @@ export const DwmsService = {
     body: CreateAssignedTaskPayload,
   ): Promise<unknown> {
     return sendJson("/dwms/assignedTasks", token, "POST", body);
-  },
-
-  async createTaskFromActivity(
-    token: string,
-    activityId: string,
-    body: CreateTaskFromActivityPayload,
-  ): Promise<unknown> {
-    return sendJson(
-      `/dwms/activities/${encodeURIComponent(activityId)}/tasks`,
-      token,
-      "POST",
-      body,
-    );
   },
 
   async getTodayTasks(

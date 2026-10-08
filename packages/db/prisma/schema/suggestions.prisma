@@ -1,0 +1,83 @@
+enum SuggestionStatus {
+  WAITING_FOR_REVIEW
+  UNDER_REVIEW
+  APPROVED_FOR_IMPLEMENTATION
+  REJECTED
+  ON_HOLD
+  SELECTED_FOR_SGA
+  IMPLEMENTED
+}
+
+enum DecisionType {
+  WORKPLACE_CORRECTION
+  DAILY_KAIZEN
+}
+
+enum ImplementationStatus {
+  WORK_IN_PROGRESS
+  VERY_SLOW_WORK_IN_PROGRESS
+  GOOD_WORK_IN_PROGRESS
+  SLOW_PROGRESS
+  IMPLEMENTED
+  SHIFTED_TO_SGA
+  PREVIOUSLY_IMPLEMENTED
+  UNDER_CONSULTATION
+  IMPRACTICAL
+  SAVED_FOR_LATER
+}
+
+enum SuggestionCategory {
+  QUALITY
+  COST
+  DELIVERY
+  SAFETY
+  MORALE
+  TECHNOLOGY
+  UNKNOWN
+}
+
+model Suggestion {
+  id                     String                @id @default(uuid())
+  title                  String
+  description            String
+  imageUrl               String?
+  status                 SuggestionStatus      @default(WAITING_FOR_REVIEW)
+  implementationStatus   ImplementationStatus?
+  implementationNote     String?
+  decisionType           DecisionType?
+  decisionDetails        Json?
+  categories             SuggestionCategory[]  @default([])
+  isAnonymous            Boolean               @default(false)
+  employeeId             String
+  organizationId         String
+  departmentId           String?
+  hodId                  String?
+  committeeId            String?
+  forwardedToCommitteeAt DateTime?
+  linkedKaizenId         String?               @unique
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  employee     Employee           @relation("EmployeeSuggestions", fields: [employeeId], references: [id])
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  department   Department?        @relation(fields: [departmentId], references: [id])
+  hod          Employee?          @relation("HODSuggestions", fields: [hodId], references: [id], onDelete: SetNull)
+  committee    SteeringCommittee? @relation(fields: [committeeId], references: [id], onDelete: SetNull)
+  kaizen       Kaizen?            @relation(fields: [linkedKaizenId], references: [id], onDelete: SetNull)
+  reviews      SuggestionReview[]
+}
+
+// Audit trail: every status change by a reviewer is recorded here
+model SuggestionReview {
+  id            String           @id @default(uuid())
+  suggestionId  String
+  reviewerId    String
+  statusChanged SuggestionStatus
+  note          String?
+  createdAt     DateTime         @default(now())
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  reviewer   Employee   @relation(fields: [reviewerId], references: [id])
+}
+
+// ── Calendar: Consultancy Visit Scheduling ────────────────────────────────────

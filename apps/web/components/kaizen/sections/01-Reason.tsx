@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { KaizenService, KaizenTrigger } from "@/services/kaizen.service";
-import { KAIZEN_TRIGGERS, SectionLabel } from "@/components/kaizen/kaizen-ui";
+import { HelpText, KAIZEN_TOP_TRIGGERS, KAIZEN_TRIGGERS, KAIZEN_TRIGGER_GROUPS, SectionLabel } from "@/components/kaizen/kaizen-ui";
 import { KaizenSectionHandle, KaizenSectionProps } from "./types";
 
 const EXPLANATION_MIN = 10;
@@ -22,7 +22,7 @@ const ReasonSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functi
     mutationFn: () =>
       KaizenService.updateReason(
         kaizen.id,
-        { trigger: trigger as KaizenTrigger, triggerOther: trigger === "OTHER" ? triggerOther.trim() : undefined },
+        { trigger: trigger || undefined, triggerOther: trigger === "OTHER" ? triggerOther.trim() || undefined : undefined },
         token,
       ),
     onSuccess: (updated) => onSaved(updated),
@@ -31,11 +31,9 @@ const ReasonSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functi
 
   useImperativeHandle(ref, () => ({
     save: async () => {
-      if (!trigger) {
-        setError("Please select why this Daily Kaizen was started.");
-        return false;
-      }
-      if (trigger === "OTHER" && (triggerOther.trim().length < EXPLANATION_MIN || triggerOther.trim().length > EXPLANATION_MAX)) {
+      // Drafts may be saved half-filled; submit checks what is still missing.
+      const other = triggerOther.trim();
+      if (trigger === "OTHER" && other && (other.length < EXPLANATION_MIN || other.length > EXPLANATION_MAX)) {
         setError(`Please explain in ${EXPLANATION_MIN}-${EXPLANATION_MAX} characters.`);
         return false;
       }
@@ -79,21 +77,31 @@ const ReasonSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functi
       <div className="space-y-4">
         <div>
           <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Why was this Daily Kaizen started? <span className="text-red-500">*</span>
+            Why did you start this kaizen?
           </label>
+          <HelpText>Pick the closest match. Choose &quot;Other&quot; if none fit.</HelpText>
           <select
             value={trigger}
             onChange={(e) => {
               setTrigger(e.target.value as KaizenTrigger);
               setError(null);
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
           >
             <option value="">Select a reason...</option>
-            {KAIZEN_TRIGGERS.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+            {KAIZEN_TOP_TRIGGERS.map((value) => (
+              <option key={value} value={value}>
+                {KAIZEN_TRIGGERS.find((t) => t.value === value)?.label ?? value}
               </option>
+            ))}
+            {KAIZEN_TRIGGER_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.triggers.map((value) => (
+                  <option key={value} value={value}>
+                    {KAIZEN_TRIGGERS.find((t) => t.value === value)?.label ?? value}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -102,7 +110,7 @@ const ReasonSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functi
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-sm font-semibold text-slate-700">
-                Please explain <span className="text-red-500">*</span>
+                Please explain
               </label>
               <span className={`text-xs ${triggerOther.length > EXPLANATION_MAX ? "text-red-500" : "text-slate-400"}`}>
                 {triggerOther.length}/{EXPLANATION_MAX}
@@ -116,7 +124,7 @@ const ReasonSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functi
                 setError(null);
               }}
               placeholder="Describe why this Daily Kaizen was started..."
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none"
             />
           </div>
         )}

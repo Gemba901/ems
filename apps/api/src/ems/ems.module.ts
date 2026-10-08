@@ -5,9 +5,10 @@ import { EmsService } from './ems.service';
 import { EmsController } from './ems.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
+import { DwmsModule } from 'src/dwms/dwms.module';
 
 @Module({
-  imports: [TenancyModule, ConfigModule, PrismaModule],
+  imports: [TenancyModule, ConfigModule, PrismaModule, DwmsModule],
   providers: [EmsService, ModuleGuard],
   controllers: [EmsController],
 })

@@ -24,11 +24,6 @@ import {
   Clock,
   Loader2,
   Palmtree,
-  Bell,
-  Megaphone,
-  Info,
-  AlertTriangle,
-  Pin,
   ClipboardCheck,
   Factory,
   Users2,
@@ -42,12 +37,11 @@ import { DashboardTour } from "@/components/onboarding/DashboardTour";
 import { Role } from "@/types/role";
 import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
 import { LeaveService, LEAVE_TYPE_LABELS } from "@/services/leave.service";
-import { NoticeService, Notice, NoticeType } from "@/services/notice.service";
-import DwmsTodayTasksWidget from "@/app/dwms/components/home/DwmsTodayTasksWidget";
+import MyDayPanel from "@/components/dashboard/MyDayPanel";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "WORK" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -185,68 +179,22 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
       { label: "New SGA", href: "/sga/new", icon: FileEdit },
     ],
   },
+  WORK: {
+    key: "WORK",
+    label: "Team Workspace",
+    tagline: "Attendance & Project Tasks",
+    description: "Clock in and out, see your tasks across projects, and plan team work in simple sprints.",
+    icon: Clock,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    ring: "ring-blue-200",
+    href: "/work",
+    actions: [
+      { label: "Open my day", href: "/work", icon: ArrowRight },
+    ],
+  },
 };
 
-
-// reminders
-const NOTICE_ICON: Record<NoticeType, React.ElementType> = {
-  ANNOUNCEMENT: Megaphone,
-  REMINDER:     Bell,
-  INFO:         Info,
-  ALERT:        AlertTriangle,
-};
-
-const NOTICE_CHIP_STYLE: Record<NoticeType, string> = {
-  ANNOUNCEMENT: "bg-indigo-50 border-indigo-200 text-indigo-700",
-  REMINDER:     "bg-amber-50  border-amber-200  text-amber-700",
-  INFO:         "bg-white     border-slate-200   text-slate-600",
-  ALERT:        "bg-red-50   border-red-200    text-red-700",
-};
-
-const NOTICE_ICON_COLOR: Record<NoticeType, string> = {
-  ANNOUNCEMENT: "text-indigo-500",
-  REMINDER:     "text-amber-500",
-  INFO:         "text-slate-400",
-  ALERT:        "text-red-500",
-};
-
-function fmtNoticeDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
-}
-
-function RemindersStrip({ token }: { token: string }) {
-  const { data: notices = [], isLoading } = useQuery({
-    queryKey: ["notices"],
-    queryFn: () => NoticeService.getNotices(token),
-    enabled: !!token,
-    staleTime: 60_000,
-  });
-
-  if (isLoading) return null;
-  if (notices.length === 0) return null;
-
-  return (
-    <div className="flex items-center gap-3 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-      <span className="text-xs font-medium text-slate-400 shrink-0">Notices</span>
-      <div className="flex items-center gap-2">
-        {notices.map((n: Notice) => {
-          const Icon = NOTICE_ICON[n.type];
-          return (
-            <div
-              key={n.id}
-              className={`shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs ${NOTICE_CHIP_STYLE[n.type]}`}
-            >
-              <Icon className={`h-3 w-3 shrink-0 ${NOTICE_ICON_COLOR[n.type]}`} />
-              <span className="font-medium whitespace-nowrap">{n.title}</span>
-              {n.pinned && <Pin className="h-2.5 w-2.5 shrink-0 opacity-40" />}
-              <span className="text-[10px] opacity-60 whitespace-nowrap">{fmtNoticeDate(n.createdAt)}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // upcoming modules
 
@@ -357,9 +305,7 @@ export default function DashboardPage() {
 
       <DashboardHero />
 
-      {accessToken && <RemindersStrip token={accessToken} />}
-
-      {activeModules.includes("DWMS") && <DwmsTodayTasksWidget />}
+      {!loadingModules && <MyDayPanel dwmsEnabled={activeModules.includes("DWMS")} />}
 
       {/* <DashboardRoleSection /> */}
 

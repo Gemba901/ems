@@ -1,7 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
+import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
+import { DwmsService } from 'src/dwms/dwms.service';
 import { 
   AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto,
 } from './dto/onboarding.dto';
@@ -72,7 +74,7 @@ const EMS_EMPLOYEE_SELECT = {
   employmentStatus: true, employmentType: true, jobTitle: true, dateJoined: true,
   plantBranch: true, workStation: true, section: true, subSection: true, shift: true,
   reportingManagerId: true,
-  reportingManager: { select: { id: true, firstName: true, lastName: true } },
+  reportingManager: { select: { id: true, firstName: true, lastName: true, jobTitle: true, avatarUrl: true } },
 
   hodName: true, hodDesignation: true, beesAccessLevel: true,
   companyCode: true,
@@ -169,7 +171,10 @@ function normalisePhone(value: string | null): string | null {
 
 @Injectable()
 export class EmsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private dwmsService?: DwmsService,
+  ) {}
 
   private async resolveEmployee(userId: string, organizationId: string) {
     const emp = await this.prisma.employee.findFirst({
@@ -188,8 +193,37 @@ export class EmsService {
     });
     if (!emp) throw new ForbiddenException('No employee profile linked to your account');
 
+    const reporteeWhere = { reportingManagerId: emp.id, organizationId };
+    const [reportees, reporteeCount, leaveSettings] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: reporteeWhere,
+        select: { id: true, firstName: true, lastName: true, jobTitle: true, avatarUrl: true, employeeCode: true },
+        orderBy: { firstName: 'asc' },
+        take: 50,
+      }),
+      this.prisma.employee.count({ where: reporteeWhere }),
+      this.prisma.leaveSettings.findUnique({ where: { organizationId }, select: { workingDays: true } }),
+    ]);
+
     const { overall, groups } = calcEmployeeCompletion(emp as Record<string, unknown>);
-    return { employee: emp, completion: { overall, groups } };
+    return {
+      employee: emp,
+      completion: { overall, groups },
+      reportees,
+      reporteeCount,
+      upcomingHolidays: this.upcomingHolidays(new Date(), 3),
+      // Same Mon–Fri default the leave module falls back to when no settings exist.
+      workingDays: leaveSettings?.workingDays ?? [1, 2, 3, 4, 5],
+    };
+  }
+
+  private upcomingHolidays(from: Date, limit: number) {
+    const today = from.toISOString().slice(0, 10);
+    const year = from.getFullYear();
+    return [...getKenyaPublicHolidays(year), ...getKenyaPublicHolidays(year + 1)]
+      .filter((holiday) => holiday.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, limit);
   }
 
   // ── HR/Admin: single employee profile ────────────────────────────────────
@@ -236,7 +270,12 @@ export class EmsService {
   async updateEmployee(employeeId: string, organizationId: string, dto: UpdateEmployeeEmsDto) {
     const existing = await this.prisma.employee.findFirst({
       where: { id: employeeId, organizationId },
-      select: { id: true },
+      select: {
+        id: true,
+        departmentId: true,
+        jobTitle: true,
+        employmentStatus: true,
+      },
     });
     if (!existing) throw new NotFoundException('Employee not found');
 
@@ -260,6 +299,16 @@ export class EmsService {
       data: updateData,
       select: EMS_EMPLOYEE_SELECT,
     });
+
+    await this.dwmsService?.synchronizeEmployeeActivities(
+      organizationId,
+      employeeId,
+      {
+        previousDepartmentId: existing.departmentId,
+        previousJobTitle: existing.jobTitle,
+        previousEmploymentStatus: existing.employmentStatus,
+      },
+    );
 
     const { overall, groups } = calcEmployeeCompletion(updated as Record<string, unknown>);
     return { employee: updated, completion: { overall, groups } };

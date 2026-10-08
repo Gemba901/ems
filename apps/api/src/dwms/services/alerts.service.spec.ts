@@ -8,7 +8,13 @@ describe('DWMS alert histories', () => {
 
   beforeEach(() => {
     prisma = {
-      employee: { findFirst: jest.fn().mockResolvedValue({ id: 'manager', departmentId: 'department' }) },
+      employee: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'manager', departmentId: 'department' }),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'direct' },
+          { id: 'indirect' },
+        ]),
+      },
       dwmsPermissionConfig: {
         findUnique: jest.fn().mockResolvedValue({ alertViewLevel: 'OWN', analyticsViewLevel: 'DEPARTMENT' }),
       },
@@ -22,7 +28,8 @@ describe('DWMS alert histories', () => {
     notifications = { create: jest.fn() };
     service = new DwmsService(prisma, notifications);
     jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([
-      { id: 'direct' }, { id: 'indirect' },
+      { id: 'direct', organizationId: 'org' },
+      { id: 'indirect', organizationId: 'org' },
     ]);
   });
 
@@ -270,5 +277,79 @@ describe('DWMS alert histories', () => {
     expect(prisma.alertOccurrence.count).toHaveBeenCalledWith({
       where: { alert: { organizationId: 'org', againstUserId: 'manager' } },
     });
+  });
+
+  it('lists allocated routine tasks once instead of scheduled instances', async () => {
+    prisma.employee.findFirst.mockResolvedValue({
+      id: 'manager',
+      firstName: 'Manager',
+      lastName: 'Employee',
+      department: null,
+    });
+    prisma.task = {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'routine-task',
+          activityId: 'activity',
+          title: 'Daily Safe Start Check',
+          description: null,
+          frequency: 'DAILY',
+          assignedById: null,
+          activity: {
+            id: 'activity',
+            name: 'Daily Safe Start Check',
+            code: 'GP-001',
+            scope: 'ORGANISATION',
+          },
+        },
+        {
+          id: 'duplicate-routine-task',
+          title: 'Daily Safe Start Check',
+          description: null,
+          frequency: 'DAILY',
+          assignedById: null,
+          activityId: 'activity',
+          activity: {
+            id: 'activity',
+            name: 'Daily Safe Start Check',
+            code: 'GP-001',
+            scope: 'ORGANISATION',
+          },
+        },
+      ]),
+    };
+    prisma.taskInstance = {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    };
+    prisma.alert.findMany.mockResolvedValue([]);
+    prisma.alert.count.mockResolvedValue(0);
+    jest.spyOn(service as any, 'listEmployeeRoleActivities').mockResolvedValue({
+      count: 0,
+      activities: [],
+    });
+
+    const result = await service.getEmployeeDwmsProfile(
+      { ...user, roleLevel: 'MANAGEMENT' },
+      'manager',
+    );
+
+    expect(prisma.task.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerId: 'manager',
+          isActive: true,
+          assignedById: null,
+        }),
+      }),
+    );
+    expect(result.counts.routineWork).toBe(1);
+    expect(result.routineWork).toEqual([
+      expect.objectContaining({
+        taskId: 'routine-task',
+        taskCategory: 'GOOD_PRACTICE',
+      }),
+    ]);
+    expect(result.routineWork[0]).not.toHaveProperty('instanceId');
   });
 });

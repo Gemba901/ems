@@ -92,7 +92,10 @@ export interface EmployeeProfile {
   subSection: string | null;
   shift: string | null;
   reportingManagerId: string | null;
-  reportingManager: { id: string; firstName: string; lastName: string } | null;
+  reportingManager: {
+    id: string; firstName: string; lastName: string;
+    jobTitle?: string | null; avatarUrl?: string | null;
+  } | null;
   hrRecordOwnerId: string | null;
   hrRecordOwner: { id: string; firstName: string; lastName: string } | null;
 
@@ -123,6 +126,30 @@ export interface EmployeeProfile {
     roleInCommittee: string | null;
     committee: { id: string; name: string; type: string };
   }>;
+}
+
+export interface Reportee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  jobTitle: string | null;
+  avatarUrl: string | null;
+  employeeCode: string | null;
+}
+
+export interface PublicHoliday {
+  date: string; // YYYY-MM-DD
+  name: string;
+}
+
+export interface MyProfileResponse {
+  employee: EmployeeProfile;
+  completion: CompletionResult;
+  reportees?: Reportee[];
+  reporteeCount?: number;
+  upcomingHolidays?: PublicHoliday[];
+  /** 0 = Sunday … 6 = Saturday */
+  workingDays?: number[];
 }
 
 export interface CompletionResult {
@@ -322,7 +349,7 @@ export interface UpdateOnboardingRecordPayload {
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export const EmsService = {
-  async getMyProfile(token: string): Promise<{ employee: EmployeeProfile; completion: CompletionResult }> {
+  async getMyProfile(token: string): Promise<MyProfileResponse> {
     const res = await apiClient(`${API_URL}/ems/me`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },

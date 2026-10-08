@@ -469,7 +469,7 @@ export class OrganizationsService {
                     ],
                 } });
                 if (reservation) throw new ConflictException('This company address is reserved by an onboarding request');
-                const org = await (tx.organization as any).create({
+                const org = await tx.organization.create({
                     data: {
                         name: dto.name,
                         slug,
@@ -573,7 +573,7 @@ export class OrganizationsService {
         const logoUrl = dto.logoUrl?.startsWith('/api/uploads/files/')
             ? await this.prisma.$transaction(tx => this.companyLogo(tx, dto.logoUrl, id, sourceOrganizationId))
             : dto.logoUrl;
-        return (this.prisma.organization as any).update({
+        return this.prisma.organization.update({
             where: { id },
             data: {
                 ...(dto.name !== undefined && { name: dto.name }),
@@ -659,7 +659,7 @@ export class OrganizationsService {
         }
 
         await this.prisma.$transaction(async (tx) => {
-            await (tx as any).visitMonthPlan.deleteMany({ where: { clientOrgId: id } });
+            await tx.visitMonthPlan.deleteMany({ where: { clientOrgId: id } });
             await tx.consultancyVisit.deleteMany({ where: { clientOrgId: id } });
             await tx.visitRequest.deleteMany({ where: { organizationId: id } });
             await tx.steeringCommitteeMember.deleteMany({
@@ -752,11 +752,11 @@ export class OrganizationsService {
         await this.findOrFail(id);
 
         await this.prisma.$transaction(async (tx) => {
-            await (tx.organization as any).updateMany({
+            await tx.organization.updateMany({
                 where: { isAdminOrg: true },
                 data: { isAdminOrg: false },
             });
-            await (tx.organization as any).update({
+            await tx.organization.update({
                 where: { id },
                 data: { isAdminOrg: true },
             });

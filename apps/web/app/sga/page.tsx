@@ -8,39 +8,30 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SgaService, Sga, SgaStatus } from "@/services/sga.service";
 import { EmployeeService } from "@/services/employee.service";
-import { StatusBadge, KpiCard, Thumbnail, SgaPagination, STATUS_LABELS, formatDate } from "@/components/sga/sga-ui";
-import { Plus, Users2, Loader2, ShieldCheck, CheckCircle2, Search, X, ArrowRight } from "lucide-react";
+import { KpiCard, SgaPagination, STATUS_BADGE, STATUS_LABELS, formatDate } from "@/components/sga/sga-ui";
+import { CoverCard, CoverCardGrid } from "@/components/ui/CoverCard";
+import { Plus, Users2, Loader2, ShieldCheck, CheckCircle2, Search, X } from "lucide-react";
 
 type TabKey = "mine" | "department" | "verification";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12;
 
 const RAISER_EDITABLE_STATUSES: SgaStatus[] = ["DRAFT", "RETURNED_FOR_REVISION"];
 
-function SgaRow({ s, showOwner, myEmployeeId }: { s: Sga; showOwner?: boolean; myEmployeeId?: string }) {
+function SgaCard({ s, showOwner, myEmployeeId }: { s: Sga; showOwner?: boolean; myEmployeeId?: string }) {
   const title = s.title || s.problemDescription || "Untitled SGA";
   const canContinue = !!myEmployeeId && s.employeeId === myEmployeeId && RAISER_EDITABLE_STATUSES.includes(s.status);
   return (
-    <Link
+    <CoverCard
       href={`/sga/${s.id}`}
-      className="flex items-center gap-3 px-4 py-3 sm:px-6 hover:bg-slate-50 transition-colors"
-    >
-      <Thumbnail src={s.beforeFileUrls[0]} alt={title} />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900 truncate">{title}</p>
-        <p className="text-xs text-slate-500 mt-1">
-          {showOwner && `${s.employee.firstName} ${s.employee.lastName} · `}
-          {s.mainDepartment?.name ?? "No department"} · {formatDate(s.createdAt)}
-        </p>
-      </div>
-      {canContinue ? (
-        <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2.5 py-1">
-          {s.status === "DRAFT" ? "Continue draft" : "Update & resubmit"} <ArrowRight className="h-3 w-3" />
-        </span>
-      ) : (
-        <StatusBadge status={s.status} />
-      )}
-    </Link>
+      title={title}
+      meta={`${showOwner ? `${s.employee.firstName} ${s.employee.lastName} · ` : ""}${s.mainDepartment?.name ?? "No department"} · ${formatDate(s.createdAt)}`}
+      coverSrc={s.beforeFileUrls[0]}
+      coverIcon={<Users2 />}
+      tone={STATUS_BADGE[s.status]}
+      statusLabel={STATUS_LABELS[s.status]}
+      cta={canContinue ? (s.status === "DRAFT" ? "Continue draft" : "Update & resubmit") : undefined}
+    />
   );
 }
 
@@ -58,9 +49,9 @@ function SgaListCard({ sgas, isLoading, emptyText, showOwner, myEmployeeId }: {
     );
   }
   return (
-    <div className="bg-white border border-slate-100 rounded-xl shadow-sm divide-y divide-slate-50">
-      {sgas.map((s) => <SgaRow key={s.id} s={s} showOwner={showOwner} myEmployeeId={myEmployeeId} />)}
-    </div>
+    <CoverCardGrid>
+      {sgas.map((s) => <SgaCard key={s.id} s={s} showOwner={showOwner} myEmployeeId={myEmployeeId} />)}
+    </CoverCardGrid>
   );
 }
 

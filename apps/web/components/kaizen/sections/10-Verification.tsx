@@ -88,7 +88,7 @@ function StageCard({ kaizen, stage, ctx, token, onSaved }: {
                 value={benefitAmount}
                 onChange={(e) => setBenefitAmount(e.target.value)}
                 placeholder="Verified benefit amount (optional)"
-                className="flex-1 min-w-0 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                className="flex-1 min-w-0 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
               />
               <CurrencySelect value={benefitCurrency} onChange={setBenefitCurrency} className="text-xs w-28 shrink-0" />
             </div>
@@ -98,7 +98,7 @@ function StageCard({ kaizen, stage, ctx, token, onSaved }: {
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
             placeholder="Remarks (optional)..."
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
           />
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center gap-2">

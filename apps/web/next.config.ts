@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 import withPWA from "next-pwa";
 
@@ -11,6 +12,23 @@ const nextConfig: NextConfig = {
       "./content/dwms-docs-images/**/*.png",
     ],
     "/api/docs/sga/*": ["./content/sga-docs/*.md"],
+    "/api/docs/kaizen/*": ["./content/kaizen-docs/*.md"],
+  },
+  // Baseline headers for every page and proxied API response. The CSP only covers
+  // directives that can't break Next.js scripts or styles; a script-src policy would need nonces.
+  async headers() {
+    return [{
+      source: "/:path*",
+      headers: [
+        { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'" },
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "Strict-Transport-Security", value: "max-age=31536000" },
+        // SIMS photo inputs use the camera and Team Workspace clock-in reads location; nothing uses the microphone.
+        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self), payment=(), usb=()" },
+      ],
+    }];
   },
 };
 
@@ -23,4 +41,12 @@ const pwaConfig = withPWA({
   runtimeCaching: [{ urlPattern: /\/api\//, handler: "NetworkOnly" }],
 });
 
-export default pwaConfig(nextConfig);
+export default withSentryConfig(pwaConfig(nextConfig), {
+  org: "gemba-pms",
+  project: "gemba-web",
+  // Only present in Vercel builds; without it the source map upload is skipped.
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  // Send browser events via this app so ad blockers don't drop them.
+  tunnelRoute: "/monitoring",
+});

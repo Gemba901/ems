@@ -1,0 +1,244 @@
+enum RecurrencePattern {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+// ── Holistic Calendar ─────────────────────────────────────────────────────────
+
+// Google Calendar-style color swatches, freely chosen, no restriction on meaning
+enum EventColor {
+  TOMATO
+  FLAMINGO
+  TANGERINE
+  BANANA
+  SAGE
+  BASIL
+  PEACOCK
+  BLUEBERRY
+  LAVENDER
+  GRAPE
+  GRAPHITE
+}
+
+enum EventVisibility {
+  PRIVATE // visible only to creator + invited guests
+  ORG_WIDE // visible to every employee in the organization
+}
+
+enum EventRecurrencePattern {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum VisitStatus {
+  TENTATIVE
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum VisitRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CalendarEvent {
+  id              String          @id @default(uuid())
+  title           String
+  description     String?
+  label           String?
+  color           EventColor      @default(PEACOCK)
+  visibility      EventVisibility @default(PRIVATE)
+  startAt         DateTime
+  endAt           DateTime
+  allDay          Boolean         @default(false)
+  organizationId  String
+  createdById     String
+  // Free-text prospect/company name — set only for "New Client Visit" quick-created
+  // events (initial meetings with a company not yet onboarded as a Partner Organization)
+  prospectOrgName String?
+
+  // Recurrence
+  isRecurring        Boolean                 @default(false)
+  recurrencePattern  EventRecurrencePattern?
+  recurrenceInterval Int                     @default(1)
+  recurrenceEndAt    DateTime?
+  parentEventId      String?
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  createdBy    Employee           @relation("CalendarEventCreator", fields: [createdById], references: [id])
+  invitations  EventInvitation[]
+  participants EventParticipant[]
+  parentEvent  CalendarEvent?     @relation("EventSeries", fields: [parentEventId], references: [id])
+  childEvents  CalendarEvent[]    @relation("EventSeries")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, startAt])
+  @@index([createdById, startAt])
+}
+
+// Tracks meeting invites + accept/decline responses (also serves as the accept/reject log)
+model EventInvitation {
+  id          String           @id @default(uuid())
+  eventId     String
+  inviteeId   String
+  status      InvitationStatus @default(PENDING)
+  respondedAt DateTime?
+
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitee Employee      @relation("ReceivedInvitations", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, inviteeId])
+  @@index([inviteeId, status])
+}
+
+// Assigned participants for training sessions and audits (no accept/decline flow)
+model EventParticipant {
+  id         String @id @default(uuid())
+  eventId    String
+  employeeId String
+
+  event    CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  employee Employee      @relation("EventParticipations", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, employeeId])
+}
+
+model ConsultancyVisit {
+  id                String             @id @default(uuid())
+  title             String
+  clientOrgId       String
+  date              DateTime
+  endDate           DateTime?
+  startTime         String?
+  endTime           String?
+  status            VisitStatus        @default(TENTATIVE)
+  notes             String?
+  internalNotes     String?
+  completionNote    String?
+  recurrencePattern RecurrencePattern?
+  recurrenceEndDate DateTime?
+  recurrenceGroupId String?
+  rescheduleCount   Int                @default(0)
+  createdById       String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  clientOrg     Organization    @relation(fields: [clientOrgId], references: [id])
+  createdBy     User            @relation(fields: [createdById], references: [id])
+  attendees     VisitAttendee[]
+  sourceRequest VisitRequest?
+
+  @@index([recurrenceGroupId])
+}
+
+model VisitMonthPlan {
+  id          String   @id @default(uuid())
+  clientOrgId String
+  year        Int
+  month       Int
+  plannedDays Int      @default(1)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clientOrg Organization    @relation(fields: [clientOrgId], references: [id])
+  createdBy User            @relation(fields: [createdById], references: [id])
+  slots     VisitPlanSlot[]
+
+  @@unique([clientOrgId, year, month])
+}
+
+model VisitPlanSlot {
+  id        String    @id @default(uuid())
+  planId    String
+  slotIndex Int
+  date      DateTime?
+  agenda    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  plan VisitMonthPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, slotIndex])
+}
+
+model VisitRequest {
+  id             String             @id @default(uuid())
+  organizationId String
+  requestedDate  DateTime
+  preferredTime  String?
+  message        String?
+  status         VisitRequestStatus @default(PENDING)
+  responseNote   String?
+  visitId        String?            @unique
+  createdById    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  createdBy    User              @relation(fields: [createdById], references: [id])
+  visit        ConsultancyVisit? @relation(fields: [visitId], references: [id])
+}
+
+model VisitAttendee {
+  id         String  @id @default(uuid())
+  visitId    String
+  employeeId String
+  role       String?
+
+  visit    ConsultancyVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  employee Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, employeeId])
+}
+
+enum CalendarBlockType {
+  HOLIDAY
+  BUSY_DAY
+}
+
+model CalendarBlock {
+  id          String            @id @default(uuid())
+  date        DateTime
+  type        CalendarBlockType
+  label       String?
+  createdById String
+  employeeId  String?
+  createdAt   DateTime          @default(now())
+
+  createdBy User      @relation(fields: [createdById], references: [id])
+  employee  Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+// Google Calendar-style user-defined filters for the holistic calendar agenda
+model CalendarFilter {
+  id         String   @id @default(uuid())
+  employeeId String
+  name       String
+  kinds      String[] @default([])
+  orgIds     String[] @default([])
+  colors     String[] @default([])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+// ── Leave Management ──────────────────────────────────────────────────────────

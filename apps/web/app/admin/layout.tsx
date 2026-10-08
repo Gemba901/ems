@@ -1,33 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import { Role } from "@/types/role";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
+import { ModuleSidebar, SIDEBAR_PADDING, type SidebarNavItem } from "@/components/shell/ModuleSidebar";
 import {
     LayoutDashboard,
     Building2,
     LogOut,
-    ChevronRight,
     Menu,
     Shield,
-    X,
     Settings,
-    Home,
-    PanelLeftClose,
-    PanelLeftOpen,
 } from "lucide-react";
 
-const NAV = [
-    { label: "Readiness", href: "/admin/readiness", icon: Shield },
-    { label: "Dashboard",     href: "/admin",               icon: LayoutDashboard },
-    { label: "Organizations", href: "/admin/organizations",  icon: Building2 },
-    { label: "Settings",      href: "/admin/settings",       icon: Settings },
-    { label: "Main App",      href: "/",                     icon: Home },
+const NAV: SidebarNavItem[] = [
+    { label: "Readiness",     href: "/admin/readiness",     icon: Shield },
+    { label: "Dashboard",     href: "/admin",               icon: LayoutDashboard, exact: true },
+    { label: "Organizations", shortLabel: "Orgs", href: "/admin/organizations", icon: Building2 },
+    { label: "Settings",      href: "/admin/settings",      icon: Settings },
 ];
 
 interface AdminSidebarProps {
@@ -37,8 +31,7 @@ interface AdminSidebarProps {
     onToggle: () => void;
 }
 
-function AdminSidebar({ open, onClose, collapsed, onToggle }: AdminSidebarProps) {
-    const pathname  = usePathname();
+function AdminSidebar(props: AdminSidebarProps) {
     const router    = useRouter();
     const { user, logout } = useAuthStore();
     const queryClient = useQueryClient();
@@ -54,126 +47,64 @@ function AdminSidebar({ open, onClose, collapsed, onToggle }: AdminSidebarProps)
         router.replace("/login");
     };
 
+    const footer = (collapsed: boolean) =>
+        collapsed ? (
+            <>
+                <span
+                    className="mt-1 flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-[11px] font-bold text-white"
+                    title={user?.name ?? "Super Admin"}
+                >
+                    {initials}
+                </span>
+                <button
+                    type="button"
+                    onClick={handleLogout}
+                    title="Sign out"
+                    className="flex w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                >
+                    <LogOut className="h-[18px] w-[18px]" strokeWidth={1.6} aria-hidden="true" />
+                    <span className="text-[10.5px] font-medium leading-tight">Sign out</span>
+                </button>
+            </>
+        ) : (
+            <div className="space-y-1 border-t border-slate-200 px-3 py-3">
+                <div className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-[11px] font-bold text-white">
+                        {initials}
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block truncate text-xs font-semibold text-slate-900">{user?.name}</span>
+                        <span className="block text-[10px] uppercase tracking-wider text-indigo-600">Super Admin</span>
+                    </span>
+                </div>
+                <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                >
+                    <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.6} aria-hidden="true" />
+                    Sign out
+                </button>
+            </div>
+        );
+
     return (
-        <>
-            {/* Mobile backdrop */}
-            {open && (
-                <div
-                    className="fixed inset-0 z-40 bg-black/50 md:hidden"
-                    onClick={onClose}
-                />
-            )}
-
-            <aside className={`
-                fixed left-0 top-0 h-screen bg-[#0d0d14] flex flex-col border-r border-white/6 z-50
-                transition-all duration-300 ease-in-out overflow-hidden w-64
-                ${open ? "translate-x-0" : "-translate-x-full"}
-                md:translate-x-0
-                ${collapsed ? "md:w-16" : "md:w-64"}
-            `}>
-                {/* Brand + collapse toggle */}
-                <div className={`flex items-center h-14 border-b border-white/6 shrink-0 ${collapsed ? "justify-center" : "px-4 gap-3"}`}>
-                    <button
-                        onClick={onToggle}
-                        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                        className="hidden md:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/30 hover:bg-white/8 hover:text-white/70 transition-colors"
-                    >
-                        {collapsed
-                            ? <PanelLeftOpen className="h-4 w-4" />
-                            : <PanelLeftClose className="h-4 w-4" />
-                        }
-                    </button>
-
-                    {!collapsed && (
-                        <>
-                            <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
-                                <Shield className="h-3.5 w-3.5 text-white" />
-                            </div>
-                            <div className="min-w-0 flex flex-col">
-                                <p className="text-white text-[13px] font-semibold leading-none truncate">Admin Console</p>
-                                <p className="text-[10px] text-white/30 uppercase tracking-widest mt-0.5">Gemba PMS</p>
-                            </div>
-                            <button
-                                onClick={onClose}
-                                className="md:hidden ml-auto p-1 text-white/30 hover:text-white/60 transition-colors"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        </>
-                    )}
-                </div>
-
-                {/* Nav */}
-                <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto overflow-x-hidden">
-                    {!collapsed && (
-                        <p className="text-[10px] text-white/20 uppercase tracking-widest px-3 pb-2 font-medium">Platform</p>
-                    )}
-                    {NAV.map(({ label, href, icon: Icon }) => {
-                        const isActive =
-                            href === "/" || href === "/admin"
-                                ? pathname === href
-                                : pathname.startsWith(href);
-                        return (
-                            <Link
-                                key={href}
-                                href={href}
-                                onClick={onClose}
-                                title={collapsed ? label : undefined}
-                                className={`flex items-center rounded-xl text-[13px] font-medium transition-all ${
-                                    isActive
-                                        ? "bg-white/8 text-white"
-                                        : "text-white/40 hover:text-white/80 hover:bg-white/4"
-                                } ${collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"}`}
-                            >
-                                <Icon className="h-4 w-4 shrink-0" />
-                                {!collapsed && (
-                                    <>
-                                        <span className="flex-1">{label}</span>
-                                        {isActive && <ChevronRight className="h-3.5 w-3.5 text-white/30" />}
-                                    </>
-                                )}
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                {/* User */}
-                {collapsed ? (
-                    <div className="mx-2 mb-2 flex justify-center py-2">
-                        <div
-                            className="h-8 w-8 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center text-[11px] font-bold"
-                            title={user?.name ?? "Super Admin"}
-                        >
-                            {initials}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="mx-2 mb-1 rounded-xl border border-white/6 bg-white/4 px-3 py-2.5 flex items-center gap-3">
-                        <div className="h-7 w-7 rounded-full bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center text-[11px] font-bold shrink-0">
-                            {initials}
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-white text-[12px] font-medium truncate">{user?.name}</p>
-                            <p className="text-[10px] text-indigo-400/70 uppercase tracking-wider">Super Admin</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Logout */}
-                <div className="pb-3 px-2">
-                    <button
-                        onClick={handleLogout}
-                        title={collapsed ? "Sign out" : undefined}
-                        className={`w-full flex items-center rounded-xl text-[13px] text-white/30 hover:text-red-400 hover:bg-red-500/8 transition-all ${
-                            collapsed ? "h-10 justify-center" : "gap-3 px-3 py-2.5"
-                        }`}
-                    >
-                        <LogOut className="h-4 w-4" />
-                        {!collapsed && <span>Sign out</span>}
-                    </button>
-                </div>
-            </aside>
-        </>
+        <ModuleSidebar
+            {...props}
+            id="admin-sidebar"
+            title="Admin Console"
+            subtitle="Gemba PMS"
+            homeHref="/admin"
+            brand={
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600">
+                    <Shield className="h-4 w-4 text-white" />
+                </span>
+            }
+            ariaLabel="Admin navigation"
+            groups={[{ name: "Platform", items: NAV }]}
+            backLink={{ label: "Main App", href: "/" }}
+            footer={footer}
+        />
     );
 }
 
@@ -217,9 +148,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 onToggle={toggle}
             />
 
-            <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "md:pl-16" : "md:pl-64"}`}>
+            <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded}`}>
                 {/* Mobile top bar */}
-                <div className="md:hidden flex items-center gap-3 px-4 h-14 bg-white border-b border-slate-200 sticky top-0 z-30">
+                <div className="lg:hidden flex items-center gap-3 px-4 h-14 bg-white border-b border-slate-200 sticky top-0 z-30">
                     <button
                         onClick={() => setSidebarOpen(true)}
                         className="p-2 -ml-1 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"

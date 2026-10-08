@@ -1,0 +1,271 @@
+model Task {
+  id                         String                 @id @default(uuid())
+  activityId                 String?
+  title                      String
+  frequency                  TaskFrequency
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+  assignedById               String?
+  completionPercent          Int                    @default(0)
+  description                String?
+  ownerId                    String
+  status                     TaskStatus             @default(PENDING)
+  acknowledgedAt             DateTime?
+  completionNote             String?
+  completionAttachmentUrl    String?
+  completionAttachmentName   String?
+  requiresCompletionDocument Boolean                @default(false)
+  completionDocumentName     String?
+  dueDate                    DateTime?
+  isAdhoc                    Boolean                @default(false)
+  isActive                   Boolean                @default(true)
+  priority                   Priority?              @default(MEDIUM)
+  departmentId               String?
+  ownerName                  String?
+  assignedByName             String?
+  approvedById               String?
+  backupOwnerId              String?
+  activity                   Activity?              @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  assignedBy                 Employee?              @relation("TaskAssignedBy", fields: [assignedById], references: [id])
+  owner                      Employee               @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  approvedBy                 Employee?              @relation("TaskApprovedBy", fields: [approvedById], references: [id])
+  backupOwner                Employee?              @relation("TaskBackupOwner", fields: [backupOwnerId], references: [id])
+  ingestionRows              ActivityIngestionRow[]
+  instances                  TaskInstance[]
+  department                 Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([activityId])
+  @@index([assignedById])
+  @@index([departmentId])
+  @@index([approvedById])
+  @@index([backupOwnerId])
+}
+
+model TaskInstance {
+  id                       String                @id @default(uuid())
+  taskId                   String
+  ownerId                  String
+  frequency                TaskFrequency
+  scheduledFor             DateTime
+  dueAt                    DateTime
+  titleSnapshot            String
+  descriptionSnapshot      String?
+  requiresDocumentSnapshot Boolean
+  documentNameSnapshot     String?
+  status                   TaskStatus            @default(PENDING)
+  completionPercent        Int                   @default(0)
+  completionNote           String?
+  completionAttachmentUrl  String?
+  completionAttachmentName String?
+  completedAt              DateTime?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  owner                    Employee              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  task                     Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  alerts                   Alert[]
+  comments                 TaskInstanceComment[]
+  events                   TaskInstanceEvent[]
+
+  @@unique([taskId, scheduledFor])
+  @@index([ownerId, frequency])
+  @@index([ownerId, scheduledFor])
+  @@index([taskId])
+}
+
+model TaskInstanceComment {
+  id             String       @id @default(uuid())
+  taskInstanceId String
+  authorId       String
+  comment        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  author         Employee     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskInstanceId])
+  @@index([authorId])
+}
+
+model TaskInstanceEvent {
+  id             String       @id @default(uuid())
+  taskInstanceId String
+  actorId        String?
+  type           String
+  fromStatus     TaskStatus?
+  toStatus       TaskStatus?
+  note           String?
+  attachmentUrl  String?
+  attachmentName String?
+  createdAt      DateTime     @default(now())
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  actor          Employee?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([taskInstanceId])
+  @@index([actorId])
+  @@index([type])
+}
+
+model Alert {
+  id               String    @id @default(uuid())
+  type             AlertType
+  title            String
+  description      String
+  raisedById       String
+  organizationId   String?
+  severity         Severity
+  raiseCount       Int       @default(1)
+  taskInstanceId   String?
+  departmentId     String?
+  againstUserId    String?
+  isAbnormality    Boolean   @default(false)
+  deduplicationKey String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  raisedBy     Employee          @relation("AlertsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskInstance TaskInstance?     @relation(fields: [taskInstanceId], references: [id], onDelete: SetNull)
+  department   Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  againstUser  Employee?         @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
+  comments     AlertComment[]
+  occurrences  AlertOccurrence[]
+
+  @@index([raisedById])
+  @@index([organizationId])
+  @@index([taskInstanceId])
+  @@index([departmentId])
+  @@index([againstUserId])
+  @@index([isAbnormality])
+}
+
+model AlertOccurrence {
+  id                 String    @id @default(uuid())
+  alertId            String
+  raisedById         String
+  raisedAt           DateTime  @default(now())
+  acknowledgedById   String?
+  acknowledgedAt     DateTime?
+  acknowledgmentNote String?
+
+  alert          Alert     @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  raisedBy       Employee  @relation("AlertOccurrencesRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  acknowledgedBy Employee? @relation("AlertOccurrencesAcknowledged", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  @@index([alertId, raisedAt])
+  @@index([acknowledgedById])
+}
+
+model AlertComment {
+  id        String   @id @default(uuid())
+  alertId   String
+  authorId  String
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  alert  Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  author Employee @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@index([authorId])
+}
+
+enum AlertType {
+  BREAKDOWN
+  DELAY
+  QUALITY_ISSUE
+  WRONG_ENTRY
+  WRONG_DELIVERY
+  SAFETY_CONCERN
+  PROCESS_DEVIATION
+  MISSED_ACTIVITY
+  REPEATED_PROBLEM
+  DISCIPLINE_ISSUE
+  ABNORMAL_SITUATION
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  PLANNED
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  APPROVAL_PENDING
+  PARTLY_DONE
+  LESS_THAN_50
+  NOT_APPLICABLE
+  OVERDUE
+}
+
+enum ActivityStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ActivityScope {
+  ORGANISATION
+  DEPARTMENT
+  JOB_TITLE
+  EMPLOYEE
+}
+
+enum EmployeeActivityStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ViewLevel {
+  OWN
+  DEPARTMENT
+  ORGANIZATION
+}
+
+enum TaskPermissionRole {
+  ADMIN
+  MANAGEMENT
+  HOD
+  DIRECT_MANAGER
+  HIGHER_LEVEL_MANAGERS
+  OWNER
+  ANYONE
+  CUSTOM
+}
+
+model DwmsPermissionConfig {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  approverRoles             TaskPermissionRole[] @default([])
+  approverCustomEmployeeIds String[]             @default([])
+
+  alertViewLevel     ViewLevel @default(OWN)
+  analyticsViewLevel ViewLevel @default(DEPARTMENT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// DAILY GEMBA KAIZEN

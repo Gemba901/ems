@@ -1,5 +1,6 @@
+import { SentryExceptionCaptured } from '@sentry/nestjs';
+import type { ArgumentsHost } from '@nestjs/common';
 import {
-  ArgumentsHost,
   Catch,
   ExceptionFilter,
   HttpException,
@@ -8,6 +9,7 @@ import {
 @Catch()
 export class SafeExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger('HTTPError');
+  @SentryExceptionCaptured()
   catch(error: unknown, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse();
     const status = error instanceof HttpException ? error.getStatus() : 500;

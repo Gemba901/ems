@@ -56,6 +56,47 @@ export class WorkspaceDomainService {
     return { token, project, team, branch, base };
   }
 
+  private async vercel(
+    settings: { token: string; team: string },
+    path: string,
+    method = 'GET',
+    body?: object,
+  ) {
+    const url = new URL(path, 'https://api.vercel.com');
+    url.searchParams.set('teamId', settings.team);
+    try {
+      return await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${settings.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        redirect: 'error',
+        signal: AbortSignal.timeout(8_000),
+      });
+    } catch {
+      throw new WorkspaceDomainError('Vercel API connection failed');
+    }
+  }
+
+  // Frees the project domain slot of a signup that never became a company.
+  // The caller must first confirm no company uses this slug.
+  async removeDomain(slug: string): Promise<void> {
+    if (!this.enabled()) return;
+    if (getOrganizationSlugError(slug))
+      throw new WorkspaceDomainError('Invalid workspace slug');
+    const settings = this.settings();
+    const response = await this.vercel(
+      settings,
+      `/v9/projects/${encodeURIComponent(settings.project)}/domains/${slug}.${settings.base}`,
+      'DELETE',
+    );
+    await response.body?.cancel();
+    if (!response.ok && response.status !== 404)
+      throw new WorkspaceDomainError(`Vercel API HTTP ${response.status}`);
+  }
+
   async ensureReady(
     slug: string,
     reportStage?: (
@@ -70,24 +111,8 @@ export class WorkspaceDomainService {
     const project = encodeURIComponent(settings.project);
     const domainPath = `/v9/projects/${project}/domains/${hostname}`;
 
-    const api = async (path: string, method = 'GET', body?: object) => {
-      const url = new URL(path, 'https://api.vercel.com');
-      url.searchParams.set('teamId', settings.team);
-      try {
-        return await fetch(url, {
-          method,
-          headers: {
-            Authorization: `Bearer ${settings.token}`,
-            'Content-Type': 'application/json',
-          },
-          body: body ? JSON.stringify(body) : undefined,
-          redirect: 'error',
-          signal: AbortSignal.timeout(8_000),
-        });
-      } catch {
-        throw new WorkspaceDomainError('Vercel API connection failed');
-      }
-    };
+    const api = (path: string, method = 'GET', body?: object) =>
+      this.vercel(settings, path, method, body);
     const read = async <T>(response: Response): Promise<T> => {
       if (!response.ok) {
         await response.body?.cancel();

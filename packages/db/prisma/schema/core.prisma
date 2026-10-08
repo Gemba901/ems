@@ -1,0 +1,282 @@
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum TimeOfDay {
+  MORNING
+  AFTERNOON
+  EVENING
+  NIGHT
+}
+
+enum QuoteCategory {
+  MOTIVATION
+  PRODUCTIVITY
+  WELLNESS
+  CODING
+  LEADERSHIP
+  STUDY
+}
+
+enum ModuleType {
+  SIMS
+  EMS
+  CALENDAR
+  LEAVE
+  DWMS
+  STEEL
+  KAIZEN
+  SGA
+  WORK
+}
+
+enum CommitteeType {
+  QUALITY
+  COST
+  DELIVERY
+  SAFETY
+  MORALE
+  TECHNOLOGY
+  GENERAL
+}
+
+enum RoleName {
+  SUPER_ADMIN
+  ADMIN
+  MANAGEMENT
+  HR
+  HOD
+  EMPLOYEE
+}
+
+enum NotificationType {
+  ACTION_REQUIRED // user must do something
+  INFO // information update
+  REMINDER // time based nudge
+  ALERT // urgent/system-lever
+}
+
+// EMS: Employee Master Data
+enum EmploymentStatus {
+  ACTIVE
+  PROBATION
+  RESIGNED
+  TERMINATED
+  RETIRED
+  SUSPENDED
+  ABSCONDED
+  CONTRACT_ENDED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum SkillLevel {
+  LEVEL_1 // Learner
+  LEVEL_2 // Can Work with Support
+  LEVEL_3 // Can Work Independently
+  LEVEL_4 // Can Train Others
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+  CASUAL
+}
+
+enum TicketType {
+  SYSTEM_TICKET
+  COMPANY_TICKET
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  ARCHIVED
+}
+
+//organization
+model Organization {
+  files        FileAsset[]
+  id           String       @id @default(uuid())
+  name         String
+  shortName    String?
+  slug         String?      @unique
+  logoUrl      String?
+  industry     String?
+  email        String?
+  phone        String?
+  address      String?
+  status       OrgStatus    @default(ACTIVE)
+  modules      ModuleType[] @default([])
+  primaryColor String?      @default("#4F46E5")
+  timeZone     String       @default("Africa/Nairobi")
+  isAdminOrg   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  userOrganizations     UserOrganization[]
+  employees             Employee[]
+  departments           Department[]
+  suggestions           Suggestion[]
+  committees            SteeringCommittee[]
+  consultancyVisits     ConsultancyVisit[]
+  visitRequests         VisitRequest[]
+  visitMonthPlans       VisitMonthPlan[]
+  leaveRequests         LeaveRequest[]
+  leavePolicies         LeavePolicy[]
+  leaveSettings         LeaveSettings?
+  dwmsPermissionConfig  DwmsPermissionConfig?
+  calendarEvents        CalendarEvent[]
+  notices               Notice[]
+  alerts                Alert[]
+  tickets               Tickets[]
+  kaizens               Kaizen[]
+  sgas                  Sga[]
+  emsOnboardingBatches EmsOnboardingBatch[]
+  emsOnboardingRecords EmsOnboardingRecord[]
+  workProjects          WorkProject[]
+  attendanceRecords     AttendanceRecord[]
+  attendanceCorrections AttendanceCorrection[]
+  workSettings          WorkSettings?
+  workHolidays          WorkHoliday[]
+  workSites             WorkSite[]
+  workEmployeeProfiles  WorkEmployeeProfile[]
+  workHomeRequests      WorkHomeLocationRequest[]
+
+  // SIMS: single designated committee that SELECTED_FOR_SGA suggestions are forwarded to
+  sgaCommitteeId String?
+  sgaCommittee   SteeringCommittee? @relation("OrgSgaCommittee", fields: [sgaCommitteeId], references: [id], onDelete: SetNull)
+
+  steelProductionPlans        SteelProductionPlan[]
+  steelSourcingOrders         SteelSourcingOrder[]
+  suppliers                   Supplier[]
+  steelMaterialIntakes        SteelMaterialIntake[]
+  steelChargePreparations     SteelChargePreparation[]
+  steelMeltings               SteelMelting[]
+  steelHeatApprovals          SteelHeatApproval[]
+  furnaces                    Furnace[]
+  furnaceLinings              FurnaceLining[]
+  heatMaterialCharges         HeatMaterialCharge[]
+  heatCycleEvents             HeatCycleEvent[]
+  activities                  Activity[]
+  jobTitleActivities          JobTitleActivity[]
+  employeeActivityAssignments EmployeeActivityAssignment[]
+  activityIngestions          ActivityIngestion[]
+  activityIngestionRows       ActivityIngestionRow[]
+  customers                   Customer[]
+  dealers                     Dealer[]
+  steelLookups                SteelLookup[]
+  steelSupplierMaterials      SteelSupplierMaterial[]
+  steelQcdCriteria            SteelQcdCriteria[]
+  stockFulfilmentItems        StockFulfilmentItem[]
+  steelProducts               SteelProduct[]
+  steelProductSpecifications  SteelProductSpecification[]
+  steelProductionRoutes       SteelProductionRoute[]
+  steelMaterialMasters        SteelMaterialMaster[]
+  steelFinishedGoodsStocks    SteelFinishedGoodsStock[]
+}
+
+//specific user
+model User {
+  id       String  @id @default(uuid())
+  email    String? @unique
+  phone    String  @unique
+  password String?
+  name     String
+
+  organizations       UserOrganization[]
+  employees           Employee[]
+  emsBatchesUploaded  EmsOnboardingBatch[] @relation("EmsBatchUploadedBy")
+  createdVisits       ConsultancyVisit[]
+  visitRequests       VisitRequest[]
+  visitMonthPlans     VisitMonthPlan[]
+  calendarBlocks      CalendarBlock[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  reviewedLeaves      LeaveRequest[]       @relation("LeaveReviewer")
+
+  createdAt DateTime @default(now())
+}
+
+model RefreshToken {
+  id             String   @id @default(uuid())
+  tokenHash      String   @unique
+  userId         String
+  organizationId String
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Fixed-window request counters shared by every API instance. `key` is a
+// SHA-256 of the limit name plus subject, so no emails or IPs are stored.
+model RateLimitBucket {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model UserOrganization {
+  userId         String
+  organizationId String
+  roleId         Int
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  @@id([userId, organizationId])
+}
+
+model Role {
+  id   Int      @id
+  name RoleName @unique
+
+  userOrganizations UserOrganization[]
+  permissions       RolePermission[]
+}
+
+model Permission {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}

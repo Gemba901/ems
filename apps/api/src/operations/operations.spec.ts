@@ -61,6 +61,7 @@ describe('Operational boundaries', () => {
       organization: { findMany: async () => [] },
       onboardingRequest: { count: async () => 1 },
       onboardingMessage: { count: async () => 1 },
+      activityIngestion: { count: async () => 0 },
       scheduledJobRun: {
         findMany: async () => [{ failedAt: new Date(), completedAt: null }],
       },

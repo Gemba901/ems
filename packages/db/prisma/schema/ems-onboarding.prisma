@@ -1,0 +1,89 @@
+// EMS Standalone: Onboarding (Module 1 imports)
+enum EmsOnboardingBatchStatus {
+  DRAFT
+  VALIDATING
+  READY
+  PARTIALLY_REGISTERED
+  REGISTERED
+  CANCELLED
+}
+
+enum EmsOnboardingRecordStatus {
+  DRAFT
+  NEEDS_FIXING
+  READY
+  REGISTERED
+  EXCLUDED
+}
+
+model EmsOnboardingBatch {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  label          String?
+  sourceFileName String?
+  status         EmsOnboardingBatchStatus @default(DRAFT)
+
+  uploadedById String?
+  uploadedBy   User?   @relation("EmsBatchUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  records EmsOnboardingRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model EmsOnboardingRecord {
+  id             String             @id @default(uuid())
+  batchId        String
+  batch          EmsOnboardingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+
+  rowNumber Int?
+
+  // Module 1 — raw as imported, validated at promotion
+  companyCode     String?
+  plantBranchCode String?
+  employeeCode    String?
+  firstName       String?
+  middleName      String?
+  lastName        String?
+  mobileNumber           String?
+  workEmail       String?
+  gender                 String?
+  nationality            String?
+  currentDepartment      String?
+  hodName                String?
+  hodDesignation         String?
+  workArea               String?
+  subSection             String?
+  jobDesignation         String?
+  beesAccessLevel        String?
+  shift                  String?
+  reportingToName        String?
+  reportingToDesignation String?
+  employmentStatus       String?
+  employmentType         String?
+  reliever1Name          String?
+  reliever1Designation   String?
+  reliever2Name          String?
+  reliever2Designation   String?
+
+  status           EmsOnboardingRecordStatus @default(DRAFT)
+  validationErrors Json?
+  exclusionReason  String?
+
+  employeeId   String?   @unique
+  employee     Employee? @relation("EmsOnboardingRegisteredAs", fields: [employeeId], references: [id])
+  registeredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+  @@index([organizationId])
+}

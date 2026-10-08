@@ -1,0 +1,323 @@
+// Tracks how far the melting record has progressed through P05-A01..A14
+enum SteelMeltingStage {
+  A01_CONFIRM_FURNACE_AVAILABILITY
+  A02_FURNACE_LINING_CHECK
+  A03_FURNACE_SYSTEMS_CHECK
+  A04_PREVIOUS_HEAT_READINESS
+  A05_VERIFY_CHARGE_RECIPE
+  A06_LOAD_CHARGE
+  A07_START_MELTING
+  A08_MONITOR_POWER
+  A09_MONITOR_TEMPERATURE
+  A10_RECORD_ADDITIONS
+  A11_REMOVE_SLAG
+  A12_RECORD_MELT_OUTPUT
+  A13_CONFIRM_LIQUID_READY
+  A14_HANDOVER_TO_REFINING
+}
+
+enum SteelMeltingStatus {
+  DRAFT
+  IN_PROGRESS
+  ON_HOLD
+  CLOSED
+  CANCELLED
+}
+
+// Identifies each of the 14 melting activities for the audit trail
+enum SteelMeltingActivity {
+  A01
+  A02
+  A03
+  A04
+  A05
+  A06
+  A07
+  A08
+  A09
+  A10
+  A11
+  A12
+  A13
+  A14
+  STATUS_OVERRIDE
+}
+
+// One record per furnace heat, created against a closed P04 charge
+// preparation, carried through P05-A01 -> P05-A14. Hands off to P06 (heat
+// approval / refining) once closed (no P06 model exists in this repository
+// yet).
+model SteelMelting {
+  id                  String             @id @default(uuid())
+  heatInProcessNumber String             @unique
+  organizationId      String
+  createdById         String
+  chargePreparationId String             @unique
+  stage               SteelMeltingStage  @default(A01_CONFIRM_FURNACE_AVAILABILITY)
+  status              SteelMeltingStatus @default(DRAFT)
+
+  // Snapshot of the parent charge preparation at creation time
+  chargeNumberSnapshot         String?
+  recipeScrapWeightSnapshot    Float?
+  recipeDriWeightSnapshot      Float?
+  recipeAlloyWeightSnapshot    Float?
+  recipeAdditiveWeightSnapshot Float?
+
+  // P05-A01 — Confirm furnace availability
+  furnaceId      String?
+  plannedHeatRef String?
+  operatorName   String?
+  shift          String?
+
+  // Optional structured furnace/lining selection (master data), alongside the
+  // free-text furnaceId/liningCampaignId fields above which are kept for
+  // backward compatibility with records created before Furnace/FurnaceLining
+  // existed. New heats should prefer furnaceRefId/liningRefId.
+  furnaceRefId String?
+  liningRefId  String?
+
+  // P05-A02 — Furnace lining check
+  liningCampaignId      String?
+  liningHeatCount       Int?
+  liningVisualCondition String?
+
+  // P05-A03 — Furnace systems check
+  waterPressureFlowOk Boolean?
+  powerSystemOk       Boolean?
+  hydraulicSystemOk   Boolean?
+  alarmsOk            Boolean?
+
+  // P05-A04 — Previous heat readiness
+  previousHeatRef      String?
+  slagCleaningStatus   String?
+  readinessDelayReason String?
+
+  // P05-A05 — Verify charge recipe
+  materialLotRef         String?
+  actualWeightVsRecipeOk Boolean?
+
+  // P05-A06 — Load charge
+  loadingTime      DateTime?
+  loadingEquipment String?
+  chargeSequence   String?
+
+  // P05-A07 — Start melting
+  meltingStartTime DateTime?
+  meltingFurnaceId String?
+  meltingOperator  String?
+  meltingChargeId  String?
+
+  // P05-A08 — Monitor power
+  powerKwh            Float?
+  powerElapsedMinutes Float?
+  powerTonnage        Float?
+  powerInterruptions  String?
+
+  // P05-A09 — Monitor temperature
+  temperatureCelsius        Float?
+  temperatureElapsedMinutes Float?
+  temperatureDelayReason    String?
+
+  // P05-A10 — Record additions (optional/conditional — zero additions allowed)
+  additions Json?
+
+  // P05-A11 — Remove slag (optional/conditional — "not applicable" allowed)
+  slagRemovalTime      DateTime?
+  slagQuantityEstimate Float?
+  slagIssueFound       String?
+  slagNotApplicable    Boolean?
+
+  // P05-A12 — Record melt output
+  outputChargeId         String?
+  outputFurnaceId        String?
+  outputMeltTimeMinutes  Float?
+  outputEnergyTotalKwh   Float?
+  outputAdditionsSummary String?
+  outputWeightTonnes     Float?
+
+  // P05-A13 — Confirm liquid ready
+  liquidReady              Boolean?
+  liquidTemperatureCelsius Float?
+  liquidOperatorConfirmed  Boolean?
+
+  // P05-A14 — Refining handover (irreversible)
+  handoverToRefiningAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization      Organization              @relation(fields: [organizationId], references: [id])
+  createdBy         Employee                  @relation("SteelMeltingCreatedBy", fields: [createdById], references: [id])
+  chargePreparation SteelChargePreparation    @relation(fields: [chargePreparationId], references: [id])
+  furnace           Furnace?                  @relation(fields: [furnaceRefId], references: [id])
+  lining            FurnaceLining?            @relation(fields: [liningRefId], references: [id])
+  activityLogs      SteelMeltingActivityLog[]
+  materialCharges   HeatMaterialCharge[]
+  cycleEvents       HeatCycleEvent[]
+  heatApproval      SteelHeatApproval?
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([organizationId, status])
+  @@index([furnaceRefId])
+  @@index([liningRefId])
+}
+
+// Audit trail: every activity performed against a melting record is recorded here
+model SteelMeltingActivityLog {
+  id            String               @id @default(uuid())
+  meltingId     String
+  activity      SteelMeltingActivity
+  performedById String
+  notes         String?
+  data          Json?
+  createdAt     DateTime             @default(now())
+
+  melting     SteelMelting @relation(fields: [meltingId], references: [id], onDelete: Cascade)
+  performedBy Employee     @relation("SteelMeltingPerformedBy", fields: [performedById], references: [id])
+
+  @@index([meltingId])
+}
+
+enum FurnaceStatus {
+  READY
+  MAINTENANCE
+  DOWN
+  RETIRED
+}
+
+// Master data: a physical furnace. Selectable on P05-A01/A02 in place of the
+// earlier free-text furnaceId fields on SteelMelting (kept there for
+// backward compatibility with records created before this model existed).
+model Furnace {
+  id             String        @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  status         FurnaceStatus @default(READY)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  linings      FurnaceLining[]
+  meltings     SteelMelting[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+enum FurnaceLiningStatus {
+  ACTIVE
+  RETIRED
+}
+
+// A lining campaign installed on a furnace at a point in time and reused
+// across multiple heats until relined. heatsCompleted/condition are raw
+// measurements — lining "efficiency" is not computed here since no formula
+// for it is defined by the business yet.
+model FurnaceLining {
+  id                   String              @id @default(uuid())
+  organizationId       String
+  furnaceId            String
+  // Optional human-readable identifier for the lining campaign (e.g. a
+  // physical tag/batch code). Nullable, no uniqueness constraint — existing
+  // linings recorded before this field existed have no code, and none is
+  // enforced going forward either.
+  code                 String?
+  installedAt          DateTime
+  material             String?
+  heatsCompleted       Int                 @default(0)
+  condition            String?
+  thicknessRemainingMm Float?
+  inspectionNotes      String?
+  status               FurnaceLiningStatus @default(ACTIVE)
+  retiredAt            DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  furnace      Furnace        @relation(fields: [furnaceId], references: [id])
+  meltings     SteelMelting[]
+
+  @@index([organizationId])
+  @@index([furnaceId])
+}
+
+enum HeatChargeMaterialCategory {
+  SCRAP
+  RAW_METAL
+  ALLOY
+  ADDITIVE
+  OTHER
+}
+
+// One row per material charged into a heat, from initial charging (P05-A06)
+// through mid-heat additions (P05-A10). Supports multiple materials per
+// heat, unlike the aggregate recipe-weight snapshot already on SteelMelting.
+model HeatMaterialCharge {
+  id               String                     @id @default(uuid())
+  organizationId   String
+  meltingId        String
+  sequence         Int
+  material         String
+  materialCategory HeatChargeMaterialCategory
+  grade            String?
+  batchRef         String?
+  plannedQuantity  Float?
+  actualQuantity   Float
+  unit             String
+  chargedAt        DateTime                   @default(now())
+  chargedById      String
+  createdAt        DateTime                   @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  melting      SteelMelting @relation(fields: [meltingId], references: [id], onDelete: Cascade)
+  chargedBy    Employee     @relation("HeatMaterialChargeChargedBy", fields: [chargedById], references: [id])
+
+  @@index([organizationId])
+  @@index([meltingId])
+}
+
+enum HeatCycleEventType {
+  HEAT_STARTED
+  FURNACE_CHARGING
+  HEATING_STARTED
+  TEMPERATURE_READING
+  MATERIAL_ADDITION
+  ADJUSTMENT
+  ALARM
+  DELAY
+  OPERATOR_INTERVENTION
+  TARGET_TEMPERATURE_REACHED
+  TAPPING_STARTED
+  TAPPING_COMPLETED
+  HEAT_COMPLETED
+  OTHER
+}
+
+// Chronological operational event log for a heat cycle — temperature
+// readings, alarms, delays, interventions, additions. Distinct from
+// SteelMeltingActivityLog, which audits stage-transition actions rather than
+// free-form events occurring within a stage.
+model HeatCycleEvent {
+  id                 String             @id @default(uuid())
+  organizationId     String
+  meltingId          String
+  eventType          HeatCycleEventType
+  occurredAt         DateTime           @default(now())
+  temperatureCelsius Float?
+  quantity           Float?
+  unit               String?
+  recordedById       String
+  notes              String?
+  createdAt          DateTime           @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  melting      SteelMelting @relation(fields: [meltingId], references: [id], onDelete: Cascade)
+  recordedBy   Employee     @relation("HeatCycleEventRecordedBy", fields: [recordedById], references: [id])
+
+  @@index([organizationId])
+  @@index([meltingId])
+  @@index([meltingId, occurredAt])
+}

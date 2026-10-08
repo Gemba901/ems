@@ -3,7 +3,14 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { AlertType, NotificationType, Severity, TaskStatus, ViewLevel } from 'db';
+import {
+  ActivityScope,
+  AlertType,
+  NotificationType,
+  Severity,
+  TaskStatus,
+  ViewLevel,
+} from 'db';
 import type { Prisma } from 'db';
 import {
   AcknowledgeAlertOccurrenceDto,
@@ -12,6 +19,7 @@ import {
 } from '../dto/dwms.dto';
 import { UserPayload } from './base.service';
 import { DwmsDirectoryService } from './directory.service';
+import { resolveTaskCategory } from './task.service';
 
 const employeeSelect = {
   id: true,
@@ -572,27 +580,37 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       ...taskWhere,
       task: { assignedById: { not: null } },
     };
-    const routineTaskWhere: Prisma.TaskInstanceWhereInput = {
-      ...taskWhere,
-      task: { activityId: { not: null }, assignedById: null },
+    const routineTaskWhere: Prisma.TaskWhereInput = {
+      ownerId: employeeId,
+      isActive: true,
+      assignedById: null,
+      activity: {
+        is: {
+          scope: {
+            in: [
+              ActivityScope.ORGANISATION,
+              ActivityScope.DEPARTMENT,
+              ActivityScope.JOB_TITLE,
+              ActivityScope.EMPLOYEE,
+            ],
+          },
+        },
+      },
     };
     const alertWhere = (extra: Prisma.AlertWhereInput): Prisma.AlertWhereInput => ({
       organizationId: user.organizationId, ...extra,
     });
     const currentWhere = alertWhere({ againstUserId: employeeId, isAbnormality: false });
     const abnormalWhere = alertWhere({ againstUserId: employeeId, isAbnormality: true });
-    const [routineTasks, routineTaskCount, assignedTasks, assignedTaskCount, current, currentCount, abnormal, abnormalCount, activities] =
+    const [routineTaskAllocations, assignedTasks, assignedTaskCount, current, currentCount, abnormal, abnormalCount, activities] =
       await Promise.all([
-        this.prisma.taskInstance.findMany({
+        this.prisma.task.findMany({
           where: routineTaskWhere,
           include: {
-            task: { include: { owner: true, assignedBy: true, approvedBy: true, activity: true, department: true } },
-            comments: true, events: true, alerts: { orderBy: { createdAt: 'desc' } },
+            activity: true,
           },
-          orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
-          skip: (pages.routineWork - 1) * pageSize, take: pageSize,
+          orderBy: [{ title: 'asc' }, { createdAt: 'asc' }],
         }),
-        this.prisma.taskInstance.count({ where: routineTaskWhere }),
         this.prisma.taskInstance.findMany({
           where: assignedTaskWhere,
           include: {
@@ -609,6 +627,22 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
         this.prisma.alert.count({ where: abnormalWhere }),
         this.listEmployeeRoleActivities(user, employeeId),
       ]);
+    const routineTasksByAllocation = new Map<
+      string,
+      (typeof routineTaskAllocations)[number]
+    >();
+    routineTaskAllocations.forEach((task) => {
+      const allocationId = task.activityId ?? task.id;
+      if (!routineTasksByAllocation.has(allocationId)) {
+        routineTasksByAllocation.set(allocationId, task);
+      }
+    });
+    const uniqueRoutineTasks = Array.from(routineTasksByAllocation.values());
+    const routineTaskCount = uniqueRoutineTasks.length;
+    const routineTasks = uniqueRoutineTasks.slice(
+      (pages.routineWork - 1) * pageSize,
+      pages.routineWork * pageSize,
+    );
     const pagination = (page: number, count: number) => ({
       page, pageSize, totalItems: count, totalPages: Math.max(1, Math.ceil(count / pageSize)),
     });
@@ -633,7 +667,21 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
         currentAlerts: pagination(pages.currentAlerts, currentCount),
         abnormalities: pagination(pages.abnormalities, abnormalCount),
       },
-      routineWork: routineTasks.map((item) => this.serializeTaskInstance(item.task, item)),
+      routineWork: routineTasks.map((task) => ({
+        taskId: task.id,
+        title: task.title,
+        description: task.description,
+        frequency: task.frequency,
+        taskCategory: resolveTaskCategory(task),
+        activity: task.activity
+          ? {
+              id: task.activity.id,
+              name: task.activity.name,
+              code: task.activity.code,
+              scope: task.activity.scope,
+            }
+          : null,
+      })),
       assignedTasks: assignedTasks.map((item) => this.serializeTaskInstance(item.task, item)),
       currentAlerts: current.map((item) => this.serializeAlert(item)),
       abnormalities: abnormal.map((item) => this.serializeAlert(item)),

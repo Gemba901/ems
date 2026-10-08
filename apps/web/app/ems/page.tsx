@@ -135,7 +135,7 @@ export default function EmsDashboardPage() {
             href="/ems/onboarding"
             className="bg-white border border-slate-100 rounded-2xl shadow-sm px-5 py-4 hover:border-blue-200 transition-colors"
           >
-            <p className="font-semibold text-slate-800">Onboarding imports</p>
+            <p className="font-semibold text-slate-800">BEES Onboarding imports</p>
             <p className="text-sm text-slate-500">Bulk-load employee data for registration</p>
           </Link>
         </div>

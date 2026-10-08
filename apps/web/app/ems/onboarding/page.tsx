@@ -7,8 +7,10 @@ import { useAuthStore } from "@/store/auth.store";
 import {
   EmsService, OnboardingBatchSummary, OnboardingBatchStatus, BATCH_STATUS_LABELS,
 } from "@/services/ems.service";
-import { ArrowLeft, Loader2, FileSpreadsheet } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Ban, Loader2, FileSpreadsheet, Trash2, Upload } from "lucide-react";
+
 
 function BatchStatusPill({ status }: { status: OnboardingBatchStatus }) {
   const colour =
@@ -33,7 +35,24 @@ export default function EmsOnboardingPage() {
     enabled: !!accessToken,
   });
 
-  const batches: OnboardingBatchSummary[] = data ?? [];
+  const [showCancelled, setShowCancelled] = useState(false);
+  const queryClient = useQueryClient();
+
+  const cancel = useMutation({
+    mutationFn: (batchId: string) => EmsService.cancelOnboardingBatch(batchId, accessToken!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] }),
+  });
+
+  const remove = useMutation({
+    mutationFn: (batchId: string) => EmsService.deleteOnboardingBatch(batchId, accessToken!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] }),
+  });
+
+  const allBatches: OnboardingBatchSummary[] = data ?? [];
+  const batches = showCancelled
+    ? allBatches
+    : allBatches.filter((b) => b.status !== "CANCELLED");
+  const cancelledCount = allBatches.filter((b) => b.status === "CANCELLED").length;
   const error = queryError ? (queryError as any).message : null;
 
   return (
@@ -44,10 +63,16 @@ export default function EmsOnboardingPage() {
           <Link href="/ems" className="text-slate-400 hover:text-slate-600 transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Onboarding imports</h1>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-slate-900">BEES Onboarding imports</h1>
             <p className="text-sm text-slate-500">Employee data uploaded for registration</p>
           </div>
+          <Link
+            href="/ems/onboarding/new"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700"
+          >
+            <Upload className="h-3.5 w-3.5" /> New import
+          </Link>
         </div>
 
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
@@ -90,13 +115,43 @@ export default function EmsOnboardingPage() {
                       <td className="px-4 py-3 text-slate-400 text-xs">
                         {new Date(batch.createdAt).toLocaleDateString()}
                       </td>
+
                       <td className="px-5 py-3 text-right">
-                        <Link
-                          href={`/ems/onboarding/${batch.id}`}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                        >
-                          Open
-                        </Link>
+                        <div className="flex items-center justify-end gap-3">
+                          <Link
+                            href={`/ems/onboarding/${batch.id}`}
+                            className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                          >
+                            Open
+                          </Link>
+                          {batch.status === "CANCELLED" ? (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Delete "${batch.label ?? "this import"}" permanently?`)) {
+                                  remove.mutate(batch.id);
+                                }
+                              }}
+                              disabled={remove.isPending}
+                              title="Delete permanently"
+                              className="text-slate-300 hover:text-red-600 disabled:opacity-40"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Cancel "${batch.label ?? "this import"}"?`)) {
+                                  cancel.mutate(batch.id);
+                                }
+                              }}
+                              disabled={cancel.isPending}
+                              title="Cancel this import"
+                              className="text-slate-300 hover:text-amber-600 disabled:opacity-40"
+                            >
+                              <Ban className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -109,6 +164,17 @@ export default function EmsOnboardingPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {cancelledCount > 0 && (
+            <div className="px-5 py-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowCancelled((v) => !v)}
+                className="text-xs font-medium text-slate-500 hover:text-slate-700"
+              >
+                {showCancelled ? "Hide" : "Show"} {cancelledCount} cancelled
+              </button>
             </div>
           )}
         </div>

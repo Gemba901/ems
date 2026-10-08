@@ -425,6 +425,46 @@ export const EmsService = {
     }, token);
     return handleResponse(res);
   },
+
+  async addOnboardingRecords(
+    batchId: string,
+    data: { records: (UpdateOnboardingRecordPayload & { rowNumber?: number })[] },
+    token: string,
+  ): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${batchId}/records`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async registerOnboardingBatch(
+    id: string,
+    token: string,
+  ): Promise<{ registered: number; failed: number; batch: OnboardingBatchDetail }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/register`, {
+      method: "POST",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async cancelOnboardingBatch(id: string, token: string): Promise<OnboardingBatchSummary> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/cancel`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+async deleteOnboardingBatch(id: string, token: string): Promise<{ deleted: boolean }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
 };
 
 // ── Completion colour helpers ─────────────────────────────────────────────────
@@ -449,3 +489,5 @@ export function completionRing(pct: number): string {
   if (pct >= 75) return "ring-amber-200";
   return "ring-red-200";
 }
+
+

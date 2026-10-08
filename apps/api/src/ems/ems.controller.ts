@@ -14,7 +14,7 @@ import { RequiresModule } from 'src/auth/decorators/module.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
-import { Post } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
+import { Post, Delete } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
 import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, 
   UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto } from './dto/onboarding.dto';
 
@@ -146,5 +146,35 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.includeOnboardingRecord(user.organizationId, id);
+  }
+
+  /** POST /ems/onboarding/batches/:id/register — turn ready records into employees */
+  @Post('onboarding/batches/:id/register')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async registerOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.registerOnboardingBatch(user.organizationId, id);
+  }
+
+  /** PATCH /ems/onboarding/batches/:id/cancel — abandon an import */
+  @Patch('onboarding/batches/:id/cancel')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async cancelOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.cancelOnboardingBatch(user.organizationId, id);
+  }
+
+  /** DELETE /ems/onboarding/batches/:id — remove a cancelled import */
+  @Delete('onboarding/batches/:id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  async deleteOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.deleteOnboardingBatch(user.organizationId, id);
   }
 }

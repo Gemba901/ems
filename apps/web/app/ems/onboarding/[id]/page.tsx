@@ -10,7 +10,7 @@ import {
   BATCH_STATUS_LABELS, UpdateOnboardingRecordPayload,
 } from "@/services/ems.service";
 import {
-  ArrowLeft, Loader2, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Ban, Undo2,
+  ArrowLeft, Loader2, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Ban, Undo2, UserPlus,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -164,7 +164,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const save = useMutation({
     mutationFn: (vars: { recordId: string; data: UpdateOnboardingRecordPayload }) =>
       EmsService.updateOnboardingRecord(vars.recordId, vars.data, accessToken!),
-    onSuccess: (updated) => queryClient.setQueryData(queryKey, updated),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKey, updated);
+      setOpenRow(null);
+    }, 
   });
 
   const exclude = useMutation({
@@ -178,12 +181,18 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     onSuccess: (updated) => queryClient.setQueryData(queryKey, updated),
   });
 
+  const register = useMutation({
+    mutationFn: () => EmsService.registerOnboardingBatch(id, accessToken!),
+    onSuccess: (result) => queryClient.setQueryData(queryKey, result.batch),
+  });
+
   const error = queryError ? (queryError as any).message : null;
   const records: OnboardingRecord[] = batch?.records ?? [];
   const busy = save.isPending || exclude.isPending || include.isPending;
 
   const readyCount = records.filter((r) => r.status === "READY").length;
   const problemCount = records.filter((r) => r.status === "NEEDS_FIXING").length;
+  const registeredCount = records.filter((r) => r.status === "REGISTERED").length;
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
@@ -197,9 +206,15 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             <h1 className="text-2xl font-bold text-slate-900">{batch?.label ?? "Import"}</h1>
             <p className="text-sm text-slate-500">
               {batch
-                ? `${records.length} records · ${readyCount} ready · ${problemCount} need fixing · ${BATCH_STATUS_LABELS[batch.status]}`
+                ? `${records.length} records · ${readyCount} ready · ${problemCount} need fixing · ${registeredCount} registered · ${BATCH_STATUS_LABELS[batch.status]}`
                 : "Loading…"}
             </p>
+            {register.isSuccess && (
+              <p className="text-xs text-emerald-700">
+                {register.data.registered} registered
+                {register.data.failed > 0 && `, ${register.data.failed} failed`}
+              </p>
+          )}
           </div>
           <button
             onClick={() => validate.mutate()}
@@ -209,6 +224,25 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             {validate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             Validate all
           </button>
+
+          <button
+            onClick={() => register.mutate()}
+            disabled={register.isPending || readyCount === 0}
+            title={readyCount === 0 ? "No records are ready to register" : undefined}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {register.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+            Register {readyCount}
+          </button>
+
+          {/*<button
+            disabled
+            title="Not implemented yet"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Register {readyCount}
+          </button>*/}
         </div>
 
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">

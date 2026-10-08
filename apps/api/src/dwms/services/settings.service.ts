@@ -26,8 +26,13 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
     return configured;
   }
 
-  async getDwmsAccessCapabilities(user: UserPayload) {
-    const employee = await this.getEmployee(user.userId, user.organizationId);
+  async getDwmsAccessCapabilities(
+    user: UserPayload,
+    currentEmployee?: { id: string; departmentId?: string | null },
+  ) {
+    const employee =
+      currentEmployee ??
+      (await this.getEmployee(user.userId, user.organizationId));
     const hasEmployeePerformanceRole =
       this.getDwmsRole(user.roleLevel) === 'MANAGEMENT';
     const organizationEmployeesPromise: Promise<Array<{ id: string }>> =
@@ -65,8 +70,7 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
       hasReportees: teamEmployeeIds.length > 0,
       teamPerformanceEmployeeIds: teamEmployeeIds,
       canViewEmployeePerformance:
-        hasEmployeePerformanceRole &&
-        employeePerformanceEmployeeIds.length > 0,
+        hasEmployeePerformanceRole && employeePerformanceEmployeeIds.length > 0,
       employeePerformanceEmployeeIds,
     };
   }

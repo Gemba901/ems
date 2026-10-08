@@ -1,5 +1,6 @@
 ﻿import { NotFoundException } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { TaskStatus, ViewLevel, type Prisma } from 'db';
 import {
   addUtcDays,
@@ -34,6 +35,8 @@ const TASK_BREAKDOWN_STATUS = {
 
 type TaskBreakdownStatus =
   (typeof TASK_BREAKDOWN_STATUS)[keyof typeof TASK_BREAKDOWN_STATUS];
+
+type EmployeeDashboardView = 'personal' | 'team' | 'both';
 
 const TASK_BREAKDOWN_LABELS: Record<TaskBreakdownStatus, string> = {
   NOT_ACKNOWLEDGED: 'Not Acknowledged',
@@ -76,8 +79,11 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
 
   // Dashboard calculations
   async getOverviewStats(user: UserPayload, rawDays?: string) {
-    await this.getEmployee(user.userId, user.organizationId);
-    const access = await this.getDwmsAccessCapabilities(user);
+    const currentEmployee = await this.getEmployee(
+      user.userId,
+      user.organizationId,
+    );
+    const access = await this.getDwmsAccessCapabilities(user, currentEmployee);
     if (access.analyticsViewLevel !== ViewLevel.ORGANIZATION) {
       throw new ForbiddenException('Organization analytics access is required');
     }
@@ -94,7 +100,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     });
     const userIds = members.map((m) => m.id);
 
-    const summary = await this.getPerformanceMetrics(
+    const metricRows = await this.loadPerformanceMetricRows(
       userIds,
       user.organizationId,
       timeZone,
@@ -102,6 +108,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       days,
       true,
     );
+    const summary = this.calculatePerformanceMetrics(metricRows);
     const taskCategoryBreakdown = await this.getTaskCategoryStatusBreakdown(
       userIds,
       timeZone,
@@ -120,46 +127,30 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       orderBy: { name: 'asc' },
     });
 
-    const departmentCompliance = await Promise.all(
-      departments.map(async (department) => {
-        const departmentMembers = members.filter(
-          (member) => member.departmentId === department.id,
-        );
-        const metrics = await this.getPerformanceMetrics(
+    const departmentCompliance = departments.map((department) => {
+      const departmentMembers = members.filter(
+        (member) => member.departmentId === department.id,
+      );
+      const metrics = this.calculatePerformanceMetrics(
+        this.filterPerformanceMetricRows(
+          metricRows,
           departmentMembers.map((member) => member.id),
-          user.organizationId,
-          timeZone,
-          department.id,
-          days,
-        );
+        ),
+      );
 
-        return {
-          id: department.id,
-          name: department.name,
-          ...metrics,
-        };
-      }),
-    );
+      return {
+        id: department.id,
+        name: department.name,
+        ...metrics,
+      };
+    });
 
-    const employeeScoreboard = await Promise.all(
-      members.map(async (member) => {
-        const metrics = await this.getPerformanceMetrics(
-          [member.id],
-          user.organizationId,
-          timeZone,
-          undefined,
-          days,
-        );
-
-        return {
-          id: member.id,
-          name: `${member.firstName} ${member.lastName}`.trim(),
-          email: member.email,
-          department: member.department?.name ?? 'Unassigned',
-          role: member.jobTitle ?? 'Employee',
-          ...metrics,
-        };
-      }),
+    const employeeScoreboard = await this.getEmployeeScoreboard(
+      userIds,
+      user.organizationId,
+      timeZone,
+      days,
+      metricRows,
     );
 
     return {
@@ -181,7 +172,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       user.userId,
       user.organizationId,
     );
-    const access = await this.getDwmsAccessCapabilities(user);
+    const access = await this.getDwmsAccessCapabilities(user, currentEmployee);
     if (
       !this.viewLevelAtLeast(access.analyticsViewLevel, ViewLevel.DEPARTMENT)
     ) {
@@ -208,13 +199,14 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     });
     const userIds = members.map((m) => m.id);
 
-    const summary = await this.getPerformanceMetrics(
+    const metricRows = await this.loadPerformanceMetricRows(
       userIds,
       user.organizationId,
       timeZone,
       deptId,
       days,
     );
+    const summary = this.calculatePerformanceMetrics(metricRows);
     const taskCategoryBreakdown = await this.getTaskCategoryStatusBreakdown(
       userIds,
       timeZone,
@@ -236,6 +228,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       user.organizationId,
       timeZone,
       days,
+      metricRows,
     );
 
     return {
@@ -250,7 +243,9 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     user: UserPayload,
     employeeId: string,
     rawDays?: string,
+    rawView?: string,
   ) {
+    const view = this.resolveEmployeeDashboardView(rawView);
     const currentEmployee = await this.getEmployee(
       user.userId,
       user.organizationId,
@@ -299,74 +294,60 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       }
     }
 
+    const includePersonal = view === 'personal' || view === 'both';
+    const includeTeam = view === 'team' || view === 'both';
     const resolvedEmployeeId = employee.id;
-    const summary = await this.getPerformanceMetrics(
-      [resolvedEmployeeId],
-      user.organizationId,
-      timeZone,
-      undefined,
-      days,
-    );
-    const taskCategoryBreakdown = await this.getTaskCategoryStatusBreakdown(
-      [resolvedEmployeeId],
-      timeZone,
-      days,
-    );
-    const trends = await this.getTrendsForEntity(
-      'employee',
-      resolvedEmployeeId,
-      user.organizationId,
-      timeZone,
-      days,
-    );
-    const reporteeIds =
-      employee.id === currentEmployee.id
-        ? await this.listTeamEmployeeIds(
-            currentEmployee,
+    const personalPromise = includePersonal
+      ? Promise.all([
+          this.getPerformanceMetrics(
+            [resolvedEmployeeId],
             user.organizationId,
-            user.roleLevel,
-          )
-        : (await this.listReporteesRecursive(resolvedEmployeeId))
-            .filter(
-              (reportee) => reportee.organizationId === user.organizationId,
-            )
-            .map((reportee) => reportee.id);
-    const reporteesPerformance = await this.getEmployeeScoreboard(
-      reporteeIds,
-      user.organizationId,
-      timeZone,
-      days,
-    );
-    const teamSummary = reporteeIds.length
-      ? await this.getPerformanceMetrics(
-          reporteeIds,
-          user.organizationId,
-          timeZone,
-          undefined,
-          days,
-        )
-      : null;
-    const teamTaskCategoryBreakdown = reporteeIds.length
-      ? await this.getTaskCategoryStatusBreakdown(reporteeIds, timeZone, days)
-      : null;
-    const teamTrends = reporteeIds.length
-      ? await this.getTrendsForEntity(
-          'team',
-          null,
-          user.organizationId,
+            timeZone,
+            undefined,
+            days,
+          ),
+          this.getTaskCategoryStatusBreakdown(
+            [resolvedEmployeeId],
+            timeZone,
+            days,
+          ),
+          this.getTrendsForEntity(
+            'employee',
+            resolvedEmployeeId,
+            user.organizationId,
+            timeZone,
+            days,
+          ),
+        ])
+      : Promise.resolve(null);
+    const teamPromise = includeTeam
+      ? this.getEmployeeTeamStats(
+          user,
+          currentEmployee,
+          resolvedEmployeeId,
           timeZone,
           days,
-          reporteeIds,
         )
-      : null;
+      : Promise.resolve(null);
+    const [personal, team] = await Promise.all([personalPromise, teamPromise]);
 
     return {
-      summary: { ...summary, taskCategoryBreakdown },
-      trends,
-      teamSummary: teamSummary
-        ? { ...teamSummary, taskCategoryBreakdown: teamTaskCategoryBreakdown }
-        : null,
-      teamTrends,
+      ...(personal
+        ? {
+            summary: {
+              ...personal[0],
+              taskCategoryBreakdown: personal[1],
+            },
+            trends: personal[2],
+          }
+        : {}),
+      ...(team
+        ? {
+            teamSummary: team.summary,
+            teamTrends: team.trends,
+            reporteesPerformance: team.reporteesPerformance,
+          }
+        : {}),
       employee: {
         id: employee.id,
         name: `${employee.firstName} ${employee.lastName}`.trim(),
@@ -374,6 +355,76 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         role: employee.jobTitle ?? 'Employee',
         departmentName: employee.department?.name ?? 'Unassigned',
       },
+    };
+  }
+
+  private resolveEmployeeDashboardView(
+    rawView?: string,
+  ): EmployeeDashboardView {
+    const view = rawView?.trim().toLowerCase() || 'both';
+    if (view === 'personal' || view === 'team' || view === 'both') return view;
+    throw new BadRequestException(
+      'Dashboard view must be personal, team, or both',
+    );
+  }
+
+  private async getEmployeeTeamStats(
+    user: UserPayload,
+    currentEmployee: { id: string; departmentId?: string | null },
+    resolvedEmployeeId: string,
+    timeZone: string,
+    days: number,
+  ) {
+    const reporteeIds =
+      resolvedEmployeeId === currentEmployee.id
+        ? await this.listTeamEmployeeIds(
+            currentEmployee,
+            user.organizationId,
+            user.roleLevel,
+          )
+        : await this.listReporteeIdsRecursive(
+            resolvedEmployeeId,
+            user.organizationId,
+          );
+
+    if (reporteeIds.length === 0) {
+      return {
+        summary: null,
+        trends: null,
+        reporteesPerformance: [],
+      };
+    }
+
+    const [metricRows, taskCategoryBreakdown, trends] = await Promise.all([
+      this.loadPerformanceMetricRows(
+        reporteeIds,
+        user.organizationId,
+        timeZone,
+        undefined,
+        days,
+      ),
+      this.getTaskCategoryStatusBreakdown(reporteeIds, timeZone, days),
+      this.getTrendsForEntity(
+        'team',
+        null,
+        user.organizationId,
+        timeZone,
+        days,
+        reporteeIds,
+      ),
+    ]);
+    const summary = this.calculatePerformanceMetrics(metricRows);
+    const reporteesPerformance = await this.getEmployeeScoreboard(
+      reporteeIds,
+      user.organizationId,
+      timeZone,
+      days,
+      metricRows,
+    );
+
+    return {
+      summary: { ...summary, taskCategoryBreakdown },
+      trends,
       reporteesPerformance,
     };
   }
@@ -383,38 +434,124 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     orgId: string,
     timeZone: string,
     days = 7,
+    prefetchedMetricRows?: Awaited<
+      ReturnType<DwmsDashboardService['loadPerformanceMetricRows']>
+    >,
   ) {
-    const employees = await this.prisma.employee.findMany({
-      where: { id: { in: userIds }, organizationId: orgId },
-      include: { department: true },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-    });
-
-    const rows = await Promise.all(
-      employees.map(async (employee) => {
-        const metrics = await this.getPerformanceMetrics(
-          [employee.id],
-          orgId,
-          timeZone,
-          undefined,
-          days,
-        );
-
-        return {
-          id: employee.id,
-          name: `${employee.firstName} ${employee.lastName}`.trim(),
-          email: employee.email,
-          role: employee.jobTitle ?? 'Employee',
-          departmentName: employee.department?.name ?? 'Unassigned',
-          department: employee.department?.name ?? 'Unassigned',
-          ...metrics,
-        };
+    const [employees, metricRows] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: { id: { in: userIds }, organizationId: orgId },
+        include: { department: true },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       }),
+      prefetchedMetricRows
+        ? Promise.resolve(prefetchedMetricRows)
+        : this.loadPerformanceMetricRows(
+            userIds,
+            orgId,
+            timeZone,
+            undefined,
+            days,
+          ),
+    ]);
+
+    const groupByEmployee = <T>(
+      values: T[],
+      getEmployeeId: (value: T) => string | null,
+    ) => {
+      const groups = new Map<string, T[]>();
+      values.forEach((value) => {
+        const employeeId = getEmployeeId(value);
+        if (!employeeId) return;
+        const group = groups.get(employeeId);
+        if (group) group.push(value);
+        else groups.set(employeeId, [value]);
+      });
+      return groups;
+    };
+    const rangeInstancesByEmployee = groupByEmployee(
+      metricRows.rangeInstances,
+      (row) => row.ownerId,
     );
+    const rangeTasksByEmployee = groupByEmployee(
+      metricRows.rangeTasks,
+      (row) => row.ownerId,
+    );
+    const completedAssignedByEmployee = groupByEmployee(
+      metricRows.completedAssignedInstances,
+      (row) => row.ownerId,
+    );
+    const alertsByEmployee = groupByEmployee(
+      metricRows.alertOccurrences,
+      (row) => row.alert.againstUserId,
+    );
+    const acknowledgedTasksByEmployee = groupByEmployee(
+      metricRows.acknowledgedTasks,
+      (row) => row.ownerId,
+    );
+    const completedInstancesByEmployee = groupByEmployee(
+      metricRows.completedInstances,
+      (row) => row.ownerId,
+    );
+
+    const rows = employees.map((employee) => {
+      const metrics = this.calculatePerformanceMetrics({
+        ...metricRows,
+        rangeInstances: rangeInstancesByEmployee.get(employee.id) ?? [],
+        rangeTasks: rangeTasksByEmployee.get(employee.id) ?? [],
+        completedAssignedInstances:
+          completedAssignedByEmployee.get(employee.id) ?? [],
+        alertOccurrences: alertsByEmployee.get(employee.id) ?? [],
+        acknowledgedTasks: acknowledgedTasksByEmployee.get(employee.id) ?? [],
+        completedInstances: completedInstancesByEmployee.get(employee.id) ?? [],
+      });
+
+      return {
+        id: employee.id,
+        name: `${employee.firstName} ${employee.lastName}`.trim(),
+        email: employee.email,
+        role: employee.jobTitle ?? 'Employee',
+        departmentName: employee.department?.name ?? 'Unassigned',
+        department: employee.department?.name ?? 'Unassigned',
+        ...metrics,
+      };
+    });
 
     return rows.sort(
       (a, b) => b.tasksPerformedTodayPercent - a.tasksPerformedTodayPercent,
     );
+  }
+
+  private filterPerformanceMetricRows(
+    rows: Awaited<
+      ReturnType<DwmsDashboardService['loadPerformanceMetricRows']>
+    >,
+    employeeIds: string[],
+  ) {
+    const employeeIdSet = new Set(employeeIds);
+    return {
+      ...rows,
+      rangeInstances: rows.rangeInstances.filter((row) =>
+        employeeIdSet.has(row.ownerId),
+      ),
+      rangeTasks: rows.rangeTasks.filter((row) =>
+        employeeIdSet.has(row.ownerId),
+      ),
+      completedAssignedInstances: rows.completedAssignedInstances.filter(
+        (row) => employeeIdSet.has(row.ownerId),
+      ),
+      alertOccurrences: rows.alertOccurrences.filter(
+        (row) =>
+          row.alert.againstUserId !== null &&
+          employeeIdSet.has(row.alert.againstUserId),
+      ),
+      acknowledgedTasks: rows.acknowledgedTasks.filter((row) =>
+        employeeIdSet.has(row.ownerId),
+      ),
+      completedInstances: rows.completedInstances.filter((row) =>
+        employeeIdSet.has(row.ownerId),
+      ),
+    };
   }
 
   private async getTaskCategoryStatusBreakdown(
@@ -570,7 +707,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
 
   private splitAlertOccurrencesBySequence<
     T extends { id: string; alertId: string; raisedAt: Date },
-  >(occurrences: T[]) {
+  >(occurrences: T[], priorCounts = new Map<string, number>()) {
     const occurrencesByAlert = new Map<string, T[]>();
 
     occurrences.forEach((occurrence) => {
@@ -590,7 +727,8 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
             a.id.localeCompare(b.id),
         )
         .forEach((occurrence, index) => {
-          if (index < 2) alerts.push(occurrence);
+          const sequence = (priorCounts.get(occurrence.alertId) ?? 0) + index;
+          if (sequence < 2) alerts.push(occurrence);
           else abnormalities.push(occurrence);
         });
     });
@@ -606,48 +744,180 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     days = 7,
     organizationWide = false,
   ) {
+    const rows = await this.loadPerformanceMetricRows(
+      userIds,
+      orgId,
+      timeZone,
+      departmentId,
+      days,
+      organizationWide,
+    );
+    return this.calculatePerformanceMetrics(rows);
+  }
+
+  private async loadPerformanceMetricRows(
+    userIds: string[],
+    orgId: string,
+    timeZone: string,
+    departmentId?: string,
+    days = 7,
+    organizationWide = false,
+  ) {
     const now = new Date();
     const { scheduleStart, scheduleEnd, instantStart, instantEnd } =
       getOrganizationDateRange(now, timeZone, days);
+    const alertScopeWhere = this.getAlertPerformanceScope(
+      orgId,
+      userIds,
+      departmentId,
+      organizationWide,
+    );
 
-    const rangeInstances = await this.prisma.taskInstance.findMany({
-      where: {
-        ownerId: { in: userIds },
-        scheduledFor: { gte: scheduleStart, lte: scheduleEnd },
-      },
-      include: {
-        task: {
-          select: {
-            assignedById: true,
-            acknowledgedAt: true,
-            activity: { select: { scope: true } },
+    const [
+      rangeInstances,
+      rangeTasks,
+      completedAssignedInstances,
+      priorAlertOccurrenceCounts,
+      alertOccurrences,
+      acknowledgedTasks,
+      completedInstances,
+    ] = await Promise.all([
+      this.prisma.taskInstance.findMany({
+        where: {
+          ownerId: { in: userIds },
+          scheduledFor: { gte: scheduleStart, lte: scheduleEnd },
+        },
+        include: {
+          task: {
+            select: {
+              assignedById: true,
+              acknowledgedAt: true,
+              activity: { select: { scope: true } },
+            },
           },
         },
-      },
-    });
-
-    const rangeTasks = await this.prisma.task.findMany({
-      where: {
-        ownerId: { in: userIds },
-        OR: [
-          { dueDate: { gte: scheduleStart, lte: scheduleEnd } },
-          { dueDate: null, createdAt: { gte: instantStart, lte: instantEnd } },
-          {
-            dueDate: { lt: scheduleStart },
-            status: { notIn: nonOverdueStatusValues },
+      }),
+      this.prisma.task.findMany({
+        where: {
+          ownerId: { in: userIds },
+          OR: [
+            { dueDate: { gte: scheduleStart, lte: scheduleEnd } },
+            {
+              dueDate: null,
+              createdAt: { gte: instantStart, lte: instantEnd },
+            },
+            {
+              dueDate: { lt: scheduleStart },
+              status: { notIn: nonOverdueStatusValues },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          ownerId: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          dueDate: true,
+          assignedById: true,
+          acknowledgedAt: true,
+        },
+      }),
+      this.prisma.taskInstance.findMany({
+        where: {
+          ownerId: { in: userIds },
+          scheduledFor: { gte: scheduleStart, lte: scheduleEnd },
+          status: TaskStatus.DONE,
+          completedAt: { not: null },
+        },
+        select: { ownerId: true, completedAt: true, dueAt: true },
+      }),
+      this.prisma.alertOccurrence.groupBy({
+        by: ['alertId'],
+        where: {
+          raisedAt: { lt: instantStart },
+          alert: alertScopeWhere,
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.alertOccurrence.findMany({
+        where: {
+          raisedAt: { gte: instantStart, lte: instantEnd },
+          alert: alertScopeWhere,
+        },
+        select: {
+          id: true,
+          alertId: true,
+          raisedAt: true,
+          acknowledgedAt: true,
+          alert: {
+            select: {
+              departmentId: true,
+              againstUserId: true,
+              taskInstanceId: true,
+            },
           },
-        ],
-      },
-      select: {
-        id: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        dueDate: true,
-        assignedById: true,
-        acknowledgedAt: true,
-      },
-    });
+        },
+      }),
+      this.prisma.task.findMany({
+        where: {
+          ownerId: { in: userIds },
+          assignedById: { not: null },
+          acknowledgedAt: { not: null },
+          createdAt: { gte: instantStart, lte: instantEnd },
+        },
+        select: {
+          ownerId: true,
+          createdAt: true,
+          acknowledgedAt: true,
+        },
+      }),
+      this.prisma.taskInstance.findMany({
+        where: {
+          ownerId: { in: userIds },
+          task: { assignedById: { not: null } },
+          status: { in: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
+          completedAt: { not: null, gte: instantStart, lte: instantEnd },
+        },
+        include: {
+          task: { select: { acknowledgedAt: true } },
+        },
+      }),
+    ]);
+
+    return {
+      now,
+      instantStart,
+      instantEnd,
+      rangeInstances,
+      rangeTasks,
+      completedAssignedInstances,
+      priorAlertOccurrenceCounts: new Map(
+        priorAlertOccurrenceCounts.map((row) => [row.alertId, row._count._all]),
+      ),
+      alertOccurrences,
+      acknowledgedTasks,
+      completedInstances,
+    };
+  }
+
+  private calculatePerformanceMetrics(
+    rows: Awaited<
+      ReturnType<DwmsDashboardService['loadPerformanceMetricRows']>
+    >,
+  ) {
+    const {
+      now,
+      instantStart,
+      instantEnd,
+      rangeInstances,
+      rangeTasks,
+      completedAssignedInstances,
+      priorAlertOccurrenceCounts,
+      alertOccurrences,
+      acknowledgedTasks,
+      completedInstances,
+    } = rows;
 
     const instanceTaskIds = new Set(rangeInstances.map((inst) => inst.taskId));
     const taskOnlyRows = rangeTasks.filter(
@@ -730,15 +1000,6 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     ).length;
     const overdueTasks = overdueInstances + overdueTaskOnly;
 
-    const completedAssignedInstances = await this.prisma.taskInstance.findMany({
-      where: {
-        ownerId: { in: userIds },
-        scheduledFor: { gte: scheduleStart, lte: scheduleEnd },
-        status: TaskStatus.DONE,
-        completedAt: { not: null },
-      },
-      select: { completedAt: true, dueAt: true },
-    });
     const completedOnTimeRate =
       completedAssignedInstances.length === 0
         ? null
@@ -751,37 +1012,13 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
           );
 
     // Alert occurrences for this scope. Every raise is counted, even after acknowledgment.
-    const alertScopeWhere = this.getAlertPerformanceScope(
-      orgId,
-      userIds,
-      departmentId,
-      organizationWide,
-    );
-    const alertOccurrences = await this.prisma.alertOccurrence.findMany({
-      where: {
-        raisedAt: { lte: instantEnd },
-        alert: alertScopeWhere,
-      },
-      select: {
-        id: true,
-        alertId: true,
-        raisedAt: true,
-        acknowledgedAt: true,
-        alert: {
-          select: {
-            departmentId: true,
-            againstUserId: true,
-            taskInstanceId: true,
-          },
-        },
-      },
-    });
     // Existing alert KPIs remain person/task based. Direct department and
     // organization targets are reported separately below.
     const employeeTargetOccurrences =
       this.employeeTargetOccurrences(alertOccurrences);
     const classifiedEmployeeOccurrences = this.splitAlertOccurrencesBySequence(
       employeeTargetOccurrences,
+      priorAlertOccurrenceCounts,
     );
     const isInReportRange = (occurrence: { raisedAt: Date }) =>
       occurrence.raisedAt >= instantStart && occurrence.raisedAt <= instantEnd;
@@ -826,19 +1063,6 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       averageOccurrenceAcknowledgement(abnormalityRows);
 
     // Avg Acknowledge Time
-    const acknowledgedTasks = await this.prisma.task.findMany({
-      where: {
-        ownerId: { in: userIds },
-        assignedById: { not: null },
-        acknowledgedAt: { not: null },
-        createdAt: { gte: instantStart, lte: instantEnd },
-      },
-      select: {
-        createdAt: true,
-        acknowledgedAt: true,
-      },
-    });
-
     let avgAcknowledgeTimeMin = 0;
     if (acknowledgedTasks.length > 0) {
       const totalAckDuration = acknowledgedTasks.reduce((acc, curr) => {
@@ -854,18 +1078,6 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
     }
 
     // Avg Close Time
-    const completedInstances = await this.prisma.taskInstance.findMany({
-      where: {
-        ownerId: { in: userIds },
-        task: { assignedById: { not: null } },
-        status: { in: [TaskStatus.DONE, TaskStatus.NOT_APPLICABLE] },
-        completedAt: { not: null, gte: instantStart, lte: instantEnd },
-      },
-      include: {
-        task: { select: { acknowledgedAt: true } },
-      },
-    });
-
     const completedTaskOnlyRows = taskOnlyRows.filter(
       (task) =>
         completedStatuses.has(task.status) && task.assignedById !== null,
@@ -966,7 +1178,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       userIds = [entityId!];
     } else if (entityType === 'department') {
       const members = await this.prisma.employee.findMany({
-        where: { departmentId: entityId! },
+        where: { departmentId: entityId!, organizationId: orgId },
         select: { id: true },
       });
       userIds = members.map((m) => m.id);
@@ -1005,23 +1217,52 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
       raisedAt: { lte: instantEnd },
     };
 
-    const allAlerts = await this.prisma.alertOccurrence.findMany({
-      where: alertsWhere,
-      select: {
-        id: true,
-        alertId: true,
-        raisedAt: true,
-        acknowledgedAt: true,
-        alert: {
-          select: {
-            againstUserId: true,
+    const [priorAlertOccurrenceCounts, allAlerts] = await Promise.all([
+      this.prisma.alertOccurrence.groupBy({
+        by: ['alertId'],
+        where: {
+          alert: alertWhere,
+          raisedAt: { lt: instantStart },
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.alertOccurrence.findMany({
+        where: {
+          ...alertsWhere,
+          OR: [
+            { raisedAt: { gte: instantStart } },
+            {
+              raisedAt: { lt: instantStart },
+              OR: [
+                { acknowledgedAt: null },
+                { acknowledgedAt: { gte: instantStart } },
+              ],
+            },
+          ],
+        },
+        select: {
+          id: true,
+          alertId: true,
+          raisedAt: true,
+          acknowledgedAt: true,
+          alert: {
+            select: {
+              againstUserId: true,
+            },
           },
         },
-      },
-    });
+      }),
+    ]);
     const employeeTargetAlerts = this.employeeTargetOccurrences(allAlerts);
-    const classifiedEmployeeAlerts =
-      this.splitAlertOccurrencesBySequence(employeeTargetAlerts);
+    const rangeEmployeeTargetAlerts = employeeTargetAlerts.filter(
+      (alert) => alert.raisedAt >= instantStart,
+    );
+    const classifiedEmployeeAlerts = this.splitAlertOccurrencesBySequence(
+      rangeEmployeeTargetAlerts,
+      new Map(
+        priorAlertOccurrenceCounts.map((row) => [row.alertId, row._count._all]),
+      ),
+    );
 
     const allTasks = await this.prisma.task.findMany({
       where: {
@@ -1044,6 +1285,76 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         assignedById: true,
         acknowledgedAt: true,
       },
+    });
+
+    const appendByKey = <T>(map: Map<string, T[]>, key: string, row: T) => {
+      const existing = map.get(key);
+      if (existing) existing.push(row);
+      else map.set(key, [row]);
+    };
+    const organizationDateKey = (value: Date) =>
+      toIsoDate(getUtcDateInTimeZone(value, timeZone));
+    const instancesBySchedule = new Map<
+      number,
+      (typeof allInstances)[number][]
+    >();
+    allInstances.forEach((instance) => {
+      const key = instance.scheduledFor.getTime();
+      const existing = instancesBySchedule.get(key);
+      if (existing) existing.push(instance);
+      else instancesBySchedule.set(key, [instance]);
+    });
+    const alertsByDate = new Map<
+      string,
+      (typeof classifiedEmployeeAlerts.alerts)[number][]
+    >();
+    classifiedEmployeeAlerts.alerts.forEach((alert) =>
+      appendByKey(alertsByDate, organizationDateKey(alert.raisedAt), alert),
+    );
+    const abnormalitiesByDate = new Map<
+      string,
+      (typeof classifiedEmployeeAlerts.abnormalities)[number][]
+    >();
+    classifiedEmployeeAlerts.abnormalities.forEach((alert) =>
+      appendByKey(
+        abnormalitiesByDate,
+        organizationDateKey(alert.raisedAt),
+        alert,
+      ),
+    );
+    const acknowledgedTasksByDate = new Map<
+      string,
+      (typeof allTasks)[number][]
+    >();
+    const completedTasksByDate = new Map<string, (typeof allTasks)[number][]>();
+    allTasks.forEach((task) => {
+      if (task.assignedById !== null && task.acknowledgedAt !== null) {
+        appendByKey(
+          acknowledgedTasksByDate,
+          organizationDateKey(task.createdAt),
+          task,
+        );
+      }
+      if (completedStatuses.has(task.status)) {
+        appendByKey(
+          completedTasksByDate,
+          organizationDateKey(task.updatedAt),
+          task,
+        );
+      }
+    });
+    const completedInstancesByDate = new Map<
+      string,
+      (typeof allInstances)[number][]
+    >();
+    allInstances.forEach((instance) => {
+      if (instance.completedAt) {
+        appendByKey(
+          completedInstancesByDate,
+          organizationDateKey(instance.completedAt),
+          instance,
+        );
+      }
     });
 
     const tasksPerformedToday: Array<{
@@ -1098,9 +1409,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         continue;
       }
 
-      const dayInsts = allInstances.filter(
-        (inst) => inst.scheduledFor.getTime() === scheduleDay.getTime(),
-      );
+      const dayInsts = instancesBySchedule.get(scheduleDay.getTime()) ?? [];
       const completionMetrics = calculateDoneTaskMetrics(dayInsts);
       const totalInsts = completionMetrics.total;
       const completedInsts = completionMetrics.completed;
@@ -1131,13 +1440,8 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         completedInsts === 0
           ? 0
           : Math.round((completedOnTime.length / completedInsts) * 100);
-      const dayAlertsCount = classifiedEmployeeAlerts.alerts.filter(
-        (alert) => alert.raisedAt >= dayStart && alert.raisedAt <= dayEnd,
-      ).length;
-      const dayAbnormalitiesCount =
-        classifiedEmployeeAlerts.abnormalities.filter(
-          (alert) => alert.raisedAt >= dayStart && alert.raisedAt <= dayEnd,
-        ).length;
+      const dayAlertsCount = alertsByDate.get(date)?.length ?? 0;
+      const dayAbnormalitiesCount = abnormalitiesByDate.get(date)?.length ?? 0;
       tasksPerformedToday.push({
         date,
         label,
@@ -1170,13 +1474,7 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         value: activeAlerts.length,
       });
 
-      const monthTasks = allTasks.filter(
-        (t) =>
-          t.createdAt >= dayStart &&
-          t.createdAt <= dayEnd &&
-          t.assignedById !== null &&
-          t.acknowledgedAt !== null,
-      );
+      const monthTasks = acknowledgedTasksByDate.get(date) ?? [];
       let ackVal = 0;
       if (monthTasks.length > 0) {
         const sum = monthTasks.reduce(
@@ -1200,18 +1498,8 @@ export abstract class DwmsDashboardService extends DwmsAlertsService {
         tasksPerformedToday.length - 1
       ].avgAcknowledgeTimeMin = ackVal;
 
-      const monthCompletedInsts = allInstances.filter(
-        (inst) =>
-          inst.completedAt !== null &&
-          inst.completedAt >= dayStart &&
-          inst.completedAt <= dayEnd,
-      );
-      const monthCompletedTasks = allTasks.filter(
-        (task) =>
-          completedStatuses.has(task.status) &&
-          task.updatedAt >= dayStart &&
-          task.updatedAt <= dayEnd,
-      );
+      const monthCompletedInsts = completedInstancesByDate.get(date) ?? [];
+      const monthCompletedTasks = completedTasksByDate.get(date) ?? [];
       const closeDurations = [
         ...monthCompletedInsts.map((curr) => {
           const instStart = curr.task?.acknowledgedAt ?? curr.createdAt;

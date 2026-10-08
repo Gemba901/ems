@@ -62,8 +62,15 @@ describe('DWMS employee performance access', () => {
       .spyOn(service as any, 'getTaskCategoryStatusBreakdown')
       .mockResolvedValue({});
     jest.spyOn(service as any, 'getTrendsForEntity').mockResolvedValue({});
-    jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([]);
+    jest
+      .spyOn(service as any, 'listReporteeIdsRecursive')
+      .mockResolvedValue([]);
     jest.spyOn(service as any, 'getEmployeeScoreboard').mockResolvedValue([]);
+    jest.spyOn(service as any, 'getEmployeeTeamStats').mockResolvedValue({
+      summary: null,
+      trends: null,
+      reporteesPerformance: [],
+    });
   }
 
   it.each(['MANAGEMENT', 'ADMIN', 'SUPER_ADMIN', 'HR'])(
@@ -127,25 +134,23 @@ describe('DWMS employee performance access', () => {
   });
 
   it('returns aggregate KPI and trend data for the employee reporting scope', async () => {
-    const performanceMetrics = jest
+    jest
       .spyOn(service as any, 'getPerformanceMetrics')
-      .mockResolvedValueOnce({ completionRate: 25 })
-      .mockResolvedValueOnce({ completionRate: 80 });
+      .mockResolvedValue({ completionRate: 25 });
     jest
       .spyOn(service as any, 'getTaskCategoryStatusBreakdown')
-      .mockResolvedValueOnce({ ASSIGNED_TASK: { total: 1 } })
-      .mockResolvedValueOnce({ ASSIGNED_TASK: { total: 4 } });
-    const trends = jest
-      .spyOn(service as any, 'getTrendsForEntity')
-      .mockResolvedValueOnce({ tasksPerformedToday: [{ value: 25 }] })
-      .mockResolvedValueOnce({ tasksPerformedToday: [{ value: 80 }] });
-    jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([
-      { id: 'direct', organizationId: 'org' },
-      { id: 'indirect', organizationId: 'org' },
-    ]);
+      .mockResolvedValue({ ASSIGNED_TASK: { total: 1 } });
     jest
-      .spyOn(service as any, 'getEmployeeScoreboard')
-      .mockResolvedValue([{ id: 'direct', completionRate: 80 }]);
+      .spyOn(service as any, 'getTrendsForEntity')
+      .mockResolvedValue({ tasksPerformedToday: [{ value: 25 }] });
+    jest.spyOn(service as any, 'getEmployeeTeamStats').mockResolvedValue({
+      summary: {
+        completionRate: 80,
+        taskCategoryBreakdown: { ASSIGNED_TASK: { total: 4 } },
+      },
+      trends: { tasksPerformedToday: [{ value: 80 }] },
+      reporteesPerformance: [{ id: 'direct', completionRate: 80 }],
+    });
 
     const result = await service.getEmployeeStats(baseUser, 'target', '7');
 
@@ -158,18 +163,120 @@ describe('DWMS employee performance access', () => {
         teamTrends: { tasksPerformedToday: [{ value: 80 }] },
       }),
     );
-    expect(performanceMetrics).toHaveBeenNthCalledWith(
-      2,
-      ['direct', 'indirect'],
+    expect(result.reporteesPerformance).toEqual([
+      { id: 'direct', completionRate: 80 },
+    ]);
+  });
+
+  it('skips team calculations for a personal-only report', async () => {
+    mockSuccessfulEmployeeReport();
+    const teamStats = jest.spyOn(service as any, 'getEmployeeTeamStats');
+
+    const result = await service.getEmployeeStats(
+      baseUser,
+      'target',
+      '7',
+      'personal',
+    );
+
+    expect(teamStats).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({ summary: expect.any(Object) }),
+    );
+    expect(result).not.toHaveProperty('teamSummary');
+    expect(result).not.toHaveProperty('reporteesPerformance');
+  });
+
+  it('skips personal calculations for a team-only report', async () => {
+    const performanceMetrics = jest.spyOn(
+      service as any,
+      'getPerformanceMetrics',
+    );
+    const taskBreakdown = jest.spyOn(
+      service as any,
+      'getTaskCategoryStatusBreakdown',
+    );
+    const trends = jest.spyOn(service as any, 'getTrendsForEntity');
+    jest.spyOn(service as any, 'getEmployeeTeamStats').mockResolvedValue({
+      summary: { completionRate: 80 },
+      trends: { tasksPerformedToday: [] },
+      reporteesPerformance: [],
+    });
+
+    const result = await service.getEmployeeStats(
+      baseUser,
+      'target',
+      '7',
+      'team',
+    );
+
+    expect(performanceMetrics).not.toHaveBeenCalled();
+    expect(taskBreakdown).not.toHaveBeenCalled();
+    expect(trends).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({ teamSummary: { completionRate: 80 } }),
+    );
+    expect(result).not.toHaveProperty('summary');
+  });
+
+  it('rejects an unsupported employee dashboard view', async () => {
+    await expect(
+      service.getEmployeeStats(baseUser, 'target', '7', 'everything'),
+    ).rejects.toThrow('Dashboard view must be personal, team, or both');
+  });
+
+  it('loads scoreboard metric rows once and partitions them per employee', async () => {
+    prisma.employee.findMany.mockResolvedValue([
+      {
+        id: 'first',
+        firstName: 'First',
+        lastName: 'Employee',
+        email: 'first@example.com',
+        jobTitle: 'Operator',
+        department: { name: 'Operations' },
+      },
+      {
+        id: 'second',
+        firstName: 'Second',
+        lastName: 'Employee',
+        email: 'second@example.com',
+        jobTitle: 'Operator',
+        department: { name: 'Operations' },
+      },
+    ]);
+    const metricRows = {
+      now: new Date(),
+      instantStart: new Date(),
+      instantEnd: new Date(),
+      rangeInstances: [],
+      rangeTasks: [],
+      completedAssignedInstances: [],
+      alertOccurrences: [],
+      acknowledgedTasks: [],
+      completedInstances: [],
+    };
+    const loadRows = jest
+      .spyOn(service as any, 'loadPerformanceMetricRows')
+      .mockResolvedValue(metricRows);
+    const calculate = jest
+      .spyOn(service as any, 'calculatePerformanceMetrics')
+      .mockReturnValue({ tasksPerformedTodayPercent: 50 });
+    const perEmployeeMetrics = jest.spyOn(
+      service as any,
+      'getPerformanceMetrics',
+    );
+
+    const result = await (service as any).getEmployeeScoreboard(
+      ['first', 'second'],
       'org',
       'UTC',
-      undefined,
       7,
     );
-    expect(trends).toHaveBeenNthCalledWith(2, 'team', null, 'org', 'UTC', 7, [
-      'direct',
-      'indirect',
-    ]);
+
+    expect(loadRows).toHaveBeenCalledTimes(1);
+    expect(calculate).toHaveBeenCalledTimes(2);
+    expect(perEmployeeMetrics).not.toHaveBeenCalled();
+    expect(result).toHaveLength(2);
   });
 
   it('allows every role to view their own performance', async () => {
@@ -270,11 +377,9 @@ describe('DWMS employee performance access', () => {
   });
 
   it('uses recursive reportees as the normal employee team scope', async () => {
-    jest.spyOn(service as any, 'listReporteesRecursive').mockResolvedValue([
-      { id: 'direct', organizationId: 'org' },
-      { id: 'indirect', organizationId: 'org' },
-      { id: 'foreign', organizationId: 'other-org' },
-    ]);
+    jest
+      .spyOn(service as any, 'listReporteeIdsRecursive')
+      .mockResolvedValue(['direct', 'indirect']);
 
     await expect(
       service.getDwmsAccessCapabilities({ ...baseUser, roleLevel: 'EMPLOYEE' }),
@@ -375,6 +480,23 @@ describe('DWMS performance alert scopes', () => {
       alerts: [occurrences[2], occurrences[1]],
       abnormalities: [occurrences[3], occurrences[0]],
     });
+  });
+
+  it('uses pre-range occurrence counts when classifying ranged alerts', () => {
+    const occurrences = [
+      {
+        id: 'in-range-third',
+        alertId: 'alert-1',
+        raisedAt: new Date('2026-01-03T00:00:00Z'),
+      },
+    ];
+
+    expect(
+      (service as any).splitAlertOccurrencesBySequence(
+        occurrences,
+        new Map([['alert-1', 2]]),
+      ),
+    ).toEqual({ alerts: [], abnormalities: occurrences });
   });
 
   it('counts direct department and organization targets separately', () => {

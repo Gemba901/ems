@@ -73,7 +73,6 @@ export abstract class DwmsBaseService {
     return timeZone;
   }
 
-
   protected async validateDwmsEmployee(
     employeeId: string,
     organizationId: string,
@@ -257,13 +256,43 @@ export abstract class DwmsBaseService {
       return departmentEmployees.map((member) => member.id);
     }
 
-    const reportees = await this.listReporteesRecursive(employee.id);
-    return reportees
-      .filter((reportee) => reportee.organizationId === organizationId)
-      .map((reportee) => reportee.id);
+    return this.listReporteeIdsRecursive(employee.id, organizationId);
   }
 
-  async isSuperior(superiorId: string, employeeId: string, organizationId: string): Promise<boolean> {
+  protected async listReporteeIdsRecursive(
+    managerId: string,
+    organizationId: string,
+  ): Promise<string[]> {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    let queue = [managerId];
+
+    while (queue.length > 0) {
+      const batch = await this.prisma.employee.findMany({
+        where: {
+          organizationId,
+          reportingManagerId: { in: queue },
+        },
+        select: { id: true },
+      });
+      const nextQueue: string[] = [];
+      for (const employee of batch) {
+        if (seen.has(employee.id)) continue;
+        seen.add(employee.id);
+        result.push(employee.id);
+        nextQueue.push(employee.id);
+      }
+      queue = nextQueue;
+    }
+
+    return result;
+  }
+
+  async isSuperior(
+    superiorId: string,
+    employeeId: string,
+    organizationId: string,
+  ): Promise<boolean> {
     let currentId: string | null = employeeId;
     const visited = new Set<string>();
     while (currentId) {
@@ -282,4 +311,3 @@ export abstract class DwmsBaseService {
     return false;
   }
 }
-

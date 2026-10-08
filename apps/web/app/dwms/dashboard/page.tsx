@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useAuthStore } from '@/store/auth.store';
 import {
@@ -25,11 +26,12 @@ import { addDaysToDateKey } from '../utils/organizationDate';
 import TaskCategoryPieCharts from '../components/dashboard/TaskCategoryPieCharts';
 import {
   canShowEmployeePerformanceTab,
-  filterEmployeePerformanceOptions,
   resolveEmployeePerformanceDestination,
 } from '../utils/employeePerformanceAccess';
 
 type GraphRange = '7d' | '1m' | '3m' | '1y' | 'all';
+
+const REPORT_CACHE_MS = 5 * 60 * 1000;
 
 const graphRangeOptions: Array<{
   value: GraphRange;
@@ -96,217 +98,154 @@ function DashboardPage() {
   const { user, accessToken } = useAuthStore();
 
   // Tab: 'overview' | 'department' | 'employee' | 'my-team' | 'team'
-  const [activeTab, setActiveTab] = useState<'overview' | 'department' | 'employee' | 'my-team' | 'team'>('employee');
+  const [requestedTab, setActiveTab] = useState<'overview' | 'department' | 'employee' | 'my-team' | 'team'>('employee');
   const [graphRange, setGraphRange] = useState<GraphRange>('7d');
-  const [access, setAccess] = useState<DwmsAccessCapabilities | null>(null);
-
   // Selections
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
-  const [hasDefaultedTeamEmp, setHasDefaultedTeamEmp] = useState(false);
   const [showSelectedEmployeeInsights, setShowSelectedEmployeeInsights] = useState(false);
 
-  // Loaded Data
-  const [overviewData, setOverviewData] = useState<DwmsOverviewDashboardResponse | null>(null);
-  const [departmentData, setDepartmentData] = useState<DwmsDepartmentDashboardResponse | null>(null);
-  const [employeeData, setEmployeeData] = useState<DwmsEmployeeDashboardResponse | null>(null);
+  const accessQuery = useQuery({
+    queryKey: ['dwms', 'reports', 'access', user?.organizationId, user?.userId],
+    queryFn: () => DwmsService.getAccessCapabilities(accessToken ?? ''),
+    enabled: Boolean(accessToken && user),
+    staleTime: REPORT_CACHE_MS,
+  });
+  const access: DwmsAccessCapabilities | null = accessQuery.data ?? null;
+  const activeTab =
+    (requestedTab === 'overview' && access?.analyticsViewLevel !== 'ORGANIZATION') ||
+    (requestedTab === 'department' && access?.analyticsViewLevel === 'OWN') ||
+    (requestedTab === 'my-team' && !access?.hasReportees) ||
+    (requestedTab === 'team' && !access?.canViewEmployeePerformance)
+      ? 'employee'
+      : requestedTab;
 
-  const overviewDataRef = useRef<DwmsOverviewDashboardResponse | null>(null);
-  const departmentDataRef = useRef<DwmsDepartmentDashboardResponse | null>(null);
+  const days = getGraphRangeDays(graphRange);
+  const departmentsQuery = useQuery({
+    queryKey: ['dwms', 'reports', 'departments', user?.organizationId],
+    queryFn: () => DwmsService.getDepartments(accessToken ?? ''),
+    enabled: Boolean(
+      accessToken &&
+      access &&
+      activeTab === 'department' &&
+      access.analyticsViewLevel === 'ORGANIZATION',
+    ),
+    staleTime: REPORT_CACHE_MS,
+  });
+  const departmentsList = useMemo(
+    () => departmentsQuery.data ?? [],
+    [departmentsQuery.data],
+  );
+  const usersQuery = useQuery({
+    queryKey: ['dwms', 'reports', 'employees', user?.organizationId],
+    queryFn: () => DwmsService.listUsers(accessToken ?? ''),
+    enabled: Boolean(
+      accessToken && access?.canViewEmployeePerformance && activeTab === 'team',
+    ),
+    staleTime: REPORT_CACHE_MS,
+  });
+  const employeesList = useMemo(() => {
+    const permitted = new Set(access?.employeePerformanceEmployeeIds ?? []);
+    return (usersQuery.data ?? [])
+      .filter((employee) => permitted.has(employee.id))
+      .map((employee) => ({
+        id: employee.id,
+        name: employee.name,
+        department: employee.department?.name ?? employee.designation ?? undefined,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [access?.employeePerformanceEmployeeIds, usersQuery.data]);
 
-  const updateOverviewData = useCallback((data: DwmsOverviewDashboardResponse | null) => {
-    setOverviewData(data);
-    overviewDataRef.current = data;
-  }, []);
+  const organizationDepartmentId =
+    [selectedDeptId, user?.departmentId]
+      .find((candidate) =>
+        Boolean(candidate) &&
+        departmentsList.some((department) => department.id === candidate),
+      ) ?? departmentsList[0]?.id ?? '';
+  const resolvedDepartmentId =
+    access?.analyticsViewLevel === 'DEPARTMENT'
+      ? user?.departmentId ?? ''
+      : organizationDepartmentId;
+  const resolvedSelectedEmpId =
+    employeesList.some((employee) => employee.id === selectedEmpId)
+      ? selectedEmpId
+      : employeesList[0]?.id ?? access?.employeePerformanceEmployeeIds[0] ?? '';
+  const employeeView = activeTab === 'my-team' ? 'team' : 'personal';
+  const reportEmployeeId =
+    activeTab === 'team' ? resolvedSelectedEmpId : access?.currentEmployeeId ?? '';
 
-  const updateDepartmentData = useCallback((data: DwmsDepartmentDashboardResponse | null) => {
-    setDepartmentData(data);
-    departmentDataRef.current = data;
-  }, []);
+  const overviewQuery = useQuery({
+    queryKey: ['dwms', 'reports', 'overview', user?.organizationId, days],
+    queryFn: () => DwmsService.getDashboardOverview(accessToken ?? '', days),
+    enabled: Boolean(accessToken && access && activeTab === 'overview'),
+    staleTime: REPORT_CACHE_MS,
+  });
+  const departmentQuery = useQuery({
+    queryKey: ['dwms', 'reports', 'department', resolvedDepartmentId, days],
+    queryFn: () =>
+      DwmsService.getDashboardDepartment(
+        accessToken ?? '',
+        resolvedDepartmentId,
+        days,
+      ),
+    enabled: Boolean(
+      accessToken && access && activeTab === 'department' && resolvedDepartmentId,
+    ),
+    staleTime: REPORT_CACHE_MS,
+  });
+  const employeeQuery = useQuery({
+    queryKey: [
+      'dwms',
+      'reports',
+      'employee',
+      reportEmployeeId,
+      employeeView,
+      days,
+    ],
+    queryFn: () =>
+      DwmsService.getDashboardEmployee(
+        accessToken ?? '',
+        reportEmployeeId,
+        days,
+        employeeView,
+      ),
+    enabled: Boolean(
+      accessToken &&
+      access &&
+      reportEmployeeId &&
+      (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team'),
+    ),
+    staleTime: REPORT_CACHE_MS,
+  });
 
-  // Lists for drop downs
-  const [departmentsList, setDepartmentsList] = useState<Array<{ id: string; name: string }>>([]);
-  const [employeesList, setEmployeesList] = useState<Array<{ id: string; name: string; department?: string }>>([]);
-
-  // Loaders
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Reset defaulted flag when activeTab changes
-  useEffect(() => {
-    if (activeTab !== 'team') {
-      setHasDefaultedTeamEmp(false);
-    }
-  }, [activeTab]);
-
-
-
-  // Initialize view tabs based on user role
-  useEffect(() => {
-    if (!user) return;
-    setActiveTab('employee');
-    setSelectedEmpId(user.userId);
-    if (user.departmentId) {
-      setSelectedDeptId(user.departmentId);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!accessToken) return;
-    void DwmsService.getAccessCapabilities(accessToken)
-      .then(setAccess)
-      .catch((cause) => setError(cause instanceof Error ? cause.message : 'Failed to load dashboard access'));
-  }, [accessToken]);
-
-  useEffect(() => {
-    if (!access) return;
-    if (activeTab === 'overview' && access.analyticsViewLevel !== 'ORGANIZATION') setActiveTab('employee');
-    if (activeTab === 'department' && access.analyticsViewLevel === 'OWN') setActiveTab('employee');
-    if (activeTab === 'my-team' && !access.hasReportees) setActiveTab('employee');
-    const canViewSelectedTeamMember = (access.teamPerformanceEmployeeIds ?? []).includes(selectedEmpId);
-    if (activeTab === 'team' && !access.canViewEmployeePerformance && !canViewSelectedTeamMember) {
-      setShowSelectedEmployeeInsights(false);
-      setActiveTab('employee');
-      if (user) setSelectedEmpId(user.userId);
-    }
-  }, [access, activeTab, selectedEmpId, user]);
-
-  // Load lists when overview data or department scoreboard is fetched
-  useEffect(() => {
-    if (overviewData) {
-      if (overviewData.departmentCompliance) {
-        setDepartmentsList(overviewData.departmentCompliance.map((d) => ({ id: d.id, name: d.name })));
-      }
-    }
-  }, [overviewData]);
-
-  // Update and sort employeesList alphabetically, and default selectedEmpId on the team tab
-  useEffect(() => {
-    let list: Array<{ id: string; name: string; department?: string }> = [];
-    if (overviewData?.employeeScoreboard) {
-      list = filterEmployeePerformanceOptions(
-        overviewData.employeeScoreboard,
-        access,
-      )
-        .map((e) => ({ id: e.id, name: e.name, department: e.department }));
-    } else if (departmentData?.employeeScoreboard) {
-      list = filterEmployeePerformanceOptions(
-        departmentData.employeeScoreboard,
-        access,
-      )
-        .map((e) => ({ id: e.id, name: e.name, department: departmentData.departmentName }));
-    }
-
-    if (list.length > 0) {
-      const sorted = list.sort((a, b) => a.name.localeCompare(b.name));
-      setEmployeesList(sorted);
-
-      // Default selectedEmpId to the first employee in the sorted list when entering 'team' tab
-      if (activeTab === 'team' && !hasDefaultedTeamEmp) {
-        setSelectedEmpId(sorted[0].id);
-        setHasDefaultedTeamEmp(true);
-      }
-    }
-  }, [overviewData, departmentData, activeTab, hasDefaultedTeamEmp, access]);
-
-  // Fetch function
-  const fetchData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const token = useAuthStore.getState().accessToken ?? '';
-      const days = getGraphRangeDays(graphRange);
-      if (activeTab === 'overview') {
-        const data = await DwmsService.getDashboardOverview(token, days);
-        updateOverviewData(data);
-      } else if (activeTab === 'department') {
-        // If MANAGEMENT and no department selected yet, load overview to extract departments
-        let deptId = selectedDeptId;
-        if (!deptId && access?.analyticsViewLevel === 'ORGANIZATION') {
-          const overview = await DwmsService.getDashboardOverview(token, days);
-          updateOverviewData(overview);
-          const firstDepartment = overview.departmentCompliance?.[0];
-          if (firstDepartment) {
-            deptId = firstDepartment.id;
-            setSelectedDeptId(deptId);
-          }
-        } else if (!deptId && access?.analyticsViewLevel === 'DEPARTMENT') {
-          deptId = user.departmentId || '';
-          setSelectedDeptId(deptId);
-        }
-
-        if (deptId) {
-          const data = await DwmsService.getDashboardDepartment(token, deptId, days);
-          updateDepartmentData(data);
-        } else {
-          setError('No department selected or assigned.');
-        }
-      } else if (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team') {
-        let empId = activeTab === 'my-team' ? user.userId : selectedEmpId;
-
-        // Ensure lists are loaded for role-based dropdown filter
-        if (activeTab !== 'my-team' && access?.analyticsViewLevel === 'ORGANIZATION' && !overviewDataRef.current) {
-          const overview = await DwmsService.getDashboardOverview(token, days);
-          updateOverviewData(overview);
-          const permittedEmployeeIds = new Set(
-            access.employeePerformanceEmployeeIds,
-          );
-          const firstEmployee = overview.employeeScoreboard?.find((employee) =>
-            permittedEmployeeIds.has(employee.id),
-          );
-          if (!empId && firstEmployee) {
-            empId = firstEmployee.id;
-            setSelectedEmpId(empId);
-          }
-        } else if (activeTab !== 'my-team' && access?.analyticsViewLevel === 'DEPARTMENT' && !departmentDataRef.current) {
-          const deptId = user.departmentId || '';
-          const dept = await DwmsService.getDashboardDepartment(token, deptId, days);
-          updateDepartmentData(dept);
-          const permittedEmployeeIds = new Set(
-            access.employeePerformanceEmployeeIds,
-          );
-          const firstEmployee = dept.employeeScoreboard?.find((employee) =>
-            permittedEmployeeIds.has(employee.id),
-          );
-          if (!empId && firstEmployee) {
-            empId = firstEmployee.id;
-            setSelectedEmpId(empId);
-          }
-        }
-
-        if (activeTab === 'team' && user) {
-          const permittedEmployeeIds = access?.canViewEmployeePerformance
-            ? access.employeePerformanceEmployeeIds
-            : (access?.teamPerformanceEmployeeIds ?? []);
-          empId = permittedEmployeeIds.includes(selectedEmpId)
-            ? selectedEmpId
-            : (permittedEmployeeIds[0] ?? '');
-          if (empId && empId !== selectedEmpId) setSelectedEmpId(empId);
-        }
-
-        if (empId) {
-          const data = await DwmsService.getDashboardEmployee(token, empId, days);
-          setEmployeeData(data);
-          if (data.employee?.id && data.employee.id !== empId) {
-            setSelectedEmpId(data.employee.id);
-          }
-        } else {
-          setError('No employee selected or assigned.');
-        }
-      }
-    } catch (err: unknown) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  }, [access, activeTab, graphRange, selectedDeptId, selectedEmpId, user, updateOverviewData, updateDepartmentData]);
-
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+  const overviewData: DwmsOverviewDashboardResponse | null = overviewQuery.data ?? null;
+  const departmentData: DwmsDepartmentDashboardResponse | null = departmentQuery.data ?? null;
+  const employeeData: DwmsEmployeeDashboardResponse | null = employeeQuery.data ?? null;
+  const activeReportQuery =
+    activeTab === 'overview'
+      ? overviewQuery
+      : activeTab === 'department'
+        ? departmentQuery
+        : employeeQuery;
+  const metadataLoading =
+    (activeTab === 'department' &&
+      access?.analyticsViewLevel === 'ORGANIZATION' &&
+      departmentsQuery.isPending) ||
+    (activeTab === 'team' &&
+      Boolean(access?.canViewEmployeePerformance) &&
+      usersQuery.isPending);
+  const loading = accessQuery.isPending || metadataLoading || activeReportQuery.isFetching;
+  const activeError = accessQuery.error ?? activeReportQuery.error ??
+    (activeTab === 'department' ? departmentsQuery.error : null) ??
+    (activeTab === 'team' ? usersQuery.error : null);
+  const selectionError =
+    !metadataLoading && activeTab === 'department' && !resolvedDepartmentId
+      ? 'No department selected or assigned.'
+      : !metadataLoading && activeTab === 'team' && !resolvedSelectedEmpId
+        ? 'No employee selected or assigned.'
+        : null;
+  const error =
+    activeError instanceof Error ? activeError.message : selectionError;
   const stats = useMemo(() => {
     if (activeTab === 'overview') return overviewData?.summary;
     if (activeTab === 'department') return departmentData?.summary;
@@ -349,12 +288,11 @@ function DashboardPage() {
     if (destination === 'my-performance') {
       setShowSelectedEmployeeInsights(false);
       setActiveTab('employee');
-      if (user) setSelectedEmpId(user.userId);
+      setSelectedEmpId('');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
     setSelectedEmpId(employeeId);
-    setHasDefaultedTeamEmp(true);
     setShowSelectedEmployeeInsights(true);
     setActiveTab('team');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -369,19 +307,15 @@ function DashboardPage() {
           setShowSelectedEmployeeInsights(false);
           if (tab === 'employee') {
             setActiveTab('employee');
-            if (user) setSelectedEmpId(user.userId);
           } else if (tab === 'my-team') {
             setActiveTab('my-team');
-            if (user) setSelectedEmpId(user.userId);
           } else if (tab === 'team') {
             if (!access?.canViewEmployeePerformance) return;
             setActiveTab('team');
             if (employeesList.length > 0) {
               setSelectedEmpId(employeesList[0].id);
-              setHasDefaultedTeamEmp(true);
             } else if (access.employeePerformanceEmployeeIds[0]) {
               setSelectedEmpId(access.employeePerformanceEmployeeIds[0]);
-              setHasDefaultedTeamEmp(true);
             }
           } else if (tab === 'department') {
             setActiveTab('department');
@@ -419,7 +353,7 @@ function DashboardPage() {
                 <span className="text-xs text-muted-app font-semibold">Department:</span>
                 <div className="w-48">
                   <DwmsSelectDropdown
-                    value={selectedDeptId}
+                    value={resolvedDepartmentId}
                     options={departmentsList.map((dept) => ({ value: dept.id, label: dept.name }))}
                     onChange={setSelectedDeptId}
                     placeholder="Select department"
@@ -433,7 +367,7 @@ function DashboardPage() {
               <div className="flex items-center gap-2">
                 <div className="w-60">
                   <DwmsSelectDropdown
-                    value={selectedEmpId}
+                    value={resolvedSelectedEmpId}
                     options={employeesList.map((emp) => ({
                         value: emp.id,
                         label: emp.name,
@@ -475,7 +409,7 @@ function DashboardPage() {
 
           {/* Show the shared report layout for every populated performance scope. */}
           {(activeTab !== 'my-team' || !!employeeData?.reporteesPerformance?.length) &&
-            (activeTab !== 'team' || selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && (
+            (activeTab !== 'team' || resolvedSelectedEmpId !== access?.currentEmployeeId || showSelectedEmployeeInsights) && (
             <>
               {/* 1. Period controls and KPI summary */}
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -603,9 +537,9 @@ function DashboardPage() {
                 employeeData={{ ...employeeData, employee: employeeData.employee }}
                 loggedInUserId={access?.currentEmployeeId || user?.userId || ''}
                 onSelectEmployee={handleSelectDepartmentEmployee}
-                activeSubTab={selectedEmpId === user?.userId && !showSelectedEmployeeInsights ? 'team' : 'insights'}
+                activeSubTab={resolvedSelectedEmpId === access?.currentEmployeeId && !showSelectedEmployeeInsights ? 'team' : 'insights'}
               />
-              {(selectedEmpId !== user?.userId || showSelectedEmployeeInsights) && accessToken && (
+              {(resolvedSelectedEmpId !== access?.currentEmployeeId || showSelectedEmployeeInsights) && accessToken && (
                 <EmployeeDwmsPanel
                   employeeId={employeeData.employee.id}
                   accessToken={accessToken}

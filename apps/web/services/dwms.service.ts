@@ -687,6 +687,8 @@ export interface DwmsEmployeeDashboardResponse {
   reporteesPerformance?: DwmsEmployeeScore[];
 }
 
+export type DwmsEmployeeDashboardView = "personal" | "team" | "both";
+
 export interface DwmsAlertItem {
   id: string;
   type: string;
@@ -997,9 +999,10 @@ export const DwmsService = {
     token: string,
     empId: string,
     days: number | "all",
+    view: DwmsEmployeeDashboardView = "both",
   ): Promise<DwmsEmployeeDashboardResponse> {
     return getJson<DwmsEmployeeDashboardResponse>(
-      `/dwms/dashboard/employee/${encodeURIComponent(empId)}${buildQuery({ days })}`,
+      `/dwms/dashboard/employee/${encodeURIComponent(empId)}${buildQuery({ days, view })}`,
       token,
     );
   },

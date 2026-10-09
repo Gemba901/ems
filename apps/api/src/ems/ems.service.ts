@@ -690,11 +690,23 @@ export class EmsService {
       throw new BadRequestException('This record has already been registered');
     }
 
+    const reason = dto.reason?.trim();
+
+    if (!reason) {
+      throw new BadRequestException('An exclusion reason is required');
+    }
+
+    if (reason.length < 5) {
+      throw new BadRequestException(
+        'Exclusion reason must contain at least 5 characters',
+      );
+    }
+
     await this.prisma.emsOnboardingRecord.update({
       where: { id: recordId },
       data: {
         status: 'EXCLUDED',
-        exclusionReason: dto.reason?.trim() || null,
+        exclusionReason: reason,
         validationErrors: Prisma.DbNull,
       },
     });

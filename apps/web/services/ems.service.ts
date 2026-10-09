@@ -8,8 +8,27 @@ function authHeaders(token: string) {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `Request failed with status ${res.status}`);
+    const rawMessage = err?.message;
+
+    const messages: string[] = Array.isArray(rawMessage)
+      ? rawMessage.filter(
+          (message): message is string => typeof message === "string",
+        )
+      : typeof rawMessage === "string"
+        ? [rawMessage]
+        : [];
+
+    const requiredReason = "An exclusion reason is required";
+
+    const message = messages.includes(requiredReason)
+      ? requiredReason
+      : messages.filter(Boolean).join("; ");
+
+    throw new Error(
+      message || `Request failed with status ${res.status}`,
+    );
   }
+
   return res.json();
 }
 

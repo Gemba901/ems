@@ -58,13 +58,14 @@ function RecordStatusPill({ status }: { status: OnboardingRecordStatus }) {
 }
 
 function RecordEditor({
-  record, onSave, onExclude, onInclude, saving,
+  record, onSave, onExclude, onInclude, saving, exclusionError,
 }: {
   record: OnboardingRecord;
   onSave: (data: UpdateOnboardingRecordPayload) => void;
   onExclude: (reason: string) => void;
   onInclude: () => void;
   saving: boolean;
+  exclusionError?: string;
 }) {
   const [draft, setDraft] = useState<UpdateOnboardingRecordPayload>(() => {
     const initial: UpdateOnboardingRecordPayload = {};
@@ -120,13 +121,31 @@ function RecordEditor({
             </button>
           ) : (
             <div className="flex items-center gap-2 ml-auto">
-              <input
-                type="text"
-                placeholder="Reason for excluding…"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="px-3 py-2 rounded-lg border border-slate-200 text-xs w-56 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
+              <div className="w-56">
+                <input
+                  type="text"
+                  aria-label="Reason for excluding"
+                  aria-invalid={!!exclusionError}
+                  aria-describedby={
+                    exclusionError ? `exclude-error-${record.id}` : undefined
+                  }
+                  placeholder="Reason for excluding…"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-lg border text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                    exclusionError ? "border-red-300" : "border-slate-200"
+                  }`}
+                />
+                {exclusionError && (
+                  <p
+                    id={`exclude-error-${record.id}`}
+                    role="alert"
+                    className="mt-1 text-xs text-red-600"
+                  >
+                    {exclusionError}
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => onExclude(reason)}
                 disabled={saving}
@@ -306,6 +325,11 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                             <RecordEditor
                               record={rec}
                               saving={busy}
+                              exclusionError={
+                                exclude.isError && exclude.variables?.recordId === rec.id
+                                  ? exclude.error.message || "Could not exclude this record."
+                                  : undefined
+                              }
                               onSave={(data) => save.mutate({ recordId: rec.id, data })}
                               onExclude={(reason) => exclude.mutate({ recordId: rec.id, reason })}
                               onInclude={() => include.mutate(rec.id)}

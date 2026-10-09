@@ -1,6 +1,6 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
-  IsArray, IsInt, IsOptional, IsString, MaxLength, ValidateNested,
+  IsArray, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
 } from 'class-validator';
 
 export class CreateOnboardingBatchDto {
@@ -82,6 +82,17 @@ export class UpdateOnboardingRecordDto {
 //}
 
 export class ExcludeOnboardingRecordDto {
-  @IsString() @IsOptional() @MaxLength(300) reason?: string;
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Matches(/\S/, {
+    message: 'An exclusion reason is required',
+  })
+  @MinLength(5, {
+    message: 'Exclusion reason must contain at least 5 characters',
+  })
+  @MaxLength(300)
+  reason!: string;
 }
 

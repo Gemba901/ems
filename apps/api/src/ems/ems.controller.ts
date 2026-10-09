@@ -14,6 +14,9 @@ import { RequiresModule, SkipModuleCheck } from 'src/auth/decorators/module.deco
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
+import { Post, Delete } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
+import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, 
+  UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -65,5 +68,114 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.updateEmployee(id, user.organizationId, dto);
+  }
+    /** POST /ems/onboarding/batches — start a new import */
+  @Post('onboarding/batches')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async createOnboardingBatch(
+    @Body() dto: CreateOnboardingBatchDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.ems.createOnboardingBatch(user.userId, user.organizationId, dto);
+  }
+
+  /** GET /ems/onboarding/batches — list imports */
+  @Get('onboarding/batches')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async listOnboardingBatches(@CurrentUser() user: { organizationId: string }) {
+    return this.ems.listOnboardingBatches(user.organizationId);
+  }
+
+  /** GET /ems/onboarding/batches/:id — one import with its rows */
+  @Get('onboarding/batches/:id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.getOnboardingBatch(user.organizationId, id);
+  }
+
+  /** POST /ems/onboarding/batches/:id/records — load rows into an import */
+  @Post('onboarding/batches/:id/records')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async addOnboardingRecords(
+    @Param('id') id: string,
+    @Body() dto: AddOnboardingRecordsDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.ems.addOnboardingRecords(user.organizationId, id, dto);
+  }
+    
+  /** POST /ems/onboarding/batches/:id/validate — check every record */
+  @Post('onboarding/batches/:id/validate')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async validateOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.validateOnboardingBatch(user.organizationId, id);
+  }
+
+    /** PATCH /ems/onboarding/records/:id — correct a record's fields */
+  @Patch('onboarding/records/:id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async updateOnboardingRecord(
+    @Param('id') id: string,
+    @Body() dto: UpdateOnboardingRecordDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.updateOnboardingRecord(user.organizationId, id, dto);
+  }
+
+  /** PATCH /ems/onboarding/records/:id/exclude — leave this row out */
+  @Patch('onboarding/records/:id/exclude')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async excludeOnboardingRecord(
+    @Param('id') id: string,
+    @Body() dto: ExcludeOnboardingRecordDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.excludeOnboardingRecord(user.organizationId, id, dto);
+  }
+
+  /** PATCH /ems/onboarding/records/:id/include — undo an exclusion */
+  @Patch('onboarding/records/:id/include')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async includeOnboardingRecord(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.includeOnboardingRecord(user.organizationId, id);
+  }
+
+  /** POST /ems/onboarding/batches/:id/register — turn ready records into employees */
+  @Post('onboarding/batches/:id/register')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async registerOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.registerOnboardingBatch(user.organizationId, id);
+  }
+
+  /** PATCH /ems/onboarding/batches/:id/cancel — abandon an import */
+  @Patch('onboarding/batches/:id/cancel')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async cancelOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.cancelOnboardingBatch(user.organizationId, id);
+  }
+
+  /** DELETE /ems/onboarding/batches/:id — remove a cancelled import */
+  @Delete('onboarding/batches/:id')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  async deleteOnboardingBatch(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.deleteOnboardingBatch(user.organizationId, id);
   }
 }

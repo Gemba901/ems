@@ -141,6 +141,8 @@ model Organization {
   tickets               Tickets[]
   kaizens               Kaizen[]
   sgas                  Sga[]
+  emsOnboardingBatches EmsOnboardingBatch[]
+  emsOnboardingRecords EmsOnboardingRecord[]
   workProjects          WorkProject[]
   attendanceRecords     AttendanceRecord[]
   attendanceCorrections AttendanceCorrection[]
@@ -193,6 +195,7 @@ model User {
 
   organizations       UserOrganization[]
   employees           Employee[]
+  emsBatchesUploaded  EmsOnboardingBatch[] @relation("EmsBatchUploadedBy")
   createdVisits       ConsultancyVisit[]
   visitRequests       VisitRequest[]
   visitMonthPlans     VisitMonthPlan[]

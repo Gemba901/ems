@@ -4,11 +4,15 @@ import { Role } from 'src/common/enum/role.enum';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
+import { 
+  AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto,
+} from './dto/onboarding.dto';
+import { Prisma, RoleName } from 'db';
 
 // ── Field groups that define completeness ────────────────────────────────────
 export const EMS_GROUPS = {
   IDENTITY:            ['firstName', 'lastName', 'employeeCode', 'middleName', 'gender', 'nationalId', 'dateOfBirth', 'nationality'],
-  WORK_ALLOCATION:     ['departmentId', 'employmentStatus', 'employmentType', 'jobTitle', 'dateJoined', 'plantBranch', 'workStation', 'section', 'subSection', 'shift', 'reportingManagerId'],
+  WORK_ALLOCATION:     ['departmentId', 'employmentStatus', 'employmentType', 'jobTitle', 'dateJoined', 'plantBranch', 'workStation', 'section', 'subSection', 'shift', 'reportingManagerId', 'hodName', 'hodDesignation', 'beesAccessLevel'],
   ROLE_RESPONSIBILITY: ['jobDescription', 'level', 'grade', 'jobCategory', 'primaryWorkRole', 'machineProcess'],
   CONTACT:             ['phone', 'email', 'whatsappNumber', 'homeAddress', 'emergencyContactName', 'emergencyContactPhone'],
   SKILL:               ['skillLevel'],
@@ -71,6 +75,11 @@ const EMS_EMPLOYEE_SELECT = {
   plantBranch: true, workStation: true, section: true, subSection: true, shift: true,
   reportingManagerId: true,
   reportingManager: { select: { id: true, firstName: true, lastName: true, jobTitle: true, avatarUrl: true } },
+
+  hodName: true, hodDesignation: true, beesAccessLevel: true,
+  companyCode: true,
+  firstRelieverId: true, secondRelieverId: true,
+
   hrRecordOwnerId: true,
   hrRecordOwner: { select: { id: true, firstName: true, lastName: true } },
 
@@ -94,6 +103,71 @@ const EMS_EMPLOYEE_SELECT = {
     },
   },
 };
+
+// ── Onboarding batch list shape
+const BATCH_LIST_SELECT = {          
+  id: true,
+  label: true,
+  sourceFileName: true,
+  status: true,
+  createdAt: true,
+  uploadedBy: { select: { id: true, name: true } },
+  _count: { select: { records: true } },
+};
+
+// ── Onboarding validation ────────────────────────────────────────────────────
+type ValidationFinding = { field: string; message: string };
+
+const GENDER_VALUES: Record<string, string> = {
+  male: "MALE", m: "MALE",
+  female: "FEMALE", f: "FEMALE",
+  other: "OTHER",
+};
+
+const EMPLOYMENT_STATUS_VALUES = new Set([
+  "ACTIVE", "PROBATION", "RESIGNED", "TERMINATED",
+  "RETIRED", "SUSPENDED", "ABSCONDED", "CONTRACT_ENDED",
+]);
+
+const EMPLOYMENT_TYPE_VALUES = new Set([
+  "FULL_TIME", "PART_TIME", "CONTRACT", "INTERN", "CASUAL",
+]);
+
+function normaliseKey(value: string | null): string {
+  return String(value ?? '')
+    .replace(/[\n\r]+/g, ' ')        // line breaks inside a cell
+    .replace(/\([^)]*\)/g, '')       // "(Line 1)" and similar notes
+    .replace(/\s*\/\s*/g, ' ')       // "Work Area / Section"
+    .replace(/[^a-zA-Z0-9]+/g, '')   // everything else removed
+    .trim()
+    .toLowerCase();
+}
+
+//rbac new acc to BEES
+const ACCESS_LEVEL_VALUES: Record<string, RoleName> = {
+  employee:          RoleName.EMPLOYEE,
+  supervisor:        RoleName.EMPLOYEE,   // elevated permissions handled separately
+  management:        RoleName.MANAGEMENT,
+  manager:           RoleName.MANAGEMENT,
+  hod:               RoleName.HOD,
+  headofdepartment:  RoleName.HOD,
+  hr:                RoleName.HR,
+  humanresources:    RoleName.HR,
+  admin:             RoleName.ADMIN,
+  administrator:     RoleName.ADMIN,
+  systemadministrator: RoleName.ADMIN,
+};
+
+/** Strip to digits and expand a local leading 0 to the default country code. */
+// TODO: country code should come from the organisation, not a constant.
+const DEFAULT_COUNTRY_CODE = '254';
+
+function normalisePhone(value: string | null): string | null {
+  const digits = (value ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('0')) return DEFAULT_COUNTRY_CODE + digits.slice(1);
+  return digits;
+}
 
 @Injectable()
 export class EmsService {
@@ -389,5 +463,437 @@ export class EmsService {
       committeeSummary,
       priorityEmployees,
     };
+  }
+  // ── HR/Admin: onboarding import ──────────────────────────────────────────
+  async createOnboardingBatch(
+    userId: string,
+    organizationId: string,
+    dto: CreateOnboardingBatchDto,
+  ) {
+    return this.prisma.emsOnboardingBatch.create({
+      data: {
+        organizationId,
+        uploadedById: userId,
+        label: dto.label,
+        sourceFileName: dto.sourceFileName,
+      },
+      select: BATCH_LIST_SELECT,
+    });
+  }
+
+  async listOnboardingBatches(organizationId: string) {
+    return this.prisma.emsOnboardingBatch.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+      select: BATCH_LIST_SELECT,
+    });
+  }
+
+  async getOnboardingBatch(organizationId: string, batchId: string) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      include: {
+        uploadedBy: { select: { id: true, name: true } },
+        records: { orderBy: { rowNumber: 'asc' } },
+      },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+    return batch;
+  }
+
+  async addOnboardingRecords(
+    organizationId: string,
+    batchId: string,
+    dto: AddOnboardingRecordsDto,
+  ) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      select: { id: true },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+
+    await this.prisma.emsOnboardingRecord.createMany({
+      data: dto.records.map((record) => ({
+        ...record,
+        batchId,
+        organizationId,
+      })),
+    });
+
+    return this.getOnboardingBatch(organizationId, batchId);
+  }
+    async validateOnboardingBatch(organizationId: string, batchId: string) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      include: { records: true },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+
+    // Existing values in this org, to detect clashes
+    const existing = await this.prisma.employee.findMany({
+      where: { organizationId },
+      select: { employeeCode: true, phone: true, email: true },
+    });
+    const takenCodes  = new Set(existing.map((e) => normaliseKey(e.employeeCode)).filter(Boolean));
+    const takenPhones = new Set(existing.map((e) => normaliseKey(e.phone)).filter(Boolean));
+    const takenEmails = new Set(existing.map((e) => normaliseKey(e.email)).filter(Boolean));
+
+    const departments = await this.prisma.department.findMany({
+      where: { organizationId },
+      select: { name: true },
+    });
+    const knownDepartments = new Set(departments.map((d) => normaliseKey(d.name)));
+
+    // Codes seen within this batch, to detect internal duplicates
+    const seenCodes = new Set<string>();
+
+    let readyCount = 0;
+
+    for (const record of batch.records) {
+      if (record.status === 'EXCLUDED' || record.status === 'REGISTERED') continue;
+
+      const findings: ValidationFinding[] = [];
+
+      if (!record.employeeCode?.trim()) {
+        findings.push({ field: 'employeeCode', message: 'Required' });
+      } else {
+        const key = normaliseKey(record.employeeCode);
+        if (takenCodes.has(key)) {
+          findings.push({ field: 'employeeCode', message: 'Already used by an existing employee' });
+        }
+        if (seenCodes.has(key)) {
+          findings.push({ field: 'employeeCode', message: 'Duplicated within this import' });
+        }
+        seenCodes.add(key);
+      }
+
+      if (!record.firstName?.trim()) findings.push({ field: 'firstName', message: 'Required' });
+      if (!record.lastName?.trim())  findings.push({ field: 'lastName',  message: 'Required' });
+      
+      if (!record.companyCode?.trim()) {
+        findings.push({ field: 'companyCode', message: 'Required' });
+      }
+
+      if (record.gender?.trim() && !GENDER_VALUES[normaliseKey(record.gender)]) {
+        findings.push({ field: 'gender', message: `Unrecognised value "${record.gender}"` });
+      }
+
+      if (record.employmentStatus?.trim()) {
+        const key = normaliseKey(record.employmentStatus).toUpperCase();
+        const match = [...EMPLOYMENT_STATUS_VALUES].find((v) => normaliseKey(v).toUpperCase() === key);
+        if (!match) findings.push({ field: 'employmentStatus', message: `Unrecognised value "${record.employmentStatus}"` });
+      }
+
+      if (record.employmentType?.trim()) {
+        const key = normaliseKey(record.employmentType).toUpperCase();
+        const match = [...EMPLOYMENT_TYPE_VALUES].find((v) => normaliseKey(v).toUpperCase() === key);
+        if (!match) findings.push({ field: 'employmentType', message: `Unrecognised value "${record.employmentType}"` });
+      }
+
+      if (!record.beesAccessLevel?.trim()) {
+        findings.push({ field: 'beesAccessLevel', message: 'Required' });
+      } else if (!ACCESS_LEVEL_VALUES[normaliseKey(record.beesAccessLevel)]) {
+        findings.push({
+          field: 'beesAccessLevel',
+          message: `Unrecognised access level "${record.beesAccessLevel}"`,
+        });
+      }
+
+      if (record.currentDepartment?.trim() && !knownDepartments.has(normaliseKey(record.currentDepartment))) {
+        findings.push({ field: 'currentDepartment', message: `No department named "${record.currentDepartment}" in this organisation` });
+      }
+
+      if (!record.currentDepartment?.trim()) {
+        findings.push({ field: 'currentDepartment', message: 'Required' });
+      } else if (!knownDepartments.has(normaliseKey(record.currentDepartment))) {
+        findings.push({
+          field: 'currentDepartment',
+          message: `No department named "${record.currentDepartment}" in this organisation`,
+        });
+      }
+
+      if (record.workEmail?.trim() && takenEmails.has(normaliseKey(record.workEmail))) {
+        findings.push({ field: 'workEmail', message: 'Already used by an existing employee' });
+      }
+
+      if (record.workEmail?.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(record.workEmail.trim())) {
+        findings.push({
+          field: 'workEmail',
+          message: `"${record.workEmail}" is not a valid email address`,
+        });
+      }
+
+      const status = findings.length > 0 ? 'NEEDS_FIXING' : 'READY';
+      if (status === 'READY') readyCount++;
+
+      await this.prisma.emsOnboardingRecord.update({
+        where: { id: record.id },
+        data: { status, validationErrors: findings.length > 0 ? findings : Prisma.DbNull },
+      });
+    }
+
+    const pending = batch.records.filter(
+      (r) => r.status !== 'EXCLUDED' && r.status !== 'REGISTERED',
+    ).length;
+
+    await this.prisma.emsOnboardingBatch.update({
+      where: { id: batchId },
+      data: { status: readyCount === pending && pending > 0 ? 'READY' : 'DRAFT' },
+    });
+
+    return this.getOnboardingBatch(organizationId, batchId);
+  }
+
+    async updateOnboardingRecord(
+    organizationId: string,
+    recordId: string,
+    dto: UpdateOnboardingRecordDto,
+  ) {
+    const record = await this.prisma.emsOnboardingRecord.findFirst({
+      where: { id: recordId, organizationId },
+      select: { id: true, batchId: true, status: true },
+    });
+    if (!record) throw new NotFoundException('Onboarding record not found');
+    if (record.status === 'REGISTERED') {
+      throw new BadRequestException('This record has already been registered');
+    }
+
+    const data: Record<string, string | null> = {};
+    for (const [key, value] of Object.entries(dto)) {
+      if (value === undefined) continue;
+      data[key] = value.trim() === '' ? null : value.trim();
+    }
+
+    await this.prisma.emsOnboardingRecord.update({
+      where: { id: recordId },
+      data: {
+        ...data,
+        status: record.status === 'EXCLUDED' ? 'EXCLUDED' : 'DRAFT',
+        validationErrors: Prisma.DbNull,
+      },
+    });
+
+    return this.validateOnboardingBatch(organizationId, record.batchId);
+  }
+
+  async excludeOnboardingRecord(
+    organizationId: string,
+    recordId: string,
+    dto: ExcludeOnboardingRecordDto,
+  ) {
+    const record = await this.prisma.emsOnboardingRecord.findFirst({
+      where: { id: recordId, organizationId },
+      select: { id: true, batchId: true, status: true },
+    });
+    if (!record) throw new NotFoundException('Onboarding record not found');
+    if (record.status === 'REGISTERED') {
+      throw new BadRequestException('This record has already been registered');
+    }
+
+    await this.prisma.emsOnboardingRecord.update({
+      where: { id: recordId },
+      data: {
+        status: 'EXCLUDED',
+        exclusionReason: dto.reason?.trim() || null,
+        validationErrors: Prisma.DbNull,
+      },
+    });
+
+    return this.validateOnboardingBatch(organizationId, record.batchId);
+  }
+
+  async includeOnboardingRecord(organizationId: string, recordId: string) {
+    const record = await this.prisma.emsOnboardingRecord.findFirst({
+      where: { id: recordId, organizationId },
+      select: { id: true, batchId: true, status: true },
+    });
+    if (!record) throw new NotFoundException('Onboarding record not found');
+    if (record.status !== 'EXCLUDED') {
+      throw new BadRequestException('Only excluded records can be restored');
+    }
+
+    await this.prisma.emsOnboardingRecord.update({
+      where: { id: recordId },
+      data: { status: 'DRAFT', exclusionReason: null },
+    });
+
+    return this.validateOnboardingBatch(organizationId, record.batchId);
+  }
+
+  async registerOnboardingBatch(organizationId: string, batchId: string) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      include: { records: true },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+
+    const ready = batch.records.filter((r) => r.status === 'READY');
+    if (ready.length === 0) {
+      throw new BadRequestException('No records are ready to register');
+    }
+
+    // Departments, by normalised name
+    const departments = await this.prisma.department.findMany({
+      where: { organizationId },
+      select: { id: true, name: true },
+    });
+    const departmentIds = new Map(departments.map((d) => [normaliseKey(d.name), d.id]));
+
+    // Roles, by name
+    const roles = await this.prisma.role.findMany({ select: { id: true, name: true } });
+    const roleIds = new Map(roles.map((r) => [r.name, r.id]));
+
+    const results: { recordId: string; employeeId?: string; error?: string }[] = [];
+
+    for (const record of ready) {
+      try {
+        const phone = normalisePhone(record.mobileNumber);
+        const email = record.workEmail?.trim().toLowerCase() || null;
+
+        // Reuse an existing login if this person is already on the platform
+        let user = phone
+          ? await this.prisma.user.findUnique({ where: { phone } })
+          : null;
+
+        if (!user && email) {
+          user = await this.prisma.user.findUnique({ where: { email } });
+        }
+
+        if (!user) {
+          if (!phone) throw new Error('A mobile number is required to create a login');
+          user = await this.prisma.user.create({
+            data: {
+              phone,
+              email,
+              name: [record.firstName, record.lastName].filter(Boolean).join(' '),
+            },
+          });
+        }
+
+        const roleName = ACCESS_LEVEL_VALUES[normaliseKey(record.beesAccessLevel)];
+        const roleId = roleIds.get(roleName);
+        if (!roleId) throw new Error(`Role ${roleName} is not configured`);
+
+        await this.prisma.userOrganization.upsert({
+          where: { userId_organizationId: { userId: user.id, organizationId } },
+          update: { roleId },
+          create: { userId: user.id, organizationId, roleId },
+        });
+
+        const employee = await this.prisma.employee.create({
+          data: {
+            organizationId,
+            userId: user.id,
+            firstName: record.firstName!,
+            lastName: record.lastName!,
+            middleName: record.middleName,
+            email,
+            phone,
+            employeeCode: record.employeeCode,
+            companyCode: record.companyCode,
+            plantBranch: record.plantBranchCode,
+            gender: GENDER_VALUES[normaliseKey(record.gender)] as any,
+            nationality: record.nationality,
+            departmentId: departmentIds.get(normaliseKey(record.currentDepartment)) ?? null,
+            jobTitle: record.jobDesignation,
+            workStation: record.workArea,
+            subSection: record.subSection,
+            shift: record.shift,
+            employmentStatus: (record.employmentStatus?.trim().toUpperCase() || 'ACTIVE') as any,
+            employmentType: (record.employmentType?.trim().toUpperCase() || null) as any,
+            beesAccessLevel: record.beesAccessLevel,
+            hodName: record.hodName,
+            hodDesignation: record.hodDesignation,
+          },
+        });
+
+        await this.prisma.emsOnboardingRecord.update({
+          where: { id: record.id },
+          data: {
+            status: 'REGISTERED',
+            employeeId: employee.id,
+            registeredAt: new Date(),
+            validationErrors: Prisma.DbNull,
+          },
+        });
+
+        results.push({ recordId: record.id, employeeId: employee.id });
+      } catch (e: any) {
+        const message = e?.message ?? 'Registration failed';
+        await this.prisma.emsOnboardingRecord.update({
+          where: { id: record.id },
+          data: {
+            status: 'NEEDS_FIXING',
+            validationErrors: [{ field: 'registration', message }],
+          },
+        });
+        results.push({ recordId: record.id, error: message });
+      }
+    }
+
+    // Batch status reflects what's left outstanding
+    const after = await this.prisma.emsOnboardingRecord.findMany({
+      where: { batchId },
+      select: { status: true },
+    });
+    const outstanding = after.filter(
+      (r) => r.status !== 'REGISTERED' && r.status !== 'EXCLUDED',
+    ).length;
+    const registered = after.filter((r) => r.status === 'REGISTERED').length;
+
+    await this.prisma.emsOnboardingBatch.update({
+      where: { id: batchId },
+      data: {
+        status: outstanding === 0 ? 'REGISTERED'
+              : registered > 0   ? 'PARTIALLY_REGISTERED'
+              :                    'DRAFT',
+      },
+    });
+
+    return {
+      registered: results.filter((r) => r.employeeId).length,
+      failed: results.filter((r) => r.error).length,
+      batch: await this.getOnboardingBatch(organizationId, batchId),
+    };
+  }
+
+  async cancelOnboardingBatch(organizationId: string, batchId: string) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      select: {
+        id: true,
+        status: true,
+        _count: { select: { records: { where: { status: 'REGISTERED' } } } },
+      },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+    if (batch.status === 'CANCELLED') {
+      throw new BadRequestException('This import is already cancelled');
+    }
+    if (batch._count.records > 0) {
+      throw new BadRequestException(
+        `Cannot cancel — ${batch._count.records} record(s) have already been registered`,
+      );
+    }
+
+    return this.prisma.emsOnboardingBatch.update({
+      where: { id: batchId },
+      data: { status: 'CANCELLED' },
+      select: BATCH_LIST_SELECT,
+    });
+  }
+
+  async deleteOnboardingBatch(organizationId: string, batchId: string) {
+    const batch = await this.prisma.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      select: { id: true, status: true },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+    if (batch.status !== 'CANCELLED') {
+      throw new BadRequestException('Cancel the import before deleting it');
+    }
+
+    await this.prisma.emsOnboardingBatch.delete({ where: { id: batchId } });
+    return { deleted: true };
   }
 }

@@ -18,6 +18,21 @@ model Employee {
   nationality  String?
   plantBranch  String?
 
+  companyCode     String?
+  beesAccessLevel String?
+  hodName         String?
+  hodDesignation  String?
+
+  firstRelieverId  String?
+  firstReliever    Employee?  @relation("EmsFirstReliever", fields: [firstRelieverId], references: [id], onDelete: SetNull)
+  relievesAsFirst  Employee[] @relation("EmsFirstReliever")
+
+  secondRelieverId String?
+  secondReliever   Employee?  @relation("EmsSecondReliever", fields: [secondRelieverId], references: [id], onDelete: SetNull)
+  relievesAsSecond Employee[] @relation("EmsSecondReliever")
+
+  emsOnboardingRecord EmsOnboardingRecord? @relation("EmsOnboardingRegisteredAs")
+
   // EMS: Work Allocation group
   employmentStatus   EmploymentStatus @default(ACTIVE)
   employmentType     EmploymentType?

@@ -96,12 +96,15 @@ describe('AuthService', () => {
 
             const result = await service.login('user@test.com', 'correctpassword');
 
-            expect(result.accessToken).toBe('signed-jwt-token');
-            if (!result.user) throw new Error('Expected a single-company login');
-            expect(result.user.name).toBe('John Doe');
-            expect(result.user.userId).toBe('user-1');
+        if (!('accessToken' in result)) {
+        throw new Error('Expected a single-company login');
+        }
+
+        expect(result.accessToken).toBe('signed-jwt-token');
+        expect(result.user.name).toBe('John Doe');
+        expect(result.user.userId).toBe('user-1');
+                });
         });
-    });
 
     // ─────────────────────────────────────────────────────────────
     // verifyFirstTimeUser

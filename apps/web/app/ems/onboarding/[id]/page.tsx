@@ -21,6 +21,7 @@ const PHONE_COUNTRIES = getCountries().map((code) => ({ code, name: countryNames
   .sort((a, b) => a.name.localeCompare(b.name));
 
 const EDITABLE_FIELDS: { key: keyof UpdateOnboardingRecordPayload; label: string }[] = [
+  { key: "companyCode",            label: "Company code" },
   { key: "employeeCode",           label: "Employee code" },
   { key: "firstName",              label: "First name" },
   { key: "middleName",             label: "Middle name" },
@@ -29,7 +30,6 @@ const EDITABLE_FIELDS: { key: keyof UpdateOnboardingRecordPayload; label: string
   { key: "nationality",            label: "Nationality" },
   { key: "mobileNumber",           label: "Mobile number" },
   { key: "workEmail",              label: "Work email" },
-  { key: "companyCode",            label: "Company code" },
   { key: "plantBranchCode",        label: "Plant / branch" },
   { key: "currentDepartment",      label: "Department" },
   { key: "jobDesignation",         label: "Designation" },
@@ -102,6 +102,11 @@ function RecordEditor({
                 errorFields.has(key) ? "border-red-300" : "border-slate-200"
               }`}
             />
+            {key === "companyCode" && (
+              <p className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-500">
+                Optional. Enter the company code used in your existing records, if applicable.
+              </p>
+            )}
           </label>
         ))}
       </div>

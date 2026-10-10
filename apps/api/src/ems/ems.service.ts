@@ -694,10 +694,6 @@ export class EmsService {
         }
       }
 
-      if (!record.companyCode?.trim()) {
-        findings.push({ field: 'companyCode', message: 'Required' });
-      }
-
       if (record.gender?.trim() && !GENDER_VALUES[normaliseKey(record.gender)]) {
         findings.push({ field: 'gender', message: `Unrecognised value "${record.gender}"` });
       }

@@ -11,6 +11,16 @@ import { EmsService, UpdateOnboardingRecordPayload } from "@/services/ems.servic
 import { ArrowLeft, Loader2, Upload, AlertCircle, FileSpreadsheet } from "lucide-react";
 import { mapHeaders, findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, Field } from "../column-map";
 import TemplateCard from "./TemplateCard";
+import { getCountries } from "libphonenumber-js";
+
+const countryNames = new Intl.DisplayNames(["en"], { type: "region" });
+
+const PHONE_COUNTRIES = getCountries()
+  .map((code) => ({
+    code,
+    name: countryNames.of(code) ?? code,
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 type ParsedRow = UpdateOnboardingRecordPayload & { rowNumber: number };
 
@@ -22,6 +32,7 @@ export default function NewOnboardingImportPage() {
   const router = useRouter();
 
   const [label, setLabel] = useState("");
+  const [defaultPhoneCountry, setDefaultPhoneCountry] = useState("");
   const [fileName, setFileName] = useState("");
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [sheetName, setSheetName] = useState("");
@@ -116,11 +127,19 @@ export default function NewOnboardingImportPage() {
 
   async function handleUpload() {
     if (!accessToken || rows.length === 0) return;
+    if (!defaultPhoneCountry) {
+      setError("Select a default country for phone numbers.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const batch = await EmsService.createOnboardingBatch(
-        { label: label || fileName, sourceFileName: fileName },
+        {
+          label: label || fileName,
+          sourceFileName: fileName,
+          defaultPhoneCountry,
+        },
         accessToken,
       );
       await EmsService.addOnboardingRecords(batch.id, { records: rows }, accessToken);
@@ -160,6 +179,42 @@ export default function NewOnboardingImportPage() {
               className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </label>
+
+          <div>
+            <label
+              htmlFor="default-phone-country"
+              className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400"
+            >
+              Default country for phone numbers
+            </label>
+
+            <select
+              id="default-phone-country"
+              value={defaultPhoneCountry}
+              onChange={(e) => setDefaultPhoneCountry(e.target.value)}
+              disabled={busy}
+              aria-describedby="default-phone-country-help"
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="">Choose a country</option>
+              {PHONE_COUNTRIES.map(({ code, name }) => (
+                <option key={code} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+
+            <p
+              id="default-phone-country-help"
+              className="mt-2 text-xs text-slate-500"
+            >
+              Used to interpret phone numbers without an international country code.
+              For example, selecting Kenya means 0712345678 is treated as
+              +254712345678. Numbers starting with + and a country code keep that
+              country code. For staff in other countries, include their international
+              country code in the spreadsheet.
+            </p>
+          </div>
 
           <label className="block">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Spreadsheet</span>

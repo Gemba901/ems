@@ -5,9 +5,11 @@ import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
 import { 
-  AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto,
+  AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto,
 } from './dto/onboarding.dto';
 import { Prisma, RoleName } from 'db';
+import { getCountries } from 'libphonenumber-js/max';
+import { normalisePhone, storedPhone, phoneLookupDigits } from './onboarding-phone';
 
 // ── Field groups that define completeness ────────────────────────────────────
 export const EMS_GROUPS = {
@@ -109,6 +111,7 @@ const BATCH_LIST_SELECT = {
   id: true,
   label: true,
   sourceFileName: true,
+  defaultPhoneCountry: true,
   status: true,
   createdAt: true,
   uploadedBy: { select: { id: true, name: true } },
@@ -157,17 +160,6 @@ const ACCESS_LEVEL_VALUES: Record<string, RoleName> = {
   administrator:     RoleName.ADMIN,
   systemadministrator: RoleName.ADMIN,
 };
-
-/** Strip to digits and expand a local leading 0 to the default country code. */
-// TODO: country code should come from the organisation, not a constant.
-const DEFAULT_COUNTRY_CODE = '254';
-
-function normalisePhone(value: string | null): string | null {
-  const digits = (value ?? '').replace(/\D/g, '');
-  if (!digits) return null;
-  if (digits.startsWith('0')) return DEFAULT_COUNTRY_CODE + digits.slice(1);
-  return digits;
-}
 
 @Injectable()
 export class EmsService {
@@ -465,6 +457,86 @@ export class EmsService {
     };
   }
   // ── HR/Admin: onboarding import ──────────────────────────────────────────
+  /** Phone matching uses stored international numbers, never the new batch's country. */
+  private async checkOnboardingIdentity(
+    db: Prisma.TransactionClient,
+    organizationId: string,
+    phone: string,
+    email: string | null,
+    knownEmployees?: { phone: string | null; userId: string | null }[],
+  ): Promise<{ id: string; phone: string; email: string | null } | null> {
+    const lookup = phoneLookupDigits(phone);
+    const employees = knownEmployees ?? await db.employee.findMany({
+      where: { organizationId }, select: { phone: true, userId: true },
+    });
+    for (const employee of employees) {
+      if (storedPhone(employee.phone) === phone) {
+        throw new BadRequestException('This phone number is already used by an employee in this company');
+      }
+      const digits = (employee.phone ?? '').replace(/\D/g, '');
+      if (digits && lookup.includes(digits) && !storedPhone(employee.phone)) {
+        throw new BadRequestException('An existing employee has a matching phone without a clear country code. Ask an administrator to review it');
+      }
+    }
+    // Compare formatting variants without downloading every account on the platform.
+    // Values are parameterized; table/column names are fixed application schema names.
+    const candidates = await db.$queryRaw<{ id: string; phone: string; email: string | null }[]>`
+      SELECT id, phone, email FROM "User"
+      WHERE regexp_replace(phone, '[^0-9]', '', 'g') IN (${Prisma.join(lookup)})
+    `;
+    const exact = candidates.filter((user) => storedPhone(user.phone) === phone);
+    if (candidates.some((user) => storedPhone(user.phone) !== phone) || exact.length > 1) {
+      throw new BadRequestException('This phone matches ambiguous existing account details. Ask an administrator to review it');
+    }
+    const user = exact[0] ?? null;
+    if (user && employees.some((employee) => employee.userId === user.id)) {
+      throw new BadRequestException('This login already has an employee in this company');
+    }
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (normalizedEmail) {
+      const emailOwners = await db.user.findMany({
+        where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (emailOwners.some((owner) => owner.id !== user?.id)) {
+        throw new BadRequestException('The phone and email do not match the same account. Ask an administrator to review them');
+      }
+    }
+    return user;
+  }
+
+  async updateOnboardingBatchCountry(
+    organizationId: string, batchId: string, dto: UpdateOnboardingBatchCountryDto,
+  ) {
+    if (!getCountries().some((code) => code === dto.defaultPhoneCountry)) {
+      throw new BadRequestException('Select a supported default country for phone numbers');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "EmsOnboardingBatch"
+        WHERE id = ${batchId} AND "organizationId" = ${organizationId} FOR UPDATE`;
+      const batch = await tx.emsOnboardingBatch.findFirst({
+        where: { id: batchId, organizationId }, include: { records: true },
+      });
+      if (!batch) throw new NotFoundException('Onboarding batch not found');
+      if (batch.status === 'CANCELLED' || batch.status === 'REGISTERED') {
+        throw new BadRequestException('The country cannot be changed on a completed or cancelled import');
+      }
+      // An old partially registered batch may receive its first country, but not be reinterpreted later.
+      if (batch.defaultPhoneCountry && batch.defaultPhoneCountry !== dto.defaultPhoneCountry &&
+          batch.records.some((record) => record.status === 'REGISTERED')) {
+        throw new BadRequestException('The country cannot be changed after registration has started');
+      }
+      await tx.emsOnboardingBatch.update({
+        where: { id: batchId }, data: { defaultPhoneCountry: dto.defaultPhoneCountry },
+      });
+      await tx.emsOnboardingRecord.updateMany({
+        where: { batchId, organizationId, status: { in: ['DRAFT', 'READY', 'NEEDS_FIXING'] } },
+        data: { status: 'DRAFT', validationErrors: Prisma.DbNull },
+      });
+    });
+    return this.validateOnboardingBatch(organizationId, batchId);
+  }
+
   async createOnboardingBatch(
     userId: string,
     organizationId: string,
@@ -476,6 +548,7 @@ export class EmsService {
         uploadedById: userId,
         label: dto.label,
         sourceFileName: dto.sourceFileName,
+        defaultPhoneCountry: dto.defaultPhoneCountry,
       },
       select: BATCH_LIST_SELECT,
     });
@@ -522,20 +595,21 @@ export class EmsService {
 
     return this.getOnboardingBatch(organizationId, batchId);
   }
-    async validateOnboardingBatch(organizationId: string, batchId: string) {
+  async validateOnboardingBatch(organizationId: string, batchId: string) {
     const batch = await this.prisma.emsOnboardingBatch.findFirst({
       where: { id: batchId, organizationId },
       include: { records: true },
     });
     if (!batch) throw new NotFoundException('Onboarding batch not found');
 
+    if (batch.status === 'CANCELLED') throw new BadRequestException('This import is cancelled');
+
     // Existing values in this org, to detect clashes
     const existing = await this.prisma.employee.findMany({
       where: { organizationId },
-      select: { employeeCode: true, phone: true, email: true },
+      select: { employeeCode: true, phone: true, email: true, userId: true },
     });
     const takenCodes  = new Set(existing.map((e) => normaliseKey(e.employeeCode)).filter(Boolean));
-    const takenPhones = new Set(existing.map((e) => normaliseKey(e.phone)).filter(Boolean));
     const takenEmails = new Set(existing.map((e) => normaliseKey(e.email)).filter(Boolean));
 
     const departments = await this.prisma.department.findMany({
@@ -546,6 +620,22 @@ export class EmsService {
 
     // Codes seen within this batch, to detect internal duplicates
     const seenCodes = new Set<string>();
+
+    // Count equivalent phone numbers across all non-excluded rows.
+    const phoneCounts = new Map<string, number>();
+
+    for (const record of batch.records) {
+      if (record.status === 'EXCLUDED') continue;
+
+      const phone = normalisePhone(
+        record.mobileNumber,
+        batch.defaultPhoneCountry,
+      );
+
+      if (phone) {
+        phoneCounts.set(phone, (phoneCounts.get(phone) ?? 0) + 1);
+      }
+    }
 
     let readyCount = 0;
 
@@ -570,6 +660,40 @@ export class EmsService {
       if (!record.firstName?.trim()) findings.push({ field: 'firstName', message: 'Required' });
       if (!record.lastName?.trim())  findings.push({ field: 'lastName',  message: 'Required' });
       
+      const phone = normalisePhone(
+        record.mobileNumber,
+        batch.defaultPhoneCountry,
+      );
+
+      if (!record.mobileNumber?.trim()) {
+        findings.push({
+          field: 'mobileNumber',
+          message: 'A mobile number is required to create a login',
+        });
+      } else if (!phone) {
+        findings.push({
+          field: 'mobileNumber',
+          message:
+            'Enter a valid phone number for the selected country, or use + followed by the country code and number.',
+        });
+      } else if ((phoneCounts.get(phone) ?? 0) > 1) {
+        findings.push({
+          field: 'mobileNumber',
+          message: 'This phone number appears on another record in this import',
+        });
+      }
+
+      if (phone && (phoneCounts.get(phone) ?? 0) === 1) {
+        try {
+          await this.checkOnboardingIdentity(
+            this.prisma, organizationId, phone, record.workEmail, existing,
+          );
+        } catch (error) {
+          if (!(error instanceof BadRequestException)) throw error;
+          findings.push({ field: 'mobileNumber', message: error.message });
+        }
+      }
+
       if (!record.companyCode?.trim()) {
         findings.push({ field: 'companyCode', message: 'Required' });
       }
@@ -638,7 +762,11 @@ export class EmsService {
 
     await this.prisma.emsOnboardingBatch.update({
       where: { id: batchId },
-      data: { status: readyCount === pending && pending > 0 ? 'READY' : 'DRAFT' },
+      data: {
+        status: batch.records.some((r) => r.status === 'REGISTERED')
+          ? (pending === 0 ? 'REGISTERED' : 'PARTIALLY_REGISTERED')
+          : (readyCount === pending && pending > 0 ? 'READY' : 'DRAFT'),
+      },
     });
 
     return this.getOnboardingBatch(organizationId, batchId);
@@ -734,134 +862,122 @@ export class EmsService {
 
   async registerOnboardingBatch(organizationId: string, batchId: string) {
     const batch = await this.prisma.emsOnboardingBatch.findFirst({
-      where: { id: batchId, organizationId },
-      include: { records: true },
+      where: { id: batchId, organizationId }, include: { records: true },
     });
     if (!batch) throw new NotFoundException('Onboarding batch not found');
-
+    if (batch.status === 'CANCELLED') throw new BadRequestException('This import is cancelled');
     const ready = batch.records.filter((r) => r.status === 'READY');
-    if (ready.length === 0) {
-      throw new BadRequestException('No records are ready to register');
-    }
+    if (!ready.length) throw new BadRequestException('No records are ready to register');
 
-    // Departments, by normalised name
     const departments = await this.prisma.department.findMany({
-      where: { organizationId },
-      select: { id: true, name: true },
+      where: { organizationId }, select: { id: true, name: true },
     });
     const departmentIds = new Map(departments.map((d) => [normaliseKey(d.name), d.id]));
-
-    // Roles, by name
     const roles = await this.prisma.role.findMany({ select: { id: true, name: true } });
     const roleIds = new Map(roles.map((r) => [r.name, r.id]));
-
     const results: { recordId: string; employeeId?: string; error?: string }[] = [];
 
-    for (const record of ready) {
+    for (const candidate of ready) {
       try {
-        const phone = normalisePhone(record.mobileNumber);
-        const email = record.workEmail?.trim().toLowerCase() || null;
-
-        // Reuse an existing login if this person is already on the platform
-        let user = phone
-          ? await this.prisma.user.findUnique({ where: { phone } })
-          : null;
-
-        if (!user && email) {
-          user = await this.prisma.user.findUnique({ where: { email } });
-        }
-
-        if (!user) {
-          if (!phone) throw new Error('A mobile number is required to create a login');
-          user = await this.prisma.user.create({
+        const employee = await this.prisma.$transaction(async (tx) => {
+          // Serialize registration and country changes for this batch.
+          await tx.$queryRaw`SELECT id FROM "EmsOnboardingBatch"
+            WHERE id = ${batchId} AND "organizationId" = ${organizationId} FOR UPDATE`;
+          const current = await tx.emsOnboardingBatch.findFirst({
+            where: { id: batchId, organizationId }, include: { records: true },
+          });
+          if (!current || current.status === 'CANCELLED') {
+            throw new BadRequestException('This import is unavailable or cancelled');
+          }
+          const record = current.records.find((r) => r.id === candidate.id);
+          if (!record || record.status !== 'READY') {
+            throw new BadRequestException('This record is no longer ready; validate the import again');
+          }
+          const phone = normalisePhone(record.mobileNumber, current.defaultPhoneCountry);
+          if (!phone) throw new BadRequestException('Enter a valid phone number and check the default country');
+          const duplicates = current.records.filter((r) =>
+            r.status !== 'EXCLUDED' &&
+            normalisePhone(r.mobileNumber, current.defaultPhoneCountry) === phone,
+          );
+          if (duplicates.length > 1) {
+            throw new BadRequestException('This phone number appears on another record in this import');
+          }
+          const roleName = ACCESS_LEVEL_VALUES[normaliseKey(record.beesAccessLevel)];
+          const roleId = roleIds.get(roleName);
+          if (!roleId) throw new BadRequestException('The selected access level is not configured');
+          const email = record.workEmail?.trim().toLowerCase() || null;
+          let user = await this.checkOnboardingIdentity(tx, organizationId, phone, email);
+          if (!user) {
+            user = await tx.user.create({
+              data: { phone, email, name: [record.firstName, record.lastName].filter(Boolean).join(' ') },
+              select: { id: true, phone: true, email: true },
+            });
+          }
+          // Importing an employee must not overwrite an existing company role.
+          await tx.userOrganization.upsert({
+            where: { userId_organizationId: { userId: user.id, organizationId } },
+            update: {}, create: { userId: user.id, organizationId, roleId },
+          });
+          const employee = await tx.employee.create({
             data: {
-              phone,
+              organizationId,
+              userId: user.id,
+              firstName: record.firstName!,
+              lastName: record.lastName!,
+              middleName: record.middleName,
               email,
-              name: [record.firstName, record.lastName].filter(Boolean).join(' '),
+              phone,
+              employeeCode: record.employeeCode,
+              companyCode: record.companyCode,
+              plantBranch: record.plantBranchCode,
+              gender: GENDER_VALUES[normaliseKey(record.gender)] as any,
+              nationality: record.nationality,
+              departmentId: departmentIds.get(normaliseKey(record.currentDepartment)) ?? null,
+              jobTitle: record.jobDesignation,
+              workStation: record.workArea,
+              subSection: record.subSection,
+              shift: record.shift,
+              employmentStatus: (record.employmentStatus?.trim().toUpperCase() || 'ACTIVE') as any,
+              employmentType: (record.employmentType?.trim().toUpperCase() || null) as any,
+              beesAccessLevel: record.beesAccessLevel,
+              hodName: record.hodName,
+              hodDesignation: record.hodDesignation,
             },
           });
-        }
 
-        const roleName = ACCESS_LEVEL_VALUES[normaliseKey(record.beesAccessLevel)];
-        const roleId = roleIds.get(roleName);
-        if (!roleId) throw new Error(`Role ${roleName} is not configured`);
-
-        await this.prisma.userOrganization.upsert({
-          where: { userId_organizationId: { userId: user.id, organizationId } },
-          update: { roleId },
-          create: { userId: user.id, organizationId, roleId },
+          await tx.emsOnboardingRecord.update({
+            where: { id: record.id },
+            data: {
+              status: 'REGISTERED',
+              employeeId: employee.id,
+              registeredAt: new Date(),
+              validationErrors: Prisma.DbNull,
+            },
+          });
+          return employee;
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+        results.push({ recordId: candidate.id, employeeId: employee.id });
+      } catch (error: unknown) {
+        const message = error instanceof BadRequestException
+          ? error.message
+          : 'Registration could not be completed. Validate and retry; contact an administrator if it persists.';
+        // Do not downgrade a record another request has already registered/excluded.
+        await this.prisma.emsOnboardingRecord.updateMany({
+          where: { id: candidate.id, organizationId, status: 'READY' },
+          data: { status: 'NEEDS_FIXING', validationErrors: [{ field: 'registration', message }] },
         });
-
-        const employee = await this.prisma.employee.create({
-          data: {
-            organizationId,
-            userId: user.id,
-            firstName: record.firstName!,
-            lastName: record.lastName!,
-            middleName: record.middleName,
-            email,
-            phone,
-            employeeCode: record.employeeCode,
-            companyCode: record.companyCode,
-            plantBranch: record.plantBranchCode,
-            gender: GENDER_VALUES[normaliseKey(record.gender)] as any,
-            nationality: record.nationality,
-            departmentId: departmentIds.get(normaliseKey(record.currentDepartment)) ?? null,
-            jobTitle: record.jobDesignation,
-            workStation: record.workArea,
-            subSection: record.subSection,
-            shift: record.shift,
-            employmentStatus: (record.employmentStatus?.trim().toUpperCase() || 'ACTIVE') as any,
-            employmentType: (record.employmentType?.trim().toUpperCase() || null) as any,
-            beesAccessLevel: record.beesAccessLevel,
-            hodName: record.hodName,
-            hodDesignation: record.hodDesignation,
-          },
-        });
-
-        await this.prisma.emsOnboardingRecord.update({
-          where: { id: record.id },
-          data: {
-            status: 'REGISTERED',
-            employeeId: employee.id,
-            registeredAt: new Date(),
-            validationErrors: Prisma.DbNull,
-          },
-        });
-
-        results.push({ recordId: record.id, employeeId: employee.id });
-      } catch (e: any) {
-        const message = e?.message ?? 'Registration failed';
-        await this.prisma.emsOnboardingRecord.update({
-          where: { id: record.id },
-          data: {
-            status: 'NEEDS_FIXING',
-            validationErrors: [{ field: 'registration', message }],
-          },
-        });
-        results.push({ recordId: record.id, error: message });
+        results.push({ recordId: candidate.id, error: message });
       }
     }
-
-    // Batch status reflects what's left outstanding
     const after = await this.prisma.emsOnboardingRecord.findMany({
-      where: { batchId },
-      select: { status: true },
+      where: { batchId, organizationId }, select: { status: true },
     });
-    const outstanding = after.filter(
-      (r) => r.status !== 'REGISTERED' && r.status !== 'EXCLUDED',
-    ).length;
+    const outstanding = after.filter((r) => r.status !== 'REGISTERED' && r.status !== 'EXCLUDED').length;
     const registered = after.filter((r) => r.status === 'REGISTERED').length;
-
-    await this.prisma.emsOnboardingBatch.update({
-      where: { id: batchId },
-      data: {
-        status: outstanding === 0 ? 'REGISTERED'
-              : registered > 0   ? 'PARTIALLY_REGISTERED'
-              :                    'DRAFT',
-      },
+    await this.prisma.emsOnboardingBatch.updateMany({
+      where: { id: batchId, organizationId, status: { not: 'CANCELLED' } },
+      data: { status: outstanding === 0 ? 'REGISTERED' : registered > 0 ? 'PARTIALLY_REGISTERED' : 'DRAFT' },
     });
-
     return {
       registered: results.filter((r) => r.employeeId).length,
       failed: results.filter((r) => r.error).length,

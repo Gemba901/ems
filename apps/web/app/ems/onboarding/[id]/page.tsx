@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, Fragment } from "react";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
@@ -13,6 +13,12 @@ import {
   ArrowLeft, Loader2, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Ban, Undo2, UserPlus,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { getCountries } from "libphonenumber-js";
+
+const countryNames = new Intl.DisplayNames(["en"], { type: "region" });
+const PHONE_COUNTRIES = getCountries().map((code) => ({ code, name: countryNames.of(code) ?? code }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 const EDITABLE_FIELDS: { key: keyof UpdateOnboardingRecordPayload; label: string }[] = [
   { key: "employeeCode",           label: "Employee code" },
@@ -167,12 +173,23 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const queryClient = useQueryClient();
   const [openRow, setOpenRow] = useState<string | null>(null);
 
+  const [countryDraft, setCountryDraft] = useState<string | null>(null);
+
   const queryKey = ["ems-onboarding-batch", id];
 
   const { data: batch, isLoading: loading, error: queryError } = useQuery({
     queryKey,
     queryFn: () => EmsService.getOnboardingBatch(id, accessToken!),
     enabled: !!accessToken,
+  });
+
+  const updateCountry = useMutation({
+    mutationFn: (country: string) => EmsService.updateOnboardingBatchCountry(id, country, accessToken!),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKey, updated);
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
+      setCountryDraft(null);
+    },
   });
 
   const validate = useMutation({
@@ -207,7 +224,12 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
 
   const error = queryError ? (queryError as any).message : null;
   const records: OnboardingRecord[] = batch?.records ?? [];
-  const busy = save.isPending || exclude.isPending || include.isPending;
+  const busy = save.isPending || exclude.isPending || include.isPending ||
+    updateCountry.isPending || validate.isPending || register.isPending;
+  const country = countryDraft ?? batch?.defaultPhoneCountry ?? "";
+  const countryUnsaved = country !== (batch?.defaultPhoneCountry ?? "");
+  const closed = batch?.status === "CANCELLED" || batch?.status === "REGISTERED";
+  const mutationError = updateCountry.error ?? validate.error ?? register.error ?? save.error ?? include.error;
 
   const readyCount = records.filter((r) => r.status === "READY").length;
   const problemCount = records.filter((r) => r.status === "NEEDS_FIXING").length;
@@ -237,7 +259,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
           </div>
           <button
             onClick={() => validate.mutate()}
-            disabled={validate.isPending || !batch}
+            disabled={busy || !batch || closed || countryUnsaved}
             className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
           >
             {validate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -246,7 +268,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
 
           <button
             onClick={() => register.mutate()}
-            disabled={register.isPending || readyCount === 0}
+            disabled={busy || readyCount === 0 || closed || countryUnsaved}
             title={readyCount === 0 ? "No records are ready to register" : undefined}
             className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -263,6 +285,38 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             Register {readyCount}
           </button>*/}
         </div>
+
+        {batch && (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
+            <label htmlFor="batch-phone-country" className="block text-sm font-semibold text-slate-700">
+              Default country for phone numbers
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <select id="batch-phone-country" value={country}
+                onChange={(event) => { setCountryDraft(event.target.value); updateCountry.reset(); }}
+                disabled={busy || closed || (!!batch.defaultPhoneCountry && registeredCount > 0)}
+                aria-describedby="batch-phone-country-help"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                <option value="">Choose a country</option>
+                {PHONE_COUNTRIES.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}
+              </select>
+              <button type="button" onClick={() => updateCountry.mutate(country)}
+                disabled={busy || closed || !country || !countryUnsaved}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                {updateCountry.isPending ? "Saving…" : "Save country & revalidate"}
+              </button>
+            </div>
+            <p id="batch-phone-country-help" className="text-xs text-slate-500">
+              Used for local phone numbers in this import. Numbers beginning with + keep their country code.
+              For people in other countries, enter + and their country code. Saving checks pending records again;
+              it does not change registered employees or existing logins.
+            </p>
+            {!batch.defaultPhoneCountry && <p className="text-xs text-amber-700">This older import has no default country. Choose one for local numbers, or enter every number with + and its country code.</p>}
+            {countryUnsaved && <p className="text-xs text-amber-700">Save the country before validating or registering records.</p>}
+            {!!batch.defaultPhoneCountry && registeredCount > 0 && <p className="text-xs text-slate-500">The country is fixed because registration has started.</p>}
+          </div>
+        )}
+        {mutationError && <p role="alert" className="text-sm text-red-600">{mutationError.message}</p>}
 
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
           {loading ? (
@@ -287,7 +341,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 {records.map((rec) => {
                   const open = openRow === rec.id;
                   return (
-                    <>
+                    <Fragment key={rec.id}>
                       <tr
                         key={rec.id}
                         onClick={() => setOpenRow(open ? null : rec.id)}
@@ -324,7 +378,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                           <td colSpan={6} className="p-0">
                             <RecordEditor
                               record={rec}
-                              saving={busy}
+                              saving={busy || countryUnsaved || closed}
                               exclusionError={
                                 exclude.isError && exclude.variables?.recordId === rec.id
                                   ? exclude.error.message || "Could not exclude this record."
@@ -337,7 +391,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
                 {records.length === 0 && (

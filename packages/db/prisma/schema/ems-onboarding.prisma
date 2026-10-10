@@ -23,6 +23,10 @@ model EmsOnboardingBatch {
 
   label          String?
   sourceFileName String?
+
+  // Default country for interpreting phone numbers without a country code.
+  defaultPhoneCountry String? @db.VarChar(2)
+
   status         EmsOnboardingBatchStatus @default(DRAFT)
 
   uploadedById String?

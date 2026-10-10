@@ -1,11 +1,23 @@
 import { Transform, Type } from 'class-transformer';
 import {
-  IsArray, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
+  IsArray, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
 } from 'class-validator';
+import { getCountries } from 'libphonenumber-js';
 
 export class CreateOnboardingBatchDto {
   @IsString() @IsOptional() @MaxLength(200) label?: string;
   @IsString() @IsOptional() @MaxLength(255) sourceFileName?: string;
+  @IsString()
+  @IsIn(getCountries(), {
+    message: 'Select a supported default country for phone numbers',
+  })
+  defaultPhoneCountry!: string;
+}
+
+export class UpdateOnboardingBatchCountryDto {
+  @IsString()
+  @IsIn(getCountries(), { message: 'Select a supported default country for phone numbers' })
+  defaultPhoneCountry!: string;
 }
 
 export class OnboardingRecordInputDto {

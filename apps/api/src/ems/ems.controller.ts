@@ -16,7 +16,7 @@ import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
 import { Post, Delete } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
 import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, 
-  UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto } from './dto/onboarding.dto';
+  UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -94,6 +94,16 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.getOnboardingBatch(user.organizationId, id);
+  }
+
+  @Patch('onboarding/batches/:id/phone-country')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async updateOnboardingBatchCountry(
+    @Param('id') id: string,
+    @Body() dto: UpdateOnboardingBatchCountryDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.updateOnboardingBatchCountry(user.organizationId, id, dto);
   }
 
   /** POST /ems/onboarding/batches/:id/records — load rows into an import */

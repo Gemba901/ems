@@ -289,6 +289,7 @@ export interface OnboardingBatchSummary {
   id: string;
   label: string | null;
   sourceFileName: string | null;
+  defaultPhoneCountry: string | null;
   status: OnboardingBatchStatus;
   createdAt: string;
   uploadedBy: { id: string; name: string } | null;
@@ -418,8 +419,23 @@ export const EmsService = {
     return handleResponse(res);
   },
 
+  async updateOnboardingBatchCountry(
+    id: string, defaultPhoneCountry: string, token: string,
+  ): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/phone-country`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify({ defaultPhoneCountry }),
+    }, token);
+    return handleResponse(res);
+  },
+
   async createOnboardingBatch(
-    data: { label?: string; sourceFileName?: string },
+    data: {
+      label?: string;
+      sourceFileName?: string;
+      defaultPhoneCountry: string;
+    },
     token: string,
   ): Promise<OnboardingBatchSummary> {
     const res = await apiClient(`${API_URL}/ems/onboarding/batches`, {

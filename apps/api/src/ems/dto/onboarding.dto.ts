@@ -31,6 +31,7 @@ export class OnboardingRecordInputDto {
   @IsString() @IsOptional() middleName?: string;
   @IsString() @IsOptional() lastName?: string;
   @IsString() @IsOptional() mobileNumber?: string;
+  @IsString() @IsOptional() whatsappNumber?: string;
   @IsString() @IsOptional() workEmail?: string;
   @IsString() @IsOptional() gender?: string;
   @IsString() @IsOptional() nationality?: string;
@@ -67,6 +68,7 @@ export class UpdateOnboardingRecordDto {
   @IsString() @IsOptional() middleName?: string;
   @IsString() @IsOptional() lastName?: string;
   @IsString() @IsOptional() mobileNumber?: string;
+  @IsString() @IsOptional() whatsappNumber?: string;
   @IsString() @IsOptional() workEmail?: string;
   @IsString() @IsOptional() gender?: string;
   @IsString() @IsOptional() nationality?: string;

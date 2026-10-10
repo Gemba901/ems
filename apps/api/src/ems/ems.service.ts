@@ -462,7 +462,6 @@ export class EmsService {
     db: Prisma.TransactionClient,
     organizationId: string,
     phone: string,
-    email: string | null,
     knownEmployees?: { phone: string | null; userId: string | null }[],
   ): Promise<{ id: string; phone: string; email: string | null } | null> {
     const lookup = phoneLookupDigits(phone);
@@ -492,16 +491,7 @@ export class EmsService {
     if (user && employees.some((employee) => employee.userId === user.id)) {
       throw new BadRequestException('This login already has an employee in this company');
     }
-    const normalizedEmail = email?.trim().toLowerCase();
-    if (normalizedEmail) {
-      const emailOwners = await db.user.findMany({
-        where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
-        select: { id: true },
-      });
-      if (emailOwners.some((owner) => owner.id !== user?.id)) {
-        throw new BadRequestException('The phone and email do not match the same account. Ask an administrator to review them');
-      }
-    }
+    
     return user;
   }
 
@@ -604,13 +594,18 @@ export class EmsService {
 
     if (batch.status === 'CANCELLED') throw new BadRequestException('This import is cancelled');
 
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { communicationChannel: true },
+    });
+    const channel = organization?.communicationChannel ?? null;
+
     // Existing values in this org, to detect clashes
     const existing = await this.prisma.employee.findMany({
       where: { organizationId },
       select: { employeeCode: true, phone: true, email: true, userId: true },
     });
     const takenCodes  = new Set(existing.map((e) => normaliseKey(e.employeeCode)).filter(Boolean));
-    const takenEmails = new Set(existing.map((e) => normaliseKey(e.email)).filter(Boolean));
 
     const departments = await this.prisma.department.findMany({
       where: { organizationId },
@@ -686,7 +681,7 @@ export class EmsService {
       if (phone && (phoneCounts.get(phone) ?? 0) === 1) {
         try {
           await this.checkOnboardingIdentity(
-            this.prisma, organizationId, phone, record.workEmail, existing,
+            this.prisma, organizationId, phone, existing,
           );
         } catch (error) {
           if (!(error instanceof BadRequestException)) throw error;
@@ -728,14 +723,32 @@ export class EmsService {
         });
       }
 
-      if (record.workEmail?.trim() && takenEmails.has(normaliseKey(record.workEmail))) {
-        findings.push({ field: 'workEmail', message: 'Already used by an existing employee' });
-      }
-
       if (record.workEmail?.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(record.workEmail.trim())) {
         findings.push({
           field: 'workEmail',
           message: `"${record.workEmail}" is not a valid email address`,
+        });
+      }
+
+            const whatsapp = normalisePhone(record.whatsappNumber, batch.defaultPhoneCountry);
+      if (!record.whatsappNumber?.trim()) {
+        if (channel === 'WHATSAPP') {
+          findings.push({
+            field: 'whatsappNumber',
+            message: 'A WhatsApp number is required because your organisation communicates by WhatsApp',
+          });
+        }
+      } else if (!whatsapp) {
+        findings.push({
+          field: 'whatsappNumber',
+          message: 'Enter a valid WhatsApp number for the selected country, or use + followed by the country code and number.',
+        });
+      }
+
+      if (channel === 'EMAIL' && !record.workEmail?.trim()) {
+        findings.push({
+          field: 'workEmail',
+          message: 'An email address is required because your organisation communicates by email',
         });
       }
 
@@ -861,6 +874,16 @@ export class EmsService {
     const ready = batch.records.filter((r) => r.status === 'READY');
     if (!ready.length) throw new BadRequestException('No records are ready to register');
 
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { communicationChannel: true },
+    });
+    if (!organization?.communicationChannel) {
+      throw new BadRequestException(
+        "Choose your organisation's communication channel (WhatsApp or email) before registering",
+      );
+    }
+
     const departments = await this.prisma.department.findMany({
       where: { organizationId }, select: { id: true, name: true },
     });
@@ -898,10 +921,10 @@ export class EmsService {
           const roleId = roleIds.get(roleName);
           if (!roleId) throw new BadRequestException('The selected access level is not configured');
           const email = record.workEmail?.trim().toLowerCase() || null;
-          let user = await this.checkOnboardingIdentity(tx, organizationId, phone, email);
+          let user = await this.checkOnboardingIdentity(tx, organizationId, phone);
           if (!user) {
             user = await tx.user.create({
-              data: { phone, email, name: [record.firstName, record.lastName].filter(Boolean).join(' ') },
+              data: { phone, name: [record.firstName, record.lastName].filter(Boolean).join(' ') },
               select: { id: true, phone: true, email: true },
             });
           }
@@ -919,6 +942,7 @@ export class EmsService {
               middleName: record.middleName,
               email,
               phone,
+              whatsappNumber: normalisePhone(record.whatsappNumber, current.defaultPhoneCountry),
               employeeCode: record.employeeCode,
               companyCode: record.companyCode,
               plantBranch: record.plantBranchCode,

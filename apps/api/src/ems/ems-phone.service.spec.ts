@@ -8,7 +8,7 @@ import { UpdateOnboardingBatchCountryDto } from './dto/onboarding.dto';
 const row = (id = 'r1', mobileNumber = '0712345678') => ({
   id, organizationId: 'org1', batchId: 'b1', employeeCode: id,
   firstName: 'Test', lastName: 'Person', companyCode: 'ACME',
-  mobileNumber, workEmail: null, currentDepartment: 'HR',
+   mobileNumber, whatsappNumber: mobileNumber, workEmail: null, currentDepartment: 'HR',
   beesAccessLevel: 'employee', status: 'READY',
 });
 
@@ -20,6 +20,7 @@ function fixture() {
     employee: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'emp1' }) },
     department: { findMany: jest.fn().mockResolvedValue([{ id: 'dept1', name: 'HR' }]) },
     role: { findMany: jest.fn().mockResolvedValue([{ id: 1, name: 'EMPLOYEE' }]) },
+    organization: { findUnique: jest.fn().mockResolvedValue({ communicationChannel: 'WHATSAPP' }) },
     user: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'u1', phone: '254712345678', email: null }) },
     userOrganization: { upsert: jest.fn() },
     $queryRaw: jest.fn().mockResolvedValue([]),
@@ -101,14 +102,16 @@ describe('EMS phone registration', () => {
     expect(db.employee.create).not.toHaveBeenCalled();
     expect(db.userOrganization.upsert).not.toHaveBeenCalled();
   });
-  it('does not link an account by email when the phone differs', async () => {
+  it('ignores an account that owns the same email and registers by phone', async () => {
     const { db, service, batch } = fixture();
     Object.assign(batch.records[0], { workEmail: 'person@example.com' });
     db.user.findMany.mockResolvedValue([{ id: 'different-account' }]);
     const result = await service.registerOnboardingBatch('org1', 'b1');
-    expect(result.failed).toBe(1);
-    expect(db.user.create).not.toHaveBeenCalled();
-    expect(db.userOrganization.upsert).not.toHaveBeenCalled();
+    expect(result.failed).toBe(0);
+    expect(db.user.create).toHaveBeenCalledTimes(1);
+    expect(db.userOrganization.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ userId: 'u1' }),
+    }));
   });
   it('rechecks an existing employee even if the row was marked READY', async () => {
     const { db, service } = fixture();
@@ -151,5 +154,65 @@ describe('Batch country changes', () => {
   });
   it.each(['KE', 'US', 'JP'])('accepts supported country %s', (country) => {
     expect(validateSync(plainToInstance(UpdateOnboardingBatchCountryDto, { defaultPhoneCountry: country }))).toHaveLength(0);
+  });
+});
+
+const findingsFor = (db: ReturnType<typeof fixture>['db'], id: string) => {
+  const call = db.emsOnboardingRecord.update.mock.calls.find(([args]) => args.where.id === id);
+  const errors = call?.[0].data.validationErrors;
+  return Array.isArray(errors) ? errors : [];
+};
+
+describe('EMS communication channel rules', () => {
+  it('requires WhatsApp when the organisation uses WhatsApp', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), whatsappNumber: null, status: 'DRAFT' }];
+    await service.validateOnboardingBatch('org1', 'b1');
+    expect(findingsFor(db, 'r1')).toContainEqual(expect.objectContaining({ field: 'whatsappNumber' }));
+  });
+
+  it('requires email, not WhatsApp, when the organisation uses email', async () => {
+    const { db, service, batch } = fixture();
+    db.organization.findUnique.mockResolvedValue({ communicationChannel: 'EMAIL' });
+    batch.records = [{ ...row(), whatsappNumber: null, status: 'DRAFT' }];
+    await service.validateOnboardingBatch('org1', 'b1');
+    const fields = findingsFor(db, 'r1').map((f) => f.field);
+    expect(fields).toContain('workEmail');
+    expect(fields).not.toContain('whatsappNumber');
+  });
+
+  it('flags an invalid WhatsApp number whatever the channel', async () => {
+    const { db, service, batch } = fixture();
+    db.organization.findUnique.mockResolvedValue({ communicationChannel: 'EMAIL' });
+    batch.records = [{ ...row(), workEmail: 'a@b.co', whatsappNumber: '12345', status: 'DRAFT' }];
+    await service.validateOnboardingBatch('org1', 'b1');
+    expect(findingsFor(db, 'r1')).toContainEqual(expect.objectContaining({ field: 'whatsappNumber' }));
+  });
+
+  it('allows two people to share a work email', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [
+      { ...row('r1', '0712345678'), workEmail: 'production@acme.co', status: 'DRAFT' },
+      { ...row('r2', '0722345678'), workEmail: 'production@acme.co', status: 'DRAFT' },
+    ];
+    await service.validateOnboardingBatch('org1', 'b1');
+    expect(findingsFor(db, 'r1')).toEqual([]);
+    expect(findingsFor(db, 'r2')).toEqual([]);
+  });
+
+  it('refuses to register until the organisation has chosen a channel', async () => {
+    const { db, service } = fixture();
+    db.organization.findUnique.mockResolvedValue({ communicationChannel: null });
+    await expect(service.registerOnboardingBatch('org1', 'b1')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('keeps the work email off the login and stores WhatsApp on the employee', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), workEmail: 'production@acme.co' }];
+    await service.registerOnboardingBatch('org1', 'b1');
+    expect(db.user.create.mock.calls[0][0].data).not.toHaveProperty('email');
+    expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ email: 'production@acme.co', whatsappNumber: '254712345678' }),
+    }));
   });
 });

@@ -723,10 +723,6 @@ export class EmsService {
         });
       }
 
-      if (record.currentDepartment?.trim() && !knownDepartments.has(normaliseKey(record.currentDepartment))) {
-        findings.push({ field: 'currentDepartment', message: `No department named "${record.currentDepartment}" in this organisation` });
-      }
-
       if (!record.currentDepartment?.trim()) {
         findings.push({ field: 'currentDepartment', message: 'Required' });
       } else if (!knownDepartments.has(normaliseKey(record.currentDepartment))) {

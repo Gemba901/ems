@@ -171,7 +171,7 @@ model Employee {
   heatMaterialChargesRecorded      HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
   heatCycleEventsRecorded          HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
 
-  @@unique([email, organizationId])
+  @@index([email, organizationId])
   @@unique([phone, organizationId])
   @@unique([employeeCode, organizationId])
 }

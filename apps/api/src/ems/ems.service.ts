@@ -5,7 +5,7 @@ import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
 import { 
-  AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto,
+  AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto,
 } from './dto/onboarding.dto';
 import { Prisma, RoleName } from 'db';
 import { getCountries } from 'libphonenumber-js/max';
@@ -495,6 +495,36 @@ export class EmsService {
     return user;
   }
 
+  async getCommunicationChannel(organizationId: string) {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { communicationChannel: true },
+    });
+    if (!organization) throw new NotFoundException('Organisation not found');
+    return organization;
+  }
+
+  async updateCommunicationChannel(organizationId: string, dto: UpdateCommunicationChannelDto) {
+    const current = await this.getCommunicationChannel(organizationId);
+    if (current.communicationChannel === dto.communicationChannel) return current;
+
+    await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { communicationChannel: dto.communicationChannel },
+    });
+
+    // The required contact field has changed, so re-check every unfinished import.
+    const batches = await this.prisma.emsOnboardingBatch.findMany({
+      where: { organizationId, status: { notIn: ['CANCELLED', 'REGISTERED'] } },
+      select: { id: true },
+    });
+    for (const batch of batches) {
+      await this.validateOnboardingBatch(organizationId, batch.id);
+    }
+
+    return { communicationChannel: dto.communicationChannel };
+  }
+  
   async updateOnboardingBatchCountry(
     organizationId: string, batchId: string, dto: UpdateOnboardingBatchCountryDto,
   ) {

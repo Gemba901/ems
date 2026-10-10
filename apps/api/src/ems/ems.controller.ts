@@ -15,7 +15,7 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
 import { Post, Delete } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
-import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, 
+import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto,
   UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto } from './dto/onboarding.dto';
 
 @TenantRequired()
@@ -69,6 +69,23 @@ export class EmsController {
   ) {
     return this.ems.updateEmployee(id, user.organizationId, dto);
   }
+  /** GET /ems/onboarding/communication-channel — the org's chosen channel, or null */
+  @Get('onboarding/communication-channel')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getCommunicationChannel(@CurrentUser() user: { organizationId: string }) {
+    return this.ems.getCommunicationChannel(user.organizationId);
+  }
+
+  /** PATCH /ems/onboarding/communication-channel — choose WhatsApp or email */
+  @Patch('onboarding/communication-channel')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async updateCommunicationChannel(
+    @Body() dto: UpdateCommunicationChannelDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.updateCommunicationChannel(user.organizationId, dto);
+  }
+
     /** POST /ems/onboarding/batches — start a new import */
   @Post('onboarding/batches')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)

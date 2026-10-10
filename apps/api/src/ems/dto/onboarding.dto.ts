@@ -1,8 +1,9 @@
 import { Transform, Type } from 'class-transformer';
 import {
-  IsArray, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
+  IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
 } from 'class-validator';
 import { getCountries } from 'libphonenumber-js';
+import { OrgCommunicationChannel } from 'db';
 
 export class CreateOnboardingBatchDto {
   @IsString() @IsOptional() @MaxLength(200) label?: string;
@@ -110,3 +111,7 @@ export class ExcludeOnboardingRecordDto {
   reason!: string;
 }
 
+export class UpdateCommunicationChannelDto {
+  @IsEnum(OrgCommunicationChannel, { message: 'Choose WhatsApp or email' })
+  communicationChannel!: OrgCommunicationChannel;
+}

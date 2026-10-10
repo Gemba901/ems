@@ -8,24 +8,25 @@ import { UpdateOnboardingBatchCountryDto } from './dto/onboarding.dto';
 const row = (id = 'r1', mobileNumber = '0712345678') => ({
   id, organizationId: 'org1', batchId: 'b1', employeeCode: id,
   firstName: 'Test', lastName: 'Person', companyCode: 'ACME',
-   mobileNumber, whatsappNumber: mobileNumber, workEmail: null, currentDepartment: 'HR',
+  mobileNumber, whatsappNumber: mobileNumber as string | null, workEmail: null as string | null, currentDepartment: 'HR',
   beesAccessLevel: 'employee', status: 'READY',
 });
 
 function fixture() {
   const batch = { id: 'b1', organizationId: 'org1', status: 'READY', defaultPhoneCountry: 'KE', records: [row()] };
   const db = {
-    emsOnboardingBatch: { findFirst: jest.fn().mockResolvedValue(batch), update: jest.fn(), updateMany: jest.fn() },
+    emsOnboardingBatch: { findFirst: jest.fn().mockResolvedValue(batch), findMany: jest.fn().mockResolvedValue([batch]), update: jest.fn(), updateMany: jest.fn() },
     emsOnboardingRecord: { update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockResolvedValue([{ status: 'REGISTERED' }]) },
     employee: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'emp1' }) },
     department: { findMany: jest.fn().mockResolvedValue([{ id: 'dept1', name: 'HR' }]) },
     role: { findMany: jest.fn().mockResolvedValue([{ id: 1, name: 'EMPLOYEE' }]) },
-    organization: { findUnique: jest.fn().mockResolvedValue({ communicationChannel: 'WHATSAPP' }) },
+    organization: { findUnique: jest.fn().mockResolvedValue({ communicationChannel: 'WHATSAPP' }), update: jest.fn() },
     user: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'u1', phone: '254712345678', email: null }) },
     userOrganization: { upsert: jest.fn() },
     $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(),
   };
+
   // A unit-test transaction double. Actual PostgreSQL rollback requires integration testing.
   db.$transaction.mockImplementation(async (callback) => callback(db));
   const service = new EmsService(db as unknown as PrismaService);
@@ -214,5 +215,23 @@ describe('EMS communication channel rules', () => {
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ email: 'production@acme.co', whatsappNumber: '254712345678' }),
     }));
+  });
+});
+
+describe('EMS communication channel setting', () => {
+  it('re-validates open imports when the channel changes', async () => {
+    const { db, service } = fixture();
+    await service.updateCommunicationChannel('org1', { communicationChannel: 'EMAIL' } as any);
+    expect(db.organization.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { communicationChannel: 'EMAIL' },
+    }));
+    expect(db.emsOnboardingRecord.update).toHaveBeenCalled();
+  });
+
+  it('does nothing when the same channel is chosen again', async () => {
+    const { db, service } = fixture();
+    await service.updateCommunicationChannel('org1', { communicationChannel: 'WHATSAPP' } as any);
+    expect(db.organization.update).not.toHaveBeenCalled();
+    expect(db.emsOnboardingRecord.update).not.toHaveBeenCalled();
   });
 });

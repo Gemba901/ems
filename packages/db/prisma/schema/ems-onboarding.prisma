@@ -57,6 +57,7 @@ model EmsOnboardingRecord {
   middleName      String?
   lastName        String?
   mobileNumber           String?
+  whatsappNumber         String?
   workEmail       String?
   gender                 String?
   nationality            String?

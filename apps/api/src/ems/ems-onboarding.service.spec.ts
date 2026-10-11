@@ -272,3 +272,36 @@ describe('EMS employment values', () => {
     }));
   });
 });
+
+describe('EMS placeholder and N/A rules', () => {
+  it('treats an unknown placeholder in a required field as blank', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), status: 'DRAFT', jobDesignation: 'nil' }];
+    await service.validateOnboardingBatch('org1', 'b1');
+    expect(findingsFor(db, 'r1')).toEqual([{ field: 'jobDesignation', message: 'Required' }]);
+  });
+
+  it('rejects N/A in a required field with one clear message', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), status: 'DRAFT', mobileNumber: 'N/A' }];
+    await service.validateOnboardingBatch('org1', 'b1');
+    const mobile = findingsFor(db, 'r1').filter((f) => f.field === 'mobileNumber');
+    expect(mobile).toEqual([{ field: 'mobileNumber', message: expect.stringContaining('N/A is not accepted') }]);
+  });
+
+  it('accepts N/A in optional fields that have a format check', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), status: 'DRAFT', workEmail: 'N/A', gender: 'N/A' } as any];
+    await service.validateOnboardingBatch('org1', 'b1');
+    expect(findingsFor(db, 'r1')).toEqual([]);
+  });
+
+  it('stores N/A email as empty but keeps N/A in free-text fields', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), workEmail: 'N/A', plantBranchCode: 'N/A', subSection: '-' } as any];
+    await service.registerOnboardingBatch('org1', 'b1');
+    expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ email: null, plantBranch: 'N/A', subSection: null }),
+    }));
+  });
+});

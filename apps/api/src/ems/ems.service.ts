@@ -154,6 +154,48 @@ function matchEnumValue(value: string | null, allowed: Set<string>): string | nu
   return [...allowed].find((v) => normaliseKey(v) === key) ?? null;
 }
 
+/** Placeholders meaning "unknown". Treated exactly like an empty cell. */
+const BLANK_PLACEHOLDERS = new Set(['nil', 'none', 'null', 'noinformationavailable', 'noinfo']);
+
+/** Answers meaning "does not apply to this employee". */
+const NOT_APPLICABLE_VALUES = new Set(['na', 'notapplicable']);
+
+function isBlankValue(value: string | null | undefined): boolean {
+  if (!value?.trim()) return true;
+  const key = normaliseKey(value);
+  return key === '' || BLANK_PLACEHOLDERS.has(key); // '' covers "-", "--", "?" and similar
+}
+
+function isNotApplicable(value: string | null | undefined): boolean {
+  return !!value?.trim() && NOT_APPLICABLE_VALUES.has(normaliseKey(value));
+}
+
+/** A copy of the record with text trimmed and "unknown" placeholders turned into null. */
+function cleanRecord<T extends object>(record: T): T {
+  const copy = { ...record } as Record<string, unknown>;
+  for (const [key, value] of Object.entries(copy)) {
+    if (typeof value === 'string') copy[key] = isBlankValue(value) ? null : value.trim();
+  }
+  return copy as T;
+}
+
+/** Fields every record needs. N/A is never accepted for these. Keep in sync with ALWAYS_REQUIRED_FIELDS on the web. */
+const REQUIRED_RECORD_FIELDS = [
+  'employeeCode', 'firstName', 'lastName', 'mobileNumber', 'currentDepartment',
+  'beesAccessLevel', 'jobDesignation', 'reportingToName', 'reportingToDesignation',
+] as const;
+
+/** Optional fields with a format check. When one says N/A, the check is skipped. */
+const FORMAT_CHECKED_OPTIONAL_FIELDS = [
+  'whatsappNumber', 'workEmail', 'gender', 'employmentStatus', 'employmentType',
+] as const;
+
+function notApplicableMessage(field: string): string {
+  return field === 'reportingToName'
+    ? 'N/A is not accepted. For the most senior person, leave this blank and enter Board as the designation.'
+    : 'This field applies to every employee, so N/A is not accepted';
+}
+
 //rbac new acc to BEES
 const ACCESS_LEVEL_VALUES: Record<string, RoleName> = {
   employee:          RoleName.EMPLOYEE,
@@ -657,8 +699,9 @@ export class EmsService {
     // Count equivalent phone numbers across all non-excluded rows.
     const phoneCounts = new Map<string, number>();
 
-    for (const record of batch.records) {
-      if (record.status === 'EXCLUDED') continue;
+    for (const raw of batch.records) {
+      if (raw.status === 'EXCLUDED') continue;
+      const record = cleanRecord(raw);
 
       const phone = normalisePhone(
         record.mobileNumber,
@@ -672,8 +715,22 @@ export class EmsService {
 
     let readyCount = 0;
 
-    for (const record of batch.records) {
-      if (record.status === 'EXCLUDED' || record.status === 'REGISTERED') continue;
+    const requiredContact =
+      channel === 'WHATSAPP' ? 'whatsappNumber' : channel === 'EMAIL' ? 'workEmail' : null;
+    const requiredNow: string[] = [...REQUIRED_RECORD_FIELDS, ...(requiredContact ? [requiredContact] : [])];
+
+    for (const raw of batch.records) {
+      if (raw.status === 'EXCLUDED' || raw.status === 'REGISTERED') continue;
+      const record = cleanRecord(raw);
+      const values = record as unknown as Record<string, string | null>;
+
+      // N/A in a required field gets its own message (added below), replacing any other finding for it.
+      const naFields = new Set(requiredNow.filter((field) => isNotApplicable(values[field])));
+
+      // N/A in an optional field simply means "does not apply", so skip its format check.
+      for (const field of FORMAT_CHECKED_OPTIONAL_FIELDS) {
+        if (!requiredNow.includes(field) && isNotApplicable(values[field])) values[field] = null;
+      }
 
       const findings: ValidationFinding[] = [];
 
@@ -805,6 +862,13 @@ export class EmsService {
         findings.push({field: 'reportingToDesignation', message: 'Required' });
       }
       
+      for (const field of naFields) {
+        for (let i = findings.length - 1; i >= 0; i--) {
+          if (findings[i].field === field) findings.splice(i, 1);
+        }
+        findings.push({ field, message: notApplicableMessage(field) });
+      }
+
       const status = findings.length > 0 ? 'NEEDS_FIXING' : 'READY';
       if (status === 'READY') readyCount++;
 
@@ -957,10 +1021,11 @@ export class EmsService {
           if (!current || current.status === 'CANCELLED') {
             throw new BadRequestException('This import is unavailable or cancelled');
           }
-          const record = current.records.find((r) => r.id === candidate.id);
-          if (!record || record.status !== 'READY') {
+          const found = current.records.find((r) => r.id === candidate.id);
+          if (!found || found.status !== 'READY') {
             throw new BadRequestException('This record is no longer ready; validate the import again');
           }
+          const record = cleanRecord(found);
           const phone = normalisePhone(record.mobileNumber, current.defaultPhoneCountry);
           if (!phone) throw new BadRequestException('Enter a valid phone number and check the default country');
           const duplicates = current.records.filter((r) =>
@@ -973,7 +1038,8 @@ export class EmsService {
           const roleName = ACCESS_LEVEL_VALUES[normaliseKey(record.beesAccessLevel)];
           const roleId = roleIds.get(roleName);
           if (!roleId) throw new BadRequestException('The selected access level is not configured');
-          const email = record.workEmail?.trim().toLowerCase() || null;
+          // N/A is a valid answer, but never an address to send to.
+          const email = isNotApplicable(record.workEmail) ? null : record.workEmail?.toLowerCase() ?? null;
           let user = await this.checkOnboardingIdentity(tx, organizationId, phone);
           if (!user) {
             user = await tx.user.create({

@@ -9,6 +9,7 @@ import {
   EmsService, OnboardingRecord, OnboardingRecordStatus, RECORD_STATUS_LABELS,
   BATCH_STATUS_LABELS, UpdateOnboardingRecordPayload,
 } from "@/services/ems.service";
+import { requiredFields } from "../column-map";
 import {
   ArrowLeft, Loader2, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Ban, Undo2, UserPlus,
 } from "lucide-react";
@@ -28,7 +29,8 @@ const EDITABLE_FIELDS: { key: keyof UpdateOnboardingRecordPayload; label: string
   { key: "lastName",               label: "Last name" },
   { key: "gender",                 label: "Gender" },
   { key: "nationality",            label: "Nationality" },
-  { key: "mobileNumber",           label: "Mobile number" },
+  { key: "mobileNumber",           label: "Personal mobile number (login)" },
+  { key: "whatsappNumber",         label: "WhatsApp number" },
   { key: "workEmail",              label: "Work email" },
   { key: "plantBranchCode",        label: "Plant / branch" },
   { key: "currentDepartment",      label: "Department" },
@@ -64,7 +66,7 @@ function RecordStatusPill({ status }: { status: OnboardingRecordStatus }) {
 }
 
 function RecordEditor({
-  record, onSave, onExclude, onInclude, saving, exclusionError,
+  record, required, onSave, onExclude, onInclude, saving, exclusionError,
 }: {
   record: OnboardingRecord;
   onSave: (data: UpdateOnboardingRecordPayload) => void;
@@ -72,6 +74,7 @@ function RecordEditor({
   onInclude: () => void;
   saving: boolean;
   exclusionError?: string;
+  required: Set<keyof UpdateOnboardingRecordPayload>;
 }) {
   const [draft, setDraft] = useState<UpdateOnboardingRecordPayload>(() => {
     const initial: UpdateOnboardingRecordPayload = {};
@@ -86,12 +89,12 @@ function RecordEditor({
   const locked = record.status === "REGISTERED";
 
   return (
-    <div className="bg-slate-50 px-5 py-4 space-y-4">
+    <div className="bg-blue-50/40 border-b-2 border-slate-300 px-5 py-4 space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {EDITABLE_FIELDS.map(({ key, label }) => (
           <label key={key} className="block">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              {label}
+              {label}{required.has(key) && <span className="text-red-500"> *</span>}
             </span>
             <input
               type="text"
@@ -177,6 +180,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const { accessToken } = useAuthStore();
   const queryClient = useQueryClient();
   const [openRow, setOpenRow] = useState<string | null>(null);
+  const [lastRow, setLastRow] = useState<string | null>(null);
 
   const [countryDraft, setCountryDraft] = useState<string | null>(null);
 
@@ -187,6 +191,13 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     queryFn: () => EmsService.getOnboardingBatch(id, accessToken!),
     enabled: !!accessToken,
   });
+
+  const { data: channelData } = useQuery({
+    queryKey: ["ems-communication-channel"],
+    queryFn: () => EmsService.getCommunicationChannel(accessToken!),
+    enabled: !!accessToken,
+  });
+  const required = requiredFields(channelData?.communicationChannel ?? null);
 
   const updateCountry = useMutation({
     mutationFn: (country: string) => EmsService.updateOnboardingBatchCountry(id, country, accessToken!),
@@ -345,14 +356,15 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               <tbody className="divide-y divide-slate-50">
                 {records.map((rec) => {
                   const open = openRow === rec.id;
+                  const recent = !open && lastRow === rec.id;
                   return (
                     <Fragment key={rec.id}>
                       <tr
                         key={rec.id}
-                        onClick={() => setOpenRow(open ? null : rec.id)}
-                        className="hover:bg-slate-50 transition-colors cursor-pointer align-top"
+                        onClick={() => { setOpenRow(open ? null : rec.id); setLastRow(rec.id); }}
+                        className={`transition-colors cursor-pointer align-top ${open ? "bg-blue-50" : recent ? "bg-amber-50" : "hover:bg-slate-50"}`}
                       >
-                        <td className="px-3 py-3 text-slate-300">
+                        <td className={`px-3 py-3 border-l-4 ${open ? "border-blue-500 text-blue-500" : recent ? "border-amber-400 text-amber-500" : "border-transparent text-slate-300"}`}>
                           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </td>
                         <td className="px-4 py-3 text-xs text-slate-400">{rec.rowNumber ?? "—"}</td>
@@ -380,9 +392,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                       </tr>
                       {open && (
                         <tr key={`${rec.id}-editor`}>
-                          <td colSpan={6} className="p-0">
+                          <td colSpan={6} className="p-0 border-l-4 border-blue-500">
                             <RecordEditor
                               record={rec}
+                              required={required}
                               saving={busy || countryUnsaved || closed}
                               exclusionError={
                                 exclude.isError && exclude.variables?.recordId === rec.id

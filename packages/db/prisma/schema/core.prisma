@@ -4,6 +4,11 @@ enum OrgStatus {
   INACTIVE
 }
 
+enum OrgCommunicationChannel {
+  WHATSAPP
+  EMAIL
+}
+
 enum TimeOfDay {
   MORNING
   AFTERNOON
@@ -119,6 +124,7 @@ model Organization {
   modules      ModuleType[] @default([])
   primaryColor String?      @default("#4F46E5")
   timeZone     String       @default("Africa/Nairobi")
+  communicationChannel OrgCommunicationChannel?
   isAdminOrg   Boolean      @default(false)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -141,6 +147,8 @@ model Organization {
   tickets               Tickets[]
   kaizens               Kaizen[]
   sgas                  Sga[]
+  emsOnboardingBatches EmsOnboardingBatch[]
+  emsOnboardingRecords EmsOnboardingRecord[]
   workProjects          WorkProject[]
   attendanceRecords     AttendanceRecord[]
   attendanceCorrections AttendanceCorrection[]
@@ -193,6 +201,7 @@ model User {
 
   organizations       UserOrganization[]
   employees           Employee[]
+  emsBatchesUploaded  EmsOnboardingBatch[] @relation("EmsBatchUploadedBy")
   createdVisits       ConsultancyVisit[]
   visitRequests       VisitRequest[]
   visitMonthPlans     VisitMonthPlan[]

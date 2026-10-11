@@ -18,6 +18,7 @@ import {
   Factory,
   Sparkles,
   Users2,
+  ClipboardList,
   Briefcase
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
@@ -66,12 +67,22 @@ const NAV_ITEMS: MainNavItem[] = [
     label: "People",
     href: "/hr",
     icon: Users,
+    exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR],
+  },
+  {
+    label: "Employee Master Data",
+    href: "/ems",
+    icon: ClipboardList,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR],
+    module: "EMS",
   },
   {
     label: "Committees",
     href: "/operations/committees",
     icon: ShieldCheck,
+    exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT],
   },
   {

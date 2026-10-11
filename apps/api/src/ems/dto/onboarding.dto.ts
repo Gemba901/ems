@@ -1,0 +1,117 @@
+import { Transform, Type } from 'class-transformer';
+import {
+  IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
+} from 'class-validator';
+import { getCountries } from 'libphonenumber-js';
+import { OrgCommunicationChannel } from 'db';
+
+export class CreateOnboardingBatchDto {
+  @IsString() @IsOptional() @MaxLength(200) label?: string;
+  @IsString() @IsOptional() @MaxLength(255) sourceFileName?: string;
+  @IsString()
+  @IsIn(getCountries(), {
+    message: 'Select a supported default country for phone numbers',
+  })
+  defaultPhoneCountry!: string;
+}
+
+export class UpdateOnboardingBatchCountryDto {
+  @IsString()
+  @IsIn(getCountries(), { message: 'Select a supported default country for phone numbers' })
+  defaultPhoneCountry!: string;
+}
+
+export class OnboardingRecordInputDto {
+  @IsInt() @IsOptional() rowNumber?: number;
+
+  // Module 1 — raw text as imported
+  @IsString() @IsOptional() companyCode?: string;
+  @IsString() @IsOptional() plantBranchCode?: string;
+  @IsString() @IsOptional() employeeCode?: string;
+  @IsString() @IsOptional() firstName?: string;
+  @IsString() @IsOptional() middleName?: string;
+  @IsString() @IsOptional() lastName?: string;
+  @IsString() @IsOptional() mobileNumber?: string;
+  @IsString() @IsOptional() whatsappNumber?: string;
+  @IsString() @IsOptional() workEmail?: string;
+  @IsString() @IsOptional() gender?: string;
+  @IsString() @IsOptional() nationality?: string;
+  @IsString() @IsOptional() currentDepartment?: string;
+  @IsString() @IsOptional() hodName?: string;
+  @IsString() @IsOptional() hodDesignation?: string;
+  @IsString() @IsOptional() workArea?: string;
+  @IsString() @IsOptional() subSection?: string;
+  @IsString() @IsOptional() jobDesignation?: string;
+  @IsString() @IsOptional() beesAccessLevel?: string;
+  @IsString() @IsOptional() shift?: string;
+  @IsString() @IsOptional() reportingToName?: string;
+  @IsString() @IsOptional() reportingToDesignation?: string;
+  @IsString() @IsOptional() employmentStatus?: string;
+  @IsString() @IsOptional() employmentType?: string;
+  @IsString() @IsOptional() reliever1Name?: string;
+  @IsString() @IsOptional() reliever1Designation?: string;
+  @IsString() @IsOptional() reliever2Name?: string;
+  @IsString() @IsOptional() reliever2Designation?: string;
+}
+
+export class AddOnboardingRecordsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OnboardingRecordInputDto)
+  records!: OnboardingRecordInputDto[];
+}
+
+export class UpdateOnboardingRecordDto {
+  @IsString() @IsOptional() companyCode?: string;
+  @IsString() @IsOptional() plantBranchCode?: string;
+  @IsString() @IsOptional() employeeCode?: string;
+  @IsString() @IsOptional() firstName?: string;
+  @IsString() @IsOptional() middleName?: string;
+  @IsString() @IsOptional() lastName?: string;
+  @IsString() @IsOptional() mobileNumber?: string;
+  @IsString() @IsOptional() whatsappNumber?: string;
+  @IsString() @IsOptional() workEmail?: string;
+  @IsString() @IsOptional() gender?: string;
+  @IsString() @IsOptional() nationality?: string;
+  @IsString() @IsOptional() currentDepartment?: string;
+  @IsString() @IsOptional() hodName?: string;
+  @IsString() @IsOptional() hodDesignation?: string;
+  @IsString() @IsOptional() workArea?: string;
+  @IsString() @IsOptional() subSection?: string;
+  @IsString() @IsOptional() jobDesignation?: string;
+  @IsString() @IsOptional() beesAccessLevel?: string;
+  @IsString() @IsOptional() shift?: string;
+  @IsString() @IsOptional() reportingToName?: string;
+  @IsString() @IsOptional() reportingToDesignation?: string;
+  @IsString() @IsOptional() employmentStatus?: string;
+  @IsString() @IsOptional() employmentType?: string;
+  @IsString() @IsOptional() reliever1Name?: string;
+  @IsString() @IsOptional() reliever1Designation?: string;
+  @IsString() @IsOptional() reliever2Name?: string;
+  @IsString() @IsOptional() reliever2Designation?: string;
+}
+// TODO: replace with OmitType(OnboardingRecordInputDto, ['rowNumber'])
+// once @nestjs/mapped-types is confirmed available — removes this duplication.
+//export class UpdateOnboardingRecordDto {
+  // ...the 26 fields
+//}
+
+export class ExcludeOnboardingRecordDto {
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @Matches(/\S/, {
+    message: 'An exclusion reason is required',
+  })
+  @MinLength(5, {
+    message: 'Exclusion reason must contain at least 5 characters',
+  })
+  @MaxLength(300)
+  reason!: string;
+}
+
+export class UpdateCommunicationChannelDto {
+  @IsEnum(OrgCommunicationChannel, { message: 'Choose WhatsApp or email' })
+  communicationChannel!: OrgCommunicationChannel;
+}

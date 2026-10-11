@@ -285,6 +285,13 @@ export const RECORD_STATUS_LABELS: Record<OnboardingRecordStatus, string> = {
   EXCLUDED:     "Excluded",
 };
 
+export type CommunicationChannel = "WHATSAPP" | "EMAIL";
+
+export const COMMUNICATION_CHANNEL_LABELS: Record<CommunicationChannel, string> = {
+  WHATSAPP: "WhatsApp",
+  EMAIL:    "Email",
+};
+
 export interface OnboardingBatchSummary {
   id: string;
   label: string | null;
@@ -306,6 +313,7 @@ export interface OnboardingRecord {
   middleName: string | null;
   lastName: string | null;
   mobileNumber: string | null;
+  whatsappNumber: string | null;
   workEmail: string | null;
   gender: string | null;
   nationality: string | null;
@@ -345,6 +353,7 @@ export interface UpdateOnboardingRecordPayload {
   middleName?: string;
   lastName?: string;
   mobileNumber?: string;
+  whatsappNumber?: string;
   workEmail?: string;
   gender?: string;
   nationality?: string;
@@ -409,6 +418,27 @@ export const EmsService = {
     return handleResponse(res);
   },
   
+  async getCommunicationChannel(
+    token: string,
+  ): Promise<{ communicationChannel: CommunicationChannel | null }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/communication-channel`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async updateCommunicationChannel(
+    communicationChannel: CommunicationChannel,
+    token: string,
+  ): Promise<{ communicationChannel: CommunicationChannel }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/communication-channel`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify({ communicationChannel }),
+    }, token);
+    return handleResponse(res);
+  },
+
   async listOnboardingBatches(token: string): Promise<OnboardingBatchSummary[]> {
     const res = await apiClient(`${API_URL}/ems/onboarding/batches`, { headers: authHeaders(token) }, token);
     return handleResponse(res);

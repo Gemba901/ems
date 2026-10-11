@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
-import { EmsService, UpdateOnboardingRecordPayload } from "@/services/ems.service";
+import {
+  EmsService, UpdateOnboardingRecordPayload, CommunicationChannel, COMMUNICATION_CHANNEL_LABELS,
+} from "@/services/ems.service";
 import { ArrowLeft, Loader2, Upload, AlertCircle, FileSpreadsheet } from "lucide-react";
-import { mapHeaders, findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, Field } from "../column-map";
+import { mapHeaders, findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, Field, requiredFields } from "../column-map";
 import TemplateCard from "./TemplateCard";
 import { getCountries } from "libphonenumber-js";
 
@@ -42,6 +44,38 @@ export default function NewOnboardingImportPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mapping, setMapping] = useState<(Field | null)[]>([]);
+
+  // Organisation-wide communication channel: decides whether WhatsApp or email is required.
+  const [channel, setChannel] = useState<CommunicationChannel | null>(null);
+  const [channelLoaded, setChannelLoaded] = useState(false);
+  const [changingChannel, setChangingChannel] = useState(false);
+  const [savingChannel, setSavingChannel] = useState(false);
+  const [channelAttention, setChannelAttention] = useState(false);
+  const [countryAttention, setCountryAttention] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    EmsService.getCommunicationChannel(accessToken)
+      .then((result) => setChannel(result.communicationChannel))
+      .catch((e: any) => setError(e.message || "Could not load the communication channel."))
+      .finally(() => setChannelLoaded(true));
+  }, [accessToken]);
+
+  async function saveChannel(next: CommunicationChannel) {
+    if (!accessToken) return;
+    setSavingChannel(true);
+    setChannelAttention(false);
+    setError(null);
+    try {
+      const result = await EmsService.updateCommunicationChannel(next, accessToken);
+      setChannel(result.communicationChannel);
+      setChangingChannel(false);
+    } catch (e: any) {
+      setError(e.message || "Could not save the communication channel.");
+    } finally {
+      setSavingChannel(false);
+    }
+  }
 
   /** Read a sheet into a grid and guess where its headers are. */
   function loadSheet(wb: XLSX.WorkBook, name: string) {
@@ -96,6 +130,12 @@ export default function NewOnboardingImportPage() {
   const headerRow = headerIndex >= 0 ? grid[headerIndex] : [];
   const fields = mapping;
 
+  // Required fields for this organisation, and any of them no column is mapped to.
+  const required = requiredFields(channel);
+  const missingRequired = MAPPABLE_FIELDS.filter(
+    ({ key }) => required.has(key) && !fields.includes(key),
+  );
+
   const unmatched =
     headerIndex >= 0
       ? headerRow
@@ -129,6 +169,16 @@ export default function NewOnboardingImportPage() {
     if (!accessToken || rows.length === 0) return;
     if (!defaultPhoneCountry) {
       setError("Select a default country for phone numbers.");
+      setCountryAttention(true);
+      const countrySelect = document.getElementById("default-phone-country");
+      countrySelect?.scrollIntoView({ behavior: "smooth", block: "center" });
+      countrySelect?.focus({ preventScroll: true });
+    return;
+    }
+    if (!channel) {
+      setError("Choose your organisation's communication channel before importing.");
+      setChannelAttention(true);
+      document.getElementById("communication-channel")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     setBusy(true);
@@ -191,10 +241,12 @@ export default function NewOnboardingImportPage() {
             <select
               id="default-phone-country"
               value={defaultPhoneCountry}
-              onChange={(e) => setDefaultPhoneCountry(e.target.value)}
+              onChange={(e) => { setDefaultPhoneCountry(e.target.value); setCountryAttention(false); }}
               disabled={busy}
               aria-describedby="default-phone-country-help"
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className={`mt-1 w-full px-3 py-2 rounded-lg border text-sm bg-white focus:outline-none focus:ring-2 ${
+                countryAttention ? "border-red-400 focus:ring-red-300" : "border-slate-200 focus:ring-blue-500/20"
+              }`}
             >
               <option value="">Choose a country</option>
               {PHONE_COUNTRIES.map(({ code, name }) => (
@@ -203,6 +255,10 @@ export default function NewOnboardingImportPage() {
                 </option>
               ))}
             </select>
+
+            {countryAttention && (
+              <p className="mt-1 text-xs font-semibold text-red-600">Select a country to continue.</p>
+            )}
 
             <p
               id="default-phone-country-help"
@@ -213,6 +269,66 @@ export default function NewOnboardingImportPage() {
               +254712345678. Numbers starting with + and a country code keep that
               country code. For staff in other countries, include their international
               country code in the spreadsheet.
+            </p>
+          </div>
+
+          <div
+            id="communication-channel"
+            className={channelAttention ? "rounded-lg ring-2 ring-red-300 bg-red-50/40 p-3 -mx-3" : ""}
+          >
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Organisation communication channel
+            </span>
+
+            {!channelLoaded ? (
+              <p className="mt-1 text-xs text-slate-400 flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+              </p>
+            ) : channel && !changingChannel ? (
+              <p className="mt-1 text-sm text-slate-700">
+                {COMMUNICATION_CHANNEL_LABELS[channel]}
+                <button
+                  onClick={() => setChangingChannel(true)}
+                  className="ml-2 text-xs font-medium text-blue-600 hover:text-blue-700"
+                >
+                  Change
+                </button>
+              </p>
+            ) : (
+              <div className="mt-1 flex items-center gap-2">
+                {(Object.keys(COMMUNICATION_CHANNEL_LABELS) as CommunicationChannel[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => saveChannel(option)}
+                    disabled={savingChannel}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-semibold disabled:opacity-50 ${
+                      channel === option
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {COMMUNICATION_CHANNEL_LABELS[option]}
+                  </button>
+                ))}
+                {channel && (
+                  <button
+                    onClick={() => setChangingChannel(false)}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            )}
+
+            {channelAttention && (
+              <p className="mt-2 text-xs font-semibold text-red-600">Choose WhatsApp or email to continue.</p>
+            )}
+
+            <p className="mt-2 text-xs text-slate-500">
+              How the system will contact your employees. WhatsApp makes a WhatsApp number
+              required for everyone; email makes a work email required. This applies to your
+              whole organisation, and changing it re-checks your other unfinished imports.
             </p>
           </div>
 
@@ -319,11 +435,14 @@ export default function NewOnboardingImportPage() {
           {unmatched.length > 0 && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Ignored columns: {unmatched.join(", ")}
-              {headerIndex >= 0 && headerRow.length > 0 && (
+            </div>
+          )}
+
+          {headerIndex >= 0 && headerRow.length > 0 && (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
                   <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                     <p className="text-xs text-slate-500">
-                      Match your columns to the fields they hold
+                      Match your columns to the fields they hold · <span className="text-red-500">*</span> required
                     </p>
                     <p className="text-xs text-slate-400">
                       {fields.filter(Boolean).length} of {headerRow.length} mapped
@@ -374,7 +493,7 @@ export default function NewOnboardingImportPage() {
                             <option value="">— ignore this column —</option>
                             {MAPPABLE_FIELDS.map(({ key, label }) => (
                               <option key={key} value={key} disabled={takenElsewhere(key)}>
-                                {label}{takenElsewhere(key) ? " (already used)" : ""}
+                                {label}{required.has(key) ? " *" : ""}{takenElsewhere(key) ? " (already used)" : ""}
                               </option>
                             ))}
                           </select>
@@ -384,45 +503,61 @@ export default function NewOnboardingImportPage() {
                   </div>
                 </div>
               )}
+
+          {headerIndex >= 0 && missingRequired.length > 0 && (
+            <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>
+                No column mapped to:{" "}
+                <span className="font-semibold">{missingRequired.map((f) => f.label).join(", ")}</span>.
+                Every row will be flagged until these are filled in.
+              </span>
+            </div>
+          )}
+
+          {rows.length > 0 && (
+            <>
+              <div className="text-sm text-slate-600">
+                <span className="font-semibold text-slate-900">{rows.length}</span> rows ready to import
+              </div>
+
+              <div className="border border-slate-100 rounded-xl overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500">
+                      <th className="text-left px-3 py-2 font-semibold">Row</th>
+                      <th className="text-left px-3 py-2 font-semibold">Code</th>
+                      <th className="text-left px-3 py-2 font-semibold">Name</th>
+                      <th className="text-left px-3 py-2 font-semibold">Department</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {rows.slice(0, 5).map((r) => (
+                      <tr key={r.rowNumber}>
+                        <td className="px-3 py-2 text-slate-400">{r.rowNumber}</td>
+                        <td className="px-3 py-2 font-mono text-slate-500">{r.employeeCode ?? "—"}</td>
+                        <td className="px-3 py-2 text-slate-700">
+                          {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
+                        </td>
+                        <td className="px-3 py-2 text-slate-500">{r.currentDepartment ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {rows.length > 5 && (
+                  <p className="px-3 py-2 text-xs text-slate-400 bg-slate-50">
+                    …and {rows.length - 5} more
+                  </p>
+                )}
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 text-sm text-red-600">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  {error}
                 </div>
               )}
 
-          {rows.length > 0 && (
-            <>
-              <div className="text-sm text-slate-600">
-                <span className="font-semibold text-slate-900">{rows.length}</span> rows ready to import
-              </div>
-
-              <div className="border border-slate-100 rounded-xl overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 text-slate-500">
-                      <th className="text-left px-3 py-2 font-semibold">Row</th>
-                      <th className="text-left px-3 py-2 font-semibold">Code</th>
-                      <th className="text-left px-3 py-2 font-semibold">Name</th>
-                      <th className="text-left px-3 py-2 font-semibold">Department</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {rows.slice(0, 5).map((r) => (
-                      <tr key={r.rowNumber}>
-                        <td className="px-3 py-2 text-slate-400">{r.rowNumber}</td>
-                        <td className="px-3 py-2 font-mono text-slate-500">{r.employeeCode ?? "—"}</td>
-                        <td className="px-3 py-2 text-slate-700">
-                          {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
-                        </td>
-                        <td className="px-3 py-2 text-slate-500">{r.currentDepartment ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {rows.length > 5 && (
-                  <p className="px-3 py-2 text-xs text-slate-400 bg-slate-50">
-                    …and {rows.length - 5} more
-                  </p>
-                )}
-              </div>
-
               <button
                 onClick={handleUpload}
                 disabled={busy}
@@ -438,214 +573,3 @@ export default function NewOnboardingImportPage() {
     </ProtectedRoute>
   );
 }
-
-
-
-
-
-
-
-{/*"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import * as XLSX from "xlsx";
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { Role } from "@/types/role";
-import { useAuthStore } from "@/store/auth.store";
-import { EmsService, UpdateOnboardingRecordPayload } from "@/services/ems.service";
-import { ArrowLeft, Loader2, Upload, AlertCircle } from "lucide-react";
-import { mapHeaders } from "../column-map";
-
-type ParsedRow = UpdateOnboardingRecordPayload & { rowNumber: number };
-
-export default function NewOnboardingImportPage() {
-  const { accessToken } = useAuthStore();
-  const router = useRouter();
-
-  const [label, setLabel] = useState("");
-  const [fileName, setFileName] = useState("");
-  const [rows, setRows] = useState<ParsedRow[]>([]);
-  const [unmatched, setUnmatched] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function handleFile(file: File) {
-    setError(null);
-    setRows([]);
-    setUnmatched([]);
-    setFileName(file.name);
-    if (!label) setLabel(file.name.replace(/\.[^.]+$/, ""));
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const grid: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
-
-      if (grid.length < 2) {
-        setError("That file has no data rows.");
-        return;
-      }
-
-      const headerRow = grid[0];
-      const fields = mapHeaders(headerRow);
-
-      const missed = headerRow
-        .map((cell, i) => (fields[i] ? null : String(cell ?? "").trim()))
-        .filter((v): v is string => !!v);
-      setUnmatched(missed);
-
-      const parsed: ParsedRow[] = [];
-      for (let i = 1; i < grid.length; i++) {
-        const row = grid[i];
-        const record: ParsedRow = { rowNumber: i + 1 };
-        let hasValue = false;
-
-        fields.forEach((field, col) => {
-          if (!field) return;
-          const raw = row[col];
-          const text = String(raw ?? "").trim();
-          if (text) {
-            record[field] = text;
-            hasValue = true;
-          }
-        });
-
-        if (hasValue) parsed.push(record);
-      }
-
-      if (parsed.length === 0) setError("No usable rows found — check the column headings.");
-      setRows(parsed);
-    } catch (e: any) {
-      setError(e.message || "Could not read that file.");
-    }
-  }
-
-  async function handleUpload() {
-    if (!accessToken || rows.length === 0) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const batch = await EmsService.createOnboardingBatch(
-        { label: label || fileName, sourceFileName: fileName },
-        accessToken,
-      );
-      await EmsService.addOnboardingRecords(batch.id, { records: rows }, accessToken);
-      await EmsService.validateOnboardingBatch(batch.id, accessToken);
-      router.push(`/ems/onboarding/${batch.id}`);
-    } catch (e: any) {
-      setError(e.message || "Upload failed.");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
-      <div className="space-y-5 max-w-3xl">
-
-        <div className="flex items-center gap-3">
-          <Link href="/ems/onboarding" className="text-slate-400 hover:text-slate-600 transition-colors">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">New import</h1>
-            <p className="text-sm text-slate-500">Upload a spreadsheet of employees to review before registering</p>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4">
-
-          <label className="block">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Label</span>
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Nairobi plant, January intake"
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Spreadsheet</span>
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
-              }}
-              className="mt-1 w-full text-sm file:mr-3 file:px-4 file:py-2 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:text-xs file:font-semibold"
-            />
-          </label>
-
-          {error && (
-            <div className="flex items-start gap-2 text-sm text-red-600">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              {error}
-            </div>
-          )}
-
-          {unmatched.length > 0 && (
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Ignored columns: {unmatched.join(", ")}
-            </div>
-          )}
-
-          {rows.length > 0 && (
-            <>
-              <div className="text-sm text-slate-600">
-                <span className="font-semibold text-slate-900">{rows.length}</span> rows ready to import
-              </div>
-
-              <div className="border border-slate-100 rounded-xl overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 text-slate-500">
-                      <th className="text-left px-3 py-2 font-semibold">Row</th>
-                      <th className="text-left px-3 py-2 font-semibold">Code</th>
-                      <th className="text-left px-3 py-2 font-semibold">Name</th>
-                      <th className="text-left px-3 py-2 font-semibold">Department</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {rows.slice(0, 5).map((r) => (
-                      <tr key={r.rowNumber}>
-                        <td className="px-3 py-2 text-slate-400">{r.rowNumber}</td>
-                        <td className="px-3 py-2 font-mono text-slate-500">{r.employeeCode ?? "—"}</td>
-                        <td className="px-3 py-2 text-slate-700">
-                          {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
-                        </td>
-                        <td className="px-3 py-2 text-slate-500">{r.currentDepartment ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {rows.length > 5 && (
-                  <p className="px-3 py-2 text-xs text-slate-400 bg-slate-50">
-                    …and {rows.length - 5} more
-                  </p>
-                )}
-              </div>
-
-              <button
-                onClick={handleUpload}
-                disabled={busy}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                Import {rows.length} rows
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </ProtectedRoute>
-  );
-}
-  */}
-
-
-  

@@ -1,4 +1,4 @@
-import { UpdateOnboardingRecordPayload } from "@/services/ems.service";
+import { CommunicationChannel, UpdateOnboardingRecordPayload } from "@/services/ems.service";
 
 export type Field = keyof UpdateOnboardingRecordPayload;
 
@@ -16,6 +16,12 @@ const HEADER_MAP: Record<string, Field> = {
   mobilenumber:           "mobileNumber",
   mobile:                 "mobileNumber",
   phone:                  "mobileNumber",
+  whatsappnumber:         "whatsappNumber",
+  whatsappno:             "whatsappNumber",
+  whatsapp:               "whatsappNumber",
+  whatsappcontact:        "whatsappNumber",
+  personalmobilenumber:   "mobileNumber",
+  personalmobilenumberlogin: "mobileNumber",
   workemail:              "workEmail",
   companyemail:           "workEmail",
   emailid:                "workEmail",
@@ -98,7 +104,8 @@ export const MAPPABLE_FIELDS: { key: Field; label: string }[] = [
   { key: "lastName",               label: "Last name" },
   { key: "gender",                 label: "Gender" },
   { key: "nationality",            label: "Nationality" },
-  { key: "mobileNumber",           label: "Mobile number" },
+  { key: "mobileNumber",           label: "Personal mobile number (login)" },
+  { key: "whatsappNumber",         label: "WhatsApp number" },
   { key: "workEmail",              label: "Work email" },
   { key: "companyCode",            label: "Company code" },
   { key: "plantBranchCode",        label: "Plant / branch code" },
@@ -119,3 +126,21 @@ export const MAPPABLE_FIELDS: { key: Field; label: string }[] = [
   { key: "reliever2Name",          label: "2nd reliever" },
   { key: "reliever2Designation",   label: "2nd reliever designation" },
 ];
+
+/** Fields every record needs, whatever the organisation's channel. Keep in sync with the API's validateOnboardingBatch. */
+export const ALWAYS_REQUIRED_FIELDS: Field[] = [
+  "employeeCode", "firstName", "lastName", "mobileNumber", "currentDepartment", "beesAccessLevel",
+];
+
+/** The contact field each channel makes required. */
+const CHANNEL_REQUIRED_FIELD: Record<CommunicationChannel, Field> = {
+  WHATSAPP: "whatsappNumber",
+  EMAIL:    "workEmail",
+};
+
+/** Every required field for this organisation. With no channel chosen yet, only the always-required ones. */
+export function requiredFields(channel: CommunicationChannel | null): Set<Field> {
+  const fields = new Set(ALWAYS_REQUIRED_FIELDS);
+  if (channel) fields.add(CHANNEL_REQUIRED_FIELD[channel]);
+  return fields;
+}

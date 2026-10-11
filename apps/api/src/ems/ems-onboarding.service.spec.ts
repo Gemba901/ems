@@ -261,3 +261,14 @@ describe('EMS reporting and designation rules', () => {
     expect(findingsFor(db, 'r1')).toEqual([]);
   });
 });
+
+describe('EMS employment values', () => {
+  it('stores spaced values in the form the database accepts', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), employmentStatus: 'Contract Ended', employmentType: 'Full Time' } as any];
+    await service.registerOnboardingBatch('org1', 'b1');
+    expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ employmentStatus: 'CONTRACT_ENDED', employmentType: 'FULL_TIME' }),
+    }));
+  });
+});

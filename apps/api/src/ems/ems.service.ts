@@ -146,6 +146,14 @@ function normaliseKey(value: string | null): string {
     .toLowerCase();
 }
 
+
+/** The allowed value matching free text like "Full Time" or "full-time", or null if none matches. */
+function matchEnumValue(value: string | null, allowed: Set<string>): string | null {
+  const key = normaliseKey(value);
+  if (!key) return null;
+  return [...allowed].find((v) => normaliseKey(v) === key) ?? null;
+}
+
 //rbac new acc to BEES
 const ACCESS_LEVEL_VALUES: Record<string, RoleName> = {
   employee:          RoleName.EMPLOYEE,
@@ -723,16 +731,12 @@ export class EmsService {
         findings.push({ field: 'gender', message: `Unrecognised value "${record.gender}"` });
       }
 
-      if (record.employmentStatus?.trim()) {
-        const key = normaliseKey(record.employmentStatus).toUpperCase();
-        const match = [...EMPLOYMENT_STATUS_VALUES].find((v) => normaliseKey(v).toUpperCase() === key);
-        if (!match) findings.push({ field: 'employmentStatus', message: `Unrecognised value "${record.employmentStatus}"` });
+      if (record.employmentStatus?.trim() && !matchEnumValue(record.employmentStatus, EMPLOYMENT_STATUS_VALUES)) {
+        findings.push({ field: 'employmentStatus', message: `Unrecognised value "${record.employmentStatus}"` });
       }
 
-      if (record.employmentType?.trim()) {
-        const key = normaliseKey(record.employmentType).toUpperCase();
-        const match = [...EMPLOYMENT_TYPE_VALUES].find((v) => normaliseKey(v).toUpperCase() === key);
-        if (!match) findings.push({ field: 'employmentType', message: `Unrecognised value "${record.employmentType}"` });
+      if (record.employmentType?.trim() && !matchEnumValue(record.employmentType, EMPLOYMENT_TYPE_VALUES)) {
+        findings.push({ field: 'employmentType', message: `Unrecognised value "${record.employmentType}"` });
       }
 
       if (!record.beesAccessLevel?.trim()) {
@@ -1002,8 +1006,8 @@ export class EmsService {
               workStation: record.workArea,
               subSection: record.subSection,
               shift: record.shift,
-              employmentStatus: (record.employmentStatus?.trim().toUpperCase() || 'ACTIVE') as any,
-              employmentType: (record.employmentType?.trim().toUpperCase() || null) as any,
+              employmentStatus: (matchEnumValue(record.employmentStatus, EMPLOYMENT_STATUS_VALUES) ?? 'ACTIVE') as any,
+              employmentType: matchEnumValue(record.employmentType, EMPLOYMENT_TYPE_VALUES) as any,
               beesAccessLevel: record.beesAccessLevel,
               hodName: record.hodName,
               hodDesignation: record.hodDesignation,

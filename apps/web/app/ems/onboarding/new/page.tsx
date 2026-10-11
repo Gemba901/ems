@@ -39,6 +39,7 @@ export default function NewOnboardingImportPage() {
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [sheetName, setSheetName] = useState("");
   const [grid, setGrid] = useState<unknown[][]>([]);
+  const [firstRow, setFirstRow] = useState(0);
   const [headerIndex, setHeaderIndex] = useState(-1);
   const [pickingHeader, setPickingHeader] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,11 +83,12 @@ export default function NewOnboardingImportPage() {
     const sheet = wb.Sheets[name];
     const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
       header: 1,
-      blankrows: false,
+      blankrows: true,  // keep gaps so row positions match Excel
       defval: "",
     });
 
     setGrid(rows);
+    setFirstRow(sheet["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]).s.r : 0);
     setPickingHeader(false);
 
     if (rows.length === 0) {
@@ -148,7 +150,7 @@ export default function NewOnboardingImportPage() {
     const out: ParsedRow[] = [];
 
     for (let i = headerIndex + 1; i < grid.length; i++) {
-      const record: ParsedRow = { rowNumber: i + 1 };
+      const record: ParsedRow = { rowNumber: firstRow + i + 1 };
       let hasValue = false;
 
       fields.forEach((field, col) => {
@@ -377,7 +379,7 @@ export default function NewOnboardingImportPage() {
               <FileSpreadsheet className="h-3.5 w-3.5 text-slate-300" />
               {headerIndex >= 0 ? (
                 <>
-                  Reading column names from <span className="font-semibold text-slate-700">row {headerIndex + 1}</span>
+                  Reading column names from <span className="font-semibold text-slate-700">row {firstRow + headerIndex + 1}</span>
                   <span className="text-slate-300">·</span>
                   <span>{fields.filter(Boolean).length} columns matched</span>
                 </>
@@ -416,7 +418,7 @@ export default function NewOnboardingImportPage() {
                         chosen ? "bg-blue-50" : ""
                       }`}
                     >
-                      <span className="text-slate-300 w-6 shrink-0">{i + 1}</span>
+                      <span className="text-slate-300 w-6 shrink-0">{firstRow + i + 1}</span>
                       <span className="flex-1 truncate text-slate-600">
                         {row.map((c) => String(c ?? "").trim()).filter(Boolean).join(" · ") || "(empty)"}
                       </span>

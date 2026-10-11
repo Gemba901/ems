@@ -760,7 +760,7 @@ export class EmsService {
         });
       }
 
-            const whatsapp = normalisePhone(record.whatsappNumber, batch.defaultPhoneCountry);
+       const whatsapp = normalisePhone(record.whatsappNumber, batch.defaultPhoneCountry);
       if (!record.whatsappNumber?.trim()) {
         if (channel === 'WHATSAPP') {
           findings.push({
@@ -782,6 +782,25 @@ export class EmsService {
         });
       }
 
+      
+      if (!record.jobDesignation?.trim()) {
+        findings.push({ field: 'jobDesignation', message: 'Required' });
+      }
+
+      // The most senior person reports to the board, not a named person.
+      const reportsToBoard = ['board', 'boardofdirectors'].includes(
+        normaliseKey(record.reportingToDesignation),
+      );
+      if (!record.reportingToName?.trim() && !reportsToBoard) {
+        findings.push({
+          field: 'reportingToName',
+          message: 'Required. For the most senior person, leave this blank and enter Board as the designation.',
+        });
+      }
+      if (!record.reportingToDesignation?.trim() && !reportsToBoard) {
+        findings.push({field: 'reportingToDesignation', message: 'Required' });
+      }
+      
       const status = findings.length > 0 ? 'NEEDS_FIXING' : 'READY';
       if (status === 'READY') readyCount++;
 

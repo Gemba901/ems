@@ -129,7 +129,7 @@ export const MAPPABLE_FIELDS: { key: Field; label: string }[] = [
 
 /** Fields every record needs, whatever the organisation's channel. Keep in sync with the API's validateOnboardingBatch. */
 export const ALWAYS_REQUIRED_FIELDS: Field[] = [
-  "employeeCode", "firstName", "lastName", "mobileNumber", "currentDepartment", "beesAccessLevel",
+  "employeeCode", "firstName", "lastName", "mobileNumber", "currentDepartment", "beesAccessLevel", "jobDesignation", "reportingToName", "reportingToDesignation",
 ];
 
 /** The contact field each channel makes required. */

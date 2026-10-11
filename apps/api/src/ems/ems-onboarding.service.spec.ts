@@ -10,6 +10,9 @@ const row = (id = 'r1', mobileNumber = '0712345678') => ({
   firstName: 'Test', lastName: 'Person', companyCode: 'ACME',
   mobileNumber, whatsappNumber: mobileNumber as string | null, workEmail: null as string | null, currentDepartment: 'HR',
   beesAccessLevel: 'employee', status: 'READY',
+  jobDesignation: 'Clerk' as string | null,
+  reportingToName: 'Jane Boss' as string | null,
+  reportingToDesignation: 'HR Manager' as string | null,
 });
 
 function fixture() {
@@ -233,5 +236,28 @@ describe('EMS communication channel setting', () => {
     await service.updateCommunicationChannel('org1', { communicationChannel: 'WHATSAPP' } as any);
     expect(db.organization.update).not.toHaveBeenCalled();
     expect(db.emsOnboardingRecord.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('EMS reporting and designation rules', () => {
+  it('requires job designation and both reporting fields', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{
+      ...row(), status: 'DRAFT',
+      jobDesignation: null, reportingToName: null, reportingToDesignation: null,
+    }];
+    await service.validateOnboardingBatch('org1', 'b1');
+    const fields = findingsFor(db, 'r1').map((f) => f.field);
+    expect(fields).toEqual(expect.arrayContaining(['jobDesignation', 'reportingToName', 'reportingToDesignation']));
+  });
+
+  it('lets the most senior person report to the Board with no name', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{
+      ...row(), status: 'DRAFT',
+      reportingToName: null, reportingToDesignation: 'Board of Directors',
+    }];
+    await service.validateOnboardingBatch('org1', 'b1');
+    expect(findingsFor(db, 'r1')).toEqual([]);
   });
 });

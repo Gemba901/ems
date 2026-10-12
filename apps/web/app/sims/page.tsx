@@ -17,13 +17,12 @@ export default function SimsOverviewPage() {
     <ProtectedRoute
       allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}
     >
-      <div className="mx-5 pt-4 md:pt-6 space-y-6">
+      <div className="space-y-6">
 
         {/* Page header */}
         <div className="flex items-center sm:items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wider text-blue-600">SIMS</p>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 sm:mt-0.5 truncate">
+            <h1 className="text-lg font-bold tracking-tight text-slate-900 truncate">
               Suggestions & Ideas
             </h1>
             <p className="hidden sm:block text-sm text-slate-500 mt-1 max-w-xl">
@@ -33,7 +32,7 @@ export default function SimsOverviewPage() {
 
           <Link
             href="/sims/new"
-            className="flex items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-1.5 text-sm font-semibold sm:font-medium text-white shadow-sm hover:bg-blue-700 whitespace-nowrap shrink-0"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#52618a] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174]"
           >
             <span className="sm:hidden">New</span>
             <span className="hidden sm:inline">New Suggestion</span>

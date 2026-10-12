@@ -116,7 +116,7 @@ function DesignatedCommitteeControl() {
   });
 
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+    <div className="bg-white border border-slate-200 rounded-xl p-5">
       <div className="flex items-center gap-2 mb-3">
         <ShieldCheck className="h-4 w-4 text-slate-400" />
         <h2 className="text-sm font-bold text-slate-800">Designated SGA Committee</h2>
@@ -128,7 +128,7 @@ function DesignatedCommitteeControl() {
         value={designated?.id ?? ""}
         onChange={(e) => e.target.value && setDesignatedMutation.mutate(e.target.value)}
         disabled={setDesignatedMutation.isPending}
-        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
       >
         <option value="" disabled>Select a committee...</option>
         {committees.map((c) => (
@@ -165,13 +165,13 @@ export default function CommitteeReportPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-4 py-4 md:px-8 md:py-6">
+      <div>
 
         <div className="flex items-center sm:items-start justify-between gap-3 mb-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Users className="hidden sm:block h-5 w-5 text-slate-400" />
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Committee Report</h1>
+              <h1 className="text-lg font-bold tracking-tight text-slate-900 truncate">Committee Report</h1>
             </div>
             <p className="hidden sm:block text-sm text-slate-500">Suggestions forwarded to the SGA steering committee.</p>
           </div>
@@ -217,13 +217,13 @@ export default function CommitteeReportPage() {
             )}
 
             {!isLoading && !error && suggestions.length === 0 && (
-              <div className="bg-white border border-slate-100 rounded-2xl p-8 text-center text-sm text-slate-400">
+              <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-400">
                 No suggestions have been forwarded to a committee yet.
               </div>
             )}
 
             {!isLoading && !error && suggestions.length > 0 && (
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>

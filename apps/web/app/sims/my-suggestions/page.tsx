@@ -88,16 +88,16 @@ export default function MySuggestionsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="mx-5 pt-4 md:pt-6 space-y-5">
+      <div className="space-y-6">
 
         {/* Page header */}
         <div className="flex items-center justify-between gap-3 flex-nowrap">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">
+          <h1 className="text-lg font-bold tracking-tight text-slate-900 truncate">
             My Suggestions
           </h1>
           <Link
             href="/sims/new"
-            className="flex items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-1.5 text-sm font-semibold sm:font-medium text-white shadow-sm hover:bg-blue-700 whitespace-nowrap shrink-0"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#52618a] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174]"
           >
             <span className="sm:hidden">New</span>
             <span className="hidden sm:inline">New Suggestion</span>
@@ -109,7 +109,7 @@ export default function MySuggestionsPage() {
         {!loading && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {metrics.map((m) => (
-              <div key={m.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+              <div key={m.label} className="bg-white border border-slate-200 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2.5">
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{m.label}</p>
                   <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${m.iconBg}`}>{m.icon}</div>
@@ -144,7 +144,7 @@ export default function MySuggestionsPage() {
         )}
 
         {!loading && displayed.length === 0 && (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col items-center gap-3 py-20">
+          <div className="bg-white border border-slate-200 rounded-xl flex flex-col items-center gap-3 py-20">
             <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center">
               <Lightbulb className="h-7 w-7 text-blue-300" />
             </div>
@@ -160,7 +160,7 @@ export default function MySuggestionsPage() {
         )}
 
         {!loading && displayed.length > 0 && (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="divide-y divide-slate-50">
               {displayed.map((s) => {
                 const status = STATUS_CONFIG[s.status];

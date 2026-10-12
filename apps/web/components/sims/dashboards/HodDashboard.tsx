@@ -93,7 +93,7 @@ export default function HodDashboard() {
       {scope === "department" ? (
         <>
           {/* KPI row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <KpiCard label="Department Total" value={loading ? "—" : kpis.total} sub="All suggestions" icon={<Users className="h-5 w-5 text-blue-600" />} accent="bg-blue-50" />
             <KpiCard label="Awaiting Review" value={loading ? "—" : kpis.awaitingReview} sub={kpis.awaitingReview > 0 ? "needs your attention" : "all clear"} icon={<Clock className="h-5 w-5 text-amber-500" />} accent="bg-amber-50" />
             <KpiCard label="On Hold" value={loading ? "—" : kpis.onHold} sub="Paused for clarification" icon={<PauseCircle className="h-5 w-5 text-orange-500" />} accent="bg-orange-50" />
@@ -107,7 +107,7 @@ export default function HodDashboard() {
           {!loading && kpis.awaitingReview > 0 && (
             <Link
               href="/sims/queue"
-              className="flex items-center justify-between gap-3 rounded-2xl bg-amber-50 border border-amber-200 px-5 py-3.5 hover:bg-amber-100/70 transition-colors"
+              className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 border border-amber-200 px-5 py-3.5 hover:bg-amber-100/70 transition-colors"
             >
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
@@ -123,7 +123,7 @@ export default function HodDashboard() {
 
           {/* Target dial + charts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex items-center justify-center">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 flex items-center justify-center">
               <TargetDial
                 implemented={implementedCount}
                 target={(summary?.department.employeeCount ?? 0) * 4}

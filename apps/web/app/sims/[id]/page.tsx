@@ -111,14 +111,14 @@ function DecisionFieldsForm({
               required={f.required}
               value={values[f.key] ?? ""}
               onChange={(e) => onChange(f.key, e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
             />
           ) : f.type === "select" ? (
             <select
               required={f.required}
               value={values[f.key] ?? ""}
               onChange={(e) => onChange(f.key, e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
             >
               <option value="">Select...</option>
               {(optionsByKey?.[f.key] ?? []).map((o) => (
@@ -131,7 +131,7 @@ function DecisionFieldsForm({
               required={f.required}
               value={values[f.key] ?? ""}
               onChange={(e) => onChange(f.key, e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
             />
           )}
         </div>
@@ -428,7 +428,7 @@ export default function SuggestionDetailPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE]}>
-      <div className="px-4 py-4 md:px-8 md:py-6">
+      <div>
 
         <Link href="/sims" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back to Suggestions
@@ -443,7 +443,7 @@ export default function SuggestionDetailPage() {
           <>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
               <div>
-                <h1 className="text-2xl font-bold text-slate-900 leading-snug mb-2">{suggestion.title}</h1>
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-snug mb-2">{suggestion.title}</h1>
                 <div className="flex flex-wrap gap-2 items-center">
                   <span className={`text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider ${STATUS_BADGE[suggestion.status]}`}>
                     {STATUS_LABELS[suggestion.status]}
@@ -469,7 +469,7 @@ export default function SuggestionDetailPage() {
 
               {/* LEFT — Proposal + Timeline */}
               <div className="xl:col-span-2 space-y-5">
-                <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+                <div className="bg-white border border-slate-200 rounded-xl p-6">
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Detailed Proposal</p>
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{suggestion.description}</p>
                   {suggestion.imageUrl && (
@@ -533,7 +533,7 @@ export default function SuggestionDetailPage() {
                 </div>
 
                 {suggestion.status === "ON_HOLD" && suggestion.decisionDetails && (
-                  <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6 shadow-sm">
+                  <div className="bg-orange-50 border border-orange-100 rounded-xl p-6">
                     <div className="flex items-center gap-2 mb-3">
                       <AlertCircle className="h-4 w-4 text-orange-600" />
                       <h3 className="text-sm font-bold text-orange-900 uppercase tracking-widest">On Hold</h3>
@@ -552,7 +552,7 @@ export default function SuggestionDetailPage() {
                 )}
 
                 {suggestion.status === "SELECTED_FOR_SGA" && suggestion.decisionDetails?.responsibleEmployeeName && (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 shadow-sm">
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6">
                     <div className="flex items-center gap-2 mb-1">
                       <Sparkles className="h-4 w-4 text-indigo-600" />
                       <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-widest">Selected for SGA</h3>
@@ -564,7 +564,7 @@ export default function SuggestionDetailPage() {
                 )}
 
                 {suggestion.implementationNote && (
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 shadow-sm">
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-6">
                     <div className="flex items-center gap-2 mb-3">
                       <TrendingUp className="h-4 w-4 text-emerald-600" />
                       <h3 className="text-sm font-bold text-emerald-900 uppercase tracking-widest">Implementation Direction</h3>
@@ -574,7 +574,7 @@ export default function SuggestionDetailPage() {
                 )}
 
                 {suggestion.status === "IMPLEMENTED" && suggestion.decisionDetails && Object.keys(suggestion.decisionDetails).length > 0 && (
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 shadow-sm">
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-6">
                     <div className="flex items-center gap-2 mb-4">
                       <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                       <h3 className="text-sm font-bold text-emerald-900 uppercase tracking-widest">
@@ -600,7 +600,7 @@ export default function SuggestionDetailPage() {
                   </div>
                 )}
 
-                <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+                <div className="bg-white border border-slate-200 rounded-xl p-6">
                   <ReviewTimeline suggestion={suggestion} reviews={suggestion.reviews} />
                 </div>
               </div>
@@ -610,7 +610,7 @@ export default function SuggestionDetailPage() {
 
                 {/* ── Review Form (department HOD, or the committee once forwarded) ── */}
                 {canReview && (
-                  <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm sticky top-6">
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 sticky top-6">
                     <div className="flex items-center gap-2 mb-5">
                       <h2 className="text-sm font-bold text-slate-800">Add a Review</h2>
                       {isAssignedHOD && (
@@ -636,7 +636,7 @@ export default function SuggestionDetailPage() {
                             reviewMutation.mutate({ statusChanged: "UNDER_REVIEW" });
                           }}
                           disabled={reviewing}
-                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                          className="w-full bg-[#52618a] hover:bg-[#445174] disabled:opacity-60 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors"
                         >
                           {reviewing ? "Starting..." : "Start Review"}
                         </button>
@@ -659,7 +659,7 @@ export default function SuggestionDetailPage() {
                               setDecisionFields({});
                               resetKaizenForm();
                             }}
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                           >
                             <option value="">Select status...</option>
                             {allowedNext.map((s) => (
@@ -687,7 +687,7 @@ export default function SuggestionDetailPage() {
                                     setKaizenPhotoPreview(suggestion.imageUrl ?? null);
                                   }
                                 }}
-                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                               >
                                 <option value="">Select decision type...</option>
                                 {Object.entries(DECISION_TYPE_LABELS).map(([val, label]) => (
@@ -717,7 +717,7 @@ export default function SuggestionDetailPage() {
                                     required
                                     value={kaizenOwnerId}
                                     onChange={(e) => setKaizenOwnerId(e.target.value)}
-                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
                                   >
                                     <option value="">Select...</option>
                                     {responsibleOptions.map((o) => (
@@ -733,7 +733,7 @@ export default function SuggestionDetailPage() {
                                     rows={3}
                                     value={kaizenCondition}
                                     onChange={(e) => setKaizenCondition(e.target.value)}
-                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
                                   />
                                 </div>
                                 <div>
@@ -811,7 +811,7 @@ export default function SuggestionDetailPage() {
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
                             placeholder={newStatus === "REJECTED" ? "Why is this being rejected?" : "Enter evaluation notes..."}
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none"
                           />
                         </div>
 
@@ -822,7 +822,7 @@ export default function SuggestionDetailPage() {
                         <button
                           type="submit"
                           disabled={reviewing || !newStatus}
-                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                          className="w-full bg-[#52618a] hover:bg-[#445174] disabled:opacity-60 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors"
                         >
                           {reviewing ? "Saving..." : "Submit Review"}
                         </button>

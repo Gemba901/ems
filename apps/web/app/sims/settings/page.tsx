@@ -49,7 +49,7 @@ const SECTIONS: Section[] = [
 
 function Toggle({ defaultOn }: { defaultOn: boolean }) {
   return (
-    <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${defaultOn ? "bg-blue-600" : "bg-slate-200"}`}>
+    <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${defaultOn ? "bg-[#52618a]" : "bg-slate-200"}`}>
       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${defaultOn ? "translate-x-4" : "translate-x-1"}`} />
     </div>
   );
@@ -82,7 +82,7 @@ const MODULE_STATS = [
 export default function SimsSettingsPage() {
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 space-y-6">
+      <div className="space-y-6">
 
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -90,7 +90,7 @@ export default function SimsSettingsPage() {
             <Settings className="h-5 w-5 text-slate-500" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">SIMS Settings</h1>
+            <h1 className="text-lg font-bold tracking-tight text-slate-900">SIMS Settings</h1>
             <p className="hidden sm:block text-sm text-slate-500 mt-0.5">Manage suggestion system preferences and access rules.</p>
           </div>
         </div>
@@ -101,7 +101,7 @@ export default function SimsSettingsPage() {
           {/* Left — settings sections */}
           <div className="lg:col-span-2 space-y-5">
             {/* Info banner */}
-            <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-100">
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-100">
               <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
               <p className="text-xs text-blue-700 leading-relaxed">
                 Settings configuration is coming soon. The values shown below reflect the current system defaults.
@@ -110,7 +110,7 @@ export default function SimsSettingsPage() {
             </div>
 
             {SECTIONS.map((section) => (
-              <div key={section.title} className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+              <div key={section.title} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                 <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-50">
                   <div className="h-8 w-8 rounded-lg bg-slate-50 flex items-center justify-center">
                     <section.icon className="h-4 w-4 text-slate-500" />
@@ -138,7 +138,7 @@ export default function SimsSettingsPage() {
 
           {/* Right — module info panel */}
           <div className="space-y-4">
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-50">
                 <p className="text-sm font-bold text-slate-800">Module Overview</p>
                 <p className="text-xs text-slate-400 mt-0.5">Current configuration snapshot</p>
@@ -158,7 +158,7 @@ export default function SimsSettingsPage() {
               </div>
             </div>
 
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm px-6 py-5">
+            <div className="bg-white border border-slate-200 rounded-xl px-6 py-5">
               <p className="text-sm font-bold text-slate-800 mb-1">What is SIMS?</p>
               <p className="text-xs text-slate-500 leading-relaxed">
                 The Suggestion & Idea Management System (SIMS) enables employees to submit improvement ideas

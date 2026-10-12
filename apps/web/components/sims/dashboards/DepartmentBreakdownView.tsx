@@ -121,7 +121,7 @@ export function DepartmentBreakdownView({
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-44 rounded-2xl bg-slate-100 animate-pulse" />
+          <div key={i} className="h-44 rounded-xl bg-slate-100 animate-pulse" />
         ))}
       </div>
     );
@@ -141,7 +141,7 @@ export function DepartmentBreakdownView({
         const statusData = computeStatusChartData(g.suggestions);
 
         return (
-          <div key={g.id} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+          <div key={g.id} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-bold text-slate-800 truncate">{g.name}</p>
               <Link

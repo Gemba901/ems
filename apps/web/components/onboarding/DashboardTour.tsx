@@ -1,13 +1,11 @@
 // apps/web/components/onboarding/DashboardTour.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { Joyride, EventData, STATUS, Step } from "react-joyride";
-import { useAuthStore } from "@/store/auth.store";
+import { ModuleTour, type TourStep } from "./ModuleTour";
 
 const TOUR_VERSION = "v1"; // bump this if you change the steps meaningfully
 
-const STEPS: Step[] = [
+const STEPS: TourStep[] = [
   {
     target: "body",
     placement: "center",
@@ -35,41 +33,5 @@ const STEPS: Step[] = [
 ];
 
 export function DashboardTour() {
-  const user = useAuthStore((s) => s.user);
-  const [run, setRun] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    if (!user?.userId) return;
-    const key = `tour_dashboard_${TOUR_VERSION}_${user.userId}`;
-    if (!localStorage.getItem(key)) setRun(true);
-    setMounted(true);
-  }, [user?.userId]);
-
-  const handleEvent = (data: EventData) => {
-    if (!user?.userId) return;
-    const { status } = data;
-    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-      localStorage.setItem(`tour_dashboard_${TOUR_VERSION}_${user.userId}`, "1");
-      setRun(false);
-    }
-  };
-
-  if (!mounted) return null;
-
-  return (
-    <Joyride
-      steps={STEPS}
-      run={run}
-      continuous
-      scrollToFirstStep
-      onEvent={handleEvent}
-      options={{
-        primaryColor: "#4f46e5",
-        zIndex: 10000,
-        showProgress: true,
-        buttons: ["back", "close", "primary", "skip"],
-      }}
-    />
-  );
+  return <ModuleTour tourId="dashboard" version={TOUR_VERSION} steps={STEPS} />;
 }

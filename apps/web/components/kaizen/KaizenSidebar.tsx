@@ -2,6 +2,7 @@
 
 import { LayoutGrid, Building2, BarChart3, BookOpen, Plus } from "lucide-react";
 import { ModuleSidebar, type SidebarNavGroup } from "@/components/shell/ModuleSidebar";
+import { KAIZEN_TOUR } from "@/components/onboarding/tours";
 import { useAuthStore } from "@/store/auth.store";
 
 interface KaizenSidebarProps {
@@ -41,6 +42,7 @@ export function KaizenSidebar(props: KaizenSidebarProps) {
       id="kaizen-sidebar"
       title="Daily Gemba Kaizen"
       homeHref="/kaizen"
+      tour={{ id: "kaizen", steps: KAIZEN_TOUR }}
       ariaLabel="Daily kaizen navigation"
       actions={[{ label: "New Kaizen", shortLabel: "New", href: "/kaizen/new", icon: Plus }]}
       groups={groups}

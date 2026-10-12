@@ -2,6 +2,7 @@
 
 import { LayoutGrid, Building2, BarChart3, BookOpen, Plus } from "lucide-react";
 import { ModuleSidebar, type SidebarNavGroup } from "@/components/shell/ModuleSidebar";
+import { SGA_TOUR } from "@/components/onboarding/tours";
 import { useAuthStore } from "@/store/auth.store";
 
 interface SgaSidebarProps {
@@ -41,6 +42,7 @@ export function SgaSidebar(props: SgaSidebarProps) {
       id="sga-sidebar"
       title="Small Group Activities"
       homeHref="/sga"
+      tour={{ id: "sga", steps: SGA_TOUR }}
       ariaLabel="Small group activity navigation"
       actions={[{ label: "New SGA", shortLabel: "New", href: "/sga/new", icon: Plus }]}
       groups={groups}

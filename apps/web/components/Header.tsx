@@ -166,6 +166,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <button
             className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100"
             onClick={onMenuClick}
+            data-tour="tour-menu"
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />

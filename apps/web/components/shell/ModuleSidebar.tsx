@@ -3,7 +3,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, PanelLeft, type LucideIcon } from "lucide-react";
+import { ArrowLeft, CircleHelp, PanelLeft, type LucideIcon } from "lucide-react";
+import { ModuleTour, startTour, type TourStep } from "@/components/onboarding/ModuleTour";
 
 // Shared shell sidebar for every module (main app, DWMS, Kaizen, SGA, SIMS, Leave, Admin).
 // Expanded: a 256px panel with grouped links. Collapsed (desktop): an 88px rail that keeps
@@ -54,6 +55,8 @@ interface ModuleSidebarProps {
   footer?: (collapsed: boolean) => ReactNode;
   /** data-tour target for the onboarding tour; placed on whichever nav is visible. */
   dataTour?: string;
+  /** Module guided tour: runs on first visit and adds a "Take a tour" button. */
+  tour?: { id: string; steps: TourStep[] };
   open?: boolean;
   onClose?: () => void;
   collapsed?: boolean;
@@ -84,6 +87,7 @@ function RailLink({
   return (
     <Link
       href={href}
+      data-tour={`nav:${href}`}
       title={fullLabel}
       aria-label={fullLabel}
       aria-current={active ? "page" : undefined}
@@ -117,6 +121,7 @@ export function ModuleSidebar({
   backLink = { label: "Back to Gemba", href: "/" },
   footer,
   dataTour,
+  tour,
   open = false,
   onClose,
   collapsed = false,
@@ -234,8 +239,23 @@ export function ModuleSidebar({
               </div>
             ))}
           </nav>
-          {(backLink || footer) && (
+          {(backLink || footer || tour) && (
             <div className="flex w-full shrink-0 flex-col items-center gap-1 border-t border-slate-100 py-2">
+              {tour && (
+                <button
+                  type="button"
+                  data-tour="tour-replay"
+                  onClick={() => startTour(tour.id)}
+                  title="Take a tour"
+                  aria-label="Take a tour"
+                  className="group flex w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-center text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg">
+                    <CircleHelp className="h-[18px] w-[18px]" strokeWidth={1.6} aria-hidden="true" />
+                  </span>
+                  <span className="text-[10.5px] font-medium leading-tight">Tour</span>
+                </button>
+              )}
               {backLink && (
                 <RailLink href={backLink.href} label="Back" fullLabel={backLink.label} icon={ArrowLeft} />
               )}
@@ -293,6 +313,7 @@ export function ModuleSidebar({
                 <Link
                   key={action.href}
                   href={action.href}
+                  data-tour={`nav:${action.href}`}
                   onClick={onClose}
                   className="flex min-h-10 items-center justify-center rounded-xl px-3 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
                 >
@@ -302,6 +323,7 @@ export function ModuleSidebar({
                 <Link
                   key={action.href}
                   href={action.href}
+                  data-tour={`nav:${action.href}`}
                   onClick={onClose}
                   className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#52618a] px-3 text-sm font-medium text-white hover:bg-[#445174]"
                 >
@@ -326,6 +348,7 @@ export function ModuleSidebar({
                   <Link
                     key={item.href}
                     href={item.href}
+                    data-tour={`nav:${item.href}`}
                     onClick={onClose}
                     aria-current={active ? "page" : undefined}
                     className={`my-0.5 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors ${
@@ -345,6 +368,20 @@ export function ModuleSidebar({
           ))}
         </nav>
         {footer?.(false)}
+        {tour && (
+          <button
+            type="button"
+            data-tour="tour-replay"
+            onClick={() => {
+              onClose?.();
+              startTour(tour.id);
+            }}
+            className="flex items-center gap-2 border-t border-slate-200 px-6 py-4 text-left text-sm text-slate-500 hover:text-slate-900"
+          >
+            <CircleHelp className="h-4 w-4" strokeWidth={1.6} aria-hidden="true" />
+            Take a tour
+          </button>
+        )}
         {backLink && (
           <Link
             href={backLink.href}
@@ -356,6 +393,7 @@ export function ModuleSidebar({
           </Link>
         )}
       </aside>
+      {tour && <ModuleTour tourId={tour.id} steps={tour.steps} />}
     </>
   );
 }

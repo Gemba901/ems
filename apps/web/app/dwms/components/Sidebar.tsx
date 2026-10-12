@@ -15,6 +15,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { ModuleSidebar, type SidebarNavGroup } from "@/components/shell/ModuleSidebar";
+import { DWMS_TOUR } from "@/components/onboarding/tours";
 import { useAuthStore } from "@/store/auth.store";
 
 interface SidebarProps {
@@ -62,6 +63,7 @@ export function Sidebar(props: SidebarProps) {
       id="dwms-sidebar"
       title="Daily Work Management"
       homeHref="/dwms"
+      tour={{ id: "dwms", steps: DWMS_TOUR }}
       ariaLabel="Daily work navigation"
       actions={[
         { label: "Assign task", shortLabel: "Assign", href: "/dwms/actions/new?mode=TASK", icon: Plus },

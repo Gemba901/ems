@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Lightbulb,
   LoaderCircle,
   UserRoundX,
 } from "lucide-react";
@@ -23,7 +22,14 @@ import { useAuthStore } from "@/store/auth.store";
 import { getOrganizationTodayKey } from "../../utils/organizationDate";
 import { Role } from "@/types/role";
 import DwmsSelectDropdown from "../../components/DwmsSelectDropdown";
-import RecurrenceBuilder from "./RecurrenceBuilder";
+import FormHelp, { type FormHelpContent } from "./FormHelp";
+import RecurrenceBuilder, { recurrenceSummary } from "./RecurrenceBuilder";
+import {
+  GuidedForm,
+  GuidedFormSection,
+  GuidedFormReview,
+  isRecurringScheduleReady,
+} from "./GuidedForm";
 
 const PRIORITY_OPTIONS: Array<{ val: DwmsPriority; label: string }> = [
   { val: "MEDIUM", label: "Medium" },
@@ -37,106 +43,97 @@ const TASK_CONTROL_CLASS =
 const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5];
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type TaskHelpField =
-  | "general"
-  | "title"
-  | "description"
-  | "assignee"
-  | "frequency"
-  | "dueDate"
-  | "priority"
-  | "approver"
-  | "document";
-
-const TASK_HELP: Record<
-  TaskHelpField,
-  { title: string; tips: string[]; example: string }
-> = {
-  general: {
-    title: "How to create a useful task",
-    tips: [
-      "Describe one clear outcome that the assignee can complete.",
-      "Choose the person who owns the work and can act on it.",
-      "Use priority for business impact, not convenience.",
-      "Add approval or document requirements only when evidence is needed.",
+const TASK_STAGE_HELP: Record<string, FormHelpContent> = {
+  details: {
+    title: "What to do",
+    options: [
+      {
+        label: "Title",
+        description:
+          "Describe one clear action, such as Inspect packing line 2.",
+      },
+      {
+        label: "Description",
+        description:
+          "Add useful steps, a checklist or the expected result. This is optional.",
+      },
+      {
+        label: "Assign to",
+        description: "Choose the person responsible for completing this work.",
+      },
     ],
-    example:
-      "Example: Inspect packing line 2 before the afternoon shift and upload the signed checklist.",
   },
-  title: {
-    title: "Writing the task title",
-    tips: [
-      "Start with an action verb.",
-      "Mention the asset, area, report, or process involved.",
-      "Keep the title short enough to scan in a task list.",
+  schedule: {
+    title: "When to do",
+    options: [
+      {
+        label: "Once",
+        description: "Create a single task and choose when it is due.",
+      },
+      {
+        label: "Days",
+        description: "Repeat at a fixed interval, such as every 2 days.",
+      },
+      {
+        label: "Weeks",
+        description: "Choose the weekdays and how many weeks between repeats.",
+      },
+      {
+        label: "Months",
+        description:
+          "Choose a day of the month and how many months between repeats.",
+      },
+      {
+        label: "Starts on",
+        description:
+          "Choose the date from which the repeating schedule begins.",
+      },
+      {
+        label: "Priority",
+        description:
+          "Medium: routine. High: urgent. Critical: safety or stoppage.",
+      },
     ],
-    example: "Good: Inspect packing line 2. Avoid: Packing line task.",
   },
-  description: {
-    title: "Adding task instructions",
-    tips: [
-      "Explain the expected steps or checklist.",
-      "Include relevant locations, standards, or measurements.",
-      "State what a completed result should look like.",
+  completion: {
+    title: "Who approves",
+    options: [
+      {
+        label: "Approver",
+        description:
+          "Choose who checks the completed work. Leave blank if approval is not needed.",
+      },
+      {
+        label: "Document required",
+        description:
+          "Turn this on when the owner must upload evidence before completing the task.",
+      },
+      {
+        label: "Document name",
+        description:
+          "Describe the evidence expected, such as a signed checklist or inspection photo.",
+      },
     ],
-    example:
-      "Check guards, sensors, and emergency stops, then record any defects found.",
   },
-  assignee: {
-    title: "Choosing the assignee",
-    tips: [
-      "Assign the person responsible for completing the work.",
-      "Confirm the task fits their reporting scope and responsibilities.",
-      "Create separate tasks when several people own different outcomes.",
+  review: {
+    title: "Review",
+    options: [
+      {
+        label: "Check",
+        description:
+          "Confirm the owner, schedule, priority, approver and evidence requirements.",
+      },
+      {
+        label: "Back",
+        description:
+          "Return to an earlier section to make changes; your entries are kept.",
+      },
+      {
+        label: "Assign task",
+        description:
+          "Create the task for the selected owner using these settings.",
+      },
     ],
-    example: "Assign the inspection to the operator responsible for that line.",
-  },
-  frequency: {
-    title: "Choosing frequency",
-    tips: [
-      "Use Once for a single task with a specific due date.",
-      "Use a recurring frequency only when the same work repeats.",
-      "Avoid creating recurring tasks for temporary follow-up work.",
-    ],
-    example: "Use Daily for a shift checklist and Once for a repair follow-up.",
-  },
-  dueDate: {
-    title: "Selecting the due date",
-    tips: [
-      "Choose a realistic working day for completion.",
-      "Past dates, holidays, and non-working days are unavailable.",
-      "Allow enough time for any required approval or document upload.",
-    ],
-    example:
-      "Set the date before the next production run if action is required first.",
-  },
-  priority: {
-    title: "Setting priority",
-    tips: [
-      "Critical is for immediate safety or production risk.",
-      "High is for meaningful work that needs prompt action.",
-      "Medium is appropriate for normal planned work.",
-    ],
-    example:
-      "A stopped production line is Critical; a routine inspection is Medium.",
-  },
-  approver: {
-    title: "Choosing an approver",
-    tips: [
-      "Add an approver when completion must be reviewed.",
-      "Select someone able to verify the result or evidence.",
-      "Leave this empty when no formal approval is required.",
-    ],
-    example: "Use the maintenance lead to approve a completed repair task.",
-  },
-  document: {
-    title: "Requiring completion evidence",
-    tips: [
-      "Enable this when the assignee must upload proof of completion.",
-      "Name the exact document or record expected.",
-      "Do not require a file when a normal task update is sufficient.",
-    ],
-    example: "Required document: Signed inspection checklist.",
   },
 };
 
@@ -272,8 +269,7 @@ export default function CreateTaskAction() {
   const submittingRef = useRef(false);
   const dueDateCalendarRef = useRef<HTMLDivElement | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [focusedHelpField, setFocusedHelpField] =
-    useState<TaskHelpField>("general");
+  const [activeStage, setActiveStage] = useState("details");
 
   const [approvedById, setApprovedById] = useState("");
   const [backupOwnerId, setBackupOwnerId] = useState("");
@@ -305,7 +301,25 @@ export default function CreateTaskAction() {
   const dueDateBlockReason = dueDate
     ? getDueDateBlockReason(new Date(`${dueDate}T00:00:00`))
     : "Select a due date";
-  const activeHelp = TASK_HELP[focusedHelpField];
+  const activeHelp = TASK_STAGE_HELP[activeStage];
+  const detailsReady = Boolean(title.trim() && assignedToId);
+  const scheduleReady = schedule
+    ? isRecurringScheduleReady(schedule, organizationToday)
+    : Boolean(dueDate && !dueDateBlockReason);
+  const completionReady =
+    !requiresCompletionDocument || Boolean(completionDocumentName.trim());
+  const taskReady = detailsReady && scheduleReady && completionReady;
+  const formSteps = [
+    { id: "details", title: "What to do", complete: detailsReady },
+    { id: "schedule", title: "When to do", complete: scheduleReady },
+    {
+      id: "completion",
+      title: "Who approves",
+      complete: completionReady,
+      optional: !requiresCompletionDocument,
+    },
+    { id: "review", title: "Review", complete: taskReady },
+  ];
 
   const employeeOptions = useMemo(
     () =>
@@ -486,6 +500,14 @@ export default function CreateTaskAction() {
       return;
     }
 
+    if (schedule && !isRecurringScheduleReady(schedule, organizationToday)) {
+      setMessage(
+        "Check the repeat interval, start date, and selected days in When to do.",
+      );
+      setLoading(false);
+      return;
+    }
+
     const isPlanned = frequency === "PLANNED";
     const isDailyOrWeekly = frequency === "DAILY" || frequency === "WEEKLY";
 
@@ -618,316 +640,369 @@ export default function CreateTaskAction() {
       )}
 
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-        <div className="w-full rounded-lg border border-border-app bg-white p-4 dark:bg-zinc-900 sm:p-6 lg:col-span-8">
+        <div className="min-w-0 w-full rounded-2xl border border-border-app bg-white p-4 dark:bg-zinc-900 sm:p-6 lg:col-span-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Title <span className="ml-0.5 text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Inspect the packing line"
-                value={title}
-                onFocus={() => setFocusedHelpField("title")}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Description (optional)
-              </label>
-              <textarea
-                placeholder="Add instructions or a checklist"
-                value={description}
-                onFocus={() => setFocusedHelpField("description")}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                className="w-full resize-none rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Assign to <span className="ml-0.5 text-red-500">*</span>
-                </label>
-                <DwmsSelectDropdown
-                  value={assignedToId}
-                  options={employeeOptions}
-                  onChange={setAssignedToId}
-                  onFocus={() => setFocusedHelpField("assignee")}
-                  placeholder="Choose a team member..."
-                  variant="employee"
-                  showTriggerDescription={false}
-                  allowClear
-                  clearLabel="Clear selection"
-                  emptyMessage="No matching team members found."
-                  triggerClassName={TASK_CONTROL_CLASS}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Frequency <span className="ml-0.5 text-red-500">*</span>
-                </label>
-                <RecurrenceBuilder
-                  value={schedule}
-                  today={organizationToday}
-                  allowOnce
-                  workingDays={workingDays}
-                  isClosedDate={(dateKey) => Boolean(getHolidayName(dateKey))}
-                  onChange={(nextSchedule) => {
-                    setSchedule(nextSchedule);
-                    setFrequency(
-                      !nextSchedule
-                        ? "PLANNED"
-                        : nextSchedule.unit === "DAY"
-                          ? "DAILY"
-                          : nextSchedule.unit === "WEEK"
-                            ? "WEEKLY"
-                            : nextSchedule.interval === 3
-                              ? "QUARTERLY"
-                              : "MONTHLY",
-                    );
-                    setIsDueDateCalendarOpen(false);
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {frequency === "PLANNED" ? (
-                <div ref={dueDateCalendarRef} className="relative">
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Due date <span className="ml-0.5 text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsDueDateCalendarOpen((open) => !open);
-                    }}
-                    onFocus={() => setFocusedHelpField("dueDate")}
-                    className={`flex w-full items-center justify-between border text-left outline-none transition ${TASK_CONTROL_CLASS}`}
-                  >
-                    <span>{dueDate}</span>
-                    <ChevronDown
-                      className={`h-4 w-4 shrink-0 text-muted-app transition ${
-                        isDueDateCalendarOpen ? "rotate-180" : ""
-                      }`}
-                      strokeWidth={1.5}
-                    />
-                  </button>
-                  {dueDateBlockReason && (
-                    <p className="mt-1.5 text-xs font-semibold text-rose-600">
-                      Unavailable: {dueDateBlockReason}
-                    </p>
-                  )}
-                  {isDueDateCalendarOpen && (
-                    <div className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCalendarMonth((current) =>
-                              addMonths(current, -1),
-                            )
-                          }
-                          className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
-                          aria-label="Previous month"
-                        >
-                          <ChevronLeft className="h-4 w-4" strokeWidth={1.5} />
-                        </button>
-                        <span className="text-xs font-bold text-text-app">
-                          {monthLabel(calendarMonth)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCalendarMonth((current) => addMonths(current, 1))
-                          }
-                          className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
-                          aria-label="Next month"
-                        >
-                          <ChevronRight className="h-4 w-4" strokeWidth={1.5} />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold uppercase text-slate-400">
-                        {WEEKDAY_LABELS.map((day) => (
-                          <span key={day} className="py-1">
-                            {day}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="mt-1 grid grid-cols-7 gap-1">
-                        {calendarCells.map((date) => {
-                          const dateKey = toDateKey(date);
-                          const blockReason = getDueDateBlockReason(date);
-                          const isCurrentMonth =
-                            date.getMonth() === calendarMonth.getMonth();
-                          const isSelected = dueDate === dateKey;
-
-                          return (
-                            <button
-                              key={dateKey}
-                              type="button"
-                              disabled={!!blockReason}
-                              title={blockReason ?? "Available"}
-                              onClick={() => {
-                                setDueDate(dateKey);
-                                setIsDueDateCalendarOpen(false);
-                              }}
-                              className={`aspect-square rounded-md border text-[11px] font-semibold transition ${
-                                isSelected
-                                  ? "border-blue-600 bg-blue-600 text-white"
-                                  : blockReason
-                                    ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300 line-through"
-                                    : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
-                              } ${isCurrentMonth ? "" : "opacity-40"}`}
-                            >
-                              {date.getDate()}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
-                        <span>Selected: {dueDate}</span>
-                        {dueDateBlockReason && (
-                          <span className="font-semibold text-rose-600">
-                            Unavailable: {dueDateBlockReason}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
+            <GuidedForm
+              title="Assign a task"
+              description="Start with the work and its owner, then continue one section at a time. You can go back to change your entries."
+              steps={formSteps}
+              onStepChange={setActiveStage}
+            >
+              <GuidedFormSection
+                id="details"
+                description="Describe one clear outcome and choose the person responsible for it."
+              >
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Schedule Target
+                    Title <span className="ml-0.5 text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    disabled
-                    value="Runs on automated schedule"
-                    className="w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold italic text-muted-app/60 outline-none"
+                    required
+                    placeholder="e.g. Inspect the packing line"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
                   />
                 </div>
-              )}
 
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Priority <span className="ml-0.5 text-red-500">*</span>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Description (optional)
+                  </label>
+                  <textarea
+                    placeholder="Add instructions or a checklist"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    className="w-full resize-none rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Assign to <span className="ml-0.5 text-red-500">*</span>
+                    </label>
+                    <DwmsSelectDropdown
+                      value={assignedToId}
+                      options={employeeOptions}
+                      onChange={setAssignedToId}
+                      placeholder="Choose a team member..."
+                      variant="employee"
+                      showTriggerDescription={false}
+                      allowClear
+                      clearLabel="Clear selection"
+                      emptyMessage="No matching team members found."
+                      triggerClassName={TASK_CONTROL_CLASS}
+                    />
+                  </div>
+                </div>
+              </GuidedFormSection>
+              <GuidedFormSection
+                id="schedule"
+                description="Choose Once for a single task, or set a repeating schedule. Medium priority is suitable for normal work."
+              >
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Frequency <span className="ml-0.5 text-red-500">*</span>
+                  </label>
+                  <RecurrenceBuilder
+                    value={schedule}
+                    today={organizationToday}
+                    allowOnce
+                    workingDays={workingDays}
+                    isClosedDate={(dateKey) => Boolean(getHolidayName(dateKey))}
+                    onChange={(nextSchedule) => {
+                      setSchedule(nextSchedule);
+                      setFrequency(
+                        !nextSchedule
+                          ? "PLANNED"
+                          : nextSchedule.unit === "DAY"
+                            ? "DAILY"
+                            : nextSchedule.unit === "WEEK"
+                              ? "WEEKLY"
+                              : nextSchedule.interval === 3
+                                ? "QUARTERLY"
+                                : "MONTHLY",
+                      );
+                      setIsDueDateCalendarOpen(false);
+                    }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  {frequency === "PLANNED" ? (
+                    <div ref={dueDateCalendarRef} className="relative">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                        Due date <span className="ml-0.5 text-red-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDueDateCalendarOpen((open) => !open);
+                        }}
+                        className={`flex w-full items-center justify-between border text-left outline-none transition ${TASK_CONTROL_CLASS}`}
+                      >
+                        <span>{dueDate}</span>
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 text-muted-app transition ${
+                            isDueDateCalendarOpen ? "rotate-180" : ""
+                          }`}
+                          strokeWidth={1.5}
+                        />
+                      </button>
+                      {dueDateBlockReason && (
+                        <p className="mt-1.5 text-xs font-semibold text-rose-600">
+                          Unavailable: {dueDateBlockReason}
+                        </p>
+                      )}
+                      {isDueDateCalendarOpen && (
+                        <div className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCalendarMonth((current) =>
+                                  addMonths(current, -1),
+                                )
+                              }
+                              className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                              aria-label="Previous month"
+                            >
+                              <ChevronLeft
+                                className="h-4 w-4"
+                                strokeWidth={1.5}
+                              />
+                            </button>
+                            <span className="text-xs font-bold text-text-app">
+                              {monthLabel(calendarMonth)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCalendarMonth((current) =>
+                                  addMonths(current, 1),
+                                )
+                              }
+                              className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                              aria-label="Next month"
+                            >
+                              <ChevronRight
+                                className="h-4 w-4"
+                                strokeWidth={1.5}
+                              />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold uppercase text-slate-400">
+                            {WEEKDAY_LABELS.map((day) => (
+                              <span key={day} className="py-1">
+                                {day}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="mt-1 grid grid-cols-7 gap-1">
+                            {calendarCells.map((date) => {
+                              const dateKey = toDateKey(date);
+                              const blockReason = getDueDateBlockReason(date);
+                              const isCurrentMonth =
+                                date.getMonth() === calendarMonth.getMonth();
+                              const isSelected = dueDate === dateKey;
+
+                              return (
+                                <button
+                                  key={dateKey}
+                                  type="button"
+                                  disabled={!!blockReason}
+                                  title={blockReason ?? "Available"}
+                                  onClick={() => {
+                                    setDueDate(dateKey);
+                                    setIsDueDateCalendarOpen(false);
+                                  }}
+                                  className={`aspect-square rounded-md border text-[11px] font-semibold transition ${
+                                    isSelected
+                                      ? "border-blue-600 bg-blue-600 text-white"
+                                      : blockReason
+                                        ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300 line-through"
+                                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                                  } ${isCurrentMonth ? "" : "opacity-40"}`}
+                                >
+                                  {date.getDate()}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                            <span>Selected: {dueDate}</span>
+                            {dueDateBlockReason && (
+                              <span className="font-semibold text-rose-600">
+                                Unavailable: {dueDateBlockReason}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                        Schedule Target
+                      </label>
+                      <input
+                        type="text"
+                        disabled
+                        value="Runs on automated schedule"
+                        className="w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold italic text-muted-app/60 outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Priority <span className="ml-0.5 text-red-500">*</span>
+                    </label>
+                    <DwmsSelectDropdown
+                      value={priority}
+                      options={PRIORITY_OPTIONS.map((option) => ({
+                        value: option.val,
+                        label: option.label,
+                      }))}
+                      onChange={(value) => setPriority(value as DwmsPriority)}
+                      placeholder="Select priority"
+                      triggerClassName={TASK_CONTROL_CLASS}
+                    />
+                  </div>
+                </div>
+              </GuidedFormSection>
+              <GuidedFormSection
+                id="completion"
+                description="Leave these options unchanged unless someone must approve the work or a file must be uploaded."
+              >
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Approver{" "}
+                      <span className="font-normal text-slate-400">
+                        (optional)
+                      </span>
+                    </label>
+                    <DwmsSelectDropdown
+                      value={approvedById}
+                      options={approverOptions}
+                      onChange={setApprovedById}
+                      placeholder="None (No approval required)"
+                      variant="employee"
+                      showTriggerDescription={false}
+                      allowClear
+                      clearLabel="Clear Selection (No Approver)"
+                      emptyMessage="No matching approvers found."
+                      triggerClassName={TASK_CONTROL_CLASS}
+                    />
+                  </div>
+                </div>
+                <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={requiresCompletionDocument}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setRequiresCompletionDocument(checked);
+                      if (!checked) setCompletionDocumentName("");
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-slate-700">
+                      Document required for completion
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">
+                      Assignee must upload a file before marking this task done.
+                    </span>
+                  </span>
                 </label>
-                <DwmsSelectDropdown
-                  value={priority}
-                  options={PRIORITY_OPTIONS.map((option) => ({
-                    value: option.val,
-                    label: option.label,
-                  }))}
-                  onChange={(value) => setPriority(value as DwmsPriority)}
-                  onFocus={() => setFocusedHelpField("priority")}
-                  placeholder="Select priority"
-                  triggerClassName={TASK_CONTROL_CLASS}
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Approver
-                </label>
-                <DwmsSelectDropdown
-                  value={approvedById}
-                  options={approverOptions}
-                  onChange={setApprovedById}
-                  onFocus={() => setFocusedHelpField("approver")}
-                  placeholder="None (No approval required)"
-                  variant="employee"
-                  allowClear
-                  clearLabel="Clear Selection (No Approver)"
-                  emptyMessage="No matching approvers found."
-                  triggerClassName={TASK_CONTROL_CLASS}
+                {requiresCompletionDocument && (
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Document Name{" "}
+                      <span className="ml-0.5 text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={completionDocumentName}
+                      onChange={(event) =>
+                        setCompletionDocumentName(event.target.value)
+                      }
+                      placeholder="e.g. Signed inspection checklist"
+                      className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                    />
+                  </div>
+                )}
+              </GuidedFormSection>
+              <GuidedFormSection
+                id="review"
+                description="Check who will receive the task and what they need to do before assigning it."
+              >
+                <GuidedFormReview
+                  ready={taskReady}
+                  entries={[
+                    { label: "Task", value: title.trim() },
+                    {
+                      label: "Assigned to",
+                      value:
+                        employeeOptions.find(
+                          (option) => option.value === assignedToId,
+                        )?.label ?? "",
+                    },
+                    {
+                      label: "Schedule",
+                      value: schedule
+                        ? `${recurrenceSummary(schedule)} · starts ${schedule.startsOn}`
+                        : `Once · due ${dueDate}`,
+                    },
+                    {
+                      label: "Priority",
+                      value:
+                        PRIORITY_OPTIONS.find(
+                          (option) => option.val === priority,
+                        )?.label ?? priority,
+                    },
+                    {
+                      label: "Approval",
+                      value:
+                        approverOptions.find(
+                          (option) => option.value === approvedById,
+                        )?.label ?? "No approval required",
+                    },
+                    {
+                      label: "Completion document",
+                      value: requiresCompletionDocument
+                        ? completionDocumentName.trim()
+                        : "No document required",
+                    },
+                  ]}
                 />
-              </div>
-            </div>
-            <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50">
-              <input
-                type="checkbox"
-                checked={requiresCompletionDocument}
-                onFocus={() => setFocusedHelpField("document")}
-                onChange={(event) => {
-                  const checked = event.target.checked;
-                  setRequiresCompletionDocument(checked);
-                  if (!checked) setCompletionDocumentName("");
-                }}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span>
-                <span className="block text-sm font-medium text-slate-700">
-                  Document required for completion
-                </span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">
-                  Assignee must upload a file before marking this task done.
-                </span>
-              </span>
-            </label>
-
-            {requiresCompletionDocument && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Document Name <span className="ml-0.5 text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={completionDocumentName}
-                  onFocus={() => setFocusedHelpField("document")}
-                  onChange={(event) =>
-                    setCompletionDocumentName(event.target.value)
-                  }
-                  placeholder="e.g. Signed inspection checklist"
-                  className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-                />
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-2 flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-md border border-slate-200 bg-[#52618a] py-3 text-sm font-medium text-white transition hover:bg-[#445174] disabled:opacity-50"
-            >
-              <span>{loading ? "Assigning..." : "Assign task"}</span>
-            </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="mt-2 flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-md border border-slate-200 bg-[#52618a] py-3 text-sm font-medium text-white transition hover:bg-[#445174] disabled:opacity-50"
+                >
+                  <span>{loading ? "Assigning..." : "Assign task"}</span>
+                </button>
+              </GuidedFormSection>
+            </GuidedForm>
           </form>
         </div>
 
-        <aside className="rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-6 lg:sticky lg:top-6 lg:col-span-4">
-          <div className="flex items-center gap-2 border-b border-border-app pb-3">
-            <Lightbulb className="h-4 w-4 text-amber-500" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-text-app">
-              {activeHelp.title}
-            </h3>
-          </div>
-          <ul className="mt-5 space-y-2 text-sm leading-6 text-slate-600">
-            {activeHelp.tips.map((tip) => (
-              <li key={tip}>- {tip}</li>
-            ))}
-          </ul>
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Example / suggestion
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-700">
-              {activeHelp.example}
-            </p>
-          </div>
+        <aside
+          aria-label="Help for the current stage"
+          className="rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-5 lg:sticky lg:top-6 lg:col-span-4"
+        >
+          <FormHelp {...activeHelp} />
         </aside>
       </div>
     </div>

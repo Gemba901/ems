@@ -11,7 +11,7 @@ import {
   Settings2,
   Plus,
   BellPlus,
-  Repeat,
+  CalendarClock,
   TriangleAlert,
 } from "lucide-react";
 import { ModuleSidebar, type SidebarNavGroup } from "@/components/shell/ModuleSidebar";
@@ -35,7 +35,7 @@ export function Sidebar(props: SidebarProps) {
       name: "Your work",
       items: [
         { label: "Home", href: "/dwms", icon: Home },
-        { label: "Routine Work", shortLabel: "Routine", href: "/dwms/routine-work", icon: Repeat },
+        { label: "Routine Work", shortLabel: "Routine", href: "/dwms/routine-work", icon: CalendarClock },
         { label: "Assigned Task", shortLabel: "Tasks", href: "/dwms/tasks", icon: ClipboardList },
         { label: "Alert", href: "/dwms/alerts", icon: AlertTriangle },
         { label: "Abnormalities", href: "/dwms/abnormalities", icon: TriangleAlert },

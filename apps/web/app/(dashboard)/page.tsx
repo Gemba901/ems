@@ -122,8 +122,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
   },
   DWMS: {
     key: "DWMS",
-    label: "DWMS",
-    tagline: "Daily Work Management",
+    label: "RTW",
+    tagline: "Routine and Task Management",
     description: "Assign and track daily tasks, raise alerts, and stay on top of what's due across your department.",
     icon: ClipboardCheck,
     color: "text-rose-600",

@@ -81,7 +81,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dwms/activities": "Activities",
   "/dwms/activities/ingestions": "Activity Import History",
   "/dwms/actions/new": "New Work",
-  "/dwms/settings": "DWMS Settings",
+  "/dwms/settings": "RTW Settings",
   "/docs/dwms": "Documentation",
   "/sga": "Small Group Activities",
   "/sga/all": "All SGAs",
@@ -114,7 +114,7 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/docs/kaizen/")) return "Documentation";
   if (pathname.startsWith("/kaizen/")) return "Kaizen Details";
   if (pathname.startsWith("/dwms/activities/ingestions/")) return "Activity Import Details";
-  if (pathname.startsWith("/dwms/")) return "Daily Work";
+  if (pathname.startsWith("/dwms/")) return "Routine and Task Management";
   if (pathname.startsWith("/sims/")) return "Suggestions";
   if (pathname.startsWith("/tickets/")) return "Ticket Details";
   if (pathname.startsWith("/admin/organizations/")) return "Organization";

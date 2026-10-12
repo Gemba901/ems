@@ -6,10 +6,9 @@ When the results are recorded, the raiser or SGA leader selects **Submit for Ver
 
 ## 1. Verification stages
 
-- **Affected Department:** Applies when a verifying department was selected. Completed by that department's HOD or the chosen representative.
 - **Department HOD:** Always applies. Completed by the HOD of the main department.
 - **Steering Committee:** Always applies. Completed by a steering committee member.
-- **Finance:** Applies when the SGA targets Cost. Completed by the Finance HOD.
+- **Finance:** Applies to every SGA. Completed by the Finance HOD, who also confirms any money benefit.
 
 Stages that do not apply are shown as **Not applicable**. The main department HOD and Admin users can complete any stage when needed.
 

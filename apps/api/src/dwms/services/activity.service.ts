@@ -1081,8 +1081,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             employeeId,
             type: NotificationType.INFO,
             module: 'DWMS',
-            title: 'DWMS activities updated',
-            message: '1 activity has been added to your DWMS profile.',
+            title: 'RTW activities updated',
+            message: '1 activity has been added to your RTW profile.',
             actionUrl: '/dwms/tasks',
           })),
         );
@@ -1645,8 +1645,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         employeeId,
         type: NotificationType.INFO,
         module: 'DWMS',
-        title: 'DWMS activities updated',
-        message: `${count} ${count === 1 ? 'activity has' : 'activities have'} been added to your DWMS profile.`,
+        title: 'RTW activities updated',
+        message: `${count} ${count === 1 ? 'activity has' : 'activities have'} been added to your RTW profile.`,
         actionUrl: '/dwms/tasks',
       }),
     );

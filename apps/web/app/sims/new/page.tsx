@@ -12,7 +12,9 @@ import { EmployeeService } from "@/services/employee.service";
 import { CommitteeService } from "@/services/committee.service";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { SpeechToTextButton } from "@/components/ui/SpeechToTextButton";
-import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, Camera, X, Loader2 } from "lucide-react";
+import { ModuleTour, startTour } from "@/components/onboarding/ModuleTour";
+import { SIMS_CREATE_TOUR } from "@/components/onboarding/tours";
+import { ArrowLeft, Send, CheckSquare, Square, CheckCircle2, ImagePlus, Camera, X, Loader2, Compass } from "lucide-react";
 
 const QCDSMT_CATEGORIES: {
   value: SuggestionCategory;
@@ -286,11 +288,21 @@ export default function NewSuggestionPage() {
 
           {/* LEFT , Form */}
           <div className="xl:col-span-2">
-            <div className="mb-6">
-              <h1 className="text-lg font-bold tracking-tight text-slate-900">New Suggestion</h1>
-              <p className="hidden sm:block text-sm text-slate-500 mt-1">
-                Help us evolve. Submit your ideas across our QCDSMT pillars, every voice matters.
-              </p>
+            <ModuleTour tourId="sims-create" steps={SIMS_CREATE_TOUR} />
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-lg font-bold tracking-tight text-slate-900">New Suggestion</h1>
+                <p className="hidden sm:block text-sm text-slate-500 mt-1">
+                  Help us evolve. Submit your ideas across our QCDSMT pillars, every voice matters.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => startTour("sims-create")}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                <Compass className="h-3.5 w-3.5" /> Show me how
+              </button>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl p-6">
@@ -298,7 +310,7 @@ export default function NewSuggestionPage() {
 
                 {/* HOD picker — only for HOD / Management / Admin */}
                 {isPrivileged && (
-                  <div>
+                  <div data-tour="sims-send-to">
                     <label className="text-sm font-semibold text-slate-700 block mb-1.5">
                       Send To <span className="text-red-500">*</span>
                     </label>
@@ -336,7 +348,7 @@ export default function NewSuggestionPage() {
                 )}
 
                 {/* Title */}
-                <div>
+                <div data-tour="sims-title">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-sm font-semibold text-slate-700">
                       Problem Identified <span className="text-red-500">*</span>
@@ -357,7 +369,9 @@ export default function NewSuggestionPage() {
                           : "border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-400"
                       }`}
                     />
-                    <SpeechToTextButton onResult={appendToTitle} disabled={submitting} />
+                    <span data-tour="sims-voice" className="inline-flex">
+                      <SpeechToTextButton onResult={appendToTitle} disabled={submitting} />
+                    </span>
                   </div>
                   {title.length > 0 && title.length < TITLE_MIN && (
                     <p className="text-xs text-amber-600 mt-1">{TITLE_MIN - title.length} more characters needed</p>
@@ -365,7 +379,7 @@ export default function NewSuggestionPage() {
                 </div>
 
                 {/* Description */}
-                <div>
+                <div data-tour="sims-description">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-sm font-semibold text-slate-700">
                       My Suggestion for Improvement <span className="text-red-500">*</span>
@@ -394,7 +408,7 @@ export default function NewSuggestionPage() {
                 </div>
 
                 {/* Image upload */}
-                <div>
+                <div data-tour="sims-image">
                   <label className="text-sm font-semibold text-slate-700 block mb-1.5">
                     Supporting Image <span className="text-xs font-normal text-slate-400">(optional)</span>
                   </label>
@@ -448,7 +462,7 @@ export default function NewSuggestionPage() {
                 </div>
 
                 {/* Category multi-select */}
-                <div>
+                <div data-tour="sims-category">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-semibold text-slate-700">
                       Category <span className="text-red-500">*</span>
@@ -538,6 +552,7 @@ export default function NewSuggestionPage() {
                 <div className="flex items-center gap-3 pt-1">
                   <button
                     type="submit"
+                    data-tour="sims-submit"
                     disabled={!canSubmit}
                     className="flex items-center gap-2 bg-[#52618a] hover:bg-[#445174] disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
                   >
@@ -559,7 +574,7 @@ export default function NewSuggestionPage() {
 
           {/* RIGHT — Submission Guide */}
           <div className="xl:col-span-1">
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden sticky top-6">
+            <div data-tour="sims-tips" className="bg-white border border-slate-200 rounded-xl overflow-hidden sticky top-6">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
                 <p className="text-sm font-bold text-slate-800">Writing tips & example</p>
                 

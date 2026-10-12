@@ -2,11 +2,11 @@
 
 Tasks assigned to me is the searchable workspace for task occurrences explicitly assigned to you by another employee, including current, overdue, approval-pending, and completed work. Activity-generated routine work appears in **Routine Work** instead.
 
-> **If you are new to DWMS:** Start with **Not Acknowledged**, acknowledge your new work, then use **Pending** for the work you need to complete. Use **Overdue** first whenever it has a count above zero.
+> **If you are new to RTW:** Start with **Not Acknowledged**, acknowledge your new work, then use **Pending** for the work you need to complete. Use **Overdue** first whenever it has a count above zero.
 
 ## 1. Open the workspace
 
-In Daily Work Management, open the left menu and select **Assigned Tasks**. Use the filter beside the status tabs to select **Assigned to me**. Every signed-in DWMS user can open their own list.
+In Routine and Task Management, open the left menu and select **Assigned Tasks**. Use the filter beside the status tabs to select **Assigned to me**. Every signed-in RTW user can open their own list.
 
 ## 2. Use the status tabs
 
@@ -37,7 +37,7 @@ Each card identifies the task, priority, schedule, acknowledgement, and status. 
 
 Select **Acknowledge** on new work. Then use the status control to move forward through Pending, In Progress, Less Than 50, Partly Done, Done, or Not Applicable as applicable.
 
-DWMS does not allow backward progress. Overdue and Approval Pending are system-managed states. A recurring task can be updated only inside its scheduled window, and a dependent activity cannot progress until its prerequisite occurrence is Done.
+RTW does not allow backward progress. Overdue and Approval Pending are system-managed states. A recurring task can be updated only inside its scheduled window, and a dependent activity cannot progress until its prerequisite occurrence is Done.
 
 ### What the progress choices mean
 

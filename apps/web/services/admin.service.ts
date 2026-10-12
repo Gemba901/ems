@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api-client";
+import { EmployeeImportMapping, toRequestMapping } from "@/lib/employee-import-mapping";
 const API_URL = "/api";
 
 function authHeaders(token: string) {
@@ -40,7 +41,7 @@ export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: s
     { key: "EMS",      label: "EMS",      description: "Employee Master Data" },
     { key: "CALENDAR", label: "Calendar", description: "Visit Scheduling" },
     { key: "LEAVE",    label: "Leave",    description: "Leave Request Management" },
-    { key: "DWMS",     label: "DWMS",     description: "Daily Work Management: Tasks & Alerts" },
+    { key: "DWMS",     label: "RTW",      description: "Routine and Task Management: Tasks & Alerts" },
     { key: "STEEL",    label: "Steel Manufacturing", description: "Production Planning (Process 1)" },
     { key: "KAIZEN",   label: "Daily Gemba Kaizen", description: "Daily Gemba Walks & Kaizen Tracking" },
     { key: "SGA",      label: "Small Group Activities", description: "Team-based CAPDo Improvement Cycles" },
@@ -249,6 +250,7 @@ export const AdminService = {
         id: string,
         file: File,
         dryRun = false,
+        mapping?: EmployeeImportMapping | null,
     ): Promise<{
         organizationId: string;
         organizationName: string;
@@ -264,6 +266,7 @@ export const AdminService = {
     }> {
         const form = new FormData();
         form.append("file", file);
+        if (mapping) form.append("mapping", JSON.stringify(toRequestMapping(mapping)));
         const res = await apiClient(`${API_URL}/organizations/${id}/employees/import?dryRun=${dryRun ? "true" : "false"}`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },

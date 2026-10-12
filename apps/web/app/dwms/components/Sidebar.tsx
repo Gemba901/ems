@@ -61,10 +61,10 @@ export function Sidebar(props: SidebarProps) {
     <ModuleSidebar
       {...props}
       id="dwms-sidebar"
-      title="Daily Work Management"
+      title="Routine and Task Management"
       homeHref="/dwms"
       tour={{ id: "dwms", steps: DWMS_TOUR }}
-      ariaLabel="Daily work navigation"
+      ariaLabel="Routine and task navigation"
       actions={[
         { label: "Assign task", shortLabel: "Assign", href: "/dwms/actions/new?mode=TASK", icon: Plus },
         {

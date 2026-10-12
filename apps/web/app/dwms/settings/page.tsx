@@ -188,7 +188,7 @@ function DwmsSettingsContent() {
       })
       .catch((cause) => {
         if (mounted)
-          setError(getDwmsErrorMessage(cause, "Failed to load DWMS settings"));
+          setError(getDwmsErrorMessage(cause, "Failed to load RTW settings"));
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -245,9 +245,9 @@ function DwmsSettingsContent() {
         toDwmsSettingsPayload(settings),
       );
       setSettings(response);
-      setSuccess("DWMS settings saved successfully.");
+      setSuccess("RTW settings saved successfully.");
     } catch (cause) {
-      setError(getDwmsErrorMessage(cause, "Failed to save DWMS settings"));
+      setError(getDwmsErrorMessage(cause, "Failed to save RTW settings"));
     } finally {
       setSaving(false);
     }
@@ -316,7 +316,7 @@ function DwmsSettingsContent() {
             {loading ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
                 <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-slate-400" />
-                Loading DWMS settings...
+                Loading RTW settings...
               </div>
             ) : (
               <>
@@ -398,7 +398,7 @@ function DwmsSettingsContent() {
                     disabled={!canEdit || saving}
                     className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:rounded-2xl"
                   >
-                    {saving ? "Saving..." : "Save DWMS settings"}
+                    {saving ? "Saving..." : "Save RTW settings"}
                   </button>
                 </div>
               </>

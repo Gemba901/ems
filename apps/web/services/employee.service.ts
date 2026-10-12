@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api-client";
+import { EmployeeImportMapping, toRequestMapping } from "@/lib/employee-import-mapping";
 const API_URL = "/api";
 
 function authHeaders(token: string) {
@@ -229,9 +230,10 @@ export const EmployeeService = {
         return handleResponse<EmployeeApiResponse>(res);
     },
 
-    async importEmployees(file: File, token: string, dryRun = false): Promise<EmployeeImportSummary> {
+    async importEmployees(file: File, token: string, dryRun = false, mapping?: EmployeeImportMapping | null): Promise<EmployeeImportSummary> {
         const form = new FormData();
         form.append("file", file);
+        if (mapping) form.append("mapping", JSON.stringify(toRequestMapping(mapping)));
         const res = await apiClient(`${API_URL}/employee/import?dryRun=${dryRun ? "true" : "false"}`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },

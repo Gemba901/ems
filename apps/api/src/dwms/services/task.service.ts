@@ -1916,7 +1916,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (!title) throw new BadRequestException('Task title is required');
 
     if (dto.priority === Priority.LOW) {
-      throw new BadRequestException('DWMS tasks cannot have low priority');
+      throw new BadRequestException('RTW tasks cannot have low priority');
     }
 
     let structuredRecurrence: StructuredRecurrence | null = null;

@@ -1,6 +1,6 @@
-# DWMS Settings
+# RTW Settings
 
-DWMS Settings controls task approver rules, alert visibility, and analytics visibility. Management, Admin, HR, and Super Admin roles can update these settings.
+RTW Settings controls task approver rules, alert visibility, and analytics visibility. Management, Admin, HR, and Super Admin roles can update these settings.
 
 Choose the roles eligible to approve task completion. The task owner is always eligible, **Anyone** is exclusive, and **Custom** supports up to three employees from the organization.
 

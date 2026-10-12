@@ -5,10 +5,12 @@ import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
 import { useQuery } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import ColumnMappingDialog from "@/components/employee-import/ColumnMappingDialog";
+import { EmployeeImportMapping, SheetData, readWorkbook } from "@/lib/employee-import-mapping";
 import { Role } from "@/types/role";
 import {
     Users, Search, Loader2, Check, ShieldCheck, AlertCircle, UserX,
-    ChevronLeft, ChevronRight, Upload,
+    ChevronLeft, ChevronRight, Upload, Columns3,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -202,6 +204,9 @@ function MembersContent() {
     const [importError, setImportError] = useState<string | null>(null);
     const [importProgress, setImportProgress] = useState(0);
     const [importPhase, setImportPhase] = useState("");
+    const [importSheets, setImportSheets] = useState<SheetData[] | null>(null);
+    const [importMapping, setImportMapping] = useState<EmployeeImportMapping | null>(null);
+    const [mappingOpen, setMappingOpen] = useState(false);
     const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const orgId = user?.organizationId ?? "";
@@ -256,9 +261,27 @@ function MembersContent() {
         setImportProgress(100);
     };
 
-    const handleImportDryRun = async (file: File) => {
-        if (!accessToken) return;
+    // Step 1: read the workbook in the browser and let the user map its columns.
+    const handleImportFileSelected = async (file: File) => {
         setImportFile(file);
+        setImportSummary(null);
+        setImportError(null);
+        setImportMapping(null);
+        try {
+            setImportSheets(await readWorkbook(file));
+            setMappingOpen(true);
+        } catch {
+            setImportSheets(null);
+            setImportError("Couldn't read that file. Make sure it's an Excel workbook (.xlsx or .xls).");
+        }
+    };
+
+    // Step 2: dry run with the confirmed mapping.
+    const handleImportDryRun = async (mapping: EmployeeImportMapping) => {
+        const file = importFile;
+        if (!accessToken || !file) return;
+        setImportMapping(mapping);
+        setMappingOpen(false);
         setImportSummary(null);
         setImportError(null);
         setImporting(true);
@@ -268,7 +291,7 @@ function MembersContent() {
             { label: "Preparing preview…",  target: 94, duration: 1000 },
         ]);
         try {
-            const summary = await EmployeeService.importEmployees(file, accessToken, true);
+            const summary = await EmployeeService.importEmployees(file, accessToken, true, mapping);
             finishProgress();
             setImportSummary(summary);
         } catch (e: any) {
@@ -290,7 +313,7 @@ function MembersContent() {
             { label: "Finalizing…",         target: 94, duration: 2000 },
         ]);
         try {
-            const summary = await EmployeeService.importEmployees(importFile, accessToken, false);
+            const summary = await EmployeeService.importEmployees(importFile, accessToken, false, importMapping);
             finishProgress();
             setImportSummary(summary);
             await refetch();
@@ -346,7 +369,7 @@ function MembersContent() {
                         onChange={(e) => {
                             const file = e.target.files?.[0];
                             e.target.value = "";
-                            if (file) void handleImportDryRun(file);
+                            if (file) void handleImportFileSelected(file);
                         }}
                     />
                 </label>
@@ -393,9 +416,27 @@ function MembersContent() {
                 </div>
             )}
 
+            {mappingOpen && importFile && importSheets && (
+                <ColumnMappingDialog
+                    fileName={importFile.name}
+                    sheets={importSheets}
+                    initialMapping={importMapping}
+                    onCancel={() => setMappingOpen(false)}
+                    onConfirm={(mapping) => void handleImportDryRun(mapping)}
+                />
+            )}
+
             {!importing && (importSummary || importError) && (
                 <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
                     {importError && <p className="text-sm font-medium text-red-600">{importError}</p>}
+                    {importSheets && (importError || importSummary?.dryRun) ? (
+                        <button
+                            onClick={() => setMappingOpen(true)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:underline"
+                        >
+                            <Columns3 className="h-3.5 w-3.5" /> Edit column mapping
+                        </button>
+                    ) : null}
                     {importSummary && (
                         <>
                             <div className="flex flex-wrap items-center gap-2 text-xs">

@@ -146,7 +146,7 @@ export default function EmployeeActivityManager({
           </div>
         ) : !items.length ? (
           <div className="m-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
-            No DWMS activities apply to this employee yet.
+            No RTW activities apply to this employee yet.
           </div>
         ) : (
           <>

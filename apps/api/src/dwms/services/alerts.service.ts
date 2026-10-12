@@ -119,7 +119,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
       throw new BadRequestException('Alert title and description are required');
     }
     if (dto.severity === Severity.LOW) {
-      throw new BadRequestException('DWMS alerts cannot have low severity');
+      throw new BadRequestException('RTW alerts cannot have low severity');
     }
     const targetType = dto.targetType ?? 'GENERAL';
     const supplied = [dto.taskInstanceId && 'TASK', dto.againstUserId && 'PERSON', dto.departmentId && 'DEPARTMENT'].filter(Boolean);
@@ -557,7 +557,7 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
   ) {
     await this.getEmployee(user.userId, user.organizationId);
     if (!this.canUpdateDwmsPermissions(user.roleLevel)) {
-      throw new ForbiddenException('You are not authorized to view employee DWMS profile');
+      throw new ForbiddenException('You are not authorized to view employee RTW profile');
     }
     const employee = await this.prisma.employee.findFirst({
       where: { id: employeeId, organizationId: user.organizationId },

@@ -1017,15 +1017,13 @@ export class SgaService {
             throw new BadRequestException('Complete steps 3-5 before submitting for verification');
         }
 
-        const financeApplicable = sga.qcdsmtImpacts.some((i) => i.category === 'COST');
-        const affectedDeptApplicable = !!sga.verifyingDepartmentId;
-
         const updated = await this.prisma.$transaction(async (tx) => {
             const stageApplicability: Record<SgaVerificationStage, boolean> = {
-                AFFECTED_DEPARTMENT: affectedDeptApplicable,
+                // Closure is signed off by the HOD, the Steering Committee and the Finance HOD only.
+                AFFECTED_DEPARTMENT: false,
                 HOD: true,
                 STEERING_COMMITTEE: true,
-                FINANCE: financeApplicable,
+                FINANCE: true, // the Finance HOD signs off every SGA, not only cost-saving ones
             };
             const stages: SgaVerificationStage[] = ['AFFECTED_DEPARTMENT', 'HOD', 'STEERING_COMMITTEE', 'FINANCE'];
             for (const stage of stages) {
@@ -1051,13 +1049,11 @@ export class SgaService {
         });
 
         const hodIds = await this.findDepartmentHODs(sga.mainDepartmentId!, organizationId);
-        const verifyingDeptHodIds = affectedDeptApplicable ? await this.findDepartmentHODs(sga.verifyingDepartmentId!, organizationId) : [];
         const committeeMemberIds = await this.getSteeringCommitteeMemberIds(organizationId);
-        const financeHodIds = financeApplicable ? await this.findFinanceDepartmentHODs(organizationId) : [];
-        const departmentRepIds = sga.departmentRepId ? [sga.departmentRepId] : [];
+        const financeHodIds = await this.findFinanceDepartmentHODs(organizationId);
 
         await this.notifications.createMany(
-            [...new Set([...hodIds, ...verifyingDeptHodIds, ...committeeMemberIds, ...financeHodIds, ...departmentRepIds])]
+            [...new Set([...hodIds, ...committeeMemberIds, ...financeHodIds])]
                 .filter((id) => id !== employee.id)
                 .map((recipientId) => ({
                     employeeId: recipientId,
@@ -1085,19 +1081,13 @@ export class SgaService {
         const privileged = this.isPrivileged(roles);
 
         const existingStage = sga.verifications.find((v) => v.stage === dto.stage);
-        if (!existingStage || existingStage.decision === 'NOT_APPLICABLE') {
+        if (!existingStage || existingStage.decision === 'NOT_APPLICABLE' || dto.stage === 'AFFECTED_DEPARTMENT') {
             throw new BadRequestException('This verification stage is not applicable to this SGA');
         }
 
         const isMainDeptHod = roles.includes(Role.HOD) && verifier.departmentId === sga.mainDepartmentId;
 
-        if (dto.stage === 'AFFECTED_DEPARTMENT') {
-            const isVerifyingDeptHod = roles.includes(Role.HOD) && verifier.departmentId === sga.verifyingDepartmentId;
-            const isDepartmentRep = sga.departmentRepId === verifier.id;
-            if (!isVerifyingDeptHod && !isDepartmentRep && !privileged) {
-                throw new ForbiddenException('Only the verifying department HOD, the designated representative, or admin can submit this verification');
-            }
-        } else if (dto.stage === 'HOD') {
+        if (dto.stage === 'HOD') {
             if (!isMainDeptHod && !privileged) {
                 throw new ForbiddenException('Only the department HOD or admin can submit the HOD verification');
             }
@@ -1125,7 +1115,10 @@ export class SgaService {
             });
 
             const stages = await tx.sgaVerification.findMany({ where: { sgaId } });
-            const applicable = stages.filter((s) => s.decision !== 'NOT_APPLICABLE' || s.stage === dto.stage);
+            // AFFECTED_DEPARTMENT is no longer part of closure; ignore it on SGAs submitted before that change.
+            const applicable = stages.filter(
+                (s) => s.stage !== 'AFFECTED_DEPARTMENT' && (s.decision !== 'NOT_APPLICABLE' || s.stage === dto.stage),
+            );
             const anyReturned = applicable.some((s) => (s.stage === dto.stage ? dto.decision : s.decision) === 'RETURN');
             const allVerified = applicable.every((s) => (s.stage === dto.stage ? dto.decision : s.decision) === 'VERIFIED');
 

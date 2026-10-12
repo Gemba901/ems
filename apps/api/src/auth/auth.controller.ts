@@ -124,4 +124,18 @@ export class AuthController {
     getMyOrg(@Request() req: any) {
         return this.authService.getMyOrg(req.user.organizationId);
     }
+
+    @Get('tours')
+    @TenantRequired()
+    @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard)
+    getCompletedTours(@Request() req: any) {
+        return this.authService.getCompletedTours(req.user.userId);
+    }
+
+    @Post('tours')
+    @TenantRequired()
+    @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard)
+    markTourCompleted(@Request() req: any, @Body('tourKey') tourKey: unknown) {
+        return this.authService.markTourCompleted(req.user.userId, tourKey);
+    }
 }

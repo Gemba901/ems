@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -740,6 +740,23 @@ export class AuthService {
         );
 
         return { setupToken, message: 'Temporary password verified. Please set a new password.' };
+    }
+
+    async getCompletedTours(userId: string): Promise<string[]> {
+        const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { completedTours: true } });
+        return user?.completedTours ?? [];
+    }
+
+    async markTourCompleted(userId: string, tourKey: unknown): Promise<string[]> {
+        if (typeof tourKey !== 'string' || !/^[\w-]{1,100}$/.test(tourKey)) throw new BadRequestException('Invalid tour key');
+        const tours = await this.getCompletedTours(userId);
+        if (tours.includes(tourKey)) return tours;
+        const user = await this.prisma.user.update({
+            where: { id: userId },
+            data: { completedTours: { push: tourKey } },
+            select: { completedTours: true },
+        });
+        return user.completedTours;
     }
 
     async getMyOrg(organizationId: string) {

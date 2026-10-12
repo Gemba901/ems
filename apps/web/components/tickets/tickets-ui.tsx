@@ -34,7 +34,7 @@ export const MODULE_LABELS: Record<string, string> = {
   ATTENDANCE: "Attendance",
   HR: "HR",
   EMS: "Employee Records",
-  DWMS: "DWMS",
+  DWMS: "RTW",
   CALENDAR: "Calendar",
   OTHER: "Other",
 };

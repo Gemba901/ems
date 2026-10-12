@@ -698,20 +698,15 @@ export class KaizenService {
             throw new BadRequestException('Complete part 9 before submitting for verification');
         }
 
-        const financeApplicable = kaizen.qcdsmtImpacts.some((i) => i.category === 'COST');
-
+        // Every kaizen is closed out by the department HOD, the Steering Committee and the Finance HOD.
         const updated = await this.prisma.$transaction(async (tx) => {
             const stages: KaizenVerificationStage[] = ['HOD', 'STEERING_COMMITTEE', 'FINANCE'];
             for (const stage of stages) {
                 await tx.kaizenVerification.upsert({
                     where: { kaizenId_stage: { kaizenId, stage } },
-                    create: {
-                        kaizenId,
-                        stage,
-                        decision: stage === 'FINANCE' && !financeApplicable ? 'NOT_APPLICABLE' : 'PENDING',
-                    },
+                    create: { kaizenId, stage, decision: 'PENDING' },
                     update: {
-                        decision: stage === 'FINANCE' && !financeApplicable ? 'NOT_APPLICABLE' : 'PENDING',
+                        decision: 'PENDING',
                         remarks: null,
                         verifiedById: null,
                         verifiedAt: null,
@@ -730,7 +725,7 @@ export class KaizenService {
 
         const hodIds = await this.findDepartmentHODs(kaizen.departmentId, organizationId);
         const committeeMemberIds = await this.getSteeringCommitteeMemberIds(organizationId);
-        const financeHodIds = financeApplicable ? await this.findFinanceDepartmentHODs(organizationId) : [];
+        const financeHodIds = await this.findFinanceDepartmentHODs(organizationId);
 
         await this.notifications.createMany(
             [...new Set([...hodIds, ...committeeMemberIds, ...financeHodIds])]

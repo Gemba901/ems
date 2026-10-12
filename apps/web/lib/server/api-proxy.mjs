@@ -2,7 +2,7 @@
 import { isIP } from 'node:net';
 import { RESERVED_SLUGS as RESERVED } from '../reserved-slugs.mjs';
 const ROOTS = new Set(['operations', 'onboarding', 'auth', 'organizations', 'company', 'employee', 'departments', 'committees', 'notices', 'notifications', 'tickets', 'sims', 'kaizen', 'sga', 'ems', 'leave', 'calendar', 'dwms', 'uploads', 'chat', 'quotes', 'steel', 'work']);
-const AUTH = new Set(['login', 'refresh', 'logout', 'select-org', 'verify-first-time', 'create-password', 'forgot-password', 'reset-password', 'verify-temp-password', 'my-org']);
+const AUTH = new Set(['login', 'refresh', 'logout', 'select-org', 'verify-first-time', 'create-password', 'forgot-password', 'reset-password', 'verify-temp-password', 'my-org', 'tours']);
 const COMPANY_AUTH = new Set(['login', 'refresh', 'logout', 'verify-first-time', 'create-password']);
 const LIMIT = 20 * 1024 * 1024;
 

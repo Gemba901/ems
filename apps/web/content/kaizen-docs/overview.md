@@ -41,7 +41,7 @@ The progress bar at the top of each kaizen shows where it is.
 - **Team members:** Up to three colleagues who help. They are notified when they are added.
 - **Department HOD:** Reviews the kaizen before work starts and completes the HOD verification.
 - **Steering committee:** Confirms the result for the organization.
-- **Finance HOD:** Confirms the money saved when the kaizen targets Cost.
+- **Finance HOD:** Reviews every kaizen before it closes and confirms any money saved.
 
 ## 5. Where to find what you need
 

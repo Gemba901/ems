@@ -19,6 +19,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EmployeeService } from './employee.service';
+import { parseImportMapping } from './employee-import-mapping';
 import { CreateEmployeeDto, UpdateEmployeeDto, UpdateEmployeeRoleDto, UpdateAvatarDto, PaginationDto } from './dto/employee.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -56,6 +57,7 @@ export class EmployeeController {
   async importEmployees(
     @UploadedFile() file: any,
     @Query('dryRun') dryRun: string | undefined,
+    @Body('mapping') mapping: string | undefined,
     @CurrentUser() user: { userId: string; organizationId: string },
   ) {
     if (!file?.buffer) throw new BadRequestException('Excel file is required');
@@ -64,6 +66,7 @@ export class EmployeeController {
       user.organizationId,
       user.userId,
       dryRun === 'true',
+      parseImportMapping(mapping),
     );
   }
 

@@ -92,7 +92,7 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     if (!this.canUpdateDwmsPermissions(user.roleLevel)) {
       throw new ForbiddenException(
-        'Only admin, management, HR, and super admin users can update DWMS permissions',
+        'Only admin, management, HR, and super admin users can update RTW permissions',
       );
     }
     const updateData: {
@@ -129,7 +129,7 @@ export abstract class DwmsSettingsService extends DwmsActivityService {
       update: updateData,
     });
     return {
-      message: 'DWMS settings updated successfully',
+      message: 'RTW settings updated successfully',
       updatedBy: {
         id: employee.id,
         name: `${employee.firstName} ${employee.lastName}`.trim(),

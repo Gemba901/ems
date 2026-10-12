@@ -153,7 +153,7 @@ function TaskList({
           </button>
         ))
       ) : (
-        <EmptyState>No current DWMS tasks.</EmptyState>
+        <EmptyState>No current RTW tasks.</EmptyState>
       )}
     </div>
   );
@@ -313,7 +313,7 @@ export default function EmployeeDwmsPanel({
 
       {dwmsProfileLoading ? (
         <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-white py-12 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading DWMS data...
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading RTW data...
         </div>
       ) : (
         <>

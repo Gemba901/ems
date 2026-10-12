@@ -19,6 +19,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationsService } from './organizations.service';
 import { EmployeeService } from 'src/employee/employee.service';
+import { parseImportMapping } from 'src/employee/employee-import-mapping';
 import {
     CreateOrganizationDto,
     UpdateOrganizationDto,
@@ -128,6 +129,7 @@ export class OrganizationsController {
         @Param('id') id: string,
         @UploadedFile() file: any,
         @Query('dryRun') dryRun: string | undefined,
+        @Body('mapping') mapping: string | undefined,
     ) {
         if (!file?.buffer) throw new BadRequestException('Excel file is required');
         return this.employeeService.importEmployeesFromWorkbook(
@@ -135,6 +137,7 @@ export class OrganizationsController {
             id,
             undefined,
             dryRun === 'true',
+            parseImportMapping(mapping),
         );
     }
 

@@ -96,6 +96,19 @@ pnpm build
 
 ---
 
+## 🐳 Local development with Docker Compose
+
+Runs Postgres, the API and the web app with hot reload; no local Node or Postgres needed.
+
+```sh
+docker compose up        # http://localhost:3000 (web), :5000 (API), Postgres on :5433
+```
+
+- The first run installs dependencies, builds `packages/db` and applies all migrations to a fresh local database (`gemba` / `gemba`, db `gemba_dev`). The database starts empty.
+- Secrets still come from `apps/api/.env` and `apps/web/.env.local`. Compose overrides `DATABASE_URL`, so containers never touch RDS.
+- After changing `pnpm-lock.yaml` or adding a migration: `docker compose run --rm setup`
+- Reset everything (database included): `docker compose down -v`
+
 ## 🐳 Docker (Backend)
 
 Build the backend container:

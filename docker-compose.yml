@@ -1,0 +1,88 @@
+# Local development stack: Postgres + API + web, with hot reload.
+# Production images are apps/*/Dockerfile; this file is not used in deploys.
+#
+#   docker compose up            # first run installs deps, builds db, migrates
+#   docker compose run --rm setup  # re-run after lockfile or schema changes
+#   docker compose down -v       # wipe the local database and node_modules
+name: gemba-ems
+
+x-node: &node
+  build:
+    context: .
+    dockerfile: Dockerfile.dev
+  image: gemba-ems-dev
+  working_dir: /app
+  volumes:
+    - .:/app
+    # Keep container node_modules and build output off the host checkout.
+    - root_modules:/app/node_modules
+    - api_modules:/app/apps/api/node_modules
+    - web_modules:/app/apps/web/node_modules
+    - db_modules:/app/packages/db/node_modules
+    - web_next:/app/apps/web/.next
+    - pnpm_store:/pnpm-store
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: gemba
+      POSTGRES_PASSWORD: gemba
+      POSTGRES_DB: gemba_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gemba -d gemba_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  setup:
+    <<: *node
+    command: >
+      sh -c "pnpm install --frozen-lockfile
+      && pnpm --filter db build
+      && pnpm --filter db exec prisma migrate deploy"
+    environment:
+      # Set explicitly so packages/db/.env (which may point at RDS) is never used.
+      DATABASE_URL: postgresql://gemba:gemba@postgres:5432/gemba_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *node
+    command: pnpm --filter api dev
+    # JWT_SECRET, TENANT_PROXY_SECRET, AWS/SES keys etc. come from apps/api/.env;
+    # these override the values there that must differ inside Docker.
+    environment:
+      DATABASE_URL: postgresql://gemba:gemba@postgres:5432/gemba_dev
+      EXPECTED_DATABASE_NAME: gemba_dev
+      PORT: "5000"
+    ports:
+      - "5000:5000"
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+
+  web:
+    <<: *node
+    command: pnpm --filter web exec next dev -H 0.0.0.0 -p 3000
+    # Tenant settings and TENANT_PROXY_SECRET come from apps/web/.env.local.
+    environment:
+      API_INTERNAL_URL: http://api:5000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  root_modules:
+  api_modules:
+  web_modules:
+  db_modules:
+  web_next:
+  pnpm_store:

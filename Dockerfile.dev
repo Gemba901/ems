@@ -1,0 +1,15 @@
+# Local development image shared by every service in docker-compose.yml.
+# Source is bind-mounted at runtime; this image only provides Node + pnpm.
+FROM node:20-bookworm-slim
+
+ENV COREPACK_HOME=/corepack npm_config_store_dir=/pnpm-store
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate \
+    && chown -R node:node /corepack
+
+# Named volumes copy ownership from these paths on first use, so pre-create
+# them as the node user (uid 1000) instead of letting Docker create them as root.
+WORKDIR /app
+RUN mkdir -p /pnpm-store node_modules apps/api/node_modules \
+      apps/web/node_modules apps/web/.next packages/db/node_modules \
+    && chown -R node:node /app /pnpm-store
+USER node

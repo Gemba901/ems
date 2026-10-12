@@ -12,6 +12,10 @@ model Activity {
   purpose                       String?
   category                      String?
   frequency                     TaskFrequency
+  recurrenceUnit                RecurrenceUnit?
+  recurrenceInterval            Int?
+  recurrenceWeekdays            Int[]          @default([])
+  recurrenceDayOfMonth          Int?
   startTrigger                  String?
   completionDeadline            String?
   completionOutput              String?

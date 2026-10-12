@@ -12,8 +12,11 @@ import {
   IsArray,
   ArrayUnique,
   ArrayMaxSize,
+  ArrayMinSize,
   NotEquals,
   IsBoolean,
+  IsIn,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
@@ -24,7 +27,40 @@ import {
   TaskStatus,
   Priority,
   Severity,
+  RecurrenceUnit,
 } from 'db';
+
+export class RecurringScheduleDto {
+  @IsIn(['RECURRING'])
+  kind!: 'RECURRING';
+
+  @IsDateString({ strict: true })
+  startsOn!: string;
+
+  @IsEnum(RecurrenceUnit)
+  unit!: RecurrenceUnit;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  interval!: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(7)
+  @IsIn(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], { each: true })
+  weekdays?: string[];
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  dayOfMonth?: number;
+}
 
 export class CreateAssignedTaskDto {
   @IsNotEmpty()
@@ -52,6 +88,11 @@ export class CreateAssignedTaskDto {
   @IsOptional()
   @IsEnum(TaskFrequency)
   frequency?: TaskFrequency;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RecurringScheduleDto)
+  schedule?: RecurringScheduleDto;
 
   @IsOptional()
   @IsString()
@@ -179,9 +220,14 @@ export class CreateActivityDto {
   @IsString()
   category?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsEnum(TaskFrequency)
-  frequency!: TaskFrequency;
+  frequency?: TaskFrequency;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RecurringScheduleDto)
+  schedule?: RecurringScheduleDto;
 
   @IsOptional()
   @IsString()

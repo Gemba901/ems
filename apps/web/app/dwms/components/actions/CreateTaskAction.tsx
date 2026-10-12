@@ -16,21 +16,14 @@ import {
   type DwmsEmployeeOption,
   type DwmsFrequency,
   type DwmsPriority,
+  type DwmsRecurringSchedule,
 } from "@/services/dwms.service";
 import { LeaveService } from "@/services/leave.service";
 import { useAuthStore } from "@/store/auth.store";
 import { getOrganizationTodayKey } from "../../utils/organizationDate";
 import { Role } from "@/types/role";
 import DwmsSelectDropdown from "../../components/DwmsSelectDropdown";
-
-const FREQUENCY_OPTIONS: Array<{ val: DwmsFrequency; label: string }> = [
-  { val: "PLANNED", label: "Once" },
-  { val: "DAILY", label: "Daily" },
-  { val: "WEEKLY", label: "Weekly" },
-  { val: "MONTHLY", label: "Monthly" },
-  { val: "QUARTERLY", label: "Quarterly" },
-  { val: "YEARLY", label: "Yearly" },
-];
+import RecurrenceBuilder from "./RecurrenceBuilder";
 
 const PRIORITY_OPTIONS: Array<{ val: DwmsPriority; label: string }> = [
   { val: "MEDIUM", label: "Medium" },
@@ -114,7 +107,8 @@ const TASK_HELP: Record<
       "Past dates, holidays, and non-working days are unavailable.",
       "Allow enough time for any required approval or document upload.",
     ],
-    example: "Set the date before the next production run if action is required first.",
+    example:
+      "Set the date before the next production run if action is required first.",
   },
   priority: {
     title: "Setting priority",
@@ -123,7 +117,8 @@ const TASK_HELP: Record<
       "High is for meaningful work that needs prompt action.",
       "Medium is appropriate for normal planned work.",
     ],
-    example: "A stopped production line is Critical; a routine inspection is Medium.",
+    example:
+      "A stopped production line is Critical; a routine inspection is Medium.",
   },
   approver: {
     title: "Choosing an approver",
@@ -272,6 +267,7 @@ export default function CreateTaskAction() {
     useState<number[]>(DEFAULT_WORKING_DAYS);
   const [priority, setPriority] = useState<DwmsPriority>("MEDIUM");
   const [frequency, setFrequency] = useState<DwmsFrequency>("PLANNED");
+  const [schedule, setSchedule] = useState<DwmsRecurringSchedule | null>(null);
   const [loading, setLoading] = useState(false);
   const submittingRef = useRef(false);
   const dueDateCalendarRef = useRef<HTMLDivElement | null>(null);
@@ -336,7 +332,6 @@ export default function CreateTaskAction() {
       })),
     [approverCandidates],
   );
-
 
   useEffect(() => {
     let mounted = true;
@@ -469,7 +464,6 @@ export default function CreateTaskAction() {
     };
   }, [isDueDateCalendarOpen]);
 
-
   const validBackupOwnerId = users.some((user) => user.id === backupOwnerId)
     ? backupOwnerId
     : "";
@@ -525,6 +519,7 @@ export default function CreateTaskAction() {
         dueDate: isPlanned ? dueDate : undefined,
         priority,
         frequency,
+        schedule: schedule ?? undefined,
         approvedById: approvedById || undefined,
         backupOwnerId: isDailyOrWeekly
           ? validBackupOwnerId || undefined
@@ -544,6 +539,7 @@ export default function CreateTaskAction() {
       setDueDate(organizationToday);
       setPriority("MEDIUM");
       setFrequency("PLANNED");
+      setSchedule(null);
       setMessage("Task assigned successfully!");
 
       router.push("/dwms/tasks?view=by-me");
@@ -584,15 +580,19 @@ export default function CreateTaskAction() {
       >
         <div className="relative mx-auto max-w-md">
           <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-indigo-600 shadow-sm">
-            <UserRoundX className="h-6 w-6" strokeWidth={1.7} aria-hidden="true" />
+            <UserRoundX
+              className="h-6 w-6"
+              strokeWidth={1.7}
+              aria-hidden="true"
+            />
           </span>
           <h2 className="mt-5 text-xl font-bold tracking-tight text-slate-900">
             No team members available
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            There is currently no one present who you can assign a task to.
-            When an employee is added to your reporting scope, they will appear
-            here automatically.
+            There is currently no one present who you can assign a task to. When
+            an employee is added to your reporting scope, they will appear here
+            automatically.
           </p>
           <div className="mx-auto mt-6 h-px w-16 bg-slate-200" />
           <p className="mt-4 text-xs text-slate-500">
@@ -669,23 +669,31 @@ export default function CreateTaskAction() {
                 />
               </div>
 
-              <div>
+              <div className="md:col-span-2">
                 <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Frequency <span className="ml-0.5 text-red-500">*</span>
                 </label>
-                <DwmsSelectDropdown
-                  value={frequency}
-                  options={FREQUENCY_OPTIONS.map((option) => ({
-                    value: option.val,
-                    label: option.label,
-                  }))}
-                  onChange={(value) => {
-                    setFrequency(value as DwmsFrequency);
+                <RecurrenceBuilder
+                  value={schedule}
+                  today={organizationToday}
+                  allowOnce
+                  workingDays={workingDays}
+                  isClosedDate={(dateKey) => Boolean(getHolidayName(dateKey))}
+                  onChange={(nextSchedule) => {
+                    setSchedule(nextSchedule);
+                    setFrequency(
+                      !nextSchedule
+                        ? "PLANNED"
+                        : nextSchedule.unit === "DAY"
+                          ? "DAILY"
+                          : nextSchedule.unit === "WEEK"
+                            ? "WEEKLY"
+                            : nextSchedule.interval === 3
+                              ? "QUARTERLY"
+                              : "MONTHLY",
+                    );
                     setIsDueDateCalendarOpen(false);
                   }}
-                  onFocus={() => setFocusedHelpField("frequency")}
-                  placeholder="Select frequency"
-                  triggerClassName={TASK_CONTROL_CLASS}
                 />
               </div>
             </div>
@@ -848,7 +856,6 @@ export default function CreateTaskAction() {
                   triggerClassName={TASK_CONTROL_CLASS}
                 />
               </div>
-
             </div>
             <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50">
               <input

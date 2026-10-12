@@ -16,19 +16,13 @@ import {
   type CreateActivityPayload,
   type DwmsActivityItem,
   type DwmsDepartmentOption,
-  type DwmsFrequency,
+  type DwmsRecurringSchedule,
   type IngestActivityRowPayload,
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 import DwmsSelectDropdown from "../DwmsSelectDropdown";
-
-const FREQUENCIES: DwmsFrequency[] = [
-  "DAILY",
-  "WEEKLY",
-  "MONTHLY",
-  "QUARTERLY",
-  "YEARLY",
-];
+import RecurrenceBuilder from "./RecurrenceBuilder";
+import { getOrganizationTodayKey } from "../../utils/organizationDate";
 
 const EMPTY_FORM: CreateActivityPayload = {
   name: "",
@@ -304,9 +298,32 @@ function cleanPayload(payload: CreateActivityPayload): CreateActivityPayload {
   return cleaned as unknown as CreateActivityPayload;
 }
 
+function schedulesMatch(
+  activity: DwmsActivityItem,
+  schedule: DwmsRecurringSchedule,
+) {
+  const candidate = activity.schedule;
+  if (!candidate) return false;
+  return (
+    candidate.startsOn === schedule.startsOn &&
+    candidate.unit === schedule.unit &&
+    candidate.interval === schedule.interval &&
+    candidate.dayOfMonth === schedule.dayOfMonth &&
+    JSON.stringify([...(candidate.weekdays ?? [])].sort()) ===
+      JSON.stringify([...(schedule.weekdays ?? [])].sort())
+  );
+}
+
 export default function ActivityForm({ onCreated }: ActivityFormProps) {
   const { accessToken, user } = useAuthStore();
   const [form, setForm] = useState<CreateActivityPayload>(EMPTY_FORM);
+  const activityToday = getOrganizationTodayKey(user?.organizationTimeZone);
+  const [schedule, setSchedule] = useState<DwmsRecurringSchedule>(() => ({
+    kind: "RECURRING",
+    startsOn: activityToday,
+    unit: "DAY",
+    interval: 1,
+  }));
   const [departments, setDepartments] = useState<DwmsDepartmentOption[]>([]);
   const [activities, setActivities] = useState<DwmsActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -359,7 +376,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         .filter(
           (activity) =>
             activity.status !== "ARCHIVED" &&
-            activity.frequency === form.frequency,
+            schedulesMatch(activity, schedule),
         )
         .map((activity) => ({
           value: activity.id,
@@ -368,7 +385,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
             .filter(Boolean)
             .join(" | "),
         })),
-    [activities, form.frequency],
+    [activities, schedule],
   );
 
   function setField<K extends keyof CreateActivityPayload>(
@@ -385,8 +402,17 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
     setLoading(true);
     setMessage(null);
     try {
-      await DwmsService.createActivity(accessToken, cleanPayload(form));
+      await DwmsService.createActivity(
+        accessToken,
+        cleanPayload({ ...form, schedule }),
+      );
       setForm({ ...EMPTY_FORM });
+      setSchedule({
+        kind: "RECURRING",
+        startsOn: activityToday,
+        unit: "DAY",
+        interval: 1,
+      });
       setMessage("Activity created successfully.");
       onCreated?.();
     } catch (error) {
@@ -604,23 +630,31 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                 )
               }
             />
-            <SelectField
-              label="Frequency"
-              required
-              value={String(form.frequency)}
-              options={FREQUENCIES.map((value) => ({
-                value,
-                label: value.replaceAll("_", " "),
-              }))}
-              placeholder="Select frequency"
-              onChange={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  frequency: value,
-                  parentActivityIds: [],
-                }))
-              }
-            />
+            <div className="md:col-span-2">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                Recurrence <span className="text-rose-500">*</span>
+              </span>
+              <RecurrenceBuilder
+                value={schedule}
+                today={activityToday}
+                onChange={(nextSchedule) => {
+                  if (!nextSchedule) return;
+                  setSchedule(nextSchedule);
+                  setForm((current) => ({
+                    ...current,
+                    frequency:
+                      nextSchedule.unit === "DAY"
+                        ? "DAILY"
+                        : nextSchedule.unit === "WEEK"
+                          ? "WEEKLY"
+                          : nextSchedule.interval === 3
+                            ? "QUARTERLY"
+                            : "MONTHLY",
+                    parentActivityIds: [],
+                  }));
+                }}
+              />
+            </div>
             <TextField
               label="Expected Output"
               required

@@ -132,6 +132,16 @@ export type DwmsFrequency =
   | "YEARLY"
   | "PLANNED"
   | "ADHOC";
+export type DwmsRecurrenceUnit = "DAY" | "WEEK" | "MONTH";
+export type DwmsWeekday = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
+export interface DwmsRecurringSchedule {
+  kind: "RECURRING";
+  startsOn: string;
+  unit: DwmsRecurrenceUnit;
+  interval: number;
+  weekdays?: DwmsWeekday[];
+  dayOfMonth?: number;
+}
 export type DwmsPriority = "MEDIUM" | "HIGH" | "CRITICAL";
 export type DwmsSeverity = "MEDIUM" | "HIGH" | "CRITICAL";
 export type DwmsAlertTargetType = "GENERAL" | "PERSON" | "TASK" | "DEPARTMENT";
@@ -189,6 +199,12 @@ export interface DwmsActivityItem {
   purpose?: string | null;
   category?: string | null;
   frequency: DwmsFrequency;
+  recurrenceUnit?: DwmsRecurrenceUnit | null;
+  recurrenceInterval?: number | null;
+  recurrenceWeekdays?: number[];
+  recurrenceDayOfMonth?: number | null;
+  schedule?: DwmsRecurringSchedule;
+  scheduleLabel?: string;
   startTrigger?: string | null;
   completionDeadline?: string | null;
   completionOutput?: string | null;
@@ -443,6 +459,8 @@ export interface DwmsTaskItem {
   status: DwmsTaskStatus;
   dueAt: string;
   frequency: DwmsFrequency;
+  schedule?: DwmsRecurringSchedule;
+  scheduleLabel?: string;
   organizationTimeZone: string;
   owner: DwmsUserRef;
   assignedBy?: DwmsUserRef | null;
@@ -757,6 +775,7 @@ export interface CreateAssignedTaskPayload {
   assignedToId: string;
   dueDate?: string | null;
   frequency?: string;
+  schedule?: DwmsRecurringSchedule;
   priority?: string;
   approvedById?: string | null;
   backupOwnerId?: string | null;
@@ -775,7 +794,8 @@ export interface CreateActivityPayload {
   code: string;
   completionDeadline: number;
   purpose?: string | null;
-  frequency: string;
+  frequency?: string;
+  schedule?: DwmsRecurringSchedule;
   completionOutput: string;
   scope: ActivityScope;
   scopeTarget?: string | null;

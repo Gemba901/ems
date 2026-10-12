@@ -202,7 +202,7 @@ export default function DwmsSelectDropdown(props: Props) {
           'flex w-full items-center justify-between gap-3 border bg-white text-left text-sm text-slate-800 shadow-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-70',
           isEmployeeSelector
             ? 'min-h-11 min-w-0 rounded-xl border-slate-200 bg-white px-4 py-3 font-medium hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20'
-            : 'h-10 min-w-0 rounded-full border-slate-200 px-3 py-2 hover:border-blue-200 hover:bg-slate-50 focus:ring-4 focus:ring-blue-100',
+            : 'min-h-11 min-w-0 rounded-xl border-slate-200 px-3 py-2 hover:border-blue-200 hover:bg-slate-50 focus:ring-4 focus:ring-blue-100 sm:rounded-full',
           triggerClassName
         )}
       >
@@ -224,7 +224,7 @@ export default function DwmsSelectDropdown(props: Props) {
       {open && (
         <div
           className={cn(
-            'absolute left-0 right-0 z-[100030] mt-1.5 max-w-[calc(100vw-2rem)] overflow-hidden border bg-white shadow-2xl animate-in fade-in slide-in-from-top-2 duration-100',
+            'absolute left-0 right-0 z-[100030] mt-1.5 w-full max-w-[calc(100vw-2rem)] overflow-hidden border bg-white shadow-2xl animate-in fade-in slide-in-from-top-2 duration-100 sm:w-auto sm:min-w-full',
             isEmployeeSelector
               ? 'min-w-full rounded-xl border-border-app p-1.5'
               : 'min-w-full rounded-2xl border-slate-200 p-1.5',

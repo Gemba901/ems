@@ -529,7 +529,7 @@ function HomeContent() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-none flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
           {error}
@@ -812,14 +812,14 @@ function HomeContent() {
 
       {completionTask && (
         <div
-          className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
+          className="dwms-dialog-backdrop fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
           onClick={() => {
             if (!savingId) setCompletionTask(null);
           }}
         >
           <form
             onSubmit={handleCompletionSubmit}
-            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+            className="dwms-dialog-panel w-full max-w-lg rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">

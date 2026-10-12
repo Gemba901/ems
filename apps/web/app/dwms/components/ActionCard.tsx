@@ -101,11 +101,11 @@ export default function ActionCard(props: ActionCardProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-[2px]"
+      className="dwms-dialog-backdrop fixed inset-0 z-[100000] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-[2px]"
       onClick={props.onClose}
     >
       <article
-        className="max-h-[88vh] w-full max-w-3xl overflow-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:rounded-[28px] sm:p-7"
+        className="dwms-dialog-panel w-full max-w-3xl overflow-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-h-[88vh] sm:rounded-[28px] sm:p-7"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">

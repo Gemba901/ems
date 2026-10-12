@@ -94,15 +94,15 @@ function AlertsPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
       <DwmsTabHeader activeTab={tab} onTabChange={(next) => { setTab(next as DwmsAlertListTab); setPage(1); }} tabs={tabs} />
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <input
           aria-label="Search alerts"
           value={search}
           onChange={(event) => { setSearch(event.target.value); setPage(1); }}
           placeholder="Search alerts..."
-          className="min-w-48 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"
+          className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"
         />
         <DwmsSelectDropdown
           value={severity}
@@ -110,10 +110,10 @@ function AlertsPage() {
           onChange={(next) => { setSeverity(next); setPage(1); }}
           placeholder="All severities"
           ariaLabel="Severity"
-          className="w-44"
+          className="w-full sm:w-44"
           triggerClassName="h-10 rounded-xl px-4 text-sm shadow-none"
         />
-        <button type="button" onClick={() => router.push("/dwms/actions/new?mode=alert")} className="rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white">
+        <button type="button" onClick={() => router.push("/dwms/actions/new?mode=alert")} className="min-h-11 w-full rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white sm:w-auto sm:rounded-full">
           Raise New Alert
         </button>
       </div>
@@ -130,7 +130,7 @@ function AlertsPage() {
               key={alert.id}
               type="button"
               onClick={() => router.push(`/dwms/alerts/${alert.id}`)}
-              className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-blue-300"
+              className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5"
             >
               <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
                 <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{alert.severity}</span>
@@ -138,21 +138,21 @@ function AlertsPage() {
                 {alert.responsibleEmployee && <span className={alert.pendingAcknowledgments ? "rounded-full bg-amber-50 px-2.5 py-1 text-amber-800" : "rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-800"}>
                   {alert.pendingAcknowledgments ? `${alert.pendingAcknowledgments} Not Acknowledged` : "Acknowledged"}
                 </span>}
-                <span className="ml-auto font-normal text-slate-500">{formatDate(alert.updatedAt ?? alert.createdAt)}</span>
+                <span className="w-full font-normal text-slate-500 sm:ml-auto sm:w-auto">{formatDate(alert.updatedAt ?? alert.createdAt)}</span>
               </div>
               <h2 className="mt-3 text-base font-semibold text-slate-900">{alert.title}</h2>
               <p className="mt-1 line-clamp-2 text-sm text-slate-600">{alert.description}</p>
-              <div className="mt-3 flex gap-4 text-xs text-slate-500">
+              <div className="mt-3 flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:gap-4">
                 {person && <span>{personLabel}: {person.name}</span>}
                 {alert.department && <span>Department: {alert.department.name}</span>}
               </div>
             </button>;
           })}
         </div>}
-      {pages > 1 && <div className="flex items-center justify-end gap-3 text-sm">
-        <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-lg border px-3 py-2 disabled:opacity-50">Previous</button>
+      {pages > 1 && <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-sm sm:flex sm:justify-end sm:gap-3">
+        <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="min-h-11 rounded-lg border px-3 py-2 disabled:opacity-50">Previous</button>
         <span>Page {page} of {pages}</span>
-        <button type="button" disabled={page >= pages} onClick={() => setPage(page + 1)} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
+        <button type="button" disabled={page >= pages} onClick={() => setPage(page + 1)} className="min-h-11 rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
       </div>}
     </main>
   );

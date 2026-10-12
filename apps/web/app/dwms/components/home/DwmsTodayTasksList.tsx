@@ -203,14 +203,14 @@ export default function DwmsTodayTasksList({ maxItems = 3 }: Props) {
       )}
       {completionTask && (
         <div
-          className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
+          className="dwms-dialog-backdrop fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
           onClick={() => {
             if (!savingId) setCompletionTask(null);
           }}
         >
           <form
             onSubmit={handleCompletionSubmit}
-            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+            className="dwms-dialog-panel w-full max-w-lg rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">

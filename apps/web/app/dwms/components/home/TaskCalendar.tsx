@@ -87,11 +87,11 @@ export default function TaskCalendar({
             {monthLabel}
           </h3>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 sm:flex">
           <button
             type="button"
             onClick={onToday}
-            className="h-8 rounded-full border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+            className="min-h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 sm:min-h-8 sm:rounded-full"
           >
             Today
           </button>
@@ -99,7 +99,7 @@ export default function TaskCalendar({
             type="button"
             onClick={onPreviousMonth}
             aria-label="Show previous month"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 sm:h-8 sm:w-8 sm:rounded-full"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -107,14 +107,54 @@ export default function TaskCalendar({
             type="button"
             onClick={onNextMonth}
             aria-label="Show next month"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 sm:h-8 sm:w-8 sm:rounded-full"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="sm:hidden">
+        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
+          {weekDays.map((day) => (
+            <div key={day} className="py-2 text-center text-[10px] font-bold uppercase text-slate-400">
+              {day.slice(0, 1)}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 p-1">
+          {calendarDays.map((dateKey) => {
+            const dayTasks = tasksByDate.get(dateKey) ?? [];
+            const isOutsideMonth = dateKey.slice(0, 7) !== monthKey;
+            const isToday = dateKey === todayKey;
+            const isSelected = dateKey === selectedDate;
+            return (
+              <button
+                key={dateKey}
+                type="button"
+                onClick={() => onSelectDate(dateKey)}
+                aria-label={`${dateKey}, ${dayTasks.length} ${dayTasks.length === 1 ? "task" : "tasks"}`}
+                aria-pressed={isSelected}
+                className={`relative flex min-h-12 flex-col items-center justify-center rounded-xl text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#52618a] ${
+                  isOutsideMonth ? "text-slate-300" : "text-slate-700"
+                } ${isSelected ? "bg-[#52618a] text-white shadow-sm" : "hover:bg-slate-100"}`}
+              >
+                <span className={isToday && !isSelected ? "text-blue-700" : undefined}>
+                  {Number(dateKey.slice(8, 10))}
+                </span>
+                {dayTasks.length > 0 && (
+                  <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blue-500"}`} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <p className="border-t border-slate-100 px-4 py-2 text-center text-[11px] text-slate-500">
+          Select a date to view its agenda below.
+        </p>
+      </div>
+
+      <div className="hidden overflow-x-auto sm:block">
         <div className="min-w-[760px]">
           <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
             {weekDays.map((day) => (

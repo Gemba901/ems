@@ -499,7 +499,7 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
 
   return (
     <div className="relative">
-      <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-none flex-col gap-6 px-4 pb-8 pt-0 sm:px-6 lg:px-8">
+      <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 pb-8 pt-0 sm:gap-6 sm:px-6 lg:px-8">
         {/* Sticky Header Zone */}
         <div className="flex flex-col gap-4 pt-8 pb-4">
           {/* Title Zone & Filter Pills */}
@@ -515,7 +515,7 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
           />
 
           {/* Search & Action Filter Inputs */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
+          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
             {/* Search Input */}
             <div className="relative flex-1 w-full">
               <svg
@@ -542,13 +542,13 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-start sm:justify-end shrink-0">
+            <div className="grid w-full grid-cols-2 gap-2.5 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:justify-end">
               {/* Frequency Toggle */}
               <div className="relative">
                 <button
                   ref={filterButtonRef}
                   onClick={toggleFilterMenu}
-                  className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-4 text-xs font-semibold transition cursor-pointer select-none ${
+                  className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition cursor-pointer select-none sm:w-auto sm:rounded-full sm:px-4 ${
                     frequencyFilter !== "ALL"
                       ? "bg-blue-50 text-blue-700 border-blue-200"
                       : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
@@ -603,7 +603,7 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                 <button
                   ref={assigneeButtonRef}
                   onClick={toggleAssigneeMenu}
-                  className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-4 text-xs font-semibold transition cursor-pointer select-none ${
+                  className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition cursor-pointer select-none sm:w-auto sm:rounded-full sm:px-4 ${
                     assigneeFilter !== "ALL"
                       ? "bg-blue-50 text-blue-700 border-blue-200"
                       : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
@@ -903,14 +903,14 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
 
       {completionTask && (
         <div
-          className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
+          className="dwms-dialog-backdrop fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
           onClick={() => {
             if (!savingId) setCompletionTask(null);
           }}
         >
           <form
             onSubmit={handleCompletionSubmit}
-            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+            className="dwms-dialog-panel w-full max-w-lg rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">

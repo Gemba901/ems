@@ -40,7 +40,7 @@ function SectionCard({
 }) {
   return (
     <div className="overflow-visible rounded-2xl border border-slate-100 bg-white shadow-sm">
-      <div className="flex items-center gap-3 border-b border-slate-50 px-6 py-4">
+      <div className="flex items-center gap-3 border-b border-slate-50 px-4 py-4 sm:px-6">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50">
           <Icon className="h-5 w-5 text-slate-500" />
         </div>
@@ -66,12 +66,12 @@ function SettingRow({
   control: React.ReactNode;
 }) {
   return (
-    <div className="relative flex flex-col gap-4 overflow-visible px-6 py-4 md:flex-row md:items-center md:justify-between">
+    <div className="relative flex flex-col gap-4 overflow-visible px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0 flex-1 pr-2">
         <p className="text-sm font-medium text-slate-700">{title}</p>
         <p className="mt-0.5 text-xs text-slate-400">{hint}</p>
       </div>
-      <div className="relative shrink-0 overflow-visible md:max-w-[560px]">
+      <div className="relative w-full min-w-0 overflow-visible md:w-auto md:max-w-[560px] md:shrink-0">
         {control}
       </div>
     </div>
@@ -105,9 +105,9 @@ function EmployeeMultiSelectDropdown({
       placeholder="Select Employees"
       maxSelected={3}
       variant="employee"
-      className="w-56 max-w-full"
-      triggerClassName="h-10 min-h-10 rounded-full px-3 py-2 text-sm"
-      contentClassName="left-auto right-0 w-80"
+      className="w-full md:w-56 md:max-w-full"
+      triggerClassName="min-h-11 rounded-xl px-3 py-2 text-sm md:rounded-full"
+      contentClassName="left-0 right-0 w-full sm:left-auto sm:w-80"
       selectionSummary="first-with-count"
       showTriggerDescription={false}
       emptyMessage="No matching employees found."
@@ -127,7 +127,7 @@ function ViewLevelSelect({
   disabled?: boolean;
 }) {
   return (
-    <div className="w-56">
+    <div className="w-full md:w-56">
       <DwmsSelectDropdown
         value={value}
         options={DWMS_VIEW_LEVEL_OPTIONS}
@@ -281,7 +281,7 @@ function DwmsSettingsContent() {
   if (isForbidden) return null;
 
   return (
-    <div className="mx-auto flex w-full max-w-none flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
       <div className="space-y-6">
         <DwmsTabHeader
           activeTab={activeTab}
@@ -338,7 +338,7 @@ function DwmsSettingsContent() {
                         onChange={updateApproverRules}
                         disabled={!canEdit}
                         placeholder="Select approver rules"
-                        className="w-56 max-w-full"
+                        className="w-full md:w-56 md:max-w-full"
                         contentClassName="w-full"
                         descriptionDisplay="tooltip"
                         selectionSummary="first-with-count"
@@ -391,12 +391,12 @@ function DwmsSettingsContent() {
                     }
                   />
                 </SectionCard>
-                <div className="flex justify-end pt-1">
+                <div className="flex justify-stretch pt-1 sm:justify-end">
                   <button
                     type="button"
                     onClick={() => void handleSave()}
                     disabled={!canEdit || saving}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:rounded-2xl"
                   >
                     {saving ? "Saving..." : "Save DWMS settings"}
                   </button>
@@ -405,7 +405,7 @@ function DwmsSettingsContent() {
             )}
           </div>
         ) : (
-          <div className="rounded-2xl border border-slate-100 bg-white px-6 py-5 shadow-sm">
+          <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm sm:px-6">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
                 <Users className="h-4 w-4 text-slate-500" />

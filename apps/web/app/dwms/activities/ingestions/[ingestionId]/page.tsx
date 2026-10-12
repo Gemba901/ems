@@ -22,6 +22,7 @@ import {
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 import DwmsSelectDropdown from "../../../components/DwmsSelectDropdown";
+import { DwmsDataField, DwmsMobileDataCard } from "../../../components/DwmsResponsive";
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "All rows" },
@@ -176,7 +177,7 @@ function ActivityIngestionDetailContent() {
   }, [rows, search, status]);
 
   return (
-    <div className="w-full space-y-6 px-4 pt-8 pb-10 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-10 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-2">
           <Link
@@ -197,12 +198,12 @@ function ActivityIngestionDetailContent() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
           {ingestion && ingestion.failedRows > 0 && (
             <button
               type="button"
               onClick={() => downloadFailedRows(ingestion.fileName, rows)}
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:rounded-full sm:px-4"
             >
               <Download className="h-4 w-4" />
               Failed rows
@@ -212,7 +213,7 @@ function ActivityIngestionDetailContent() {
             type="button"
             disabled={loading}
             onClick={() => setRefreshKey((value) => value + 1)}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 sm:rounded-full sm:px-4"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -232,7 +233,7 @@ function ActivityIngestionDetailContent() {
       )}
 
       {ingestion && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryTile label="Total rows" value={ingestion.totalRows} />
           <SummaryTile
             label="Created"
@@ -255,7 +256,7 @@ function ActivityIngestionDetailContent() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search row, activity, job role, reason..."
-            className="w-full rounded-full border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
+            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
           />
         </div>
         <div className="md:w-48">
@@ -280,7 +281,29 @@ function ActivityIngestionDetailContent() {
             No rows found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="space-y-3 p-3 md:hidden">
+            {filteredRows.map((row) => (
+              <DwmsMobileDataCard key={row.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">Row {row.rowNumber}</p>
+                    <p className="mt-1 break-words text-sm font-semibold text-slate-700">{row.activityName || "Not captured"}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{row.activityCode || "No code"}</p>
+                  </div>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === "CREATED" ? "bg-emerald-50 text-emerald-700" : row.status === "FAILED" ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700"}`}>{row.status}</span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+                  <DwmsDataField label="Scope">{row.scope?.replaceAll("_", " ") || "Legacy"}</DwmsDataField>
+                  <DwmsDataField label="Target">{row.scopeTarget || "Organisation"}</DwmsDataField>
+                  <DwmsDataField label="Matched">{row.assignedCount ?? 0}</DwmsDataField>
+                  <DwmsDataField label="Links">{row.activityId ? "Activity linked" : "No activity"} · {row.taskId ? "Task linked" : "No task"}</DwmsDataField>
+                </div>
+                <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm leading-5 text-slate-600">{cleanDwmsMessage(row.message, "No message")}</div>
+              </DwmsMobileDataCard>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
                 <tr>
@@ -349,6 +372,7 @@ function ActivityIngestionDetailContent() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>
@@ -371,11 +395,11 @@ function SummaryTile({
         ? "text-rose-700"
         : "text-slate-900";
   return (
-    <div className="rounded-2xl border border-border-app bg-white p-5 shadow-sm">
+    <div className="min-w-0 rounded-2xl border border-border-app bg-white p-3 shadow-sm sm:p-5">
       <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
         {label}
       </p>
-      <p className={`mt-2 text-2xl font-extrabold ${toneClass}`}>{value}</p>
+      <p className={`mt-2 break-words text-xl font-extrabold sm:text-2xl ${toneClass}`}>{value}</p>
     </div>
   );
 }

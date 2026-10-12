@@ -299,7 +299,7 @@ function DashboardPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-none flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
 
       <DwmsTabHeader
         activeTab={activeTab}
@@ -347,11 +347,11 @@ function DashboardPage() {
             : []),
         ]}
         rightContent={(
-          <div className="relative z-40 flex translate-y-1 flex-wrap items-center gap-3">
+          <div className="relative z-40 flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:translate-y-1 sm:flex-row sm:flex-wrap sm:items-center">
             {activeTab === 'department' && access?.analyticsViewLevel === 'ORGANIZATION' && departmentsList.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                 <span className="text-xs text-muted-app font-semibold">Department:</span>
-                <div className="w-48">
+                <div className="w-full sm:w-48">
                   <DwmsSelectDropdown
                     value={resolvedDepartmentId}
                     options={departmentsList.map((dept) => ({ value: dept.id, label: dept.name }))}
@@ -364,8 +364,8 @@ function DashboardPage() {
             )}
 
             {activeTab === 'team' && access?.canViewEmployeePerformance && employeesList.length > 0 && (
-              <div className="flex items-center gap-2">
-                <div className="w-60">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="w-full sm:w-60">
                   <DwmsSelectDropdown
                     value={resolvedSelectedEmpId}
                     options={employeesList.map((emp) => ({
@@ -412,9 +412,9 @@ function DashboardPage() {
             (activeTab !== 'team' || resolvedSelectedEmpId !== access?.currentEmployeeId || showSelectedEmployeeInsights) && (
             <>
               {/* 1. Period controls and KPI summary */}
-              <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <span className="text-xs font-semibold text-muted-app">Period:</span>
-                <div className="w-44">
+                <div className="w-full sm:w-44">
                   <DwmsSelectDropdown
                     value={graphRange}
                     options={graphRangeOptions.map((option) => ({

@@ -182,7 +182,7 @@ function ApprovalTasksContent() {
   const emptyCount = currentTasks.length;
 
   return (
-    <div className="mx-auto max-w-none px-4 pt-8 sm:px-6 lg:px-8 space-y-6 pb-8">
+    <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-8 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
       <DwmsTabHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -310,12 +310,12 @@ function ApprovalTasksContent() {
                     </div>
 
                     {activeTab === "pending" && (
-                      <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+                      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center" onClick={(event) => event.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => openApprovalModal({ action: "reject", id: task.id, title: task.title })}
                           disabled={saving}
-                          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-[11px] font-bold text-rose-600 shadow-sm transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 text-[11px] font-bold text-rose-600 shadow-sm transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-8 sm:rounded-full"
                         >
                           <XCircle className="h-3.5 w-3.5" />
                           {saving ? "Rejecting..." : "Reject"}
@@ -324,7 +324,7 @@ function ApprovalTasksContent() {
                           type="button"
                           onClick={() => openApprovalModal({ action: "approve", id: task.id, title: task.title })}
                           disabled={saving}
-                          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-3 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-[11px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-8 sm:rounded-full"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           {saving ? "Approving..." : "Approve"}
@@ -340,8 +340,8 @@ function ApprovalTasksContent() {
       </div>
 
       {approvalModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6" role="dialog" aria-modal="true">
-          <div className="w-full max-w-lg rounded-2xl border border-border-app bg-white p-5 shadow-2xl">
+        <div className="dwms-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6" role="dialog" aria-modal="true">
+          <div className="dwms-dialog-panel w-full max-w-lg rounded-t-3xl border border-border-app bg-white p-5 shadow-2xl sm:rounded-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-app">

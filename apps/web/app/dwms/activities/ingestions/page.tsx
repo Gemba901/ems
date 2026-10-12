@@ -17,6 +17,7 @@ import {
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 import ActivityTabs from "../ActivityTabs";
+import { DwmsDataField, DwmsMobileDataCard } from "../../components/DwmsResponsive";
 
 function formatDateTime(value?: string | null, timeZone?: string | null) {
   if (!value) return "Not available";
@@ -90,7 +91,7 @@ function ActivityIngestionsContent() {
   }, [ingestions, search]);
 
   return (
-    <div className="w-full space-y-6 px-4 pt-8 pb-10 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-10 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
       <ActivityTabs active="ingestions" />
       {message && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
@@ -105,22 +106,22 @@ function ActivityIngestionsContent() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search file, uploader, status..."
-            className="w-full rounded-full border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
+            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
           <button
             type="button"
             disabled={loading}
             onClick={() => setRefreshKey((value) => value + 1)}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 sm:rounded-full sm:px-4"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </button>
           <Link
             href="/dwms/actions/new?mode=ACTIVITY"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:rounded-full sm:px-4"
           >
             <FileSpreadsheet className="h-4 w-4" />
             <span>Import sheet</span>
@@ -139,7 +140,27 @@ function ActivityIngestionsContent() {
             No ingestion history found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="space-y-3 p-3 md:hidden">
+            {filtered.map((ingestion) => (
+              <DwmsMobileDataCard key={ingestion.id}>
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <p className="min-w-0 break-all font-semibold text-slate-900">{ingestion.fileName}</p>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(ingestion.status)}`}>{ingestion.status}</span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+                  <DwmsDataField label="Uploaded by">{ingestion.uploadedBy?.name ?? "Unknown"}</DwmsDataField>
+                  <DwmsDataField label="Uploaded">{formatDateTime(ingestion.createdAt, user?.organizationTimeZone)}</DwmsDataField>
+                  <DwmsDataField label="Total rows">{ingestion.totalRows}</DwmsDataField>
+                  <DwmsDataField label="Result"><span className="text-emerald-700">{ingestion.successfulRows} created</span><span className="mx-1 text-slate-300">·</span><span className="text-rose-700">{ingestion.failedRows} declined</span></DwmsDataField>
+                </div>
+                <Link href={`/dwms/activities/ingestions/${ingestion.id}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">
+                  View row details <ArrowRight className="h-4 w-4" />
+                </Link>
+              </DwmsMobileDataCard>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
                 <tr>
@@ -198,6 +219,7 @@ function ActivityIngestionsContent() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

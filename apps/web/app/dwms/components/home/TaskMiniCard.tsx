@@ -424,7 +424,7 @@ export default function TaskMiniCard({
                     ? prerequisiteLabel
                     : (statusLockReason ?? undefined)
                 }
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-8 sm:rounded-full"
               >
                 <span>{formatTaskStatus(task.status)}</span>
                 {!isPrerequisiteBlocked &&
@@ -466,7 +466,7 @@ export default function TaskMiniCard({
                 handleAckSelect();
               }}
               disabled={saving}
-              className="inline-flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 sm:min-h-8 sm:rounded-lg"
             >
               {saving ? "Acknowledging…" : "Acknowledge"}
             </button>

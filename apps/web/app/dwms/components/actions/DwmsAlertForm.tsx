@@ -547,18 +547,18 @@ export default function DwmsAlertForm({
           </section>
         )}
 
-        <div className="flex justify-end gap-2 pt-4">
+        <div className="grid grid-cols-2 gap-2 pt-4 sm:flex sm:justify-end">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting || !canSubmit}
-            className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+            className="min-h-11 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
           >
             {submitting
               ? "Raising Alert..."

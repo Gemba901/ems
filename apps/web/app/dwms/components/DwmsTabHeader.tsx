@@ -25,9 +25,9 @@ export default function DwmsTabHeader<T extends string>({
   className = '',
 }: Props<T>) {
   return (
-    <div className={`flex flex-col gap-4 border-b border-border-app ${className}`}>
-      <div className="flex items-end justify-between gap-4">
-        <div className="flex flex-1 gap-6 overflow-x-auto select-none whitespace-nowrap">
+    <div className={`min-w-0 border-b border-border-app ${className}`}>
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+        <div className="-mx-1 flex min-w-0 flex-1 gap-5 overflow-x-auto px-1 select-none whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
             const dotColor = tab.dotColor ?? 'bg-slate-400';
@@ -37,7 +37,7 @@ export default function DwmsTabHeader<T extends string>({
                 key={tab.key}
                 type="button"
                 onClick={() => onTabChange(tab.key)}
-                className={`pb-3 text-sm font-semibold flex items-center gap-2 relative transition duration-150 cursor-pointer border-b-2 ${
+                className={`relative flex min-h-11 shrink-0 cursor-pointer items-center gap-2 border-b-2 pb-2 pt-1 text-sm font-semibold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   isActive
                     ? 'text-blue-700 border-blue-500'
                     : 'text-slate-500 border-transparent hover:text-slate-800'
@@ -59,7 +59,7 @@ export default function DwmsTabHeader<T extends string>({
           })}
         </div>
 
-        {rightContent && <div className="shrink-0 pb-2">{rightContent}</div>}
+        {rightContent && <div className="w-full min-w-0 pb-3 sm:w-auto sm:shrink-0 sm:pb-2">{rightContent}</div>}
       </div>
     </div>
   );

@@ -56,6 +56,9 @@ describe('DWMS employee performance access', () => {
 
   function mockSuccessfulEmployeeReport() {
     jest
+      .spyOn(service as any, 'getEmployeePersonalStats')
+      .mockResolvedValue([{ completionRate: 0 }, {}, {}]);
+    jest
       .spyOn(service as any, 'getPerformanceMetrics')
       .mockResolvedValue({ completionRate: 0 });
     jest
@@ -134,6 +137,13 @@ describe('DWMS employee performance access', () => {
   });
 
   it('returns aggregate KPI and trend data for the employee reporting scope', async () => {
+    jest
+      .spyOn(service as any, 'getEmployeePersonalStats')
+      .mockResolvedValue([
+        { completionRate: 25 },
+        { ASSIGNED_TASK: { total: 1 } },
+        { tasksPerformedToday: [{ value: 25 }] },
+      ]);
     jest
       .spyOn(service as any, 'getPerformanceMetrics')
       .mockResolvedValue({ completionRate: 25 });

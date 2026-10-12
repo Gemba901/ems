@@ -23,6 +23,7 @@ import EmployeeDwmsPanel from '../components/EmployeeDwmsPanel';
 import DwmsTabHeader from '../components/DwmsTabHeader';
 import DwmsSelectDropdown from '../components/DwmsSelectDropdown';
 import { addDaysToDateKey } from '../utils/organizationDate';
+import { performanceQueryOptions } from '../utils/performanceQueryOptions';
 import TaskCategoryPieCharts from '../components/dashboard/TaskCategoryPieCharts';
 import {
   canShowEmployeePerformanceTab,
@@ -179,6 +180,7 @@ function DashboardPage() {
     queryFn: () => DwmsService.getDashboardOverview(accessToken ?? '', days),
     enabled: Boolean(accessToken && access && activeTab === 'overview'),
     staleTime: REPORT_CACHE_MS,
+    ...performanceQueryOptions,
   });
   const departmentQuery = useQuery({
     queryKey: ['dwms', 'reports', 'department', resolvedDepartmentId, days],
@@ -192,6 +194,7 @@ function DashboardPage() {
       accessToken && access && activeTab === 'department' && resolvedDepartmentId,
     ),
     staleTime: REPORT_CACHE_MS,
+    ...performanceQueryOptions,
   });
   const employeeQuery = useQuery({
     queryKey: [
@@ -216,6 +219,7 @@ function DashboardPage() {
       (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team'),
     ),
     staleTime: REPORT_CACHE_MS,
+    ...performanceQueryOptions,
   });
 
   const overviewData: DwmsOverviewDashboardResponse | null = overviewQuery.data ?? null;
@@ -392,7 +396,17 @@ function DashboardPage() {
       {/* Global Loading / Error handler */}
       {error && (
         <div className="rounded-3xl border border-rose-200/60 bg-rose-50 dark:bg-rose-950/20 px-5 py-4 text-center text-sm text-rose-700 dark:text-rose-400">
-          {error}
+          <p role="alert">{error}</p>
+          {activeReportQuery.isError && !accessQuery.isError && (
+            <button
+              type="button"
+              onClick={() => void activeReportQuery.refetch()}
+              disabled={activeReportQuery.isFetching}
+              className="mt-3 rounded-xl border border-rose-300 px-4 py-2 font-semibold disabled:opacity-50"
+            >
+              {activeReportQuery.isFetching ? 'Retrying...' : 'Retry report'}
+            </button>
+          )}
         </div>
       )}
 

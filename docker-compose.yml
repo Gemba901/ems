@@ -1,8 +1,11 @@
 # Local development stack: Postgres + API + web, with hot reload.
 # Production images are apps/*/Dockerfile; this file is not used in deploys.
 #
-#   docker compose up            # first run installs deps, builds db, migrates
+#   docker compose up            # first run installs deps, builds db, migrates, seeds
 #   docker compose run --rm setup  # re-run after lockfile or schema changes
+#
+# On Linux, if `id -u` is not 1000, put DEV_UID/DEV_GID in a root .env file
+# (see README) and run `docker compose build`.
 #   docker compose down -v       # wipe the local database and node_modules
 name: gemba-ems
 
@@ -10,6 +13,9 @@ x-node: &node
   build:
     context: .
     dockerfile: Dockerfile.dev
+    args:
+      DEV_UID: ${DEV_UID:-1000}
+      DEV_GID: ${DEV_GID:-1000}
   image: gemba-ems-dev
   working_dir: /app
   volumes:
@@ -44,7 +50,8 @@ services:
     command: >
       sh -c "pnpm install --frozen-lockfile
       && pnpm --filter db build
-      && pnpm --filter db exec prisma migrate deploy"
+      && pnpm --filter db exec prisma migrate deploy
+      && pnpm --filter db exec prisma db execute --file prisma/dev-seed.sql"
     environment:
       # Set explicitly so packages/db/.env (which may point at RDS) is never used.
       DATABASE_URL: postgresql://gemba:gemba@postgres:5432/gemba_dev
@@ -55,12 +62,18 @@ services:
   api:
     <<: *node
     command: pnpm --filter api dev
-    # JWT_SECRET, TENANT_PROXY_SECRET, AWS/SES keys etc. come from apps/api/.env;
-    # these override the values there that must differ inside Docker.
+    # Defaults from .env.example, overridden by your apps/api/.env if present;
+    # `environment` below overrides both with the values Docker needs.
+    env_file:
+      - apps/api/.env.example
+      - path: apps/api/.env
+        required: false
     environment:
       DATABASE_URL: postgresql://gemba:gemba@postgres:5432/gemba_dev
       EXPECTED_DATABASE_NAME: gemba_dev
       PORT: "5000"
+      # nest --watch type-checks the whole API and exceeds Node's default heap.
+      NODE_OPTIONS: --max-old-space-size=3072
     ports:
       - "5000:5000"
     depends_on:
@@ -70,7 +83,10 @@ services:
   web:
     <<: *node
     command: pnpm --filter web exec next dev -H 0.0.0.0 -p 3000
-    # Tenant settings and TENANT_PROXY_SECRET come from apps/web/.env.local.
+    env_file:
+      - apps/web/.env.example
+      - path: apps/web/.env.local
+        required: false
     environment:
       API_INTERNAL_URL: http://api:5000
     ports:

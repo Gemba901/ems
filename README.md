@@ -99,13 +99,18 @@ pnpm build
 ## 🐳 Local development with Docker Compose
 
 Runs Postgres, the API and the web app with hot reload; no local Node or Postgres needed.
+Only Docker is required — clone and run:
 
 ```sh
 docker compose up        # http://localhost:3000 (web), :5000 (API), Postgres on :5433
 ```
 
-- The first run installs dependencies, builds `packages/db` and applies all migrations to a fresh local database (`gemba` / `gemba`, db `gemba_dev`). The database starts empty.
-- Secrets still come from `apps/api/.env` and `apps/web/.env.local`. Compose overrides `DATABASE_URL`, so containers never touch RDS.
+Log in at http://localhost:3000 with `admin@gemba.local` / `Admin@12345` (local only).
+
+- The first run installs dependencies, builds `packages/db`, applies all migrations and seeds the `gemba-pms` workspace with one SUPER_ADMIN (`packages/db/prisma/dev-seed.sql`; skipped if the database already has data). Expect several minutes and ~4 GB of RAM.
+- Settings come from `apps/api/.env.example` and `apps/web/.env.example`. Your own `apps/api/.env` / `apps/web/.env.local`, if present, override them — add AWS/SES/Anthropic keys there to enable uploads, email and the AI assistant. Compose always overrides `DATABASE_URL`, so containers never touch RDS.
+- Linux users whose `id -u` is not 1000: `printf "DEV_UID=$(id -u)\nDEV_GID=$(id -g)\n" > .env && docker compose build`.
+- Keep your existing local data: `pg_dump -Fc -h localhost -U <user> <db> | docker compose exec -T postgres pg_restore -U gemba -d gemba_dev --clean --if-exists --no-owner`, then `docker compose run --rm setup`.
 - After changing `pnpm-lock.yaml` or adding a migration: `docker compose run --rm setup`
 - Reset everything (database included): `docker compose down -v`
 

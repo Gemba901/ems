@@ -36,6 +36,7 @@ export default function TaskCalendar({
   onPreviousMonth,
   onNextMonth,
   onToday,
+  compact = false,
 }: {
   tasks: TaskItem[];
   monthStart: string;
@@ -46,6 +47,7 @@ export default function TaskCalendar({
   onPreviousMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
+  compact?: boolean;
 }) {
   const calendarDays = buildCalendarDays(monthStart);
   const monthKey = monthStart.slice(0, 7);
@@ -98,7 +100,7 @@ export default function TaskCalendar({
         </div>
       </div>
 
-      <div className="sm:hidden">
+      <div className={compact ? "" : "sm:hidden"}>
         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
           {weekDays.map((day) => (
             <div
@@ -120,7 +122,11 @@ export default function TaskCalendar({
                 key={dateKey}
                 type="button"
                 onClick={() => onSelectDate(dateKey)}
-                aria-label={`${dateKey}, ${dayTasks.length} ${dayTasks.length === 1 ? "task" : "tasks"}`}
+                aria-label={
+                  compact
+                    ? dateKey
+                    : `${dateKey}, ${dayTasks.length} ${dayTasks.length === 1 ? "task" : "tasks"}`
+                }
                 aria-pressed={isSelected}
                 className={`relative flex min-h-12 flex-col items-center justify-center rounded-xl text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#52618a] ${
                   isOutsideMonth ? "text-slate-300" : "text-slate-700"
@@ -143,11 +149,13 @@ export default function TaskCalendar({
           })}
         </div>
         <p className="border-t border-slate-100 px-4 py-2 text-center text-[11px] text-slate-500">
-          Select a date to view its agenda below.
+          {compact
+            ? "Select a date to filter instances."
+            : "Select a date to view its agenda below."}
         </p>
       </div>
 
-      <div className="hidden sm:block">
+      <div className={compact ? "hidden" : "hidden sm:block"}>
         <div className="min-w-0">
           <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
             {weekDays.map((day) => (

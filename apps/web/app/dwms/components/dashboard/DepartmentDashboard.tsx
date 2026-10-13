@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useUrlViewState } from '@/hooks/useUrlViewState';
+import { enumParam, textParam } from '@/lib/url-view-state';
 import type { DwmsDepartmentDashboardResponse } from '@/services/dwms.service';
 import PerformanceKpiSelect from './PerformanceKpiSelect';
 import PerformanceSortSelect from './PerformanceSortSelect';
 import PerformanceScoreboardSearch from './PerformanceScoreboardSearch';
 import {
+  performanceKpis,
   comparePerformanceKpi,
   formatPerformanceKpiValue,
   getPerformanceKpi,
@@ -14,6 +16,15 @@ import {
   type PerformanceSortDirection,
 } from './performanceKpis';
 
+const scoreboardSchema = {
+  kpi: enumParam(
+    performanceKpis.map((item) => item.key),
+    "allTasksCompletionRate",
+  ),
+  sort: enumParam(["asc", "desc"] as const, "desc"),
+  search: textParam,
+};
+
 type DepartmentDashboardProps = {
   departmentData: Pick<DwmsDepartmentDashboardResponse, 'departmentName' | 'employeeScoreboard'>;
   onSelectEmployee: (employeeId: string) => void;
@@ -21,9 +32,18 @@ type DepartmentDashboardProps = {
 };
 
 export default function DepartmentDashboard({ departmentData, onSelectEmployee, canSelectEmployee }: DepartmentDashboardProps) {
-  const [selectedKpi, setSelectedKpi] = useState<PerformanceKpiKey>('allTasksCompletionRate');
-  const [sortDirection, setSortDirection] = useState<PerformanceSortDirection>('desc');
-  const [scoreboardSearch, setScoreboardSearch] = useState('');
+  const { state, update } = useUrlViewState(
+    "scoreDepartment",
+    scoreboardSchema,
+  );
+  const {
+    kpi: selectedKpi,
+    sort: sortDirection,
+    search: scoreboardSearch,
+  } = state;
+  const setSelectedKpi = (kpi: PerformanceKpiKey) => update({ kpi });
+  const setSortDirection = (sort: PerformanceSortDirection) => update({ sort });
+  const setScoreboardSearch = (search: string) => update({ search });
   const activeKpi = getPerformanceKpi(selectedKpi);
   const normalizedScoreboardSearch = scoreboardSearch.trim().toLowerCase();
   const employees = [...(departmentData.employeeScoreboard ?? [])]

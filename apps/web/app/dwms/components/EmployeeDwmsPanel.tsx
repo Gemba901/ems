@@ -1,26 +1,21 @@
 "use client";
 
-import { type ElementType, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useId, useState } from "react";
+import { useUrlViewState } from "@/hooks/useUrlViewState";
+import { enumParam, pageParam, textParam } from "@/lib/url-view-state";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle,
-  Bell,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
   Loader2,
+  Search,
+  UserRound,
 } from "lucide-react";
-import {
-  DwmsService,
-  type DwmsAlertItem,
-  type DwmsAllocatedRoutineTask,
-  type DwmsPaginationMeta,
-  type DwmsTaskItem,
-} from "@/services/dwms.service";
+import { DwmsService, type DwmsPaginationMeta } from "@/services/dwms.service";
+import EmployeeActivityManager from "./EmployeeActivityManager";
 import { useAuthStore } from "@/store/auth.store";
 import { formatOrganizationDate } from "../utils/organizationDate";
-import EmployeeActivityManager from "./EmployeeActivityManager";
 
 type EmployeeDwmsPanelProps = {
   employeeId: string;
@@ -28,83 +23,64 @@ type EmployeeDwmsPanelProps = {
   jobTitle?: string | null;
   canManageActivities: boolean;
   showApplicableActivities?: boolean;
+  persistView?: boolean;
 };
 
-function formatDate(iso: string | null | undefined, timeZone?: string | null) {
-  if (!iso) return "-";
-  return (
-    formatOrganizationDate(iso, timeZone, {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }) ?? "-"
-  );
-}
+const tabs = [
+  { key: "routineWork", label: "Good Practices", count: "goodPractices" },
+  {
+    key: "jobResponsibilities",
+    label: "Job Responsibility",
+    count: "jobResponsibilities",
+  },
+  { key: "assignedTasks", label: "Assigned Tasks", count: "assignedTasks" },
+  { key: "currentAlerts", label: "Alerts", count: "currentAlerts" },
+  { key: "abnormalities", label: "Abnormalities", count: "abnormalities" },
+] as const;
+type Tab = (typeof tabs)[number]["key"];
+const workViewSchema = {
+  tab: enumParam(
+    tabs.map((item) => item.key),
+    "routineWork",
+  ),
+  page: pageParam,
+  search: textParam,
+};
 
-function CardHeader({
-  icon: Icon,
-  title,
-  iconColor = "text-indigo-500",
-  iconBg = "bg-indigo-50",
+function Pagination({
+  value,
+  onChange,
 }: {
-  icon: ElementType;
-  title: string;
-  iconColor?: string;
-  iconBg?: string;
+  value?: DwmsPaginationMeta;
+  onChange: (page: number) => void;
 }) {
+  if (!value?.totalItems) return null;
+  const first = (value.page - 1) * value.pageSize + 1;
+  const last = Math.min(value.page * value.pageSize, value.totalItems);
   return (
-    <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2.5">
-      <div className={`p-1.5 rounded-lg ${iconBg}`}>
-        <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
-      </div>
-      <p className="text-sm font-bold text-slate-800">{title}</p>
-    </div>
-  );
-}
-
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return <div className="p-4 text-sm text-slate-500 sm:p-5">{children}</div>;
-}
-
-function PaginationControls({
-  pagination,
-  onPageChange,
-}: {
-  pagination?: DwmsPaginationMeta;
-  onPageChange: (page: number) => void;
-}) {
-  if (!pagination || pagination.totalItems === 0) return null;
-
-  const firstItem = (pagination.page - 1) * pagination.pageSize + 1;
-  const lastItem = Math.min(
-    pagination.page * pagination.pageSize,
-    pagination.totalItems,
-  );
-
-  return (
-    <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
-      <p className="text-xs text-slate-500">
-        Showing {firstItem}-{lastItem} of {pagination.totalItems} tasks
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
+      <p className="text-xs text-slate-500" aria-live="polite">
+        Showing {first}–{last} of {value.totalItems} items
       </p>
       <div className="flex items-center gap-2">
         <button
           type="button"
           aria-label="Previous page"
-          disabled={pagination.page <= 1}
-          onClick={() => onPageChange(pagination.page - 1)}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={value.page <= 1}
+          onClick={() => onChange(value.page - 1)}
+          className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 disabled:opacity-40"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="min-w-20 text-center text-xs font-semibold text-slate-600">
-          Page {pagination.page} of {pagination.totalPages}
+        <span className="text-xs text-slate-600">
+          Page {value.page} of {value.totalPages}
         </span>
         <button
           type="button"
           aria-label="Next page"
-          disabled={pagination.page >= pagination.totalPages}
-          onClick={() => onPageChange(pagination.page + 1)}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={value.page >= value.totalPages}
+          onClick={() => onChange(value.page + 1)}
+          className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 disabled:opacity-40"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -113,298 +89,361 @@ function PaginationControls({
   );
 }
 
-function TaskList({
-  tasks,
-  timeZone,
-  onOpen,
-}: {
-  tasks?: DwmsTaskItem[];
-  timeZone?: string | null;
-  onOpen: (task: DwmsTaskItem) => void;
-}) {
-  return (
-    <div className="divide-y divide-slate-100">
-      {tasks?.length ? (
-        tasks.map((task) => (
-          <button
-            key={task.instanceId}
-            type="button"
-            onClick={() => onOpen(task)}
-            className="w-full p-4 text-left transition-colors hover:bg-slate-50"
-          >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-              <div className="min-w-0">
-                <p className="break-words text-sm font-semibold text-slate-900">
-                  {task.title}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Due{" "}
-                  {formatDate(
-                    task.dueAt,
-                    task.organizationTimeZone || timeZone,
-                  )}{" "}
-                  - {task.frequency}
-                </p>
-              </div>
-              <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                {task.status.replace(/_/g, " ")}
-              </span>
-            </div>
-          </button>
-        ))
-      ) : (
-        <EmptyState>No current RTW tasks.</EmptyState>
-      )}
-    </div>
-  );
+export default function EmployeeDwmsPanel(props: EmployeeDwmsPanelProps) {
+  // Reset local filters and selection when moving between employees.
+  return <EmployeeWorkOverview key={props.employeeId} {...props} />;
 }
 
-function RoutineTaskList({ tasks }: { tasks?: DwmsAllocatedRoutineTask[] }) {
-  return (
-    <div className="divide-y divide-slate-100">
-      {tasks?.length ? (
-        tasks.map((task) => {
-          const category =
-            task.taskCategory === "GOOD_PRACTICE"
-              ? "Good Practice"
-              : "Job Responsibility";
-
-          return (
-            <div key={task.taskId} className="p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                <div className="min-w-0">
-                  <p className="break-words text-sm font-semibold text-slate-900">
-                    {task.title}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {task.activity?.code ? `${task.activity.code} · ` : ""}
-                    {String(task.frequency).replace(/_/g, " ")}
-                  </p>
-                </div>
-                <span className="w-fit shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                  {category}
-                </span>
-              </div>
-            </div>
-          );
-        })
-      ) : (
-        <EmptyState>No routine work allocated to this employee.</EmptyState>
-      )}
-    </div>
-  );
-}
-
-function AlertList({
-  alerts,
-  emptyMessage,
-  tone,
-  meta,
-  onOpen,
-}: {
-  alerts?: DwmsAlertItem[];
-  emptyMessage: string;
-  tone: "rose" | "amber" | "blue";
-  meta: (alert: DwmsAlertItem) => string;
-  onOpen: (alert: DwmsAlertItem) => void;
-}) {
-  const badgeClass =
-    tone === "rose"
-      ? "bg-rose-50 text-rose-600"
-      : tone === "amber"
-        ? "bg-amber-50 text-amber-700"
-        : "bg-blue-50 text-blue-700";
-
-  return (
-    <div className="divide-y divide-slate-100">
-      {alerts?.length ? (
-        alerts.map((alert) => (
-          <button
-            key={alert.id}
-            type="button"
-            onClick={() => onOpen(alert)}
-            className="w-full p-4 text-left transition-colors hover:bg-slate-50"
-          >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-              <div className="min-w-0">
-                <p className="break-words text-sm font-semibold text-slate-900">
-                  {alert.title}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">{meta(alert)}</p>
-              </div>
-              <span
-                className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${badgeClass}`}
-              >
-                {alert.isAbnormality ? "Abnormality" : alert.pendingAcknowledgments ? "Not Acknowledged" : "Acknowledged"}
-              </span>
-            </div>
-          </button>
-        ))
-      ) : (
-        <EmptyState>{emptyMessage}</EmptyState>
-      )}
-    </div>
-  );
-}
-
-export default function EmployeeDwmsPanel({
+function EmployeeWorkOverview({
   employeeId,
   accessToken,
   canManageActivities,
   showApplicableActivities = true,
+  persistView = false,
 }: EmployeeDwmsPanelProps) {
-  const router = useRouter();
-  const [pages, setPages] = useState({
-    routineWork: 1,
-    assignedTasks: 1,
-    currentAlerts: 1,
-    abnormalities: 1,
-  });
+  const panelId = useId();
   const organizationTimeZone = useAuthStore(
     (state) => state.user?.organizationTimeZone,
   );
+  const formatDate = (value: string) =>
+    formatOrganizationDate(value, organizationTimeZone, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }) ?? "—";
+  const restored = useUrlViewState("work", workViewSchema, {
+    key: "employee",
+    value: employeeId,
+  });
+  const [localView, setLocalView] = useState<{
+    tab: Tab;
+    page: number;
+    search: string;
+  }>({ tab: "routineWork", page: 1, search: "" });
+  const view = persistView ? restored.state : localView;
+  const ready = !persistView || restored.ready;
+  const updateView = (patch: Partial<typeof localView>) => {
+    if (persistView) restored.update(patch);
+    else setLocalView((current) => ({ ...current, ...patch }));
+  };
+  const { tab, page, search } = view;
+  const setPage = (page: number) => updateView({ page });
+  const [querySearch, setQuerySearch] = useState(search.trim());
+  const activeTab = tabs.find((item) => item.key === tab)!;
+  const isAllocation = tab === "routineWork" || tab === "jobResponsibilities";
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuerySearch(search.trim());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const { data: dwmsProfile, isLoading: dwmsProfileLoading } = useQuery({
-    queryKey: [
-      "dwms-employee-profile",
-      employeeId,
-      pages.routineWork,
-      pages.assignedTasks,
-      pages.currentAlerts,
-      pages.abnormalities,
-    ],
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
+    queryKey: ["dwms-employee-profile", employeeId, tab, page, querySearch],
     queryFn: () =>
       DwmsService.getEmployeeDwmsProfile(accessToken, employeeId, {
-        routinePage: pages.routineWork,
-        assignedPage: pages.assignedTasks,
-        currentAlertPage: pages.currentAlerts,
-        abnormalityPage: pages.abnormalities,
+        routinePage: isAllocation ? page : 1,
+        routineCategory:
+          tab === "jobResponsibilities"
+            ? "JOB_RESPONSIBILITY"
+            : "GOOD_PRACTICE",
+        assignedPage: tab === "assignedTasks" ? page : 1,
+        currentAlertPage: tab === "currentAlerts" ? page : 1,
+        abnormalityPage: tab === "abnormalities" ? page : 1,
+        search: querySearch,
       }),
-    placeholderData: (previousData) => previousData,
-    enabled: !!accessToken && !!employeeId,
+    enabled:
+      ready && querySearch === search.trim() && !!accessToken && !!employeeId,
   });
 
-  const changePage = (section: keyof typeof pages, page: number) => {
-    setPages((current) => ({ ...current, [section]: page }));
-  };
+  function selectTab(next: Tab) {
+    updateView({ tab: next, page: 1, search: "" });
+    setQuerySearch("");
+  }
+  const pagination = isAllocation
+    ? data?.pagination?.routineWork
+    : data?.pagination?.[
+        tab as "assignedTasks" | "currentAlerts" | "abnormalities"
+      ];
+  const allocations = data?.routineWork ?? [];
+  const assignedTasks = data?.assignedTasks ?? [];
+  const alerts =
+    (tab === "currentAlerts" ? data?.currentAlerts : data?.abnormalities) ?? [];
+  const total = pagination?.totalItems ?? 0;
+  const emptyMessage = querySearch
+    ? "No matching items. Try another search."
+    : isAllocation
+      ? `No ${tab === "routineWork" ? "good practices" : "job responsibilities"} allocated to this employee.`
+      : tab === "assignedTasks"
+        ? "No assigned tasks."
+        : tab === "currentAlerts"
+          ? "No alerts assigned to this employee."
+          : "No abnormalities recorded for this employee.";
+  const rowClass =
+    "flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between";
+  const detailLabel = (
+    <span className="shrink-0 text-xs font-medium text-indigo-700">
+      View details →
+    </span>
+  );
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {([
-          ["routineWork", "Routine Work", dwmsProfile?.counts?.routineWork ?? 0],
-          ["assignedTasks", "Assigned Tasks", dwmsProfile?.counts?.assignedTasks ?? 0],
-          ["currentAlerts", "Alerts", dwmsProfile?.counts?.currentAlerts ?? 0],
-          ["abnormalities", "Abnormalities", dwmsProfile?.counts?.abnormalities ?? 0],
-        ] as const).map(([section, label, value]) => (
-          <div
-            key={section}
-            className="min-w-0 rounded-2xl border border-slate-100 bg-white p-3 text-left shadow-sm sm:p-4"
-          >
-            <p className="break-words text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[11px]">
-              {label}
-            </p>
-            <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
-              {value}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {dwmsProfileLoading ? (
-        <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-white py-12 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading RTW data...
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <CardHeader
-                icon={ClipboardList}
-                title="Routine Work"
-                iconColor="text-indigo-500"
-                iconBg="bg-indigo-50"
-              />
-              <RoutineTaskList tasks={dwmsProfile?.routineWork} />
-              <PaginationControls
-                pagination={dwmsProfile?.pagination?.routineWork}
-                onPageChange={(page) => changePage("routineWork", page)}
-              />
+      {data?.employee && (
+        <section
+          aria-label="Employee work overview"
+          className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 lg:flex-row lg:items-center lg:gap-6"
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+            <div
+              aria-hidden="true"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-base font-semibold text-indigo-700 sm:h-14 sm:w-14"
+            >
+              {data.employee.name
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part[0])
+                .join("")
+                .toUpperCase()}
             </div>
-
-            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <CardHeader
-                icon={ClipboardList}
-                title="Assigned Tasks"
-                iconColor="text-indigo-500"
-                iconBg="bg-indigo-50"
-              />
-              <TaskList
-                tasks={dwmsProfile?.assignedTasks}
-                timeZone={organizationTimeZone}
-                onOpen={(task) => router.push(`/dwms/tasks/${task.instanceId}`)}
-              />
-              <PaginationControls
-                pagination={dwmsProfile?.pagination?.assignedTasks}
-                onPageChange={(page) => changePage("assignedTasks", page)}
-              />
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <CardHeader
-                icon={Bell}
-                title="Abnormalities"
-                iconColor="text-amber-500"
-                iconBg="bg-amber-50"
-              />
-              <AlertList
-                alerts={dwmsProfile?.abnormalities}
-                emptyMessage="No open abnormalities for this employee."
-                tone="amber"
-                meta={(alert) =>
-                  `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
-                }
-                onOpen={(alert) => router.push(`/dwms/alerts/${alert.id}`)}
-              />
-              <PaginationControls
-                pagination={dwmsProfile?.pagination?.abnormalities}
-                onPageChange={(page) => changePage("abnormalities", page)}
-              />
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <CardHeader
-                icon={AlertTriangle}
-                title="Alerts"
-                iconColor="text-rose-500"
-                iconBg="bg-rose-50"
-              />
-              <AlertList
-                alerts={dwmsProfile?.currentAlerts}
-                emptyMessage="No alerts assigned to this employee."
-                tone="rose"
-                meta={(alert) =>
-                  `${alert.severity} - ${formatDate(alert.createdAt, organizationTimeZone)}`
-                }
-                onOpen={(alert) => router.push(`/dwms/alerts/${alert.id}`)}
-              />
-              <PaginationControls
-                pagination={dwmsProfile?.pagination?.currentAlerts}
-                onPageChange={(page) => changePage("currentAlerts", page)}
-              />
+            <div className="min-w-0">
+              <p className="mb-1 text-xs font-medium text-slate-500">
+                Work overview
+              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h2 className="break-words text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
+                  {data.employee.name}
+                </h2>
+                {data.employee.employeeCode && (
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-600">
+                    ID {data.employee.employeeCode}
+                  </span>
+                )}
+              </div>
+              {(data.employee.jobTitle || data.employee.department?.name) && (
+                <p className="mt-1 break-words text-sm text-slate-500">
+                  {[data.employee.jobTitle, data.employee.department?.name]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
             </div>
           </div>
-
-          {showApplicableActivities && (
-            <EmployeeActivityManager
-              key={employeeId}
-              employeeId={employeeId}
-              accessToken={accessToken}
-              canManageActivities={canManageActivities}
-              pageSize={5}
+          <div className="flex items-center gap-3 border-t border-slate-100 pt-3 lg:w-64 lg:shrink-0 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+            <UserRound
+              aria-hidden="true"
+              className="h-4 w-4 shrink-0 text-slate-400"
             />
-          )}
-        </>
+            <div className="min-w-0">
+              <p className="text-xs text-slate-500">Reports to</p>
+              <p
+                className={`mt-0.5 break-words text-sm ${data.employee.reportingManager?.name ? "font-medium text-slate-800" : "text-slate-500"}`}
+              >
+                {data.employee.reportingManager?.name ?? "Not assigned"}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section
+        className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+        aria-label="Employee workload"
+      >
+        <div
+          role="tablist"
+          aria-label="Work categories"
+          className="flex flex-wrap gap-1 border-b border-slate-100 p-3"
+        >
+          {tabs.map((item, index) => (
+            <button
+              key={item.key}
+              id={`${panelId}-${item.key}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.key}
+              aria-controls={`${panelId}-content`}
+              tabIndex={tab === item.key ? 0 : -1}
+              onClick={() => selectTab(item.key)}
+              onKeyDown={(event) => {
+                if (
+                  !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                    event.key,
+                  )
+                )
+                  return;
+                event.preventDefault();
+                const next =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : (index +
+                          (event.key === "ArrowRight" ? 1 : tabs.length - 1)) %
+                        tabs.length;
+                selectTab(tabs[next].key);
+                document
+                  .getElementById(`${panelId}-${tabs[next].key}`)
+                  ?.focus();
+              }}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${tab === item.key ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              {item.label}
+              <span className="rounded bg-slate-100 px-1.5 text-xs tabular-nums text-slate-600">
+                {data?.counts?.[item.count] ?? "—"}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div
+          id={`${panelId}-content`}
+          role="tabpanel"
+          aria-labelledby={`${panelId}-${tab}`}
+          aria-busy={isFetching}
+        >
+          {
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    {activeTab.label}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {isAllocation
+                      ? "Allocated responsibilities; completion is tracked on dated occurrences."
+                      : tab === "assignedTasks"
+                        ? "Assigned tasks; open a task to see its dated instances."
+                        : "Reported items and acknowledgment status."}
+                  </p>
+                </div>
+                <label className="flex w-full items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-500 sm:w-64">
+                  <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                  <input
+                    type="search"
+                    aria-label={`Search ${activeTab.label}`}
+                    placeholder="Search title or description"
+                    value={search}
+                    onChange={(event) =>
+                      updateView({ search: event.target.value, page: 1 })
+                    }
+                    className="min-w-0 flex-1 bg-transparent text-base text-slate-800 outline-none sm:text-sm"
+                  />
+                </label>
+              </div>
+              {isError ? (
+                <div role="alert" className="p-5 text-sm text-rose-700">
+                  Unable to load employee work.{" "}
+                  <button
+                    type="button"
+                    onClick={() => void refetch()}
+                    className="underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : !ready || querySearch !== search.trim() || isLoading ? (
+                <div
+                  role="status"
+                  className="flex items-center justify-center gap-2 p-10 text-sm text-slate-500"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading work…
+                </div>
+              ) : (
+                <>
+                  {!total ? (
+                    <p className="p-5 text-sm text-slate-500" role="status">
+                      {emptyMessage}
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {isAllocation
+                        ? allocations.map((task) => (
+                            <Link
+                              key={task.taskId}
+                              href={`/dwms/task-definitions/${task.taskId}`}
+                              className={rowClass}
+                            >
+                              <span className="min-w-0">
+                                <span className="block break-words text-sm font-semibold text-slate-900">
+                                  {task.title}
+                                </span>
+                                <span className="mt-1 block text-xs text-slate-500">
+                                  {task.frequency.replace(/_/g, " ")}
+                                  {task.activity?.code
+                                    ? ` · ${task.activity.code}`
+                                    : ""}
+                                </span>
+                              </span>
+                              {detailLabel}
+                            </Link>
+                          ))
+                        : tab === "assignedTasks"
+                          ? assignedTasks.map((task) => (
+                              <Link
+                                key={task.taskId}
+                                href={`/dwms/task-definitions/${task.taskId}`}
+                                className={rowClass}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block break-words text-sm font-semibold text-slate-900">
+                                    {task.title}
+                                  </span>
+                                  <span className="mt-1 block text-xs text-slate-500">
+                                    {task.frequency.replace(/_/g, " ")}
+                                    {task.activity?.code
+                                      ? ` � ${task.activity.code}`
+                                      : ""}
+                                  </span>
+                                </span>
+                                {detailLabel}
+                              </Link>
+                            ))
+                          : alerts.map((alert) => (
+                              <Link
+                                key={alert.id}
+                                href={`/dwms/alerts/${alert.id}`}
+                                className={rowClass}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block break-words text-sm font-semibold text-slate-900">
+                                    {alert.title}
+                                  </span>
+                                  <span className="mt-1 block text-xs text-slate-500">
+                                    {alert.severity} ·{" "}
+                                    {formatDate(alert.createdAt)}
+                                  </span>
+                                </span>
+                                <span className="flex shrink-0 flex-wrap items-center gap-3">
+                                  <span
+                                    className={`rounded-full px-2 py-1 text-xs ${alert.pendingAcknowledgments ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}
+                                  >
+                                    {alert.pendingAcknowledgments
+                                      ? "Not acknowledged"
+                                      : "Acknowledged"}
+                                  </span>
+                                  {detailLabel}
+                                </span>
+                              </Link>
+                            ))}
+                    </div>
+                  )}
+                  <Pagination value={pagination} onChange={setPage} />
+                </>
+              )}
+            </>
+          }
+        </div>
+      </section>
+      {showApplicableActivities && (
+        <EmployeeActivityManager
+          key={employeeId}
+          employeeId={employeeId}
+          accessToken={accessToken}
+          canManageActivities={canManageActivities}
+          pageSize={20}
+        />
       )}
     </div>
   );

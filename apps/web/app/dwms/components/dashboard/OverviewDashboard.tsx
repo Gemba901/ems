@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useUrlViewState } from '@/hooks/useUrlViewState';
+import { enumParam, textParam } from '@/lib/url-view-state';
 import type { DwmsOverviewDashboardResponse } from '@/services/dwms.service';
 import PerformanceKpiSelect from './PerformanceKpiSelect';
 import PerformanceSortSelect from './PerformanceSortSelect';
 import PerformanceScoreboardSearch from './PerformanceScoreboardSearch';
 import {
+  performanceKpis,
   comparePerformanceKpi,
   formatPerformanceKpiValue,
   getPerformanceKpi,
@@ -14,6 +16,19 @@ import {
   type PerformanceKpiKey,
   type PerformanceSortDirection,
 } from './performanceKpis';
+
+const scoreboardSchema = {
+  kpi: enumParam(
+    performanceKpis.map((item) => item.key),
+    "allTasksCompletionRate",
+  ),
+  sort: enumParam(["asc", "desc"] as const, "desc"),
+  search: textParam,
+  heatmap: enumParam(
+    performanceKpis.map((item) => item.key),
+    "allTasksCompletionRate",
+  ),
+};
 
 type OverviewDashboardProps = {
   overviewData: DwmsOverviewDashboardResponse;
@@ -28,10 +43,18 @@ function rankingDescription(key: PerformanceKpiKey, direction = getPerformanceKp
 }
 
 export default function OverviewDashboard({ overviewData, onSelectDepartment, onSelectEmployee, canSelectEmployee }: OverviewDashboardProps) {
-  const [heatmapKpi, setHeatmapKpi] = useState<PerformanceKpiKey>('allTasksCompletionRate');
-  const [scoreboardKpi, setScoreboardKpi] = useState<PerformanceKpiKey>('allTasksCompletionRate');
-  const [scoreboardSortDirection, setScoreboardSortDirection] = useState<PerformanceSortDirection>('desc');
-  const [scoreboardSearch, setScoreboardSearch] = useState('');
+  const { state, update } = useUrlViewState("scoreOverview", scoreboardSchema);
+  const {
+    heatmap: heatmapKpi,
+    kpi: scoreboardKpi,
+    sort: scoreboardSortDirection,
+    search: scoreboardSearch,
+  } = state;
+  const setHeatmapKpi = (heatmap: PerformanceKpiKey) => update({ heatmap });
+  const setScoreboardKpi = (kpi: PerformanceKpiKey) => update({ kpi });
+  const setScoreboardSortDirection = (sort: PerformanceSortDirection) =>
+    update({ sort });
+  const setScoreboardSearch = (search: string) => update({ search });
   const departments = [...(overviewData.departmentCompliance ?? [])].sort((a, b) => comparePerformanceKpi(a, b, heatmapKpi));
   const normalizedScoreboardSearch = scoreboardSearch.trim().toLowerCase();
   const employees = [...(overviewData.employeeScoreboard ?? [])]

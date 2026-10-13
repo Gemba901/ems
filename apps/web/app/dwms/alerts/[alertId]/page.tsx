@@ -22,15 +22,19 @@ function AlertDetailPage() {
   const [comment, setComment] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!alertId) return;
+    setLoading(true);
     try {
       const token = useAuthStore.getState().accessToken ?? "";
       setDetail(await DwmsService.getAlertDetail(token, alertId));
       setError(null);
     } catch (cause) {
       setError(getDwmsErrorMessage(cause, "Failed to load alert."));
+    } finally {
+      setLoading(false);
     }
   }, [alertId]);
 
@@ -74,9 +78,9 @@ function AlertDetailPage() {
   const alert = detail?.alert;
   const isResponsible = Boolean(alert?.responsibleEmployee?.id && alert.responsibleEmployee.id === detail?.employeeId);
   return <main className="mx-auto w-full max-w-4xl min-w-0 space-y-5 px-4 py-6 sm:space-y-6 sm:px-6 sm:py-8">
-    <button type="button" onClick={() => router.push(alert?.isAbnormality ? "/dwms/abnormalities" : "/dwms/alerts")} className="min-h-11 w-fit rounded-lg px-1 text-sm font-semibold text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">← {alert?.isAbnormality ? "Abnormalities" : "Alerts"}</button>
+    <button type="button" onClick={() => router.back()} className="min-h-11 w-fit rounded-lg px-1 text-sm font-semibold text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">← Back</button>
     {error && <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{error}</p>}
-    {!alert ? <p className="text-sm text-slate-500">Loading alert...</p> : <>
+    {!alert ? loading && <p role="status" className="text-sm text-slate-500">Loading alert...</p> : <>
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">{alert.severity}</span>

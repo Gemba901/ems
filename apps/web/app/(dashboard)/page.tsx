@@ -288,6 +288,7 @@ export default function DashboardPage() {
   const activeModules: string[] = orgData?.modules ?? [];
 
   const enabledModules = activeModules
+    .filter((key) => key !== "EMS") // EMS card temporarily hidden from the dashboard; the module itself stays enabled
     .map((key) => MODULE_REGISTRY[key])
     .filter(Boolean);
 

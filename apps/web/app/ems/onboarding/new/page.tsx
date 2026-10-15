@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -10,10 +11,14 @@ import { useAuthStore } from "@/store/auth.store";
 import {
   EmsService, UpdateOnboardingRecordPayload, CommunicationChannel, COMMUNICATION_CHANNEL_LABELS,
 } from "@/services/ems.service";
-import { ArrowLeft, Loader2, Upload, AlertCircle, FileSpreadsheet } from "lucide-react";
-import { mapHeaders, findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, Field, requiredFields } from "../column-map";
+import { ArrowLeft, Loader2, Upload, AlertCircle, FileSpreadsheet, CheckCircle2, Info, ArrowDown } from "lucide-react";
+import {
+  mapHeaders, findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, MapField, NameOrder, requiredFields, splitFullName,
+} from "../column-map";
 import TemplateCard from "./TemplateCard";
-import { getCountries } from "libphonenumber-js";
+import ConfirmDialog from "@/components/ems/ConfirmDialog";
+import SearchableSelect from "@/components/ems/SearchableSelect";
+import { getCountries, getCountryCallingCode } from "libphonenumber-js";
 
 const countryNames = new Intl.DisplayNames(["en"], { type: "region" });
 
@@ -24,18 +29,56 @@ const PHONE_COUNTRIES = getCountries()
   }))
   .sort((a, b) => a.name.localeCompare(b.name));
 
+/** The same list for the searchable dropdown, with each country's dialling code as a hint. */
+/** Everyday names people search by, so "usa", "uk" or "ivory coast" find the right country. */
+/** Demo-only tools (e.g. resetting the channel) show only when the web app's env enables them. */
+const DEMO_TOOLS = process.env.NEXT_PUBLIC_EMS_DEMO_TOOLS === "true";
+
+const COUNTRY_ALIASES: Record<string, { aside?: string; keywords?: string[] }> = {
+  US: { aside: "USA", keywords: ["America", "United States of America"] },
+  GB: { aside: "UK", keywords: ["Britain", "Great Britain", "England", "Scotland", "Wales", "Northern Ireland"] },
+  AE: { aside: "UAE", keywords: ["Emirates", "Dubai", "Abu Dhabi"] },
+  CD: { aside: "DRC", keywords: ["Congo", "Democratic Republic of the Congo", "Kinshasa"] },
+  CG: { keywords: ["Congo", "Republic of the Congo", "Brazzaville"] },
+  CI: { keywords: ["Ivory Coast"] },
+  KR: { keywords: ["South Korea"] },
+  KP: { keywords: ["North Korea"] },
+  NL: { keywords: ["Holland"] },
+  SZ: { keywords: ["Swaziland"] },
+  CZ: { keywords: ["Czech Republic"] },
+  MM: { keywords: ["Burma"] },
+  TR: { keywords: ["Turkey"] },
+  RU: { keywords: ["Russian Federation"] },
+};
+
+const COUNTRY_OPTIONS = PHONE_COUNTRIES.map(({ code, name }) => ({
+  value: code,
+  label: name,
+  hint: `+${getCountryCallingCode(code as Parameters<typeof getCountryCallingCode>[0])}`,
+  aside: COUNTRY_ALIASES[code]?.aside,
+  keywords: [code, ...(COUNTRY_ALIASES[code]?.keywords ?? [])], // the ISO code too: "ke" finds Kenya
+}));
+
 type ParsedRow = UpdateOnboardingRecordPayload & { rowNumber: number };
 
 /** How many rows to offer when picking the header manually. */
 const HEADER_SEARCH_DEPTH = 20;
 
 export default function NewOnboardingImportPage() {
-  const { accessToken } = useAuthStore();
+  const { accessToken, user: viewer } = useAuthStore();
+  const isAdmin = [Role.ADMIN, Role.SUPER_ADMIN].includes(viewer?.roleLevel as Role);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [label, setLabel] = useState("");
+  const [labelEdited, setLabelEdited] = useState(false); // true once HR types their own import name
   const [defaultPhoneCountry, setDefaultPhoneCountry] = useState("");
+  // What HR has typed in the searchable country box; defaultPhoneCountry is set only when it names a real country.
+  const [countryText, setCountryText] = useState("");
+  const [countryPrefilled, setCountryPrefilled] = useState(false);
   const [fileName, setFileName] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [sheetName, setSheetName] = useState("");
   const [grid, setGrid] = useState<unknown[][]>([]);
@@ -44,15 +87,76 @@ export default function NewOnboardingImportPage() {
   const [pickingHeader, setPickingHeader] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [mapping, setMapping] = useState<(Field | null)[]>([]);
+  const [mapping, setMapping] = useState<(MapField | null)[]>([]);
+  // How names in a mapped "Full name" column are written.
+  const [nameOrder, setNameOrder] = useState<NameOrder>("FIRST_LAST");
 
   // Organisation-wide communication channel: decides whether WhatsApp or email is required.
   const [channel, setChannel] = useState<CommunicationChannel | null>(null);
   const [channelLoaded, setChannelLoaded] = useState(false);
   const [changingChannel, setChangingChannel] = useState(false);
   const [savingChannel, setSavingChannel] = useState(false);
+  // Demo reset: confirmation open, request in progress, and any error to show.
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resettingChannel, setResettingChannel] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  async function resetChannel() {
+    if (!accessToken) return;
+    setResettingChannel(true);
+    setResetError(null);
+    try {
+      await EmsService.resetCommunicationChannel(accessToken);
+      setChannel(null);
+      setChangingChannel(false);
+      setConfirmingReset(false);
+      // Findings and counts may have changed across unfinished imports.
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batch"] });
+      queryClient.invalidateQueries({ queryKey: ["ems-communication-channel"] });
+    } catch (e: any) {
+      setConfirmingReset(false);
+      setResetError(e.message || "Could not reset the channel.");
+      // If the outcome is uncertain (e.g. a network drop), re-read the real value rather than guess.
+      EmsService.getCommunicationChannel(accessToken)
+        .then((result) => setChannel(result.communicationChannel))
+        .catch(() => {});
+    } finally {
+      setResettingChannel(false);
+    }
+  }
   const [channelAttention, setChannelAttention] = useState(false);
   const [countryAttention, setCountryAttention] = useState(false);
+  // Which help texts are expanded ("More").
+  const [countryMore, setCountryMore] = useState(false);
+  const [channelMore, setChannelMore] = useState(false);
+  // A channel HR picked that differs from the saved one, waiting for confirmation.
+  const [pendingChannel, setPendingChannel] = useState<CommunicationChannel | null>(null);
+
+  // The imports list (newest first) tells us which country the organisation used last time.
+  const { data: previousImports } = useQuery({
+    queryKey: ["ems-onboarding-batches"],
+    queryFn: () => EmsService.listOnboardingBatches(accessToken!),
+    enabled: !!accessToken,
+  });
+
+  useEffect(() => {
+    if (countryText || !previousImports) return; // never overwrite what HR has typed
+    const last = previousImports.find((b) => b.status !== "CANCELLED" && b.defaultPhoneCountry);
+    const country = PHONE_COUNTRIES.find((c) => c.code === last?.defaultPhoneCountry);
+    if (!country) return;
+    setCountryText(country.name);
+    setDefaultPhoneCountry(country.code);
+    setCountryPrefilled(true);
+  }, [previousImports]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function chooseCountry(text: string) {
+    setCountryText(text);
+    setCountryPrefilled(false);
+    setCountryAttention(false);
+    const match = PHONE_COUNTRIES.find((c) => c.name.toLowerCase() === text.trim().toLowerCase());
+    setDefaultPhoneCountry(match?.code ?? "");
+  }
 
   useEffect(() => {
     if (!accessToken) return;
@@ -64,6 +168,12 @@ export default function NewOnboardingImportPage() {
 
   async function saveChannel(next: CommunicationChannel) {
     if (!accessToken) return;
+    // Switching an existing channel affects every open import, so ask first.
+    if (channel && channel !== next && pendingChannel !== next) {
+      setPendingChannel(next);
+      return;
+    }
+    setPendingChannel(null);
     setSavingChannel(true);
     setChannelAttention(false);
     setError(null);
@@ -110,7 +220,7 @@ export default function NewOnboardingImportPage() {
   async function handleFile(file: File) {
     setError(null);
     setFileName(file.name);
-    if (!label) setLabel(file.name.replace(/\.[^.]+$/, ""));
+    if (!labelEdited) setLabel(file.name.replace(/\.[^.]+$/, ""));
 
     try {
       const buffer = await file.arrayBuffer();
@@ -134,9 +244,12 @@ export default function NewOnboardingImportPage() {
 
   // Required fields for this organisation, and any of them no column is mapped to.
   const required = requiredFields(channel);
-  const missingRequired = MAPPABLE_FIELDS.filter(
-    ({ key }) => required.has(key) && !fields.includes(key),
-  );
+  const hasFullName = fields.includes("fullName");
+  // A mapped full name supplies first and last name, so those count as covered.
+  const covered = new Set<string>(fields.filter((f): f is MapField => !!f));
+  if (hasFullName) { covered.add("firstName"); covered.add("lastName"); }
+  const isRequired = (key: MapField) => (required as Set<string>).has(key);
+  const missingRequired = MAPPABLE_FIELDS.filter(({ key }) => isRequired(key) && !covered.has(key));
 
   const unmatched =
     headerIndex >= 0
@@ -152,15 +265,24 @@ export default function NewOnboardingImportPage() {
     for (let i = headerIndex + 1; i < grid.length; i++) {
       const record: ParsedRow = { rowNumber: firstRow + i + 1 };
       let hasValue = false;
+      let fullName = "";
 
       fields.forEach((field, col) => {
         if (!field) return;
         const text = String(grid[i][col] ?? "").trim();
-        if (text) {
-          record[field] = text;
-          hasValue = true;
-        }
+        if (!text) return;
+        hasValue = true;
+        if (field === "fullName") fullName = text;
+        else record[field] = text;
       });
+
+      // Split a full name, but never over names that have their own columns.
+      if (fullName) {
+        const parts = splitFullName(fullName, nameOrder);
+        record.firstName ??= parts.firstName;
+        record.middleName ??= parts.middleName;
+        record.lastName ??= parts.lastName;
+      }
 
       if (hasValue) out.push(record);
     }
@@ -169,18 +291,22 @@ export default function NewOnboardingImportPage() {
 
   async function handleUpload() {
     if (!accessToken || rows.length === 0) return;
+    // Check everything first, so HR sees every blocker at once rather than one per click.
+    const problems: string[] = [];
     if (!defaultPhoneCountry) {
-      setError("Select a default country for phone numbers.");
-      setCountryAttention(true);
-      const countrySelect = document.getElementById("default-phone-country");
-      countrySelect?.scrollIntoView({ behavior: "smooth", block: "center" });
-      countrySelect?.focus({ preventScroll: true });
-    return;
+      problems.push(countryText.trim()
+        ? `choose a country from the list ("${countryText.trim()}" isn't one)`
+        : "choose a default country for phone numbers");
     }
-    if (!channel) {
-      setError("Choose your organisation's communication channel before importing.");
-      setChannelAttention(true);
-      document.getElementById("communication-channel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!channel) problems.push("choose your organisation's communication channel");
+    setCountryAttention(!defaultPhoneCountry);
+    setChannelAttention(!channel);
+    if (problems.length > 0) {
+      setError(`Before importing, ${problems.join(", and ")}.`);
+      // Jump to the first problem on the page.
+      const first = document.getElementById(!defaultPhoneCountry ? "default-phone-country" : "communication-channel");
+      first?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (!defaultPhoneCountry) first?.focus({ preventScroll: true });
       return;
     }
     setBusy(true);
@@ -196,6 +322,7 @@ export default function NewOnboardingImportPage() {
       );
       await EmsService.addOnboardingRecords(batch.id, { records: rows }, accessToken);
       await EmsService.validateOnboardingBatch(batch.id, accessToken);
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
       router.push(`/ems/onboarding/${batch.id}`);
     } catch (e: any) {
       setError(e.message || "Upload failed.");
@@ -217,20 +344,102 @@ export default function NewOnboardingImportPage() {
           </div>
         </div>
 
-        <TemplateCard />
-
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4">
 
-          <label className="block">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Label</span>
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Nairobi plant, January intake"
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </label>
+          {/* Template and file side by side; on narrow screens the template comes first. */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="md:order-2">
+              <TemplateCard channel={channel} />
+            </div>
+            <div className="md:col-span-2 md:order-1">
+              {/* The main action on this page: a drop zone that shows clearly once a file is loaded. */}
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleFile(file);
+                }}
+                className={`flex h-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+                  dragging ? "border-slate-500 bg-slate-100"
+                    : workbook ? "border-emerald-300 bg-emerald-50/40"
+                    : "border-slate-300 bg-slate-50"
+                }`}
+              >
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFile(file);
+                    e.target.value = ""; // so choosing the same file again still triggers a change
+                  }}
+                />
+
+                {workbook ? (
+                  <>
+                    <CheckCircle2 className="h-9 w-9 text-emerald-600" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 break-all">{fileName}</p>
+                      <p className="text-xs text-slate-600">
+                        {rows.length > 0
+                          ? <><span className="font-semibold">{rows.length}</span> employee row{rows.length === 1 ? "" : "s"} found{workbook.SheetNames.length > 1 ? ` on "${sheetName}"` : ""}</>
+                          : "No employee rows found yet. Check the sheet and header row below."}
+                      </p>
+                    </div>
+                    <label className="flex w-full max-w-sm items-center gap-2 text-left text-xs text-slate-500">
+                      <span className="shrink-0 font-medium">Import name</span>
+                      <input
+                        type="text"
+                        value={label}
+                        onChange={(e) => { setLabel(e.target.value); setLabelEdited(e.target.value.trim() !== ""); }}
+                        placeholder="e.g. Nairobi plant, January intake"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById("import-review")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                      >
+                        Review columns & preview <ArrowDown className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInput.current?.click()}
+                        className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                      >
+                        Change file
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
+                      <Upload className="h-5 w-5 text-slate-600" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Spreadsheet to import</p>
+                      <p className="text-xs text-slate-500">Drag your filled-in file here, or</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInput.current?.click()}
+                      className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                    >
+                      Choose file
+                    </button>
+                    <p className="text-xs text-slate-400">.xlsx, .xls or .csv</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
           <div>
             <label
@@ -240,38 +449,50 @@ export default function NewOnboardingImportPage() {
               Default country for phone numbers
             </label>
 
-            <select
+            <SearchableSelect
               id="default-phone-country"
+              options={COUNTRY_OPTIONS}
               value={defaultPhoneCountry}
-              onChange={(e) => { setDefaultPhoneCountry(e.target.value); setCountryAttention(false); }}
+              text={countryText}
+              onTextChange={chooseCountry}
               disabled={busy}
-              aria-describedby="default-phone-country-help"
-              className={`mt-1 w-full px-3 py-2 rounded-lg border text-sm bg-white focus:outline-none focus:ring-2 ${
-                countryAttention ? "border-red-400 focus:ring-red-300" : "border-slate-200 focus:ring-blue-500/20"
-              }`}
-            >
-              <option value="">Choose a country</option>
-              {PHONE_COUNTRIES.map(({ code, name }) => (
-                <option key={code} value={code}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              invalid={countryAttention}
+              placeholder="Choose or type a country, e.g. Kenya"
+              describedBy="default-phone-country-help"
+            />
 
-            {countryAttention && (
-              <p className="mt-1 text-xs font-semibold text-red-600">Select a country to continue.</p>
+            {countryPrefilled && (
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-700">
+                <Info className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                <span><span className="font-semibold">{countryText}</span> was used in your last import. Change it if this import is for another country.</span>
+                <button type="button" onClick={() => chooseCountry("")} className="font-medium text-blue-600 hover:text-blue-700">
+                  Clear
+                </button>
+              </p>
             )}
 
-            <p
-              id="default-phone-country-help"
-              className="mt-2 text-xs text-slate-500"
-            >
-              Used to interpret phone numbers without an international country code.
-              For example, selecting Kenya means 0712345678 is treated as
-              +254712345678. Numbers starting with + and a country code keep that
-              country code. For staff in other countries, include their international
-              country code in the spreadsheet.
+            {countryAttention && (
+              <p className="mt-1 text-xs font-semibold text-red-600">
+                {countryText.trim() ? "Choose a country from the list." : "Select a country to continue."}
+              </p>
+            )}
+
+            <p id="default-phone-country-help" className="mt-2 text-xs text-slate-600">
+              Local numbers like 0712 345 678 get{" "}
+              <span className="font-semibold">
+                {COUNTRY_OPTIONS.find((c) => c.value === defaultPhoneCountry)?.hint ?? "this country's code"}
+              </span>{" "}
+              added.{" "}
+              <button type="button" onClick={() => setCountryMore((v) => !v)} className="font-medium text-blue-600 hover:text-blue-700">
+                {countryMore ? "Less" : "More"}
+              </button>
             </p>
+            {countryMore && (
+              <p className="mt-1 text-xs text-slate-600">
+                Numbers that already start with + and a country code keep it, so staff in other
+                countries just need their full international number in the spreadsheet.
+              </p>
+            )}
           </div>
 
           <div
@@ -291,10 +512,20 @@ export default function NewOnboardingImportPage() {
                 {COMMUNICATION_CHANNEL_LABELS[channel]}
                 <button
                   onClick={() => setChangingChannel(true)}
-                  className="ml-2 text-xs font-medium text-blue-600 hover:text-blue-700"
+                  disabled={resettingChannel}
+                  className="ml-2 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
                 >
                   Change
                 </button>
+                {DEMO_TOOLS && isAdmin && (
+                  <button
+                    onClick={() => { setResetError(null); setConfirmingReset(true); }}
+                    disabled={savingChannel || resettingChannel}
+                    className="ml-3 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                  >
+                    Reset (demo)
+                  </button>
+                )}
               </p>
             ) : (
               <div className="mt-1 flex items-center gap-2">
@@ -302,7 +533,7 @@ export default function NewOnboardingImportPage() {
                   <button
                     key={option}
                     onClick={() => saveChannel(option)}
-                    disabled={savingChannel}
+                    disabled={savingChannel || resettingChannel}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-semibold disabled:opacity-50 ${
                       channel === option
                         ? "border-blue-500 bg-blue-50 text-blue-700"
@@ -323,29 +554,26 @@ export default function NewOnboardingImportPage() {
               </div>
             )}
 
+            {resetError && <p className="mt-2 text-xs font-semibold text-red-600">{resetError}</p>}
+
             {channelAttention && (
               <p className="mt-2 text-xs font-semibold text-red-600">Choose WhatsApp or email to continue.</p>
             )}
 
-            <p className="mt-2 text-xs text-slate-500">
-              How the system will contact your employees. WhatsApp makes a WhatsApp number
-              required for everyone; email makes a work email required. This applies to your
-              whole organisation, and changing it re-checks your other unfinished imports.
+            <p className="mt-2 text-xs text-slate-600">
+              Decides which contact every employee needs: a WhatsApp number or a work email.{" "}
+              <button type="button" onClick={() => setChannelMore((v) => !v)} className="font-medium text-blue-600 hover:text-blue-700">
+                {channelMore ? "Less" : "More"}
+              </button>
             </p>
+            {channelMore && (
+              <p className="mt-1 text-xs text-slate-600">
+                It applies to your whole organisation and is how the system will contact your
+                employees. Changing it re-checks your other unfinished imports.
+              </p>
+            )}
           </div>
 
-          <label className="block">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Spreadsheet</span>
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
-              }}
-              className="mt-1 w-full text-sm file:mr-3 file:px-4 file:py-2 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:text-xs file:font-semibold"
-            />
-          </label>
 
           {/* Sheet picker — only when the workbook has more than one */}
           {workbook && workbook.SheetNames.length > 1 && (
@@ -373,9 +601,9 @@ export default function NewOnboardingImportPage() {
             </div>
           )}
 
-          {/* Which row is being read as headers */}
+          {/* Which row is being read as headers. "Review columns & preview" scrolls here. */}
           {grid.length > 0 && (
-            <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+            <div id="import-review" className="scroll-mt-6 text-xs text-slate-500 flex items-center gap-2 flex-wrap">
               <FileSpreadsheet className="h-3.5 w-3.5 text-slate-300" />
               {headerIndex >= 0 ? (
                 <>
@@ -441,9 +669,9 @@ export default function NewOnboardingImportPage() {
           )}
 
           {headerIndex >= 0 && headerRow.length > 0 && (
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                    <p className="text-xs text-slate-500">
+                <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 bg-slate-100 border-b border-slate-300 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-800">
                       Match your columns to the fields they hold · <span className="text-red-500">*</span> required
                     </p>
                     <p className="text-xs text-slate-400">
@@ -461,7 +689,7 @@ export default function NewOnboardingImportPage() {
                         .find(Boolean);
 
                       // A field already taken by another column
-                      const takenElsewhere = (key: Field) =>
+                      const takenElsewhere = (key: MapField) =>
                         fields.some((f, i) => f === key && i !== col);
 
                       return (
@@ -475,7 +703,7 @@ export default function NewOnboardingImportPage() {
                           <select
                             value={fields[col] ?? ""}
                             onChange={(e) => {
-                              const value = (e.target.value || null) as Field | null;
+                              const value = (e.target.value || null) as MapField | null;
                               setMapping((prev) => {
                                 const next = [...prev];
                                 // A field can only be used once — clear any other column holding it
@@ -495,7 +723,7 @@ export default function NewOnboardingImportPage() {
                             <option value="">— ignore this column —</option>
                             {MAPPABLE_FIELDS.map(({ key, label }) => (
                               <option key={key} value={key} disabled={takenElsewhere(key)}>
-                                {label}{required.has(key) ? " *" : ""}{takenElsewhere(key) ? " (already used)" : ""}
+                                {label}{isRequired(key) ? " *" : ""}{takenElsewhere(key) ? " (already used)" : ""}
                               </option>
                             ))}
                           </select>
@@ -505,6 +733,21 @@ export default function NewOnboardingImportPage() {
                   </div>
                 </div>
               )}
+
+          {headerIndex >= 0 && hasFullName && (
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+              <span className="font-semibold">Full names are written:</span>
+              {([["FIRST_LAST", "First … Last (Peter Kamau Otieno)"], ["LAST_FIRST", "Last … First (Otieno Peter Kamau)"]] as const).map(
+                ([value, text]) => (
+                  <label key={value} className="inline-flex items-center gap-1.5">
+                    <input type="radio" name="name-order" checked={nameOrder === value} onChange={() => setNameOrder(value)} />
+                    {text}
+                  </label>
+                ),
+              )}
+              <span className="text-slate-400">A surname in CAPITALS is always used as the last name. Check the preview below.</span>
+            </div>
+          )}
 
           {headerIndex >= 0 && missingRequired.length > 0 && (
             <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -519,17 +762,19 @@ export default function NewOnboardingImportPage() {
 
           {rows.length > 0 && (
             <>
-              <div className="text-sm text-slate-600">
+              <div className="border-t-2 border-slate-200 pt-4 text-sm text-slate-700">
                 <span className="font-semibold text-slate-900">{rows.length}</span> rows ready to import
               </div>
 
-              <div className="border border-slate-100 rounded-xl overflow-hidden">
+              <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500">
                       <th className="text-left px-3 py-2 font-semibold">Row</th>
                       <th className="text-left px-3 py-2 font-semibold">Code</th>
-                      <th className="text-left px-3 py-2 font-semibold">Name</th>
+                      <th className="text-left px-3 py-2 font-semibold">First name</th>
+                      <th className="text-left px-3 py-2 font-semibold">Middle name</th>
+                      <th className="text-left px-3 py-2 font-semibold">Last name</th>
                       <th className="text-left px-3 py-2 font-semibold">Department</th>
                     </tr>
                   </thead>
@@ -538,9 +783,9 @@ export default function NewOnboardingImportPage() {
                       <tr key={r.rowNumber}>
                         <td className="px-3 py-2 text-slate-400">{r.rowNumber}</td>
                         <td className="px-3 py-2 font-mono text-slate-500">{r.employeeCode ?? "—"}</td>
-                        <td className="px-3 py-2 text-slate-700">
-                          {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
-                        </td>
+                        <td className="px-3 py-2 text-slate-700">{r.firstName ?? "—"}</td>
+                        <td className="px-3 py-2 text-slate-500">{r.middleName ?? "—"}</td>
+                        <td className="px-3 py-2 text-slate-700">{r.lastName ?? "—"}</td>
                         <td className="px-3 py-2 text-slate-500">{r.currentDepartment ?? "—"}</td>
                       </tr>
                     ))}
@@ -572,6 +817,30 @@ export default function NewOnboardingImportPage() {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmingReset}
+        title="Reset the channel?"
+        message={"Your organisation will have no channel until one is chosen again. Unfinished imports are re-checked.\n\nDemo tool: not available to clients."}
+        keepLabel="Keep channel"
+        confirmLabel="Reset channel"
+        busy={resettingChannel}
+        onConfirm={resetChannel}
+        onClose={() => setConfirmingReset(false)}
+      />
+
+      {pendingChannel && channel && (
+        <ConfirmDialog
+          open
+          tone="primary"
+          title={`Switch to ${COMMUNICATION_CHANNEL_LABELS[pendingChannel]}?`}
+          message={`This applies to every employee in your organisation and re-checks all your unfinished imports. Rows may then need ${pendingChannel === "EMAIL" ? "a work email" : "a WhatsApp number"} before they can be registered.`}
+          keepLabel={`Keep ${COMMUNICATION_CHANNEL_LABELS[channel]}`}
+          confirmLabel={`Switch to ${COMMUNICATION_CHANNEL_LABELS[pendingChannel]}`}
+          busy={savingChannel}
+          onConfirm={() => saveChannel(pendingChannel)}
+          onClose={() => setPendingChannel(null)}
+        />
+      )}
     </ProtectedRoute>
   );
 }

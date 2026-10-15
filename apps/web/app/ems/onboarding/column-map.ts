@@ -2,8 +2,11 @@ import { CommunicationChannel, UpdateOnboardingRecordPayload } from "@/services/
 
 export type Field = keyof UpdateOnboardingRecordPayload;
 
+/** What a column can map to: a record field, or a full name that is split into first/middle/last on import. */
+export type MapField = Field | "fullName";
+
 /** Spreadsheet header text → record field. Keys are normalised (lowercase, no spaces/punctuation). */
-const HEADER_MAP: Record<string, Field> = {
+const HEADER_MAP: Record<string, MapField> = {
   companycode:            "companyCode",
   plantbranchcode:        "plantBranchCode",
   plantbranch:            "plantBranchCode",
@@ -13,6 +16,12 @@ const HEADER_MAP: Record<string, Field> = {
   middlename:             "middleName",
   lastname:               "lastName",
   surname:                "lastName",
+  fullname:               "fullName",
+  fullnames:              "fullName",
+  employeename:           "fullName",
+  employeefullname:       "fullName",
+  name:                   "fullName",
+  names:                  "fullName",
   mobilenumber:           "mobileNumber",
   mobile:                 "mobileNumber",
   phone:                  "mobileNumber",
@@ -66,7 +75,7 @@ export function normaliseHeader(value: unknown): string {
   return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function mapHeaders(headerRow: unknown[]): (Field | null)[] {
+export function mapHeaders(headerRow: unknown[]): (MapField | null)[] {
   return headerRow.map((cell) => HEADER_MAP[normaliseHeader(cell)] ?? null);
 }
 
@@ -97,8 +106,9 @@ const limit = Math.min(searchDepth, grid.length);
 }
 
 /** Every field a column can map to, in the order shown in the picker. */
-export const MAPPABLE_FIELDS: { key: Field; label: string }[] = [
+export const MAPPABLE_FIELDS: { key: MapField; label: string }[] = [
   { key: "employeeCode",           label: "Employee code" },
+  { key: "fullName",               label: "Full name (split into first, middle, last)" },
   { key: "firstName",              label: "First name" },
   { key: "middleName",             label: "Middle name" },
   { key: "lastName",               label: "Last name" },
@@ -143,4 +153,37 @@ export function requiredFields(channel: CommunicationChannel | null): Set<Field>
   const fields = new Set(ALWAYS_REQUIRED_FIELDS);
   if (channel) fields.add(CHANNEL_REQUIRED_FIELD[channel]);
   return fields;
+}
+
+/** How full names in a sheet are written. */
+export type NameOrder = "FIRST_LAST" | "LAST_FIRST";
+
+/** A word written entirely in capitals, e.g. "OTIENO", which conventionally marks the surname. */
+function isCapitalised(word: string): boolean {
+  const letters = word.replace(/[^\p{L}]/gu, "");
+  return letters.length > 1 && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
+}
+
+/**
+ * Split a full name into first, middle and last name.
+ * If exactly one word is in capitals ("OTIENO Peter Kamau"), that word is the surname, whatever the order.
+ * Otherwise the chosen order decides. A single word becomes the first name only, so validation flags the
+ * missing last name rather than the page guessing.
+ */
+export function splitFullName(value: string, order: NameOrder): { firstName?: string; middleName?: string; lastName?: string } {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return {};
+  if (words.length === 1) return { firstName: words[0] };
+
+  const capitalised = words.map((w, i) => (isCapitalised(w) ? i : -1)).filter((i) => i >= 0);
+  let surnameAt: number;
+  if (capitalised.length === 1) surnameAt = capitalised[0];
+  else surnameAt = order === "LAST_FIRST" ? 0 : words.length - 1;
+
+  const rest = words.filter((_, i) => i !== surnameAt);
+  return {
+    firstName: rest[0],
+    middleName: rest.slice(1).join(" ") || undefined,
+    lastName: words[surnameAt],
+  };
 }

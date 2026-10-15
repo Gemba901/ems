@@ -1,3 +1,4 @@
+import { UpdateEmployeeReportingDto } from './dto/onboarding.dto';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import { TenantGuard } from 'src/tenancy/tenant.guard';
@@ -5,6 +6,7 @@ import {
   Controller, Get, Patch, Body, Param, Query, UseGuards,
 } from '@nestjs/common';
 import { EmsService } from './ems.service';
+import { EmsDemoOnly, EmsDemoToolsGuard } from './ems-demo-tools.guard';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -20,7 +22,7 @@ import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationC
 
 @TenantRequired()
 @Controller('ems')
-@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
+@UseGuards(EmsDemoToolsGuard, TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.EMS)
 export class EmsController {
   constructor(private ems: EmsService) {}
@@ -59,6 +61,19 @@ export class EmsController {
     return this.ems.getEmployeeById(id, user.organizationId);
   }
 
+  @Get('employees/:id/reporting')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getEmployeeReporting(@Param('id') id: string, @CurrentUser() user: { organizationId: string }) {
+    return this.ems.getEmployeeReporting(id, user.organizationId);
+  }
+
+  @Patch('employees/:id/reporting')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async updateEmployeeReporting(@Param('id') id: string, @Body() dto: UpdateEmployeeReportingDto,
+    @CurrentUser() user: { organizationId: string }) {
+    return this.ems.updateEmployeeReporting(id, user.organizationId, dto.target);
+  }
+
   /** PATCH /ems/employees/:id — update employee EMS data */
   @Patch('employees/:id')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
@@ -84,6 +99,14 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.updateCommunicationChannel(user.organizationId, dto);
+  }
+
+  /** DELETE /ems/onboarding/communication-channel — deliberately enabled demos only */
+  @Delete('onboarding/communication-channel')
+  @EmsDemoOnly()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  async resetCommunicationChannel(@CurrentUser() user: { organizationId: string }) {
+    return this.ems.resetCommunicationChannel(user.organizationId);
   }
 
     /** POST /ems/onboarding/batches — start a new import */

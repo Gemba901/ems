@@ -1,5 +1,6 @@
 "use client";
 
+import EmployeeReportingCard from "@/components/ems/EmployeeReportingCard";
 import { TenantImage } from "@/components/files/TenantImage";
 import { useState, type ElementType } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -242,7 +243,6 @@ export default function EmployeeDetailPage() {
       section: employee.section ?? "",
       subSection: employee.subSection ?? "",
       shift: employee.shift ?? "",
-      reportingManagerId: employee.reportingManagerId ?? "",
       hrRecordOwnerId: employee.hrRecordOwnerId ?? "",
       jobDescription: employee.jobDescription ?? "",
       level: employee.level ?? "",
@@ -422,6 +422,10 @@ export default function EmployeeDetailPage() {
         )}
 
         {/* ── Profile tab ───────────────────────────────────────────────── */}
+        {employee && accessToken && isAdminOrHr && (
+          <EmployeeReportingCard employeeId={id} token={accessToken} />
+        )}
+
         {activeTab === "profile" && employee && (
           <div className="space-y-5">
 
@@ -839,14 +843,7 @@ export default function EmployeeDetailPage() {
                   <input className={inputCls} value={form.shift ?? ""} onChange={(e) => set("shift", e.target.value)} placeholder="e.g. Morning, Night" />
                 </Field>
                 <Field label="Reporting Manager">
-                  <select className={selectCls} value={form.reportingManagerId ?? ""} onChange={(e) => set("reportingManagerId", e.target.value)}>
-                    <option value="">— None —</option>
-                    {employeesData?.data.filter((e) => e.id !== id).map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.firstName} {e.lastName}{e.jobTitle ? ` (${e.jobTitle})` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <a href="#reporting-manager" className="text-sm text-indigo-600 underline">View or change in the Reporting manager section</a>
                 </Field>
                 <Field label="HR Record Owner">
                   <select className={selectCls} value={form.hrRecordOwnerId ?? ""} onChange={(e) => set("hrRecordOwnerId", e.target.value)}>

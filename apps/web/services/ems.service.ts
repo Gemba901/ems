@@ -111,6 +111,8 @@ export interface EmployeeProfile {
   subSection: string | null;
   shift: string | null;
   reportingManagerId: string | null;
+  reportsToBoard: boolean;
+  pendingReportingRecordId: string | null;
   reportingManager: {
     id: string; firstName: string; lastName: string;
     jobTitle?: string | null; avatarUrl?: string | null;
@@ -301,9 +303,36 @@ export interface OnboardingBatchSummary {
   createdAt: string;
   uploadedBy: { id: string; name: string } | null;
   _count: { records: number };
+   /** Present on list/create responses. NEEDS_FIXING includes upstream-chain waiting. */
+  statusCounts?: Record<OnboardingRecordStatus, number>;
 }
 
+export interface ReportingOption {
+  target: string; name: string; designation: string; employeeCode: string; department: string; branch: string;
+}
+export type ReportingState = 'BOARD' | 'ASSIGNED' | 'PENDING' | 'UNKNOWN' | 'NEEDS_ATTENTION';
+export interface ReportingChainItem {
+  target: string; name: string; label: string; designation: string; employeeCode: string;
+  recordId?: string; employeeId?: string;
+  status: 'PENDING' | 'REGISTERED' | 'NEEDS_ATTENTION' | 'UNKNOWN' | 'BOARD';
+}
+export interface ReportingResolution {
+  target: string | null; error: string | null; warning: string | null; depth: number | null;
+  state: ReportingState; managerName: string | null;
+  errorScope?: 'DIRECT' | 'UPSTREAM';
+  chain?: ReportingChainItem[];
+  chainEnd?: 'BOARD' | 'UNRESOLVED' | 'UNKNOWN' | 'CYCLE' | 'LIMIT';
+}
+export interface EmployeeReportingDetail { assignment: ReportingResolution; options: ReportingOption[]; }
+export const REPORTING_STATE_LABELS: Record<ReportingState, string> = {
+  BOARD: 'Reports to Board', ASSIGNED: 'Manager assigned', PENDING: 'Valid manager assignment pending',
+  UNKNOWN: 'Reporting information incomplete', NEEDS_ATTENTION: 'Reporting needs attention',
+};
+
 export interface OnboardingRecord {
+  reportingToRecordId: string | null;
+  reportingToEmployeeId: string | null;
+  reportingToBoard: boolean;
   id: string;
   rowNumber: number | null;
   companyCode: string | null;
@@ -341,11 +370,13 @@ export interface OnboardingRecord {
 }
 
 export interface OnboardingBatchDetail extends OnboardingBatchSummary {
+  hierarchy: { suggestionsByRecord?: Record<string, ReportingOption[]>; options: ReportingOption[]; byRecord: Record<string, ReportingResolution>; orderedIds: string[] };
   organizationId: string;
   records: OnboardingRecord[];
 }
 
 export interface UpdateOnboardingRecordPayload {
+  reportingTarget?: string;
   companyCode?: string;
   plantBranchCode?: string;
   employeeCode?: string;
@@ -400,6 +431,17 @@ export const EmsService = {
     return handleResponse(res);
   },
 
+  async getEmployeeReporting(id: string, token: string): Promise<EmployeeReportingDetail> {
+    const res = await apiClient(`${API_URL}/ems/employees/${id}/reporting`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+  async updateEmployeeReporting(id: string, target: string, token: string): Promise<EmployeeReportingDetail> {
+    const res = await apiClient(`${API_URL}/ems/employees/${id}/reporting`, {
+      method: 'PATCH', headers: authHeaders(token), body: JSON.stringify({ target }),
+    }, token);
+    return handleResponse(res);
+  },
+
   async getEmployee(id: string, token: string): Promise<{ employee: EmployeeProfile; completion: CompletionResult }> {
     const res = await apiClient(`${API_URL}/ems/employees/${id}`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
@@ -417,7 +459,7 @@ export const EmsService = {
     }, token);
     return handleResponse(res);
   },
-  
+
   async getCommunicationChannel(
     token: string,
   ): Promise<{ communicationChannel: CommunicationChannel | null }> {
@@ -435,6 +477,14 @@ export const EmsService = {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify({ communicationChannel }),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async resetCommunicationChannel(token: string): Promise<{ communicationChannel: null }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/communication-channel`, {
+      method: "DELETE",
+      headers: authHeaders(token),
     }, token);
     return handleResponse(res);
   },

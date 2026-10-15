@@ -71,6 +71,15 @@ model EmsOnboardingRecord {
   shift                  String?
   reportingToName        String?
   reportingToDesignation String?
+
+  // Explicit manager choice; imported text remains available until resolved.
+  reportingToRecordId String?
+  reportingToRecord EmsOnboardingRecord? @relation("EmsReportingRecord", fields: [reportingToRecordId], references: [id], onDelete: NoAction)
+  reportingRecords EmsOnboardingRecord[] @relation("EmsReportingRecord")
+  employeesAwaitingManager Employee[] @relation("EmployeePendingReporting")
+  reportingToEmployeeId String?
+  reportingToEmployee Employee? @relation("EmsReportingEmployee", fields: [reportingToEmployeeId], references: [id], onDelete: NoAction)
+  reportingToBoard Boolean @default(false)
   employmentStatus       String?
   employmentType         String?
   reliever1Name          String?
@@ -89,6 +98,8 @@ model EmsOnboardingRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([reportingToRecordId])
+  @@index([reportingToEmployeeId])
   @@index([batchId])
   @@index([organizationId])
 }

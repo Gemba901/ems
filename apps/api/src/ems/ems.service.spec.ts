@@ -8,6 +8,8 @@ import { ExcludeOnboardingRecordDto } from './dto/onboarding.dto';
 
 describe('EMS onboarding record exclusion', () => {
   const prisma = {
+    $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
     emsOnboardingRecord: {
       findFirst: jest.fn(),
       update: jest.fn(),
@@ -19,6 +21,8 @@ describe('EMS onboarding record exclusion', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    prisma.$queryRaw.mockResolvedValue([]);
+    prisma.$transaction.mockImplementation(async callback => callback(prisma));
 
     service = new EmsService(
       prisma as unknown as PrismaService,

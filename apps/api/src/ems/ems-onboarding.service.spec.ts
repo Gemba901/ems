@@ -19,8 +19,10 @@ function fixture() {
   const batch = { id: 'b1', organizationId: 'org1', status: 'READY', defaultPhoneCountry: 'KE', records: [row()] };
   const db = {
     emsOnboardingBatch: { findFirst: jest.fn().mockResolvedValue(batch), findMany: jest.fn().mockResolvedValue([batch]), update: jest.fn(), updateMany: jest.fn() },
-    emsOnboardingRecord: { update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockResolvedValue([{ status: 'REGISTERED' }]) },
-    employee: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'emp1' }) },
+    emsOnboardingRecord: { update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockImplementation(async args => args?.select?.firstName ? batch.records : [{ status: 'REGISTERED' }]) },
+    employee: { findMany: jest.fn().mockImplementation(async (args) => args?.select?.firstName
+      ? [{ id: 'boss', firstName: 'Jane', lastName: 'Boss', jobTitle: 'HR Manager', reportingManagerId: null, reportsToBoard: true, pendingReportingRecordId: null }]
+      : []), create: jest.fn().mockResolvedValue({ id: 'emp1' }), updateMany: jest.fn() },
     department: { findMany: jest.fn().mockResolvedValue([{ id: 'dept1', name: 'HR' }]) },
     role: { findMany: jest.fn().mockResolvedValue([{ id: 1, name: 'EMPLOYEE' }]) },
     organization: { findUnique: jest.fn().mockResolvedValue({ communicationChannel: 'WHATSAPP' }), update: jest.fn() },
@@ -303,5 +305,77 @@ describe('EMS placeholder and N/A rules', () => {
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ email: null, plantBranch: 'N/A', subSection: null }),
     }));
+  });
+});
+
+describe('Reporting relationship integration', () => {
+  it('writes the resolved existing employee ID onto the new employee', async () => {
+    const {db,service}=fixture();
+    await service.registerOnboardingBatch('org1','b1');
+    expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingManagerId:'boss'})}));
+    expect(db.emsOnboardingRecord.update).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingToEmployeeId:'boss',reportingToRecordId:null,reportingToBoard:false})}));
+  });
+  it('rejects a designation mismatch even if the saved row is READY', async () => {
+    const {db,service,batch}=fixture(); batch.records[0].reportingToDesignation='HR Mgr';
+    expect((await service.registerOnboardingBatch('org1','b1')).failed).toBe(1);
+    expect(db.employee.create).not.toHaveBeenCalled(); expect(db.user.create).not.toHaveBeenCalled();
+  });
+  it('adds a hierarchy validation finding for self-reporting', async () => {
+    const {db,service,batch}=fixture();Object.assign(batch.records[0],{reportingToRecordId:'r1'});
+    await service.validateOnboardingBatch('org1','b1');
+    expect(db.emsOnboardingRecord.update.mock.calls[0][0].data).toEqual(expect.objectContaining({status:'NEEDS_FIXING',validationErrors:expect.arrayContaining([expect.objectContaining({field:'reportingToName',message:expect.stringContaining('themselves')})])}));
+  });
+  it('registers a selected Board root with no employee manager', async () => {
+    const {db,service,batch}=fixture();Object.assign(batch.records[0],{reportingToBoard:true});
+    expect((await service.registerOnboardingBatch('org1','b1')).registered).toBe(1);
+    expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingManagerId:null})}));
+  });
+  it('registers a valid report pending the manager when the manager has an unrelated write failure', async () => {
+    const {db,service,batch}=fixture();
+    const manager=row('manager','0712345679');Object.assign(manager,{reportingToName:null,reportingToDesignation:'Board'});
+    Object.assign(batch.records[0],{reportingToRecordId:'manager'});batch.records.push(manager);
+    db.employee.create.mockRejectedValueOnce(new Error('failed manager write')).mockResolvedValueOnce({id:'ann'});
+    const result=await service.registerOnboardingBatch('org1','b1');
+    expect(result.failed).toBe(1); expect(result.registered).toBe(1);
+    expect(db.employee.create.mock.calls[1][0].data).toEqual(expect.objectContaining({reportingManagerId:null,pendingReportingRecordId:'manager',reportsToBoard:false}));
+  });
+  it('registers a batch manager first and uses the created ID for their report', async () => {
+    const {db,service,batch}=fixture();
+    const manager=row('manager','0712345679');Object.assign(manager,{reportingToName:null,reportingToDesignation:'Board'});
+    Object.assign(batch.records[0],{reportingToRecordId:'manager'});batch.records.push(manager);
+    const employees: Array<Record<string,unknown>>=[];
+    db.employee.findMany.mockImplementation(async()=>employees);
+    db.employee.create.mockImplementation(async({data})=>{
+      const employee={...data,id:`emp-${data.employeeCode}`}; employees.push(employee);return employee;
+    });
+    db.emsOnboardingRecord.update.mockImplementation(async({where,data})=>{
+      const r=batch.records.find(r=>r.id===where.id)!;Object.assign(r,data);return r;
+    });
+    const result=await service.registerOnboardingBatch('org1','b1');
+    expect(result.registered).toBe(2);
+    expect(db.employee.create.mock.calls.map(([arg])=>arg.data.employeeCode)).toEqual(['manager','r1']);
+    expect(db.employee.create.mock.calls[1][0].data.reportingManagerId).toBe('emp-manager');
+  });
+  it('returns reporting options scoped to the organization',async()=>{
+    const {db,service}=fixture(); const result=await service.getOnboardingBatch('org1','b1');
+    expect(result.hierarchy.options).toContainEqual(expect.objectContaining({target:'employee:boss'}));
+    expect(db.employee.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{organizationId:'org1'},select:expect.objectContaining({reportingManagerId:true})}));
+  });
+  it('stores an explicit selection with canonical name/designation',async()=>{
+    const {db,service}=fixture();Object.assign(db.emsOnboardingRecord,{findFirst:jest.fn().mockResolvedValue({batchId:'b1'})});
+    jest.spyOn(service,'validateOnboardingBatch').mockResolvedValue({} as never);
+    await service.updateOnboardingRecord('org1','r1',{reportingTarget:'employee:boss'});
+    expect(db.emsOnboardingRecord.update).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingToEmployeeId:'boss',reportingToRecordId:null,reportingToBoard:false,reportingToName:'Jane Boss',reportingToDesignation:'HR Manager'})}));
+  });
+  it('rejects an explicit selection outside the scoped options without saving',async()=>{
+    const {db,service}=fixture();Object.assign(db.emsOnboardingRecord,{findFirst:jest.fn().mockResolvedValue({batchId:'b1'})});
+    await expect(service.updateOnboardingRecord('org1','r1',{reportingTarget:'employee:foreign'})).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.emsOnboardingRecord.update).not.toHaveBeenCalled();
+  });
+  it('invalidates a saved selection when reporting text is changed directly',async()=>{
+    const {db,service,batch}=fixture();Object.assign(batch.records[0],{reportingToEmployeeId:'boss'});
+    Object.assign(db.emsOnboardingRecord,{findFirst:jest.fn().mockResolvedValue({batchId:'b1'})});jest.spyOn(service,'validateOnboardingBatch').mockResolvedValue({} as never);
+    await service.updateOnboardingRecord('org1','r1',{reportingToName:'Another Name'});
+    expect(db.emsOnboardingRecord.update).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingToEmployeeId:null,reportingToRecordId:null,reportingToBoard:false})}));
   });
 });

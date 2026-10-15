@@ -62,6 +62,10 @@ export class AddOnboardingRecordsDto {
 }
 
 export class UpdateOnboardingRecordDto {
+  // Empty string clears the saved choice; all referenced IDs are checked by the service.
+  @IsString() @IsOptional() @MaxLength(100)
+  @Matches(/^(?:BOARD|(?:record|employee):[A-Za-z0-9_-]+)?$/)
+  reportingTarget?: string;
   @IsString() @IsOptional() companyCode?: string;
   @IsString() @IsOptional() plantBranchCode?: string;
   @IsString() @IsOptional() employeeCode?: string;
@@ -92,10 +96,6 @@ export class UpdateOnboardingRecordDto {
 }
 // TODO: replace with OmitType(OnboardingRecordInputDto, ['rowNumber'])
 // once @nestjs/mapped-types is confirmed available — removes this duplication.
-//export class UpdateOnboardingRecordDto {
-  // ...the 26 fields
-//}
-
 export class ExcludeOnboardingRecordDto {
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim() : value,
@@ -114,4 +114,10 @@ export class ExcludeOnboardingRecordDto {
 export class UpdateCommunicationChannelDto {
   @IsEnum(OrgCommunicationChannel, { message: 'Choose WhatsApp or email' })
   communicationChannel!: OrgCommunicationChannel;
+}
+
+export class UpdateEmployeeReportingDto {
+  @IsString() @MaxLength(100)
+  @Matches(/^(?:BOARD|employee:[A-Za-z0-9_-]+)$/)
+  target!: string;
 }

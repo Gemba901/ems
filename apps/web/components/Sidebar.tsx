@@ -18,7 +18,8 @@ import {
   Factory,
   Sparkles,
   Users2,
-  Briefcase
+  Briefcase,
+  Layers,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -86,6 +87,14 @@ const NAV_ITEMS: MainNavItem[] = [
     href: "/work",
     icon: Briefcase,
     module: "WORK",
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+  },
+  {
+    label: "5S Workplace",
+    shortLabel: "5S",
+    href: "/five-s",
+    icon: Layers,
+    module: "FIVE_S",
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
   },
   {

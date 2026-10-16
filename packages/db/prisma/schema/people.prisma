@@ -124,6 +124,25 @@ model Employee {
   workHomeReviews              WorkHomeLocationRequest[]    @relation("WorkHomeLocationReviewer")
   attendanceRecords            AttendanceRecord[]           @relation("AttendanceEmployee")
   attendanceCorrections        AttendanceCorrection[]       @relation("AttendanceCorrectionActor")
+  // 5S workplace organisation
+  fiveSResponsibilities        FiveSResponsibilityAssignment[] @relation("FiveSResponsibility")
+  fiveSAreasOwned              FiveSArea[]                  @relation("FiveSAreaOwner")
+  fiveSAuditsConducted         FiveSAudit[]                 @relation("FiveSAuditor")
+  fiveSAuditsAsAuditee         FiveSAudit[]                 @relation("FiveSAuditee")
+  fiveSAuditsSubmitted         FiveSAudit[]                 @relation("FiveSAuditSubmittedBy")
+  fiveSActionsOwned            FiveSAction[]                @relation("FiveSActionOwner")
+  fiveSActionsVerified         FiveSAction[]                @relation("FiveSActionVerifiedBy")
+  fiveSActionsCreated          FiveSAction[]                @relation("FiveSActionCreatedBy")
+  fiveSActionEvents            FiveSActionEvent[]           @relation("FiveSActionEventActor")
+  fiveSRedTagsOwned            FiveSRedTag[]                @relation("FiveSRedTagOwner")
+  fiveSRedTagsRaised           FiveSRedTag[]                @relation("FiveSRedTagRaisedBy")
+  fiveSRedTagsDecided          FiveSRedTag[]                @relation("FiveSRedTagDecidedBy")
+  fiveSRedTagsResolved         FiveSRedTag[]                @relation("FiveSRedTagResolvedBy")
+  fiveSStandardsOwned          FiveSStandard[]              @relation("FiveSStandardOwner")
+  fiveSStandardsApproved       FiveSStandard[]              @relation("FiveSStandardApprovedBy")
+  fiveSRoutinesResponsible     FiveSRoutine[]               @relation("FiveSRoutineResponsible")
+  fiveSRoutineCompletions      FiveSRoutineCompletion[]     @relation("FiveSRoutineCompletedBy")
+  fiveSChangeLogs              FiveSChangeLog[]             @relation("FiveSChangeLogActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -179,6 +198,7 @@ model Department {
   sgasMain      Sga[]        @relation("SgaMainDepartment")
   sgasOther     Sga[]        @relation("SgaOtherDepartments")
   sgasVerifying Sga[]        @relation("SgaVerifyingDepartment")
+  fiveSAreas    FiveSArea[]  @relation("FiveSAreaDepartment")
 }
 
 model SteeringCommittee {

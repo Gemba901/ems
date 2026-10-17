@@ -192,8 +192,18 @@ suite('5S API on PostgreSQL', () => {
         // The area owner plans the action and hands it to a worker, who cannot change the plan.
         await api('owner').patch(`/five-s/actions/${action.id}`, { ownerId: emp('worker') }).expect(200);
         await api('worker').patch(`/five-s/actions/${action.id}`, { dueDate: '2020-01-01' }).expect(403);
-        await api('hod').patch(`/five-s/actions/${action.id}`, { dueDate: '2020-01-01', correctiveAction: 'Remove scrap bin' }).expect(200);
+        await api('hod').patch(`/five-s/actions/${action.id}`, { dueDate: '2020-01-01' }).expect(200);
         expect((await api('worker').get(`/five-s/actions/${action.id}`)).body.isOverdue).toBe(true);
+
+        // Verification needs at least one corrective action, and every one of them done.
+        await api('worker').post(`/five-s/actions/${action.id}/submit`, { completionDescription: 'Scrap removed and bin relocated' }).expect(400);
+        const planned = (await api('hod').post(`/five-s/actions/${action.id}/corrective-actions`, { description: 'Remove scrap bin' }).expect(201)).body;
+        const [step] = planned.correctiveActions;
+        expect(step).toMatchObject({ description: 'Remove scrap bin', owner: { id: emp('worker') }, completedAt: null });
+        await api('worker').post(`/five-s/actions/${action.id}/submit`, { completionDescription: 'Scrap removed and bin relocated' }).expect(400);
+        await api('worker').patch(`/five-s/actions/${action.id}/corrective-actions/${step.id}`, { dueDate: '2030-01-01' }).expect(403);
+        const ticked = (await api('worker').patch(`/five-s/actions/${action.id}/corrective-actions/${step.id}`, { done: true }).expect(200)).body;
+        expect(ticked.correctiveActionProgress).toEqual({ done: 1, total: 1 });
 
         await api('worker').post(`/five-s/actions/${action.id}/submit`, {}).expect(400);
         await api('owner').post(`/five-s/actions/${action.id}/submit`, { completionDescription: 'Done it' }).expect(403);
@@ -206,7 +216,7 @@ suite('5S API on PostgreSQL', () => {
         const verified = (await api('owner').post(`/five-s/actions/${action.id}/verify`, { outcome: 'VERIFIED' }).expect(201)).body;
         expect(verified.status).toBe('VERIFIED');
         expect(verified.history.map((e: { type: string }) => e.type)).toEqual([
-            'CREATED', 'ASSIGNED', 'DUE_DATE_CHANGED', 'UPDATED', 'SUBMITTED_FOR_VERIFICATION', 'RETURNED_FOR_REWORK', 'SUBMITTED_FOR_VERIFICATION', 'VERIFIED',
+            'CREATED', 'ASSIGNED', 'DUE_DATE_CHANGED', 'UPDATED', 'UPDATED', 'SUBMITTED_FOR_VERIFICATION', 'RETURNED_FOR_REWORK', 'SUBMITTED_FOR_VERIFICATION', 'VERIFIED',
         ]);
 
         const audit = (await api('hod').get(`/five-s/audits/${auditId}`)).body;

@@ -3,7 +3,15 @@ import { FiveSActionEventType, FiveSActionSource, FiveSActionStatus, Prisma } fr
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { addDays, toDbDate } from 'src/work/work-date';
-import { ActionListQueryDto, CreateActionDto, SubmitActionDto, UpdateActionDto, VerifyActionDto } from '../dto/five-s.dto';
+import {
+    ActionListQueryDto,
+    CorrectiveActionInputDto,
+    CreateActionDto,
+    SubmitActionDto,
+    UpdateActionDto,
+    UpdateCorrectiveActionDto,
+    VerifyActionDto,
+} from '../dto/five-s.dto';
 import { FiveSAccessService, FiveSActor } from '../five-s-access.service';
 import { PERSON_SELECT, dateOnly, nextReference, person } from '../five-s-records';
 import { overdueActionWhere } from '../five-s-summary';
@@ -11,6 +19,21 @@ import { PRACTICE_LABELS } from '../five-s-template';
 
 // Improvement actions. Closing or verifying an action never changes the audit it came from:
 // audit results are a snapshot written at submission.
+//
+// Each action is a plan made of corrective actions (steps). Steps have their own owner and due
+// date and are ticked done one by one; the plan owner can only request verification once every
+// step is done. Steps can only change while the plan is open.
+
+const CORRECTIVE_ACTION_SELECT = {
+    id: true,
+    sortOrder: true,
+    description: true,
+    ownerId: true,
+    dueDate: true,
+    completedAt: true,
+    owner: { select: PERSON_SELECT },
+    completedBy: { select: PERSON_SELECT },
+} satisfies Prisma.FiveSCorrectiveActionSelect;
 
 const ACTION_SELECT = {
     id: true,
@@ -23,8 +46,6 @@ const ACTION_SELECT = {
     locationCount: true,
     checkpointText: true,
     finding: true,
-    affectedLocations: true,
-    correctiveAction: true,
     ownerId: true,
     dueDate: true,
     status: true,
@@ -40,6 +61,7 @@ const ACTION_SELECT = {
     owner: { select: PERSON_SELECT },
     verifiedBy: { select: PERSON_SELECT },
     createdBy: { select: PERSON_SELECT },
+    correctiveActions: { orderBy: { sortOrder: 'asc' }, select: CORRECTIVE_ACTION_SELECT },
 } satisfies Prisma.FiveSActionSelect;
 
 type ActionRow = Prisma.FiveSActionGetPayload<{ select: typeof ACTION_SELECT }>;
@@ -59,7 +81,10 @@ export class ActionsService {
                 : query.view === 'no_due_date'
                   ? { status: { not: FiveSActionStatus.VERIFIED }, dueDate: null }
                   : query.view === 'mine'
-                    ? { ownerId: actor.employeeId, status: { not: FiveSActionStatus.VERIFIED } }
+                    ? {
+                          status: { not: FiveSActionStatus.VERIFIED },
+                          OR: [{ ownerId: actor.employeeId }, { correctiveActions: { some: { ownerId: actor.employeeId, completedAt: null } } }],
+                      }
                     : query.view === 'to_verify'
                       ? { status: FiveSActionStatus.AWAITING_VERIFICATION, NOT: { ownerId: actor.employeeId } }
                       : {};
@@ -110,7 +135,9 @@ export class ActionsService {
         if (!this.access.canCoordinateArea(actor, area) && !this.access.canAudit(actor, area)) {
             throw new ForbiddenException('You cannot raise actions for this area');
         }
-        await this.access.assertCompanyEmployees(actor.organizationId, [dto.ownerId]);
+        const steps = dto.correctiveActions ?? [];
+        await this.access.assertCompanyEmployees(actor.organizationId, [dto.ownerId, ...steps.map((c) => c.ownerId)]);
+        const planOwnerId = dto.ownerId ?? area.ownerId ?? null;
 
         return this.prisma.$transaction(async (tx) => {
             const reference = await nextReference(tx, actor.organizationId, 'ACTION');
@@ -122,14 +149,25 @@ export class ActionsService {
                     source: FiveSActionSource.MANUAL,
                     practice: dto.practice,
                     finding: dto.finding,
-                    affectedLocations: dto.affectedLocations || null,
-                    correctiveAction: dto.correctiveAction || null,
-                    ownerId: dto.ownerId ?? area.ownerId ?? null,
+                    ownerId: planOwnerId,
                     dueDate: dto.dueDate ? toDbDate(dto.dueDate) : null,
                     createdById: actor.employeeId,
                 },
                 select: { id: true, reference: true, ownerId: true },
             });
+            if (steps.length) {
+                await tx.fiveSCorrectiveAction.createMany({
+                    data: steps.map((c, i) => ({
+                        actionId: action.id,
+                        sortOrder: i + 1,
+                        description: c.description,
+                        // A step without its own owner belongs to the plan owner.
+                        ownerId: c.ownerId ?? planOwnerId,
+                        dueDate: c.dueDate ? toDbDate(c.dueDate) : null,
+                        createdById: actor.employeeId,
+                    })),
+                });
+            }
             await tx.fiveSActionEvent.create({
                 data: { actionId: action.id, actorId: actor.employeeId, type: FiveSActionEventType.CREATED, note: `Raised manually (${PRACTICE_LABELS[dto.practice]})` },
             });
@@ -137,7 +175,8 @@ export class ActionsService {
         });
     }
 
-    // Plan the action: owner, due date, finding, corrective action. Each change is recorded in history.
+    // Plan the action: owner, due date and finding. Each change is recorded in history.
+    // Corrective actions have their own endpoints below.
     async update(user: AccessTokenPayload, actionId: string, dto: UpdateActionDto) {
         const actor = await this.access.resolveActor(user);
         const action = await this.actionOrThrow(actor, actionId);
@@ -172,14 +211,6 @@ export class ActionsService {
             data.finding = dto.finding;
             textChanges.push('finding');
         }
-        if (dto.affectedLocations !== undefined && (dto.affectedLocations || null) !== action.affectedLocations) {
-            data.affectedLocations = dto.affectedLocations || null;
-            textChanges.push('locations');
-        }
-        if (dto.correctiveAction !== undefined && (dto.correctiveAction || null) !== action.correctiveAction) {
-            data.correctiveAction = dto.correctiveAction || null;
-            textChanges.push('corrective action');
-        }
         if (textChanges.length) event(FiveSActionEventType.UPDATED, null, null, dto.note || `Updated ${textChanges.join(', ')}`);
         if (events.length === 0) return this.get(user, actionId);
 
@@ -199,6 +230,16 @@ export class ActionsService {
             throw new ForbiddenException(action.ownerId ? 'Only the action owner can request verification' : 'Assign an owner before requesting verification');
         }
         if (action.status !== FiveSActionStatus.OPEN) throw new ConflictException('Only open actions can be sent for verification');
+        if (action.correctiveActions.length === 0) {
+            throw new BadRequestException({ message: 'Add at least one corrective action before requesting verification', code: 'FIVE_S_NO_CORRECTIVE_ACTIONS' });
+        }
+        const pending = action.correctiveActions.filter((c) => !c.completedAt);
+        if (pending.length) {
+            throw new BadRequestException({
+                message: `Finish every corrective action first (${pending.length} of ${action.correctiveActions.length} not done)`,
+                code: 'FIVE_S_CORRECTIVE_ACTIONS_PENDING',
+            });
+        }
 
         await this.prisma.$transaction(async (tx) => {
             const updated = await tx.fiveSAction.updateMany({
@@ -252,7 +293,106 @@ export class ActionsService {
         return this.get(user, actionId);
     }
 
+    // ---------- corrective actions ----------
+
+    // The area coordinators and the plan owner manage the steps of an open plan.
+    async addCorrectiveAction(user: AccessTokenPayload, actionId: string, dto: CorrectiveActionInputDto) {
+        const actor = await this.access.resolveActor(user);
+        const action = await this.actionOrThrow(actor, actionId);
+        this.assertCanManageSteps(actor, action);
+        await this.access.assertCompanyEmployees(actor.organizationId, [dto.ownerId]);
+
+        await this.prisma.$transaction(async (tx) => {
+            const last = await tx.fiveSCorrectiveAction.aggregate({ where: { actionId }, _max: { sortOrder: true } });
+            await tx.fiveSCorrectiveAction.create({
+                data: {
+                    actionId,
+                    sortOrder: (last._max.sortOrder ?? 0) + 1,
+                    description: dto.description,
+                    ownerId: dto.ownerId === undefined ? action.ownerId : dto.ownerId,
+                    dueDate: dto.dueDate ? toDbDate(dto.dueDate) : null,
+                    createdById: actor.employeeId,
+                },
+            });
+            await tx.fiveSActionEvent.create({
+                data: { actionId, actorId: actor.employeeId, type: FiveSActionEventType.UPDATED, note: `Added corrective action: ${dto.description}` },
+            });
+        });
+        return this.get(user, actionId);
+    }
+
+    // Editing a step needs plan rights; ticking it done is also open to the step's own owner.
+    async updateCorrectiveAction(user: AccessTokenPayload, actionId: string, stepId: string, dto: UpdateCorrectiveActionDto) {
+        const actor = await this.access.resolveActor(user);
+        const action = await this.actionOrThrow(actor, actionId);
+        const step = action.correctiveActions.find((c) => c.id === stepId);
+        if (!step) throw new NotFoundException('Corrective action not found');
+        if (action.status !== FiveSActionStatus.OPEN) throw new ConflictException('Corrective actions can only change while the action is open');
+        const editsDetails = dto.description !== undefined || dto.ownerId !== undefined || dto.dueDate !== undefined;
+        if (editsDetails) this.assertCanManageSteps(actor, action);
+        if (dto.done !== undefined && !this.canManageSteps(actor, action) && step.ownerId !== actor.employeeId) {
+            throw new ForbiddenException('Only the step owner, the action owner or the area coordinators can tick this step');
+        }
+        await this.access.assertCompanyEmployees(actor.organizationId, [dto.ownerId]);
+
+        const data: Prisma.FiveSCorrectiveActionUncheckedUpdateInput = {};
+        const notes: string[] = [];
+        if (dto.description !== undefined && dto.description !== step.description) {
+            data.description = dto.description;
+            notes.push(`Corrective action reworded: ${dto.description}`);
+        }
+        if (dto.ownerId !== undefined && dto.ownerId !== step.ownerId) {
+            data.ownerId = dto.ownerId;
+            const newOwner = dto.ownerId ? await this.prisma.employee.findUnique({ where: { id: dto.ownerId }, select: PERSON_SELECT }) : null;
+            notes.push(`"${step.description}" assigned to ${person(newOwner)?.name ?? 'nobody'}`);
+        }
+        const currentDue = dateOnly(step.dueDate);
+        if (dto.dueDate !== undefined && dto.dueDate !== currentDue) {
+            data.dueDate = dto.dueDate ? toDbDate(dto.dueDate) : null;
+            notes.push(`"${step.description}" due date ${describeDate(currentDue)} → ${describeDate(dto.dueDate)}`);
+        }
+        if (dto.done !== undefined && dto.done !== !!step.completedAt) {
+            data.completedAt = dto.done ? new Date() : null;
+            data.completedById = dto.done ? actor.employeeId : null;
+            notes.push(`${dto.done ? 'Completed' : 'Reopened'} corrective action: ${step.description}`);
+        }
+        if (notes.length === 0) return this.get(user, actionId);
+
+        await this.prisma.$transaction(async (tx) => {
+            await tx.fiveSCorrectiveAction.update({ where: { id: stepId }, data });
+            await tx.fiveSActionEvent.createMany({
+                data: notes.map((note) => ({ actionId, actorId: actor.employeeId, type: FiveSActionEventType.UPDATED, note })),
+            });
+        });
+        return this.get(user, actionId);
+    }
+
+    async removeCorrectiveAction(user: AccessTokenPayload, actionId: string, stepId: string) {
+        const actor = await this.access.resolveActor(user);
+        const action = await this.actionOrThrow(actor, actionId);
+        const step = action.correctiveActions.find((c) => c.id === stepId);
+        if (!step) throw new NotFoundException('Corrective action not found');
+        this.assertCanManageSteps(actor, action);
+
+        await this.prisma.$transaction(async (tx) => {
+            await tx.fiveSCorrectiveAction.delete({ where: { id: stepId } });
+            await tx.fiveSActionEvent.create({
+                data: { actionId, actorId: actor.employeeId, type: FiveSActionEventType.UPDATED, note: `Removed corrective action: ${step.description}` },
+            });
+        });
+        return this.get(user, actionId);
+    }
+
     // ---------- helpers ----------
+
+    private canManageSteps(actor: FiveSActor, action: ActionRow): boolean {
+        return action.status === FiveSActionStatus.OPEN && (this.access.canCoordinateArea(actor, action.area) || action.ownerId === actor.employeeId);
+    }
+
+    private assertCanManageSteps(actor: FiveSActor, action: ActionRow) {
+        if (action.status !== FiveSActionStatus.OPEN) throw new ConflictException('Corrective actions can only change while the action is open');
+        if (!this.canManageSteps(actor, action)) throw new ForbiddenException('Only the action owner or the area coordinators can change corrective actions');
+    }
 
     private async actionOrThrow(actor: FiveSActor, actionId: string): Promise<ActionRow> {
         const action = await this.prisma.fiveSAction.findFirst({
@@ -267,6 +407,21 @@ export class ActionsService {
         const dueDate = dateOnly(a.dueDate);
         const coordinator = this.access.canCoordinateArea(actor, a.area);
         const isOwner = a.ownerId === actor.employeeId;
+        const canManageSteps = this.canManageSteps(actor, a);
+        const steps = a.correctiveActions.map((c) => {
+            const stepDue = dateOnly(c.dueDate);
+            return {
+                id: c.id,
+                description: c.description,
+                owner: person(c.owner),
+                dueDate: stepDue,
+                isOverdue: !c.completedAt && a.status === FiveSActionStatus.OPEN && !!stepDue && stepDue < today,
+                completedAt: c.completedAt,
+                completedBy: person(c.completedBy),
+                canComplete: a.status === FiveSActionStatus.OPEN && (canManageSteps || c.ownerId === actor.employeeId),
+            };
+        });
+        const stepsDone = steps.filter((c) => c.completedAt).length;
         return {
             id: a.id,
             reference: a.reference,
@@ -279,8 +434,8 @@ export class ActionsService {
             practiceLabel: PRACTICE_LABELS[a.practice],
             locationCount: a.locationCount,
             finding: a.finding,
-            affectedLocations: a.affectedLocations,
-            correctiveAction: a.correctiveAction,
+            correctiveActions: steps,
+            correctiveActionProgress: { done: stepsDone, total: steps.length },
             owner: person(a.owner),
             dueDate,
             // No due date means never overdue.
@@ -299,6 +454,9 @@ export class ActionsService {
                 canPlan: a.status !== FiveSActionStatus.VERIFIED && coordinator,
                 canEditText: a.status !== FiveSActionStatus.VERIFIED && (coordinator || isOwner),
                 canSubmit: a.status === FiveSActionStatus.OPEN && isOwner,
+                // Sending for verification also needs every step done; the UI explains what is missing.
+                allStepsDone: steps.length > 0 && stepsDone === steps.length,
+                canManageSteps,
                 canVerify: a.status === FiveSActionStatus.AWAITING_VERIFICATION && this.access.canVerifyAction(actor, a.area, a.ownerId),
             },
         };

@@ -282,10 +282,14 @@ export class AuditsService {
                         practice: checkpoint.practice,
                         locationCount: count,
                         checkpointText: checkpoint.text,
-                        finding:
+                        // Actions have no separate locations field; the audit's affected locations stay readable in the finding.
+                        finding: [
                             response.remark ||
-                            `${countLabel} problem location${count === 1 ? '' : 's'} found against checkpoint ${checkpoint.no} (${PRACTICE_LABELS[checkpoint.practice]}).`,
-                        affectedLocations: response.affectedLocations,
+                                `${countLabel} problem location${count === 1 ? '' : 's'} found against checkpoint ${checkpoint.no} (${PRACTICE_LABELS[checkpoint.practice]}).`,
+                            response.affectedLocations ? `Affected locations: ${response.affectedLocations}` : null,
+                        ]
+                            .filter(Boolean)
+                            .join('\n'),
                         ownerId: area.ownerId,
                         dueDate: null,
                         createdById: actor.employeeId,

@@ -30,6 +30,7 @@ import {
   primaryButton,
   secondaryButton,
 } from "@/components/five-s/ui";
+import { CorrectiveActions } from "@/components/five-s/actions/CorrectiveActions";
 import { cn } from "@/lib/utils";
 
 const FLOW: ActionStatus[] = ["OPEN", "AWAITING_VERIFICATION", "VERIFIED"];
@@ -85,7 +86,13 @@ export default function ActionDetailPage() {
             </button>
           )}
           {action.permissions.canSubmit && (
-            <button type="button" className={primaryButton} onClick={() => setDialog("submit")}>
+            <button
+              type="button"
+              className={primaryButton}
+              onClick={() => setDialog("submit")}
+              disabled={!action.permissions.allStepsDone}
+              title={action.permissions.allStepsDone ? undefined : "Tick every corrective action done first"}
+            >
               Mark complete
             </button>
           )}
@@ -122,6 +129,13 @@ export default function ActionDetailPage() {
           Returned for rework by {lastRework.actor?.name ?? "the verifier"} on {formatTimestamp(lastRework.createdAt)}: {lastRework.note}
         </ErrorNote>
       )}
+      {action.permissions.canSubmit && !action.permissions.allStepsDone && (
+        <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          {action.correctiveActionProgress.total === 0
+            ? "Add at least one corrective action. You can mark the action complete once every corrective action is done."
+            : `${action.correctiveActionProgress.total - action.correctiveActionProgress.done} of ${action.correctiveActionProgress.total} corrective actions still to do. You can mark the action complete once they are all done.`}
+        </p>
+      )}
       {action.status === "AWAITING_VERIFICATION" && isOwner && (
         <p className="rounded-lg bg-violet-50 px-4 py-2 text-sm text-violet-800">Waiting for someone else to verify. You cannot verify an action you own.</p>
       )}
@@ -141,11 +155,9 @@ export default function ActionDetailPage() {
             <KeyValue label="Finding">
               <span className="whitespace-pre-line">{action.finding}</span>
             </KeyValue>
-            <KeyValue label="Affected locations">{action.affectedLocations || <span className="text-slate-400">Not recorded</span>}</KeyValue>
-            <KeyValue label="Corrective action">
-              {action.correctiveAction ? <span className="whitespace-pre-line">{action.correctiveAction}</span> : <span className="text-slate-400">Not planned yet</span>}
-            </KeyValue>
           </Surface>
+
+          <CorrectiveActions action={action} />
 
           {action.completionDescription && (
             <Surface className="space-y-3 p-5">
@@ -215,8 +227,6 @@ function EditDialog({ action, onClose }: { action: ActionDetail; onClose: () => 
   const update = useUpdateAction();
   const { canPlan, canEditText } = action.permissions;
   const [finding, setFinding] = useState(action.finding);
-  const [affected, setAffected] = useState(action.affectedLocations ?? "");
-  const [corrective, setCorrective] = useState(action.correctiveAction ?? "");
   const [ownerId, setOwnerId] = useState(action.owner?.id ?? null);
   const [dueDate, setDueDate] = useState(action.dueDate ?? "");
   const [note, setNote] = useState("");
@@ -224,8 +234,6 @@ function EditDialog({ action, onClose }: { action: ActionDetail; onClose: () => 
   function save() {
     const body = {
       ...(canEditText && finding.trim() !== action.finding ? { finding: finding.trim() } : {}),
-      ...(canEditText && affected !== (action.affectedLocations ?? "") ? { affectedLocations: affected.trim() || null } : {}),
-      ...(canEditText && corrective !== (action.correctiveAction ?? "") ? { correctiveAction: corrective.trim() || null } : {}),
       ...(canPlan && ownerId !== (action.owner?.id ?? null) ? { ownerId } : {}),
       ...(canPlan && dueDate !== (action.dueDate ?? "") ? { dueDate: dueDate || null } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
@@ -263,12 +271,6 @@ function EditDialog({ action, onClose }: { action: ActionDetail; onClose: () => 
         {!!update.error && <ErrorNote>{errorMessage(update.error)}</ErrorNote>}
         <Field label="Finding" htmlFor="edit-finding">
           <textarea id="edit-finding" rows={3} className={inputClass} value={finding} disabled={!canEditText} maxLength={2000} onChange={(e) => setFinding(e.target.value)} />
-        </Field>
-        <Field label="Affected locations" htmlFor="edit-affected">
-          <input id="edit-affected" className={inputClass} value={affected} disabled={!canEditText} maxLength={2000} onChange={(e) => setAffected(e.target.value)} />
-        </Field>
-        <Field label="Corrective action" htmlFor="edit-corrective">
-          <textarea id="edit-corrective" rows={2} className={inputClass} value={corrective} disabled={!canEditText} maxLength={2000} onChange={(e) => setCorrective(e.target.value)} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Action owner" htmlFor="edit-owner" hint={canPlan ? undefined : "Set by the area owner, HOD or a verifier."}>

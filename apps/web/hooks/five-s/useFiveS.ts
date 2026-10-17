@@ -10,6 +10,7 @@ import {
   type AreaStatusFilter,
   type AuditListQuery,
   type AuditResponsePayload,
+  type CorrectiveActionPayload,
   type CreateActionPayload,
   type CreateAuditPayload,
   type CreateRedTagPayload,
@@ -22,6 +23,7 @@ import {
   type StandardPayload,
   type StandardStatus,
   type UpdateActionPayload,
+  type UpdateCorrectiveActionPayload,
   type UpdateAreaPayload,
   type UpdateAuditPayload,
   type UpdateRedTagPayload,
@@ -82,6 +84,10 @@ export function useFiveSDirectory() {
 
 export function useFiveSOverview(params: OverviewQuery) {
   return useFiveSQuery(["overview", params], (t) => FiveSService.overview(params, t));
+}
+
+export function useFiveSAnalytics(params: OverviewQuery) {
+  return useFiveSQuery(["analytics", params], (t) => FiveSService.analytics(params, t));
 }
 
 // ── Areas ─────────────────────────────────────────────────────────────────────
@@ -155,6 +161,21 @@ export function useCreateAction() {
 
 export function useUpdateAction() {
   return useFiveSMutation(({ id, body }: { id: string; body: UpdateActionPayload }, t) => FiveSService.updateAction(id, body, t));
+}
+
+export function useAddCorrectiveAction() {
+  return useFiveSMutation(({ id, body }: { id: string; body: CorrectiveActionPayload }, t) => FiveSService.addCorrectiveAction(id, body, t));
+}
+
+export function useUpdateCorrectiveAction() {
+  return useFiveSMutation(
+    ({ id, stepId, body }: { id: string; stepId: string; body: UpdateCorrectiveActionPayload }, t) =>
+      FiveSService.updateCorrectiveAction(id, stepId, body, t),
+  );
+}
+
+export function useRemoveCorrectiveAction() {
+  return useFiveSMutation(({ id, stepId }: { id: string; stepId: string }, t) => FiveSService.removeCorrectiveAction(id, stepId, t));
 }
 
 export function useSubmitAction() {

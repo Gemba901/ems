@@ -3,7 +3,7 @@
 import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { useCreateAction } from "@/hooks/five-s/useFiveS";
 import { useToast } from "@/contexts/toast.context";
 import { PRACTICE_LABELS, PRACTICE_ORDER } from "@/lib/five-s/template";
@@ -24,6 +24,13 @@ import {
   selectClass,
 } from "@/components/five-s/ui";
 
+const MAX_STEPS = 20;
+
+type StepDraft = { key: number; description: string; ownerId: string | null; dueDate: string };
+
+let stepKey = 0;
+const emptyStep = (): StepDraft => ({ key: ++stepKey, description: "", ownerId: null, dueDate: "" });
+
 function NewAction() {
   const router = useRouter();
   const params = useSearchParams();
@@ -32,24 +39,28 @@ function NewAction() {
   const [areaId, setAreaId] = useState<string | null>(params.get("areaId"));
   const [practice, setPractice] = useState<Practice>("SORT");
   const [finding, setFinding] = useState("");
-  const [affected, setAffected] = useState("");
-  const [corrective, setCorrective] = useState("");
+  const [steps, setSteps] = useState<StepDraft[]>([emptyStep()]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  function updateStep(key: number, patch: Partial<StepDraft>) {
+    setSteps((all) => all.map((s) => (s.key === key ? { ...s, ...patch } : s)));
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!areaId) return setFormError("Choose the area.");
     if (!finding.trim()) return setFormError("Describe the finding.");
+    const filled = steps.filter((s) => s.description.trim());
+    if (filled.some((s) => s.description.trim().length < 3)) return setFormError("Each corrective action needs at least 3 characters.");
     setFormError(null);
     create.mutate(
       {
         areaId,
         practice,
         finding: finding.trim(),
-        affectedLocations: affected.trim() || null,
-        correctiveAction: corrective.trim() || null,
+        correctiveActions: filled.map((s) => ({ description: s.description.trim(), ownerId: s.ownerId, dueDate: s.dueDate || null })),
         ownerId,
         dueDate: dueDate || null,
       },
@@ -63,7 +74,7 @@ function NewAction() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
       <Link href="/five-s/actions" className={linkButton}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Improvement actions
       </Link>
@@ -88,12 +99,57 @@ function NewAction() {
           <Field label="Finding" htmlFor="action-finding">
             <textarea id="action-finding" rows={3} className={inputClass} value={finding} maxLength={2000} onChange={(e) => setFinding(e.target.value)} />
           </Field>
-          <Field label="Affected locations" htmlFor="action-affected">
-            <input id="action-affected" className={inputClass} value={affected} maxLength={2000} onChange={(e) => setAffected(e.target.value)} />
-          </Field>
-          <Field label="Corrective action" htmlFor="action-corrective" hint="What will be done to fix it.">
-            <textarea id="action-corrective" rows={2} className={inputClass} value={corrective} maxLength={2000} onChange={(e) => setCorrective(e.target.value)} />
-          </Field>
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium text-slate-700">Corrective actions</legend>
+            <p className="text-xs text-slate-500">
+              The steps that fix the finding. Each step can have its own owner and due date; blank owners fall to the action owner. The action can only be
+              sent for verification once every step is ticked done.
+            </p>
+            {steps.map((step, i) => (
+              <div key={step.key} className="grid gap-3 rounded-lg border border-slate-200 p-3 lg:grid-cols-[minmax(0,1fr)_14rem_10rem_auto] lg:items-end">
+                <Field label={`Step ${i + 1}`} htmlFor={`step-${step.key}-description`}>
+                  <input
+                    id={`step-${step.key}-description`}
+                    className={inputClass}
+                    value={step.description}
+                    maxLength={2000}
+                    placeholder="What will be done"
+                    onChange={(e) => updateStep(step.key, { description: e.target.value })}
+                  />
+                </Field>
+                <Field label="Owner" htmlFor={`step-${step.key}-owner`}>
+                  <PersonSelect
+                    id={`step-${step.key}-owner`}
+                    value={step.ownerId}
+                    onChange={(ownerId) => updateStep(step.key, { ownerId })}
+                    emptyLabel="Action owner"
+                  />
+                </Field>
+                <Field label="Due date" htmlFor={`step-${step.key}-due`}>
+                  <input
+                    id={`step-${step.key}-due`}
+                    type="date"
+                    className={inputClass}
+                    value={step.dueDate}
+                    onChange={(e) => updateStep(step.key, { dueDate: e.target.value })}
+                  />
+                </Field>
+                <button
+                  type="button"
+                  className={secondaryButton}
+                  onClick={() => setSteps((all) => (all.length === 1 ? [emptyStep()] : all.filter((s) => s.key !== step.key)))}
+                  aria-label={`Remove step ${i + 1}`}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+            {steps.length < MAX_STEPS && (
+              <button type="button" className={secondaryButton} onClick={() => setSteps((all) => [...all, emptyStep()])}>
+                <Plus className="h-4 w-4" aria-hidden="true" /> Add corrective action
+              </button>
+            )}
+          </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Action owner" htmlFor="action-owner" hint="Defaults to the area owner.">
               <PersonSelect id="action-owner" value={ownerId} onChange={setOwnerId} emptyLabel="Area owner" />

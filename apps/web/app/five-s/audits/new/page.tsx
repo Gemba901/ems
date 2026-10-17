@@ -72,7 +72,7 @@ function NewAuditForm() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
       <Link href="/five-s/audits" className={linkButton}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 5S audits
       </Link>

@@ -141,6 +141,11 @@ function ActionList() {
                       </span>
                     )}
                     <span>· Owner: {a.owner?.name ?? "not assigned"}</span>
+                    {a.correctiveActionProgress.total > 0 && (
+                      <span>
+                        · {a.correctiveActionProgress.done}/{a.correctiveActionProgress.total} steps done
+                      </span>
+                    )}
                     <span>·</span>
                     <DueDate date={a.dueDate} overdue={a.isOverdue} />
                   </p>

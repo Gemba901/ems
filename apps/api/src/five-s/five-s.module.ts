@@ -6,6 +6,8 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { ActionsController } from './actions/actions.controller';
 import { ActionsService } from './actions/actions.service';
+import { AnalyticsController } from './analytics/analytics.controller';
+import { AnalyticsService } from './analytics/analytics.service';
 import { AreasController } from './areas/areas.controller';
 import { AreasService } from './areas/areas.service';
 import { AuditsController } from './audits/audits.controller';
@@ -27,6 +29,7 @@ import { StandardsService } from './standards/standards.service';
     imports: [TenancyModule, ConfigModule, PrismaModule, AuthModule],
     controllers: [
         OverviewController,
+        AnalyticsController,
         AreasController,
         AuditsController,
         ActionsController,
@@ -39,6 +42,7 @@ import { StandardsService } from './standards/standards.service';
         ModuleGuard,
         FiveSAccessService,
         OverviewService,
+        AnalyticsService,
         AreasService,
         AuditsService,
         ActionsService,

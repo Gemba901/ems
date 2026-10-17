@@ -365,8 +365,8 @@ export type ActionView = {
   practiceLabel: string;
   locationCount: number | null;
   finding: string;
-  affectedLocations: string | null;
-  correctiveAction: string | null;
+  correctiveActions: CorrectiveActionView[];
+  correctiveActionProgress: { done: number; total: number };
   owner: Person | null;
   dueDate: string | null;
   isOverdue: boolean;
@@ -380,8 +380,30 @@ export type ActionView = {
   createdBy: Person | null;
   createdAt: string;
   updatedAt: string;
-  permissions: { canPlan: boolean; canEditText: boolean; canSubmit: boolean; canVerify: boolean };
+  permissions: {
+    canPlan: boolean;
+    canEditText: boolean;
+    canSubmit: boolean;
+    canVerify: boolean;
+    allStepsDone: boolean;
+    canManageSteps: boolean;
+  };
 };
+
+export type CorrectiveActionView = {
+  id: string;
+  description: string;
+  owner: Person | null;
+  dueDate: string | null;
+  isOverdue: boolean;
+  completedAt: string | null;
+  completedBy: Person | null;
+  canComplete: boolean;
+};
+
+export type CorrectiveActionPayload = { description: string; ownerId?: string | null; dueDate?: string | null };
+
+export type UpdateCorrectiveActionPayload = Partial<CorrectiveActionPayload> & { done?: boolean };
 
 export type ActionDetail = ActionView & {
   history: {
@@ -402,16 +424,13 @@ export type CreateActionPayload = {
   areaId: string;
   practice: Practice;
   finding: string;
-  affectedLocations?: string | null;
-  correctiveAction?: string | null;
+  correctiveActions?: CorrectiveActionPayload[];
   ownerId?: string | null;
   dueDate?: string | null;
 };
 
 export type UpdateActionPayload = {
   finding?: string;
-  affectedLocations?: string | null;
-  correctiveAction?: string | null;
   ownerId?: string | null;
   dueDate?: string | null;
   note?: string;
@@ -584,6 +603,56 @@ export type Overview = {
 
 export type OverviewQuery = FiveSFilters & { status?: AreaStatusFilter };
 
+// Conformance % = (20 − points) ÷ 20 per S: the same abnormality points, shown "higher is better".
+export type AnalyticsProfile = {
+  meanLevel: number | null;
+  meanPoints: PracticePoints | null;
+  conformance: PracticePoints | null;
+  assessed: number;
+};
+
+export type DepartmentAnalytics = AnalyticsProfile & {
+  key: string;
+  id: string | null;
+  name: string;
+  areas: number;
+  notAssessed: number;
+  targetMet: number;
+  audits: number;
+  openActions: number;
+  overdueActions: number;
+  awaitingVerification: number;
+  pendingRedTags: number;
+  redTagsRaised: number;
+};
+
+export type Analytics = {
+  today: string;
+  method: string;
+  range: { from: string; to: string };
+  overall: AnalyticsProfile & { areas: number; audits: number; firstAudit: string | null };
+  departments: DepartmentAnalytics[];
+  areaProfiles: (AnalyticsProfile & {
+    id: string;
+    name: string;
+    departmentKey: string;
+    departmentName: string;
+    auditDate: string;
+    level: number;
+    targetLevel: number;
+    points: PracticePoints;
+    totalPoints: number;
+  })[];
+  trend: { month: string; audits: number; meanLevel: number; meanTotalPoints: number; byDepartment: Record<string, number> }[];
+  checkpoints: { no: number; practice: Practice; text: string; points: number; auditsWithFindings: number }[];
+  redTags: {
+    total: number;
+    byReason: { key: RedTagReason; count: number }[];
+    byStatus: { key: RedTagStatus; count: number }[];
+    byDepartment: ({ key: string; name: string } & Record<RedTagStatus, number>)[];
+  };
+};
+
 export type ResponsibilityRow = {
   id: string;
   responsibility: Responsibility;
@@ -609,6 +678,7 @@ export const FiveSService = {
   capabilities: (token: string) => get<Capabilities>("/me/capabilities", token),
   directory: (token: string) => get<Directory>("/directory", token),
   overview: (params: OverviewQuery, token: string) => get<Overview>(`/overview${query(params)}`, token),
+  analytics: (params: OverviewQuery, token: string) => get<Analytics>(`/analytics${query(params)}`, token),
 
   listAreas: (params: { departmentId?: string; ownerId?: string; status?: AreaStatusFilter }, token: string) =>
     get<AreaSummary[]>(`/areas${query(params)}`, token),
@@ -630,6 +700,12 @@ export const FiveSService = {
   getAction: (id: string, token: string) => get<ActionDetail>(`/actions/${id}`, token),
   createAction: (body: CreateActionPayload, token: string) => send<{ id: string; reference: string }>("POST", "/actions", body, token),
   updateAction: (id: string, body: UpdateActionPayload, token: string) => send<ActionDetail>("PATCH", `/actions/${id}`, body, token),
+  addCorrectiveAction: (id: string, body: CorrectiveActionPayload, token: string) =>
+    send<ActionDetail>("POST", `/actions/${id}/corrective-actions`, body, token),
+  updateCorrectiveAction: (id: string, stepId: string, body: UpdateCorrectiveActionPayload, token: string) =>
+    send<ActionDetail>("PATCH", `/actions/${id}/corrective-actions/${stepId}`, body, token),
+  removeCorrectiveAction: (id: string, stepId: string, token: string) =>
+    send<ActionDetail>("DELETE", `/actions/${id}/corrective-actions/${stepId}`, undefined, token),
   submitAction: (id: string, body: { completionDescription: string; completionEvidenceUrls?: string[] }, token: string) =>
     send<ActionDetail>("POST", `/actions/${id}/submit`, body, token),
   verifyAction: (id: string, body: { outcome: "VERIFIED" | "REWORK"; remarks?: string }, token: string) =>

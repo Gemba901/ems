@@ -94,6 +94,7 @@ export class FiveSAccessService {
                 ...(actor.departmentId ? [{ departmentId: actor.departmentId }] : []),
                 { ownerId: me },
                 { actions: { some: { ownerId: me } } },
+                { actions: { some: { correctiveActions: { some: { ownerId: me } } } } },
                 { redTags: { some: { ownerId: me } } },
                 { routines: { some: { responsibleId: me } } },
                 { audits: { some: { auditorId: me } } },

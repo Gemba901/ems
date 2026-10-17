@@ -17,7 +17,7 @@ function NewRoutine() {
   const create = useCreateRoutine();
   if (!caps) return <Loading />;
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
       <Link href="/five-s/standards?tab=routines" className={linkButton}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Standards & routines
       </Link>

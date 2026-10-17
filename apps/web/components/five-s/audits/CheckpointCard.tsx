@@ -12,43 +12,43 @@ import { cn } from "@/lib/utils";
 // Class strings are spelled out in full so Tailwind keeps them.
 const COUNT_TONES: Record<number, { idle: string; selected: string; card: string; dot: string; badge: string }> = {
   0: {
-    idle: "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
-    selected: "border-emerald-600 bg-emerald-600 text-white ring-emerald-600",
+    idle: "border-slate-200 bg-white text-emerald-800 hover:bg-emerald-50",
+    selected: "border-transparent bg-emerald-600 text-white",
     card: "border-emerald-300",
     dot: "bg-emerald-600 text-white",
     badge: "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200",
   },
   1: {
-    idle: "border-lime-300 bg-lime-50 text-lime-800 hover:bg-lime-100",
-    selected: "border-lime-600 bg-lime-600 text-white ring-lime-600",
+    idle: "border-slate-200 bg-white text-lime-800 hover:bg-lime-50",
+    selected: "border-transparent bg-lime-600 text-white",
     card: "border-lime-300",
     dot: "bg-lime-600 text-white",
     badge: "bg-lime-50 text-lime-800 ring-1 ring-lime-200",
   },
   2: {
-    idle: "border-yellow-300 bg-yellow-50 text-yellow-800 hover:bg-yellow-100",
-    selected: "border-yellow-400 bg-yellow-400 text-yellow-950 ring-yellow-500",
+    idle: "border-slate-200 bg-white text-yellow-800 hover:bg-yellow-50",
+    selected: "border-transparent bg-yellow-400 text-yellow-950",
     card: "border-yellow-300",
     dot: "bg-yellow-400 text-yellow-950",
     badge: "bg-yellow-50 text-yellow-800 ring-1 ring-yellow-200",
   },
   3: {
-    idle: "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100",
-    selected: "border-amber-500 bg-amber-500 text-amber-950 ring-amber-500",
+    idle: "border-slate-200 bg-white text-amber-800 hover:bg-amber-50",
+    selected: "border-transparent bg-amber-500 text-amber-950",
     card: "border-amber-300",
     dot: "bg-amber-500 text-amber-950",
     badge: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
   },
   4: {
-    idle: "border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100",
-    selected: "border-orange-600 bg-orange-600 text-white ring-orange-600",
+    idle: "border-slate-200 bg-white text-orange-800 hover:bg-orange-50",
+    selected: "border-transparent bg-orange-600 text-white",
     card: "border-orange-300",
     dot: "bg-orange-600 text-white",
     badge: "bg-orange-50 text-orange-800 ring-1 ring-orange-200",
   },
   5: {
-    idle: "border-red-300 bg-red-50 text-red-800 hover:bg-red-100",
-    selected: "border-red-600 bg-red-600 text-white ring-red-600",
+    idle: "border-slate-200 bg-white text-red-800 hover:bg-red-50",
+    selected: "border-transparent bg-red-600 text-white",
     card: "border-red-300",
     dot: "bg-red-600 text-white",
     badge: "bg-red-50 text-red-800 ring-1 ring-red-200",
@@ -117,7 +117,7 @@ export function CheckpointEditor({
                   onClick={() => onCount(v)}
                   className={cn(
                     "min-h-11 min-w-11 rounded-lg border px-3 text-sm font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60",
-                    selected ? cn("ring-2 ring-offset-2", toneFor(v).selected) : toneFor(v).idle,
+                    selected ? toneFor(v).selected : toneFor(v).idle,
                   )}
                 >
                   {countLabel(v)}

@@ -19,6 +19,7 @@ import {
   ErrorNote,
   Field,
   FiveSDialog,
+  HEADER_ACTIONS,
   KeyValue,
   Loading,
   OccurrenceBadge,
@@ -72,7 +73,7 @@ export default function RoutineDetailPage() {
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold text-slate-900">
             {r.title}
             {!r.isActive && <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 align-middle text-sm font-medium text-slate-600">Inactive</span>}
@@ -85,7 +86,7 @@ export default function RoutineDetailPage() {
           </p>
         </div>
         {r.permissions.canEdit && (
-          <div className="flex flex-wrap gap-2">
+          <div className={HEADER_ACTIONS}>
             <button
               type="button"
               className={secondaryButton}

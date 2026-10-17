@@ -18,6 +18,7 @@ import {
   EmptyState,
   ErrorNote,
   FiveSDialog,
+  HEADER_ACTIONS,
   KeyValue,
   LevelValue,
   Loading,
@@ -53,7 +54,7 @@ export default function AreaDetailPage() {
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900">{area.name}</h1>
             {area.isSample && <SampleBadge />}
@@ -63,7 +64,7 @@ export default function AreaDetailPage() {
             {area.department?.name ?? "No department"} · Owner: {area.owner?.name ?? "not set"} · {AUDIT_FREQUENCY_LABELS[area.auditFrequency]} audits
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={HEADER_ACTIONS}>
           {area.permissions.canEdit && (
             <>
               <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>

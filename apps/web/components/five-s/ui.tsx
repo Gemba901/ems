@@ -48,14 +48,17 @@ export const dangerButton =
 export const selectClass =
   "min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-500";
 
+export const HEADER_ACTIONS = "flex shrink-0 flex-wrap gap-2 sm:justify-end [&>*]:whitespace-nowrap";
+
 export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
   return (
     <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
         {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {/* The description wraps instead of the buttons: actions keep their width and stay on one line. */}
+      {actions && <div className={HEADER_ACTIONS}>{actions}</div>}
     </header>
   );
 }

@@ -12,6 +12,7 @@ import {
   ErrorNote,
   Field,
   FiveSDialog,
+  HEADER_ACTIONS,
   KeyValue,
   Loading,
   PhotoGallery,
@@ -52,7 +53,7 @@ export default function RedTagDetailPage() {
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900">{tag.itemName}</h1>
             <RedTagStatusBadge status={tag.status} />
@@ -65,7 +66,7 @@ export default function RedTagDetailPage() {
             </Link>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={HEADER_ACTIONS}>
           {tag.permissions.canEdit && (
             <button type="button" className={secondaryButton} onClick={() => setDialog("edit")}>
               <Pencil className="h-4 w-4" aria-hidden="true" /> Edit

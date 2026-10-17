@@ -11,6 +11,7 @@ import {
   ErrorNote,
   FileList,
   FiveSDialog,
+  HEADER_ACTIONS,
   KeyValue,
   Loading,
   StandardStatusBadge,
@@ -65,7 +66,7 @@ export default function StandardDetailPage() {
       )}
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900">{s.title}</h1>
             <StandardStatusBadge status={s.status} />
@@ -78,7 +79,7 @@ export default function StandardDetailPage() {
             · Owner: {s.owner?.name ?? "—"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={HEADER_ACTIONS}>
           {s.status === "DRAFT" && s.permissions.canEdit && (
             <>
               <button type="button" className={dangerButton} onClick={() => setDialog("delete")}>

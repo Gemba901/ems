@@ -15,6 +15,7 @@ import {
   Field,
   FileUploader,
   FiveSDialog,
+  HEADER_ACTIONS,
   KeyValue,
   Loading,
   PersonSelect,
@@ -55,7 +56,7 @@ export default function ActionDetailPage() {
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900">{action.reference}</h1>
             <PracticeBadge practice={action.practice} />
@@ -79,7 +80,7 @@ export default function ActionDetailPage() {
             )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={HEADER_ACTIONS}>
           {(action.permissions.canPlan || action.permissions.canEditText) && (
             <button type="button" className={secondaryButton} onClick={() => setDialog("edit")}>
               <Pencil className="h-4 w-4" aria-hidden="true" /> Edit

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ClipboardList, Lock, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Lock, Pencil, Trash2 } from "lucide-react";
 import {
   useDeleteAudit,
   useFiveSAudit,
@@ -14,7 +14,7 @@ import {
 } from "@/hooks/five-s/useFiveS";
 import { useToast } from "@/contexts/toast.context";
 import { CHECKSHEET_LABEL, PRACTICE_AIMS, PRACTICE_LABELS, PRACTICE_ORDER } from "@/lib/five-s/template";
-import { COUNTING_RULES, SELECTION_RULES, previewScore } from "@/lib/five-s/scoring";
+import { previewScore } from "@/lib/five-s/scoring";
 import { FiveSApiError, type AuditCheckpoint, type AuditDetail, type AuditResponsePayload } from "@/services/five-s.service";
 import { ResultSummary } from "@/components/five-s/audits/ResultSummary";
 import { CheckpointEditor, CheckpointResult } from "@/components/five-s/audits/CheckpointCard";
@@ -90,28 +90,6 @@ function AuditHeader({ audit, onEdit }: { audit: AuditDetail; onEdit?: () => voi
         </div>
       </dl>
     </Surface>
-  );
-}
-
-function CountingInstructions({ defaultOpen }: { defaultOpen: boolean }) {
-  return (
-    <details open={defaultOpen} className="group rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-blue-900">
-        <ClipboardList className="h-4 w-4" aria-hidden="true" /> Counting instructions
-        <span className="ml-auto text-xs font-normal text-blue-800 group-open:hidden">Show</span>
-        <span className="ml-auto hidden text-xs font-normal text-blue-800 group-open:inline">Hide</span>
-      </summary>
-      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-blue-950">
-        {COUNTING_RULES.map((r) => (
-          <li key={r}>{r}</li>
-        ))}
-      </ul>
-      <ul className="mt-3 space-y-1 border-t border-blue-200 pt-3 text-xs text-blue-900">
-        {SELECTION_RULES.map((r) => (
-          <li key={r}>• {r}</li>
-        ))}
-      </ul>
-    </details>
   );
 }
 
@@ -229,7 +207,6 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
         </div>
       </div>
 
-      <CountingInstructions defaultOpen={preview.answered === 0} />
 
       <ul className="space-y-8">
         {PRACTICE_ORDER.map((p, i) => (

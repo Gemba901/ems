@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Plus } from "lucide-react";
 import { useFiveSCapabilities, useFiveSOverview } from "@/hooks/five-s/useFiveS";
 import { PRACTICE_LABELS, PRACTICE_ORDER } from "@/lib/five-s/template";
@@ -27,20 +26,10 @@ import {
   selectClass,
 } from "@/components/five-s/ui";
 
-const PRACTICE_COLORS = ["#2563eb", "#0d9488", "#f59e0b", "#8b5cf6", "#ef4444"];
-
 export default function FiveSOverviewPage() {
   const [filters, setFilters] = useState<OverviewQuery>({ status: "active" });
   const { data, isLoading, error } = useFiveSOverview(filters);
   const { data: caps } = useFiveSCapabilities();
-
-  const chartData = useMemo(
-    () =>
-      (data?.areas ?? [])
-        .filter((a) => a.latest)
-        .map((a) => ({ name: a.name, ...Object.fromEntries(PRACTICE_ORDER.map((p) => [PRACTICE_LABELS[p], a.latest!.points[p]])) })),
-    [data?.areas],
-  );
 
   return (
     <div className="space-y-6">
@@ -183,27 +172,6 @@ export default function FiveSOverviewPage() {
               </div>
             )}
           </Surface>
-
-          {chartData.length > 0 && (
-            <Surface className="p-5">
-              <h2 className="text-base font-semibold text-slate-900">Abnormality points by S (latest audit per area)</h2>
-              <p className="mb-4 text-xs text-slate-500">Each S can score 0–20 points. Shorter bars mean fewer problem locations.</p>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    {PRACTICE_ORDER.map((p, i) => (
-                      <Bar key={p} dataKey={PRACTICE_LABELS[p]} stackId="s" fill={PRACTICE_COLORS[i]} />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Surface>
-          )}
 
           <Surface>
             <div className="border-b border-slate-100 px-5 py-3">

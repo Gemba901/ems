@@ -143,23 +143,40 @@ export class AuditListQueryDto extends FiveSFilterDto {
 
 // ---------- Improvement actions ----------
 
+// One step of an action plan.
+export class CorrectiveActionInputDto {
+    @Trim() @IsString() @Length(3, 2000, { message: 'Describe the corrective action (at least 3 characters)' }) description!: string;
+    @IsOptional() @ValidateIf((o) => o.ownerId !== null) @IsUUID() ownerId?: string | null;
+    @IsOptional() @ValidateIf((o) => o.dueDate !== null) @IsDateOnly() dueDate?: string | null;
+}
+
 export class CreateActionDto {
     @IsUUID() areaId!: string;
     @IsEnum(FiveSPractice) practice!: FiveSPractice;
     @Trim() @IsString() @Length(3, 2000) finding!: string;
-    @IsOptional() @Trim() @IsString() @MaxLength(1000) affectedLocations?: string | null;
-    @IsOptional() @Trim() @IsString() @MaxLength(2000) correctiveAction?: string | null;
     @IsOptional() @IsUUID() ownerId?: string | null;
     @IsOptional() @IsDateOnly() dueDate?: string | null;
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(20)
+    @ValidateNested({ each: true })
+    @Type(() => CorrectiveActionInputDto)
+    correctiveActions?: CorrectiveActionInputDto[];
 }
 
 export class UpdateActionDto {
     @IsOptional() @Trim() @IsString() @Length(3, 2000) finding?: string;
-    @IsOptional() @Trim() @IsString() @MaxLength(1000) affectedLocations?: string | null;
-    @IsOptional() @Trim() @IsString() @MaxLength(2000) correctiveAction?: string | null;
     @IsOptional() @ValidateIf((o) => o.ownerId !== null) @IsUUID() ownerId?: string | null;
     @IsOptional() @ValidateIf((o) => o.dueDate !== null) @IsDateOnly() dueDate?: string | null;
     @IsOptional() @Trim() @IsString() @MaxLength(500) note?: string;
+}
+
+export class UpdateCorrectiveActionDto {
+    @IsOptional() @Trim() @IsString() @Length(3, 2000, { message: 'Describe the corrective action (at least 3 characters)' }) description?: string;
+    @IsOptional() @ValidateIf((o) => o.ownerId !== null) @IsUUID() ownerId?: string | null;
+    @IsOptional() @ValidateIf((o) => o.dueDate !== null) @IsDateOnly() dueDate?: string | null;
+    @IsOptional() @IsBoolean() done?: boolean;
 }
 
 export class SubmitActionDto {

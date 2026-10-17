@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards, UsePipes } from '@nestjs/common';
 import { ModuleType } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
@@ -10,7 +10,15 @@ import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import { workValidationPipe } from 'src/work/dto/common.dto';
-import { ActionListQueryDto, CreateActionDto, SubmitActionDto, UpdateActionDto, VerifyActionDto } from '../dto/five-s.dto';
+import {
+    ActionListQueryDto,
+    CorrectiveActionInputDto,
+    CreateActionDto,
+    SubmitActionDto,
+    UpdateActionDto,
+    UpdateCorrectiveActionDto,
+    VerifyActionDto,
+} from '../dto/five-s.dto';
 import { ActionsService } from './actions.service';
 
 // Improvement actions: Open -> Awaiting Verification -> Verified. Rework returns an action to Open.
@@ -50,5 +58,25 @@ export class ActionsController {
     @Post(':id/verify')
     verify(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string, @Body() dto: VerifyActionDto) {
         return this.service.verify(user, id, dto);
+    }
+
+    @Post(':id/corrective-actions')
+    addCorrectiveAction(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CorrectiveActionInputDto) {
+        return this.service.addCorrectiveAction(user, id, dto);
+    }
+
+    @Patch(':id/corrective-actions/:stepId')
+    updateCorrectiveAction(
+        @CurrentUser() user: AccessTokenPayload,
+        @Param('id', ParseUUIDPipe) id: string,
+        @Param('stepId', ParseUUIDPipe) stepId: string,
+        @Body() dto: UpdateCorrectiveActionDto,
+    ) {
+        return this.service.updateCorrectiveAction(user, id, stepId, dto);
+    }
+
+    @Delete(':id/corrective-actions/:stepId')
+    removeCorrectiveAction(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string, @Param('stepId', ParseUUIDPipe) stepId: string) {
+        return this.service.removeCorrectiveAction(user, id, stepId);
     }
 }

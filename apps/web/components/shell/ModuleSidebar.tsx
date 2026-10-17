@@ -224,7 +224,7 @@ export function ModuleSidebar({
                 key={group.name}
                 role="group"
                 aria-label={group.name}
-                className={`flex flex-col items-center gap-1 ${index ? "mt-2 w-full border-t border-slate-100 pt-2" : ""}`}
+                className={`flex w-full flex-col items-center gap-1 ${index ? "mt-3 border-t border-slate-300 pt-3" : ""}`}
               >
                 {group.items.map((item) => (
                   <RailLink
@@ -336,10 +336,10 @@ export function ModuleSidebar({
         )}
         <nav
           data-tour={collapsed ? undefined : dataTour}
-          className="min-h-0 flex-1 space-y-6 overflow-y-auto thin-scrollbar px-3 pb-6 pt-3">
-          {visibleGroups.map((group) => (
-            <div key={group.name}>
-              <p className="mx-3 mb-2 border-b border-slate-200 pb-2 text-xs font-medium text-slate-400">
+          className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 pb-6 pt-3">
+          {visibleGroups.map((group, index) => (
+            <div key={group.name} role="group" aria-label={group.name} className={index ? "mt-4 border-t border-slate-200 pt-4" : ""}>
+              <p className="mx-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 {group.name}
               </p>
               {group.items.map((item) => {

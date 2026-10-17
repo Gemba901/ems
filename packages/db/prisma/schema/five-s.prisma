@@ -234,8 +234,6 @@ model FiveSAction {
   locationCount          Int?
   checkpointText         String?
   finding                String
-  affectedLocations      String?
-  correctiveAction       String?
   ownerId                String?
   dueDate                DateTime?         @db.Date
   status                 FiveSActionStatus @default(OPEN)
@@ -249,19 +247,44 @@ model FiveSAction {
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  area         FiveSArea          @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  audit        FiveSAudit?        @relation(fields: [auditId], references: [id], onDelete: Restrict)
-  owner        Employee?          @relation("FiveSActionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  verifiedBy   Employee?          @relation("FiveSActionVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
-  createdBy    Employee           @relation("FiveSActionCreatedBy", fields: [createdById], references: [id])
-  events       FiveSActionEvent[]
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  area              FiveSArea               @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  audit             FiveSAudit?             @relation(fields: [auditId], references: [id], onDelete: Restrict)
+  owner             Employee?               @relation("FiveSActionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  verifiedBy        Employee?               @relation("FiveSActionVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  createdBy         Employee                @relation("FiveSActionCreatedBy", fields: [createdById], references: [id])
+  events            FiveSActionEvent[]
+  correctiveActions FiveSCorrectiveAction[]
 
   @@unique([organizationId, reference])
   @@unique([auditId, checkpointNo])
   @@index([organizationId, status])
   @@index([areaId, status])
   @@index([ownerId, status])
+}
+
+// One step of an action plan. Each has its own owner and due date and is ticked done on its own;
+// the plan can only be sent for verification once every step is done.
+model FiveSCorrectiveAction {
+  id            String    @id @default(uuid())
+  actionId      String
+  sortOrder     Int
+  description   String
+  ownerId       String?
+  dueDate       DateTime? @db.Date
+  completedAt   DateTime?
+  completedById String?
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  action      FiveSAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  owner       Employee?   @relation("FiveSCorrectiveActionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  completedBy Employee?   @relation("FiveSCorrectiveActionCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  createdBy   Employee    @relation("FiveSCorrectiveActionCreatedBy", fields: [createdById], references: [id])
+
+  @@index([actionId, sortOrder])
+  @@index([ownerId, completedAt])
 }
 
 model FiveSActionEvent {

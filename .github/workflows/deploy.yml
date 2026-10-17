@@ -75,6 +75,9 @@ jobs:
             docker run -d \
               --name gemba-api \
               --restart unless-stopped \
+              --memory 448m \
+              --memory-swap 704m \
+              -e NODE_OPTIONS=--max-old-space-size=320 \
               -p 5000:5000 \
               --env-file /home/ubuntu/.env \
               --log-driver=awslogs \
@@ -114,6 +117,9 @@ jobs:
             docker run -d \
               --name gemba-api-staging \
               --restart unless-stopped \
+              --memory 320m \
+              --memory-swap 576m \
+              -e NODE_OPTIONS=--max-old-space-size=224 \
               -p 5001:5000 \
               --env-file /home/ubuntu/.env.staging \
               --log-driver=awslogs \

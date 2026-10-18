@@ -8,7 +8,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import { DepartmentsService, DepartmentWithCount } from "@/services/departments.service";
-import { MAX_SETUP_NAMES, namesFromColumn, reviewDepartments, suggestColumn } from "./department-setup";
+import { MAX_SETUP_NAMES, columnSummary, namesFromColumn, reviewDepartments, sheetOrigin, suggestColumn } from "./department-setup";
 
 const inputClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600";
 const secondaryClass = "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
@@ -33,6 +33,8 @@ function DepartmentSetup() {
   const [sheet, setSheet] = useState("");
   const [header, setHeader] = useState(0);
   const [column, setColumn] = useState(-1);
+  // Where the chosen worksheet starts (sheets don't always begin at A1), so labels show real Excel rows/columns.
+  const [origin, setOrigin] = useState({ row: 0, col: 0 });
   const [reading, setReading] = useState(false);
   const [fileError, setFileError] = useState("");
   const fileVersion = useRef(0);
@@ -65,7 +67,18 @@ function DepartmentSetup() {
     const data = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: "", blankrows: true, raw: false });
     const suggestion = suggestColumn(data);
     setSheet(name); setHeader(suggestion?.header ?? 0); setColumn(suggestion?.column ?? -1);
+    setOrigin(sheetOrigin(wb.Sheets[name]?.['!ref']));
   }
+
+  /** Use another row as the header row, and pick its department column if it has one (never an arbitrary column). */
+  function chooseHeader(row: number) {
+    setHeader(row);
+    setColumn(suggestColumn([rows[row] ?? []])?.column ?? -1);
+  }
+
+  // Real Excel labels for a grid row / column.
+  const excelRow = (i: number) => origin.row + i + 1;
+  const excelCol = (c: number) => XLSX.utils.encode_col(origin.col + c);
 
   async function readFile(file: File) {
     const version = ++fileVersion.current;
@@ -138,10 +151,22 @@ function DepartmentSetup() {
           <p className="break-all text-sm font-medium">{fileName}</p>
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="space-y-1 text-sm">Worksheet<select aria-label="Worksheet" value={sheet} onChange={e => chooseSheet(workbook, e.target.value)} className={inputClass}>{workbook.SheetNames.map(name => <option key={name}>{name}</option>)}</select></label>
-            <label className="space-y-1 text-sm">Header row<select aria-label="Header row" value={header} onChange={e => { setHeader(Number(e.target.value)); setColumn(-1); }} className={inputClass}>{rows.slice(0, 20).map((_, i) => <option key={i} value={i}>Excel row {i + 1}</option>)}</select></label>
-            <label className="space-y-1 text-sm">Department column<select aria-label="Department column" value={column} onChange={e => setColumn(Number(e.target.value))} className={inputClass}><option value={-1}>Choose column</option>{(rows[header] ?? []).map((value, i) => <option key={i} value={i}>{XLSX.utils.encode_col(i)} · {String(value || "Untitled")}</option>)}</select></label>
+            <label className="space-y-1 text-sm">Header row<select aria-label="Header row" value={header} onChange={e => chooseHeader(Number(e.target.value))} className={inputClass}>{rows.slice(0, 20).map((_, i) => <option key={i} value={i}>Excel row {excelRow(i)}</option>)}</select></label>
+            <label className="space-y-1 text-sm">Department column<select aria-label="Department column" value={column} onChange={e => setColumn(Number(e.target.value))} className={inputClass}><option value={-1}>Choose column</option>{(rows[header] ?? []).map((value, i) => <option key={i} value={i}>{excelCol(i)} · {String(value || "Untitled")}</option>)}</select></label>
           </div>
-          {column >= 0 && <p className="text-xs text-slate-600">First values: {namesFromColumn(rows, header, column).slice(0, 4).join(" · ") || "No values below this header."}</p>}
+          <SheetPreview rows={rows} header={header} column={column} excelRow={excelRow} excelCol={excelCol}
+            onPickHeader={chooseHeader} onPickColumn={setColumn} />
+          {column < 0
+            ? <p role="status" className="text-xs font-medium text-amber-900">No column headed “Department” was found in Excel row {excelRow(header)}. Click the department column’s letter or heading in the preview, or choose another header row.</p>
+            : (() => {
+              const summary = columnSummary(rows, header, column);
+              return summary.count === 0
+                ? <p role="status" className="text-xs font-medium text-amber-900">Column {excelCol(column)} has no values below Excel row {excelRow(header)}.</p>
+                : <p role="status" className="text-xs text-slate-700">
+                  <span className="font-semibold">{summary.count}</span> value{summary.count === 1 ? "" : "s"} in column {excelCol(column)} ({summary.distinct} different), Excel rows {excelRow(summary.first)}–{excelRow(summary.last)}.
+                  {" "}First: {namesFromColumn(rows, header, column).slice(0, 4).join(" · ")}
+                </p>;
+            })()}
           <button type="button" disabled={column < 0 || !namesFromColumn(rows, header, column).length} className={secondaryClass} onClick={() => editText([text, ...namesFromColumn(rows, header, column)].filter(Boolean).join("\n"))}>Add this column to the list</button>
         </div>}
         <label className="block space-y-2 text-sm font-medium" htmlFor="department-names"><span>Department names</span><textarea id="department-names" value={text} onChange={e => editText(e.target.value)} rows={7} placeholder={"Administration\nProduction\nQuality"} className={`${inputClass} font-normal`} /></label>
@@ -175,4 +200,70 @@ function DepartmentSetup() {
       {busy ? <span className="text-sm text-slate-500">Finishing department setup…</span> : <Link href="/ems/onboarding/new" className={secondaryClass}>Continue to employee import →</Link>}
     </div>
   </div>;
+}
+
+/**
+ * A small view of the worksheet around the header row, with real Excel row numbers and column letters.
+ * The header row and chosen column are highlighted; clicking a row number makes it the header row,
+ * and clicking a column letter or heading makes it the department column.
+ */
+function SheetPreview({ rows, header, column, excelRow, excelCol, onPickHeader, onPickColumn }: {
+  rows: unknown[][]; header: number; column: number;
+  excelRow: (i: number) => number; excelCol: (c: number) => string;
+  onPickHeader: (row: number) => void; onPickColumn: (col: number) => void;
+}) {
+  if (!rows.length) return <p className="text-xs text-slate-500">This worksheet is empty.</p>;
+  const start = Math.max(0, header - 1);                       // one row above the header, for context
+  const shown = rows.slice(start, Math.min(rows.length, header + 9)).map((row, k) => ({ i: start + k, row }));
+  const width = Math.min(40, Math.max(1, ...shown.map(({ row }) => row.length)));
+  const cols = Array.from({ length: width }, (_, c) => c);
+  const cell = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
+  return (
+    <div className="max-h-80 overflow-auto rounded-lg border border-slate-300 bg-white" aria-label="Worksheet preview">
+      <table className="border-collapse text-xs">
+        <thead className="sticky top-0 z-10 bg-slate-100">
+          <tr>
+            <th className="sticky left-0 z-20 border border-slate-200 bg-slate-100 px-2 py-1 text-slate-500">Row</th>
+            {cols.map((c) => (
+              <th key={c} className={`border border-slate-200 px-2 py-1 ${c === column ? "bg-violet-200 text-violet-950" : "text-slate-600"}`}>
+                <button type="button" onClick={() => onPickColumn(c)} className="w-full font-semibold hover:underline" aria-label={`Use column ${excelCol(c)} for departments`}>
+                  {excelCol(c)}
+                </button>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map(({ i, row }) => {
+            const isHeader = i === header;
+            return (
+              <tr key={i} className={isHeader ? "bg-violet-50 font-semibold" : ""}>
+                <th className={`sticky left-0 border border-slate-200 px-2 py-1 text-right ${isHeader ? "bg-violet-100 text-violet-950" : "bg-slate-50 text-slate-500"}`}>
+                  <button type="button" onClick={() => onPickHeader(i)} className="hover:underline" aria-label={`Use Excel row ${excelRow(i)} as the header row`}>
+                    {excelRow(i)}
+                  </button>
+                </th>
+                {cols.map((c) => {
+                  const text = cell(row[c]);
+                  const inColumn = c === column;
+                  return (
+                    <td key={c} title={text} className={`max-w-[12rem] truncate border border-slate-200 px-2 py-1 ${
+                      inColumn && isHeader ? "bg-violet-300 text-violet-950" : inColumn ? "bg-violet-100 text-slate-900" : "text-slate-700"}`}>
+                      {isHeader && text
+                        ? <button type="button" onClick={() => onPickColumn(c)} className="max-w-full truncate hover:underline">{text}</button>
+                        : text}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="sticky left-0 border-t border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500">
+        Showing Excel rows {excelRow(shown[0].i)}–{excelRow(shown[shown.length - 1].i)}{width === 40 ? ", first 40 columns" : ""}.
+        Click a row number to use it as the header row; click a column letter or heading to choose the department column.
+      </p>
+    </div>
+  );
 }

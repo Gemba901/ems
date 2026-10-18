@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { reviewDepartments, namesFromColumn, suggestColumn } from '../app/ems/onboarding/departments/department-setup';
+import { reviewDepartments, namesFromColumn, suggestColumn, sheetOrigin, columnSummary } from '../app/ems/onboarding/departments/department-setup';
 
 test('repeated employees produce one department entry, with an occurrence count', () => {
   assert.deepEqual(reviewDepartments('Production\n production \n\nQuality', []), [
@@ -31,4 +31,22 @@ test('finds a department header below workbook title rows', () => {
 });
 test('extracts only the chosen column below the chosen header, excluding blanks', () => {
   assert.deepEqual(namesFromColumn([['Company'], ['Name', 'Department'], ['Sam', ' Production '], ['Faith', ''], ['Ann', 'Quality']], 1, 1), ['Production', 'Quality']);
+});
+test('recognises the template heading "Current Department" below a key row', () => {
+  const rows = [['CLIENT DATA SHEET · 27 columns · Key: …'], ['Company Code', 'Employee Code', 'Current Department'], ['GPL', 'EMP-001', 'Production']];
+  assert.deepEqual(suggestColumn(rows), { header: 1, column: 2 });
+});
+test('prefers the plain Department column over a combined "Plant & Department" column', () => {
+  assert.deepEqual(suggestColumn([['Department', 'Plant & Department'], ['Quality', 'Head Office - Quality']]), { header: 0, column: 0 });
+});
+test('reads where a worksheet starts, for real row and column labels', () => {
+  assert.deepEqual(sheetOrigin('A1:AA999'), { row: 0, col: 0 });
+  assert.deepEqual(sheetOrigin('B3:N262'), { row: 2, col: 1 });
+  assert.deepEqual(sheetOrigin('AA10:AC20'), { row: 9, col: 26 });
+  assert.deepEqual(sheetOrigin(undefined), { row: 0, col: 0 });
+});
+test('summarises a department column: values, distinct names and the rows they span', () => {
+  const rows = [['Name', 'Department'], ['Sam', 'Production'], ['Faith', ''], ['Ann', ' production '], ['Bo', 'Quality']];
+  assert.deepEqual(columnSummary(rows, 0, 1), { count: 3, distinct: 2, first: 1, last: 4 });
+  assert.deepEqual(columnSummary(rows, 0, 0).count, 4);
 });

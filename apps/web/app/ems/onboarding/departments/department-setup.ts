@@ -37,7 +37,8 @@ export function reviewDepartments(text: string, existing: ExistingDepartment[]):
 
 export function suggestColumn(rows: unknown[][]): { header: number; column: number } | null {
   for (let header = 0; header < Math.min(rows.length, 20); header++) {
-    const column = rows[header].findIndex(value => /^(department|departmentname|dept|deptname)$/.test(String(value ?? '').toLowerCase().replace(/[^a-z]/g, '')));
+    // "Department", "Dept.", "Department Name" and the template's "Current Department" all count.
+    const column = rows[header].findIndex(value => /^(current)?(department|dept)(name)?$/.test(String(value ?? '').toLowerCase().replace(/[^a-z]/g, '')));
     if (column >= 0) return { header, column };
   }
   return null;
@@ -45,4 +46,26 @@ export function suggestColumn(rows: unknown[][]): { header: number; column: numb
 
 export function namesFromColumn(rows: unknown[][], header: number, column: number): string[] {
   return rows.slice(header + 1).map(row => cleanName(String(row[column] ?? ''))).filter(Boolean);
+}
+
+/** Where a worksheet's data starts. Sheets don't always begin at A1, so row/column labels must add this offset. */
+export function sheetOrigin(ref: string | undefined): { row: number; col: number } {
+  const match = /^([A-Z]+)(\d+)/.exec(ref ?? 'A1');
+  if (!match) return { row: 0, col: 0 };
+  const col = match[1].split('').reduce((n, ch) => n * 26 + (ch.charCodeAt(0) - 64), 0) - 1;
+  return { row: Number(match[2]) - 1, col };
+}
+
+/** A column's department values: how many there are, how many differ, and the sheet rows they span (0-based grid rows). */
+export function columnSummary(rows: unknown[][], header: number, column: number) {
+  let count = 0, first = -1, last = -1;
+  const distinct = new Set<string>();
+  for (let i = header + 1; i < rows.length; i++) {
+    const name = cleanName(String(rows[i]?.[column] ?? ''));
+    if (!name) continue;
+    count++; distinct.add(nameKey(name));
+    if (first < 0) first = i;
+    last = i;
+  }
+  return { count, distinct: distinct.size, first, last };
 }

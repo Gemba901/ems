@@ -137,8 +137,28 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
 
   type Placement = { depth: number | null; relative: number; root: string; warning: string | null; error: string | null };
   const placed = new Map<string, Placement>();
+  // Database IDs identify nodes, but must not decide the visible order. Reimports
+  // create new IDs. Source rows and person details survive that change.
+  type SourceKey = { row: number; details: string };
+  const sourceKeys = new Map<string, SourceKey>();
+  const compareSource = (a: SourceKey, b: SourceKey) =>
+    (a.row < b.row ? -1 : a.row > b.row ? 1 : 0) || a.details.localeCompare(b.details);
+  for (const r of allRows) {
+    const key = { row: typeof r.rowNumber === 'number' && Number.isFinite(r.rowNumber) ? r.rowNumber : Infinity,
+      details: JSON.stringify([r.employeeCode, fullName(r), r.jobDesignation, r.currentDepartment, r.plantBranchCode].map(v => reportingKey(v))) };
+    sourceKeys.set(`record:${r.id}`, key);
+    if (r.status === 'REGISTERED' && r.employeeId) {
+      const previous = sourceKeys.get(`employee:${r.employeeId}`);
+      if (!previous || compareSource(key, previous) < 0) sourceKeys.set(`employee:${r.employeeId}`, key);
+    }
+  }
+  for (const e of employees) if (!sourceKeys.has(`employee:${e.id}`)) sourceKeys.set(`employee:${e.id}`, {
+    row: Infinity, details: JSON.stringify([e.employeeCode, fullName(e), e.jobTitle, e.department?.name, e.plantBranch].map(v => reportingKey(v))),
+  });
+  const compareNodes = (a: string, b: string) => compareSource(sourceKeys.get(a)!, sourceKeys.get(b)!);
   // Iterative walk: no recursion limit, preserve order within unknown-root chains.
-  for (const start of nodes.keys()) {
+  // Stable traversal also fixes the choice of representative inside a cycle.
+  for (const start of [...nodes.keys()].sort(compareNodes)) {
     if (placed.has(start)) continue;
     const path: string[] = [], seen = new Map<string, number>(); let cursor = start;
     let base: Placement;
@@ -215,15 +235,22 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
   for (const r of allRows) byRecord[r.id] = r.status === 'REGISTERED' && r.employeeId && byEmployee[r.employeeId]
     ? byEmployee[r.employeeId] : unavailable(r) ? { target: null, error: null, warning: null, depth: null, state: 'UNKNOWN', managerName: null } : resolution(`record:${r.id}`);
   const position = (r: ReportingRow) => placed.get(r.status === 'REGISTERED' && r.employeeId ? `employee:${r.employeeId}` : `record:${r.id}`);
+  const compareRows = (a: ReportingRow, b: ReportingRow) => compareNodes(`record:${a.id}`, `record:${b.id}`);
+  const branchOrder = new Map<string, number>();
+  for (const row of [...rows].sort(compareRows)) {
+    const root = position(row)?.root;
+    if (root !== undefined && !branchOrder.has(root)) branchOrder.set(root, branchOrder.size);
+  }
   const ordered = [...rows].sort((a, b) => {
     const group = (r: ReportingRow) => unavailable(r) ? 3 : byRecord[r.id].error ? 2 : byRecord[r.id].depth === null ? 1 : 0;
     const groupDifference = group(a) - group(b); if (groupDifference) return groupDifference;
     if (group(a) === 1 || group(a) === 2) {
-      const rootOrder = (position(a)?.root ?? '').localeCompare(position(b)?.root ?? '');
+      const rootOrder = (branchOrder.get(position(a)?.root ?? '') ?? Infinity)
+        - (branchOrder.get(position(b)?.root ?? '') ?? Infinity);
       if (rootOrder) return rootOrder;
       const relative = (position(a)?.relative ?? 0) - (position(b)?.relative ?? 0); if (relative) return relative;
     }
-    return (byRecord[a.id].depth ?? Infinity) - (byRecord[b.id].depth ?? Infinity) || (a.rowNumber ?? Infinity) - (b.rowNumber ?? Infinity);
+    return (byRecord[a.id].depth ?? Infinity) - (byRecord[b.id].depth ?? Infinity) || compareRows(a, b);
   });
   // Suggestions never create an assignment. HR must explicitly confirm a candidate.
   const suggestionsByRecord: Record<string, ReportingOption[]> = {};

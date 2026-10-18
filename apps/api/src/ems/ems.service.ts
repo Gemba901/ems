@@ -1,3 +1,4 @@
+import { retryOnboardingTransaction } from './onboarding-transaction';
 import { assertPeopleLinksAllowBatchRemoval, employeePeopleLinks, loadPeopleLinks, registrationPeopleData, relieverDraftData, resolvePendingPeopleLinks, saveDepartmentHod, saveEmployeeHod, saveEmployeeRelievers } from './ems-people-links';
 import { peopleLinkFindings } from './onboarding-people-links';
 import { cleanRecord, isBlankValue, isNotApplicable, matchEnumValue, normaliseKey } from './onboarding-text';
@@ -142,6 +143,13 @@ const emptyOnboardingStatusCounts = () => ({
 
 // ── Onboarding validation ────────────────────────────────────────────────────
 type ValidationFinding = { field: string; message: string };
+
+// JSONB may return object keys in a different order. Compare JSON values, not
+// object prototypes, and retain array order because it controls finding display.
+function validationJson(value: unknown): string | undefined {
+  return JSON.stringify(value, (_key, entry) => entry && typeof entry === 'object' && !Array.isArray(entry)
+    ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b))) : entry);
+}
 
 const GENDER_VALUES: Record<string, string> = {
   male: "MALE", m: "MALE",
@@ -317,7 +325,7 @@ export class EmsService {
     });
     if (!existing) throw new NotFoundException('Employee not found');
 
-    const updated = await this.prisma.$transaction(async tx => {
+    const updated = await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const current = await tx.employee.findFirst({
         where: { id: employeeId, organizationId },
@@ -336,7 +344,7 @@ export class EmsService {
       const result = await tx.employee.update({ where: { id: employeeId, organizationId }, data: updateData, select: EMS_EMPLOYEE_SELECT });
       await this.resolvePendingAssignments(tx, organizationId);
       return result;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
 
     await this.dwmsService?.synchronizeEmployeeActivities(
       organizationId,
@@ -509,6 +517,7 @@ export class EmsService {
     organizationId: string,
     phone: string,
     knownEmployees?: { phone: string | null; userId: string | null }[],
+    knownCandidates?: { id: string; phone: string; email: string | null }[],
   ): Promise<{ id: string; phone: string; email: string | null } | null> {
     const lookup = phoneLookupDigits(phone);
     const employees = knownEmployees ?? await db.employee.findMany({
@@ -525,7 +534,7 @@ export class EmsService {
     }
     // Compare formatting variants without downloading every account on the platform.
     // Values are parameterized; table/column names are fixed application schema names.
-    const candidates = await db.$queryRaw<{ id: string; phone: string; email: string | null }[]>`
+    const candidates = knownCandidates ?? await db.$queryRaw<{ id: string; phone: string; email: string | null }[]>`
       SELECT id, phone, email FROM "User"
       WHERE regexp_replace(phone, '[^0-9]', '', 'g') IN (${Prisma.join(lookup)})
     `;
@@ -539,6 +548,32 @@ export class EmsService {
     }
     
     return user;
+  }
+
+  /** One bounded account lookup per group of phone variants, never a platform-wide account download. */
+  private async onboardingAccountCandidates(db: Prisma.TransactionClient, phones: readonly string[]) {
+    type Account = { id: string; phone: string; email: string | null };
+    const variants = new Map([...new Set(phones)].map(phone => [phone, phoneLookupDigits(phone)]));
+    const lookup = [...new Set([...variants.values()].flat())];
+    const byDigits = new Map<string, Map<string, Account>>();
+    // Bound SQL parameters for large imports; all results stay inside this transaction.
+    for (let start = 0; start < lookup.length; start += 1000) {
+      const chunk = lookup.slice(start, start + 1000);
+      const candidates = await db.$queryRaw<Account[]>`
+        SELECT id, phone, email FROM "User"
+        WHERE regexp_replace(phone, '[^0-9]', '', 'g') IN (${Prisma.join(chunk)})
+      `;
+      for (const candidate of candidates) {
+        const digits = candidate.phone.replace(/\D/g, '');
+        const entries = byDigits.get(digits) ?? new Map<string, Account>();
+        entries.set(candidate.id, candidate);
+        byDigits.set(digits, entries);
+      }
+    }
+    return new Map([...variants].map(([phone, digits]) => [phone,
+      [...new Map(digits.flatMap(value => [...(byDigits.get(value)?.values() ?? [])])
+        .map(candidate => [candidate.id, candidate])).values()],
+    ]));
   }
 
   async getCommunicationChannel(organizationId: string) {
@@ -565,7 +600,7 @@ export class EmsService {
     communicationChannel: UpdateCommunicationChannelDto['communicationChannel'] | null,
     revalidateUnchanged = false,
   ) {
-    return this.prisma.$transaction(async tx => {
+    return retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const current = await tx.organization.findUnique({
         where: { id: organizationId }, select: { communicationChannel: true },
@@ -585,7 +620,7 @@ export class EmsService {
         await this.validateOnboardingBatchLocked(tx, organizationId, batch.id);
       }
       return { communicationChannel };
-    }, { timeout: 20000 });
+    }, { timeout: 20000 }));
   }
 
   async updateOnboardingBatchCountry(
@@ -594,7 +629,7 @@ export class EmsService {
     if (!getCountries().some((code) => code === dto.defaultPhoneCountry)) {
       throw new BadRequestException('Select a supported default country for phone numbers');
     }
-    await this.prisma.$transaction(async (tx) => {
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async (tx) => {
       await this.lockReporting(tx, organizationId);
       await tx.$queryRaw`SELECT id FROM "EmsOnboardingBatch"
         WHERE id = ${batchId} AND "organizationId" = ${organizationId} FOR UPDATE`;
@@ -617,8 +652,9 @@ export class EmsService {
         where: { batchId, organizationId, status: { in: ['DRAFT', 'READY', 'NEEDS_FIXING'] } },
         data: { status: 'DRAFT', validationErrors: Prisma.DbNull },
       });
-    });
-    return this.validateOnboardingBatch(organizationId, batchId);
+      await this.validateOnboardingBatchLocked(tx, organizationId, batchId);
+    }, { timeout: 20000 }));
+    return this.getOnboardingBatch(organizationId, batchId);
   }
 
   async createOnboardingBatch(
@@ -744,12 +780,12 @@ export class EmsService {
   }
 
   async updateEmployeeReporting(employeeId: string, organizationId: string, target: string) {
-    await this.prisma.$transaction(async tx => {
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const data = await this.reportingAssignmentData(tx, organizationId, employeeId, target);
       await tx.employee.update({ where: { id: employeeId, organizationId }, data });
       await this.resolvePendingAssignments(tx, organizationId);
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
     return this.getEmployeeReporting(employeeId, organizationId);
   }
 
@@ -795,7 +831,7 @@ export class EmsService {
   async confirmOnboardingDifferentPerson(organizationId: string, recordId: string, userId: string, token: string) {
     if (!userId?.trim()) throw new ForbiddenException('An authenticated reviewer is required');
     if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new BadRequestException('A current review token is required');
-    const batchId = await this.prisma.$transaction(async tx => {
+    const batchId = await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const record = await tx.emsOnboardingRecord.findFirst({
         where: { id: recordId, organizationId, batch: { organizationId } }, include: { batch: true },
@@ -813,14 +849,14 @@ export class EmsService {
       } });
       await this.validateOnboardingBatchLocked(tx, organizationId, record.batchId);
       return record.batchId;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
     return this.getOnboardingBatch(organizationId, batchId);
   }
 
   async undoOnboardingDifferentPerson(organizationId: string, recordId: string, userId: string, token: string) {
     if (!userId?.trim()) throw new ForbiddenException('An authenticated reviewer is required');
     if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new BadRequestException('A current confirmation token is required');
-    const batchId = await this.prisma.$transaction(async tx => {
+    const batchId = await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const record = await tx.emsOnboardingRecord.findFirst({
         where: { id: recordId, organizationId, batch: { organizationId } }, include: { batch: true },
@@ -834,7 +870,7 @@ export class EmsService {
       await tx.emsOnboardingRecord.update({ where: { id: recordId }, data: { duplicateReviewReceipt: Prisma.DbNull } });
       await this.validateOnboardingBatchLocked(tx, organizationId, record.batchId);
       return record.batchId;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
     return this.getOnboardingBatch(organizationId, batchId);
   }
 
@@ -907,7 +943,7 @@ export class EmsService {
     batchId: string,
     dto: AddOnboardingRecordsDto,
   ): Promise<{ id: string }> {
-    await this.prisma.$transaction(async tx => {
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const batch = await tx.emsOnboardingBatch.findFirst({ where: { id: batchId, organizationId }, select: { id: true, status: true } });
       if (!batch) throw new NotFoundException('Onboarding batch not found');
@@ -922,7 +958,7 @@ export class EmsService {
       await tx.emsOnboardingBatch.update({ where: { id: batchId }, data: {
         status: batch.status === 'PARTIALLY_REGISTERED' ? 'PARTIALLY_REGISTERED' : 'DRAFT',
       } });
-    });
+    }));
 
     return { id: batchId };
   }
@@ -933,10 +969,10 @@ export class EmsService {
 
   /** Completion means checks were saved; rows may still need fixing. */
   async validateOnboardingBatchAck(organizationId: string, batchId: string): Promise<{ id: string }> {
-    await this.prisma.$transaction(async tx => {
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       await this.validateOnboardingBatchLocked(tx, organizationId, batchId);
-    }, { timeout: 20000 });
+    }, { timeout: 20000 }));
     return { id: batchId };
   }
 
@@ -987,6 +1023,13 @@ export class EmsService {
         phoneCounts.set(phone, (phoneCounts.get(phone) ?? 0) + 1);
       }
     }
+
+    const identityPhones = batch.records.flatMap(raw => {
+      if (raw.status === 'EXCLUDED' || raw.status === 'REGISTERED') return [];
+      const phone = normalisePhone(cleanRecord(raw).mobileNumber, batch.defaultPhoneCountry);
+      return phone && phoneCounts.get(phone) === 1 ? [phone] : [];
+    });
+    const accountCandidates = await this.onboardingAccountCandidates(db, identityPhones);
 
     const hierarchy = await this.reportingHierarchy(db, organizationId, batch.records);
     const duplicateIndex = await this.duplicateContext(db, organizationId);
@@ -1063,7 +1106,7 @@ export class EmsService {
       if (phone && (phoneCounts.get(phone) ?? 0) === 1) {
         try {
           await this.checkOnboardingIdentity(
-            db, organizationId, phone, existing,
+            db, organizationId, phone, existing, accountCandidates.get(phone) ?? [],
           );
         } catch (error) {
           if (!(error instanceof BadRequestException)) throw error;
@@ -1175,10 +1218,14 @@ export class EmsService {
       const status = findings.length > 0 ? 'NEEDS_FIXING' : 'READY';
       if (status === 'READY') readyCount++;
 
-      await db.emsOnboardingRecord.update({
-        where: { id: record.id },
-        data: { status, validationErrors: findings.length > 0 ? findings : Prisma.DbNull },
-      });
+      // JSONB object-key order is not meaningful. Avoid rewriting identical results
+      // (and changing updatedAt) when validation finds nothing new.
+      if (raw.status !== status || validationJson(raw.validationErrors ?? null) !== validationJson(findings.length ? findings : null)) {
+        await db.emsOnboardingRecord.update({
+          where: { id: record.id, organizationId, batchId },
+          data: { status, validationErrors: findings.length > 0 ? findings : Prisma.DbNull },
+        });
+      }
     }
 
     const pending = batch.records.filter(
@@ -1202,7 +1249,7 @@ export class EmsService {
       where: { id: recordId, organizationId }, select: { batchId: true },
     });
     if (!record) throw new NotFoundException('Onboarding record not found');
-    await this.prisma.$transaction(async tx => {
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       await tx.$queryRaw`SELECT id FROM "EmsOnboardingBatch"
         WHERE id = ${record.batchId} AND "organizationId" = ${organizationId} FOR UPDATE`;
@@ -1245,15 +1292,16 @@ export class EmsService {
         where: { id: recordId },
         data: { ...data, status: found.status === 'EXCLUDED' ? 'EXCLUDED' : 'DRAFT', validationErrors: Prisma.DbNull },
       });
-    });
-    return this.validateOnboardingBatch(organizationId, record.batchId);
+      await this.validateOnboardingBatchLocked(tx, organizationId, record.batchId);
+    }, { timeout: 20000 }));
+    return this.getOnboardingBatch(organizationId, record.batchId);
   }
 
   async excludeOnboardingRecord(organizationId: string, recordId: string, dto: ExcludeOnboardingRecordDto) {
     const reason = dto.reason?.trim();
     if (!reason) throw new BadRequestException('An exclusion reason is required');
     if (reason.length < 5) throw new BadRequestException('Exclusion reason must contain at least 5 characters');
-    const batchId = await this.prisma.$transaction(async tx => {
+    const batchId = await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const record = await tx.emsOnboardingRecord.findFirst({
         where: { id: recordId, organizationId }, select: { id: true, batchId: true, status: true },
@@ -1263,13 +1311,14 @@ export class EmsService {
       await tx.emsOnboardingRecord.update({ where: { id: recordId },
         data: { status: 'EXCLUDED', exclusionReason: reason, validationErrors: Prisma.DbNull } });
       // Pending employee references are preserved: their computed status becomes NEEDS_ATTENTION.
+      await this.validateOnboardingBatchLocked(tx, organizationId, record.batchId);
       return record.batchId;
-    });
-    return this.validateOnboardingBatch(organizationId, batchId);
+    }, { timeout: 20000 }));
+    return this.getOnboardingBatch(organizationId, batchId);
   }
 
   async includeOnboardingRecord(organizationId: string, recordId: string) {
-    const batchId = await this.prisma.$transaction(async tx => {
+    const batchId = await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const record = await tx.emsOnboardingRecord.findFirst({
         where: { id: recordId, organizationId }, select: { id: true, batchId: true, status: true },
@@ -1277,9 +1326,10 @@ export class EmsService {
       if (!record) throw new NotFoundException('Onboarding record not found');
       if (record.status !== 'EXCLUDED') throw new BadRequestException('Only excluded records can be restored');
       await tx.emsOnboardingRecord.update({ where: { id: recordId }, data: { status: 'DRAFT', exclusionReason: null } });
+      await this.validateOnboardingBatchLocked(tx, organizationId, record.batchId);
       return record.batchId;
-    });
-    return this.validateOnboardingBatch(organizationId, batchId);
+    }, { timeout: 20000 }));
+    return this.getOnboardingBatch(organizationId, batchId);
   }
 
   async registerOnboardingBatch(organizationId: string, batchId: string) {
@@ -1318,7 +1368,7 @@ export class EmsService {
 
     for (const candidate of ready) {
       try {
-        const employee = await this.prisma.$transaction(async (tx) => {
+        const employee = await retryOnboardingTransaction(() => this.prisma.$transaction(async (tx) => {
           await this.lockReporting(tx, organizationId);
           const lockedOrganization = await tx.organization.findUnique({
             where: { id: organizationId }, select: { communicationChannel: true },
@@ -1339,6 +1389,7 @@ export class EmsService {
             throw new BadRequestException('This import is unavailable or cancelled');
           }
           const found = current.records.find((r) => r.id === candidate.id);
+          if (found && ['REGISTERED', 'EXCLUDED'].includes(found.status)) return null;
           if (!found || !['READY', 'NEEDS_FIXING'].includes(found.status)) {
             throw new BadRequestException('This record is no longer ready; validate the import again');
           }
@@ -1434,18 +1485,14 @@ export class EmsService {
           });
           await this.resolvePendingAssignments(tx, organizationId);
           return employee;
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
-        results.push({ recordId: candidate.id, employeeId: employee.id });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
+        if (employee) results.push({ recordId: candidate.id, employeeId: employee.id });
       } catch (error: unknown) {
-        const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
-        const meta = error && typeof error === 'object' && 'meta' in error ? error.meta : null;
-        const sqlState = meta && typeof meta === 'object' && 'code' in meta ? meta.code : null;
-        const interruptedLock = code === 'P2010' && ['40001', '40P01', '55P03'].some(value => value === sqlState);
-        if (error instanceof OnboardingChannelChangedError || code === 'P2034' || code === 'P2028' || interruptedLock) {
-          // A reset may commit while this serializable transaction waits for its
-          // lock. Conflicts/timeouts are retryable operations, not personal errors.
+        if (!(error instanceof BadRequestException)) {
+          // Database/connection/programming failures describe the operation, not the
+          // person's data. Preserve already committed registrations and stop safely.
           interruption = error instanceof OnboardingChannelChangedError ? error.message
-            : 'Another change or a transaction timeout interrupted registration. Validate the import and try again.';
+            : 'A technical problem interrupted registration. Contact an administrator if it persists.';
           break;
         }
         const message = error instanceof BadRequestException
@@ -1486,7 +1533,7 @@ export class EmsService {
   }
 
   async cancelOnboardingBatch(organizationId: string, batchId: string) {
-    return this.prisma.$transaction(async tx => {
+    return retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const batch = await tx.emsOnboardingBatch.findFirst({
         where: { id: batchId, organizationId },
@@ -1512,11 +1559,11 @@ export class EmsService {
         data: { status: 'CANCELLED' },
         select: BATCH_LIST_SELECT,
       });
-    });
+    }));
   }
 
   async deleteOnboardingBatch(organizationId: string, batchId: string) {
-    return this.prisma.$transaction(async tx => {
+    return retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const batch = await tx.emsOnboardingBatch.findFirst({
         where: { id: batchId, organizationId },
@@ -1530,16 +1577,16 @@ export class EmsService {
       await assertPeopleLinksAllowBatchRemoval(tx, organizationId, batchId);
       await tx.emsOnboardingBatch.delete({ where: { id: batchId } });
       return { deleted: true };
-    });
+    }));
   }
 
 
   async updateOnboardingDepartmentHod(organizationId: string, batchId: string, recordId: string, target: string, expectedVersion: string, userId: string) {
-    await this.prisma.$transaction(async tx => {
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       await saveDepartmentHod(tx, organizationId, batchId, recordId, target, expectedVersion, userId);
       await this.validateOnboardingBatchLocked(tx, organizationId, batchId);
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
     return this.getOnboardingBatch(organizationId, batchId);
   }
 
@@ -1549,18 +1596,18 @@ export class EmsService {
   }
 
   async updateEmployeeRelievers(employeeId: string, organizationId: string, first: string, second: string, expectedVersion: string) {
-    await this.prisma.$transaction(async tx => {
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       await saveEmployeeRelievers(tx, organizationId, employeeId, first, second, expectedVersion);
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
     return this.getEmployeePeopleLinks(employeeId, organizationId);
   }
 
   async updateEmployeeDepartmentHod(employeeId: string, organizationId: string, target: string, expectedVersion: string, userId: string) {
-    await this.prisma.$transaction(async tx => {
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       await saveEmployeeHod(tx, organizationId, employeeId, target, expectedVersion, userId);
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
     return this.getEmployeePeopleLinks(employeeId, organizationId);
   }
 

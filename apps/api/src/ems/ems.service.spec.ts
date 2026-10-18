@@ -38,8 +38,9 @@ describe('EMS onboarding record exclusion', () => {
 
     // Batch validation is tested separately.
     revalidate = jest
-      .spyOn(service, 'validateOnboardingBatch')
-      .mockResolvedValue({ id: 'batch-1' } as never);
+      .spyOn(service as any, 'validateOnboardingBatchLocked')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service, 'getOnboardingBatch').mockResolvedValue({ id: 'batch-1' } as never);
   });
 
   it.each([
@@ -78,7 +79,7 @@ describe('EMS onboarding record exclusion', () => {
       },
     });
 
-    expect(revalidate).toHaveBeenCalledWith('org-1', 'batch-1');
+    expect(revalidate).toHaveBeenCalledWith(prisma, 'org-1', 'batch-1');
   });
 
   it('accepts a reason of exactly five characters', async () => {

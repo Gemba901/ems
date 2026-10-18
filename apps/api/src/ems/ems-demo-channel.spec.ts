@@ -304,9 +304,9 @@ describe('EMS demo-only communication reset', () => {
     ['P2010', '40001'], ['P2010', '40P01'], ['P2010', '55P03'],
   ])('does not label a %s/%s transaction failure as a personal error', async (code, sqlState) => {
     const f = registrationFixture();
-    f.prisma.$transaction.mockRejectedValueOnce(Object.assign(new Error('database operation failed'), { code, meta: { code: sqlState } }));
+    f.prisma.$transaction.mockRejectedValue(Object.assign(new Error('database operation failed'), { code, meta: { code: sqlState } }));
     await expect(f.service.registerOnboardingBatch(orgId, 'batch')).rejects.toBeInstanceOf(ConflictException);
-    expect(f.prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(f.prisma.$transaction).toHaveBeenCalledTimes(code === 'P2034' || ['40001', '40P01'].includes(sqlState ?? '') ? 3 : 1);
     expect(f.prisma.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
     expect(f.tx.employee.create).not.toHaveBeenCalled();
   });

@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { EmsService } from './ems.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { plainToInstance } from 'class-transformer';
@@ -54,6 +54,7 @@ describe('EMS phone validation', () => {
   });
   it('ignores an excluded duplicate', async () => {
     const { db, service, batch } = fixture();
+    batch.records[0].status = 'DRAFT';
     batch.records.push({ ...row('r2'), status: 'EXCLUDED' });
     await service.validateOnboardingBatch('org1', 'b1');
     expect(db.emsOnboardingRecord.update).toHaveBeenCalledTimes(1);
@@ -131,9 +132,9 @@ describe('EMS phone registration', () => {
   it('never marks a failed employee write as registered', async () => {
     const { db, service } = fixture();
     db.employee.create.mockRejectedValue(new Error('database failure'));
-    expect((await service.registerOnboardingBatch('org1', 'b1')).failed).toBe(1);
+    await expect(service.registerOnboardingBatch('org1', 'b1')).rejects.toBeInstanceOf(ConflictException);
     expect(db.emsOnboardingRecord.update).not.toHaveBeenCalled();
-    expect(db.emsOnboardingRecord.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'r1', organizationId: 'org1', status: { in: ['READY', 'NEEDS_FIXING'] }, updatedAt: new Date('2026-10-14T12:00:00Z') } }));
+    expect(db.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
   });
   it('rejects a cancelled batch before writing', async () => {
     const { db, service, batch } = fixture();
@@ -146,11 +147,11 @@ describe('EMS phone registration', () => {
 describe('Batch country changes', () => {
   it('saves the country, invalidates pending readiness, then revalidates', async () => {
     const { db, service } = fixture();
-    const revalidate = jest.spyOn(service, 'validateOnboardingBatch').mockResolvedValue({} as never);
+    const revalidate = jest.spyOn(service as any, 'validateOnboardingBatchLocked').mockResolvedValue(undefined);
     await service.updateOnboardingBatchCountry('org1', 'b1', { defaultPhoneCountry: 'JP' });
     expect(db.emsOnboardingBatch.update).toHaveBeenCalledWith({ where: { id: 'b1' }, data: { defaultPhoneCountry: 'JP' } });
     expect(db.emsOnboardingRecord.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { batchId: 'b1', organizationId: 'org1', status: { in: ['DRAFT', 'READY', 'NEEDS_FIXING'] } } }));
-    expect(revalidate).toHaveBeenCalledWith('org1', 'b1');
+    expect(revalidate).toHaveBeenCalledWith(db, 'org1', 'b1');
   });
   it('rejects a country change after registration has started', async () => {
     const { service, batch } = fixture();
@@ -229,6 +230,10 @@ describe('EMS communication channel rules', () => {
 describe('EMS communication channel setting', () => {
   it('re-validates open imports when the channel changes', async () => {
     const { db, service } = fixture();
+    db.organization.update.mockImplementation(async () => {
+      db.organization.findUnique.mockResolvedValue({ communicationChannel: 'EMAIL' });
+      return {};
+    });
     await service.updateCommunicationChannel('org1', { communicationChannel: 'EMAIL' } as any);
     expect(db.organization.update).toHaveBeenCalledWith(expect.objectContaining({
       data: { communicationChannel: 'EMAIL' },
@@ -333,14 +338,17 @@ describe('Reporting relationship integration', () => {
     expect((await service.registerOnboardingBatch('org1','b1')).registered).toBe(1);
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingManagerId:null})}));
   });
-  it('registers a valid report pending the manager when the manager has an unrelated write failure', async () => {
+  it('registers a valid report pending the manager when the manager has an unrelated identity validation failure', async () => {
     const {db,service,batch}=fixture();
     const manager=row('manager','0712345679');Object.assign(manager,{reportingToName:null,reportingToDesignation:'Board'});
     Object.assign(batch.records[0],{reportingToRecordId:'manager'});batch.records.push(manager);
-    db.employee.create.mockRejectedValueOnce(new Error('failed manager write')).mockResolvedValueOnce({id:'ann'});
+    jest.spyOn(service as any, 'checkOnboardingIdentity')
+      .mockRejectedValueOnce(new BadRequestException('Manager phone needs review'))
+      .mockResolvedValueOnce(null);
+    db.employee.create.mockResolvedValueOnce({id:'ann'});
     const result=await service.registerOnboardingBatch('org1','b1');
     expect(result.failed).toBe(1); expect(result.registered).toBe(1);
-    expect(db.employee.create.mock.calls[1][0].data).toEqual(expect.objectContaining({reportingManagerId:null,pendingReportingRecordId:'manager',reportsToBoard:false}));
+    expect(db.employee.create.mock.calls[0][0].data).toEqual(expect.objectContaining({reportingManagerId:null,pendingReportingRecordId:'manager',reportsToBoard:false}));
   });
   it('registers a batch manager first and uses the created ID for their report', async () => {
     const {db,service,batch}=fixture();

@@ -32,6 +32,34 @@ const PHONE_COUNTRIES = getCountries()
 /** The same list for the searchable dropdown, with each country's dialling code as a hint. */
 /** Everyday names people search by, so "usa", "uk" or "ivory coast" find the right country. */
 /** Demo-only tools (e.g. resetting the channel) show only when the web app's env enables them. */
+/**
+ * Upload requests are packed up to this size: under the server's ~100 KB limit, with room to spare.
+ * Packing by size (not a fixed row count) means fewer trips for sheets with few columns.
+ */
+const MAX_CHUNK_BYTES = 80_000;
+/** Never more rows than this in one request, however small they are, so each trip stays quick. */
+const MAX_CHUNK_ROWS = 500;
+
+/** Split rows into groups that each fit within MAX_CHUNK_BYTES when sent. */
+function chunkBySize<T>(rows: T[]): T[][] {
+  const encoder = new TextEncoder();
+  const chunks: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+  for (const row of rows) {
+    const size = encoder.encode(JSON.stringify(row)).length + 1; // +1 for the comma between rows
+    if (current.length > 0 && (bytes + size > MAX_CHUNK_BYTES || current.length >= MAX_CHUNK_ROWS)) {
+      chunks.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(row);
+    bytes += size;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
 const DEMO_TOOLS = process.env.NEXT_PUBLIC_EMS_DEMO_TOOLS === "true";
 
 const COUNTRY_ALIASES: Record<string, { aside?: string; keywords?: string[] }> = {
@@ -87,6 +115,8 @@ export default function NewOnboardingImportPage() {
   const [pickingHeader, setPickingHeader] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // What the upload is doing right now, e.g. "Uploading rows 51–100 of 231…".
+  const [progress, setProgress] = useState<string | null>(null);
   const [mapping, setMapping] = useState<(MapField | null)[]>([]);
   // How names in a mapped "Full name" column are written.
   const [nameOrder, setNameOrder] = useState<NameOrder>("FIRST_LAST");
@@ -311,6 +341,8 @@ export default function NewOnboardingImportPage() {
     }
     setBusy(true);
     setError(null);
+    let batchId: string | null = null;
+    let sent = 0;
     try {
       const batch = await EmsService.createOnboardingBatch(
         {
@@ -320,12 +352,35 @@ export default function NewOnboardingImportPage() {
         },
         accessToken,
       );
-      await EmsService.addOnboardingRecords(batch.id, { records: rows }, accessToken);
-      await EmsService.validateOnboardingBatch(batch.id, accessToken);
+      batchId = batch.id;
+
+      // Send rows in as few requests as fit under the server's size limit.
+      for (const chunk of chunkBySize(rows)) {
+        setProgress(`Uploading rows ${sent + 1}–${sent + chunk.length} of ${rows.length}…`);
+        await EmsService.addOnboardingRecordsAck(batch.id, { records: chunk }, accessToken);
+        sent += chunk.length;
+      }
+
+      setProgress(`Checking ${rows.length} rows…`);
+      await EmsService.validateOnboardingBatchAck(batch.id, accessToken);
       queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
       router.push(`/ems/onboarding/${batch.id}`);
     } catch (e: any) {
-      setError(e.message || "Upload failed.");
+      let message = e.message || "Upload failed.";
+      // Don't leave a half-uploaded import behind: cancel it, so HR simply tries again.
+      if (batchId) {
+        try {
+          await EmsService.cancelOnboardingBatch(batchId, accessToken);
+          message += sent > 0
+            ? ` The upload stopped after ${sent} of ${rows.length} rows, so this import was cancelled. Please try again.`
+            : " Nothing was imported. Please try again.";
+        } catch {
+          message += " An unfinished import may be left in the imports list; cancel it there.";
+        }
+        queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
+      }
+      setError(message);
+      setProgress(null);
       setBusy(false);
     }
   }
@@ -343,6 +398,14 @@ export default function NewOnboardingImportPage() {
             <p className="text-sm text-slate-500">Upload a spreadsheet of employees to review before registering</p>
           </div>
         </div>
+
+        {!workbook && isAdmin && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4">
+            <div><p className="text-sm font-semibold text-violet-950">First import for this organization?</p>
+              <p className="text-xs text-violet-900">Set up the departments in your employee sheet before importing.</p></div>
+            <Link href="/ems/onboarding/departments" className="rounded-lg bg-violet-800 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-900">Set up departments</Link>
+          </div>
+        )}
 
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4">
 
@@ -813,6 +876,9 @@ export default function NewOnboardingImportPage() {
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                 Import {rows.length} rows
               </button>
+              {progress && (
+                <p role="status" className="text-xs text-slate-600">{progress}</p>
+              )}
             </>
           )}
         </div>

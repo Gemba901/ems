@@ -54,12 +54,28 @@ export function peopleIndex(options: readonly LinkPerson[], records: readonly Li
     return { target: person.target, person, state: pending ? 'PENDING' : 'ASSIGNED', error: null,
       warning: pending ? `${label} link will be completed when ${person.name} registers.` : null };
   };
+  // Each candidate scope gets one exact name/designation index for this resolution.
+  // Store candidates, not mutable LinkResolution objects (second-slot errors are local).
+  const matchIndexes = new WeakMap<readonly LinkPerson[], Map<string, LinkPerson[]>>();
+  const matchKey = (name: string, title: string) => JSON.stringify([completeNameKey(name), reportingKey(title)]);
   const match = (name: string | null | undefined, title: string | null | undefined, candidates: readonly LinkPerson[], label: string): LinkResolution => {
     const hasName = !!name?.trim() && !isNotApplicable(name), hasTitle = !!title?.trim() && !isNotApplicable(title);
     if (!hasName && !hasTitle) return noLink();
     if (!hasName || !hasTitle) return failedLink(`Choose ${label.toLowerCase()} to confirm both name and designation, or clear both fields.`);
-    const matches = candidates.filter(p => !p.unavailable && completeNameKey(p.name) === completeNameKey(name) && reportingKey(p.designation) === reportingKey(title));
-    const unique = [...new Map(matches.map(p => [canonical(p.target), p])).values()];
+    let matches = matchIndexes.get(candidates);
+    if (!matches) {
+      const grouped = new Map<string, Map<string | null, LinkPerson>>();
+      for (const person of candidates) {
+        if (person.unavailable) continue;
+        const key = matchKey(person.name, person.designation);
+        const group = grouped.get(key) ?? new Map<string | null, LinkPerson>();
+        group.set(canonical(person.target), person);
+        grouped.set(key, group);
+      }
+      matches = new Map([...grouped].map(([key, group]) => [key, [...group.values()]]));
+      matchIndexes.set(candidates, matches);
+    }
+    const unique = matches.get(matchKey(name!, title!)) ?? [];
     return unique.length === 1 ? resolve(unique[0].target, label)
       : failedLink(unique.length ? `Several people match ${label.toLowerCase()}. Choose the correct person.`
         : `${label} could not be matched. Choose the person or correct the imported name and designation.`);
@@ -67,9 +83,15 @@ export function peopleIndex(options: readonly LinkPerson[], records: readonly Li
   return { byTarget, canonical, resolve, match };
 }
 
-export function resolveRecordRelievers(record: LinkRecord, options: readonly LinkPerson[], allRecords: readonly LinkRecord[] = []) {
-  const index = peopleIndex(options, allRecords);
-  const candidates = options.filter(p => p.target.startsWith('employee:') || p.batchId === record.batchId);
+interface RelieverContext {
+  index: ReturnType<typeof peopleIndex>;
+  candidates: readonly LinkPerson[];
+  recordsById: ReadonlyMap<string, LinkRecord>;
+}
+
+export function resolveRecordRelievers(record: LinkRecord, options: readonly LinkPerson[], allRecords: readonly LinkRecord[] = [], prepared?: RelieverContext) {
+  const index = prepared?.index ?? peopleIndex(options, allRecords);
+  const candidates = prepared?.candidates ?? options.filter(p => p.target.startsWith('employee:') || p.batchId === record.batchId);
   const resolve = (slot: 1 | 2) => {
     const label = slot === 1 ? 'First reliever' : 'Second reliever';
     const employeeId = record[`reliever${slot}EmployeeId`], recordId = record[`reliever${slot}RecordId`];
@@ -77,7 +99,7 @@ export function resolveRecordRelievers(record: LinkRecord, options: readonly Lin
     const target = employeeId ? `employee:${employeeId}` : recordId ? `record:${recordId}` : null;
     let result = target ? index.resolve(target, label) : index.match(record[`reliever${slot}Name`], record[`reliever${slot}Designation`], candidates, label);
     if (recordId) {
-      const source = allRecords.find(r => r.id === recordId);
+      const source = prepared ? prepared.recordsById.get(recordId) : allRecords.find(r => r.id === recordId);
       if (!source || source.batchId !== record.batchId) result = failedLink(`${label} must belong to this import or be an existing employee.`, target);
     }
     if (result.target && (index.canonical(result.target) === index.canonical(`record:${record.id}`)
@@ -98,11 +120,26 @@ export function resolveBatchPeopleLinks(records: readonly LinkRecord[], options:
   departments: readonly { id: string; name: string }[], assignments: readonly HodAssignment[], contextRecords: readonly LinkRecord[] = []) {
   const allRecords = [...new Map([...contextRecords, ...records].map(r => [r.id, r])).values()];
   const index = peopleIndex(options, allRecords);
-  const currentOptions = options.filter(p => p.target.startsWith('employee:') || records.some(r => r.id === p.recordId));
+  const currentIds = new Set(records.map(record => record.id));
+  const currentOptions = options.filter(p => p.target.startsWith('employee:') || (p.recordId !== undefined && currentIds.has(p.recordId)));
+  const recordsById = new Map(allRecords.map(record => [record.id, record]));
+  const candidatesByBatch = new Map<string, readonly LinkPerson[]>();
+  const departmentsByName = new Map<string, { id: string; name: string }[]>();
+  for (const department of departments) {
+    const key = normaliseKey(department.name);
+    const group = departmentsByName.get(key) ?? [];
+    group.push(department); departmentsByName.set(key, group);
+  }
+  const affectedByScope = new Map<string, number>();
+  for (const record of records) {
+    if (['REGISTERED', 'EXCLUDED'].includes(record.status)) continue;
+    const key = scopeKey(normaliseKey(record.currentDepartment ?? null), branchKey(record.plantBranchCode));
+    affectedByScope.set(key, (affectedByScope.get(key) ?? 0) + 1);
+  }
   const byScope = new Map(assignments.map(a => [scopeKey(a.departmentId, a.branchKey), a]));
   const byRecord: Record<string, RecordPeopleLinks> = {};
   for (const record of records) {
-    const matches = departments.filter(d => normaliseKey(d.name) === normaliseKey(record.currentDepartment ?? null));
+    const matches = departmentsByName.get(normaliseKey(record.currentDepartment ?? null)) ?? [];
     const department = matches.length === 1 ? matches[0] : null;
     const branch = branchKey(record.plantBranchCode), key = scopeKey(department?.id ?? '', branch);
     const assignment = byScope.get(key);
@@ -120,8 +157,13 @@ export function resolveBatchPeopleLinks(records: readonly LinkRecord[], options:
     const hod: HodResolution = { ...resolved, departmentId: department?.id ?? null, departmentName: department?.name ?? record.currentDepartment ?? '',
       branchKey: branch, branchLabel: record.plantBranchCode?.trim() || 'Branch not specified',
       version: JSON.stringify([key, reviewKey]), reviewKey, suggestedTarget: imported.error ? null : imported.target,
-      affectedRecords: records.filter(r => !['REGISTERED', 'EXCLUDED'].includes(r.status) && normaliseKey(r.currentDepartment ?? null) === normaliseKey(record.currentDepartment ?? null) && branchKey(r.plantBranchCode) === branch).length };
-    byRecord[record.id] = { hod, ...resolveRecordRelievers(record, options, allRecords) };
+      affectedRecords: affectedByScope.get(scopeKey(normaliseKey(record.currentDepartment ?? null), branch)) ?? 0 };
+    let candidates = candidatesByBatch.get(record.batchId);
+    if (!candidates) {
+      candidates = options.filter(p => p.target.startsWith('employee:') || p.batchId === record.batchId);
+      candidatesByBatch.set(record.batchId, candidates);
+    }
+    byRecord[record.id] = { hod, ...resolveRecordRelievers(record, options, allRecords, { index, candidates, recordsById }) };
   }
   return { options: currentOptions.filter(p => !p.unavailable), byRecord };
 }

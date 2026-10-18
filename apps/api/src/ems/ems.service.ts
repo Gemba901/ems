@@ -1,3 +1,5 @@
+import { onboardingReadContext, OnboardingEmployeeSnapshot } from './onboarding-read-context';
+import { onboardingPerformance } from './onboarding-performance';
 import { retryOnboardingTransaction } from './onboarding-transaction';
 import { assertPeopleLinksAllowBatchRemoval, employeePeopleLinks, loadPeopleLinks, registrationPeopleData, relieverDraftData, resolvePendingPeopleLinks, saveDepartmentHod, saveEmployeeHod, saveEmployeeRelievers } from './ems-people-links';
 import { peopleLinkFindings } from './onboarding-people-links';
@@ -704,8 +706,8 @@ export class EmsService {
     await db.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
   }
 
-  private async reportingContext(db: Prisma.TransactionClient, organizationId: string) {
-    const employees = await this.reportingEmployees(db, organizationId);
+  private async reportingContext(db: Prisma.TransactionClient, organizationId: string, knownEmployees?: OnboardingEmployeeSnapshot[]) {
+    const employees = knownEmployees ?? await this.reportingEmployees(db, organizationId);
     const pendingIds = employees.flatMap(e => e.pendingReportingRecordId ? [e.pendingReportingRecordId] : []);
     if (!pendingIds.length) return { employees, records: [] as ReportingRow[] };
     // Only imports referenced by a pending employee are needed as historical context.
@@ -727,8 +729,8 @@ export class EmsService {
     return { employees, records };
   }
 
-  private async reportingHierarchy(db: Prisma.TransactionClient, organizationId: string, rows: ReportingRow[]) {
-    const context = await this.reportingContext(db, organizationId);
+  private async reportingHierarchy(db: Prisma.TransactionClient, organizationId: string, rows: ReportingRow[], knownEmployees?: OnboardingEmployeeSnapshot[]) {
+    const context = await this.reportingContext(db, organizationId, knownEmployees);
     return resolveReporting(rows, context.employees, context.records);
   }
 
@@ -802,8 +804,8 @@ export class EmsService {
   }
 
   /** One candidate index per validation/detail snapshot, scoped to the organisation. */
-  private async duplicateContext(db: Prisma.TransactionClient, organizationId: string) {
-    const employees = await db.employee.findMany({
+  private async duplicateContext(db: Prisma.TransactionClient, organizationId: string, knownEmployees?: OnboardingEmployeeSnapshot[]) {
+    const employees = knownEmployees ?? await db.employee.findMany({
       where: { organizationId },
       select: { id: true, firstName: true, middleName: true, lastName: true, employeeCode: true,
         phone: true, jobTitle: true, plantBranch: true, department: { select: { name: true } },
@@ -876,6 +878,7 @@ export class EmsService {
 
   async getOnboardingBatch(organizationId: string, batchId: string) {
     return this.prisma.$transaction(async tx => {
+      const timing = onboardingPerformance('detail', organizationId, batchId);
       const batch = await tx.emsOnboardingBatch.findFirst({
         where: { id: batchId, organizationId },
         include: {
@@ -884,13 +887,21 @@ export class EmsService {
         },
       });
       if (!batch) throw new NotFoundException('Onboarding batch not found');
-      const hierarchy = await this.reportingHierarchy(tx, organizationId, batch.records);
+      timing.mark('batchRead');
+      const context = onboardingReadContext(tx, organizationId);
+      const employees = await context.employees();
+      timing.mark('employeesRead');
+      const hierarchy = await this.reportingHierarchy(tx, organizationId, batch.records, employees);
+      timing.mark('hierarchy');
       const active = batch.status !== 'CANCELLED' && batch.records.some(r => !['REGISTERED', 'EXCLUDED'].includes(r.status));
-      const index = active ? await this.duplicateContext(tx, organizationId) : null;
+      const index = active ? await this.duplicateContext(tx, organizationId, employees) : null;
+      timing.mark('duplicateContext');
       const records = batch.records.map(record => refreshedDuplicateRecord(record,
         index && !['REGISTERED', 'EXCLUDED'].includes(record.status)
           ? index.review(duplicateImportPerson(record, organizationId, batch.defaultPhoneCountry), record.duplicateReviewReceipt) : null));
-      const peopleLinks = await loadPeopleLinks(tx, organizationId, batch.records);
+      timing.mark('duplicateReview');
+      const peopleLinks = await loadPeopleLinks(tx, organizationId, batch.records, { employees, departments: await context.departments() });
+      timing.mark('peopleLinks');
       for (const record of records) {
         if (['REGISTERED', 'EXCLUDED'].includes(record.status) || batch.status === 'CANCELLED') continue;
         const old = Array.isArray(record.validationErrors)
@@ -923,7 +934,10 @@ export class EmsService {
       const status = batch.status === 'CANCELLED' ? batch.status
         : records.some(r => r.status === 'REGISTERED') ? pending.length ? 'PARTIALLY_REGISTERED' : 'REGISTERED'
         : pending.length && pending.every(r => r.status === 'READY') ? 'READY' : 'DRAFT';
-      return { ...batch, status, records: hierarchy.orderedIds.map(id => byId.get(id)!), hierarchy, peopleLinks: { options: peopleLinks.options, byRecord: peopleLinks.byRecord } };
+      const result = { ...batch, status, records: hierarchy.orderedIds.map(id => byId.get(id)!), hierarchy, peopleLinks: { options: peopleLinks.options, byRecord: peopleLinks.byRecord } };
+      timing.mark('responseAssembly');
+      timing.finish(records.length);
+      return result;
 
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 20000 });
   }
@@ -977,6 +991,7 @@ export class EmsService {
   }
 
   private async validateOnboardingBatchLocked(db: Prisma.TransactionClient, organizationId: string, batchId: string) {
+    const timing = onboardingPerformance('validation', organizationId, batchId);
     const batch = await db.emsOnboardingBatch.findFirst({
       where: { id: batchId, organizationId },
       include: { records: true },
@@ -990,18 +1005,14 @@ export class EmsService {
       select: { communicationChannel: true },
     });
     const channel = organization?.communicationChannel ?? null;
-
-    // Existing values in this org, to detect clashes
-    const existing = await db.employee.findMany({
-      where: { organizationId },
-      select: { employeeCode: true, phone: true, email: true, userId: true },
-    });
+    timing.mark('batchAndChannel');
+    // This context is created after the caller's edits. It never survives a write/retry.
+    const context = onboardingReadContext(db, organizationId);
+    const existing = await context.employees();
     const takenCodes  = new Set(existing.map((e) => normaliseKey(e.employeeCode)).filter(Boolean));
 
-    const departments = await db.department.findMany({
-      where: { organizationId },
-      select: { name: true },
-    });
+    const departments = await context.departments();
+    timing.mark('employeesAndDepartments');
     const knownDepartments = new Set(departments.map((d) => normaliseKey(d.name)));
 
     // Codes seen within this batch, to detect internal duplicates
@@ -1031,10 +1042,15 @@ export class EmsService {
     });
     const accountCandidates = await this.onboardingAccountCandidates(db, identityPhones);
 
-    const hierarchy = await this.reportingHierarchy(db, organizationId, batch.records);
-    const duplicateIndex = await this.duplicateContext(db, organizationId);
-    const peopleLinks = await loadPeopleLinks(db, organizationId, batch.records);
-    let readyCount = 0;
+    timing.mark('phonesAndAccounts');
+    const hierarchy = await this.reportingHierarchy(db, organizationId, batch.records, existing);
+    timing.mark('hierarchy');
+    const duplicateIndex = await this.duplicateContext(db, organizationId, existing);
+    timing.mark('duplicateContext');
+    const peopleLinks = await loadPeopleLinks(db, organizationId, batch.records, { employees: existing, departments });
+    timing.mark('peopleLinks');
+    const reportingOptions = new Map(hierarchy.options.map(option => [option.target, option]));
+    let readyCount = 0, changedRows = 0;
 
     const requiredContact =
       channel === 'WHATSAPP' ? 'whatsappNumber' : channel === 'EMAIL' ? 'workEmail' : null;
@@ -1044,7 +1060,7 @@ export class EmsService {
       if (raw.status === 'EXCLUDED' || raw.status === 'REGISTERED') continue;
       const record = cleanRecord(raw);
       const resolution = hierarchy.byRecord[record.id];
-      const selected = hierarchy.options.find(o => o.target === resolution?.target);
+      const selected = resolution?.target ? reportingOptions.get(resolution.target) : undefined;
       if (resolution?.target === 'BOARD') {
         record.reportingToName = null;
         record.reportingToDesignation = 'Board';
@@ -1221,6 +1237,7 @@ export class EmsService {
       // JSONB object-key order is not meaningful. Avoid rewriting identical results
       // (and changing updatedAt) when validation finds nothing new.
       if (raw.status !== status || validationJson(raw.validationErrors ?? null) !== validationJson(findings.length ? findings : null)) {
+        changedRows++;
         await db.emsOnboardingRecord.update({
           where: { id: record.id, organizationId, batchId },
           data: { status, validationErrors: findings.length > 0 ? findings : Prisma.DbNull },
@@ -1228,6 +1245,7 @@ export class EmsService {
       }
     }
 
+    timing.mark('rowChecksAndWrites');
     const pending = batch.records.filter(
       (r) => r.status !== 'EXCLUDED' && r.status !== 'REGISTERED',
     ).length;
@@ -1241,6 +1259,8 @@ export class EmsService {
       },
     });
 
+    timing.mark('batchStatusWrite');
+    timing.finish(batch.records.length, changedRows);
     return;
   }
 

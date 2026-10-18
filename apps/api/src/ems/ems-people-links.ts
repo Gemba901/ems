@@ -8,11 +8,16 @@ const PERSON_SELECT = { id: true, firstName: true, middleName: true, lastName: t
   employeeCode: true, plantBranch: true, departmentId: true, hodName: true, hodDesignation: true, department: { select: { name: true } },
   firstRelieverId: true, secondRelieverId: true, pendingFirstRelieverRecordId: true, pendingSecondRelieverRecordId: true } as const;
 
+type PeopleLinkSnapshot = {
+  employees: Prisma.EmployeeGetPayload<{ select: typeof PERSON_SELECT }>[];
+  departments: { id: string; name: string }[];
+};
+
 /** Call mutations inside the caller's organisation lock and transaction. */
-export async function loadPeopleLinks(db: Prisma.TransactionClient, organizationId: string, rows: readonly LinkRecord[] = []) {
+export async function loadPeopleLinks(db: Prisma.TransactionClient, organizationId: string, rows: readonly LinkRecord[] = [], snapshot?: PeopleLinkSnapshot) {
   const [employees, departments, assignments] = await Promise.all([
-    db.employee.findMany({ where: { organizationId }, select: PERSON_SELECT }),
-    db.department.findMany({ where: { organizationId }, select: { id: true, name: true } }),
+    snapshot ? Promise.resolve(snapshot.employees) : db.employee.findMany({ where: { organizationId }, select: PERSON_SELECT }),
+    snapshot ? Promise.resolve(snapshot.departments) : db.department.findMany({ where: { organizationId }, select: { id: true, name: true } }),
     db.emsDepartmentHod.findMany({ where: { department: { organizationId } } }),
   ]);
   const ids = [...new Set([...employees.flatMap(e => [e.pendingFirstRelieverRecordId, e.pendingSecondRelieverRecordId]),

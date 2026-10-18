@@ -89,3 +89,40 @@ describe('independent HOD and reliever resolution', () => {
     expect(result.byRecord.a.hod.departmentId).toBeNull(); expect(result.byRecord.a.hod.error).toMatch(/unique department/);
   });
 });
+
+describe('batch-scoped matching indexes', () => {
+  it('does not let a duplicate second-slot error contaminate another row or its first slot', () => {
+    const rows=[row('a',{reliever1Name:'boss Person',reliever1Designation:'Operator',reliever2Name:'boss Person',reliever2Designation:'Operator'}),
+      row('b',{reliever1Name:'boss Person',reliever1Designation:'Operator'}),row('boss')];
+    const result=links(rows,[person('boss')]);
+    expect(result.byRecord.a.first.error).toBeNull();
+    expect(result.byRecord.a.second.error).toMatch(/different person/);
+    expect(result.byRecord.b.first.error).toBeNull();
+  });
+  it('keeps identical imported names in different batches in their own candidate scopes', () => {
+    const rows=[row('a',{reliever1Name:'Shared Person',reliever1Designation:'Operator'}),
+      row('b',{batchId:'other',reliever1Name:'Shared Person',reliever1Designation:'Operator'}),row('boss'),row('other-boss',{batchId:'other'})];
+    const result=links(rows,[person('boss',{name:'Shared Person'}),person('other-boss',{name:'Shared Person',batchId:'other'})]);
+    expect(result.byRecord.a.first.target).toBe('record:boss');
+    expect(result.byRecord.b.first.target).toBe('record:other-boss');
+  });
+  it('counts active department/branch rows once without conflating blank branches or duplicate departments', () => {
+    const rows=[row('a'),row('b',{currentDepartment:' PRODUCTION '}),row('c',{status:'EXCLUDED'}),row('d',{status:'REGISTERED'}),
+      row('e',{plantBranchCode:null}),row('f',{plantBranchCode:'Mombasa'})];
+    const result=links(rows,[]);
+    expect(result.byRecord.a.hod.affectedRecords).toBe(2);
+    expect(result.byRecord.c.hod.affectedRecords).toBe(2);
+    expect(result.byRecord.e.hod.affectedRecords).toBe(1);
+    expect(result.byRecord.f.hod.affectedRecords).toBe(1);
+  });
+  it('sees an excluded candidate on the next resolution instead of retaining its earlier match', () => {
+    const rows=[row('a',{reliever1Name:'boss Person',reliever1Designation:'Operator'}),row('boss')];
+    expect(links(rows,[person('boss')]).byRecord.a.first.state).toBe('PENDING');
+    expect(links(rows,[person('boss',{unavailable:true})]).byRecord.a.first.state).toBe('NEEDS_ATTENTION');
+  });
+  it('does not hide a newly ambiguous name on a later resolution', () => {
+    const rows=[row('a',{reliever1Name:'boss Person',reliever1Designation:'Operator'}),row('boss'),row('other')];
+    expect(links(rows,[person('boss')]).byRecord.a.first.target).toBe('record:boss');
+    expect(links(rows,[person('boss'),person('other',{name:'boss Person'})]).byRecord.a.first.error).toMatch(/Several/);
+  });
+});

@@ -240,3 +240,90 @@ describe('registration interruption and repeat protection', () => {
     expect(f.state().rows[0].status).toBe(status);
   });
 });
+
+// G1b: reductions are measured per phase, never by caching across requests.
+describe('shared onboarding read phases', () => {
+  it('loads employees/departments once for a detail snapshot without leaking internal account fields', async () => {
+    const f = fixture();
+    f.state().employees.push({id:'employee',organizationId:'org',firstName:'Other',lastName:'Person',
+      employeeCode:'OTHER',phone:'254799999999',email:'private@example.test',userId:'private-user'});
+    const result = await f.get();
+    expect(f.db.employee.findMany).toHaveBeenCalledTimes(1);
+    expect(f.db.department.findMany).toHaveBeenCalledTimes(1);
+    expect(result.peopleLinks.options).toEqual(expect.arrayContaining([expect.objectContaining({target:'employee:employee'})]));
+    expect(JSON.stringify(result.peopleLinks)).not.toContain('private@example.test');
+    expect(JSON.stringify(result.peopleLinks)).not.toContain('private-user');
+    expect(result).not.toHaveProperty('employees');
+  });
+
+  it('loads employees/departments once per validation, then freshly for its post-commit response', async () => {
+    const f = fixture();
+    await f.validate();
+    expect(f.db.employee.findMany).toHaveBeenCalledTimes(2);
+    expect(f.db.department.findMany).toHaveBeenCalledTimes(2);
+    for (const [args] of f.db.employee.findMany.mock.calls) expect(args.where).toEqual({organizationId:'org'});
+  });
+
+  it('revalidates 300 rows using one employee read and one department read per phase', async () => {
+    const f = fixture();
+    f.state().rows = Array.from({length:300}, (_, i) => f.row(`r${i}`, {
+      firstName:`Name${i}`, lastName:`Surname${i}`, middleName:null, mobileNumber:`0${712340000+i}`,rowNumber:i+2,
+    }));
+    await f.service.validateOnboardingBatchAck('org','batch');
+    expect(f.db.employee.findMany).toHaveBeenCalledTimes(1);
+    expect(f.db.department.findMany).toHaveBeenCalledTimes(1);
+    f.db.employee.findMany.mockClear(); f.db.department.findMany.mockClear(); f.db.emsOnboardingRecord.update.mockClear();
+    await f.service.validateOnboardingBatchAck('org','batch');
+    expect(f.db.employee.findMany).toHaveBeenCalledTimes(1);
+    expect(f.db.department.findMany).toHaveBeenCalledTimes(1);
+    expect(f.db.emsOnboardingRecord.update).not.toHaveBeenCalled();
+  });
+
+  it('sees a newly created conflicting employee on the next detail request', async () => {
+    const f = fixture();
+    expect((await f.get()).records[0].duplicateReview!.hardConflicts).toHaveLength(0);
+    f.state().employees.push({id:'conflict',organizationId:'org',employeeCode:'EMP-a',firstName:'Different',lastName:'Person',phone:'254799999999'});
+    expect((await f.get()).records[0].duplicateReview!.hardConflicts).toEqual(expect.arrayContaining([expect.objectContaining({employeeId:'conflict',reasons:expect.arrayContaining(['EMPLOYEE_CODE'])})]));
+  });
+
+  it('does not reuse employee data from a validation transaction in its subsequent detail snapshot', async () => {
+    const f = fixture(), transaction = f.db.$transaction.getMockImplementation();
+    let completed = 0;
+    f.db.$transaction.mockImplementation(async (run:any) => {
+      const result = await transaction(run);
+      if (++completed === 1) f.state().employees.push({id:'late',organizationId:'org',employeeCode:'EMP-a',firstName:'Different',lastName:'Person'});
+      return result;
+    });
+    const result = await f.validate();
+    expect(result.records[0].duplicateReview!.hardConflicts.some((p:any)=>p.employeeId==='late')).toBe(true);
+  });
+
+  it('loads fresh employee data when an aborted validation transaction retries', async () => {
+    const f = fixture(), transaction = f.db.$transaction.getMockImplementation();
+    let first = true;
+    f.db.$transaction.mockImplementation(async (run:any) => {
+      try {
+        return await transaction(async (tx:any) => {
+          const result = await run(tx);
+          if (first) { first=false; throw {code:'P2034'}; }
+          return result;
+        });
+      } catch (error) {
+        f.state().employees.push({id:'conflict',organizationId:'org',employeeCode:'EMP-a',firstName:'Other',lastName:'Person'});
+        throw error;
+      }
+    });
+    await f.service.validateOnboardingBatchAck('org','batch');
+    expect(f.db.employee.findMany).toHaveBeenCalledTimes(2);
+    expect(f.state().rows[0].status).toBe('NEEDS_FIXING');
+    expect(f.state().rows[0].validationErrors.some((e:any)=>e.field==='employeeCode')).toBe(true);
+  });
+
+  it('loads the edited record for validation rather than the earlier editor snapshot', async () => {
+    const f = fixture();
+    await f.service.updateOnboardingRecord('org','a',{firstName:'Changed',currentDepartment:'Unknown'});
+    expect(f.state().rows[0].firstName).toBe('Changed');
+    expect(f.state().rows[0].status).toBe('NEEDS_FIXING');
+    expect(f.state().rows[0].validationErrors.some((e:any)=>e.field==='currentDepartment')).toBe(true);
+  });
+});

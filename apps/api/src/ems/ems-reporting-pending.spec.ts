@@ -16,6 +16,7 @@ function setup() {
   const batch: any = { id: 'batch', organizationId: 'org', status: 'READY', defaultPhoneCountry: 'KE', records: [ann, manager] };
   const employees: any[] = [];
   const db: any = {
+    emsDepartmentHod: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     $queryRaw: jest.fn().mockResolvedValue([]), $transaction: jest.fn(),
     organization: { findUnique: jest.fn().mockResolvedValue({ communicationChannel: 'WHATSAPP' }) },
     role: { findMany: jest.fn().mockResolvedValue([{ id: 5, name: 'EMPLOYEE' }]) },
@@ -23,7 +24,7 @@ function setup() {
     user: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'user' }) },
     userOrganization: { upsert: jest.fn() },
     employee: {
-      findMany: jest.fn().mockImplementation(async () => employees),
+      findMany: jest.fn().mockImplementation(async () => employees.map(e => ({...e, emsOnboardingRecord: batch.records.find((r: any) => r.employeeId === e.id) ?? null}))),
       findFirst: jest.fn().mockImplementation(async ({ where }: any) => employees.find(e => e.id === where.id && e.organizationId === where.organizationId) ?? null),
       create: jest.fn().mockImplementation(async ({ data }: any) => { const e = { ...data, id: `employee-${data.employeeCode}` }; employees.push(e); return e; }),
       update: jest.fn().mockImplementation(async ({ where, data }: any) => {
@@ -42,10 +43,12 @@ function setup() {
     },
     emsOnboardingRecord: {
       findFirst: jest.fn().mockImplementation(async ({ where }: any) => batch.records.find((r: any) => r.id === where.id && r.organizationId === where.organizationId) ?? null),
-      findMany: jest.fn().mockImplementation(async () => batch.records),
+      findMany: jest.fn().mockImplementation(async (args: any) => args?.select?.mobileNumber
+        ? batch.records.filter((r: any) => !['REGISTERED','EXCLUDED'].includes(r.status)).map((r: any) => ({...r, batch: {defaultPhoneCountry: batch.defaultPhoneCountry, label: null, sourceFileName: null}}))
+        : batch.records),
       update: jest.fn().mockImplementation(async ({ where, data }: any) => Object.assign(batch.records.find((r: any) => r.id === where.id), data)),
       updateMany: jest.fn().mockImplementation(async ({ where, data }: any) => {
-        const r = batch.records.find((r: any) => r.id === where.id && r.status === where.status);
+        const r = batch.records.find((r: any) => r.id === where.id && (typeof where.status === 'string' ? r.status === where.status : where.status.in.includes(r.status)));
         if (r) Object.assign(r,data);return { count:r ? 1 : 0 };
       }),
     },
@@ -142,5 +145,30 @@ describe('Board reporting completion', () => {
   it('counts explicit Board reporting as complete without an individual manager', () => {
     expect(calcEmployeeCompletion({reportsToBoard:true}).groups.WORK_ALLOCATION).toBe(calcEmployeeCompletion({reportingManagerId:'boss'}).groups.WORK_ALLOCATION);
     expect(calcEmployeeCompletion({reportsToBoard:true}).groups.WORK_ALLOCATION).toBeGreaterThan(calcEmployeeCompletion({}).groups.WORK_ALLOCATION);
+  });
+});
+
+
+describe('onboarding registration with independent people links', () => {
+  it('registers a valid report with a pending reliever, then fills the slot when that person registers', async () => {
+    const {service,manager,ann,employees}=setup();
+    Object.assign(ann,{reliever1RecordId:'manager',reliever1Name:'Peter Otieno',reliever1Designation:'HOD'});
+    await service.validateOnboardingBatch('org','batch');
+    expect(ann.status).toBe('READY'); expect(manager.status).toBe('NEEDS_FIXING');
+    expect((await service.registerOnboardingBatch('org','batch')).registered).toBe(1);
+    const employee=employees.find(e=>e.employeeCode==='A1');
+    expect(employee).toMatchObject({firstRelieverId:null,pendingFirstRelieverRecordId:'manager'});
+    await service.updateOnboardingRecord('org','manager',{mobileNumber:'0712345679',whatsappNumber:'0712345679'});
+    expect((await service.registerOnboardingBatch('org','batch')).registered).toBe(1);
+    expect(employee).toMatchObject({firstRelieverId:'employee-M1',pendingFirstRelieverRecordId:null});
+    await expect(service.registerOnboardingBatch('org','batch')).rejects.toThrow('No records are ready');
+    expect(employees).toHaveLength(2);
+  });
+  it('blocks registration when a stale Ready row now has an excluded reliever', async () => {
+    const {service,manager,ann,employees}=setup();
+    Object.assign(ann,{reliever1RecordId:'manager',reportingToRecordId:null,reportingToBoard:true,reportingToName:null,reportingToDesignation:'Board'});
+    manager.status='EXCLUDED';
+    expect((await service.registerOnboardingBatch('org','batch')).failed).toBe(1);
+    expect(employees).toHaveLength(0);
   });
 });

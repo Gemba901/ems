@@ -6,8 +6,8 @@ import { validateSync } from 'class-validator';
 import { UpdateOnboardingBatchCountryDto } from './dto/onboarding.dto';
 
 const row = (id = 'r1', mobileNumber = '0712345678') => ({
-  id, organizationId: 'org1', batchId: 'b1', employeeCode: id,
-  firstName: 'Test', lastName: 'Person', companyCode: 'ACME',
+  id, organizationId: 'org1', batchId: 'b1', employeeCode: id, updatedAt: new Date('2026-10-14T12:00:00Z'),
+  firstName: id === 'manager' ? 'Samuel' : id === 'r2' ? 'Alice' : 'Test', lastName: id === 'manager' ? 'Kiprono' : id === 'r2' ? 'Winter' : 'Person', companyCode: 'ACME',
   mobileNumber, whatsappNumber: mobileNumber as string | null, workEmail: null as string | null, currentDepartment: 'HR',
   beesAccessLevel: 'employee', status: 'READY',
   jobDesignation: 'Clerk' as string | null,
@@ -18,8 +18,11 @@ const row = (id = 'r1', mobileNumber = '0712345678') => ({
 function fixture() {
   const batch = { id: 'b1', organizationId: 'org1', status: 'READY', defaultPhoneCountry: 'KE', records: [row()] };
   const db = {
+    emsDepartmentHod: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     emsOnboardingBatch: { findFirst: jest.fn().mockResolvedValue(batch), findMany: jest.fn().mockResolvedValue([batch]), update: jest.fn(), updateMany: jest.fn() },
-    emsOnboardingRecord: { update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockImplementation(async args => args?.select?.firstName ? batch.records : [{ status: 'REGISTERED' }]) },
+    emsOnboardingRecord: { update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockImplementation(async args => args?.select?.mobileNumber
+      ? batch.records.filter(r => !['REGISTERED','EXCLUDED'].includes(r.status)).map(r => ({...r, batch: {defaultPhoneCountry: batch.defaultPhoneCountry, label: null, sourceFileName: null}}))
+      : args?.select?.firstName ? batch.records : [{ status: 'REGISTERED' }]) },
     employee: { findMany: jest.fn().mockImplementation(async (args) => args?.select?.firstName
       ? [{ id: 'boss', firstName: 'Jane', lastName: 'Boss', jobTitle: 'HR Manager', reportingManagerId: null, reportsToBoard: true, pendingReportingRecordId: null }]
       : []), create: jest.fn().mockResolvedValue({ id: 'emp1' }), updateMany: jest.fn() },
@@ -130,7 +133,7 @@ describe('EMS phone registration', () => {
     db.employee.create.mockRejectedValue(new Error('database failure'));
     expect((await service.registerOnboardingBatch('org1', 'b1')).failed).toBe(1);
     expect(db.emsOnboardingRecord.update).not.toHaveBeenCalled();
-    expect(db.emsOnboardingRecord.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'r1', organizationId: 'org1', status: 'READY' } }));
+    expect(db.emsOnboardingRecord.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'r1', organizationId: 'org1', status: { in: ['READY', 'NEEDS_FIXING'] }, updatedAt: new Date('2026-10-14T12:00:00Z') } }));
   });
   it('rejects a cancelled batch before writing', async () => {
     const { db, service, batch } = fixture();

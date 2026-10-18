@@ -1,7 +1,10 @@
 "use client";
+import { DepartmentHodEditor, PersonLinkPicker, PersonLinkStatus } from '@/components/ems/OnboardingPeopleLinks';
 
 import { use, useState, useEffect, useCallback, useLayoutEffect, useRef, useMemo, Fragment, type ChangeEvent } from "react";
 import Link from "next/link";
+import OnboardingDuplicateReview from "@/components/ems/OnboardingDuplicateReview";
+import { safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -98,7 +101,9 @@ function editorFindings(record: OnboardingRecord, draft: UpdateOnboardingRecordP
     if (isChainFinding(finding.field, resolution)) continue;
     const reporting = ['reportingToName', 'reportingToDesignation', 'reportingTarget'].includes(finding.field);
     const key = reporting && (draft.reportingTarget || finding.message === resolution?.error) ? 'reportingTarget' : finding.field;
-    add(key, finding.message, reporting ? reportingChanged : !sameValue(finding.field as keyof UpdateOnboardingRecordPayload));
+    add(key, finding.message, reporting ? reportingChanged : key === 'duplicateReview'
+      ? (['firstName', 'middleName', 'lastName', 'employeeCode', 'mobileNumber', 'currentDepartment', 'jobDesignation', 'plantBranchCode'] as const).some(field => !sameValue(field))
+      : !sameValue(finding.field as keyof UpdateOnboardingRecordPayload));
   }
   if (resolution?.error && resolution.errorScope !== 'UPSTREAM') add('reportingTarget', resolution.error, reportingChanged);
   if (record.status !== 'REGISTERED') {
@@ -125,7 +130,13 @@ function waitingOnChain(record: OnboardingRecord, resolution?: ReportingResoluti
     && record.validationErrors.every(e => isChainFinding(e.field, resolution) && e.message === resolution.error);
 }
 
-type RecordFilters = { search: string; department: string; status: '' | OnboardingRecordStatus | 'WAITING';
+function needsDuplicateReview(record: OnboardingRecord, resolution?: ReportingResolution) {
+  return record.status === 'NEEDS_FIXING' && !!record.duplicateReview?.requiresReview
+    && !!record.validationErrors?.length && record.validationErrors.every(finding =>
+      finding.field === 'duplicateReview' || isChainFinding(finding.field, resolution));
+}
+
+type RecordFilters = { search: string; department: string; status: '' | OnboardingRecordStatus | 'WAITING' | 'NEEDS_REVIEW';
   reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT' };
 const EMPTY_FILTERS: RecordFilters = {search: '', department: '', status: '', reportingTarget: '', reportingLabel: '', scope: 'BRANCH'};
 const normaliseFilter = (value: string | null | undefined) => (value ?? '').normalize('NFKD').replace(/\p{M}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -194,7 +205,7 @@ function matchingRecordIds(batch: OnboardingBatchDetail | undefined, filters: Re
   const terms = normaliseFilter(filters.search).split(' ').filter(Boolean);
   return new Set((batch?.records ?? []).filter(record => {
     const nameAndCode = normaliseFilter([record.firstName, record.middleName, record.lastName, record.employeeCode].filter(Boolean).join(' '));
-    const status = waitingOnChain(record, batch?.hierarchy.byRecord[record.id]) ? 'WAITING' : record.status;
+    const status = needsDuplicateReview(record, batch?.hierarchy.byRecord[record.id]) ? 'NEEDS_REVIEW' : waitingOnChain(record, batch?.hierarchy.byRecord[record.id]) ? 'WAITING' : record.status;
     return terms.every(term => nameAndCode.includes(term))
       && (!filters.department || filters.department === departmentKey(record.currentDepartment))
       && (!filters.status || filters.status === status)
@@ -202,9 +213,9 @@ function matchingRecordIds(batch: OnboardingBatchDetail | undefined, filters: Re
   }).map(record => record.id));
 }
 
-function RecordStatusPill({ status, waiting = false }: { status: OnboardingRecordStatus; waiting?: boolean }) {
+function RecordStatusPill({ status, waiting = false, review = false }: { status: OnboardingRecordStatus; waiting?: boolean; review?: boolean }) {
   const colour =
-    waiting ? "bg-amber-100 text-amber-800" :
+    waiting || review ? "bg-amber-100 text-amber-800" :
     status === "REGISTERED"   ? "bg-emerald-100 text-emerald-700" :
     status === "READY"        ? "bg-blue-100 text-blue-700" :
     status === "NEEDS_FIXING" ? "bg-red-100 text-red-700" :
@@ -212,7 +223,7 @@ function RecordStatusPill({ status, waiting = false }: { status: OnboardingRecor
                                 "bg-slate-100 text-slate-500";
   return (
     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${colour}`}>
-      {waiting ? "Waiting on reporting chain" : RECORD_STATUS_LABELS[status]}
+      {review ? "Needs review" : waiting ? "Waiting on reporting chain" : RECORD_STATUS_LABELS[status]}
     </span>
   );
 }
@@ -544,7 +555,7 @@ function SaveFeedback({ notice, hasReturn, disabled, onView, onDismiss }: {
 }
 
 function RecordEditor({
-  record, batch, required, onSave, onSaved, onExclude, onInclude, saving, exclusionError, inclusionError, reportingOptions, reportingResolution, reportingSuggestions = [], onDirtyChange, reviewSequence = 0,
+  record, batch, required, onSave, onSaved, onSaveHod, onHodSaved, onConfirmDuplicate, onUndoDuplicate, reviewReturnTo, onVisit, onRefreshDuplicates, onExclude, onInclude, saving, exclusionError, inclusionError, reportingOptions, reportingResolution, reportingSuggestions = [], onDirtyChange, reviewSequence = 0,
 }: {
   record: OnboardingRecord;
   batch: OnboardingBatchDetail;
@@ -555,6 +566,13 @@ function RecordEditor({
   reportingResolution?: ReportingResolution;
   onSave: (data: UpdateOnboardingRecordPayload) => Promise<OnboardingBatchDetail>;
   onSaved: (updated: OnboardingBatchDetail) => void;
+  onSaveHod: (target: string, expectedVersion: string) => Promise<OnboardingBatchDetail>;
+  onHodSaved: (updated: OnboardingBatchDetail) => void;
+  onConfirmDuplicate: (token: string) => Promise<void>;
+  onUndoDuplicate: (token: string) => Promise<void>;
+  reviewReturnTo: string | null;
+  onVisit: (id: string) => void;
+  onRefreshDuplicates: () => void;
   onExclude: (reason: string) => void;
   onInclude: () => void;
   saving: boolean;
@@ -566,10 +584,15 @@ function RecordEditor({
   const summaryRef = useRef<HTMLDivElement>(null);
   const [highlightReview, setHighlightReview] = useState(false);
   const [reviewRequest, setReviewRequest] = useState(0);
-  function makeDraft(source: OnboardingRecord, options: ReportingOption[], resolution?: ReportingResolution): UpdateOnboardingRecordPayload {
+  function makeDraft(source: OnboardingRecord, options: ReportingOption[], resolution?: ReportingResolution, people = batch.peopleLinks?.byRecord[source.id]): UpdateOnboardingRecordPayload {
     const initial: UpdateOnboardingRecordPayload = {};
     for (const { key } of EDITABLE_FIELDS) {
       initial[key] = (source[key as keyof OnboardingRecord] as string | null) ?? "";
+    }
+    for (const slot of [1, 2] as const) {
+      const employeeId = source[`reliever${slot}EmployeeId`], recordId = source[`reliever${slot}RecordId`];
+      initial[`reliever${slot}Target`] = employeeId || recordId
+        ? (slot === 1 ? people?.first.target : people?.second.target) ?? (employeeId ? `employee:${employeeId}` : `record:${recordId}`) : '';
     }
     initial.reportingTarget = reportingTarget(source, resolution);
     const selected = options.find(o => o.target === initial.reportingTarget);
@@ -585,8 +608,9 @@ function RecordEditor({
   const [baseline, setBaseline] = useState(() => makeDraft(record, reportingOptions, reportingResolution));
   const [draft, setDraft] = useState<UpdateOnboardingRecordPayload>(() => baseline);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [hodDirty, setHodDirty] = useState(false);
   const dirty = Object.keys(draft).some(key => draft[key as keyof UpdateOnboardingRecordPayload] !== baseline[key as keyof UpdateOnboardingRecordPayload]);
-  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => { onDirtyChange(dirty || hodDirty); }, [dirty, hodDirty, onDirtyChange]);
   // A background refresh may update saved findings; never overwrite an unsaved draft.
   useEffect(() => {
     if (dirty) return;
@@ -603,12 +627,13 @@ function RecordEditor({
     }));
   }
   async function saveDraft() {
+    if (hodDirty) { setFeedback('Save or discard the department HOD change first.'); return; }
     setFeedback(null);
     try {
       const updated = await onSave({ ...draft });
       const saved = updated.records.find(r => r.id === record.id);
       if (!saved) throw new Error('Saved record was not returned. Refresh before continuing.');
-      const next = makeDraft(saved, updated.hierarchy.options, updated.hierarchy.byRecord[saved.id]);
+      const next = makeDraft(saved, updated.hierarchy.options, updated.hierarchy.byRecord[saved.id], updated.peopleLinks?.byRecord[saved.id]);
       setBaseline(next); setDraft(next); onDirtyChange(false);
       // The action notice already confirms success; adding another banner here shifts the fields after scrolling was restored.
       setFeedback(null);
@@ -646,7 +671,7 @@ function RecordEditor({
     summaryRef.current.focus({preventScroll: true});
   }, [reviewRequest]);
   const issueLabel = (key: string) => key === 'reportingTarget' ? 'Reporting person or Board'
-    : EDITABLE_FIELDS.find(field => field.key === key)?.label ?? (key === 'registration' ? 'Registration' : 'Record');
+    : key === 'duplicateReview' ? 'Duplicate-person review' : EDITABLE_FIELDS.find(field => field.key === key)?.label ?? (key === 'registration' ? 'Registration' : 'Record');
   const fieldMessages = (key: string) => findings.get(key)?.length ? <ul id={`issues-${record.id}-${key}`} className="mt-1 space-y-1 text-xs" data-field-findings={key}>
     {findings.get(key)!.map((finding, index) => <li key={index} className={finding.stale ? 'text-slate-500' : 'text-red-700'}>{finding.stale && 'Last saved check: '}{finding.message}</li>)}
   </ul> : null;
@@ -654,6 +679,16 @@ function RecordEditor({
   const selectablePeople = reportingOptions.filter(o => o.target !== `record:${record.id}` && o.target !== `employee:${record.employeeId}`);
   const invalidSelection = !!draft.reportingTarget && draft.reportingTarget !== 'BOARD' && !selectablePeople.some(o => o.target === draft.reportingTarget);
   const selfSelected = draft.reportingTarget === `record:${record.id}` || (!!record.employeeId && draft.reportingTarget === `employee:${record.employeeId}`);
+  const peopleLinks = batch.peopleLinks?.byRecord[record.id];
+  const peopleOptions = batch.peopleLinks?.options ?? reportingOptions;
+  const relieverOptions = peopleOptions.filter(p => p.target !== `record:${record.id}` && p.target !== `employee:${record.employeeId}`);
+  function chooseReliever(slot: 1 | 2, target: string) {
+    const person = peopleOptions.find(p => p.target === target);
+    setDraft(d => ({...d, [`reliever${slot}Target`]: target,
+      ...(target === 'NONE' ? {[`reliever${slot}Name`]: '', [`reliever${slot}Designation`]: ''}
+        : person ? {[`reliever${slot}Name`]: person.name, [`reliever${slot}Designation`]: person.designation} : {})}));
+    setFeedback(null);
+  }
   const identities = reportingIdentities([batch]);
   const reportingEdited = identities.canonical(draft.reportingTarget ?? '') !== identities.canonical(currentReporting.reportingTarget ?? '')
     || (!draft.reportingTarget && (reportingText(draft.reportingToName) !== reportingText(currentReporting.reportingToName)
@@ -665,6 +700,7 @@ function RecordEditor({
 
   return (
     <div ref={editorRef} className="max-sm:max-w-[calc(100vw-3rem)] bg-blue-50/40 border-b-2 border-slate-300 px-3 sm:px-5 py-4 space-y-4">
+      {hodDirty && <p role="status" className="rounded-lg border border-purple-300 bg-purple-50 p-3 text-sm text-purple-900">Save or discard the department HOD change before editing this record.</p>}
       {dirty && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Unsaved changes. Record status and saved validation findings describe the last saved version. Choose Save &amp; re-validate to check these edits.</p>}
       {feedback && <p role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">{feedback}</p>}
       {hasReview && reviewRequest > 0 && <div ref={summaryRef} id={`review-summary-${record.id}`} data-review-summary tabIndex={-1} aria-labelledby={`review-title-${record.id}`}
@@ -676,7 +712,7 @@ function RecordEditor({
           <p className="mt-1 text-xs text-slate-600">Select an issue to go to its field.</p>
           <ul className="mt-2 grid gap-x-5 gap-y-2 sm:grid-cols-2">
             {currentIssues.map((issue, index) => <li key={`${issue.key}:${index}`} className="min-w-0 text-xs text-red-700 break-words">
-              {issue.key === 'reportingTarget' || EDITABLE_FIELDS.some(field => field.key === issue.key)
+              {issue.key === 'reportingTarget' || issue.key === 'duplicateReview' || EDITABLE_FIELDS.some(field => field.key === issue.key)
                 ? <button type="button" disabled={saving} className="text-left font-semibold underline underline-offset-2 hover:text-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50"
                     onClick={() => { setHighlightReview(false); revealEditorField(editorRef.current, issue.key); }}>
                     {issueLabel(issue.key)}: {issue.message}
@@ -687,13 +723,16 @@ function RecordEditor({
         </>}
         {!!staleCount && <p className="mt-2 text-xs text-slate-600">Edited fields still need validation. Save &amp; re-validate to refresh their findings.</p>}
       </div>}
+      {record.status !== 'REGISTERED' && record.status !== 'EXCLUDED' && <OnboardingDuplicateReview
+        review={record.duplicateReview} batchId={batch.id} recordId={record.id} returnTo={reviewReturnTo} dirty={dirty || hodDirty} disabled={saving}
+        onConfirm={onConfirmDuplicate} onUndo={onUndoDuplicate} onVisit={onVisit} onRefresh={onRefreshDuplicates} />}
       <div className="space-y-2" data-viewport-anchor={`manager:${record.id}`} data-record-id={record.id} data-editor-field="reportingTarget" tabIndex={-1}>
         <label className="block text-xs font-semibold text-slate-600" htmlFor={`manager-${record.id}`}>
           Reporting person or Board <span className="text-red-500">*</span>
         </label>
         <select
           id={`manager-${record.id}`}
-          disabled={locked || saving}
+          disabled={locked || saving || hodDirty}
           value={draft.reportingTarget ?? ''}
           aria-invalid={findings.get('reportingTarget')?.some(finding => !finding.stale) || undefined}
           aria-describedby={findings.has('reportingTarget') ? `issues-${record.id}-reportingTarget` : undefined}
@@ -736,8 +775,24 @@ function RecordEditor({
         {!reportingResolution?.error && reportingResolution?.warning && <details className="text-xs text-amber-700"><summary className="cursor-pointer">{dirty && 'Last saved check: '}Reporting details</summary><p>{reportingResolution.warning}</p></details>}
         {locked && record.employeeId && <Link className="inline-block text-sm text-blue-600 underline" href={`/ems/employees/${record.employeeId}#reporting-manager`}>View or correct reporting assignment on employee profile</Link>}
       </div>
+      {peopleLinks && <>
+        <DepartmentHodEditor recordId={record.id} hod={peopleLinks.hod} options={peopleOptions}
+          importedName={record.hodName} importedDesignation={record.hodDesignation}
+          disabled={locked || record.status === 'EXCLUDED' || saving} recordDirty={dirty}
+          onDirtyChange={setHodDirty} onSave={onSaveHod} onSaved={updated => {setHodDirty(false); onHodSaved(updated);}} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          {([1, 2] as const).map(slot => <div key={slot} data-editor-field={`reliever${slot}Name`} tabIndex={-1} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+            <PersonLinkPicker id={`reliever-${slot}-${record.id}`} label={slot === 1 ? 'First reliever' : 'Second reliever'}
+              value={draft[`reliever${slot}Target`] ?? ''} options={relieverOptions} allowImported
+              disabled={locked || saving || hodDirty} onChange={target => chooseReliever(slot, target)} />
+            {fieldMessages(`reliever${slot}Name`)}
+            <p className="text-xs text-slate-500">Saved link</p>
+            <PersonLinkStatus link={slot === 1 ? peopleLinks.first : peopleLinks.second} showError={false} />
+          </div>)}
+        </div>
+      </>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {EDITABLE_FIELDS.map(({ key, label }) => {
+        {EDITABLE_FIELDS.filter(field => !peopleLinks || !["hodName", "hodDesignation"].includes(field.key)).map(({ key, label }) => {
           const choices = EDITOR_CHOICES[key];
           const selected = choices ? editorChoice(key, draft[key]) : '';
           const reporting = key === 'reportingToName' || key === 'reportingToDesignation';
@@ -745,7 +800,7 @@ function RecordEditor({
             && !(key === 'reportingToName' && ['board', 'boardofdirectors'].includes(editorValueKey(draft.reportingToDesignation)));
           const props = {
             id: `field-${record.id}-${key}`,
-            disabled: locked || saving || (!!draft.reportingTarget && reporting),
+            disabled: locked || saving || hodDirty || (!!draft.reportingTarget && reporting) || (/^reliever[12](Name|Designation)$/.test(key) && !!draft[`reliever${key.includes("1") ? 1 : 2}Target`]),
             'aria-required': requiredHere || undefined,
             'aria-invalid': findings.get(key)?.some(finding => !finding.stale) || undefined,
             'aria-describedby': [findings.has(key) ? `issues-${record.id}-${key}` : '', key === 'companyCode' ? `help-${record.id}-${key}` : ''].filter(Boolean).join(' ') || undefined,
@@ -763,7 +818,7 @@ function RecordEditor({
               {Object.entries(choices).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
               {key !== 'beesAccessLevel' && <option value="N/A">{key === 'employmentStatus' ? 'N/A — registers as Active' : 'Not applicable (N/A)'}</option>}
             </select> : <input {...props} type="text" value={draft[key] ?? ''} />}
-            {fieldMessages(key)}
+            {!(peopleLinks && /^reliever[12]Name$/.test(key)) && fieldMessages(key)}
             {key === "companyCode" && (
               <p id={`help-${record.id}-${key}`} className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-500">
                 Optional. Enter the company code used in your existing records, if applicable.
@@ -779,7 +834,7 @@ function RecordEditor({
             <div>
             <button
               onClick={onInclude}
-              disabled={saving || dirty}
+              disabled={saving || dirty || hodDirty}
               className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
             >
               <Undo2 className="h-3.5 w-3.5" /> Put back in
@@ -816,7 +871,7 @@ function RecordEditor({
               </div>
               <button
                 onClick={() => onExclude(reason)}
-                disabled={saving || dirty}
+                disabled={saving || dirty || hodDirty}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 <Ban className="h-3.5 w-3.5" /> Exclude
@@ -836,7 +891,7 @@ function RecordEditor({
             : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
           Review issues
         </button>
-        <button type="button" onClick={() => void saveDraft()} disabled={saving}
+        <button type="button" onClick={() => void saveDraft()} disabled={saving || hodDirty}
           className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50">
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
           Save &amp; re-validate
@@ -861,6 +916,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
   const [viewportAction, setViewportAction] = useState<ViewportAction | null>(null);
   const [returnPoints, setReturnPoints] = useState<ReturnPoint[]>([]);
+  const [externalReturn, setExternalReturn] = useState<string | null>(null);
+  const focusedReviewLink = useRef<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
   const [actionError, setActionError] = useState<{kind: string; message: string; recordId?: string} | null>(null);
   const noticeSequence = useRef(0);
@@ -924,6 +981,24 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     enabled: !!accessToken,
   });
 
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search);
+    setExternalReturn(safeReviewReturn(search.get('returnTo')));
+    if (!batch || batch.id !== id) return;
+    const target = search.get('record');
+    const key = `${id}:${target ?? ''}`;
+    if (!target || focusedReviewLink.current === key) return;
+    focusedReviewLink.current = key;
+    const record = batch.records.find(r => r.id === target);
+    if (!record) {
+      setActionError({kind: 'review-link', message: 'The linked record is not available in this import.'});
+      return;
+    }
+    const open = !['REGISTERED', 'EXCLUDED'].includes(record.status);
+    setEditorDirty(false); setOpenRow(open ? record.id : null); setLastRow(record.id); setRevealedId(record.id);
+    setViewportAction({kind: 'reveal', id: record.id, editor: open});
+  }, [id, batch]);
+
   const { data: channelData, isPending: channelLoading, error: channelError, isFetching: channelFetching, refetch: refetchChannel } = useQuery({
     queryKey: ["ems-communication-channel"],
     queryFn: () => EmsService.getCommunicationChannel(accessToken!),
@@ -979,9 +1054,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     return before >= 0 && after >= 0 && before !== after;
   };
   const statusText = (record: OnboardingRecord, updated: OnboardingBatchDetail, still = false) =>
-    waitingOnChain(record, updated.hierarchy.byRecord[record.id]) ? 'Waiting on reporting chain'
+    needsDuplicateReview(record, updated.hierarchy.byRecord[record.id]) ? 'Needs review'
+      : waitingOnChain(record, updated.hierarchy.byRecord[record.id]) ? 'Waiting on reporting chain'
       : record.status === 'NEEDS_FIXING' && still ? 'Still needs fixing' : RECORD_STATUS_LABELS[record.status];
-  const finishRecordAction = (updated: OnboardingBatchDetail, recordId: string, action: 'Saved' | 'Excluded' | 'Put back') => {
+  const finishRecordAction = (updated: OnboardingBatchDetail, recordId: string, action: 'Saved' | 'Reviewed' | 'Confirmation undone' | 'Excluded' | 'Put back') => {
     const record = updated.records.find(r => r.id === recordId);
     const moved = positionChanged(updated, recordId);
     const updatedMatches = matchingRecordIds(updated, filters);
@@ -1013,13 +1089,14 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
       setEditorDirty(false); setOpenRow(null); setLastRow(record.id);
     }
     const waiting = updated.records.filter(r => waitingOnChain(r, updated.hierarchy.byRecord[r.id])).length;
-    const fixing = updated.records.filter(r => r.status === 'NEEDS_FIXING').length - waiting;
+    const reviews = updated.records.filter(r => needsDuplicateReview(r, updated.hierarchy.byRecord[r.id])).length;
+    const fixing = updated.records.filter(r => r.status === 'NEEDS_FIXING').length - waiting - reviews;
     const ready = updated.records.filter(r => r.status === 'READY').length;
     const excluded = updated.records.filter(r => r.status === 'EXCLUDED').length;
     setSaveNotice({id: record?.id, name: record ? recordName(updated, record) : undefined, action: 'Validated',
       status: record ? statusText(record, updated) : undefined,
       reporting: record ? reportingFeedback(queryClient.getQueryData<OnboardingBatchDetail>(queryKey), updated, record.id, moved) : undefined,
-      summary: `${action} · ${ready} ready · ${fixing} need fixing · ${waiting} waiting · ${excluded} excluded`,
+      summary: `${action} · ${ready} ready · ${fixing} need fixing${reviews ? ` · ${reviews} need review` : ''} · ${waiting} waiting · ${excluded} excluded`,
       moved, ready: false, showView: !!record, sequence: ++noticeSequence.current});
     setViewportAction({kind: 'context', snapshot});
     queryClient.setQueryData(queryKey, updated);
@@ -1049,6 +1126,32 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
       EmsService.updateOnboardingRecord(vars.recordId, vars.data, accessToken!),
   });
 
+  const saveHod = useMutation({
+    onMutate: beginAction,
+    mutationFn: (vars: {recordId: string; target: string; expectedVersion: string}) =>
+      EmsService.updateOnboardingDepartmentHod(id, vars, accessToken!),
+  });
+
+  const confirmDuplicate = useMutation({
+    onMutate: beginAction,
+    mutationFn: (vars: { recordId: string; token: string }) =>
+      EmsService.confirmOnboardingDifferentPerson(vars.recordId, vars.token, accessToken!),
+    onSuccess: (updated, vars) => {
+      finishRecordAction(updated, vars.recordId, 'Reviewed');
+      queryClient.invalidateQueries({queryKey: ['ems-onboarding-batches']});
+    },
+  });
+
+  const undoDuplicate = useMutation({
+    onMutate: beginAction,
+    mutationFn: (vars: { recordId: string; token: string }) =>
+      EmsService.undoOnboardingDifferentPerson(vars.recordId, vars.token, accessToken!),
+    onSuccess: (updated, vars) => {
+      finishRecordAction(updated, vars.recordId, 'Confirmation undone');
+      queryClient.invalidateQueries({queryKey: ['ems-onboarding-batches']});
+    },
+  });
+
   const exclude = useMutation({
     onMutate: beginAction,
     mutationFn: (vars: { recordId: string; reason: string }) =>
@@ -1068,13 +1171,13 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     onMutate: beginAction,
     mutationFn: () => EmsService.registerOnboardingBatch(id, accessToken!),
     onSuccess: (result) => finishBatchAction(result.batch, `Registration complete · ${result.registered} registered · ${result.failed} failed`),
-    onError: (error: Error) => failedAction('register', error),
+    onError: (error: Error) => { failedAction('register', error); queryClient.invalidateQueries({queryKey}); },
   });
 
   const error = queryError ? (queryError as any).message : null;
   const hierarchy = batch?.hierarchy;
   const records: OnboardingRecord[] = batch?.records ?? [];
-  const busy = save.isPending || exclude.isPending || include.isPending ||
+  const busy = saveHod.isPending || undoDuplicate.isPending || confirmDuplicate.isPending || save.isPending || exclude.isPending || include.isPending ||
     updateCountry.isPending || validate.isPending || register.isPending;
   const country = countryDraft ?? batch?.defaultPhoneCountry ?? "";
   const countryUnsaved = country !== (batch?.defaultPhoneCountry ?? "");
@@ -1083,7 +1186,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
 
   const readyCount = records.filter((r) => r.status === "READY").length;
   const waitingCount = records.filter(r => waitingOnChain(r, hierarchy?.byRecord[r.id])).length;
-  const problemCount = records.filter((r) => r.status === "NEEDS_FIXING").length - waitingCount;
+  const reviewCount = records.filter(r => needsDuplicateReview(r, hierarchy?.byRecord[r.id])).length;
+  const problemCount = records.filter((r) => r.status === "NEEDS_FIXING").length - waitingCount - reviewCount;
   const registeredCount = records.filter((r) => r.status === "REGISTERED").length;
   const displayedRecords = records.filter(r => matchingIds.has(r.id) || r.id === openRow || r.id === revealedId);
   const extraCount = displayedRecords.length - matchingIds.size;
@@ -1095,12 +1199,15 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
       <div ref={pageRef} data-onboarding-page style={{overflowAnchor: 'none', paddingBottom: '40vh'}}>
-        {(saveNotice || returnPoints.length > 0) && <div data-onboarding-feedback style={{bottom: 'var(--ems-feedback-bottom, 16px)'}} className={`fixed right-4 z-50 max-w-sm rounded-xl border-2 ${saveNotice?.moved ? 'border-purple-800' : 'border-slate-400'} bg-white shadow-lg`} role="status" aria-live="polite">
+        {(saveNotice || returnPoints.length > 0 || externalReturn) && <div data-onboarding-feedback style={{bottom: 'var(--ems-feedback-bottom, 16px)'}} className={`fixed right-4 z-50 max-w-sm rounded-xl border-2 ${saveNotice?.moved ? 'border-purple-800' : 'border-slate-400'} bg-white shadow-lg`} role="status" aria-live="polite">
           {saveNotice && <SaveFeedback key={saveNotice.sequence} notice={saveNotice} hasReturn={returnPoints.length > 0} disabled={busy} onView={viewSavedRow} onDismiss={dismissNotice} />}
           {returnPoints.length > 0 && <button type="button" disabled={busy} onClick={returnToRecord} className={`mx-2 mb-2 py-1 text-sm ${FEEDBACK_LINK}`}>{(() => {
             const point = returnPoints[returnPoints.length - 1];
             return point.name ? `Return to ${point.name}` : 'Return to previous place';
           })()}</button>}
+          {returnPoints.length === 0 && externalReturn && <Link href={externalReturn}
+            onClick={event => { if (busy || !mayLeaveEditor()) event.preventDefault(); }}
+            className={`mx-3 my-2 block py-1 text-sm ${FEEDBACK_LINK}`}>Return to review record</Link>}
         </div>}
 
         <div className="space-y-5">
@@ -1112,7 +1219,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             <h1 className="text-2xl font-bold text-slate-900">{batch?.label ?? "Import"}</h1>
             <p className="text-sm text-slate-500">
               {batch
-                ? `${records.length} records · ${readyCount} ready · ${problemCount} need fixing · ${waitingCount} waiting on reporting chain · ${registeredCount} registered · ${BATCH_STATUS_LABELS[batch.status]}`
+                ? `${records.length} records · ${readyCount} ready · ${problemCount} need fixing${reviewCount ? ` · ${reviewCount} need review` : ''} · ${waitingCount} waiting on reporting chain · ${registeredCount} registered · ${BATCH_STATUS_LABELS[batch.status]}`
                 : "Loading…"}
             </p>
             {register.isSuccess && (
@@ -1220,7 +1327,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All statuses</option>
                 <option value="READY">Ready</option><option value="NEEDS_FIXING">Needs fixing</option>
-                <option value="WAITING">Waiting on reporting chain</option><option value="DRAFT">Draft</option>
+                <option value="NEEDS_REVIEW">Needs review</option><option value="WAITING">Waiting on reporting chain</option><option value="DRAFT">Draft</option>
                 <option value="EXCLUDED">Excluded</option><option value="REGISTERED">Registered</option>
               </select>
             </div>
@@ -1314,9 +1421,9 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                           {rec.validationErrors?.some(err => !open || isChainFinding(err.field, resolution)) && (
                             <ul className="mt-1 space-y-0.5">
                               {rec.validationErrors.filter(err => !open || isChainFinding(err.field, resolution)).map((err, i) => (
-                                <li key={i} className={`flex items-center gap-1 text-xs ${isChainFinding(err.field, resolution) ? 'text-amber-700' : 'text-red-600'}`}>
-                                  <AlertCircle className="h-3 w-3 shrink-0" />
-                                  {isChainFinding(err.field, resolution) ? (resolution?.error ?? err.message) : `${err.field}: ${err.message}`}
+                                <li key={i} className={`flex items-start gap-1 text-xs ${isChainFinding(err.field, resolution) || err.field === 'duplicateReview' ? 'text-amber-700' : 'text-red-600'}`}>
+                                  <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                                  {isChainFinding(err.field, resolution) ? (resolution?.error ?? err.message) : err.field === 'duplicateReview' ? err.message : `${err.field}: ${err.message}`}
                                 </li>
                               ))}
                             </ul>
@@ -1328,7 +1435,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                         </td>
                         <td className="px-4 py-3 text-slate-500">{rec.currentDepartment ?? "—"}</td>
                         <td className="px-4 py-3">
-                          <RecordStatusPill status={rec.status} waiting={waiting} />
+                          <RecordStatusPill status={rec.status} waiting={waiting} review={needsDuplicateReview(rec, resolution)} />
                           {rec.status !== 'EXCLUDED' && hierarchy?.byRecord[rec.id] && (
                             <p className={`mt-2 text-xs ${resolution?.errorScope === 'UPSTREAM' ? 'text-amber-700' : hierarchy.byRecord[rec.id].error ? 'text-red-600' : 'text-slate-600'}`}>
                               {resolution?.errorScope === 'UPSTREAM' ? 'Reporting chain needs attention' : REPORTING_STATE_LABELS[hierarchy.byRecord[rec.id].state]}
@@ -1361,8 +1468,15 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                                   : undefined
                               }
                               inclusionError={actionError?.kind === 'include' && actionError.recordId === rec.id ? actionError.message : undefined}
+                              onSaveHod={(target, expectedVersion) => saveHod.mutateAsync({recordId: rec.id, target, expectedVersion})}
+                              onHodSaved={updated => { finishRecordAction(updated, rec.id, 'Reviewed'); queryClient.invalidateQueries({queryKey: ['ems-people-links']}); queryClient.invalidateQueries({queryKey: ['ems-onboarding-batches']}); }}
                               onSave={(data) => save.mutateAsync({ recordId: rec.id, data })}
                               onSaved={updated => finishRecordAction(updated, rec.id, 'Saved')}
+                              onConfirmDuplicate={async token => { await confirmDuplicate.mutateAsync({recordId: rec.id, token}); }}
+                              onUndoDuplicate={async token => { await undoDuplicate.mutateAsync({recordId: rec.id, token}); }}
+                              reviewReturnTo={externalReturn}
+                              onVisit={targetId => visitRow(targetId, rec.id)}
+                              onRefreshDuplicates={() => { queryClient.invalidateQueries({queryKey}); }}
                               onExclude={(reason) => exclude.mutate({ recordId: rec.id, reason })}
                               onInclude={() => include.mutate(rec.id)}
                             />

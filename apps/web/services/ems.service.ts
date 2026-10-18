@@ -81,6 +81,16 @@ export const SKILL_LEVEL_LABELS: Record<SkillLevel, string> = {
   LEVEL_4: "Level 4 — Can Train Others",
 };
 
+export interface EmployeeImportSource {
+  recordId: string;
+  importedAt: string;
+  batchId: string;
+  label: string | null;
+  sourceFileName: string | null;
+  rowNumber: number | null;
+  registeredAt: string | null;
+}
+
 export interface EmployeeProfile {
   id: string;
   firstName: string;
@@ -294,6 +304,11 @@ export const COMMUNICATION_CHANNEL_LABELS: Record<CommunicationChannel, string> 
   EMAIL:    "Email",
 };
 
+/** The operation committed. This does not mean every imported row is Ready. */
+export interface OnboardingBatchAcknowledgement {
+  id: string;
+}
+
 export interface OnboardingBatchSummary {
   id: string;
   label: string | null;
@@ -329,7 +344,38 @@ export const REPORTING_STATE_LABELS: Record<ReportingState, string> = {
   UNKNOWN: 'Reporting information incomplete', NEEDS_ATTENTION: 'Reporting needs attention',
 };
 
+export type DuplicateReason = 'EMPLOYEE_CODE' | 'PERSONAL_MOBILE' | 'SAME_NAME' | 'NAME_FORMAT' | 'PARTIAL_NAME' | 'SIMILAR_NAME';
+export interface DuplicateMatch {
+  key: string;
+  kind: 'EMPLOYEE' | 'IMPORT';
+  employeeId: string | null;
+  recordId: string | null;
+  batchId: string | null;
+  batchLabel: string | null;
+  sourceFileName: string | null;
+  rowNumber: number | null;
+  name: string;
+  employeeCode: string | null;
+  personalMobile: string | null;
+  department: string | null;
+  designation: string | null;
+  branch: string | null;
+  reasons: DuplicateReason[];
+  supportingDetails: ('DEPARTMENT' | 'DESIGNATION' | 'BRANCH')[];
+}
+export interface DuplicateReview {
+  token: string | null;
+  hardConflicts: DuplicateMatch[];
+  possibleMatches: DuplicateMatch[];
+  reviewed: boolean;
+  requiresReview: boolean;
+  blocked: boolean;
+  confirmedAt: string | null;
+}
+
 export interface OnboardingRecord {
+  reliever1RecordId?: string | null; reliever1EmployeeId?: string | null;
+  reliever2RecordId?: string | null; reliever2EmployeeId?: string | null;
   reportingToRecordId: string | null;
   reportingToEmployeeId: string | null;
   reportingToBoard: boolean;
@@ -363,19 +409,44 @@ export interface OnboardingRecord {
   reliever2Name: string | null;
   reliever2Designation: string | null;
   status: OnboardingRecordStatus;
-  validationErrors: { field: string; message: string }[] | null;
+  validationErrors: { field: string; message: string; code?: string }[] | null;
+  duplicateReview?: DuplicateReview | null;
   exclusionReason: string | null;
   employeeId: string | null;
   registeredAt: string | null;
 }
 
+export interface PersonLinkResolution {
+  target: string | null;
+  state: 'UNASSIGNED' | 'ASSIGNED' | 'PENDING' | 'NEEDS_ATTENTION';
+  person: ReportingOption | null;
+  error: string | null;
+  warning: string | null;
+}
+export interface DepartmentHodResolution extends PersonLinkResolution {
+  departmentId: string | null; departmentName: string; branchKey: string; branchLabel: string;
+  version: string; reviewKey: string | null; suggestedTarget: string | null; affectedRecords: number;
+}
+export interface RecordPeopleLinks {
+  hod: DepartmentHodResolution; first: PersonLinkResolution; second: PersonLinkResolution;
+}
+export interface EmployeePeopleLinks {
+  previousHod: {name: string; designation: string} | null;
+  hod: PersonLinkResolution; first: PersonLinkResolution; second: PersonLinkResolution;
+  departmentId: string | null; departmentName: string; branchLabel: string;
+  options: ReportingOption[]; hodOptions: ReportingOption[]; version: string; hodVersion: string;
+}
+
 export interface OnboardingBatchDetail extends OnboardingBatchSummary {
+  peopleLinks?: { options: ReportingOption[]; byRecord: Record<string, RecordPeopleLinks> };
   hierarchy: { suggestionsByRecord?: Record<string, ReportingOption[]>; options: ReportingOption[]; byRecord: Record<string, ReportingResolution>; orderedIds: string[] };
   organizationId: string;
   records: OnboardingRecord[];
 }
 
 export interface UpdateOnboardingRecordPayload {
+  reliever1Target?: string;
+  reliever2Target?: string;
   reportingTarget?: string;
   companyCode?: string;
   plantBranchCode?: string;
@@ -409,6 +480,18 @@ export interface UpdateOnboardingRecordPayload {
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export const EmsService = {
+  async updateOnboardingDepartmentHod(batchId: string, data: {recordId: string; target: string; expectedVersion: string}, token: string): Promise<OnboardingBatchDetail> {
+    return handleResponse(await apiClient(`${API_URL}/ems/onboarding/batches/${batchId}/department-hod`, {method: 'PATCH', headers: authHeaders(token), body: JSON.stringify(data)}, token));
+  },
+  async getEmployeePeopleLinks(employeeId: string, token: string): Promise<EmployeePeopleLinks> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/${employeeId}/people-links`, {headers: authHeaders(token)}, token));
+  },
+  async updateEmployeeRelievers(employeeId: string, data: {first: string; second: string; expectedVersion: string}, token: string): Promise<EmployeePeopleLinks> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/${employeeId}/relievers`, {method: 'PATCH', headers: authHeaders(token), body: JSON.stringify(data)}, token));
+  },
+  async updateEmployeeDepartmentHod(employeeId: string, data: {target: string; expectedVersion: string}, token: string): Promise<EmployeePeopleLinks> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/${employeeId}/department-hod`, {method: 'PATCH', headers: authHeaders(token), body: JSON.stringify(data)}, token));
+  },
   async getMyProfile(token: string): Promise<MyProfileResponse> {
     const res = await apiClient(`${API_URL}/ems/me`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
@@ -442,7 +525,7 @@ export const EmsService = {
     return handleResponse(res);
   },
 
-  async getEmployee(id: string, token: string): Promise<{ employee: EmployeeProfile; completion: CompletionResult }> {
+  async getEmployee(id: string, token: string): Promise<{ employee: EmployeeProfile; completion: CompletionResult; sourceImport?: EmployeeImportSource | null }> {
     const res = await apiClient(`${API_URL}/ems/employees/${id}`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
   },
@@ -534,6 +617,15 @@ export const EmsService = {
     return handleResponse(res);
   },
 
+  /** The new-import page loads the full detail after navigation. */
+  async validateOnboardingBatchAck(id: string, token: string): Promise<OnboardingBatchAcknowledgement> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/validate?response=ack`, {
+      method: "POST",
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
   async updateOnboardingRecord(
     id: string,
     data: UpdateOnboardingRecordPayload,
@@ -543,6 +635,20 @@ export const EmsService = {
       method: "PATCH",
       headers: authHeaders(token),
       body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async confirmOnboardingDifferentPerson(id: string, reviewToken: string, token: string): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/records/${id}/confirm-different-person`, {
+      method: 'POST', headers: authHeaders(token), body: JSON.stringify({ token: reviewToken }),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async undoOnboardingDifferentPerson(id: string, reviewToken: string, token: string): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/records/${id}/undo-different-person`, {
+      method: 'POST', headers: authHeaders(token), body: JSON.stringify({ token: reviewToken }),
     }, token);
     return handleResponse(res);
   },
@@ -574,6 +680,20 @@ export const EmsService = {
     token: string,
   ): Promise<OnboardingBatchDetail> {
     const res = await apiClient(`${API_URL}/ems/onboarding/batches/${batchId}/records`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  /** Avoid rebuilding the growing batch after each upload chunk. */
+  async addOnboardingRecordsAck(
+    batchId: string,
+    data: { records: (UpdateOnboardingRecordPayload & { rowNumber?: number })[] },
+    token: string,
+  ): Promise<OnboardingBatchAcknowledgement> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${batchId}/records?response=ack`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(data),

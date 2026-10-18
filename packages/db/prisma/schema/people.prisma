@@ -27,6 +27,14 @@ model Employee {
   firstReliever    Employee?  @relation("EmsFirstReliever", fields: [firstRelieverId], references: [id], onDelete: SetNull)
   relievesAsFirst  Employee[] @relation("EmsFirstReliever")
 
+  pendingFirstRelieverRecordId String?
+  pendingFirstRelieverRecord EmsOnboardingRecord? @relation("EmployeePendingFirstReliever", fields: [pendingFirstRelieverRecordId], references: [id], onDelete: NoAction)
+  pendingSecondRelieverRecordId String?
+  pendingSecondRelieverRecord EmsOnboardingRecord? @relation("EmployeePendingSecondReliever", fields: [pendingSecondRelieverRecordId], references: [id], onDelete: NoAction)
+  onboardingFirstRelieverFor EmsOnboardingRecord[] @relation("OnboardingFirstRelieverEmployee")
+  onboardingSecondRelieverFor EmsOnboardingRecord[] @relation("OnboardingSecondRelieverEmployee")
+  departmentHodAssignments EmsDepartmentHod[]
+
   secondRelieverId String?
   secondReliever   Employee?  @relation("EmsSecondReliever", fields: [secondRelieverId], references: [id], onDelete: SetNull)
   relievesAsSecond Employee[] @relation("EmsSecondReliever")
@@ -177,6 +185,8 @@ model Employee {
   heatMaterialChargesRecorded      HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
   heatCycleEventsRecorded          HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
 
+  @@index([pendingFirstRelieverRecordId])
+  @@index([pendingSecondRelieverRecordId])
   @@index([pendingReportingRecordId])
   @@index([email, organizationId])
   @@unique([phone, organizationId])
@@ -184,6 +194,7 @@ model Employee {
 }
 
 model Department {
+  hodAssignments EmsDepartmentHod[]
   id                String  @id @default(uuid())
   name              String
   organizationId    String

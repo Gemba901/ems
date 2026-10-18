@@ -1,3 +1,4 @@
+import { UpdateDepartmentHodDto, UpdateEmployeeRelieversDto, UpdateEmployeeHodDto } from './dto/onboarding.dto';
 import { UpdateEmployeeReportingDto } from './dto/onboarding.dto';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
@@ -18,7 +19,7 @@ import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
 import { Post, Delete } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
 import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto,
-  UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto } from './dto/onboarding.dto';
+  UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto, ConfirmOnboardingDuplicateDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -153,7 +154,9 @@ export class EmsController {
     @Param('id') id: string,
     @Body() dto: AddOnboardingRecordsDto,
     @CurrentUser() user: { userId: string; organizationId: string },
+    @Query('response') response?: string,
   ) {
+    if (response === 'ack') return this.ems.addOnboardingRecordsAck(user.organizationId, id, dto);
     return this.ems.addOnboardingRecords(user.organizationId, id, dto);
   }
     
@@ -163,7 +166,9 @@ export class EmsController {
   async validateOnboardingBatch(
     @Param('id') id: string,
     @CurrentUser() user: { organizationId: string },
+    @Query('response') response?: string,
   ) {
+    if (response === 'ack') return this.ems.validateOnboardingBatchAck(user.organizationId, id);
     return this.ems.validateOnboardingBatch(user.organizationId, id);
   }
 
@@ -176,6 +181,26 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.updateOnboardingRecord(user.organizationId, id, dto);
+  }
+
+  @Post('onboarding/records/:id/confirm-different-person')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async confirmOnboardingDifferentPerson(
+    @Param('id') id: string,
+    @Body() dto: ConfirmOnboardingDuplicateDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.ems.confirmOnboardingDifferentPerson(user.organizationId, id, user.userId, dto.token);
+  }
+
+  @Post('onboarding/records/:id/undo-different-person')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async undoOnboardingDifferentPerson(
+    @Param('id') id: string,
+    @Body() dto: ConfirmOnboardingDuplicateDto,
+    @CurrentUser() user: { userId: string; organizationId: string },
+  ) {
+    return this.ems.undoOnboardingDifferentPerson(user.organizationId, id, user.userId, dto.token);
   }
 
   /** PATCH /ems/onboarding/records/:id/exclude — leave this row out */
@@ -228,4 +253,31 @@ export class EmsController {
   ) {
     return this.ems.deleteOnboardingBatch(user.organizationId, id);
   }
+  @Patch('onboarding/batches/:id/department-hod')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  updateOnboardingDepartmentHod(@Param('id') id: string, @Body() dto: UpdateDepartmentHodDto,
+    @CurrentUser() user: { organizationId: string; userId: string }) {
+    return this.ems.updateOnboardingDepartmentHod(user.organizationId, id, dto.recordId, dto.target, dto.expectedVersion, user.userId);
+  }
+
+  @Get('employees/:id/people-links')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  getEmployeePeopleLinks(@Param('id') id: string, @CurrentUser() user: { organizationId: string }) {
+    return this.ems.getEmployeePeopleLinks(id, user.organizationId);
+  }
+
+  @Patch('employees/:id/relievers')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  updateEmployeeRelievers(@Param('id') id: string, @Body() dto: UpdateEmployeeRelieversDto,
+    @CurrentUser() user: { organizationId: string }) {
+    return this.ems.updateEmployeeRelievers(id, user.organizationId, dto.first, dto.second, dto.expectedVersion);
+  }
+
+  @Patch('employees/:id/department-hod')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  updateEmployeeDepartmentHod(@Param('id') id: string, @Body() dto: UpdateEmployeeHodDto,
+    @CurrentUser() user: { organizationId: string; userId: string }) {
+    return this.ems.updateEmployeeDepartmentHod(id, user.organizationId, dto.target, dto.expectedVersion, user.userId);
+  }
+
 }

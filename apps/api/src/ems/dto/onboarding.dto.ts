@@ -62,6 +62,10 @@ export class AddOnboardingRecordsDto {
 }
 
 export class UpdateOnboardingRecordDto {
+  @IsString() @IsOptional() @MaxLength(100) @Matches(/^(?:NONE|(?:record|employee):[A-Za-z0-9_-]+)?$/)
+  reliever1Target?: string;
+  @IsString() @IsOptional() @MaxLength(100) @Matches(/^(?:NONE|(?:record|employee):[A-Za-z0-9_-]+)?$/)
+  reliever2Target?: string;
   // Empty string clears the saved choice; all referenced IDs are checked by the service.
   @IsString() @IsOptional() @MaxLength(100)
   @Matches(/^(?:BOARD|(?:record|employee):[A-Za-z0-9_-]+)?$/)
@@ -120,4 +124,25 @@ export class UpdateEmployeeReportingDto {
   @IsString() @MaxLength(100)
   @Matches(/^(?:BOARD|employee:[A-Za-z0-9_-]+)$/)
   target!: string;
+}
+
+/** The server creates the review receipt; clients can only confirm the current token. */
+export class ConfirmOnboardingDuplicateDto {
+  @IsString() @Matches(/^[a-f0-9]{64}$/)
+  token!: string;
+}
+
+export class UpdateDepartmentHodDto {
+  @IsString() @MaxLength(100) recordId!: string;
+  @IsString() @MaxLength(100) @Matches(/^(?:NONE|(?:record|employee):[A-Za-z0-9_-]+)$/) target!: string;
+  @IsString() @MaxLength(1000) expectedVersion!: string;
+}
+export class UpdateEmployeeRelieversDto {
+  @IsString() @MaxLength(100) @Matches(/^(?:NONE|(?:record|employee):[A-Za-z0-9_-]+)$/) first!: string;
+  @IsString() @MaxLength(100) @Matches(/^(?:NONE|(?:record|employee):[A-Za-z0-9_-]+)$/) second!: string;
+  @IsString() @MaxLength(1000) expectedVersion!: string;
+}
+export class UpdateEmployeeHodDto {
+  @IsString() @MaxLength(100) @Matches(/^(?:NONE|(?:record|employee):[A-Za-z0-9_-]+)$/) target!: string;
+  @IsString() @MaxLength(1000) expectedVersion!: string;
 }

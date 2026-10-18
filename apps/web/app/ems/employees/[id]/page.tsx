@@ -1,8 +1,11 @@
 "use client";
+import EmployeePeopleLinksCard from "@/components/ems/EmployeePeopleLinksCard";
 
 import EmployeeReportingCard from "@/components/ems/EmployeeReportingCard";
+import EmployeeOnboardingIdentity from "@/components/ems/EmployeeOnboardingIdentity";
 import { TenantImage } from "@/components/files/TenantImage";
-import { useState, type ElementType } from "react";
+import { useState, useEffect, type ElementType } from "react";
+import { employeeBackDestination, safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -154,6 +157,12 @@ export default function EmployeeDetailPage() {
   const { accessToken, user: viewer } = useAuthStore();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const [reviewReturn, setReviewReturn] = useState<string | null>(null);
+  useEffect(() => { setReviewReturn(safeReviewReturn(new URLSearchParams(window.location.search).get('returnTo'))); }, [id]);
+  const goBack = () => {
+    const destination = employeeBackDestination(window.location.search, window.history.length);
+    if (destination) router.push(destination); else router.back();
+  };
   const { hasModule } = useOrgModules();
 
   const [activeTab, setActiveTab] = useState<Tab>("profile");
@@ -284,6 +293,8 @@ export default function EmployeeDetailPage() {
     mutationFn: () => EmsService.updateEmployee(id!, form, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
+      queryClient.invalidateQueries({queryKey: ['ems-onboarding-batch']});
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -293,6 +304,7 @@ export default function EmployeeDetailPage() {
     mutationFn: (url: string) => EmployeeService.updateAvatar(id!, url, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
       setShowAvatarModal(false);
     },
@@ -303,7 +315,9 @@ export default function EmployeeDetailPage() {
       EmployeeService.update(id!, data, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
+      queryClient.invalidateQueries({queryKey: ['ems-onboarding-batch']});
       setEditingPersonal(false);
     },
   });
@@ -327,7 +341,9 @@ export default function EmployeeDetailPage() {
       }, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
+      queryClient.invalidateQueries({queryKey: ['ems-onboarding-batch']});
       setEditingDept(false);
     },
   });
@@ -373,10 +389,12 @@ export default function EmployeeDetailPage() {
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
       <div className="space-y-5">
 
+        {reviewReturn && <Link href={reviewReturn} className="inline-block text-sm font-medium text-purple-800 underline">Return to review record</Link>}
         {/* ── Page header ──────────────────────────────────────────────── */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={goBack}
+            aria-label={reviewReturn ? "Return to review record" : "Back"}
             className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 transition-all">
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -423,7 +441,10 @@ export default function EmployeeDetailPage() {
 
         {/* ── Profile tab ───────────────────────────────────────────────── */}
         {employee && accessToken && isAdminOrHr && (
-          <EmployeeReportingCard employeeId={id} token={accessToken} />
+          <>
+            <EmployeeReportingCard employeeId={id} token={accessToken} />
+            <EmployeePeopleLinksCard employeeId={id} token={accessToken} />
+          </>
         )}
 
         {activeTab === "profile" && employee && (
@@ -504,6 +525,7 @@ export default function EmployeeDetailPage() {
                 </div>
 
                 <div className="p-5">
+                  <EmployeeOnboardingIdentity employeeCode={employee.employeeCode} sourceImport={emsData?.sourceImport} />
                   {editingPersonal ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">

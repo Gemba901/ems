@@ -82,6 +82,21 @@ model EmsOnboardingRecord {
   reportingToBoard Boolean @default(false)
   employmentStatus       String?
   employmentType         String?
+  // HR confirmation of the department/branch HOD revision, never accepted from an import payload.
+  hodReviewKey String?
+  pendingHodFor EmsDepartmentHod[]
+  reliever1RecordId String?
+  reliever1Record EmsOnboardingRecord? @relation("OnboardingFirstRelieverRecord", fields: [reliever1RecordId], references: [id], onDelete: NoAction)
+  firstRelieverFor EmsOnboardingRecord[] @relation("OnboardingFirstRelieverRecord")
+  reliever1EmployeeId String?
+  reliever1Employee Employee? @relation("OnboardingFirstRelieverEmployee", fields: [reliever1EmployeeId], references: [id], onDelete: NoAction)
+  reliever2RecordId String?
+  reliever2Record EmsOnboardingRecord? @relation("OnboardingSecondRelieverRecord", fields: [reliever2RecordId], references: [id], onDelete: NoAction)
+  secondRelieverFor EmsOnboardingRecord[] @relation("OnboardingSecondRelieverRecord")
+  reliever2EmployeeId String?
+  reliever2Employee Employee? @relation("OnboardingSecondRelieverEmployee", fields: [reliever2EmployeeId], references: [id], onDelete: NoAction)
+  employeesAwaitingFirstReliever Employee[] @relation("EmployeePendingFirstReliever")
+  employeesAwaitingSecondReliever Employee[] @relation("EmployeePendingSecondReliever")
   reliever1Name          String?
   reliever1Designation   String?
   reliever2Name          String?
@@ -89,6 +104,8 @@ model EmsOnboardingRecord {
 
   status           EmsOnboardingRecordStatus @default(DRAFT)
   validationErrors Json?
+  // Server-issued confirmation of a specific duplicate match set.
+  duplicateReviewReceipt Json?
   exclusionReason  String?
 
   employeeId   String?   @unique
@@ -98,8 +115,34 @@ model EmsOnboardingRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([reliever1RecordId])
+  @@index([reliever1EmployeeId])
+  @@index([reliever2RecordId])
+  @@index([reliever2EmployeeId])
   @@index([reportingToRecordId])
   @@index([reportingToEmployeeId])
   @@index([batchId])
   @@index([organizationId])
+}
+
+// One explicit HOD choice per department and branch. No access-role changes.
+model EmsDepartmentHod {
+  id String @id @default(uuid())
+  departmentId String
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  branchKey String
+  branchLabel String
+  employeeId String?
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  pendingRecordId String?
+  pendingRecord EmsOnboardingRecord? @relation(fields: [pendingRecordId], references: [id], onDelete: NoAction)
+  isUnassigned Boolean @default(false)
+  revision Int @default(1)
+  updatedByUserId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, branchKey])
+  @@index([employeeId])
+  @@index([pendingRecordId])
 }

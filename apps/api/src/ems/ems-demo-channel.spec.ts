@@ -6,6 +6,7 @@ import { RequestMethod } from '@nestjs/common';
 import { Role } from 'src/common/enum/role.enum';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ROLES_KEY } from 'src/auth/decorators/roles.decorator';
+import { createDuplicateIndex } from './onboarding-duplicates';
 import { EmsService } from './ems.service';
 import { EmsController } from './ems.controller';
 import { EmsDemoToolsGuard } from './ems-demo-tools.guard';
@@ -77,7 +78,9 @@ function registrationFixture(lockedChannels: (string | null)[] = ['EMAIL', 'EMAI
     emsOnboardingBatch: { findFirst: jest.fn(async () => batch) },
     user: { create: jest.fn(async () => ({ id: 'new-user' })) },
     userOrganization: { upsert: jest.fn(async () => ({})) },
-    employee: { create: jest.fn(async () => ({ id: `employee-${events.push('employee-create')}` })) },
+    emsDepartmentHod: { findMany: jest.fn().mockResolvedValue([]) },
+    department: { findMany: jest.fn().mockResolvedValue([]) },
+    employee: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(async () => ({ id: `employee-${events.push('employee-create')}` })) },
     emsOnboardingRecord: { update: jest.fn(async ({ where, data }: any) => { Object.assign(records.find(r => r.id === where.id)!, data); return {}; }) },
   };
   const prisma = {
@@ -92,6 +95,8 @@ function registrationFixture(lockedChannels: (string | null)[] = ['EMAIL', 'EMAI
     },
   };
   const service = new EmsService(prisma as never);
+  // Duplicate integration has its own suite; this fixture isolates channel interruption.
+  jest.spyOn(service as any, 'duplicateContext').mockResolvedValue(createDuplicateIndex(orgId, []));
   jest.spyOn(service as any, 'reportingHierarchy').mockResolvedValue({
     orderedIds: records.map(r => r.id),
     byRecord: Object.fromEntries(records.map(r => [r.id, { target: 'BOARD', error: null }])),
@@ -168,6 +173,7 @@ describe('EMS demo-only communication reset', () => {
     }));
     const batch = { id: 'batch', organizationId: orgId, defaultPhoneCountry: 'KE', status: 'DRAFT', records };
     const db: any = {
+      emsDepartmentHod: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async callback => callback(db)), $queryRaw: jest.fn(async () => []),
       organization: {
         findUnique: jest.fn(async () => ({ communicationChannel: channel })),
@@ -183,7 +189,9 @@ describe('EMS demo-only communication reset', () => {
     };
     const service = new EmsService(db);
     jest.spyOn(service as any, 'checkOnboardingIdentity').mockResolvedValue(null);
-    jest.spyOn(service as any, 'reportingHierarchy').mockResolvedValue({
+    // Duplicate integration has its own suite; this fixture isolates channel interruption.
+  jest.spyOn(service as any, 'duplicateContext').mockResolvedValue(createDuplicateIndex(orgId, []));
+  jest.spyOn(service as any, 'reportingHierarchy').mockResolvedValue({
       options: [], byRecord: Object.fromEntries(records.map(r => [r.id, { target: 'BOARD', error: null }])),
     });
     await service.resetCommunicationChannel(orgId);

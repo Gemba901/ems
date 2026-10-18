@@ -187,3 +187,22 @@ export function splitFullName(value: string, order: NameOrder): { firstName?: st
     lastName: words[surnameAt],
   };
 }
+
+/** Two or more spreadsheet columns pointing at the same field. */
+export type MappingConflict = { field: MapField; columns: number[] };
+
+/**
+ * Fields that more than one column maps to, e.g. "Department" and "Plant & Department" both auto-mapping
+ * to Department. Each must be resolved to a single column before import, or a later column would
+ * silently overwrite an earlier one. Full name versus First/Last name is not a conflict: they are
+ * different fields, and separate name columns deliberately take precedence over the split.
+ */
+export function findMappingConflicts(mapping: (MapField | null)[]): MappingConflict[] {
+  const byField = new Map<MapField, number[]>();
+  mapping.forEach((field, col) => {
+    if (field) byField.set(field, [...(byField.get(field) ?? []), col]);
+  });
+  return [...byField.entries()]
+    .filter(([, columns]) => columns.length > 1)
+    .map(([field, columns]) => ({ field, columns }));
+}

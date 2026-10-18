@@ -13,7 +13,7 @@ import {
 } from "@/services/ems.service";
 import { ArrowLeft, Loader2, Upload, AlertCircle, FileSpreadsheet, CheckCircle2, Info, ArrowDown } from "lucide-react";
 import {
-  mapHeaders, findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, MapField, NameOrder, requiredFields, splitFullName,
+  mapHeaders, findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, MapField, NameOrder, requiredFields, splitFullName, findMappingConflicts,
 } from "../column-map";
 import TemplateCard from "./TemplateCard";
 import ConfirmDialog from "@/components/ems/ConfirmDialog";
@@ -117,6 +117,8 @@ export default function NewOnboardingImportPage() {
   const [busy, setBusy] = useState(false);
   // What the upload is doing right now, e.g. "Uploading rows 51–100 of 231…".
   const [progress, setProgress] = useState<string | null>(null);
+  // An import whose rows all arrived but whose check didn't finish: kept, so HR can open it and retry.
+  const [savedImport, setSavedImport] = useState<{ id: string; label: string; rows: number } | null>(null);
   const [mapping, setMapping] = useState<(MapField | null)[]>([]);
   // How names in a mapped "Full name" column are written.
   const [nameOrder, setNameOrder] = useState<NameOrder>("FIRST_LAST");
@@ -281,6 +283,24 @@ export default function NewOnboardingImportPage() {
   const isRequired = (key: MapField) => (required as Set<string>).has(key);
   const missingRequired = MAPPABLE_FIELDS.filter(({ key }) => isRequired(key) && !covered.has(key));
 
+  // Columns competing for the same field (from auto-mapping or a changed header row). HR must pick one.
+  const conflicts = findMappingConflicts(fields);
+  const conflictFields = new Set<MapField>(conflicts.map((c) => c.field));
+  const fieldLabel = (key: MapField) => MAPPABLE_FIELDS.find((f) => f.key === key)?.label ?? key;
+  /** Up to three different example values from a column, for telling competing columns apart. */
+  const samplesFor = (col: number) => {
+    const seen: string[] = [];
+    for (let i = headerIndex + 1; i < grid.length && seen.length < 3; i++) {
+      const text = String(grid[i]?.[col] ?? "").trim();
+      if (text && !seen.includes(text)) seen.push(text);
+    }
+    return seen;
+  };
+  /** Keep one column for a field; the others it was competing with become "ignore". */
+  function resolveConflict(field: MapField, keep: number | null) {
+    setMapping((prev) => prev.map((f, i) => (f === field && i !== keep ? null : f)));
+  }
+
   const unmatched =
     headerIndex >= 0
       ? headerRow
@@ -298,7 +318,9 @@ export default function NewOnboardingImportPage() {
       let fullName = "";
 
       fields.forEach((field, col) => {
-        if (!field) return;
+        // A field still claimed by several columns is never filled, so one can't silently overwrite another.
+        // (Import is blocked until HR resolves it; this is a second line of defence.)
+        if (!field || conflictFields.has(field)) return;
         const text = String(grid[i][col] ?? "").trim();
         if (!text) return;
         hasValue = true;
@@ -329,20 +351,28 @@ export default function NewOnboardingImportPage() {
         : "choose a default country for phone numbers");
     }
     if (!channel) problems.push("choose your organisation's communication channel");
+    if (conflicts.length > 0) {
+      problems.push(`choose which column to use for ${conflicts.map((c) => fieldLabel(c.field)).join(", ")}`);
+    }
     setCountryAttention(!defaultPhoneCountry);
     setChannelAttention(!channel);
     if (problems.length > 0) {
       setError(`Before importing, ${problems.join(", and ")}.`);
       // Jump to the first problem on the page.
-      const first = document.getElementById(!defaultPhoneCountry ? "default-phone-country" : "communication-channel");
+      const first = document.getElementById(
+        !defaultPhoneCountry ? "default-phone-country" : !channel ? "communication-channel" : "mapping-conflicts",
+      );
       first?.scrollIntoView({ behavior: "smooth", block: "center" });
       if (!defaultPhoneCountry) first?.focus({ preventScroll: true });
       return;
     }
     setBusy(true);
     setError(null);
+    setSavedImport(null);
     let batchId: string | null = null;
     let sent = 0;
+    // Which step failed decides what's safe to do afterwards.
+    let step: "create" | "upload" | "validate" = "create";
     try {
       const batch = await EmsService.createOnboardingBatch(
         {
@@ -353,6 +383,7 @@ export default function NewOnboardingImportPage() {
         accessToken,
       );
       batchId = batch.id;
+      step = "upload";
 
       // Send rows in as few requests as fit under the server's size limit.
       for (const chunk of chunkBySize(rows)) {
@@ -361,18 +392,32 @@ export default function NewOnboardingImportPage() {
         sent += chunk.length;
       }
 
+      // Every chunk was acknowledged: all rows are saved on the server from here on.
+      step = "validate";
       setProgress(`Checking ${rows.length} rows…`);
       await EmsService.validateOnboardingBatchAck(batch.id, accessToken);
       queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
       router.push(`/ems/onboarding/${batch.id}`);
     } catch (e: any) {
       let message = e.message || "Upload failed.";
-      // Don't leave a half-uploaded import behind: cancel it, so HR simply tries again.
+
+      // All rows arrived; only the check didn't finish. Keep the import: HR can open it and validate again.
+      if (step === "validate" && batchId) {
+        queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
+        setSavedImport({ id: batchId, label: label || fileName, rows: rows.length });
+        setError(null);
+        setProgress(null);
+        setBusy(false);
+        return;
+      }
+
+      // The upload stopped part-way. The last request may or may not have been saved, so resending could
+      // duplicate rows: cancel this import instead, and HR simply tries again.
       if (batchId) {
         try {
           await EmsService.cancelOnboardingBatch(batchId, accessToken);
           message += sent > 0
-            ? ` The upload stopped after ${sent} of ${rows.length} rows, so this import was cancelled. Please try again.`
+            ? ` The upload stopped after ${sent} of ${rows.length} rows (possibly a few more), so this import was cancelled. Please try again.`
             : " Nothing was imported. Please try again.";
         } catch {
           message += " An unfinished import may be left in the imports list; cancel it there.";
@@ -731,6 +776,59 @@ export default function NewOnboardingImportPage() {
             </div>
           )}
 
+          {headerIndex >= 0 && conflicts.length > 0 && (
+            <div id="mapping-conflicts" className="scroll-mt-6 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">
+                    {conflicts.length === 1 ? "Two columns are" : "Some columns are"} competing for the same field
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    Choose which column to use for each field. The others will be ignored. Import is paused until each is chosen.
+                  </p>
+                </div>
+              </div>
+              {conflicts.map(({ field, columns }) => (
+                <fieldset key={field} className="rounded-lg border border-amber-200 bg-white p-3">
+                  <legend className="px-1 text-xs font-semibold text-slate-800">
+                    {fieldLabel(field)}{isRequired(field) ? " *" : ""}
+                  </legend>
+                  <div className="space-y-2">
+                    {columns.map((col) => {
+                      const samples = samplesFor(col);
+                      return (
+                        <label key={col} className="flex cursor-pointer items-start gap-2 rounded-md p-1.5 hover:bg-slate-50">
+                          <input
+                            type="radio"
+                            name={`conflict-${field}`}
+                            className="mt-0.5"
+                            onChange={() => resolveConflict(field, col)}
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-slate-800">
+                              {String(headerRow[col] ?? "").trim() || `Column ${col + 1}`}
+                            </span>
+                            <span className="block truncate text-xs text-slate-500">
+                              {samples.length > 0 ? `e.g. ${samples.join(" · ")}` : "No values in this column"}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => resolveConflict(field, null)}
+                      className="text-xs font-medium text-slate-500 hover:text-slate-800"
+                    >
+                      Ignore all of these
+                    </button>
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+          )}
+
           {headerIndex >= 0 && headerRow.length > 0 && (
                 <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
                   <div className="px-3 py-2 bg-slate-100 border-b border-slate-300 flex items-center justify-between">
@@ -762,6 +860,9 @@ export default function NewOnboardingImportPage() {
                             {sample && (
                               <p className="text-[11px] text-slate-400 truncate">e.g. {sample}</p>
                             )}
+                            {fields[col] && conflictFields.has(fields[col]!) && (
+                              <p className="text-[11px] font-medium text-amber-700">Competing with another column: choose one above</p>
+                            )}
                           </div>
                           <select
                             value={fields[col] ?? ""}
@@ -780,7 +881,8 @@ export default function NewOnboardingImportPage() {
                               });
                             }}
                             className={`shrink-0 w-56 px-2 py-1.5 rounded-lg border text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                              fields[col] ? "border-slate-200 text-slate-700" : "border-slate-100 text-slate-400"
+                              fields[col] && conflictFields.has(fields[col]!) ? "border-amber-400 ring-1 ring-amber-300 text-slate-800"
+                                : fields[col] ? "border-slate-200 text-slate-700" : "border-slate-100 text-slate-400"
                             }`}
                           >
                             <option value="">— ignore this column —</option>
@@ -878,6 +980,25 @@ export default function NewOnboardingImportPage() {
               </button>
               {progress && (
                 <p role="status" className="text-xs text-slate-600">{progress}</p>
+              )}
+              {savedImport && (
+                <div role="alert" className="w-full rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                  <p>
+                    All <span className="font-semibold">{savedImport.rows}</span> rows were saved to
+                    {" "}<span className="font-semibold">“{savedImport.label}”</span>, but checking them didn’t finish.
+                  </p>
+                  <p className="mt-1 text-xs">
+                    Nothing is lost. Open the import and use <span className="font-semibold">Validate all</span> to check them again.
+                    Don’t import this file again, or you’ll have two copies.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/ems/onboarding/${savedImport.id}`)}
+                    className="mt-2 rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800"
+                  >
+                    Open the import
+                  </button>
+                </div>
               )}
             </>
           )}

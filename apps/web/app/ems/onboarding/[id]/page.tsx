@@ -4,6 +4,7 @@ import { DepartmentHodEditor, PersonLinkPicker, PersonLinkStatus } from '@/compo
 import { use, useState, useEffect, useCallback, useLayoutEffect, useRef, useMemo, Fragment, type ChangeEvent } from "react";
 import Link from "next/link";
 import OnboardingDuplicateReview from "@/components/ems/OnboardingDuplicateReview";
+import { PAGE_SIZES, pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
 import { safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
@@ -375,13 +376,13 @@ type SaveNotice = { id?: string; name?: string; action: string; status?: string;
   reporting?: ReportingFeedback; moved: boolean; ready: boolean; showView: boolean; sequence: number };
 type ViewportSnapshot = { scroll: ScrollSnapshot; anchor?: string; offset?: number; recordId?: string; keepVisible?: boolean };
 type ReturnPoint = { destination: string; name?: string; openId: string | null; openStatus?: OnboardingRecordStatus;
-  lastId: string | null; viewport: ViewportSnapshot; filters: RecordFilters; revealedId: string | null };
+  page: number; pageSize: number; lastId: string | null; viewport: ViewportSnapshot; filters: RecordFilters; revealedId: string | null };
 type ViewportAction = { kind: 'context'; snapshot: ViewportSnapshot; focus?: boolean }
   | { kind: 'reveal'; id: string; editor: boolean };
 
 // Measure top bars at navigation time, so desktop/mobile heights and stacked
 // sticky navigation do not need a hard-coded application-shell offset.
-function unobscuredTop(snapshot: ScrollSnapshot, edge: number) {
+function unobscuredTop(snapshot: ScrollSnapshot, edge: number, ignoreBatchBar = false) {
   const content = document.querySelector<HTMLElement>('[data-onboarding-page]')?.getBoundingClientRect();
   const left = Math.max(0, content?.left ?? 0), right = Math.min(window.innerWidth, content?.right ?? window.innerWidth);
   const x = right > left ? (left + right) / 2 : window.innerWidth / 2;
@@ -399,6 +400,7 @@ function unobscuredTop(snapshot: ScrollSnapshot, edge: number) {
     }
     const previous = top;
     for (const element of candidates) {
+      if (ignoreBatchBar && element.closest('[data-batch-toolbar]')) continue;
       const style = getComputedStyle(element), inset = Number.parseFloat(style.top);
       if (!['fixed', 'sticky'].includes(style.position) || !Number.isFinite(inset)
         || style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') continue;
@@ -911,6 +913,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const onDirtyChange = useCallback((dirty: boolean) => setEditorDirty(dirty), []);
   const [filters, setFilters] = useState<RecordFilters>(EMPTY_FILTERS);
   const [revealedId, setRevealedId] = useState<string | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(25);
 
   const pageRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
@@ -926,7 +930,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const mayLeaveEditor = () => !editorDirty || window.confirm('Discard the unsaved changes in the open record?');
   const returnPoint = (destination: string, name?: string): ReturnPoint => ({
     destination, name, openId: openRow, openStatus: batch?.records.find(r => r.id === openRow)?.status,
-    lastId: lastRow, viewport: captureViewport(pageRef.current), filters: {...filters}, revealedId,
+    page: pageNumber, pageSize, lastId: lastRow, viewport: captureViewport(pageRef.current), filters: {...filters}, revealedId,
   });
   const toggleRow = (recordId: string) => {
     if (busy || !mayLeaveEditor()) return;
@@ -966,6 +970,9 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     setLastRow(point.lastId);
     const origin = point.viewport.recordId;
     const returnMatches = matchingRecordIds(batch, point.filters);
+    setPageSize(point.pageSize);
+    const returnRows = (batch?.records ?? []).filter(r => returnMatches.has(r.id) || r.id === origin || r.id === point.openId || r.id === point.revealedId);
+    setPageNumber(recordPage(returnRows, origin ?? point.openId ?? undefined, point.pageSize) ?? point.page);
     setFilters(point.filters); setRevealedId(origin && !returnMatches.has(origin) ? origin : point.revealedId);
     setReturnPoints(points => points.slice(0, -1));
     setViewportAction({kind: 'context', snapshot: point.viewport, focus: true});
@@ -1010,7 +1017,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const changeFilters = (next: RecordFilters) => {
     if (busy) return;
     // Preserve the open draft. If it falls outside the filters, show it explicitly as an extra row.
-    setFilters(next); setRevealedId(null);
+    setFilters(next); setRevealedId(null); setPageNumber(1);
   };
   const hideExtraRecords = () => {
     if (busy) return;
@@ -1037,10 +1044,15 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   }, [openRow, batch, saveNotice, filters, revealedId]);
   useLayoutEffect(() => {
     if (!viewportAction) return;
+    // Mount the destination page before reading its row geometry.
+    if (viewportAction.kind === 'reveal') {
+      const targetPage = recordPage(displayedRecords, viewportAction.id, pageSize);
+      if (targetPage !== null && targetPage !== pagination.page) { setPageNumber(targetPage); return; }
+    }
     if (viewportAction.kind === 'context') restoreViewport(pageRef.current, viewportAction.snapshot, viewportAction.focus);
     else revealSavedRow(rowRefs.current.get(viewportAction.id), viewportAction.editor);
     setViewportAction(null);
-  }, [viewportAction, batch, openRow, filters, revealedId]);
+  }, [viewportAction, batch, openRow, filters, revealedId, pageNumber, pageSize]);
 
   const required = requiredFields(channelData?.communicationChannel ?? null);
   const beginAction = () => { setActionError(null); setSaveNotice(null); };
@@ -1195,6 +1207,41 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     {key: departmentKey(r.currentDepartment), label: r.currentDepartment?.trim().replace(/\s+/g, ' ') || 'Not provided'}])).values()]
     .sort((a, b) => a.label.localeCompare(b.label));
   const selectedTarget = filterModel.canonical(filters.reportingTarget);
+  const pagination = pageWindow(displayedRecords, pageNumber, pageSize);
+  // Keep an open draft mounted if filtering/revalidation moves it off this page.
+  const pinnedRecord = openRow && !pagination.rows.some(r => r.id === openRow)
+    ? records.find(r => r.id === openRow) : undefined;
+  const pageRecords = pinnedRecord ? [pinnedRecord, ...pagination.rows] : pagination.rows;
+  const changePage = (next: number, size = pageSize) => {
+    if (busy || !mayLeaveEditor()) return;
+    setEditorDirty(false); setOpenRow(null); setRevealedId(null);
+    setPageSize(size); setPageNumber(next);
+    setViewportAction({kind: 'context', snapshot: {scroll: scrollSnapshot(pageRef.current), anchor: 'batch-records', offset: 0}, focus: true});
+  };
+  useLayoutEffect(() => {
+    const root = pageRef.current;
+    const update = () => {
+      if (!root) return;
+      const snapshot = scrollSnapshot(root), host = snapshot.element?.getBoundingClientRect();
+      const edge = Math.max(0, host ? host.top + snapshot.element!.clientTop : 0);
+      const top = unobscuredTop(snapshot, edge, true);
+      root.style.setProperty('--ems-batch-top', `${Math.max(0, top - edge)}px`);
+    };
+    update(); window.addEventListener('scroll', update, true); window.addEventListener('resize', update);
+    return () => { window.removeEventListener('scroll', update, true); window.removeEventListener('resize', update); };
+  }, []);
+  const pageControls = (location: string) => <nav aria-label={`${location} record pages`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs">
+    <span aria-live="polite">{displayedRecords.length ? `${pagination.start + 1}–${pagination.end} of ${displayedRecords.length}` : '0 records'}{pinnedRecord ? ' · open editor retained above page' : ''}</span>
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-1">Per page <select aria-label={`${location} records per page`} value={pageSize} disabled={busy}
+        onChange={e => changePage(1, Number(e.target.value))} className="rounded border border-slate-300 bg-white px-2 py-1.5">
+        {PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+      </select></label>
+      <button type="button" disabled={busy || pagination.page === 1} onClick={() => changePage(pagination.page - 1)} className="rounded border border-slate-300 px-2 py-1.5 disabled:opacity-40">Previous</button>
+      <span>Page {pagination.page} of {pagination.pages}</span>
+      <button type="button" disabled={busy || pagination.page === pagination.pages} onClick={() => changePage(pagination.page + 1)} className="rounded border border-slate-300 px-2 py-1.5 disabled:opacity-40">Next</button>
+    </div>
+  </nav>;
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
@@ -1211,23 +1258,13 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         </div>}
 
         <div className="space-y-5">
-        <div className="flex items-center gap-3" data-viewport-anchor="batch-heading">
-          <Link href="/ems/onboarding" className="text-slate-400 hover:text-slate-600 transition-colors">
+        <div data-batch-toolbar role="navigation" aria-label="Batch actions" style={{top: 'var(--ems-batch-top, 0px)'}} className="sticky z-30 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm" data-viewport-anchor="batch-heading">
+          <Link href="/ems/onboarding" onClick={event => { if (busy || !mayLeaveEditor() || (countryUnsaved && !window.confirm('Discard the unsaved default country change?'))) event.preventDefault(); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900">
+            <span>Back to imports</span>
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-slate-900">{batch?.label ?? "Import"}</h1>
-            <p className="text-sm text-slate-500">
-              {batch
-                ? `${records.length} records · ${readyCount} ready · ${problemCount} need fixing${reviewCount ? ` · ${reviewCount} need review` : ''} · ${waitingCount} waiting on reporting chain · ${registeredCount} registered · ${BATCH_STATUS_LABELS[batch.status]}`
-                : "Loading…"}
-            </p>
-            {register.isSuccess && (
-              <p className="text-xs text-emerald-700">
-                {register.data.registered} registered
-                {register.data.failed > 0 && `, ${register.data.failed} failed`}
-              </p>
-          )}
+          <div className="min-w-0 flex-1 basis-32">
+            <h1 title={batch?.label ?? "Import"} className="truncate text-sm font-bold text-slate-900">{batch?.label ?? "Import"}</h1>
           </div>
           <button
             onClick={() => validate.mutate()}
@@ -1248,14 +1285,20 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             Register all {readyCount} ready
           </button>
 
-          {/*<button
-            disabled
-            title="Not implemented yet"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            Register {readyCount}
-          </button>*/}
+
+        </div>
+        <div>
+            <p className="text-sm text-slate-500">
+              {batch
+                ? `${records.length} records · ${readyCount} ready · ${problemCount} need fixing${reviewCount ? ` · ${reviewCount} need review` : ''} · ${waitingCount} waiting on reporting chain · ${registeredCount} registered · ${BATCH_STATUS_LABELS[batch.status]}`
+                : "Loading…"}
+            </p>
+            {register.isSuccess && (
+              <p className="text-xs text-emerald-700">
+                {register.data.registered} registered
+                {register.data.failed > 0 && `, ${register.data.failed} failed`}
+              </p>
+          )}
         </div>
 
         {batch && <div data-channel-notice aria-live="polite" className={`text-sm ${channelError || (!channelLoading && !channelData?.communicationChannel) ? 'text-amber-800' : 'text-slate-600'}`}>
@@ -1359,7 +1402,11 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
           {filterActive && <p className="text-xs text-slate-500">Filters change this view. Validate all checks the batch; Register all registers all {readyCount} ready records in the batch.</p>}
         </section>}
 
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-clip">
+        {batch && !loading && !error && <section data-viewport-anchor="batch-records" tabIndex={-1} className="rounded-xl border border-slate-200 bg-white focus:outline-none">
+          {pageControls('Top')}
+          {pinnedRecord && <p className="px-4 pb-3 text-xs text-amber-800">The open record is kept above this page so its edits are not lost. Changing page will ask before discarding unsaved changes.</p>}
+        </section>}
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-slate-400 gap-2 text-sm">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
@@ -1383,7 +1430,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {displayedRecords.map((rec) => {
+                {pageRecords.map((rec) => {
                   const resolution = hierarchy?.byRecord[rec.id];
                   const waiting = waitingOnChain(rec, resolution);
                   const open = openRow === rec.id;
@@ -1497,6 +1544,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             </table>
           )}
         </div>
+        {batch && !loading && !error && pageControls('Bottom')}
         </div>
       </div>
     </ProtectedRoute>

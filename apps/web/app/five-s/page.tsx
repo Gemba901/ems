@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
-import { useFiveSCapabilities, useFiveSOverview } from "@/hooks/five-s/useFiveS";
+import { useFiveSOverview } from "@/hooks/five-s/useFiveS";
 import { PRACTICE_LABELS, PRACTICE_ORDER } from "@/lib/five-s/template";
 import { formatLevel } from "@/lib/five-s/scoring";
 import type { AreaStatusFilter, OverviewQuery } from "@/services/five-s.service";
@@ -22,14 +21,12 @@ import {
   errorMessage,
   formatDate,
   primaryButton,
-  secondaryButton,
   selectClass,
 } from "@/components/five-s/ui";
 
 export default function FiveSOverviewPage() {
   const [filters, setFilters] = useState<OverviewQuery>({ status: "active" });
   const { data, isLoading, error } = useFiveSOverview(filters);
-  const { data: caps } = useFiveSCapabilities();
 
   return (
     <div className="space-y-6">
@@ -38,11 +35,6 @@ export default function FiveSOverviewPage() {
         description="Key 1 of the 20 Keys: Cleaning and Organising to Make Work Easy. Only submitted audits count; drafts are excluded."
         actions={
           <>
-            {caps?.canCreateAreas && (
-              <Link href="/five-s/areas/new" className={secondaryButton}>
-                <Plus className="h-4 w-4" aria-hidden="true" /> New area
-              </Link>
-            )}
             <Link href="/five-s/audits/new" className={primaryButton}>
               Start an audit
             </Link>
@@ -97,13 +89,7 @@ export default function FiveSOverviewPage() {
             </div>
             {data.areas.length === 0 ? (
               <EmptyState title="No workplace areas match these filters">
-                {caps?.canCreateAreas ? (
-                  <Link href="/five-s/areas/new" className="font-medium text-blue-700 hover:underline">
-                    Create the first area
-                  </Link>
-                ) : (
-                  "Ask a 5S administrator or your HOD to set up areas."
-                )}
+                Areas come from the Work Area / Section on employee profiles.
               </EmptyState>
             ) : (
               <div className="overflow-x-auto">

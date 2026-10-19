@@ -187,14 +187,13 @@ export class FiveSSettingsService {
                 data: {
                     organizationId: org, name: `${SAMPLE_PREFIX}Press Shop Line 1`, departmentId: actor.departmentId, ownerId: me,
                     description: 'SAMPLE DATA for training. Press line 1 including die rack and finished-goods staging.',
-                    auditBoundary: 'From the coil feed to the finished-goods staging lane, including the die rack. Excludes the maintenance crib.',
                     auditFrequency: 'MONTHLY', targetLevelTenths: 30, isSample: true, createdById: me,
                 },
             });
             await tx.fiveSArea.create({
                 data: {
                     organizationId: org, name: `${SAMPLE_PREFIX}Stores Receiving Bay`, departmentId: actor.departmentId, ownerId: me,
-                    description: 'SAMPLE DATA for training. Not yet assessed.', auditBoundary: 'Receiving dock doors 1–3 and the inspection table.',
+                    description: 'SAMPLE DATA for training. Not yet assessed.',
                     auditFrequency: 'FORTNIGHTLY', targetLevelTenths: 28, isSample: true, createdById: me,
                 },
             });
@@ -206,7 +205,7 @@ export class FiveSSettingsService {
                 data: {
                     organizationId: org, reference: await nextReference(tx, org, 'AUDIT'), areaId: press.id, template: CURRENT_TEMPLATE,
                     status: FiveSAuditStatus.SUBMITTED, auditDate: toDbDate(auditDate), auditorId: me, auditeeName: 'Sample line leader',
-                    auditBoundary: press.auditBoundary, remarks: 'SAMPLE DATA: illustrative audit for training.',
+                    remarks: 'SAMPLE DATA: illustrative audit for training.',
                     sortPoints: result.pointsByPractice.SORT, setInOrderPoints: result.pointsByPractice.SET_IN_ORDER,
                     shinePoints: result.pointsByPractice.SHINE, standardizePoints: result.pointsByPractice.STANDARDIZE,
                     sustainPoints: result.pointsByPractice.SUSTAIN, totalPoints: result.totalPoints, levelTenths: result.levelTenths,

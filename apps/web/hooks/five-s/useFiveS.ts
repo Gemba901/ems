@@ -6,7 +6,6 @@ import {
   FiveSApiError,
   FiveSService,
   type ActionListQuery,
-  type AreaPayload,
   type AreaStatusFilter,
   type AuditListQuery,
   type AuditResponsePayload,
@@ -98,10 +97,6 @@ export function useFiveSAreas(params: { departmentId?: string; ownerId?: string;
 
 export function useFiveSArea(id: string | undefined) {
   return useFiveSQuery(["area", id], (t) => FiveSService.getArea(id!, t), { enabled: !!id });
-}
-
-export function useCreateArea() {
-  return useFiveSMutation((body: AreaPayload, t) => FiveSService.createArea(body, t));
 }
 
 export function useUpdateArea() {

@@ -11,6 +11,7 @@ import request from 'supertest';
 import { ProxySecretGuard } from '../common/guards/proxy-secret.guard';
 import { SafeExceptionFilter } from '../operations/safe-exception.filter';
 import { PrismaService } from '../prisma/prisma.service';
+import { syncAreasFromProfiles } from './five-s-area-sync';
 import { FiveSModule } from './five-s.module';
 
 // Explicit opt-in against a disposable local database with migrations applied:
@@ -41,14 +42,15 @@ suite('5S API on PostgreSQL', () => {
     const deptA = id('dept-a');
     const deptB = id('dept-b');
 
+    // `section` is the profile's "Work Area / Section": 5S areas are built from it.
     const people = {
-        admin: { role: RoleName.ADMIN, org: orgId, dept: null },
-        hod: { role: RoleName.HOD, org: orgId, dept: deptA },
-        owner: { role: RoleName.EMPLOYEE, org: orgId, dept: deptA },
-        worker: { role: RoleName.EMPLOYEE, org: orgId, dept: deptA },
-        outsider: { role: RoleName.EMPLOYEE, org: orgId, dept: deptB },
-        mgmt: { role: RoleName.MANAGEMENT, org: orgId, dept: null },
-        foreign: { role: RoleName.ADMIN, org: otherOrgId, dept: null },
+        admin: { role: RoleName.ADMIN, org: orgId, dept: null, section: null },
+        hod: { role: RoleName.HOD, org: orgId, dept: deptA, section: 'Press Line' },
+        owner: { role: RoleName.EMPLOYEE, org: orgId, dept: deptA, section: 'Press Line' },
+        worker: { role: RoleName.EMPLOYEE, org: orgId, dept: deptA, section: ' press  line ' },
+        outsider: { role: RoleName.EMPLOYEE, org: orgId, dept: deptB, section: null },
+        mgmt: { role: RoleName.MANAGEMENT, org: orgId, dept: null, section: 'Press Line' },
+        foreign: { role: RoleName.ADMIN, org: otherOrgId, dept: null, section: 'Press Line' },
     } as const;
     type Who = keyof typeof people;
     const roleIds = new Map<RoleName, number>();
@@ -90,7 +92,7 @@ suite('5S API on PostgreSQL', () => {
             const userId = id(`u-${who}`);
             await db.user.create({ data: { id: userId, name: who, phone: `five-s-${userId}`, email: null } });
             await db.userOrganization.create({ data: { userId, organizationId: p.org, roleId: roleIds.get(p.role)! } });
-            await db.employee.create({ data: { id: emp(who), userId, organizationId: p.org, firstName: who, lastName: 'Test', departmentId: p.dept } });
+            await db.employee.create({ data: { id: emp(who), userId, organizationId: p.org, firstName: who, lastName: 'Test', departmentId: p.dept, section: p.section } });
         }
 
         Object.assign(process.env, { DATABASE_URL: url, JWT_SECRET, TENANT_PROXY_SECRET: PROXY_SECRET, TENANT_BASE_DOMAIN: BASE_DOMAIN });
@@ -130,13 +132,16 @@ suite('5S API on PostgreSQL', () => {
     let areaId: string;
     let auditId: string;
 
-    it('creates a workplace area (admin) and rejects percentage targets', async () => {
-        await api('admin').post('/five-s/areas', { name: 'Press Line', auditFrequency: 'MONTHLY', targetLevel: 80 }).expect(400);
-        await api('worker').post('/five-s/areas', { name: 'Nope', auditFrequency: 'MONTHLY', targetLevel: 3 }).expect(403);
-        const { body } = await api('admin')
-            .post('/five-s/areas', { name: 'Press Line', departmentId: deptA, ownerId: emp('owner'), auditFrequency: 'MONTHLY', targetLevel: 3.0, auditBoundary: 'Coil feed to staging' })
-            .expect(201);
-        areaId = body.id;
+    it('builds workplace areas from employee profiles and only lets admins set owner and target', async () => {
+        const areas = (await api('admin').get('/five-s/areas').expect(200)).body as { id: string; name: string; department: { id: string } | null }[];
+        // One area per distinct section, whitespace and case ignored; department = where most of its people sit.
+        expect(areas).toHaveLength(1);
+        expect(areas[0]).toMatchObject({ name: 'Press Line', department: { id: deptA } });
+        areaId = areas[0].id;
+        await api('admin').post('/five-s/areas', { name: 'Nope', auditFrequency: 'MONTHLY', targetLevel: 3 }).expect(404);
+        await api('admin').patch(`/five-s/areas/${areaId}`, { targetLevel: 80 }).expect(400);
+        expect([403, 404]).toContain((await api('worker').patch(`/five-s/areas/${areaId}`, { targetLevel: 3 })).status);
+        await api('admin').patch(`/five-s/areas/${areaId}`, { ownerId: emp('owner'), targetLevel: 3.0 }).expect(200);
         const detail = (await api('owner').get(`/five-s/areas/${areaId}`).expect(200)).body;
         expect(detail).toMatchObject({ name: 'Press Line', targetLevel: 3, latest: null, auditDue: { state: 'NEVER_AUDITED' } });
     });
@@ -153,7 +158,7 @@ suite('5S API on PostgreSQL', () => {
         const created = (await api('hod').post('/five-s/audits', { areaId, auditDate: today, auditeeName: 'Line leader' }).expect(201)).body;
         auditId = created.id;
         let audit = (await api('hod').get(`/five-s/audits/${auditId}`).expect(200)).body;
-        expect(audit).toMatchObject({ status: 'DRAFT', auditBoundary: 'Coil feed to staging', result: null });
+        expect(audit).toMatchObject({ status: 'DRAFT', result: null });
         expect(audit.checkpoints).toHaveLength(20);
 
         // 19 answered: blank is not zero, so submission must fail and name checkpoint 20.
@@ -259,7 +264,8 @@ suite('5S API on PostgreSQL', () => {
     });
 
     it('overview counts only submitted audits and labels the cross-area mean', async () => {
-        await api('admin').post('/five-s/areas', { name: 'Stores', departmentId: deptA, auditFrequency: 'WEEKLY', targetLevel: 2.5 }).expect(201);
+        await db.employee.update({ where: { id: emp('outsider') }, data: { section: 'Stores' } });
+        await syncAreasFromProfiles(app.get(PrismaService), orgId, { force: true });
         await api('hod').post('/five-s/audits', { areaId, auditDate: today }).expect(201); // a draft: must not count
         const { body } = await api('mgmt').get('/five-s/overview').expect(200);
         expect(body.totals).toMatchObject({ areas: 2, assessed: 1, notAssessed: 1, targetNotMet: 1 });

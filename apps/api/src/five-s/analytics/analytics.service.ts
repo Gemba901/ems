@@ -4,6 +4,7 @@ import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { addDays, toDbDate } from 'src/work/work-date';
 import { OverviewQueryDto } from '../dto/five-s.dto';
+import { syncAreasFromProfiles } from '../five-s-area-sync';
 import { FiveSAccessService } from '../five-s-access.service';
 import { dateOnly } from '../five-s-records';
 import { emptyPracticePoints, PracticePoints } from '../five-s-scoring';
@@ -53,6 +54,7 @@ export class AnalyticsService {
 
     async analytics(user: AccessTokenPayload, query: OverviewQueryDto) {
         const actor = await this.access.resolveActor(user);
+        await syncAreasFromProfiles(this.prisma, actor.organizationId);
         const today = this.access.today(actor);
         const status = query.status ?? 'active';
         const from = query.from ?? addDays(today, -365);

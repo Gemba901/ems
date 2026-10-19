@@ -136,7 +136,6 @@ model FiveSArea {
   departmentId      String?
   ownerId           String?
   description       String?
-  auditBoundary     String?
   auditFrequency    FiveSAuditFrequency @default(MONTHLY)
   targetLevelTenths Int                 @default(30)
   isActive          Boolean             @default(true)
@@ -171,7 +170,6 @@ model FiveSAudit {
   auditorId      String
   auditeeId      String?
   auditeeName    String?
-  auditBoundary  String?
   remarks        String?
   photoUrls      String[]           @default([])
 

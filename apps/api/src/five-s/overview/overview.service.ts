@@ -4,6 +4,7 @@ import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { addDays, toDbDate } from 'src/work/work-date';
 import { OverviewQueryDto } from '../dto/five-s.dto';
+import { syncAreasFromProfiles } from '../five-s-area-sync';
 import { FiveSAccessService } from '../five-s-access.service';
 import { AUDIT_RESULT_SELECT, REPORTABLE_AUDIT_WHERE, buildAreaSummaries, toAuditResult } from '../five-s-summary';
 import { TEMPLATE_LABELS } from '../five-s-template';
@@ -18,6 +19,7 @@ export class OverviewService {
 
     async overview(user: AccessTokenPayload, query: OverviewQueryDto) {
         const actor = await this.access.resolveActor(user);
+        await syncAreasFromProfiles(this.prisma, actor.organizationId);
         const today = this.access.today(actor);
         const status = query.status ?? 'active';
         const areaWhere: Prisma.FiveSAreaWhereInput = {

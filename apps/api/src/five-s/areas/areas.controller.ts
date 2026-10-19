@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards, UsePipes } from '@nestjs/common';
 import { ModuleType } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
@@ -10,10 +10,11 @@ import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import { workValidationPipe } from 'src/work/dto/common.dto';
-import { AreaListQueryDto, CreateAreaDto, UpdateAreaDto } from '../dto/five-s.dto';
+import { AreaListQueryDto, UpdateAreaDto } from '../dto/five-s.dto';
 import { AreasService } from './areas.service';
 
-// Workplace areas. Who may see or change an area is decided in FiveSAccessService.
+// Workplace areas. They come from employee profiles (see five-s-area-sync.ts), so there is no
+// create endpoint; admins and HODs only set the owner, audit frequency and target. Who may see or change an area is decided in FiveSAccessService.
 @TenantRequired()
 @Controller('five-s/areas')
 @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
@@ -30,11 +31,6 @@ export class AreasController {
     @Get(':id')
     get(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
         return this.areas.get(user, id);
-    }
-
-    @Post()
-    create(@CurrentUser() user: AccessTokenPayload, @Body() dto: CreateAreaDto) {
-        return this.areas.create(user, dto);
     }
 
     @Patch(':id')

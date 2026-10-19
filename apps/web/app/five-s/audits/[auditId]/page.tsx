@@ -83,11 +83,6 @@ function AuditHeader({ audit, onEdit }: { audit: AuditDetail; onEdit?: () => voi
         <KeyValue label="Audit date">{formatDate(audit.auditDate)}</KeyValue>
         <KeyValue label="Auditor">{audit.auditor?.name ?? "—"}</KeyValue>
         <KeyValue label="Auditee">{audit.auditee?.name ?? audit.auditeeName ?? <span className="text-slate-400">Not recorded</span>}</KeyValue>
-        <div className="sm:col-span-3">
-          <KeyValue label="Agreed audit boundary">
-            <span className="whitespace-pre-line">{audit.auditBoundary || <span className="text-slate-400">Not recorded</span>}</span>
-          </KeyValue>
-        </div>
       </dl>
     </Surface>
   );
@@ -172,7 +167,7 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
       <AuditHeader audit={audit} onEdit={canEdit ? () => setEditing(true) : undefined} />
 
       {!canEdit && <ErrorNote>Only the auditor can change this draft. You can view it, but it does not count towards results until it is submitted.</ErrorNote>}
-      {!audit.area.isActive && <ErrorNote>This area is inactive. Reactivate it before submitting.</ErrorNote>}
+      {!audit.area.isActive && <ErrorNote>This area is inactive because no current employee profile lists it as their work area. It can be submitted once an employee is assigned to it again.</ErrorNote>}
 
       {/* Sticky progress and live score */}
       <div className="sticky top-0 z-20 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
@@ -362,7 +357,6 @@ function EditDetailsDialog({ audit, onClose, maxDate }: { audit: AuditDetail; on
   const [auditorId, setAuditorId] = useState(audit.auditor?.id ?? null);
   const [auditeeId, setAuditeeId] = useState(audit.auditee?.id ?? null);
   const [auditeeName, setAuditeeName] = useState(audit.auditeeName ?? "");
-  const [boundary, setBoundary] = useState(audit.auditBoundary ?? "");
 
   return (
     <FiveSDialog
@@ -387,7 +381,6 @@ function EditDetailsDialog({ audit, onClose, maxDate }: { audit: AuditDetail; on
                     ...(auditorId && auditorId !== audit.auditor?.id ? { auditorId } : {}),
                     auditeeId,
                     auditeeName: auditeeId ? null : auditeeName.trim() || null,
-                    auditBoundary: boundary.trim() || null,
                   },
                 },
                 {
@@ -422,9 +415,6 @@ function EditDetailsDialog({ audit, onClose, maxDate }: { audit: AuditDetail; on
             </Field>
           )}
         </div>
-        <Field label="Agreed audit boundary" htmlFor="edit-boundary">
-          <textarea id="edit-boundary" rows={3} className={inputClass} value={boundary} maxLength={4000} onChange={(e) => setBoundary(e.target.value)} />
-        </Field>
       </div>
     </FiveSDialog>
   );

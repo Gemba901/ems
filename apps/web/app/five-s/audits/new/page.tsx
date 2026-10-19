@@ -37,13 +37,10 @@ function NewAuditForm() {
   const [auditorId, setAuditorId] = useState<string | null>(null);
   const [auditeeId, setAuditeeId] = useState<string | null>(null);
   const [auditeeName, setAuditeeName] = useState("");
-  // null = not edited yet, so the boundary follows the selected area's default.
-  const [boundary, setBoundary] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   if (capsLoading) return <Loading />;
 
-  const effectiveBoundary = boundary ?? area?.auditBoundary ?? "";
   const effectiveAuditor = auditorId ?? caps?.employeeId ?? null;
 
   function submit(e: FormEvent) {
@@ -51,7 +48,6 @@ function NewAuditForm() {
     if (!areaId) return setFormError("Choose the area you are auditing.");
     if (!auditDate) return setFormError("Enter the audit date.");
     if (auditDate > maxDate) return setFormError("The audit date cannot be in the future.");
-    if (!effectiveBoundary.trim()) return setFormError("Agree on the audit boundary before starting and record it here.");
     setFormError(null);
     create.mutate(
       {
@@ -60,7 +56,6 @@ function NewAuditForm() {
         ...(effectiveAuditor && effectiveAuditor !== caps?.employeeId ? { auditorId: effectiveAuditor } : {}),
         auditeeId,
         auditeeName: auditeeId ? null : auditeeName.trim() || null,
-        auditBoundary: effectiveBoundary.trim(),
       },
       {
         onSuccess: (audit) => {
@@ -79,7 +74,7 @@ function NewAuditForm() {
       <PageHeader title="Start a 5S audit" description={`${CHECKSHEET_LABEL}. 20 checkpoints, four under each S.`} />
 
       <ol className="grid grid-cols-2 gap-2 text-xs text-slate-600 sm:grid-cols-4">
-        {["1. Area, date and boundary", "2. Walk the area with the auditee", "3. Record all 20 checkpoints", "4. Review and submit"].map((s, i) => (
+        {["1. Area and date", "2. Walk the area with the auditee", "3. Record all 20 checkpoints", "4. Review and submit"].map((s, i) => (
           <li key={s} className={i === 0 ? "rounded-lg bg-blue-600 px-3 py-2 font-medium text-white" : "rounded-lg bg-slate-100 px-3 py-2"}>
             {s}
           </li>
@@ -93,10 +88,7 @@ function NewAuditForm() {
             <AreaSelect
               id="audit-area"
               value={areaId}
-              onChange={(id) => {
-                setAreaId(id);
-                setBoundary(null);
-              }}
+              onChange={setAreaId}
             />
           </Field>
           {area && (
@@ -131,13 +123,6 @@ function NewAuditForm() {
               </Field>
             )}
           </div>
-          <Field
-            label="Agreed audit boundary"
-            htmlFor="audit-boundary"
-            hint="Agree on the audit boundary before starting. Defaults to the area's boundary; adjust it if today's walk covers something different."
-          >
-            <textarea id="audit-boundary" rows={3} className={inputClass} value={effectiveBoundary} maxLength={4000} onChange={(e) => setBoundary(e.target.value)} />
-          </Field>
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Link href="/five-s/audits" className={secondaryButton}>
               Cancel

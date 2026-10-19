@@ -185,7 +185,6 @@ export type PracticePoints = Record<Practice, number>;
 export type Capabilities = {
   isModuleAdmin: boolean;
   seesWholeCompany: boolean;
-  canCreateAreas: boolean;
   isAuditor: boolean;
   isVerifier: boolean;
   responsibilities: Responsibility[];
@@ -231,7 +230,6 @@ export type AreaSummary = {
 
 export type AreaDetail = AreaSummary & {
   description: string | null;
-  auditBoundary: string | null;
   createdAt: string;
   updatedAt: string;
   method: string;
@@ -253,17 +251,16 @@ export type AreaDetail = AreaSummary & {
   permissions: { canEdit: boolean; canAudit: boolean; canMaintainStandards: boolean; canCoordinate: boolean };
 };
 
-export type AreaPayload = {
-  name: string;
-  departmentId?: string | null;
+// Name, department and active state come from employee profiles ("Work Area / Section"), so
+// only these settings are editable.
+export type AreaSettingsPayload = {
   ownerId?: string | null;
   description?: string | null;
-  auditBoundary?: string | null;
   auditFrequency: AuditFrequency;
   targetLevel: number;
 };
 
-export type UpdateAreaPayload = Partial<AreaPayload> & { isActive?: boolean };
+export type UpdateAreaPayload = Partial<AreaSettingsPayload>;
 
 export type AuditResultBlock = {
   points: PracticePoints;
@@ -311,7 +308,6 @@ export type AuditDetail = {
   auditor: Person | null;
   auditee: Person | null;
   auditeeName: string | null;
-  auditBoundary: string | null;
   remarks: string | null;
   photoUrls: string[];
   createdAt: string;
@@ -336,7 +332,6 @@ export type CreateAuditPayload = {
   auditorId?: string;
   auditeeId?: string | null;
   auditeeName?: string | null;
-  auditBoundary?: string | null;
 };
 
 export type UpdateAuditPayload = Partial<Omit<CreateAuditPayload, "areaId">> & { remarks?: string | null; photoUrls?: string[] };
@@ -683,7 +678,6 @@ export const FiveSService = {
   listAreas: (params: { departmentId?: string; ownerId?: string; status?: AreaStatusFilter }, token: string) =>
     get<AreaSummary[]>(`/areas${query(params)}`, token),
   getArea: (id: string, token: string) => get<AreaDetail>(`/areas/${id}`, token),
-  createArea: (body: AreaPayload, token: string) => send<{ id: string; name: string }>("POST", "/areas", body, token),
   updateArea: (id: string, body: UpdateAreaPayload, token: string) =>
     send<{ id: string; name: string }>("PATCH", `/areas/${id}`, body, token),
 

@@ -60,32 +60,15 @@ export class FiveSFilterDto {
 
 // ---------- Workplace areas ----------
 
-export class CreateAreaDto {
-    @Trim() @IsString() @Length(2, 120) name!: string;
-    @IsOptional() @IsUUID() departmentId?: string | null;
-    @IsOptional() @IsUUID() ownerId?: string | null;
-    @IsOptional() @Trim() @IsString() @MaxLength(2000) description?: string | null;
-    @IsOptional() @Trim() @IsString() @MaxLength(4000) auditBoundary?: string | null;
-    @IsEnum(FiveSAuditFrequency) auditFrequency!: FiveSAuditFrequency;
-
-    // A 5S level on the audit scale, 1.0 to 3.5 in steps of 0.1. Never a percentage.
-    @Type(() => Number)
-    @IsIn(TARGET_LEVELS, { message: 'Target level must be between 1.0 and 3.5, in steps of 0.1' })
-    targetLevel!: number;
-}
-
+// Name, department and active state come from employee profiles and cannot be edited here.
 export class UpdateAreaDto {
-    @IsOptional() @Trim() @IsString() @Length(2, 120) name?: string;
-    @IsOptional() @IsUUID() departmentId?: string | null;
     @IsOptional() @IsUUID() ownerId?: string | null;
     @IsOptional() @Trim() @IsString() @MaxLength(2000) description?: string | null;
-    @IsOptional() @Trim() @IsString() @MaxLength(4000) auditBoundary?: string | null;
     @IsOptional() @IsEnum(FiveSAuditFrequency) auditFrequency?: FiveSAuditFrequency;
     @IsOptional()
     @Type(() => Number)
     @IsIn(TARGET_LEVELS, { message: 'Target level must be between 1.0 and 3.5, in steps of 0.1' })
     targetLevel?: number;
-    @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 export class AreaListQueryDto {
@@ -102,7 +85,6 @@ export class CreateAuditDto {
     @IsOptional() @IsUUID() auditorId?: string;
     @IsOptional() @IsUUID() auditeeId?: string | null;
     @IsOptional() @Trim() @IsString() @MaxLength(120) auditeeName?: string | null;
-    @IsOptional() @Trim() @IsString() @MaxLength(4000) auditBoundary?: string | null;
 }
 
 export class UpdateAuditDto extends EvidenceFields {
@@ -110,7 +92,6 @@ export class UpdateAuditDto extends EvidenceFields {
     @IsOptional() @IsUUID() auditorId?: string;
     @IsOptional() @IsUUID() auditeeId?: string | null;
     @IsOptional() @Trim() @IsString() @MaxLength(120) auditeeName?: string | null;
-    @IsOptional() @Trim() @IsString() @MaxLength(4000) auditBoundary?: string | null;
     @IsOptional() @Trim() @IsString() @MaxLength(4000) remarks?: string | null;
 }
 

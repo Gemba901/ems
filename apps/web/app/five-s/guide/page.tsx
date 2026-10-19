@@ -59,7 +59,7 @@ export default function FiveSGuidePage() {
       <Section id="journey" title="Audit journey">
         <ol className="list-decimal space-y-1 pl-5">
           <li>Select the workplace area to audit.</li>
-          <li>Confirm the audit date, auditor and agreed audit boundary.</li>
+          <li>Confirm the audit date and auditor.</li>
           <li>Walk the area with the auditee.</li>
           <li>Record the number of problem locations for all 20 checkpoints.</li>
           <li>Add remarks and photos where useful (optional).</li>

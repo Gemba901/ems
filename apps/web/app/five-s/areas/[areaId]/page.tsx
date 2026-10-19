@@ -58,7 +58,11 @@ export default function AreaDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900">{area.name}</h1>
             {area.isSample && <SampleBadge />}
-            {!area.isActive && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700">Inactive</span>}
+            {!area.isActive && (
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700" title="No current employee profile lists this as their work area">
+                Inactive
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-slate-500">
             {area.department?.name ?? "No department"} · Owner: {area.owner?.name ?? "not set"} · {AUDIT_FREQUENCY_LABELS[area.auditFrequency]} audits
@@ -66,27 +70,9 @@ export default function AreaDetailPage() {
         </div>
         <div className={HEADER_ACTIONS}>
           {area.permissions.canEdit && (
-            <>
-              <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
-                <Pencil className="h-4 w-4" aria-hidden="true" /> Edit
-              </button>
-              <button
-                type="button"
-                className={secondaryButton}
-                disabled={update.isPending}
-                onClick={() =>
-                  update.mutate(
-                    { id: area.id, body: { isActive: !area.isActive } },
-                    {
-                      onSuccess: () => toast(area.isActive ? "Area deactivated" : "Area reactivated", "success"),
-                      onError: (e) => toast(errorMessage(e), "error"),
-                    },
-                  )
-                }
-              >
-                {area.isActive ? "Deactivate" : "Reactivate"}
-              </button>
-            </>
+            <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
+              <Pencil className="h-4 w-4" aria-hidden="true" /> Edit settings
+            </button>
           )}
           {area.permissions.canAudit && (
             <Link href={`/five-s/audits/new?areaId=${area.id}`} className={primaryButton}>
@@ -268,9 +254,6 @@ export default function AreaDetailPage() {
                 {area.isActive ? <AuditDueBadge state={area.auditDue.state} nextDueDate={area.auditDue.nextDueDate} /> : "Not scheduled (inactive)"}
               </KeyValue>
               <KeyValue label="Description">{area.description || <span className="text-slate-400">None</span>}</KeyValue>
-              <KeyValue label="Audit boundary">
-                <span className="whitespace-pre-line">{area.auditBoundary || <span className="text-slate-400">Not defined</span>}</span>
-              </KeyValue>
             </dl>
           </Surface>
           <Surface className="p-5">
@@ -313,11 +296,8 @@ export default function AreaDetailPage() {
       <FiveSDialog open={editing} onOpenChange={setEditing} title={`Edit ${area.name}`} size="lg">
         <AreaForm
           initial={{
-            name: area.name,
-            departmentId: area.department?.id ?? null,
             ownerId: area.owner?.id ?? null,
             description: area.description,
-            auditBoundary: area.auditBoundary,
             auditFrequency: area.auditFrequency,
             targetLevel: area.targetLevel,
           }}

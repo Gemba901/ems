@@ -16,7 +16,6 @@ const AUDIT_DETAIL_SELECT = {
     template: true,
     status: true,
     auditDate: true,
-    auditBoundary: true,
     auditeeName: true,
     remarks: true,
     photoUrls: true,
@@ -121,7 +120,7 @@ export class AuditsService {
     async create(user: AccessTokenPayload, dto: CreateAuditDto) {
         const actor = await this.access.resolveActor(user);
         const area = await this.access.areaOrThrow(actor, dto.areaId);
-        if (!area.isActive) throw new BadRequestException('This area is inactive. Reactivate it before auditing.');
+        if (!area.isActive) throw new BadRequestException('This area is inactive: no current employee profile lists it as their work area');
         if (!this.access.canAudit(actor, area)) throw new ForbiddenException('You are not an auditor for this area');
         this.assertNotFuture(actor, dto.auditDate);
 
@@ -130,7 +129,6 @@ export class AuditsService {
             throw new ForbiddenException('Only the area HOD or a 5S administrator can record an audit for someone else');
         }
         await this.access.assertCompanyEmployees(actor.organizationId, [auditorId, dto.auditeeId]);
-        const areaBoundary = await this.prisma.fiveSArea.findUniqueOrThrow({ where: { id: area.id }, select: { auditBoundary: true } });
 
         return this.prisma.$transaction(async (tx) => {
             const reference = await nextReference(tx, actor.organizationId, 'AUDIT');
@@ -145,7 +143,6 @@ export class AuditsService {
                     auditorId,
                     auditeeId: dto.auditeeId ?? null,
                     auditeeName: dto.auditeeName || null,
-                    auditBoundary: dto.auditBoundary || areaBoundary.auditBoundary || null,
                     createdById: actor.employeeId,
                 },
                 select: { id: true, reference: true },
@@ -174,7 +171,6 @@ export class AuditsService {
                 ...(dto.auditorId !== undefined ? { auditorId: dto.auditorId } : {}),
                 ...(dto.auditeeId !== undefined ? { auditeeId: dto.auditeeId } : {}),
                 ...(dto.auditeeName !== undefined ? { auditeeName: dto.auditeeName || null } : {}),
-                ...(dto.auditBoundary !== undefined ? { auditBoundary: dto.auditBoundary || null } : {}),
                 ...(dto.remarks !== undefined ? { remarks: dto.remarks || null } : {}),
                 ...(dto.photoUrls !== undefined ? { photoUrls: dto.photoUrls } : {}),
             },
@@ -222,7 +218,7 @@ export class AuditsService {
     async submit(user: AccessTokenPayload, auditId: string) {
         const actor = await this.access.resolveActor(user);
         const audit = await this.editableDraftOrThrow(actor, auditId);
-        if (!audit.area.isActive) throw new BadRequestException('This area is inactive. Reactivate it before submitting.');
+        if (!audit.area.isActive) throw new BadRequestException('This area is inactive: no current employee profile lists it as their work area');
         this.assertNotFuture(actor, dateOnly(audit.auditDate)!);
 
         const checkpoints = checkpointsFor(audit.template);
@@ -415,7 +411,6 @@ export class AuditsService {
             auditor: person(audit.auditor),
             auditee: person(audit.auditee),
             auditeeName: audit.auditeeName,
-            auditBoundary: audit.auditBoundary,
             remarks: audit.remarks,
             photoUrls: audit.photoUrls,
             createdAt: audit.createdAt,

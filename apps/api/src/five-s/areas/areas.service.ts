@@ -1,9 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { FiveSActionStatus, FiveSAuditStatus, FiveSStandardStatus, Prisma } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { isUniqueViolation } from 'src/work/work-errors';
-import { AreaListQueryDto, CreateAreaDto, UpdateAreaDto } from '../dto/five-s.dto';
+import { AreaListQueryDto, UpdateAreaDto } from '../dto/five-s.dto';
+import { syncAreasFromProfiles } from '../five-s-area-sync';
 import { FiveSAccessService } from '../five-s-access.service';
 import { PERSON_SELECT, dateOnly, logChange, person } from '../five-s-records';
 import { AUDIT_RESULT_SELECT, REPORTABLE_AUDIT_WHERE, buildAreaSummaries, toAuditResult } from '../five-s-summary';
@@ -17,6 +17,7 @@ export class AreasService {
 
     async list(user: AccessTokenPayload, query: AreaListQueryDto) {
         const actor = await this.access.resolveActor(user);
+        await syncAreasFromProfiles(this.prisma, actor.organizationId);
         const status = query.status ?? 'active';
         const where: Prisma.FiveSAreaWhereInput = {
             AND: [
@@ -40,7 +41,7 @@ export class AreasService {
             buildAreaSummaries(this.prisma, { id: areaId }, today),
             this.prisma.fiveSArea.findUniqueOrThrow({
                 where: { id: areaId },
-                select: { description: true, auditBoundary: true, createdAt: true, updatedAt: true },
+                select: { description: true, createdAt: true, updatedAt: true },
             }),
             this.prisma.fiveSAudit.findMany({
                 where: { areaId, ...REPORTABLE_AUDIT_WHERE },
@@ -70,7 +71,6 @@ export class AreasService {
         return {
             ...summary,
             description: area.description,
-            auditBoundary: area.auditBoundary,
             createdAt: area.createdAt,
             updatedAt: area.updatedAt,
             method: TEMPLATE_LABELS[REPORTABLE_AUDIT_WHERE.template],
@@ -92,54 +92,10 @@ export class AreasService {
         };
     }
 
-    async create(user: AccessTokenPayload, dto: CreateAreaDto) {
-        const actor = await this.access.resolveActor(user);
-        if (!this.access.canCreateAreas(actor)) throw new ForbiddenException('Only 5S administrators and HODs can create workplace areas');
-
-        // HODs create areas in their own department only.
-        const departmentId = this.access.isModuleAdmin(actor) ? dto.departmentId ?? null : actor.departmentId;
-        if (!this.access.isModuleAdmin(actor) && dto.departmentId && dto.departmentId !== actor.departmentId) {
-            throw new ForbiddenException('You can only create areas in your own department');
-        }
-        await this.access.assertCompanyDepartment(actor.organizationId, departmentId);
-        await this.access.assertCompanyEmployees(actor.organizationId, [dto.ownerId]);
-
-        try {
-            return await this.prisma.$transaction(async (tx) => {
-                const area = await tx.fiveSArea.create({
-                    data: {
-                        organizationId: actor.organizationId,
-                        name: dto.name,
-                        departmentId,
-                        ownerId: dto.ownerId ?? null,
-                        description: dto.description || null,
-                        auditBoundary: dto.auditBoundary || null,
-                        auditFrequency: dto.auditFrequency,
-                        targetLevelTenths: toTenths(dto.targetLevel),
-                        createdById: actor.employeeId,
-                    },
-                    select: { id: true, name: true },
-                });
-                await logChange(tx, {
-                    organizationId: actor.organizationId, actorId: actor.employeeId, entityType: 'AREA', entityId: area.id,
-                    action: 'CREATED', summary: `Created workplace area "${area.name}" (target ${dto.targetLevel.toFixed(1)})`,
-                });
-                return area;
-            });
-        } catch (error) {
-            if (isUniqueViolation(error)) throw new ConflictException('An area with this name already exists');
-            throw error;
-        }
-    }
-
     async update(user: AccessTokenPayload, areaId: string, dto: UpdateAreaDto) {
         const actor = await this.access.resolveActor(user);
         const scope = await this.access.areaOrThrow(actor, areaId);
         if (!this.access.canManageArea(actor, scope)) throw new ForbiddenException('You cannot edit this area');
-        if (dto.departmentId !== undefined && !this.access.isModuleAdmin(actor) && dto.departmentId !== actor.departmentId) {
-            throw new ForbiddenException('You can only keep areas in your own department');
-        }
-        await this.access.assertCompanyDepartment(actor.organizationId, dto.departmentId);
         await this.access.assertCompanyEmployees(actor.organizationId, [dto.ownerId]);
 
         const before = await this.prisma.fiveSArea.findUniqueOrThrow({ where: { id: areaId } });
@@ -150,28 +106,19 @@ export class AreasService {
             (data as Record<string, unknown>)[key as string] = value;
             changes.push(label);
         };
-        set('name', dto.name, 'name');
-        set('departmentId', dto.departmentId, 'department');
         set('ownerId', dto.ownerId, 'owner');
         set('description', dto.description === undefined ? undefined : dto.description || null, 'description');
-        set('auditBoundary', dto.auditBoundary === undefined ? undefined : dto.auditBoundary || null, 'audit boundary');
         set('auditFrequency', dto.auditFrequency, 'audit frequency');
         set('targetLevelTenths', dto.targetLevel === undefined ? undefined : toTenths(dto.targetLevel), 'target level');
-        set('isActive', dto.isActive, dto.isActive ? 'reactivated' : 'deactivated');
         if (changes.length === 0) return { id: areaId, name: before.name };
 
-        try {
-            return await this.prisma.$transaction(async (tx) => {
-                const area = await tx.fiveSArea.update({ where: { id: areaId }, data, select: { id: true, name: true } });
-                await logChange(tx, {
-                    organizationId: actor.organizationId, actorId: actor.employeeId, entityType: 'AREA', entityId: areaId,
-                    action: 'UPDATED', summary: `Updated "${area.name}": ${changes.join(', ')}`,
-                });
-                return area;
+        return this.prisma.$transaction(async (tx) => {
+            const area = await tx.fiveSArea.update({ where: { id: areaId }, data, select: { id: true, name: true } });
+            await logChange(tx, {
+                organizationId: actor.organizationId, actorId: actor.employeeId, entityType: 'AREA', entityId: areaId,
+                action: 'UPDATED', summary: `Updated "${area.name}": ${changes.join(', ')}`,
             });
-        } catch (error) {
-            if (isUniqueViolation(error)) throw new ConflictException('An area with this name already exists');
-            throw error;
-        }
+            return area;
+        });
     }
 }

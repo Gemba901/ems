@@ -112,10 +112,6 @@ export class FiveSAccessService {
         return area;
     }
 
-    canCreateAreas(actor: FiveSActor): boolean {
-        return this.isModuleAdmin(actor) || (actor.role === Role.HOD && !!actor.departmentId);
-    }
-
     canManageArea(actor: FiveSActor, area: Pick<AreaScope, 'departmentId'>): boolean {
         return this.isModuleAdmin(actor) || this.isDepartmentHead(actor, area);
     }
@@ -176,7 +172,6 @@ export class FiveSAccessService {
         return {
             isModuleAdmin: this.isModuleAdmin(actor),
             seesWholeCompany: this.seesWholeCompany(actor),
-            canCreateAreas: this.canCreateAreas(actor),
             isAuditor: this.has(actor, FiveSResponsibility.AUDITOR),
             isVerifier: this.has(actor, FiveSResponsibility.VERIFIER),
             responsibilities: actor.responsibilities,

@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
-import { useFiveSAreas, useFiveSCapabilities } from "@/hooks/five-s/useFiveS";
+import { useFiveSAreas } from "@/hooks/five-s/useFiveS";
 import { formatLevel } from "@/lib/five-s/scoring";
 import { AUDIT_FREQUENCY_LABELS, type AreaStatusFilter } from "@/services/five-s.service";
 import {
@@ -20,27 +19,18 @@ import {
   TargetBadge,
   errorMessage,
   formatDate,
-  primaryButton,
   selectClass,
 } from "@/components/five-s/ui";
 
 export default function AreasPage() {
   const [filters, setFilters] = useState<{ departmentId?: string; ownerId?: string; status: AreaStatusFilter }>({ status: "active" });
   const { data: areas, isLoading, error } = useFiveSAreas(filters);
-  const { data: caps } = useFiveSCapabilities();
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Workplace areas"
-        description="Each area shows its latest submitted audit. Areas without one are Not assessed."
-        actions={
-          caps?.canCreateAreas && (
-            <Link href="/five-s/areas/new" className={primaryButton}>
-              <Plus className="h-4 w-4" aria-hidden="true" /> New area
-            </Link>
-          )
-        }
+        description="Areas come from the Work Area / Section on employee profiles. Each shows its latest submitted audit; areas without one are Not assessed."
       />
 
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3">
@@ -67,7 +57,7 @@ export default function AreasPage() {
       {areas && areas.length === 0 && (
         <Surface>
           <EmptyState title="No workplace areas yet">
-            {caps?.canCreateAreas ? "Create an area to start auditing it." : "Ask a 5S administrator or your HOD to set up areas."}
+            Areas are built from the Work Area / Section on employee profiles. Fill in that field for your employees and their areas appear here.
           </EmptyState>
         </Surface>
       )}

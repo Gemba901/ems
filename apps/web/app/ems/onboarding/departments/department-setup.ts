@@ -69,3 +69,30 @@ export function columnSummary(rows: unknown[][], header: number, column: number)
   }
   return { count, distinct: distinct.size, first, last };
 }
+
+/**
+ * Reasons a chosen column may not hold department names, e.g. employee names, codes, phones or emails.
+ * Empty when it looks like a department column. Used to ask HR to confirm before adding the values.
+ */
+export function departmentColumnWarnings(rows: unknown[][], header: number, column: number): string[] {
+  const heading = cleanName(String(rows[header]?.[column] ?? ''));
+  const values = namesFromColumn(rows, header, column);
+  if (!values.length) return [];
+  const warnings: string[] = [];
+  const share = (test: (v: string) => boolean) => values.filter(test).length / values.length;
+  const distinct = new Set(values.map(nameKey)).size;
+  if (heading && !/(department|dept)/i.test(heading.replace(/[^a-z]/gi, ''))) {
+    warnings.push(`Its heading “${heading}” doesn’t mention a department.`);
+  }
+  if (/(plant|branch|division|site).*(department|dept)|(department|dept).*(plant|branch|division|site)/i.test(heading)) {
+    warnings.push(`“${heading}” looks like a combined column; department names should appear on their own.`);
+  }
+  if (values.length >= 10 && distinct / values.length > 0.6) {
+    warnings.push(`Almost every row has a different value (${distinct} different in ${values.length} rows). Departments usually repeat.`);
+  }
+  if (share((v) => /^[\d\s.,\-\/+()]+$/.test(v)) > 0.5) warnings.push('Most values are numbers or codes.');
+  if (share((v) => v.includes('@') || /\d{7,}/.test(v.replace(/\D/g, ''))) > 0.3) warnings.push('Values look like emails or phone numbers.');
+  if (values.reduce((n, v) => n + v.length, 0) / values.length > 60) warnings.push('Values are very long for department names.');
+  if (distinct > MAX_SETUP_NAMES) warnings.push(`It has ${distinct} different values, more than the ${MAX_SETUP_NAMES} departments that can be added at once.`);
+  return warnings;
+}

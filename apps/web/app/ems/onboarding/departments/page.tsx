@@ -8,7 +8,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import { DepartmentsService, DepartmentWithCount } from "@/services/departments.service";
-import { MAX_SETUP_NAMES, columnSummary, namesFromColumn, reviewDepartments, sheetOrigin, suggestColumn } from "./department-setup";
+import { MAX_SETUP_NAMES, columnSummary, departmentColumnWarnings, nameKey, namesFromColumn, reviewDepartments, sheetOrigin, suggestColumn } from "./department-setup";
 
 const inputClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600";
 const secondaryClass = "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
@@ -35,6 +35,8 @@ function DepartmentSetup() {
   const [column, setColumn] = useState(-1);
   // Where the chosen worksheet starts (sheets don't always begin at A1), so labels show real Excel rows/columns.
   const [origin, setOrigin] = useState({ row: 0, col: 0 });
+  // What the last "Add this column" did, so HR sees the effect straight away.
+  const [added, setAdded] = useState<{ values: number; distinct: number; created: number; existing: number; attention: number; column: string } | null>(null);
   const [reading, setReading] = useState(false);
   const [fileError, setFileError] = useState("");
   const fileVersion = useRef(0);
@@ -100,7 +102,24 @@ function DepartmentSetup() {
   }
 
   function editText(value: string) {
-    setText(value); setSaved(null); setSaveError(""); setUnchecked(new Set());
+    setText(value); setSaved(null); setSaveError(""); setUnchecked(new Set()); setAdded(null);
+  }
+
+  /** Add the chosen column's values to the list, then report how many are new (and selected), existing or need attention. */
+  function addColumn() {
+    const names = namesFromColumn(rows, header, column);
+    const next = [text, ...names].filter(Boolean).join("\n");
+    editText(next);
+    const keys = new Set(names.map(nameKey));
+    const status = reviewDepartments(next, departments ?? []).filter((row) => keys.has(row.key));
+    setAdded({
+      values: names.length,
+      distinct: keys.size,
+      created: status.filter((row) => row.status === "new").length,
+      existing: status.filter((row) => row.status === "existing").length,
+      attention: status.filter((row) => row.status === "invalid" || row.status === "ambiguous").length,
+      column: excelCol(column),
+    });
   }
 
   async function createSelected() {
@@ -167,7 +186,26 @@ function DepartmentSetup() {
                   {" "}First: {namesFromColumn(rows, header, column).slice(0, 4).join(" · ")}
                 </p>;
             })()}
-          <button type="button" disabled={column < 0 || !namesFromColumn(rows, header, column).length} className={secondaryClass} onClick={() => editText([text, ...namesFromColumn(rows, header, column)].filter(Boolean).join("\n"))}>Add this column to the list</button>
+          {(() => {
+            const warnings = column >= 0 ? departmentColumnWarnings(rows, header, column) : [];
+            const empty = column < 0 || !namesFromColumn(rows, header, column).length;
+            return <>
+              {warnings.length > 0 && <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+                <p className="font-semibold">Column {excelCol(column)} may not hold department names:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                <p className="mt-1">Check the preview. If you are sure, you can still add it.</p>
+              </div>}
+              <button type="button" disabled={empty} onClick={addColumn}
+                className={warnings.length ? "inline-flex items-center justify-center gap-2 rounded-lg border border-amber-400 bg-white px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50" : secondaryClass}>
+                {warnings.length ? `Add column ${excelCol(column)} anyway` : "Add this column to the list"}
+              </button>
+            </>;
+          })()}
+          {added && <p role="status" className="text-xs text-emerald-900">
+            Added {added.values} value{added.values === 1 ? "" : "s"} from column {added.column} ({added.distinct} different):
+            {" "}<span className="font-semibold">{added.created} new and selected</span> · {added.existing} already exist · {added.attention} need attention.
+            {" "}Review them below.
+          </p>}
         </div>}
         <label className="block space-y-2 text-sm font-medium" htmlFor="department-names"><span>Department names</span><textarea id="department-names" value={text} onChange={e => editText(e.target.value)} rows={7} placeholder={"Administration\nProduction\nQuality"} className={`${inputClass} font-normal`} /></label>
       </section>

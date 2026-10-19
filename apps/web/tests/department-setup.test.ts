@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { reviewDepartments, namesFromColumn, suggestColumn, sheetOrigin, columnSummary } from '../app/ems/onboarding/departments/department-setup';
+import { reviewDepartments, namesFromColumn, suggestColumn, sheetOrigin, columnSummary, departmentColumnWarnings } from '../app/ems/onboarding/departments/department-setup';
 
 test('repeated employees produce one department entry, with an occurrence count', () => {
   assert.deepEqual(reviewDepartments('Production\n production \n\nQuality', []), [
@@ -49,4 +49,19 @@ test('summarises a department column: values, distinct names and the rows they s
   const rows = [['Name', 'Department'], ['Sam', 'Production'], ['Faith', ''], ['Ann', ' production '], ['Bo', 'Quality']];
   assert.deepEqual(columnSummary(rows, 0, 1), { count: 3, distinct: 2, first: 1, last: 4 });
   assert.deepEqual(columnSummary(rows, 0, 0).count, 4);
+});
+test('a real department column raises no warnings', () => {
+  const rows = [['Name', 'Department'], ...Array.from({ length: 20 }, (_, i) => [`P${i}`, i % 2 ? 'Production' : 'Quality'])];
+  assert.deepEqual(departmentColumnWarnings(rows, 0, 1), []);
+});
+test('employee names, codes and phones are flagged as unlikely departments', () => {
+  const rows = [['Employee Name', 'Employee Number', 'Mobile'], ...Array.from({ length: 20 }, (_, i) => [`Person ${i}`, String(1000 + i), `07110010${String(i).padStart(2, '0')}`])];
+  assert.ok(departmentColumnWarnings(rows, 0, 0).some((w) => w.includes('Almost every row')));
+  assert.ok(departmentColumnWarnings(rows, 0, 0).some((w) => w.includes('doesn’t mention')));
+  assert.ok(departmentColumnWarnings(rows, 0, 1).some((w) => w.includes('numbers or codes')));
+  assert.ok(departmentColumnWarnings(rows, 0, 2).some((w) => w.includes('phone')));
+});
+test('a combined Plant & Department column is flagged', () => {
+  const rows = [['Plant & Department'], ['Head Office - Finance'], ['Head Office - Finance']];
+  assert.ok(departmentColumnWarnings(rows, 0, 0).some((w) => w.includes('combined')));
 });

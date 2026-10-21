@@ -6,6 +6,7 @@ import { Users2 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { useOrgModules } from "@/hooks/useOrgModules";
 import { CommitteeService } from "@/services/committee.service";
+import { ClockCard } from "@/components/work/attendance/ClockCard";
 import { apiClient } from "@/lib/api-client";
 
 function greeting(): string {
@@ -65,7 +66,7 @@ export default function DashboardHero() {
       <div className="pointer-events-none absolute top-0 right-0 h-full w-1/3 bg-gradient-to-l from-indigo-600/5 to-transparent" />
 
       <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-slate-400 text-xs mb-2">
             <span className="sm:hidden">{todayShort} · Week {week}</span>
             <span className="hidden sm:inline">{todayFull} · Week {week}</span>
@@ -95,16 +96,19 @@ export default function DashboardHero() {
           </div>
         </div>
 
-        {dailyQuote && (
-          <div className="shrink-0 max-w-xs text-right hidden sm:block">
-            <p className="text-slate-300 text-sm italic leading-relaxed">
-              "{dailyQuote.quote}"
-            </p>
-            <p className="text-slate-500 text-[10px] uppercase tracking-widest mt-2 font-semibold">
-              — {dailyQuote.author}
-            </p>
-          </div>
-        )}
+        <div className="flex min-w-0 flex-col items-start gap-4 sm:max-w-xs sm:shrink-0 sm:items-end">
+          {dailyQuote && (
+            <div className="hidden text-right sm:block">
+              <p className="text-slate-300 text-sm italic leading-relaxed break-words">
+                &ldquo;{dailyQuote.quote}&rdquo;
+              </p>
+              <p className="text-slate-500 text-[10px] uppercase tracking-widest mt-2 font-semibold">
+                — {dailyQuote.author}
+              </p>
+            </div>
+          )}
+          {hasModule("WORK") && <ClockCard compact />}
+        </div>
       </div>
     </div>
   );

@@ -1,30 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, Loader2, MapPin, MapPinOff } from "lucide-react";
 import { useAttendanceStatus, useClockIn, useClockOut } from "@/hooks/work/useWork";
 import { formatDateOnly, formatDuration, formatTime } from "@/lib/work/format";
 import { readLocation } from "@/lib/work/location";
 import { WorkApiError, type AttendanceRecord, type AttendanceStatus, type CapturedLocation } from "@/services/work.service";
-import { ErrorNote, Field, Surface, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import { ErrorNote, Field, Surface, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
 
-type Phase =
-  | { kind: "idle" }
-  | { kind: "locating" }
-  | { kind: "saving" }
-  | { kind: "needs-reason"; problem: string };
+type Phase = { kind: "idle" } | { kind: "locating" } | { kind: "saving" } | { kind: "needs-reason"; problem: string };
 
 function newRequestId(): string {
   return crypto.randomUUID();
 }
 
-function useNow(active: boolean) {
+function useNow(active: boolean, intervalMs = 30_000) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
-    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
     return () => window.clearInterval(id);
-  }, [active]);
+  }, [active, intervalMs]);
   return now;
 }
 
@@ -55,7 +51,8 @@ function ScheduleLine({ schedule, timeZone }: { schedule: AttendanceStatus["toda
   );
 }
 
-export function ClockCard() {
+export function ClockCard({ compact = false }: { compact?: boolean }) {
+  const reasonId = useId();
   const status = useAttendanceStatus();
   const clockIn = useClockIn();
   const clockOut = useClockOut();
@@ -69,9 +66,9 @@ export function ClockCard() {
 
   const data = status.data;
   const open = data?.openRecord ?? null;
-  const now = useNow(!!open);
+  const now = useNow(!!open, compact ? 1_000 : 30_000);
   // Elapsed time uses the server clock, adjusted by how long ago the status was fetched.
-  const serverNow = data ? new Date(data.serverNow).getTime() + (now - status.dataUpdatedAt) : now;
+  const serverNow = data ? new Date(data.serverNow).getTime() + Math.max(0, now - status.dataUpdatedAt) : now;
 
   async function submitClockIn(payload: { location?: CapturedLocation; reason?: string }) {
     clockInRequest.current ??= newRequestId();
@@ -151,8 +148,8 @@ export function ClockCard() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             You are still clocked in from <strong>{formatDateOnly(open.workDate, { weekday: "short" })}</strong> (since{" "}
-            {formatTime(open.clockInAt, data.timeZone)}). Clock out of that session before clocking in today. If the clock-out
-            time is wrong, ask HR or your manager to correct it.
+            {formatTime(open.clockInAt, data.timeZone)}). Clock out of that session before clocking in today. If the clock-out time is wrong, ask HR or your
+            manager to correct it.
           </p>
         </div>
         <button type="button" className={primaryButton} disabled={clockOut.isPending} onClick={() => submitClockOut(open)}>
@@ -174,9 +171,7 @@ export function ClockCard() {
           </div>
           <div>
             <dt className="text-slate-500">Elapsed</dt>
-            <dd className="font-semibold text-slate-900">
-              {formatDuration((serverNow - new Date(open.clockInAt).getTime()) / 1000)}
-            </dd>
+            <dd className="font-semibold text-slate-900">{formatDuration((serverNow - new Date(open.clockInAt).getTime()) / 1000)}</dd>
           </div>
         </dl>
         <LocationLine record={open} />
@@ -206,9 +201,7 @@ export function ClockCard() {
           </div>
           <div>
             <dt className="text-slate-500">Duration</dt>
-            <dd className="font-semibold text-slate-900">
-              {done.durationSeconds != null ? formatDuration(done.durationSeconds) : "—"}
-            </dd>
+            <dd className="font-semibold text-slate-900">{done.durationSeconds != null ? formatDuration(done.durationSeconds) : "—"}</dd>
           </div>
         </dl>
         <LocationLine record={done} />
@@ -229,19 +222,15 @@ export function ClockCard() {
             <p>{phase.problem} You can try again, or clock in without location by explaining why.</p>
           </div>
         )}
-        <Field
-          label="Why is your location missing?"
-          htmlFor="location-missing-reason"
-          hint={`10–500 characters (${reasonLength}/500)`}
-        >
+        <Field label="Why is your location missing?" htmlFor={reasonId} hint={`10–500 characters (${reasonLength}/500)`}>
           <textarea
-            id="location-missing-reason"
+            id={reasonId}
             className={inputClass}
             rows={3}
             maxLength={500}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            aria-describedby="location-missing-reason-hint"
+            aria-describedby={`${reasonId}-hint`}
           />
         </Field>
         <div className="flex flex-wrap gap-2">
@@ -277,10 +266,61 @@ export function ClockCard() {
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           {phase.kind === "locating" ? "Getting your location…" : phase.kind === "saving" ? "Saving…" : "Clock in"}
         </button>
-        <p className="text-xs text-slate-500">
-          Your location is captured once, when you clock in. It is not tracked during the day or at clock-out.
-        </p>
+        <p className="text-xs text-slate-500">Your location is captured once, when you clock in. It is not tracked during the day or at clock-out.</p>
       </div>
+    );
+  }
+
+  if (compact) {
+    const busy = phase.kind === "locating" || phase.kind === "saving" || clockOut.isPending;
+    const unavailable = status.isError || (!status.isLoading && !data);
+    const finished = !open && !!data?.todayRecord;
+    const seconds = open
+      ? Math.max(0, Math.floor((serverNow - new Date(open.clockInAt).getTime()) / 1000))
+      : data?.todayRecord?.durationSeconds ?? 0;
+    const elapsed = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60]
+      .map((part) => String(part).padStart(2, "0")).join(":");
+
+    return (
+      <>
+        <div className="inline-flex max-w-full flex-wrap items-center gap-3">
+          {(open || finished) && (
+            <span className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-medium text-slate-400">Time clocked in</span>
+              <span className="font-mono text-sm tabular-nums text-slate-200" aria-label={`${open ? "Time since clock-in" : "Total time clocked in"}: ${elapsed}`}>
+                {elapsed}
+              </span>
+            </span>
+          )}
+          <button
+            type="button"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={status.isLoading || busy || finished}
+            aria-busy={status.isLoading || busy}
+            aria-label={unavailable ? "Attendance unavailable. Try again" : phase.kind === "locating" ? "Getting your location" : undefined}
+            onClick={() => unavailable ? void status.refetch() : open ? void submitClockOut(open) : void startClockIn()}
+          >
+            {(status.isLoading || busy) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            {unavailable ? "Try again" : finished ? "Clocked out" : open ? "Clock out" : "Clock in"}
+          </button>
+        </div>
+        <WorkDialog
+          open={phase.kind === "needs-reason" || !!error}
+          onOpenChange={(isOpen) => {
+            if (isOpen || busy) return;
+            setError(null);
+            if (phase.kind === "needs-reason") {
+              clockInRequest.current = null;
+              setReason("");
+              setPhase({ kind: "idle" });
+            }
+          }}
+          title={phase.kind === "needs-reason" ? "Clock in without location" : "Attendance"}
+        >
+          {phase.kind === "needs-reason" && body}
+          {error && <ErrorNote>{error}</ErrorNote>}
+        </WorkDialog>
+      </>
     );
   }
 

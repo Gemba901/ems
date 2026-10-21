@@ -287,6 +287,7 @@ export function useAttendanceStatus() {
     retry: retryTransient,
     enabled,
     refetchOnWindowFocus: "always",
+    refetchInterval: 30_000,
     gcTime: 0,
   });
 }

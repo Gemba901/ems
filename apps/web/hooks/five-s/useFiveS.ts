@@ -186,6 +186,14 @@ export function useVerifyAction() {
   );
 }
 
+export function useRaiseKaizen() {
+  return useFiveSMutation(({ id, body }: { id: string; body: { kaizenOwnerId?: string } }, t) => FiveSService.raiseKaizen(id, body, t));
+}
+
+export function useRaiseSga() {
+  return useFiveSMutation(({ id, body }: { id: string; body: { ownerId?: string } }, t) => FiveSService.raiseSga(id, body, t));
+}
+
 // ── Red tags ──────────────────────────────────────────────────────────────────
 
 export function useFiveSRedTags(params: RedTagListQuery) {
@@ -225,6 +233,13 @@ export function useFiveSStandards(params: { areaId?: string; status?: StandardSt
 
 export function useFiveSStandard(id: string | undefined) {
   return useFiveSQuery(["standard", id], (t) => FiveSService.getStandard(id!, t), { enabled: !!id });
+}
+
+// Join 12: prefill for a standard written from a closed Kaizen or SGA
+export function useStandardSource(params: { kaizenId?: string; sgaId?: string }) {
+  return useFiveSQuery(["standard-source", params], (t) => FiveSService.getStandardSource(params, t), {
+    enabled: !!(params.kaizenId || params.sgaId),
+  });
 }
 
 export function useCreateStandard() {

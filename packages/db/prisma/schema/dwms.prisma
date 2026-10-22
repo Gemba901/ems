@@ -39,6 +39,17 @@ model Task {
   instances                  TaskInstance[]
   department                 Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
+  // Where a task came from when another module created it through DwmsTaskBridge; null for
+  // tasks created in DWMS itself. sourceId is the per-task key (may be compound, e.g.
+  // "<kaizenId>:<employeeId>" for fan-out), sourceParentId the owning record so all of its
+  // tasks can be closed or deactivated together.
+  sourceModule   TaskSourceModule?
+  sourceId       String?
+  sourceParentId String?
+  sourceRef      String?
+
+  @@unique([sourceModule, sourceId])
+  @@index([sourceModule, sourceParentId])
   @@index([ownerId])
   @@index([activityId])
   @@index([assignedById])
@@ -135,6 +146,9 @@ model Alert {
   againstUser  Employee?         @relation("AlertsAgainst", fields: [againstUserId], references: [id], onDelete: SetNull)
   comments     AlertComment[]
   occurrences  AlertOccurrence[]
+  // Join 10: the improvement raised to fix it (one Kaizen or one SGA)
+  raisedKaizen Kaizen?
+  raisedSga    Sga?
 
   @@index([raisedById])
   @@index([organizationId])
@@ -195,6 +209,14 @@ enum Severity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum TaskSourceModule {
+  KAIZEN // sourceParentId = Kaizen.id
+  SGA // SgaActionItem; sourceParentId = Sga.id
+  SGA_MEETING // SGA meeting plan; sourceParentId = Sga.id
+  FIVE_S_ROUTINE // sourceParentId = FiveSRoutine.id
+  FIVE_S_STEP // FiveSCorrectiveAction; sourceParentId = FiveSAction.id
 }
 
 enum TaskFrequency {

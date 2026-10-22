@@ -51,6 +51,9 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
           owner: { select: { ...employeeSelect, reportingManagerId: true } },
         },
       },
+      // Join 10: the Kaizen or SGA raised from this alert
+      raisedKaizen: { select: { id: true, title: true, status: true } },
+      raisedSga: { select: { id: true, title: true, status: true } },
       occurrences: {
         include: {
           raisedBy: { select: employeeSelect },
@@ -677,6 +680,11 @@ export abstract class DwmsAlertsService extends DwmsDirectoryService {
     });
     if (!alert) throw new NotFoundException('Alert not found');
     return alert;
+  }
+
+  // An alert the user may see, for other modules acting on it (join 10: raise a Kaizen or SGA).
+  findVisibleAlert(user: UserPayload, alertId: string) {
+    return this.visibleAlert(user, alertId);
   }
 
   async getAlertDetail(user: UserPayload, alertId: string) {

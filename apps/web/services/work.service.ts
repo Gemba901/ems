@@ -140,7 +140,17 @@ export interface UpdateProjectPayload {
   members?: ProjectMemberInput[];
 }
 
+export type WorkTaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export const TASK_PRIORITIES: WorkTaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+export const TASK_PRIORITY_LABELS: Record<WorkTaskPriority, string> = { LOW: "Low", MEDIUM: "Medium", HIGH: "High", URGENT: "Urgent" };
+export interface TaskActivity {
+  id: string; actorName: string; action: string; createdAt: string;
+  changes: Record<string, { before: string | null; after: string | null }>;
+}
+
 export interface WorkTask {
+  priority: WorkTaskPriority;
+  version: number;
   id: string;
   project: { id: string; name: string };
   title: string;
@@ -157,6 +167,7 @@ export interface WorkTask {
 }
 
 export interface CreateTaskPayload {
+  priority?: WorkTaskPriority;
   title: string;
   description?: string;
   assigneeId?: string;
@@ -166,6 +177,8 @@ export interface CreateTaskPayload {
 }
 
 export interface UpdateTaskPayload {
+  expectedVersion: number;
+  priority?: WorkTaskPriority;
   title?: string;
   description?: string | null;
   assigneeId?: string | null;
@@ -225,6 +238,7 @@ export interface SprintTeamPayload {
 }
 
 export interface AttendanceRecord {
+  autoClockedOutAt: string | null;
   id: string;
   employeeId: string;
   workDate: string;
@@ -555,6 +569,9 @@ export const WorkService = {
   },
   updateTask(taskId: string, data: UpdateTaskPayload, token: string): Promise<WorkTask> {
     return send("PATCH", `/tasks/${encodeURIComponent(taskId)}`, data, token);
+  },
+  listActivity(taskId: string, token: string, page = 1): Promise<Page<TaskActivity>> {
+    return get(`/tasks/${encodeURIComponent(taskId)}/activity${query({ page, pageSize: 20 })}`, token);
   },
   listComments(taskId: string, token: string): Promise<Page<TaskComment>> {
     return get(`/tasks/${encodeURIComponent(taskId)}/comments${query({ pageSize: 100 })}`, token);

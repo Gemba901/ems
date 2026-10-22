@@ -1,18 +1,25 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { FiveSActionEventType, FiveSActionSource, FiveSActionStatus, Prisma } from 'db';
+import { FiveSActionEventType, FiveSActionSource, FiveSActionStatus, FiveSAuditStatus, KaizenTrigger, ModuleType, Prisma, SgaStartingReason } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
+import { KaizenService } from 'src/kaizen/kaizen.service';
+import { NotificationsService } from 'src/notifications/notifications.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { SgaService } from 'src/sga/sga.service';
+import { isUniqueViolation } from 'src/work/work-errors';
 import { addDays, toDbDate } from 'src/work/work-date';
 import {
     ActionListQueryDto,
     CorrectiveActionInputDto,
     CreateActionDto,
+    RaiseKaizenDto,
+    RaiseSgaDto,
     SubmitActionDto,
     UpdateActionDto,
     UpdateCorrectiveActionDto,
     VerifyActionDto,
 } from '../dto/five-s.dto';
 import { FiveSAccessService, FiveSActor } from '../five-s-access.service';
+import { FiveSDwmsSyncService } from '../five-s-dwms-sync.service';
 import { PERSON_SELECT, dateOnly, nextReference, person } from '../five-s-records';
 import { overdueActionWhere } from '../five-s-summary';
 import { PRACTICE_LABELS } from '../five-s-template';
@@ -62,7 +69,15 @@ const ACTION_SELECT = {
     verifiedBy: { select: PERSON_SELECT },
     createdBy: { select: PERSON_SELECT },
     correctiveActions: { orderBy: { sortOrder: 'asc' }, select: CORRECTIVE_ACTION_SELECT },
+    raisedKaizen: { select: { id: true, title: true, status: true } },
+    raisedSga: { select: { id: true, title: true, status: true } },
 } satisfies Prisma.FiveSActionSelect;
+
+// Join 8: a checkpoint that failed in each of the area's last REPEAT_AUDITS submitted audits is a
+// repeat finding. Fixing it action by action hasn't held, so the action page suggests an SGA.
+export const REPEAT_AUDITS = 3;
+// An SGA still running on the same checkpoint already covers it.
+const SGA_FINISHED = ['VERIFIED_CLOSED', 'REJECTED'] as const;
 
 type ActionRow = Prisma.FiveSActionGetPayload<{ select: typeof ACTION_SELECT }>;
 
@@ -70,7 +85,14 @@ const describeDate = (value: string | null) => value ?? 'not set';
 
 @Injectable()
 export class ActionsService {
-    constructor(private prisma: PrismaService, private access: FiveSAccessService) {}
+    constructor(
+        private prisma: PrismaService,
+        private access: FiveSAccessService,
+        private dwmsSync: FiveSDwmsSyncService,
+        private kaizens: KaizenService,
+        private sgas: SgaService,
+        private notifications: NotificationsService,
+    ) {}
 
     async list(user: AccessTokenPayload, query: ActionListQueryDto) {
         const actor = await this.access.resolveActor(user);
@@ -125,6 +147,7 @@ export class ActionsService {
         });
         return {
             ...this.toView(actor, action, this.access.today(actor)),
+            repeatFinding: await this.repeatFinding(action),
             history: events.map((e) => ({ ...e, actor: person(e.actor) })),
         };
     }
@@ -139,7 +162,7 @@ export class ActionsService {
         await this.access.assertCompanyEmployees(actor.organizationId, [dto.ownerId, ...steps.map((c) => c.ownerId)]);
         const planOwnerId = dto.ownerId ?? area.ownerId ?? null;
 
-        return this.prisma.$transaction(async (tx) => {
+        const created = await this.prisma.$transaction(async (tx) => {
             const reference = await nextReference(tx, actor.organizationId, 'ACTION');
             const action = await tx.fiveSAction.create({
                 data: {
@@ -173,6 +196,9 @@ export class ActionsService {
             });
             return { id: action.id, reference: action.reference };
         });
+        // Join 9: each step becomes a task on its owner's DWMS list.
+        await this.dwmsSync.syncActionSteps(created.id, actor.employeeId);
+        return created;
     }
 
     // Plan the action: owner, due date and finding. Each change is recorded in history.
@@ -219,6 +245,8 @@ export class ActionsService {
             if (updated.count === 0) throw new ConflictException('Verified actions are closed');
             await tx.fiveSActionEvent.createMany({ data: events });
         });
+        // Steps without their own due date or owner follow the plan's.
+        await this.dwmsSync.syncActionSteps(actionId, actor.employeeId);
         return this.get(user, actionId);
     }
 
@@ -318,6 +346,7 @@ export class ActionsService {
                 data: { actionId, actorId: actor.employeeId, type: FiveSActionEventType.UPDATED, note: `Added corrective action: ${dto.description}` },
             });
         });
+        await this.dwmsSync.syncActionSteps(actionId, actor.employeeId);
         return this.get(user, actionId);
     }
 
@@ -364,6 +393,8 @@ export class ActionsService {
                 data: notes.map((note) => ({ actionId, actorId: actor.employeeId, type: FiveSActionEventType.UPDATED, note })),
             });
         });
+        if (dto.done === false && step.completedAt) await this.dwmsSync.reopenStep(stepId);
+        await this.dwmsSync.syncActionSteps(actionId, actor.employeeId);
         return this.get(user, actionId);
     }
 
@@ -380,6 +411,151 @@ export class ActionsService {
                 data: { actionId, actorId: actor.employeeId, type: FiveSActionEventType.UPDATED, note: `Removed corrective action: ${step.description}` },
             });
         });
+        await this.dwmsSync.syncActionSteps(actionId, actor.employeeId);
+        return this.get(user, actionId);
+    }
+
+    // ---------- Kaizen (join 7) ----------
+
+    // Raise a Daily Gemba Kaizen from this finding, once per action. The kaizen owner raises and owns
+    // the draft (same rights as if they started it) and completes it from the prefilled problem.
+    // The 5S action stays as it is: its steps and verification carry on independently.
+    async raiseKaizen(user: AccessTokenPayload, actionId: string, dto: RaiseKaizenDto) {
+        const actor = await this.access.resolveActor(user);
+        const action = await this.actionOrThrow(actor, actionId);
+        if (!this.access.canCoordinateArea(actor, action.area) && action.ownerId !== actor.employeeId) {
+            throw new ForbiddenException('Only the action owner or the area coordinators can raise a Kaizen');
+        }
+        if (action.raisedKaizen) throw new ConflictException('A Kaizen has already been raised from this action');
+        const organization = await this.prisma.organization.findUnique({ where: { id: actor.organizationId }, select: { modules: true } });
+        if (!organization?.modules.includes(ModuleType.KAIZEN)) throw new BadRequestException('Kaizen is not enabled for this company');
+        const kaizenOwnerId = dto.kaizenOwnerId ?? action.ownerId;
+        if (!kaizenOwnerId) throw new BadRequestException('Pick a Kaizen owner, or assign an owner to this action first');
+        await this.access.assertCompanyEmployees(actor.organizationId, [kaizenOwnerId]);
+
+        const where = action.audit
+            ? `5S audit ${action.audit.reference}, checkpoint ${action.checkpointNo}${action.checkpointText ? ` (${action.checkpointText})` : ''}`
+            : `5S action ${action.reference}`;
+        let kaizen: Awaited<ReturnType<KaizenService['createKaizenForEmployee']>>;
+        try {
+            kaizen = await this.kaizens.createKaizenForEmployee(
+                kaizenOwnerId,
+                {
+                    trigger: action.source === FiveSActionSource.AUDIT ? KaizenTrigger.AUDIT_OBSERVATION : KaizenTrigger.GEMBA_WALK_OBSERVATION,
+                    conditionDescription: `${action.area.name}: ${action.finding}\nFound in ${where}.`,
+                    sourceFiveSActionId: action.id,
+                },
+                actor.organizationId,
+            );
+        } catch (error) {
+            if (isUniqueViolation(error)) throw new ConflictException('A Kaizen has already been raised from this action');
+            throw error;
+        }
+
+        const ownerName = person(kaizen.kaizenOwner)?.name ?? 'the owner';
+        await this.prisma.fiveSActionEvent.create({
+            data: { actionId, actorId: actor.employeeId, type: FiveSActionEventType.KAIZEN_RAISED, note: `Raised a Kaizen for ${ownerName}` },
+        });
+        if (kaizenOwnerId !== actor.employeeId) {
+            await this.notifications.create({
+                employeeId: kaizenOwnerId,
+                type: 'ACTION_REQUIRED',
+                module: 'KAIZEN',
+                title: 'Kaizen raised from a 5S finding — complete the draft',
+                message: `A Daily Gemba Kaizen was raised for you from ${action.reference} in ${action.area.name}: "${action.finding}".`,
+                actionUrl: `/kaizen/${kaizen.id}`,
+                metadata: { kaizenId: kaizen.id, fiveSActionId: actionId },
+            });
+        }
+        return this.get(user, actionId);
+    }
+
+    // ---------- Repeat findings -> SGA (join 8) ----------
+
+    // The area's last REPEAT_AUDITS submitted audits, when this action's checkpoint failed in every
+    // one of them, plus any SGA still running on that checkpoint. Null when it isn't a repeat.
+    async repeatFinding(action: Pick<ActionRow, 'id' | 'areaId' | 'source' | 'checkpointNo'>) {
+        if (action.source !== FiveSActionSource.AUDIT || action.checkpointNo === null) return null;
+        const audits = await this.prisma.fiveSAudit.findMany({
+            where: { areaId: action.areaId, status: FiveSAuditStatus.SUBMITTED },
+            orderBy: [{ auditDate: 'desc' }, { submittedAt: 'desc' }],
+            take: REPEAT_AUDITS,
+            select: {
+                id: true,
+                reference: true,
+                auditDate: true,
+                responses: { where: { checkpointNo: action.checkpointNo }, select: { locationCount: true } },
+            },
+        });
+        const failed = (a: (typeof audits)[number]) => (a.responses[0]?.locationCount ?? 0) > 0;
+        if (audits.length < REPEAT_AUDITS || !audits.every(failed)) return null;
+
+        const openSga = await this.prisma.sga.findFirst({
+            where: {
+                sourceFiveSAction: { areaId: action.areaId, checkpointNo: action.checkpointNo },
+                status: { notIn: [...SGA_FINISHED] },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, title: true, status: true },
+        });
+        return {
+            audits: audits.map((a) => ({ id: a.id, reference: a.reference, auditDate: dateOnly(a.auditDate) })),
+            openSga,
+        };
+    }
+
+    // Raise an SGA for a repeat finding, once per action. Area coordinators raise it (it's a team
+    // project); the SGA owner defaults to the area owner, then the action owner, then the raiser.
+    async raiseSga(user: AccessTokenPayload, actionId: string, dto: RaiseSgaDto) {
+        const actor = await this.access.resolveActor(user);
+        const action = await this.actionOrThrow(actor, actionId);
+        if (!this.access.canCoordinateArea(actor, action.area)) throw new ForbiddenException('Only the area coordinators can raise an SGA');
+        if (action.raisedSga) throw new ConflictException('An SGA has already been raised from this action');
+        const organization = await this.prisma.organization.findUnique({ where: { id: actor.organizationId }, select: { modules: true } });
+        if (!organization?.modules.includes(ModuleType.SGA)) throw new BadRequestException('SGA is not enabled for this company');
+        const repeat = await this.repeatFinding(action);
+        if (!repeat) throw new BadRequestException(`An SGA is raised when a checkpoint fails ${REPEAT_AUDITS} audits in a row`);
+        if (repeat.openSga) throw new ConflictException('An SGA is already running for this checkpoint');
+        const ownerId = dto.ownerId ?? action.area.ownerId ?? action.ownerId ?? actor.employeeId;
+        await this.access.assertCompanyEmployees(actor.organizationId, [ownerId]);
+
+        const checkpoint = `checkpoint ${action.checkpointNo}${action.checkpointText ? ` (${action.checkpointText})` : ''}`;
+        let sga: Awaited<ReturnType<SgaService['createSgaForEmployee']>>;
+        try {
+            sga = await this.sgas.createSgaForEmployee(
+                ownerId,
+                {
+                    startingReason: SgaStartingReason.AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION,
+                    title: `${action.area.name}: ${action.checkpointText ?? `5S checkpoint ${action.checkpointNo}`}`.slice(0, 200),
+                    problemDescription: [
+                        `${action.area.name}: ${checkpoint} failed in each of the last ${REPEAT_AUDITS} 5S audits (${repeat.audits.map((a) => a.reference).join(', ')}).`,
+                        `Latest finding: ${action.finding}`,
+                    ].join('\n'),
+                    mainDepartmentId: action.area.departmentId ?? undefined,
+                    workArea: action.area.name,
+                    sourceFiveSActionId: action.id,
+                },
+                actor.organizationId,
+            );
+        } catch (error) {
+            if (isUniqueViolation(error)) throw new ConflictException('An SGA has already been raised from this action');
+            throw error;
+        }
+
+        await this.prisma.fiveSActionEvent.create({
+            data: { actionId, actorId: actor.employeeId, type: FiveSActionEventType.SGA_RAISED, note: `Raised an SGA for a repeat finding` },
+        });
+        if (ownerId !== actor.employeeId) {
+            await this.notifications.create({
+                employeeId: ownerId,
+                type: 'ACTION_REQUIRED',
+                module: 'SGA',
+                title: 'SGA raised from a repeat 5S finding — complete the draft',
+                message: `${action.area.name} failed ${checkpoint} in ${REPEAT_AUDITS} audits in a row. A Small Group Activity was raised for you to fix it for good.`,
+                actionUrl: `/sga/${sga.id}`,
+                metadata: { sgaId: sga.id, fiveSActionId: actionId },
+            });
+        }
         return this.get(user, actionId);
     }
 
@@ -436,6 +612,8 @@ export class ActionsService {
             finding: a.finding,
             correctiveActions: steps,
             correctiveActionProgress: { done: stepsDone, total: steps.length },
+            kaizen: a.raisedKaizen,
+            sga: a.raisedSga,
             owner: person(a.owner),
             dueDate,
             // No due date means never overdue.
@@ -458,6 +636,9 @@ export class ActionsService {
                 allStepsDone: steps.length > 0 && stepsDone === steps.length,
                 canManageSteps,
                 canVerify: a.status === FiveSActionStatus.AWAITING_VERIFICATION && this.access.canVerifyAction(actor, a.area, a.ownerId),
+                canRaiseKaizen: !a.raisedKaizen && (coordinator || isOwner),
+                // Also needs a repeat finding (repeatFinding on the detail view).
+                canRaiseSga: !a.raisedSga && coordinator,
             },
         };
     }

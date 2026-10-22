@@ -23,7 +23,13 @@ function LocationButton({ record, onOpen }: { record: Row; onOpen: () => void })
 }
 
 function ClockOut({ record }: { record: Row }) {
-  if (record.clockOutAt) return <>{formatTime(record.clockOutAt, record.timezoneAtClockIn)}</>;
+  if (record.clockOutAt)
+    return (
+      <>
+        {formatTime(record.clockOutAt, record.timezoneAtClockIn)}
+        {record.autoClockedOutAt && <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Auto</span>}
+      </>
+    );
   return <span className="font-medium text-amber-700">Still clocked in</span>;
 }
 
@@ -35,11 +41,7 @@ function LocationFlag({ record }: { record: Row }) {
 // Against the schedule saved when the person clocked in.
 function Punctuality({ record }: { record: Row }) {
   if (record.lateMinutes > 0) {
-    return (
-      <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
-        Late {formatMinutes(record.lateMinutes)}
-      </span>
-    );
+    return <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Late {formatMinutes(record.lateMinutes)}</span>;
   }
   return null;
 }
@@ -78,12 +80,26 @@ export function AttendanceTable({
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              {showEmployee && <th scope="col" className="px-4 py-2.5 font-semibold">Employee</th>}
-              <th scope="col" className="px-4 py-2.5 font-semibold">Date</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Clock in</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Clock out</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Duration</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Location</th>
+              {showEmployee && (
+                <th scope="col" className="px-4 py-2.5 font-semibold">
+                  Employee
+                </th>
+              )}
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Date
+              </th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Clock in
+              </th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Clock out
+              </th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Duration
+              </th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Location
+              </th>
               {onCorrect && (
                 <th scope="col" className="px-4 py-2.5 font-semibold">
                   <span className="sr-only">Actions</span>

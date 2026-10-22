@@ -175,6 +175,13 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
           </div>
         </dl>
         <LocationLine record={open} />
+        {open.scheduledEndAt && (
+          <p className="text-xs text-slate-500">
+            Automatic clock-out at {formatTime(new Date(new Date(open.scheduledEndAt).getTime() + 30 * 60_000).toISOString(), data.timeZone)} if you
+            haven&apos;t clocked out.
+          </p>
+        )}
+        {!open.scheduledEndAt && <p className="text-xs text-slate-500">No scheduled finish for this day. Remember to clock out manually.</p>}
         <div>
           <button type="button" className={primaryButton} disabled={clockOut.isPending} onClick={() => submitClockOut(open)}>
             {clockOut.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -204,6 +211,12 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
             <dd className="font-semibold text-slate-900">{done.durationSeconds != null ? formatDuration(done.durationSeconds) : "—"}</dd>
           </div>
         </dl>
+        {done.autoClockedOutAt && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            You were automatically clocked out 30 minutes after your scheduled finish.{" "}
+            {done.edited ? "This record has since been corrected." : "Contact HR if this time needs correcting."}
+          </p>
+        )}
         <LocationLine record={done} />
       </div>
     );

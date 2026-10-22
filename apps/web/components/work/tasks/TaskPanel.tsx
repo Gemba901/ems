@@ -6,6 +6,9 @@ import { ArrowLeft, Loader2, X } from "lucide-react";
 import { useTask, useUpdateTask } from "@/hooks/work/useWork";
 import {
   SPRINT_STATUS_LABELS,
+  TASK_PRIORITIES,
+  TASK_PRIORITY_LABELS,
+  type WorkTaskPriority,
   TASK_STATUS_LABELS,
   TASK_STATUSES,
   type ProjectMember,
@@ -15,11 +18,21 @@ import {
   type WorkTaskStatus,
 } from "@/services/work.service";
 import { useToast } from "@/contexts/toast.context";
+import { TaskActivityHistory } from "@/components/work/tasks/TaskActivityHistory";
 import { TaskComments } from "@/components/work/tasks/TaskComments";
-import { ErrorNote, Field, Loading, SPRINT_TERM, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import {
+  ErrorNote,
+  Field,
+  Loading,
+  SPRINT_TERM,
+  errorMessage,
+  inputClass,
+  primaryButton,
+  secondaryButton,
+} from "@/components/work/ui";
 
 function TaskEditor({
-  task,
+  task: initialTask,
   members,
   sprints,
   canManage,
@@ -29,12 +42,15 @@ function TaskEditor({
   sprints: Sprint[];
   canManage: boolean;
 }) {
+  const [task, setTask] = useState(initialTask);
+  const latest = useTask(task.id);
   const update = useUpdateTask();
   const { toast } = useToast();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [assigneeId, setAssigneeId] = useState(task.assignee?.id ?? "");
   const [status, setStatus] = useState<WorkTaskStatus>(task.status);
+  const [priority, setPriority] = useState<WorkTaskPriority>(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate ?? "");
   const [sprintId, setSprintId] = useState(task.sprint?.id ?? "");
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -43,20 +59,27 @@ function TaskEditor({
   // The current assignee may have left the project; keep them selectable so saving other fields works.
   const assigneeOptions =
     task.assignee && !members.some((m) => m.employee.id === task.assignee!.id)
-      ? [...members, { employee: task.assignee, role: "MEMBER" as const, joinedAt: "" }]
+      ? [
+          ...members,
+          { employee: task.assignee, role: "MEMBER" as const, joinedAt: "" },
+        ]
       : members;
   // Completed sprints can't receive tasks; the task's own completed sprint is shown but not offered.
   const sprintOptions = sprints.filter((s) => s.status !== "COMPLETED");
   const inCompletedSprint = task.sprint?.status === "COMPLETED";
 
-  const changes: UpdateTaskPayload = {};
+  const changes: UpdateTaskPayload = { expectedVersion: task.version };
+  if (priority !== task.priority) changes.priority = priority;
   if (title.trim() !== task.title) changes.title = title.trim();
-  if ((description.trim() || null) !== task.description) changes.description = description.trim() || null;
-  if ((assigneeId || null) !== (task.assignee?.id ?? null)) changes.assigneeId = assigneeId || null;
+  if ((description.trim() || null) !== task.description)
+    changes.description = description.trim() || null;
+  if ((assigneeId || null) !== (task.assignee?.id ?? null))
+    changes.assigneeId = assigneeId || null;
   if (status !== task.status) changes.status = status;
   if ((dueDate || null) !== task.dueDate) changes.dueDate = dueDate || null;
-  if (canManage && (sprintId || null) !== (task.sprint?.id ?? null)) changes.sprintId = sprintId || null;
-  const dirty = Object.keys(changes).length > 0;
+  if (canManage && (sprintId || null) !== (task.sprint?.id ?? null))
+    changes.sprintId = sprintId || null;
+  const dirty = Object.keys(changes).length > 1;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,7 +90,12 @@ function TaskEditor({
     setTitleError(null);
     setError(null);
     try {
-      await update.mutateAsync({ taskId: task.id, data: changes });
+      const saved = await update.mutateAsync({
+        taskId: task.id,
+        data: changes,
+      });
+      setTask(saved);
+      setSprintId(saved.sprint?.id ?? "");
       toast("Task saved", "success");
     } catch (err) {
       setError(errorMessage(err, "Your changes were not saved."));
@@ -99,7 +127,12 @@ function TaskEditor({
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Status" htmlFor="panel-status">
-          <select id="panel-status" className={inputClass} value={status} onChange={(e) => setStatus(e.target.value as WorkTaskStatus)}>
+          <select
+            id="panel-status"
+            className={inputClass}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as WorkTaskStatus)}
+          >
             {TASK_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {TASK_STATUS_LABELS[s]}
@@ -108,7 +141,12 @@ function TaskEditor({
           </select>
         </Field>
         <Field label="Assignee" htmlFor="panel-assignee">
-          <select id="panel-assignee" className={inputClass} value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+          <select
+            id="panel-assignee"
+            className={inputClass}
+            value={assigneeId}
+            onChange={(e) => setAssigneeId(e.target.value)}
+          >
             <option value="">Unassigned</option>
             {assigneeOptions.map((m) => (
               <option key={m.employee.id} value={m.employee.id}>
@@ -117,8 +155,28 @@ function TaskEditor({
             ))}
           </select>
         </Field>
+        <Field label="Priority" htmlFor="panel-priority">
+          <select
+            id="panel-priority"
+            className={inputClass}
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as WorkTaskPriority)}
+          >
+            {TASK_PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {TASK_PRIORITY_LABELS[p]}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Due date" htmlFor="panel-due">
-          <input id="panel-due" type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <input
+            id="panel-due"
+            type="date"
+            className={inputClass}
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+          />
         </Field>
         <Field
           label={SPRINT_TERM}
@@ -137,7 +195,9 @@ function TaskEditor({
             value={sprintId}
             disabled={!canManage}
             onChange={(e) => setSprintId(e.target.value)}
-            aria-describedby={!canManage || inCompletedSprint ? "panel-sprint-hint" : undefined}
+            aria-describedby={
+              !canManage || inCompletedSprint ? "panel-sprint-hint" : undefined
+            }
           >
             <option value="">Unscheduled</option>
             {inCompletedSprint && task.sprint && (
@@ -154,10 +214,40 @@ function TaskEditor({
           </select>
         </Field>
       </div>
-      {error && <ErrorNote>{error}</ErrorNote>}
+      {error && (
+        <div className="space-y-2">
+          <ErrorNote>{error}</ErrorNote>
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={async () => {
+              const result = await latest.refetch();
+              if (!result.data || result.isError) return;
+              const fresh = result.data;
+              setTask(fresh);
+              setTitle(fresh.title);
+              setDescription(fresh.description ?? "");
+              setStatus(fresh.status);
+              setPriority(fresh.priority);
+              setAssigneeId(fresh.assignee?.id ?? "");
+              setDueDate(fresh.dueDate ?? "");
+              setSprintId(fresh.sprint?.id ?? "");
+              setError(null);
+            }}
+          >
+            Discard draft and reload latest task
+          </button>
+        </div>
+      )}
       <div className="flex justify-end">
-        <button type="submit" className={primaryButton} disabled={!dirty || update.isPending}>
-          {update.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+        <button
+          type="submit"
+          className={primaryButton}
+          disabled={!dirty || update.isPending}
+        >
+          {update.isPending && (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          )}
           Save changes
         </button>
       </div>
@@ -187,9 +277,7 @@ export function TaskPanel({
         <Dialog.Backdrop className="fixed inset-0 z-50 hidden bg-slate-900/30 md:block" />
         <Dialog.Popup className="fixed inset-0 z-50 flex flex-col bg-white focus:outline-none md:inset-y-0 md:left-auto md:right-0 md:w-[min(560px,100vw)] md:border-l md:border-slate-200 md:shadow-xl">
           <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
-            <Dialog.Close
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:hidden"
-            >
+            <Dialog.Close className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:hidden">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
             </Dialog.Close>
             <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold text-slate-900">
@@ -207,15 +295,21 @@ export function TaskPanel({
               <Loading label="Loading task…" />
             ) : task.isError || !task.data ? (
               <div className="space-y-3">
-                <ErrorNote>{errorMessage(task.error, "This task could not be loaded.")}</ErrorNote>
-                <button type="button" className={secondaryButton} onClick={onClose}>
+                <ErrorNote>
+                  {errorMessage(task.error, "This task could not be loaded.")}
+                </ErrorNote>
+                <button
+                  type="button"
+                  className={secondaryButton}
+                  onClick={onClose}
+                >
                   Close
                 </button>
               </div>
             ) : (
               <>
                 <TaskEditor
-                  key={`${task.data.id}:${task.data.updatedAt}`}
+                  key={task.data.id}
                   task={task.data}
                   members={members}
                   sprints={sprints}
@@ -223,6 +317,7 @@ export function TaskPanel({
                 />
                 <hr className="border-slate-100" />
                 <TaskComments taskId={task.data.id} />
+                <TaskActivityHistory taskId={task.data.id} />
               </>
             )}
           </div>

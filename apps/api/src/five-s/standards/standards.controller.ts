@@ -10,7 +10,7 @@ import { TenantGuard } from 'src/tenancy/tenant.guard';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import { workValidationPipe } from 'src/work/dto/common.dto';
-import { CreateStandardDto, StandardListQueryDto, UpdateStandardDto } from '../dto/five-s.dto';
+import { CreateStandardDto, StandardListQueryDto, StandardSourceQueryDto, UpdateStandardDto } from '../dto/five-s.dto';
 import { StandardsService } from './standards.service';
 
 // Area standards with revisions and approval.
@@ -25,6 +25,12 @@ export class StandardsController {
     @Get()
     list(@CurrentUser() user: AccessTokenPayload, @Query() query: StandardListQueryDto) {
         return this.service.list(user, query);
+    }
+
+    // Declared before :id so "source" isn't read as a standard id.
+    @Get('source')
+    sourcePrefill(@CurrentUser() user: AccessTokenPayload, @Query() query: StandardSourceQueryDto) {
+        return this.service.sourcePrefill(user, query);
     }
 
     @Get(':id')

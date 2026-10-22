@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { FiveSStandardStatus, Prisma } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateStandardDto, StandardListQueryDto, UpdateStandardDto } from '../dto/five-s.dto';
+import { CreateStandardDto, StandardListQueryDto, StandardSourceQueryDto, UpdateStandardDto } from '../dto/five-s.dto';
 import { FiveSAccessService, FiveSActor } from '../five-s-access.service';
 import { PERSON_SELECT, logChange, person } from '../five-s-records';
 
@@ -25,7 +25,12 @@ const STANDARD_SELECT = {
     area: { select: { id: true, name: true, departmentId: true, ownerId: true, isActive: true } },
     owner: { select: PERSON_SELECT },
     approvedBy: { select: PERSON_SELECT },
+    sourceKaizen: { select: { id: true, title: true } },
+    sourceSga: { select: { id: true, title: true } },
 } satisfies Prisma.FiveSStandardSelect;
+
+// Only a verified, closed improvement is proven enough to become the standard.
+const CLOSED = 'VERIFIED_CLOSED';
 
 type StandardRow = Prisma.FiveSStandardGetPayload<{ select: typeof STANDARD_SELECT }>;
 
@@ -78,6 +83,7 @@ export class StandardsService {
         const area = await this.access.areaOrThrow(actor, dto.areaId);
         if (!this.access.canMaintainAreaStandards(actor, area)) throw new ForbiddenException('Only the area owner, HOD or a 5S administrator can write standards');
         await this.access.assertCompanyEmployees(actor.organizationId, [dto.ownerId]);
+        const source = await this.closedSource(actor.organizationId, { kaizenId: dto.sourceKaizenId, sgaId: dto.sourceSgaId });
 
         const id = randomUUID();
         return this.prisma.$transaction(async (tx) => {
@@ -95,12 +101,15 @@ export class StandardsService {
                     changeNote: dto.changeNote || 'First issue',
                     status: FiveSStandardStatus.DRAFT,
                     createdById: actor.employeeId,
+                    sourceKaizenId: source?.kind === 'KAIZEN' ? source.id : null,
+                    sourceSgaId: source?.kind === 'SGA' ? source.id : null,
                 },
                 select: { id: true },
             });
             await logChange(tx, {
                 organizationId: actor.organizationId, actorId: actor.employeeId, entityType: 'STANDARD', entityId: id,
-                action: 'DRAFTED', summary: `Drafted standard "${dto.title}" rev 1 for "${area.name}"`,
+                action: 'DRAFTED',
+                summary: `Drafted standard "${dto.title}" rev 1 for "${area.name}"${source ? ` from ${source.label}` : ''}`,
             });
             return standard;
         });
@@ -172,6 +181,8 @@ export class StandardsService {
                     instructions: latest.instructions,
                     ownerId: latest.ownerId,
                     referenceUrls: latest.referenceUrls,
+                    sourceKaizenId: latest.sourceKaizenId,
+                    sourceSgaId: latest.sourceSgaId,
                     status: FiveSStandardStatus.DRAFT,
                     changeNote: null,
                     createdById: actor.employeeId,
@@ -202,6 +213,60 @@ export class StandardsService {
         return { deleted: true };
     }
 
+    // Join 12 ("Standardise"): what a new standard written from a closed Kaizen or SGA starts with.
+    // The 5S side decides the area; the improvement supplies the title and the method that worked.
+    async sourcePrefill(user: AccessTokenPayload, query: StandardSourceQueryDto) {
+        const actor = await this.access.resolveActor(user);
+        const source = await this.closedSource(actor.organizationId, query);
+        if (!source) throw new BadRequestException('Pick a Kaizen or SGA to standardise');
+        return {
+            kind: source.kind,
+            id: source.id,
+            title: source.title,
+            instructions: source.instructions,
+            changeNote: `First issue, standardised from ${source.label}`,
+        };
+    }
+
+    private async closedSource(organizationId: string, ids: { kaizenId?: string; sgaId?: string }) {
+        if (ids.kaizenId && ids.sgaId) throw new BadRequestException('A standard comes from one Kaizen or one SGA, not both');
+        if (ids.kaizenId) {
+            const kaizen = await this.prisma.kaizen.findFirst({
+                where: { id: ids.kaizenId, organizationId },
+                select: { id: true, title: true, status: true, actionTaken: true, resultSaving: true, conditionDescription: true },
+            });
+            if (!kaizen) throw new NotFoundException('Kaizen not found');
+            if (kaizen.status !== CLOSED) throw new BadRequestException('Only a verified and closed Kaizen can be standardised');
+            const title = kaizen.title ?? 'Untitled kaizen';
+            return {
+                kind: 'KAIZEN' as const,
+                id: kaizen.id,
+                title,
+                label: `Kaizen "${title}"`,
+                instructions: [kaizen.actionTaken ?? kaizen.conditionDescription, kaizen.resultSaving && `Result: ${kaizen.resultSaving}`]
+                    .filter(Boolean)
+                    .join('\n\n'),
+            };
+        }
+        if (ids.sgaId) {
+            const sga = await this.prisma.sga.findFirst({
+                where: { id: ids.sgaId, organizationId },
+                select: { id: true, title: true, status: true, implementationSummary: true, problemDescription: true },
+            });
+            if (!sga) throw new NotFoundException('SGA not found');
+            if (sga.status !== CLOSED) throw new BadRequestException('Only a verified and closed SGA can be standardised');
+            const title = sga.title ?? 'Untitled SGA';
+            return {
+                kind: 'SGA' as const,
+                id: sga.id,
+                title,
+                label: `SGA "${title}"`,
+                instructions: sga.implementationSummary ?? sga.problemDescription ?? '',
+            };
+        }
+        return null;
+    }
+
     private async standardOrThrow(actor: FiveSActor, id: string): Promise<StandardRow> {
         const standard = await this.prisma.fiveSStandard.findFirst({
             where: { id, organizationId: actor.organizationId, area: this.access.visibleAreaWhere(actor) },
@@ -227,6 +292,8 @@ export class StandardsService {
             owner: person(s.owner),
             approvedBy: person(s.approvedBy),
             approvedAt: s.approvedAt,
+            sourceKaizen: s.sourceKaizen,
+            sourceSga: s.sourceSga,
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
             permissions: {

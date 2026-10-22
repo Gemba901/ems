@@ -126,22 +126,30 @@ model Kaizen {
   afterPhotoUrls String[] @default([])
   resultSaving   String?
 
-  linkedSgaId String?
+  linkedSgaId         String? @unique
+  // Join 7: raised from a 5S improvement action ("Raise Kaizen" on the action)
+  sourceFiveSActionId String? @unique
+  // Join 10: raised from a DWMS alert or abnormality ("Raise Kaizen" on the alert)
+  sourceAlertId       String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization     Organization         @relation(fields: [organizationId], references: [id])
-  employee         Employee             @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
-  department       Department?          @relation(fields: [departmentId], references: [id])
-  kaizenOwner      Employee?            @relation("KaizenOwner", fields: [kaizenOwnerId], references: [id], onDelete: SetNull)
-  hodPreReviewBy   Employee?            @relation("KaizenHodPreReviewBy", fields: [hodPreReviewById], references: [id], onDelete: SetNull)
-  teamMembers      Employee[]           @relation("KaizenTeamMembers")
-  reviews          KaizenReview[]
-  qcdsmtImpacts    KaizenQcdsmtImpact[]
-  wasteImpacts     KaizenWasteImpact[]
-  verifications    KaizenVerification[]
-  sourceSuggestion Suggestion?
+  organization      Organization         @relation(fields: [organizationId], references: [id])
+  employee          Employee             @relation("KaizenRaisedBy", fields: [employeeId], references: [id], onDelete: Cascade)
+  department        Department?          @relation(fields: [departmentId], references: [id])
+  kaizenOwner       Employee?            @relation("KaizenOwner", fields: [kaizenOwnerId], references: [id], onDelete: SetNull)
+  hodPreReviewBy    Employee?            @relation("KaizenHodPreReviewBy", fields: [hodPreReviewById], references: [id], onDelete: SetNull)
+  teamMembers       Employee[]           @relation("KaizenTeamMembers")
+  reviews           KaizenReview[]
+  qcdsmtImpacts     KaizenQcdsmtImpact[]
+  wasteImpacts      KaizenWasteImpact[]
+  verifications     KaizenVerification[]
+  sourceSuggestion  Suggestion?
+  linkedSga         Sga?                 @relation(fields: [linkedSgaId], references: [id], onDelete: SetNull)
+  sourceFiveSAction FiveSAction?         @relation(fields: [sourceFiveSActionId], references: [id], onDelete: SetNull)
+  sourceAlert       Alert?               @relation(fields: [sourceAlertId], references: [id], onDelete: SetNull)
+  fiveSStandards    FiveSStandard[]
 
   @@index([organizationId, status])
   @@index([employeeId, createdAt])

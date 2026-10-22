@@ -23,6 +23,7 @@ import {
   primaryButton,
   secondaryButton,
 } from "@/components/five-s/ui";
+import LinkedRecordChip from "@/components/ui/LinkedRecordChip";
 import { cn } from "@/lib/utils";
 
 export default function StandardDetailPage() {
@@ -124,6 +125,20 @@ export default function StandardDetailPage() {
             <FileList urls={s.referenceUrls} />
           </div>
           {s.changeNote && <KeyValue label="Change note">{s.changeNote}</KeyValue>}
+          {(s.sourceKaizen || s.sourceSga) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {s.sourceKaizen && (
+                <LinkedRecordChip label="Standardised from Kaizen:" title={s.sourceKaizen.title} href={`/kaizen/${s.sourceKaizen.id}`} tone="kaizen" />
+              )}
+              {s.sourceSga && <LinkedRecordChip label="Standardised from SGA:" title={s.sourceSga.title} href={`/sga/${s.sourceSga.id}`} tone="sga" />}
+              {(s.permissions.canEdit || s.permissions.canRevise) && (
+                // A standard holds when someone checks it: a routine puts that check on DWMS (join 5).
+                <Link href={`/five-s/standards/routines/new?areaId=${s.area.id}`} className={linkButton}>
+                  Add a routine to check it
+                </Link>
+              )}
+            </div>
+          )}
           {s.approvedAt && (
             <p className="text-xs text-slate-500">
               Approved by {s.approvedBy?.name ?? "—"} on {formatTimestamp(s.approvedAt)}

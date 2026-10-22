@@ -64,6 +64,7 @@ export const STARTING_REASONS: { value: SgaStartingReason; label: string }[] = [
   { value: "AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION", label: "Audit finding or Gemba walk observation" },
   { value: "MANAGEMENT_IMPROVEMENT_PRIORITY", label: "Management improvement priority" },
   { value: "DAILY_KAIZEN_UPGRADED_TO_SGA", label: "Daily Kaizen upgraded to SGA" },
+  { value: "EMPLOYEE_SUGGESTION_SELECTED_FOR_SGA", label: "Employee suggestion selected for SGA" },
   { value: "OTHER", label: "Other" },
 ];
 
@@ -97,6 +98,7 @@ export const STARTING_REASON_GROUPS: { label: string; reasons: SgaStartingReason
       "ALERT_OR_ABNORMALITY_REQUIRING_TEAM_PROJECT",
       "MANAGEMENT_IMPROVEMENT_PRIORITY",
       "DAILY_KAIZEN_UPGRADED_TO_SGA",
+      "EMPLOYEE_SUGGESTION_SELECTED_FOR_SGA",
     ],
   },
   { label: "Something else", reasons: ["OTHER"] },

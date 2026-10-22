@@ -8,9 +8,10 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
 import { KaizenModule } from 'src/kaizen/kaizen.module';
+import { SgaModule } from 'src/sga/sga.module';
 
 @Module({
-  imports: [TenancyModule, ConfigModule, PrismaModule, NotificationsModule, KaizenModule],
+  imports: [TenancyModule, ConfigModule, PrismaModule, NotificationsModule, KaizenModule, SgaModule],
   controllers: [SimsController],
   providers: [SimsService, SimsReminderService, ModuleGuard],
 })

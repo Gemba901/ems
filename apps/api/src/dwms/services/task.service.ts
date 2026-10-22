@@ -634,7 +634,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     attachmentUrl?: string | null;
     attachmentName?: string | null;
   }) {
-    return this.prisma.taskInstanceEvent.create({
+    const event = await this.prisma.taskInstanceEvent.create({
       data: {
         taskInstanceId: data.taskInstanceId,
         actorId: data.actorId ?? null,
@@ -645,6 +645,45 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         attachmentUrl: data.attachmentUrl ?? null,
         attachmentName: data.attachmentName ?? null,
       },
+    });
+    if (data.toStatus && data.toStatus !== data.fromStatus) {
+      await this.publishSourceStatusChange({ ...data, toStatus: data.toStatus });
+    }
+    return event;
+  }
+
+  // Every user-driven status change is recorded through recordTaskInstanceEvent, so this is the one
+  // place a source-linked task (Kaizen, SGA, 5S) tells its source module what happened.
+  private async publishSourceStatusChange(data: {
+    taskInstanceId: string;
+    actorId?: string | null;
+    fromStatus?: TaskStatus | null;
+    toStatus: TaskStatus;
+    note?: string | null;
+  }) {
+    if (!this.taskEvents) return;
+    const instance = await this.prisma.taskInstance.findUnique({
+      where: { id: data.taskInstanceId },
+      select: {
+        taskId: true,
+        ownerId: true,
+        scheduledFor: true,
+        task: { select: { sourceModule: true, sourceId: true, sourceParentId: true } },
+      },
+    });
+    if (!instance?.task.sourceModule || !instance.task.sourceId) return;
+    await this.taskEvents.publish({
+      taskInstanceId: data.taskInstanceId,
+      taskId: instance.taskId,
+      sourceModule: instance.task.sourceModule,
+      sourceId: instance.task.sourceId,
+      sourceParentId: instance.task.sourceParentId,
+      ownerId: instance.ownerId,
+      scheduledFor: instance.scheduledFor,
+      fromStatus: data.fromStatus ?? null,
+      toStatus: data.toStatus,
+      actorId: data.actorId ?? null,
+      note: data.note?.trim() || null,
     });
   }
 
@@ -1874,6 +1913,25 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       timeZone,
       organizationId,
     );
+  }
+
+  // Used by DwmsTaskBridge so a source-linked task reaches the owner's list immediately. A planned
+  // task's single instance is ensured on its due date even when that is past or beyond the
+  // generation window, so an overdue Kaizen/SGA item still shows up.
+  async refreshTaskInstances(taskId: string, organizationId: string) {
+    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
+    if (!task || !task.isActive) return 0;
+    if (!isPlannedTaskFrequency(task.frequency)) {
+      return this.generateUpcomingInstancesForTaskId(taskId, organizationId);
+    }
+    if (!task.dueDate) return 0;
+    const timeZone = await this.getOrganizationTimeZone(organizationId);
+    const instance = await this.ensureTaskInstance(
+      task,
+      toUtcDateOnly(task.dueDate),
+      timeZone,
+    );
+    return instance ? 1 : 0;
   }
 
   async generateUpcomingTaskInstances(days = TASK_INSTANCE_GENERATION_DAYS) {

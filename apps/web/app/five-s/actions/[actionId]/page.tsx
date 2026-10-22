@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Info, Pencil } from "lucide-react";
-import { useFiveSAction, useFiveSCapabilities, useSubmitAction, useUpdateAction, useVerifyAction } from "@/hooks/five-s/useFiveS";
+import { ArrowLeft, Info, Lightbulb, Pencil, Repeat, Users } from "lucide-react";
+import { useFiveSAction, useFiveSCapabilities, useRaiseKaizen, useRaiseSga, useSubmitAction, useUpdateAction, useVerifyAction } from "@/hooks/five-s/useFiveS";
+import { useOrgModules } from "@/hooks/useOrgModules";
 import { useToast } from "@/contexts/toast.context";
 import { countLabel } from "@/lib/five-s/scoring";
 import { ACTION_EVENT_LABELS, type ActionDetail, type ActionStatus } from "@/services/five-s.service";
@@ -40,7 +41,8 @@ export default function ActionDetailPage() {
   const { actionId } = useParams<{ actionId: string }>();
   const { data: action, isLoading, error } = useFiveSAction(actionId);
   const { data: caps } = useFiveSCapabilities();
-  const [dialog, setDialog] = useState<"edit" | "submit" | "verify" | "rework" | null>(null);
+  const [dialog, setDialog] = useState<"edit" | "submit" | "verify" | "rework" | "kaizen" | "sga" | null>(null);
+  const { hasModule } = useOrgModules();
 
   if (isLoading) return <Loading label="Loading action…" />;
   if (error || !action) return <ErrorNote>{errorMessage(error, "Action not found")}</ErrorNote>;
@@ -81,6 +83,11 @@ export default function ActionDetailPage() {
           </p>
         </div>
         <div className={HEADER_ACTIONS}>
+          {action.permissions.canRaiseKaizen && hasModule("KAIZEN") && (
+            <button type="button" className={secondaryButton} onClick={() => setDialog("kaizen")}>
+              <Lightbulb className="h-4 w-4" aria-hidden="true" /> Raise Kaizen
+            </button>
+          )}
           {(action.permissions.canPlan || action.permissions.canEditText) && (
             <button type="button" className={secondaryButton} onClick={() => setDialog("edit")}>
               <Pencil className="h-4 w-4" aria-hidden="true" /> Edit
@@ -129,6 +136,9 @@ export default function ActionDetailPage() {
         <ErrorNote>
           Returned for rework by {lastRework.actor?.name ?? "the verifier"} on {formatTimestamp(lastRework.createdAt)}: {lastRework.note}
         </ErrorNote>
+      )}
+      {action.repeatFinding && (
+        <RepeatFindingNote action={action} canRaise={action.permissions.canRaiseSga && hasModule("SGA")} onRaise={() => setDialog("sga")} />
       )}
       {action.permissions.canSubmit && !action.permissions.allStepsDone && (
         <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
@@ -207,6 +217,20 @@ export default function ActionDetailPage() {
               <KeyValue label="Raised by">
                 {action.createdBy?.name ?? "—"} · {formatTimestamp(action.createdAt)}
               </KeyValue>
+              {action.kaizen && (
+                <KeyValue label="Kaizen">
+                  <Link href={`/kaizen/${action.kaizen.id}`} className="font-medium text-emerald-700 hover:underline">
+                    {action.kaizen.title || "Kaizen raised from this finding"}
+                  </Link>
+                </KeyValue>
+              )}
+              {action.sga && (
+                <KeyValue label="SGA">
+                  <Link href={`/sga/${action.sga.id}`} className="font-medium text-purple-700 hover:underline">
+                    {action.sga.title || "SGA raised for this repeat finding"}
+                  </Link>
+                </KeyValue>
+              )}
             </dl>
           </Surface>
           <p className="flex items-start gap-1.5 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
@@ -219,7 +243,149 @@ export default function ActionDetailPage() {
       {dialog === "edit" && <EditDialog action={action} onClose={() => setDialog(null)} />}
       {dialog === "submit" && <SubmitDialog action={action} onClose={() => setDialog(null)} />}
       {(dialog === "verify" || dialog === "rework") && <VerifyDialog action={action} outcome={dialog === "verify" ? "VERIFIED" : "REWORK"} onClose={() => setDialog(null)} />}
+      {dialog === "kaizen" && <RaiseKaizenDialog action={action} onClose={() => setDialog(null)} />}
+      {dialog === "sga" && <RaiseSgaDialog action={action} onClose={() => setDialog(null)} />}
     </div>
+  );
+}
+
+// Join 7: a finding that needs a real improvement (not just a clean-up) becomes a Kaizen. The
+// Kaizen starts as a draft prefilled from the finding; this action carries on with its own steps.
+function RaiseKaizenDialog({ action, onClose }: { action: ActionDetail; onClose: () => void }) {
+  const { toast } = useToast();
+  const raise = useRaiseKaizen();
+  const [ownerId, setOwnerId] = useState(action.owner?.id ?? null);
+
+  function save() {
+    raise.mutate(
+      { id: action.id, body: ownerId ? { kaizenOwnerId: ownerId } : {} },
+      {
+        onSuccess: () => {
+          toast("Kaizen raised", "success");
+          onClose();
+        },
+      },
+    );
+  }
+
+  return (
+    <FiveSDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`Raise a Kaizen from ${action.reference}`}
+      footer={
+        <>
+          <button type="button" className={secondaryButton} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className={primaryButton} onClick={save} disabled={raise.isPending || !ownerId}>
+            {raise.isPending ? "Raising…" : "Raise Kaizen"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {!!raise.error && <ErrorNote>{errorMessage(raise.error)}</ErrorNote>}
+        <p className="text-sm text-slate-600">
+          A draft Kaizen is created with this finding as its current condition. The owner completes it in the Kaizen module. This action stays open
+          until its own corrective actions are done and verified.
+        </p>
+        <Field label="Kaizen owner" htmlFor="kaizen-owner">
+          <PersonSelect id="kaizen-owner" value={ownerId} onChange={setOwnerId} />
+        </Field>
+      </div>
+    </FiveSDialog>
+  );
+}
+
+// Join 8: the checkpoint failed in each of the area's last few audits, so clean-ups aren't holding.
+// Suggests a Small Group Activity to find and fix the cause; it is never raised on its own.
+function RepeatFindingNote({ action, canRaise, onRaise }: { action: ActionDetail; canRaise: boolean; onRaise: () => void }) {
+  const repeat = action.repeatFinding!;
+  const sga = action.sga ?? repeat.openSga;
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+      <p className="flex items-start gap-2">
+        <Repeat className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>
+          Repeat finding: checkpoint {action.checkpointNo} failed in each of the last {repeat.audits.length} audits (
+          {repeat.audits.map((a, i) => (
+            <span key={a.id}>
+              {i > 0 && ", "}
+              <Link href={`/five-s/audits/${a.id}`} className="font-medium underline">
+                {a.reference}
+              </Link>
+            </span>
+          ))}
+          ).{" "}
+          {sga ? (
+            <>
+              An SGA is working on it:{" "}
+              <Link href={`/sga/${sga.id}`} className="font-medium underline">
+                {sga.title || "open SGA"}
+              </Link>
+              .
+            </>
+          ) : canRaise ? (
+            "A Small Group Activity can find and fix the cause."
+          ) : (
+            "An area coordinator can raise a Small Group Activity to fix the cause."
+          )}
+        </span>
+      </p>
+      {!sga && canRaise && (
+        <button type="button" className={secondaryButton} onClick={onRaise}>
+          <Users className="h-4 w-4" aria-hidden="true" /> Raise SGA
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RaiseSgaDialog({ action, onClose }: { action: ActionDetail; onClose: () => void }) {
+  const { toast } = useToast();
+  const raise = useRaiseSga();
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+
+  function save() {
+    raise.mutate(
+      { id: action.id, body: ownerId ? { ownerId } : {} },
+      {
+        onSuccess: () => {
+          toast("SGA raised", "success");
+          onClose();
+        },
+      },
+    );
+  }
+
+  return (
+    <FiveSDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`Raise an SGA for ${action.area.name}, checkpoint ${action.checkpointNo}`}
+      footer={
+        <>
+          <button type="button" className={secondaryButton} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className={primaryButton} onClick={save} disabled={raise.isPending}>
+            {raise.isPending ? "Raising…" : "Raise SGA"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {!!raise.error && <ErrorNote>{errorMessage(raise.error)}</ErrorNote>}
+        <p className="text-sm text-slate-600">
+          A draft SGA is created with the repeat finding as its problem. The owner completes it and picks the team in the SGA module. This action
+          carries on with its own corrective actions.
+        </p>
+        <Field label="SGA owner" htmlFor="sga-owner" hint="Leave empty for the area owner.">
+          <PersonSelect id="sga-owner" value={ownerId} onChange={setOwnerId} />
+        </Field>
+      </div>
+    </FiveSDialog>
   );
 }
 

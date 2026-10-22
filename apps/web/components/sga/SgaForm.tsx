@@ -5,6 +5,8 @@ import { Check, CheckCircle2, ChevronDown, Clock, XCircle } from "lucide-react";
 import { Sga, SgaStatus } from "@/services/sga.service";
 import { EmployeeApiResponse } from "@/services/employee.service";
 import { Role } from "@/types/role";
+import LinkedRecordChip from "@/components/ui/LinkedRecordChip";
+import StandardiseLinks from "@/components/five-s/StandardiseLinks";
 import {
   formatDate,
   formatDateTime,
@@ -114,6 +116,34 @@ export default function SgaForm({
             <span className="text-xs text-slate-400">
               {sga.employee.firstName} {sga.employee.lastName} · {sga.mainDepartment?.name ?? "No department"}
             </span>
+            {sga.sourceSuggestion && (
+              <LinkedRecordChip
+                href={`/sims/${sga.sourceSuggestion.id}`}
+                label="From suggestion:"
+                title={sga.sourceSuggestion.title}
+                tone="suggestion"
+              />
+            )}
+            {sga.sourceKaizen && (
+              <LinkedRecordChip href={`/kaizen/${sga.sourceKaizen.id}`} label="From Kaizen:" title={sga.sourceKaizen.title} tone="kaizen" />
+            )}
+            {sga.sourceAlert && (
+              <LinkedRecordChip
+                href={`/dwms/alerts/${sga.sourceAlert.id}`}
+                label={sga.sourceAlert.isAbnormality ? "From abnormality:" : "From alert:"}
+                title={sga.sourceAlert.title}
+                tone="alert"
+              />
+            )}
+            {sga.sourceFiveSAction && (
+              <LinkedRecordChip
+                href={`/five-s/actions/${sga.sourceFiveSAction.id}`}
+                label="From repeat 5S finding:"
+                title={sga.sourceFiveSAction.reference}
+                tone="fiveS"
+              />
+            )}
+            <StandardiseLinks kind="sga" id={sga.id} status={sga.status} standards={sga.fiveSStandards} />
           </div>
         </div>
       </div>

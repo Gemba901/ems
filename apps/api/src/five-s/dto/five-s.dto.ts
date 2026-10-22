@@ -171,6 +171,17 @@ export class SubmitActionDto {
     completionEvidenceUrls?: string[];
 }
 
+// Join 7: hand a finding that needs more than the plan's steps to a Daily Gemba Kaizen.
+export class RaiseKaizenDto {
+    // Defaults to the action owner.
+    @IsOptional() @IsUUID() kaizenOwnerId?: string;
+}
+
+export class RaiseSgaDto {
+    // Defaults to the area owner, then the action owner.
+    @IsOptional() @IsUUID() ownerId?: string;
+}
+
 export class VerifyActionDto {
     @IsIn(['VERIFIED', 'REWORK']) outcome!: 'VERIFIED' | 'REWORK';
 
@@ -241,6 +252,15 @@ export class CreateStandardDto {
     @Matches(UPLOADED_FILE, { each: true, message: 'Attach files using the upload button' })
     referenceUrls?: string[];
     @IsOptional() @Trim() @IsString() @MaxLength(500) changeNote?: string | null;
+    // Join 12: the closed Kaizen or SGA being standardised (at most one)
+    @IsOptional() @IsUUID() sourceKaizenId?: string;
+    @IsOptional() @IsUUID() sourceSgaId?: string;
+}
+
+// Join 12: prefill for a standard written from a closed Kaizen or SGA
+export class StandardSourceQueryDto {
+    @IsOptional() @IsUUID() kaizenId?: string;
+    @IsOptional() @IsUUID() sgaId?: string;
 }
 
 export class UpdateStandardDto {

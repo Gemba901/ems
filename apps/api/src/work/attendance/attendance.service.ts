@@ -28,6 +28,7 @@ const RECORD_SELECT = {
     timezoneAtClockIn: true,
     clockInAt: true,
     clockOutAt: true,
+    autoClockedOutAt: true,
     locationStatus: true,
     version: true,
     lastCorrectedAt: true,
@@ -51,6 +52,7 @@ export type AttendanceView = {
     timezoneAtClockIn: string;
     clockInAt: Date;
     clockOutAt: Date | null;
+    autoClockedOutAt: Date | null;
     isOpen: boolean;
     durationSeconds: number | null;
     locationStatus: AttendanceLocationStatus;
@@ -93,6 +95,7 @@ function toView(record: RecordRow): AttendanceView {
         timezoneAtClockIn: record.timezoneAtClockIn,
         clockInAt: record.clockInAt,
         clockOutAt: record.clockOutAt,
+        autoClockedOutAt: record.autoClockedOutAt,
         isOpen: record.clockOutAt === null,
         durationSeconds: record.clockOutAt
             ? Math.floor((record.clockOutAt.getTime() - record.clockInAt.getTime()) / 1000)
@@ -122,7 +125,7 @@ export class AttendanceService {
     ) {}
 
     // Today is the organization-local date; an open record from an earlier day is reported too,
-    // since nothing closes records automatically at midnight.
+    // including unscheduled days that have no automatic clock-out cutoff.
     async status(user: AccessTokenPayload): Promise<AttendanceStatusView> {
         const actor = await this.access.resolveActor(user);
         const serverNow = new Date();

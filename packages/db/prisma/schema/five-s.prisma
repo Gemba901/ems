@@ -55,6 +55,8 @@ enum FiveSActionEventType {
   SUBMITTED_FOR_VERIFICATION
   VERIFIED
   RETURNED_FOR_REWORK
+  KAIZEN_RAISED
+  SGA_RAISED
 }
 
 enum FiveSRedTagReason {
@@ -253,6 +255,9 @@ model FiveSAction {
   createdBy         Employee                @relation("FiveSActionCreatedBy", fields: [createdById], references: [id])
   events            FiveSActionEvent[]
   correctiveActions FiveSCorrectiveAction[]
+  raisedKaizen      Kaizen?
+  // Join 8: SGA raised for a checkpoint that keeps failing audits
+  raisedSga         Sga?
 
   @@unique([organizationId, reference])
   @@unique([auditId, checkpointNo])
@@ -358,14 +363,21 @@ model FiveSStandard {
   createdById    String
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
+  // Join 12: the closed Kaizen or SGA this standard locks in ("Standardise"); kept on each revision
+  sourceKaizenId String?
+  sourceSgaId    String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   area         FiveSArea    @relation(fields: [areaId], references: [id], onDelete: Restrict)
   owner        Employee?    @relation("FiveSStandardOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   approvedBy   Employee?    @relation("FiveSStandardApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  sourceKaizen Kaizen?      @relation(fields: [sourceKaizenId], references: [id], onDelete: SetNull)
+  sourceSga    Sga?         @relation(fields: [sourceSgaId], references: [id], onDelete: SetNull)
 
   @@unique([seriesId, revision])
   @@index([organizationId, areaId, status])
+  @@index([sourceKaizenId])
+  @@index([sourceSgaId])
 }
 
 model FiveSRoutine {

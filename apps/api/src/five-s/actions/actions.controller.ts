@@ -14,6 +14,8 @@ import {
     ActionListQueryDto,
     CorrectiveActionInputDto,
     CreateActionDto,
+    RaiseKaizenDto,
+    RaiseSgaDto,
     SubmitActionDto,
     UpdateActionDto,
     UpdateCorrectiveActionDto,
@@ -58,6 +60,17 @@ export class ActionsController {
     @Post(':id/verify')
     verify(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string, @Body() dto: VerifyActionDto) {
         return this.service.verify(user, id, dto);
+    }
+
+    @Post(':id/kaizen')
+    raiseKaizen(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RaiseKaizenDto) {
+        return this.service.raiseKaizen(user, id, dto);
+    }
+
+    // The SGA module check is in the service, so the controller's FIVE_S requirement still applies.
+    @Post(':id/sga')
+    raiseSga(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RaiseSgaDto) {
+        return this.service.raiseSga(user, id, dto);
     }
 
     @Post(':id/corrective-actions')

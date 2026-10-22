@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { useAuthStore } from "@/store/auth.store";
+import { useOrgModules } from "@/hooks/useOrgModules";
 import {
   DwmsService, getDwmsErrorMessage, type DwmsAlertDetailResponse,
 } from "@/services/dwms.service";
@@ -23,6 +25,8 @@ function AlertDetailPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [raising, setRaising] = useState<"kaizen" | "sga" | null>(null);
+  const { hasModule } = useOrgModules();
 
   const load = useCallback(async () => {
     if (!alertId) return;
@@ -75,6 +79,20 @@ function AlertDetailPage() {
     }
   }
 
+  async function raiseImprovement(kind: "kaizen" | "sga") {
+    setSavingId(kind);
+    try {
+      const token = useAuthStore.getState().accessToken ?? "";
+      await DwmsService.raiseImprovementFromAlert(token, alertId, kind);
+      setRaising(null);
+      await load();
+    } catch (cause) {
+      setError(getDwmsErrorMessage(cause, `Failed to raise the ${kind === "kaizen" ? "Kaizen" : "SGA"}.`));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   const alert = detail?.alert;
   const isResponsible = Boolean(alert?.responsibleEmployee?.id && alert.responsibleEmployee.id === detail?.employeeId);
   return <main className="mx-auto w-full max-w-4xl min-w-0 space-y-5 px-4 py-6 sm:space-y-6 sm:px-6 sm:py-8">
@@ -96,6 +114,16 @@ function AlertDetailPage() {
           {alert.department && <div><dt className="text-slate-500">Department</dt><dd className="font-medium">{alert.department.name}</dd></div>}
         </dl>
       </section>
+      <ImprovementSection
+        alert={alert}
+        ownerName={alert.responsibleEmployee?.name ?? "you"}
+        canKaizen={hasModule("KAIZEN")}
+        canSga={hasModule("SGA")}
+        raising={raising}
+        saving={savingId === "kaizen" || savingId === "sga"}
+        onPick={setRaising}
+        onConfirm={(kind) => void raiseImprovement(kind)}
+      />
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h2 className="text-lg font-semibold text-slate-900">Alert history</h2>
         <ol className="mt-4 space-y-4">
@@ -128,4 +156,47 @@ function AlertDetailPage() {
       </section>
     </>}
   </main>;
+}
+
+// Join 10: fix the cause with a Kaizen (one owner) or an SGA (a team project). The draft is
+// prefilled from the alert and owned by the responsible person, or by you when there is none.
+function ImprovementSection({ alert, ownerName, canKaizen, canSga, raising, saving, onPick, onConfirm }: {
+  alert: DwmsAlertDetailResponse["alert"];
+  ownerName: string;
+  canKaizen: boolean;
+  canSga: boolean;
+  raising: "kaizen" | "sga" | null;
+  saving: boolean;
+  onPick: (kind: "kaizen" | "sga" | null) => void;
+  onConfirm: (kind: "kaizen" | "sga") => void;
+}) {
+  const raised = alert.raisedKaizen
+    ? { href: `/kaizen/${alert.raisedKaizen.id}`, label: "Kaizen", title: alert.raisedKaizen.title }
+    : alert.raisedSga
+      ? { href: `/sga/${alert.raisedSga.id}`, label: "SGA", title: alert.raisedSga.title }
+      : null;
+  if (!raised && !canKaizen && !canSga) return null;
+  const kind = alert.isAbnormality ? "abnormality" : "alert";
+
+  return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+    <h2 className="text-lg font-semibold text-slate-900">Fix the cause</h2>
+    {raised ? <p className="mt-2 text-sm text-slate-700">
+      {raised.label} raised from this {kind}:{" "}
+      <Link href={raised.href} className="font-semibold text-blue-700 hover:underline">{raised.title || `Open the ${raised.label}`}</Link>
+    </p> : raising ? <div className="mt-3 space-y-3 rounded-xl bg-slate-50 p-4">
+      <p className="text-sm text-slate-700">
+        A draft {raising === "kaizen" ? "Kaizen" : "SGA"} is created for {ownerName}, prefilled from this {kind}. They complete it in the {raising === "kaizen" ? "Kaizen" : "SGA"} module.
+      </p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button type="button" disabled={saving} onClick={() => onConfirm(raising)} className="min-h-11 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Raising..." : `Raise ${raising === "kaizen" ? "Kaizen" : "SGA"}`}</button>
+        <button type="button" disabled={saving} onClick={() => onPick(null)} className="min-h-11 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+      </div>
+    </div> : <>
+      <p className="mt-2 text-sm text-slate-600">If this keeps happening, raise an improvement to remove the cause: a Kaizen for a small fix, or an SGA when it needs a team.</p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        {canKaizen && <button type="button" onClick={() => onPick("kaizen")} className="min-h-11 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">Raise Kaizen</button>}
+        {canSga && <button type="button" onClick={() => onPick("sga")} className="min-h-11 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-semibold text-purple-800 hover:bg-purple-100">Raise SGA</button>}
+      </div>
+    </>}
+  </section>;
 }

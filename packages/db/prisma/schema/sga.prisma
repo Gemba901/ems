@@ -28,6 +28,7 @@ enum SgaStartingReason {
   AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION
   MANAGEMENT_IMPROVEMENT_PRIORITY
   DAILY_KAIZEN_UPGRADED_TO_SGA
+  EMPLOYEE_SUGGESTION_SELECTED_FOR_SGA
   OTHER
 }
 
@@ -263,6 +264,18 @@ model Sga {
   qcdsmtBenefits SgaQcdsmtBenefit[]
   verifications  SgaVerification[]
   reviews        SgaReview[]
+
+  // Typed source links (module integration joins 2 and 6); the FK lives on the source side
+  sourceSuggestion    Suggestion?
+  sourceKaizen        Kaizen?
+  // Join 10: raised from a DWMS alert or abnormality ("Raise SGA" on the alert)
+  sourceAlertId       String?         @unique
+  sourceAlert         Alert?          @relation(fields: [sourceAlertId], references: [id], onDelete: SetNull)
+  // Join 8: raised from a 5S action whose checkpoint keeps failing audits
+  sourceFiveSActionId String?         @unique
+  sourceFiveSAction   FiveSAction?    @relation(fields: [sourceFiveSActionId], references: [id], onDelete: SetNull)
+  // Join 12: 5S standards that lock in this SGA's result
+  fiveSStandards      FiveSStandard[]
 
   @@index([organizationId, status])
   @@index([employeeId, createdAt])

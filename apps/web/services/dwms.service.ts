@@ -778,6 +778,15 @@ export interface DwmsAlertItem {
   departmentId?: string | null;
   againstUserId?: string | null;
   taskInstanceId?: string | null;
+  // Join 10: the improvement raised from this alert (one Kaizen or one SGA)
+  raisedKaizen?: DwmsRaisedImprovement | null;
+  raisedSga?: DwmsRaisedImprovement | null;
+}
+
+export interface DwmsRaisedImprovement {
+  id: string;
+  title: string | null;
+  status: string;
 }
 
 export interface DwmsAlertComment {
@@ -1130,6 +1139,15 @@ export const DwmsService = {
     alertId: string,
   ): Promise<DwmsAlertDetailResponse> {
     return getJson(`/dwms/alerts/${encodeURIComponent(alertId)}`, token);
+  },
+
+  async raiseImprovementFromAlert(
+    token: string,
+    alertId: string,
+    kind: "kaizen" | "sga",
+    body: { ownerId?: string } = {},
+  ): Promise<{ kaizen?: DwmsRaisedImprovement; sga?: DwmsRaisedImprovement }> {
+    return sendJson(`/dwms/alerts/${encodeURIComponent(alertId)}/${kind}`, token, "POST", body);
   },
 
   async addAlertComment(

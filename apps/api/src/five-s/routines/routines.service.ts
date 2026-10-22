@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { FiveSRoutineFrequency, Prisma } from 'db';
+import { FiveSRoutineFrequency, FiveSRoutineOutcome, Prisma } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { addDays, daysBetween, toDbDate } from 'src/work/work-date';
@@ -12,6 +12,7 @@ import {
     UpdateRoutineDto,
 } from '../dto/five-s.dto';
 import { FiveSAccessService, FiveSActor } from '../five-s-access.service';
+import { FiveSDwmsSyncService } from '../five-s-dwms-sync.service';
 import { PERSON_SELECT, dateOnly, logChange, person } from '../five-s-records';
 import { isRoutineOccurrence, routineOccurrences } from '../five-s-schedule';
 
@@ -45,7 +46,11 @@ const GRACE_DAYS: Record<FiveSRoutineFrequency, number> = { DAILY: 0, WEEKLY: 2,
 
 @Injectable()
 export class RoutinesService {
-    constructor(private prisma: PrismaService, private access: FiveSAccessService) {}
+    constructor(
+        private prisma: PrismaService,
+        private access: FiveSAccessService,
+        private dwmsSync: FiveSDwmsSyncService,
+    ) {}
 
     async list(user: AccessTokenPayload, query: RoutineListQueryDto) {
         const actor = await this.access.resolveActor(user);
@@ -144,7 +149,7 @@ export class RoutinesService {
         if (!this.access.canMaintainAreaStandards(actor, area)) throw new ForbiddenException('Only the area owner, HOD or a 5S administrator can set up routines');
         await this.access.assertCompanyEmployees(actor.organizationId, [dto.responsibleId]);
 
-        return this.prisma.$transaction(async (tx) => {
+        const created = await this.prisma.$transaction(async (tx) => {
             const routine = await tx.fiveSRoutine.create({
                 data: {
                     organizationId: actor.organizationId,
@@ -166,6 +171,9 @@ export class RoutinesService {
             });
             return routine;
         });
+        // Join 5: the routine becomes a recurring task on the responsible person's DWMS list.
+        await this.dwmsSync.syncRoutine(created.id, actor.employeeId);
+        return created;
     }
 
     // The schedule (frequency/start) is fixed once created so completion history stays meaningful;
@@ -199,6 +207,7 @@ export class RoutinesService {
                 summary: `Updated routine "${dto.title ?? routine.title}"${dto.isActive === false ? ' (deactivated)' : dto.isActive === true && !routine.isActive ? ' (reactivated)' : ''}`,
             });
         });
+        await this.dwmsSync.syncRoutine(id, actor.employeeId);
         return this.get(user, id);
     }
 
@@ -226,6 +235,10 @@ export class RoutinesService {
         } catch (error) {
             if (isUniqueViolation(error)) throw new ConflictException('This occurrence has already been recorded');
             throw error;
+        }
+        await this.dwmsSync.recordRoutineOccurrence(routine, dto.scheduledDate, dto.outcome, dto.exception || null, actor.employeeId);
+        if (dto.outcome === FiveSRoutineOutcome.DONE_WITH_EXCEPTION) {
+            await this.dwmsSync.raiseRoutineException(routine.id, dto.scheduledDate, dto.exception || null, actor.employeeId);
         }
         return this.schedule(user, id, {});
     }

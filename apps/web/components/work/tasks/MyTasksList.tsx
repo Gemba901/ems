@@ -1,5 +1,6 @@
 "use client";
 
+import { TASK_PRIORITY_LABELS } from "@/services/work.service";
 import { useState } from "react";
 import Link from "next/link";
 import { ListChecks } from "lucide-react";
@@ -66,6 +67,7 @@ export function MyTasksList() {
                   </Link>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
                     <span className="truncate">{task.project.name}</span>
+                    <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
                     <span aria-hidden="true">·</span>
                     {task.dueDate ? (
                       <span className={overdue ? "font-semibold text-red-700" : undefined}>
@@ -85,8 +87,8 @@ export function MyTasksList() {
                   disabled={update.isPending && update.variables?.taskId === task.id}
                   onChange={(status) =>
                     update.mutate(
-                      { taskId: task.id, data: { status } },
-                      { onError: (e) => toast(errorMessage(e, "Status was not changed."), "error") },
+                      { taskId: task.id, data: { status, expectedVersion: task.version } },
+                      { onError: (e) => { toast(errorMessage(e, "Status was not changed."), "error"); tasks.refetch(); } },
                     )
                   }
                 />

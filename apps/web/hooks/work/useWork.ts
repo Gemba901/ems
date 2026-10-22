@@ -169,8 +169,19 @@ export function useUpdateTask() {
     mutationFn: ({ taskId, data }: { taskId: string; data: UpdateTaskPayload }) => WorkService.updateTask(taskId, data, token),
     onSuccess: (task) => {
       qc.setQueryData([...scope, "task", task.id], task);
+      qc.invalidateQueries({ queryKey: [...scope, "activity", task.id] });
       invalidate();
     },
+  });
+}
+
+export function useTaskActivity(taskId: string, page: number) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "activity", taskId, page],
+    queryFn: () => WorkService.listActivity(taskId, token, page),
+    retry: retryTransient,
+    enabled,
   });
 }
 

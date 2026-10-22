@@ -68,7 +68,9 @@ export type ActionEventType =
   | "UPDATED"
   | "SUBMITTED_FOR_VERIFICATION"
   | "VERIFIED"
-  | "RETURNED_FOR_REWORK";
+  | "RETURNED_FOR_REWORK"
+  | "KAIZEN_RAISED"
+  | "SGA_RAISED";
 export type RedTagReason = "UNNECESSARY" | "OBSOLETE" | "DAMAGED" | "EXCESS" | "UNIDENTIFIED";
 export type RedTagDecision = "RETAIN" | "RELOCATE" | "REPAIR" | "RECYCLE" | "DISPOSE";
 export type RedTagStatus = "PENDING" | "DECIDED" | "RESOLVED";
@@ -102,6 +104,8 @@ export const ACTION_EVENT_LABELS: Record<ActionEventType, string> = {
   SUBMITTED_FOR_VERIFICATION: "Submitted for verification",
   VERIFIED: "Verified",
   RETURNED_FOR_REWORK: "Returned for rework",
+  KAIZEN_RAISED: "Kaizen raised",
+  SGA_RAISED: "SGA raised",
 };
 
 export const RED_TAG_REASONS: RedTagReason[] = ["UNNECESSARY", "OBSOLETE", "DAMAGED", "EXCESS", "UNIDENTIFIED"];
@@ -372,6 +376,9 @@ export type ActionView = {
   verifiedBy: Person | null;
   verifiedAt: string | null;
   verificationRemarks: string | null;
+  // The Kaizen raised from this finding, if any (one per action)
+  kaizen: { id: string; title: string | null; status: string } | null;
+  sga: { id: string; title: string | null; status: string } | null;
   createdBy: Person | null;
   createdAt: string;
   updatedAt: string;
@@ -382,6 +389,9 @@ export type ActionView = {
     canVerify: boolean;
     allStepsDone: boolean;
     canManageSteps: boolean;
+    canRaiseKaizen: boolean;
+    // Also needs a repeat finding (ActionDetail.repeatFinding).
+    canRaiseSga: boolean;
   };
 };
 
@@ -400,7 +410,14 @@ export type CorrectiveActionPayload = { description: string; ownerId?: string | 
 
 export type UpdateCorrectiveActionPayload = Partial<CorrectiveActionPayload> & { done?: boolean };
 
+// Join 8: the checkpoint failed in each of the area's last few audits.
+export type RepeatFinding = {
+  audits: { id: string; reference: string; auditDate: string }[];
+  openSga: { id: string; title: string | null; status: string } | null;
+};
+
 export type ActionDetail = ActionView & {
+  repeatFinding: RepeatFinding | null;
   history: {
     id: string;
     type: ActionEventType;
@@ -493,9 +510,22 @@ export type StandardView = {
   owner: Person | null;
   approvedBy: Person | null;
   approvedAt: string | null;
+  // Join 12: the closed Kaizen or SGA this standard locks in
+  sourceKaizen: { id: string; title: string | null } | null;
+  sourceSga: { id: string; title: string | null } | null;
   createdAt: string;
   updatedAt: string;
   permissions: { canEdit: boolean; canApprove: boolean; canRevise: boolean };
+};
+
+export type StandardSourceKind = "KAIZEN" | "SGA";
+
+export type StandardSourcePrefill = {
+  kind: StandardSourceKind;
+  id: string;
+  title: string;
+  instructions: string;
+  changeNote: string;
 };
 
 export type StandardDetail = StandardView & {
@@ -519,6 +549,8 @@ export type StandardPayload = {
   ownerId?: string | null;
   referenceUrls?: string[];
   changeNote?: string | null;
+  sourceKaizenId?: string;
+  sourceSgaId?: string;
 };
 
 export type RoutineView = {
@@ -704,6 +736,10 @@ export const FiveSService = {
     send<ActionDetail>("POST", `/actions/${id}/submit`, body, token),
   verifyAction: (id: string, body: { outcome: "VERIFIED" | "REWORK"; remarks?: string }, token: string) =>
     send<ActionDetail>("POST", `/actions/${id}/verify`, body, token),
+  raiseKaizen: (id: string, body: { kaizenOwnerId?: string }, token: string) =>
+    send<ActionDetail>("POST", `/actions/${id}/kaizen`, body, token),
+  raiseSga: (id: string, body: { ownerId?: string }, token: string) =>
+    send<ActionDetail>("POST", `/actions/${id}/sga`, body, token),
 
   listRedTags: (params: RedTagListQuery, token: string) => get<RedTagView[]>(`/red-tags${query(params)}`, token),
   getRedTag: (id: string, token: string) => get<RedTagView>(`/red-tags/${id}`, token),
@@ -717,6 +753,8 @@ export const FiveSService = {
   listStandards: (params: { areaId?: string; status?: StandardStatus; view?: "current" | "all" }, token: string) =>
     get<StandardView[]>(`/standards${query(params)}`, token),
   getStandard: (id: string, token: string) => get<StandardDetail>(`/standards/${id}`, token),
+  getStandardSource: (params: { kaizenId?: string; sgaId?: string }, token: string) =>
+    get<StandardSourcePrefill>(`/standards/source${query(params)}`, token),
   createStandard: (body: StandardPayload, token: string) => send<{ id: string }>("POST", "/standards", body, token),
   updateStandard: (id: string, body: Partial<Omit<StandardPayload, "areaId">>, token: string) =>
     send<StandardDetail>("PATCH", `/standards/${id}`, body, token),
@@ -745,3 +783,6 @@ export const FiveSService = {
   addSampleData: (token: string) => send<unknown>("POST", "/settings/sample-data", {}, token),
   removeSampleData: (token: string) => send<unknown>("DELETE", "/settings/sample-data", undefined, token),
 };
+
+// Join 12: standards made from a verified Kaizen or SGA, shown on that record.
+export type LinkedFiveSStandard = { id: string; title: string; status: string; revision: number; area: { id: string; name: string } };

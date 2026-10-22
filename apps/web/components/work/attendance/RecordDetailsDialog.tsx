@@ -99,15 +99,7 @@ function CorrectionsSection({ record }: { record: AttendanceRecord }) {
 }
 
 /** Location and correction history for one record. Mount only while open. */
-export function RecordDetailsDialog({
-  record,
-  employeeName,
-  onClose,
-}: {
-  record: AttendanceRecord;
-  employeeName?: string;
-  onClose: () => void;
-}) {
+export function RecordDetailsDialog({ record, employeeName, onClose }: { record: AttendanceRecord; employeeName?: string; onClose: () => void }) {
   return (
     <WorkDialog
       open
@@ -121,6 +113,13 @@ export function RecordDetailsDialog({
       }
     >
       <div className="space-y-6">
+        {record.autoClockedOutAt && (
+          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            This session was automatically closed 30 minutes after the scheduled finish. Processed at{" "}
+            {formatDateTime(record.autoClockedOutAt, record.timezoneAtClockIn)}.
+            {record.edited && " The attendance times have since been corrected; see the history below."}
+          </p>
+        )}
         <section aria-labelledby="record-location-heading" className="space-y-2">
           <h3 id="record-location-heading" className="text-sm font-semibold text-slate-900">
             Location

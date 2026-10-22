@@ -41,6 +41,9 @@ model EmsOnboardingBatch {
 }
 
 model EmsOnboardingRecord {
+  // Imported additional columns, with original text and explicit profile mappings.
+  extraFields Json?
+
   id             String             @id @default(uuid())
   batchId        String
   batch          EmsOnboardingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
@@ -65,6 +68,7 @@ model EmsOnboardingRecord {
   hodName                String?
   hodDesignation         String?
   workArea               String?
+  fiveSLocationCategory  String? // Keep imported text until validation/registration.
   subSection             String?
   jobDesignation         String?
   beesAccessLevel        String?
@@ -79,6 +83,7 @@ model EmsOnboardingRecord {
   employeesAwaitingManager Employee[] @relation("EmployeePendingReporting")
   reportingToEmployeeId String?
   reportingToEmployee Employee? @relation("EmsReportingEmployee", fields: [reportingToEmployeeId], references: [id], onDelete: NoAction)
+  reportingToBody String? // Explicit top-level body; mutually exclusive with all other reporting targets.
   reportingToBoard Boolean @default(false)
   employmentStatus       String?
   employmentType         String?

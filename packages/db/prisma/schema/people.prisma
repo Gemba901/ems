@@ -1,4 +1,7 @@
 model Employee {
+  // Imported additional columns, with original text and explicit profile mappings.
+  importedExtraFields Json?
+
   id             String  @id @default(uuid())
   firstName      String
   lastName       String
@@ -45,13 +48,17 @@ model Employee {
 
   // EMS: Work Allocation group
   employmentStatus   EmploymentStatus @default(ACTIVE)
+  employmentStatusRevision Int @default(0)
+  employmentStatusChanges EmsEmploymentStatusChange[]
   employmentType     EmploymentType?
   jobTitle           String?
   dateJoined         DateTime?
   workStation        String?
+  fiveSLocationCategory EmsFiveSLocationCategory?
   section            String?
   subSection         String?
   shift              String?
+  reportingBody String? // COMMITTEE, MANAGEMENT_COMMITTEE or OWNER; legacy Board flag is retained.
   reportsToBoard Boolean @default(false)
   pendingReportingRecordId String?
   pendingReportingRecord EmsOnboardingRecord? @relation("EmployeePendingReporting", fields: [pendingReportingRecordId], references: [id], onDelete: NoAction)
@@ -312,3 +319,34 @@ model TicketUpdate {
 }
 
 // SIMS: Suggestions and Idea Management System
+
+// Confirmed EMS changes only. Existing status values are retained; no invented history.
+model EmsEmploymentStatusChange {
+  id String @id @default(uuid())
+  employeeId String?
+  subjectEmployeeId String // retained identity if a separate authorised deletion removes the profile
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  organizationId String
+  requestId String
+  fromStatus EmploymentStatus
+  toStatus EmploymentStatus
+  reason String
+  actorUserId String
+  actorName String?
+  source String @default("EMS_MANUAL")
+  revision Int
+  expectedUpdatedAt DateTime
+  changedAt DateTime @default(now())
+  previousDepartmentId String?
+  previousJobTitle String?
+  activitySync String @default("PENDING")
+  @@unique([organizationId, requestId])
+  @@index([organizationId, employeeId, changedAt])
+}
+
+// Optional work-location classification; independent of access roles and readiness.
+enum EmsFiveSLocationCategory {
+  STORE
+  OFFICE
+  PRODUCTION_SHOP_FLOOR
+}

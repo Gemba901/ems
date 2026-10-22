@@ -1,4 +1,6 @@
 "use client";
+import { REPORTING_BODIES, isReportingBody, reportingBodyLabel } from './reporting-bodies';
+
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,19 +35,19 @@ export default function EmployeeReportingCard({ employeeId, token }: { employeeI
       {query.isLoading && <p className="text-sm text-slate-500">Loading reporting assignment…</p>}
       {query.error && <p role="alert" className="text-sm text-red-600">{query.error.message}</p>}
       {assignment && <>
-        <p className={`text-sm font-medium ${assignment.error ? 'text-red-700' : 'text-slate-700'}`}>{REPORTING_STATE_LABELS[assignment.state]}</p>
-        {assignment.managerName && <p className="text-sm text-slate-600">{assignment.managerName}</p>}
+        <p className={`text-sm font-medium ${assignment.error ? 'text-red-700' : 'text-slate-700'}`}>{isReportingBody(assignment.target) ? `Reports to ${reportingBodyLabel(assignment.target)}` : REPORTING_STATE_LABELS[assignment.state]}</p>
+        {assignment.managerName && !isReportingBody(assignment.target) && <p className="text-sm text-slate-600">{assignment.managerName}</p>}
         {assignment.error && <p role="alert" className="text-sm text-red-600">{assignment.error}</p>}
         {assignment.warning && <p className="text-sm text-amber-700">{assignment.warning}</p>}
         {assignment.depth !== null && <p className="text-xs text-slate-500">Confirmed hierarchy level: {assignment.depth}</p>}
-        <label className="block text-sm font-medium text-slate-700" htmlFor={`reporting-choice-${employeeId}`}>Choose manager or confirm Board reporting</label>
+        <label className="block text-sm font-medium text-slate-700" htmlFor={`reporting-choice-${employeeId}`}>Choose a manager or top-level reporting body</label>
         <select id={`reporting-choice-${employeeId}`} value={target} disabled={save.isPending} onChange={e => { setTarget(e.target.value); save.reset(); }}
           className="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm">
           <option value="">Choose a new assignment</option>
-          <option value="BOARD">Reports to Board — no individual manager</option>
+          {REPORTING_BODIES.map(body => <option key={body.value} value={body.value}>Reports to {body.label} — no individual manager</option>)}
           {query.data?.options.map(o => <option key={o.target} value={o.target}>{[o.name, o.designation, o.department, o.branch, o.employeeCode].filter(Boolean).join(' · ')}</option>)}
         </select>
-        <p className="text-xs text-slate-500">Saving a new assignment replaces any pending selection. Board reporting is an explicit confirmation, not a blank manager field.</p>
+        <p className="text-xs text-slate-500">Saving replaces the current or pending assignment. For a named owner or committee member, choose the person; use a top-level body only when reporting to that body itself.</p>
         <button type="button" onClick={() => save.mutate()} disabled={!target || save.isPending} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
           {save.isPending ? 'Saving…' : 'Save reporting assignment'}
         </button>

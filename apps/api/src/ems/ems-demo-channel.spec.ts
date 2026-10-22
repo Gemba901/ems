@@ -79,14 +79,14 @@ function registrationFixture(lockedChannels: (string | null)[] = ['EMAIL', 'EMAI
     user: { create: jest.fn(async () => ({ id: 'new-user' })) },
     userOrganization: { upsert: jest.fn(async () => ({})) },
     emsDepartmentHod: { findMany: jest.fn().mockResolvedValue([]) },
-    department: { findMany: jest.fn().mockResolvedValue([]) },
+    department: { findMany: jest.fn().mockResolvedValue([{id:'quality',name:'Quality'}]) },
     employee: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(async () => ({ id: `employee-${events.push('employee-create')}` })) },
     emsOnboardingRecord: { update: jest.fn(async ({ where, data }: any) => { Object.assign(records.find(r => r.id === where.id)!, data); return {}; }) },
   };
   const prisma = {
     $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx)),
     organization: { findUnique: jest.fn(async () => ({ communicationChannel: 'EMAIL' as string | null })) },
-    department: { findMany: jest.fn(async () => []) },
+    department: { findMany: jest.fn(async () => [{id:'quality',name:'Quality'}]) },
     role: { findMany: jest.fn(async () => [{ id: 'role-employee', name: 'EMPLOYEE' }]) },
     emsOnboardingBatch: { findFirst: jest.fn(async () => batch), updateMany: jest.fn(async () => ({ count: 1 })) },
     emsOnboardingRecord: {
@@ -271,13 +271,13 @@ describe('EMS demo-only communication reset', () => {
   it('still refuses registration at preflight if no channel is chosen', async () => {
     const f = registrationFixture();
     f.prisma.organization.findUnique.mockResolvedValueOnce({ communicationChannel: null });
-    await expect(f.service.registerOnboardingBatch(orgId, 'batch')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(f.service.registerOnboardingBatch(orgId, 'batch', Role.ADMIN)).rejects.toBeInstanceOf(BadRequestException);
     expect(f.prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it.each([null, 'WHATSAPP'])('stops if the channel becomes %s after preflight, without changing personal validation', async channel => {
     const f = registrationFixture([channel]);
-    await expect(f.service.registerOnboardingBatch(orgId, 'batch')).rejects.toBeInstanceOf(ConflictException);
+    await expect(f.service.registerOnboardingBatch(orgId, 'batch', Role.ADMIN)).rejects.toBeInstanceOf(ConflictException);
     expect(f.events).toEqual(['lock', 'channel-check']);
     expect(f.prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(f.tx.user.create).not.toHaveBeenCalled();
@@ -290,7 +290,7 @@ describe('EMS demo-only communication reset', () => {
   it('keeps already committed registrations and reports their count if a reset happens between people', async () => {
     const f = registrationFixture(['EMAIL', null]);
     let error: ConflictException | undefined;
-    try { await f.service.registerOnboardingBatch(orgId, 'batch'); } catch (caught) { error = caught as ConflictException; }
+    try { await f.service.registerOnboardingBatch(orgId, 'batch', Role.ADMIN); } catch (caught) { error = caught as ConflictException; }
     expect(error).toBeInstanceOf(ConflictException);
     expect(error!.getResponse()).toEqual(expect.objectContaining({ registered: 1, failed: 0, statusCode: 409 }));
     expect(f.records.map(r => r.status)).toEqual(['REGISTERED', 'READY']);
@@ -305,7 +305,7 @@ describe('EMS demo-only communication reset', () => {
   ])('does not label a %s/%s transaction failure as a personal error', async (code, sqlState) => {
     const f = registrationFixture();
     f.prisma.$transaction.mockRejectedValue(Object.assign(new Error('database operation failed'), { code, meta: { code: sqlState } }));
-    await expect(f.service.registerOnboardingBatch(orgId, 'batch')).rejects.toBeInstanceOf(ConflictException);
+    await expect(f.service.registerOnboardingBatch(orgId, 'batch', Role.ADMIN)).rejects.toBeInstanceOf(ConflictException);
     expect(f.prisma.$transaction).toHaveBeenCalledTimes(code === 'P2034' || ['40001', '40P01'].includes(sqlState ?? '') ? 3 : 1);
     expect(f.prisma.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
     expect(f.tx.employee.create).not.toHaveBeenCalled();
@@ -313,7 +313,7 @@ describe('EMS demo-only communication reset', () => {
 
   it('continues registering normally when the channel is unchanged', async () => {
     const f = registrationFixture();
-    await expect(f.service.registerOnboardingBatch(orgId, 'batch')).resolves.toEqual(expect.objectContaining({ registered: 2, failed: 0 }));
+    await expect(f.service.registerOnboardingBatch(orgId, 'batch', Role.ADMIN)).resolves.toEqual(expect.objectContaining({ registered: 2, failed: 0 }));
     expect(f.tx.organization.findUnique).toHaveBeenCalledTimes(2);
     expect(f.tx.employee.create).toHaveBeenCalledTimes(2);
     expect(f.prisma.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
@@ -322,7 +322,7 @@ describe('EMS demo-only communication reset', () => {
   it('retains the existing personal-validation failure path', async () => {
     const f = registrationFixture();
     jest.spyOn(f.service as any, 'checkOnboardingIdentity').mockRejectedValue(new BadRequestException('Phone already used'));
-    await expect(f.service.registerOnboardingBatch(orgId, 'batch')).resolves.toEqual(expect.objectContaining({ registered: 0, failed: 2 }));
+    await expect(f.service.registerOnboardingBatch(orgId, 'batch', Role.ADMIN)).resolves.toEqual(expect.objectContaining({ registered: 0, failed: 2 }));
     expect(f.prisma.emsOnboardingRecord.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: { status: 'NEEDS_FIXING', validationErrors: [{ field: 'registration', message: 'Phone already used' }] },
     }));

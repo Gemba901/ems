@@ -8,7 +8,7 @@ const EMPLOYEE_SELECT = {
   jobTitle: true, plantBranch: true, departmentId: true,
   department: { select: { name: true } },
   emsOnboardingRecord: { select: { id: true } },
-  reportingManagerId: true, reportsToBoard: true, pendingReportingRecordId: true,
+  reportingManagerId: true, reportsToBoard: true, reportingBody: true, pendingReportingRecordId: true,
   hodName: true, hodDesignation: true, firstRelieverId: true, secondRelieverId: true,
   pendingFirstRelieverRecordId: true, pendingSecondRelieverRecordId: true,
 } as const;

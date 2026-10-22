@@ -1,3 +1,4 @@
+import { Role } from 'src/common/enum/role.enum';
 import { createHash } from 'node:crypto';
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from 'db';
@@ -203,7 +204,7 @@ describe('registration interruption and repeat protection', () => {
       if (first && options?.isolationLevel === 'Serializable') {first = false; throw {code: 'P2034'};}
       return value;
     }));
-    await expect(f.service.registerOnboardingBatch('org', 'batch')).resolves.toMatchObject({registered: 1, failed: 0});
+    await expect(f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN)).resolves.toMatchObject({registered: 1, failed: 0});
     expect(f.state().employees).toHaveLength(1);
     expect(f.state().users).toHaveLength(1);
     expect(f.state().rows[0].status).toBe('REGISTERED');
@@ -216,7 +217,7 @@ describe('registration interruption and repeat protection', () => {
     const create = f.db.employee.create.getMockImplementation();
     f.db.employee.create.mockImplementationOnce(create).mockRejectedValueOnce(new Error('Connection lost'));
     let error: any;
-    try { await f.service.registerOnboardingBatch('org', 'batch'); } catch (caught) {error = caught;}
+    try { await f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN); } catch (caught) {error = caught;}
     expect(error).toBeInstanceOf(ConflictException);
     expect(error.getResponse()).toMatchObject({registered: 1, failed: 0});
     expect(f.state().employees).toHaveLength(1);
@@ -234,7 +235,7 @@ describe('registration interruption and repeat protection', () => {
       if (!changed) {changed = true; f.state().rows[0].status = status;}
       return transaction(run);
     });
-    await expect(f.service.registerOnboardingBatch('org', 'batch')).resolves.toMatchObject({registered: 0, failed: 0});
+    await expect(f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN)).resolves.toMatchObject({registered: 0, failed: 0});
     expect(f.db.employee.create).not.toHaveBeenCalled();
     expect(f.db.user.create).not.toHaveBeenCalled();
     expect(f.state().rows[0].status).toBe(status);
@@ -325,5 +326,55 @@ describe('shared onboarding read phases', () => {
     expect(f.state().rows[0].firstName).toBe('Changed');
     expect(f.state().rows[0].status).toBe('NEEDS_FIXING');
     expect(f.state().rows[0].validationErrors.some((e:any)=>e.field==='currentDepartment')).toBe(true);
+  });
+});
+
+describe('name rules and organisation choices through the service', () => {
+  it('saves a short name, flags the field, then clears it after correction', async () => {
+    const f = fixture();
+    await f.service.updateOnboardingRecord('org','a',{firstName:' J. '});
+    expect(f.state().rows[0].firstName).toBe('J.');
+    expect(f.state().rows[0].validationErrors).toContainEqual({field:'firstName',message:'Enter at least 2 letters.'});
+    await f.service.updateOnboardingRecord('org','a',{firstName:'Jo'});
+    expect(f.state().rows[0].status).toBe('READY');
+  });
+  it('preserves placeholder and N/A findings without duplicate messages', async () => {
+    const f = fixture(); f.state().rows[0].firstName='Nil'; f.state().rows[0].lastName='N/A';
+    const batch = await f.validate();
+    expect(batch.records[0].validationErrors).toEqual([
+      {field:'firstName',message:'Required'},
+      {field:'lastName',message:'This field applies to every employee, so N/A is not accepted'},
+    ]);
+  });
+  it('refreshes old Ready name findings in detail but never downgrades registered rows', async () => {
+    const f = fixture(); f.state().rows[0].status='READY'; f.state().rows[0].firstName='J';
+    expect((await f.get()).records[0].status).toBe('NEEDS_FIXING');
+    expect(f.state().rows[0].status).toBe('READY'); // Detail is read-only.
+    f.state().rows[0].status='REGISTERED';
+    expect((await f.get()).records[0].status).toBe('REGISTERED');
+  });
+  it('cannot register a stale Ready one-letter name or create its account', async () => {
+    const f = fixture(); f.state().rows[0].status='READY'; f.state().rows[0].lastName='K';
+    const result = await f.service.registerOnboardingBatch('org','batch', Role.ADMIN);
+    expect(result).toMatchObject({registered:0,failed:1});
+    expect(f.db.user.create).not.toHaveBeenCalled(); expect(f.db.employee.create).not.toHaveBeenCalled();
+    expect(f.state().rows[0].validationErrors).toContainEqual({field:'lastName',message:'Enter at least 2 letters.'});
+  });
+  it('returns tenant-scoped field choices using the existing single read', async () => {
+    const f = fixture();
+    f.state().employees.push({id:'same',organizationId:'org',firstName:'Other',lastName:'Person',jobTitle:'Inspector'},
+      {id:'foreign',organizationId:'other-org',firstName:'Foreign',lastName:'Person',jobTitle:'Foreign-only title'});
+    const batch = await f.get();
+    expect(batch.fieldOptions.designations.map(d=>d.value)).toEqual(['Director','Inspector']);
+    expect(batch.fieldOptions.departments).toEqual([{name:'Administration',usable:true}]);
+    expect(f.db.employee.findMany).toHaveBeenCalledTimes(1); expect(f.db.department.findMany).toHaveBeenCalledTimes(1);
+  });
+  it('blocks ambiguous departments during validation and stale Ready registration', async () => {
+    const f = fixture(); f.db.department.findMany.mockResolvedValue([{id:'a',name:'Administration'},{id:'b',name:' administration '}]);
+    await f.validate();
+    expect(f.state().rows[0].validationErrors).toEqual(expect.arrayContaining([expect.objectContaining({field:'currentDepartment',message:expect.stringContaining('uniquely')})]));
+    f.state().rows[0].status='READY'; f.state().rows[0].validationErrors=null;
+    const result=await f.service.registerOnboardingBatch('org','batch', Role.ADMIN);
+    expect(result.registered).toBe(0); expect(f.db.employee.create).not.toHaveBeenCalled();
   });
 });

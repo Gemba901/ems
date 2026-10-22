@@ -1,3 +1,4 @@
+import { Role } from 'src/common/enum/role.enum';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { EmsService } from './ems.service';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -86,7 +87,7 @@ describe('EMS phone validation', () => {
 describe('EMS phone registration', () => {
   it('stores international digits on both the new login and employee', async () => {
     const { db, service } = fixture();
-    const result = await service.registerOnboardingBatch('org1', 'b1');
+    const result = await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(result.registered).toBe(1);
     expect(db.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ phone: '254712345678' }) }));
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ phone: '254712345678', userId: 'u1' }) }));
@@ -96,7 +97,7 @@ describe('EMS phone registration', () => {
     const { db, service } = fixture();
     db.$queryRaw.mockImplementation(async (sql) => String(sql[0]).includes('SELECT id, phone, email')
       ? [{ id: 'existing', phone: '+254712345678', email: null }] : []);
-    await service.registerOnboardingBatch('org1', 'b1');
+    await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(db.user.create).not.toHaveBeenCalled();
     expect(db.userOrganization.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: {}, create: expect.objectContaining({ userId: 'existing' }) }));
   });
@@ -106,7 +107,7 @@ describe('EMS phone registration', () => {
   ])('blocks ambiguous existing accounts', async (candidates) => {
     const { db, service } = fixture();
     db.$queryRaw.mockImplementation(async (sql) => String(sql[0]).includes('SELECT id, phone, email') ? candidates : []);
-    const result = await service.registerOnboardingBatch('org1', 'b1');
+    const result = await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(result.failed).toBe(1);
     expect(db.user.create).not.toHaveBeenCalled();
     expect(db.employee.create).not.toHaveBeenCalled();
@@ -116,7 +117,7 @@ describe('EMS phone registration', () => {
     const { db, service, batch } = fixture();
     Object.assign(batch.records[0], { workEmail: 'person@example.com' });
     db.user.findMany.mockResolvedValue([{ id: 'different-account' }]);
-    const result = await service.registerOnboardingBatch('org1', 'b1');
+    const result = await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(result.failed).toBe(0);
     expect(db.user.create).toHaveBeenCalledTimes(1);
     expect(db.userOrganization.upsert).toHaveBeenCalledWith(expect.objectContaining({
@@ -126,20 +127,20 @@ describe('EMS phone registration', () => {
   it('rechecks an existing employee even if the row was marked READY', async () => {
     const { db, service } = fixture();
     db.employee.findMany.mockResolvedValue([{ phone: '254712345678', userId: 'old' }]);
-    expect((await service.registerOnboardingBatch('org1', 'b1')).failed).toBe(1);
+    expect((await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN)).failed).toBe(1);
     expect(db.employee.create).not.toHaveBeenCalled();
   });
   it('never marks a failed employee write as registered', async () => {
     const { db, service } = fixture();
     db.employee.create.mockRejectedValue(new Error('database failure'));
-    await expect(service.registerOnboardingBatch('org1', 'b1')).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.registerOnboardingBatch('org1', 'b1', Role.ADMIN)).rejects.toBeInstanceOf(ConflictException);
     expect(db.emsOnboardingRecord.update).not.toHaveBeenCalled();
     expect(db.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
   });
   it('rejects a cancelled batch before writing', async () => {
     const { db, service, batch } = fixture();
     batch.status = 'CANCELLED';
-    await expect(service.registerOnboardingBatch('org1', 'b1')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.registerOnboardingBatch('org1', 'b1', Role.ADMIN)).rejects.toBeInstanceOf(BadRequestException);
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 });
@@ -213,13 +214,13 @@ describe('EMS communication channel rules', () => {
   it('refuses to register until the organisation has chosen a channel', async () => {
     const { db, service } = fixture();
     db.organization.findUnique.mockResolvedValue({ communicationChannel: null });
-    await expect(service.registerOnboardingBatch('org1', 'b1')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.registerOnboardingBatch('org1', 'b1', Role.ADMIN)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('keeps the work email off the login and stores WhatsApp on the employee', async () => {
     const { db, service, batch } = fixture();
     batch.records = [{ ...row(), workEmail: 'production@acme.co' }];
-    await service.registerOnboardingBatch('org1', 'b1');
+    await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(db.user.create.mock.calls[0][0].data).not.toHaveProperty('email');
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ email: 'production@acme.co', whatsappNumber: '254712345678' }),
@@ -276,7 +277,7 @@ describe('EMS employment values', () => {
   it('stores spaced values in the form the database accepts', async () => {
     const { db, service, batch } = fixture();
     batch.records = [{ ...row(), employmentStatus: 'Contract Ended', employmentType: 'Full Time' } as any];
-    await service.registerOnboardingBatch('org1', 'b1');
+    await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ employmentStatus: 'CONTRACT_ENDED', employmentType: 'FULL_TIME' }),
     }));
@@ -309,7 +310,7 @@ describe('EMS placeholder and N/A rules', () => {
   it('stores N/A email as empty but keeps N/A in free-text fields', async () => {
     const { db, service, batch } = fixture();
     batch.records = [{ ...row(), workEmail: 'N/A', plantBranchCode: 'N/A', subSection: '-' } as any];
-    await service.registerOnboardingBatch('org1', 'b1');
+    await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ email: null, plantBranch: 'N/A', subSection: null }),
     }));
@@ -319,13 +320,13 @@ describe('EMS placeholder and N/A rules', () => {
 describe('Reporting relationship integration', () => {
   it('writes the resolved existing employee ID onto the new employee', async () => {
     const {db,service}=fixture();
-    await service.registerOnboardingBatch('org1','b1');
+    await service.registerOnboardingBatch('org1','b1', Role.ADMIN);
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingManagerId:'boss'})}));
     expect(db.emsOnboardingRecord.update).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingToEmployeeId:'boss',reportingToRecordId:null,reportingToBoard:false})}));
   });
   it('rejects a designation mismatch even if the saved row is READY', async () => {
     const {db,service,batch}=fixture(); batch.records[0].reportingToDesignation='HR Mgr';
-    expect((await service.registerOnboardingBatch('org1','b1')).failed).toBe(1);
+    expect((await service.registerOnboardingBatch('org1','b1', Role.ADMIN)).failed).toBe(1);
     expect(db.employee.create).not.toHaveBeenCalled(); expect(db.user.create).not.toHaveBeenCalled();
   });
   it('adds a hierarchy validation finding for self-reporting', async () => {
@@ -335,7 +336,7 @@ describe('Reporting relationship integration', () => {
   });
   it('registers a selected Board root with no employee manager', async () => {
     const {db,service,batch}=fixture();Object.assign(batch.records[0],{reportingToBoard:true});
-    expect((await service.registerOnboardingBatch('org1','b1')).registered).toBe(1);
+    expect((await service.registerOnboardingBatch('org1','b1', Role.ADMIN)).registered).toBe(1);
     expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({reportingManagerId:null})}));
   });
   it('registers a valid report pending the manager when the manager has an unrelated identity validation failure', async () => {
@@ -346,7 +347,7 @@ describe('Reporting relationship integration', () => {
       .mockRejectedValueOnce(new BadRequestException('Manager phone needs review'))
       .mockResolvedValueOnce(null);
     db.employee.create.mockResolvedValueOnce({id:'ann'});
-    const result=await service.registerOnboardingBatch('org1','b1');
+    const result=await service.registerOnboardingBatch('org1','b1', Role.ADMIN);
     expect(result.failed).toBe(1); expect(result.registered).toBe(1);
     expect(db.employee.create.mock.calls[0][0].data).toEqual(expect.objectContaining({reportingManagerId:null,pendingReportingRecordId:'manager',reportsToBoard:false}));
   });
@@ -362,7 +363,7 @@ describe('Reporting relationship integration', () => {
     db.emsOnboardingRecord.update.mockImplementation(async({where,data})=>{
       const r=batch.records.find(r=>r.id===where.id)!;Object.assign(r,data);return r;
     });
-    const result=await service.registerOnboardingBatch('org1','b1');
+    const result=await service.registerOnboardingBatch('org1','b1', Role.ADMIN);
     expect(result.registered).toBe(2);
     expect(db.employee.create.mock.calls.map(([arg])=>arg.data.employeeCode)).toEqual(['manager','r1']);
     expect(db.employee.create.mock.calls[1][0].data.reportingManagerId).toBe('emp-manager');

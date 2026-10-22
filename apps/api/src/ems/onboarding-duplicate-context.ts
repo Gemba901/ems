@@ -5,7 +5,7 @@ import { normalisePhone } from './onboarding-phone';
 export const ONBOARDING_TEXT_FIELDS = [
   'companyCode', 'plantBranchCode', 'employeeCode', 'firstName', 'middleName', 'lastName',
   'mobileNumber', 'whatsappNumber', 'workEmail', 'gender', 'nationality', 'currentDepartment',
-  'hodName', 'hodDesignation', 'workArea', 'subSection', 'jobDesignation', 'beesAccessLevel',
+  'hodName', 'hodDesignation', 'workArea', 'fiveSLocationCategory', 'subSection', 'jobDesignation', 'beesAccessLevel',
   'shift', 'reportingToName', 'reportingToDesignation', 'employmentStatus', 'employmentType',
   'reliever1Name', 'reliever1Designation', 'reliever2Name', 'reliever2Designation',
 ] as const;

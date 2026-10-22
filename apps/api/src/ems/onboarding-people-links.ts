@@ -1,3 +1,4 @@
+import { createPersonSuggester, PersonSuggestion } from './onboarding-person-suggestions';
 import { completeNameKey, isNotApplicable, normaliseKey, reportingKey } from './onboarding-text';
 
 export interface LinkPerson {
@@ -5,7 +6,7 @@ export interface LinkPerson {
   employeeId?: string | null; recordId?: string; batchId?: string; unavailable?: boolean;
 }
 export interface LinkRecord {
-  id: string; batchId: string; status: string; employeeId?: string | null;
+  id: string; batchId: string; status: string; rowNumber?: number | null; employeeId?: string | null;
   firstName?: string | null; middleName?: string | null; lastName?: string | null;
   jobDesignation?: string | null; employeeCode?: string | null; currentDepartment?: string | null; plantBranchCode?: string | null;
   hodName?: string | null; hodDesignation?: string | null; hodReviewKey?: string | null;
@@ -20,8 +21,20 @@ export interface HodAssignment {
 export interface LinkResolution {
   target: string | null; state: 'UNASSIGNED' | 'ASSIGNED' | 'PENDING' | 'NEEDS_ATTENTION';
   person: LinkPerson | null; error: string | null; warning: string | null;
+  suggestions?: PersonSuggestion<LinkPerson>[];
+}
+export interface HodEvidence {
+  total: number; blank: number;
+  groups: {name: string; designation: string; count: number; records: {id: string; name: string; employeeCode: string; rowNumber: number | null}[]}[];
+}
+export interface HodDirectoryEntry {
+  key: string; source: 'CONFIRMED' | 'IMPORTED'; department: string; branch: string;
+  departmentId?: string | null; branchKey?: string;
+  target: string | null; person: LinkPerson | null; selectable: boolean; note: string | null;
 }
 export interface HodResolution extends LinkResolution {
+  recordedSuggestions?: PersonSuggestion<LinkPerson>[];
+  evidenceKey?: string;
   departmentId: string | null; departmentName: string; branchKey: string; branchLabel: string;
   version: string; reviewKey: string | null; suggestedTarget: string | null; affectedRecords: number;
 }
@@ -49,19 +62,25 @@ export function peopleIndex(options: readonly LinkPerson[], records: readonly Li
     const person = byTarget.get(target);
     if (!person || person.unavailable) return failedLink(`${label} is unavailable or excluded. Choose another person.`, target, person ?? null);
     if (!person.name || !person.designation || isNotApplicable(person.designation))
-      return failedLink(`${label} needs a recorded name and designation.`, person.target, person);
+      return failedLink(`${label} needs a recorded name and job title.`, person.target, person);
     const pending = person.target.startsWith('record:');
     return { target: person.target, person, state: pending ? 'PENDING' : 'ASSIGNED', error: null,
       warning: pending ? `${label} link will be completed when ${person.name} registers.` : null };
   };
   // Each candidate scope gets one exact name/designation index for this resolution.
   // Store candidates, not mutable LinkResolution objects (second-slot errors are local).
+  const suggesters = new WeakMap<readonly LinkPerson[], ReturnType<typeof createPersonSuggester<LinkPerson>>>();
+  const suggest = (name: string | null | undefined, title: string | null | undefined, candidates: readonly LinkPerson[]) => {
+    let run = suggesters.get(candidates);
+    if (!run) { run = createPersonSuggester(candidates); suggesters.set(candidates, run); }
+    return run(name, title);
+  };
   const matchIndexes = new WeakMap<readonly LinkPerson[], Map<string, LinkPerson[]>>();
   const matchKey = (name: string, title: string) => JSON.stringify([completeNameKey(name), reportingKey(title)]);
   const match = (name: string | null | undefined, title: string | null | undefined, candidates: readonly LinkPerson[], label: string): LinkResolution => {
     const hasName = !!name?.trim() && !isNotApplicable(name), hasTitle = !!title?.trim() && !isNotApplicable(title);
     if (!hasName && !hasTitle) return noLink();
-    if (!hasName || !hasTitle) return failedLink(`Choose ${label.toLowerCase()} to confirm both name and designation, or clear both fields.`);
+    if (!hasName || !hasTitle) return {...failedLink(`Choose ${label.toLowerCase()} to confirm both name and job title, or clear both fields.`), suggestions: suggest(name, title, candidates)};
     let matches = matchIndexes.get(candidates);
     if (!matches) {
       const grouped = new Map<string, Map<string | null, LinkPerson>>();
@@ -77,8 +96,8 @@ export function peopleIndex(options: readonly LinkPerson[], records: readonly Li
     }
     const unique = matches.get(matchKey(name!, title!)) ?? [];
     return unique.length === 1 ? resolve(unique[0].target, label)
-      : failedLink(unique.length ? `Several people match ${label.toLowerCase()}. Choose the correct person.`
-        : `${label} could not be matched. Choose the person or correct the imported name and designation.`);
+      : {...failedLink(unique.length ? `Several people match ${label.toLowerCase()}. Choose the correct person.`
+        : `${label} could not be matched. Choose the person or correct the imported name and job title.`), suggestions: suggest(name, title, candidates)};
   };
   return { byTarget, canonical, resolve, match };
 }
@@ -105,9 +124,14 @@ export function resolveRecordRelievers(record: LinkRecord, options: readonly Lin
     if (result.target && (index.canonical(result.target) === index.canonical(`record:${record.id}`)
       || (record.employeeId && result.target === `employee:${record.employeeId}`)))
       return failedLink('A person cannot be their own reliever.', result.target, result.person);
+    if (result.suggestions) result = {...result, suggestions: result.suggestions.filter(person =>
+      index.canonical(person.target) !== index.canonical(`record:${record.id}`)
+      && (!record.employeeId || person.target !== `employee:${record.employeeId}`))};
     return result;
   };
   const first = resolve(1), second = resolve(2);
+  if (first.target && second.suggestions) second.suggestions = second.suggestions.filter(p => index.canonical(p.target) !== index.canonical(first.target));
+  if (second.target && first.suggestions) first.suggestions = first.suggestions.filter(p => index.canonical(p.target) !== index.canonical(second.target));
   if (first.target && second.target && index.canonical(first.target) === index.canonical(second.target)) {
     second.error = 'Choose a different person for the second reliever, or leave it unassigned.';
     second.state = 'NEEDS_ATTENTION'; second.warning = null;
@@ -136,6 +160,42 @@ export function resolveBatchPeopleLinks(records: readonly LinkRecord[], options:
     const key = scopeKey(normaliseKey(record.currentDepartment ?? null), branchKey(record.plantBranchCode));
     affectedByScope.set(key, (affectedByScope.get(key) ?? 0) + 1);
   }
+  // Evidence describes saved HOD fields in this import, not verified identity agreement.
+  const evidenceByScope = new Map<string, HodEvidence>();
+  const evidenceGroups = new Map<string, Map<string, HodEvidence['groups'][number]>>();
+  const hodDirectory: HodDirectoryEntry[] = [];
+  const eligible = new Set(currentOptions.filter(p => !p.unavailable).map(p => index.canonical(p.target)));
+  const departmentNamesById = new Map(departments.map(d => [d.id, d.name]));
+  for (const assignment of assignments) {
+    const target = assignment.employeeId ? `employee:${assignment.employeeId}` : assignment.pendingRecordId ? `record:${assignment.pendingRecordId}` : null;
+    const resolution = index.resolve(target, 'Department HOD');
+    hodDirectory.push({key: `confirmed:${assignment.id}`, source:'CONFIRMED', departmentId: assignment.departmentId, branchKey: assignment.branchKey,
+      department: departmentNamesById.get(assignment.departmentId) ?? 'Department unavailable', branch: assignment.branchLabel || 'Branch not specified',
+      target: resolution.target, person: resolution.person, selectable: !!resolution.target && !resolution.error && eligible.has(resolution.target),
+      note: assignment.isUnassigned ? 'Not assigned' : resolution.error ? 'Person unavailable — review assignment' : resolution.target && !eligible.has(resolution.target) ? 'Pending in another import — register there before selecting here' : resolution.warning});
+  }
+  const importedDirectory = new Set<string>();
+  for (const record of records) {
+    if (record.status === 'EXCLUDED' || record.batch?.status === 'CANCELLED') continue;
+    const scope = scopeKey(normaliseKey(record.currentDepartment ?? null), branchKey(record.plantBranchCode));
+    const evidence = evidenceByScope.get(scope) ?? {total:0, blank:0, groups:[]};
+    evidenceByScope.set(scope,evidence); evidence.total++;
+    const name = reportingKey(record.hodName) && !isNotApplicable(record.hodName) ? (record.hodName ?? '').trim() : '';
+    const title = reportingKey(record.hodDesignation) && !isNotApplicable(record.hodDesignation) ? (record.hodDesignation ?? '').trim() : '';
+    if (!name && !title) { evidence.blank++; continue; }
+    const groups = evidenceGroups.get(scope) ?? new Map<string, HodEvidence['groups'][number]>(); evidenceGroups.set(scope,groups);
+    const key = JSON.stringify([completeNameKey(name),reportingKey(title)]);
+    let group = groups.get(key);
+    if (!group) {group={name,designation:title,count:0,records:[]};groups.set(key,group);evidence.groups.push(group);}
+    group.count++;group.records.push({id:record.id,name:personName(record),employeeCode:record.employeeCode ?? '',rowNumber:record.rowNumber ?? null});
+    const imported = index.match(name,title,currentOptions,'HOD');
+    if (!imported.error && imported.person && imported.target) {
+      const entryKey = JSON.stringify([scope,imported.target]);
+      if (!importedDirectory.has(entryKey)) {importedDirectory.add(entryKey);hodDirectory.push({key:`imported:${entryKey}`,source:'IMPORTED',departmentId:departmentsByName.get(normaliseKey(record.currentDepartment ?? null))?.length === 1 ? departmentsByName.get(normaliseKey(record.currentDepartment ?? null))![0].id : null,branchKey:branchKey(record.plantBranchCode),department:record.currentDepartment ?? 'Department not set',branch:record.plantBranchCode?.trim() || 'Branch not specified',target:imported.target,person:imported.person,selectable:eligible.has(imported.target),note:'Named in this import — not confirmation of the department HOD'});}
+    }
+  }
+  for (const evidence of evidenceByScope.values()) evidence.groups.sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name) || a.designation.localeCompare(b.designation));
+  hodDirectory.sort((a,b)=>a.department.localeCompare(b.department) || a.branch.localeCompare(b.branch) || (a.person?.name ?? '').localeCompare(b.person?.name ?? ''));
   const byScope = new Map(assignments.map(a => [scopeKey(a.departmentId, a.branchKey), a]));
   const byRecord: Record<string, RecordPeopleLinks> = {};
   for (const record of records) {
@@ -156,6 +216,8 @@ export function resolveBatchPeopleLinks(records: readonly LinkRecord[], options:
       resolved = { ...resolved, state: 'NEEDS_ATTENTION', error: 'The imported HOD differs from the department choice. Review and confirm the HOD for this department and branch.', warning: null };
     const hod: HodResolution = { ...resolved, departmentId: department?.id ?? null, departmentName: department?.name ?? record.currentDepartment ?? '',
       branchKey: branch, branchLabel: record.plantBranchCode?.trim() || 'Branch not specified',
+      evidenceKey: scopeKey(normaliseKey(record.currentDepartment ?? null), branch),
+      suggestions: imported.suggestions,
       version: JSON.stringify([key, reviewKey]), reviewKey, suggestedTarget: imported.error ? null : imported.target,
       affectedRecords: affectedByScope.get(scopeKey(normaliseKey(record.currentDepartment ?? null), branch)) ?? 0 };
     let candidates = candidatesByBatch.get(record.batchId);
@@ -165,7 +227,7 @@ export function resolveBatchPeopleLinks(records: readonly LinkRecord[], options:
     }
     byRecord[record.id] = { hod, ...resolveRecordRelievers(record, options, allRecords, { index, candidates, recordsById }) };
   }
-  return { options: currentOptions.filter(p => !p.unavailable), byRecord };
+  return { options: currentOptions.filter(p => !p.unavailable), byRecord, hodDirectory, hodEvidence: Object.fromEntries(evidenceByScope) };
 }
 
 export function peopleLinkFindings(links: RecordPeopleLinks) {

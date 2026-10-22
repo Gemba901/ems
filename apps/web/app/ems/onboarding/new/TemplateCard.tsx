@@ -180,7 +180,7 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
                         {KIND_STYLE[kind].label}
                         {kind === "channel" && channelField && (
                           <span className="font-semibold">
-                            {" "}(yours: {channelField === "whatsappNumber" ? "WhatsApp number" : "Work email"})
+                            {" "}(yours: {channelField === "whatsappNumber" ? "WhatsApp number" : "Email"})
                           </span>
                         )}
                       </span>

@@ -9,12 +9,13 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import {
-  EmsService, UpdateOnboardingRecordPayload, CommunicationChannel, COMMUNICATION_CHANNEL_LABELS,
+  EmsService, CommunicationChannel, COMMUNICATION_CHANNEL_LABELS,
 } from "@/services/ems.service";
 import { ArrowLeft, Loader2, Upload, AlertCircle, FileSpreadsheet, CheckCircle2, Info, ArrowDown } from "lucide-react";
 import {
-  mapHeaders, findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, MapField, NameOrder, requiredFields, splitFullName, findMappingConflicts,
+  findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, MapField, NameOrder, requiredFields, findMappingConflicts,
 } from "../column-map";
+import { importHeaderCells, initialImportMapping, buildImportRows, packImportRows } from "../import-extra-fields";
 import TemplateCard from "./TemplateCard";
 import ConfirmDialog from "@/components/ems/ConfirmDialog";
 import SearchableSelect from "@/components/ems/SearchableSelect";
@@ -40,25 +41,7 @@ const MAX_CHUNK_BYTES = 80_000;
 /** Never more rows than this in one request, however small they are, so each trip stays quick. */
 const MAX_CHUNK_ROWS = 500;
 
-/** Split rows into groups that each fit within MAX_CHUNK_BYTES when sent. */
-function chunkBySize<T>(rows: T[]): T[][] {
-  const encoder = new TextEncoder();
-  const chunks: T[][] = [];
-  let current: T[] = [];
-  let bytes = 0;
-  for (const row of rows) {
-    const size = encoder.encode(JSON.stringify(row)).length + 1; // +1 for the comma between rows
-    if (current.length > 0 && (bytes + size > MAX_CHUNK_BYTES || current.length >= MAX_CHUNK_ROWS)) {
-      chunks.push(current);
-      current = [];
-      bytes = 0;
-    }
-    current.push(row);
-    bytes += size;
-  }
-  if (current.length > 0) chunks.push(current);
-  return chunks;
-}
+
 
 const DEMO_TOOLS = process.env.NEXT_PUBLIC_EMS_DEMO_TOOLS === "true";
 
@@ -87,7 +70,6 @@ const COUNTRY_OPTIONS = PHONE_COUNTRIES.map(({ code, name }) => ({
   keywords: [code, ...(COUNTRY_ALIASES[code]?.keywords ?? [])], // the ISO code too: "ke" finds Kenya
 }));
 
-type ParsedRow = UpdateOnboardingRecordPayload & { rowNumber: number };
 
 /** How many rows to offer when picking the header manually. */
 const HEADER_SEARCH_DEPTH = 20;
@@ -241,7 +223,7 @@ export default function NewOnboardingImportPage() {
 
     const found = findHeaderRow(rows, HEADER_SEARCH_DEPTH);
     setHeaderIndex(found);
-    setMapping(found >= 0 ? mapHeaders(rows[found]) : []);
+    setMapping(found >= 0 ? initialImportMapping(importHeaderCells(rows, found), rows.slice(found + 1)) : []);
     setError(
       found === -1
         ? "Couldn't find a header row — pick one below, or check the column names."
@@ -271,7 +253,7 @@ export default function NewOnboardingImportPage() {
   }
 
   // Everything below is derived from the grid and the chosen header row.
-  const headerRow = headerIndex >= 0 ? grid[headerIndex] : [];
+  const headerRow = importHeaderCells(grid, headerIndex);
   const fields = mapping;
 
   // Required fields for this organisation, and any of them no column is mapped to.
@@ -308,43 +290,19 @@ export default function NewOnboardingImportPage() {
           .filter((v): v is string => !!v)
       : [];
 
-  const rows: ParsedRow[] = (() => {
-    if (headerIndex < 0) return [];
-    const out: ParsedRow[] = [];
-
-    for (let i = headerIndex + 1; i < grid.length; i++) {
-      const record: ParsedRow = { rowNumber: firstRow + i + 1 };
-      let hasValue = false;
-      let fullName = "";
-
-      fields.forEach((field, col) => {
-        // A field still claimed by several columns is never filled, so one can't silently overwrite another.
-        // (Import is blocked until HR resolves it; this is a second line of defence.)
-        if (!field || conflictFields.has(field)) return;
-        const text = String(grid[i][col] ?? "").trim();
-        if (!text) return;
-        hasValue = true;
-        if (field === "fullName") fullName = text;
-        else record[field] = text;
-      });
-
-      // Split a full name, but never over names that have their own columns.
-      if (fullName) {
-        const parts = splitFullName(fullName, nameOrder);
-        record.firstName ??= parts.firstName;
-        record.middleName ??= parts.middleName;
-        record.lastName ??= parts.lastName;
-      }
-
-      if (hasValue) out.push(record);
-    }
-    return out;
-  })();
+  const parsed = buildImportRows(grid, headerIndex, firstRow, fields, nameOrder,
+    workbook?.Sheets[sheetName], !!workbook?.Workbook?.WBProps?.date1904);
+  const rows = parsed.rows;
+  const extraColumns = fields.filter(f => f === 'extra').length;
+  const profileColumns = fields.filter(f => f?.startsWith('profile:')).length;
 
   async function handleUpload() {
     if (!accessToken || rows.length === 0) return;
     // Check everything first, so HR sees every blocker at once rather than one per click.
-    const problems: string[] = [];
+    const problems: string[] = [...parsed.errors.slice(0, 3)];
+    let chunks: typeof rows[] = [];
+    try { chunks = packImportRows(rows, MAX_CHUNK_BYTES, MAX_CHUNK_ROWS); }
+    catch (error) { problems.push(error instanceof Error ? error.message : "Check the size of the imported values."); }
     if (!defaultPhoneCountry) {
       problems.push(countryText.trim()
         ? `choose a country from the list ("${countryText.trim()}" isn't one)`
@@ -386,7 +344,7 @@ export default function NewOnboardingImportPage() {
       step = "upload";
 
       // Send rows in as few requests as fit under the server's size limit.
-      for (const chunk of chunkBySize(rows)) {
+      for (const chunk of chunks) {
         setProgress(`Uploading rows ${sent + 1}–${sent + chunk.length} of ${rows.length}…`);
         await EmsService.addOnboardingRecordsAck(batch.id, { records: chunk }, accessToken);
         sent += chunk.length;
@@ -669,7 +627,7 @@ export default function NewOnboardingImportPage() {
             )}
 
             <p className="mt-2 text-xs text-slate-600">
-              Decides which contact every employee needs: a WhatsApp number or a work email.{" "}
+              Decides which contact every employee needs: a WhatsApp number or an email address. Email can be a work or personal address.{" "}
               <button type="button" onClick={() => setChannelMore((v) => !v)} className="font-medium text-blue-600 hover:text-blue-700">
                 {channelMore ? "Less" : "More"}
               </button>
@@ -746,7 +704,7 @@ export default function NewOnboardingImportPage() {
                       key={i}
                       onClick={() => {
                         setHeaderIndex(i);
-                        setMapping(mapHeaders(row));
+                        setMapping(initialImportMapping(importHeaderCells(grid, i), grid.slice(i + 1)));
                         setPickingHeader(false);
                         setError(null);
                       }}
@@ -770,6 +728,11 @@ export default function NewOnboardingImportPage() {
             </div>
           )}
 
+          {headerIndex >= 0 && (extraColumns > 0 || profileColumns > 0) && <p className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-900">
+            {extraColumns} additional column(s) kept as extra information · {profileColumns} mapped to existing profile fields.
+            Review or change each choice below. Ignored columns are not uploaded. Additional information stays available after registration.
+          </p>}
+          {!!parsed.errors.length && <p role="alert" className="text-xs text-red-700">{parsed.errors[0]}{parsed.errors.length > 1 ? ` (${parsed.errors.length} affected rows)` : ''}</p>}
           {unmatched.length > 0 && (
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Ignored columns: {unmatched.join(", ")}
@@ -836,13 +799,13 @@ export default function NewOnboardingImportPage() {
                       Match your columns to the fields they hold · <span className="text-red-500">*</span> required
                     </p>
                     <p className="text-xs text-slate-400">
-                      {fields.filter(Boolean).length} of {headerRow.length} mapped
+                      {fields.filter(f => f && f !== "extra").length} mapped · {extraColumns} kept as extra
                     </p>
                   </div>
                   <div className="max-h-72 overflow-auto divide-y divide-slate-50">
                     {headerRow.map((cell, col) => {
-                      const name = String(cell ?? "").trim();
-                      if (!name) return null;
+                      const name = String(cell ?? "").trim() || `Untitled column ${XLSX.utils.encode_col(col)}`;
+                      if (!String(cell ?? "").trim() && !grid.slice(headerIndex + 1).some(row => String(row[col] ?? "").trim())) return null;
 
                       const sample = grid
                         .slice(headerIndex + 1, headerIndex + 6)
@@ -871,7 +834,7 @@ export default function NewOnboardingImportPage() {
                               setMapping((prev) => {
                                 const next = [...prev];
                                 // A field can only be used once — clear any other column holding it
-                                if (value) {
+                                if (value && value !== "extra") {
                                   for (let i = 0; i < next.length; i++) {
                                     if (next[i] === value) next[i] = null;
                                   }
@@ -886,6 +849,7 @@ export default function NewOnboardingImportPage() {
                             }`}
                           >
                             <option value="">— ignore this column —</option>
+                            <option value="extra">Keep as extra information</option>
                             {MAPPABLE_FIELDS.map(({ key, label }) => (
                               <option key={key} value={key} disabled={takenElsewhere(key)}>
                                 {label}{isRequired(key) ? " *" : ""}{takenElsewhere(key) ? " (already used)" : ""}
@@ -1020,7 +984,7 @@ export default function NewOnboardingImportPage() {
           open
           tone="primary"
           title={`Switch to ${COMMUNICATION_CHANNEL_LABELS[pendingChannel]}?`}
-          message={`This applies to every employee in your organisation and re-checks all your unfinished imports. Rows may then need ${pendingChannel === "EMAIL" ? "a work email" : "a WhatsApp number"} before they can be registered.`}
+          message={`This applies to every employee in your organisation and re-checks all your unfinished imports. Rows may then need ${pendingChannel === "EMAIL" ? "an email address" : "a WhatsApp number"} before they can be registered.`}
           keepLabel={`Keep ${COMMUNICATION_CHANNEL_LABELS[channel]}`}
           confirmLabel={`Switch to ${COMMUNICATION_CHANNEL_LABELS[pendingChannel]}`}
           busy={savingChannel}

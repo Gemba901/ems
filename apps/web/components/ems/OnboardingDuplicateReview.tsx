@@ -9,6 +9,7 @@ function Match({ person, batchId, originHref, onVisit }: { person: DuplicateMatc
   return <li className="min-w-0 rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-700">
     <p className="break-words font-semibold text-slate-900">{person.name}</p>
     <p className="mt-1 break-words">{[person.employeeCode || 'No employee code', person.designation, person.department, person.branch].filter(Boolean).join(' · ')}</p>
+    <p className="mt-1 break-words text-slate-500">{person.kind === 'EMPLOYEE' ? 'Registered employee' : `Import: ${person.batchLabel || person.sourceFileName || (person.batchId === batchId ? 'This import' : 'Other import')}`}{person.kind !== 'EMPLOYEE' && person.rowNumber != null ? ` · Excel row ${person.rowNumber}` : ''}</p>
     <p className="mt-1 break-words">Personal mobile: {person.personalMobile || 'Not available'}</p>
     <p className="mt-1 text-amber-900">{person.reasons.includes('EMPLOYEE_CODE') ? 'Employee code conflicts. ' : ''}
       {person.reasons.includes('PERSONAL_MOBILE') ? 'Personal mobile conflicts. ' : ''}
@@ -59,16 +60,15 @@ export default function OnboardingDuplicateReview({ review, batchId, recordId, r
   return <section data-editor-field="duplicateReview" tabIndex={-1} aria-label="Duplicate-person review"
     className="min-w-0 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-600">
     <h3 className="text-sm font-semibold text-amber-950">{hard ? 'Identity conflict' : review.reviewed ? 'Different person confirmed' : 'Possible duplicate person'}</h3>
-    <p className="text-xs text-amber-950">{hard
-      ? 'Correct the employee code or personal mobile, or exclude an accidentally repeated import row. A different-person confirmation cannot override these conflicts.'
-      : review.reviewed ? 'HR confirmed this saved record is a different person from the matches below. Relevant changes require another review.'
-      : 'Check every match. Similar names can belong to different people; nothing is merged automatically.'}</p>
-    <details open={!review.reviewed}>
-      <summary className="cursor-pointer text-xs font-semibold text-amber-950">Matching people ({review.hardConflicts.length + review.possibleMatches.length})</summary>
+    <p className="text-xs text-amber-950">{hard ? 'Employee code or personal mobile conflicts with another record.' : review.reviewed ? 'Your different-person confirmation is saved.' : 'Check the matches before confirming this is a different person.'}</p>
+    <details key={review.token}>
+      <summary className="cursor-pointer text-xs font-semibold text-amber-950">Review {review.hardConflicts.length + review.possibleMatches.length} {review.hardConflicts.length + review.possibleMatches.length === 1 ? 'match' : 'matches'}</summary>
+      <p className="mt-2 text-xs text-amber-950">{hard
+        ? 'Correct the employee code or personal mobile, or exclude an accidentally repeated import row. A different-person confirmation cannot override these conflicts.'
+        : review.reviewed ? 'Relevant identity changes require another review.' : 'Check every match. Similar names can belong to different people; nothing is merged automatically.'}</p>
       <ul className="mt-2 grid min-w-0 gap-2 sm:grid-cols-2">
         {[...review.hardConflicts, ...review.possibleMatches].map(person => <Match key={person.key} person={person} batchId={batchId} originHref={originHref} onVisit={onVisit} />)}
       </ul>
-    </details>
     {dirty && <p className="text-xs text-amber-950">Matches describe the saved record. Save &amp; re-validate your edits before confirming.</p>}
     {!hard && !review.reviewed && <>
       <label className="flex items-start gap-2 text-sm text-amber-950">
@@ -78,6 +78,7 @@ export default function OnboardingDuplicateReview({ review, batchId, recordId, r
       <button type="button" disabled={!checked || dirty || disabled || pending} onClick={confirm}
         className="rounded-lg bg-purple-800 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-900 disabled:opacity-50">{pending ? 'Confirming…' : 'Confirm different person'}</button>
     </>}
+    </details>
     {review.reviewed && !hard && <button type="button" onClick={undo} disabled={dirty || disabled || pending}
       className="text-sm font-medium text-purple-800 underline disabled:opacity-50">{pending ? 'Undoing…' : 'Undo confirmation'}</button>}
     {error && <div role="alert" className="text-xs text-red-800"><p>{error}</p>

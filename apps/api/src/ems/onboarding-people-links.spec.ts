@@ -16,7 +16,7 @@ describe('independent HOD and reliever resolution', () => {
   });
   it('requires correction of a half-filled or unmatched reliever', () => {
     const result=resolveRecordRelievers(row('a',{reliever1Name:'boss Person',reliever2Name:'Nobody',reliever2Designation:'Operator'}),[]);
-    expect(result.first.error).toMatch(/both name and designation/); expect(result.second.error).toMatch(/could not be matched/);
+    expect(result.first.error).toMatch(/both name and job title/); expect(result.second.error).toMatch(/could not be matched/);
   });
   it('matches a unique normalized name and designation even when the person needs personal corrections', () => {
     const rows=[row('a',{reliever1Name:' BOSS   PERSON ',reliever1Designation:'operator'}),row('boss',{status:'NEEDS_FIXING'})];
@@ -125,4 +125,76 @@ describe('batch-scoped matching indexes', () => {
     expect(links(rows,[person('boss')]).byRecord.a.first.target).toBe('record:boss');
     expect(links(rows,[person('boss'),person('other',{name:'boss Person'})]).byRecord.a.first.error).toMatch(/Several/);
   });
+});
+
+
+describe('review-only HOD and reliever suggestions',()=>{
+  const grace=person('grace',{name:'Grace Muthoni Wanjiru',designation:'Director'});
+  it('keeps a fuzzy HOD unconfirmed and lists candidate reasons',()=>{
+    const r=row('a',{hodName:'Grace Wanjiku',hodDesignation:'Director'});
+    const h=links([r,row('grace')],[grace]).byRecord.a.hod;
+    expect(h.target).toBeNull();expect(h.suggestedTarget).toBeNull();expect(h.error).not.toBeNull();
+    expect(h.suggestions?.[0]).toMatchObject({target:'record:grace',suggestionReasons:expect.arrayContaining(['Possible spelling match — check spelling and confirm'])});
+  });
+  it('offers a reliever with a different title without assigning it',()=>{
+    const r=row('a',{reliever1Name:'Grace Muthoni Wanjiru',reliever1Designation:'DIR'});
+    const result=resolveRecordRelievers(r,[grace]);
+    expect(result.first.target).toBeNull();expect(result.first.error).not.toBeNull();
+    expect(result.first.suggestions?.[0].suggestionReasons).toContain('Job title differs — check the imported and recorded values');
+  });
+  it('allows missing-title exact-name review but not automatic matching',()=>{
+    const result=resolveRecordRelievers(row('a',{reliever1Name:grace.name}),[grace]);
+    expect(result.first.target).toBeNull();expect(result.first.suggestions?.[0].suggestionReasons).toContain('Imported job title is missing');
+  });
+  it('excludes self, excluded people and foreign pending imports from reliever hints',()=>{
+    const r=row('a',{reliever1Name:'Grace Wanjiku',reliever1Designation:'Director'});
+    const options=[{...grace,target:'record:a',recordId:'a'},{...grace,target:'record:excluded',unavailable:true},{...grace,target:'record:foreign',batchId:'other'}];
+    expect(resolveRecordRelievers(r,options).first.suggestions).toEqual([]);
+  });
+  it('does not suggest the already assigned other reliever',()=>{
+    const r=row('a',{reliever1RecordId:'grace',reliever2Name:'Grace Wanjiku',reliever2Designation:'Director'});
+    const result=resolveRecordRelievers(r,[grace],[r,row('grace')]);
+    expect(result.first.target).toBe('record:grace');expect(result.second.suggestions).toEqual([]);
+  });
+  it('retains every ambiguous exact candidate for review',()=>{
+    const other={...grace,target:'employee:other',recordId:undefined};
+    const result=resolveRecordRelievers(row('a',{reliever1Name:grace.name,reliever1Designation:'Director'}),[grace,other]);
+    expect(result.first.target).toBeNull();expect(result.first.suggestions).toHaveLength(2);
+  });
+  it('does not change unique exact reliever matching',()=>{
+    const result=resolveRecordRelievers(row('a',{reliever1Name:grace.name,reliever1Designation:'Director'}),[grace]);
+    expect(result.first.target).toBe('record:grace');expect(result.first.suggestions).toBeUndefined();
+  });
+});
+
+
+describe('HOD evidence and organization shortlist',()=>{
+ it('counts matching saved fields in one department/branch, with registered included and excluded omitted',()=>{
+  const rows=[row('a',{hodName:'Boss Person',hodDesignation:'Operator',rowNumber:4}),row('b',{status:'REGISTERED',hodName:' boss  person ',hodDesignation:'operator'}),row('excluded',{status:'EXCLUDED',hodName:'Other',hodDesignation:'Other'}),row('different',{plantBranchCode:'Mombasa',hodName:'Other',hodDesignation:'Other'})];
+  const result=links(rows,[person('boss')]);const evidence=result.hodEvidence[result.byRecord.a.hod.evidenceKey!];
+  expect(evidence).toMatchObject({total:2,blank:0,groups:[{count:2,name:'Boss Person',designation:'Operator'}]});expect(evidence.groups[0].records[0].rowNumber).toBe(4);
+  expect(result.byRecord.a.hod.affectedRecords).toBe(1);
+ });
+ it('separates conflicting titles, blank entries, and half-filled HOD values',()=>{
+  const result=links([row('a',{hodName:'Boss Person',hodDesignation:'Operator'}),row('b',{hodName:'Boss Person',hodDesignation:'Director'}),row('c'),row('d',{hodName:'N/A',hodDesignation:'N/A'}),row('e',{hodName:'Boss Person'})],[]);
+  const e=result.hodEvidence[result.byRecord.a.hod.evidenceKey!];expect(e.total).toBe(5);expect(e.blank).toBe(2);expect(e.groups).toHaveLength(3);
+ });
+ it('includes confirmed HODs with scope labels but disables unavailable people',()=>{
+  const result=links([row('a')],[person('boss',{target:'employee:boss'})],[head({employeeId:'boss',pendingRecordId:null}),head({id:'missing',branchKey:'elsewhere',branchLabel:'Elsewhere',employeeId:'missing',pendingRecordId:null})]);
+  expect(result.hodDirectory.find(e=>e.key==='confirmed:head')).toMatchObject({source:'CONFIRMED',department:'Production',target:'employee:boss',selectable:true});
+  expect(result.hodDirectory.find(e=>e.key==='confirmed:missing')?.selectable).toBe(false);
+ });
+ it('shows another import pending HOD without making it selectable',()=>{
+  const foreign=person('foreign',{batchId:'other'});
+  const result=resolveBatchPeopleLinks([row('a')],[foreign],departments,[head({pendingRecordId:'foreign'})],[row('foreign',{batchId:'other'})]);
+  expect(result.hodDirectory[0]).toMatchObject({target:'record:foreign',selectable:false});expect(result.hodDirectory[0].note).toMatch(/another import/);
+ });
+ it('deduplicates imported exact suggestions and does not promote fuzzy hints into directory',()=>{
+  const result=links([row('a',{hodName:'Boss Person',hodDesignation:'Operator'}),row('b',{hodName:'Boss Person',hodDesignation:'Operator'}),row('c',{hodName:'Boss Persom',hodDesignation:'Operator'})],[person('boss',{target:'employee:boss'})]);
+  expect(result.hodDirectory.filter(e=>e.source==='IMPORTED')).toHaveLength(1);expect(result.hodDirectory[0].note).toMatch(/not confirmation/);
+ });
+ it('stores evidence once per scope rather than repeating record lists on every row',()=>{
+  const rows=Array.from({length:300},(_,i)=>row(String(i),{hodName:'Boss Person',hodDesignation:'Operator'}));
+  const result=links(rows,[person('boss')]);expect(Object.keys(result.hodEvidence)).toHaveLength(1);expect(result.hodEvidence[result.byRecord['0'].hod.evidenceKey!].total).toBe(300);expect(result.byRecord['0'].hod).not.toHaveProperty('evidence');
+ });
 });

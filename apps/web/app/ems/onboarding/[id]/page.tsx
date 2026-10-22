@@ -1,17 +1,32 @@
 "use client";
-import { DepartmentHodEditor, PersonLinkPicker, PersonLinkStatus } from '@/components/ems/OnboardingPeopleLinks';
+import { FIVE_S_LOCATION_LABELS, normaliseFiveSLocation } from "@/components/ems/five-s-location";
+import { ADMIN_REGISTRATION_MESSAGE, canRegisterOnboarding, registrationAccess, registrationOutcomeMessage } from '@/components/ems/onboarding-access';
+import ImportedExtraFields from "@/components/ems/ImportedExtraFields";
+import { REPORTING_BODIES, isReportingBody, reportingBodyLabel } from '@/components/ems/reporting-bodies';
+
+import OnboardingHierarchyChart from '@/components/ems/OnboardingHierarchyChart';
+import OnboardingWorkField from '@/components/ems/OnboardingWorkField';
+import { onboardingNameIssue } from '@/components/ems/onboarding-name-rule';
+import OnboardingPageControls from '@/components/ems/OnboardingPageControls';
+import OnboardingStickyProgress from '@/components/ems/OnboardingStickyProgress';
+import OnboardingChainNotice from '@/components/ems/OnboardingChainNotice';
+import {DUPLICATE_FILTERS, duplicateFilterState, chainRegistrationNotice, type DuplicateFilter} from '@/components/ems/onboarding-editor-controls';
+import OnboardingBatchProgress from '@/components/ems/OnboardingBatchProgress';
+import { isChainFinding, waitingOnChain, needsDuplicateReview, summarizeBatchProgress } from '@/components/ems/onboarding-batch-progress';
+import { DepartmentHodEditor, PersonLinkPicker, PersonSuggestions, PersonSummary, RelieverEditor } from '@/components/ems/OnboardingPeopleLinks';
 
 import { use, useState, useEffect, useCallback, useLayoutEffect, useRef, useMemo, Fragment, type ChangeEvent } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import OnboardingDuplicateReview from "@/components/ems/OnboardingDuplicateReview";
-import { PAGE_SIZES, pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
+import { pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
 import { safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import {
   EmsService, OnboardingRecord, OnboardingRecordStatus, OnboardingBatchDetail, RECORD_STATUS_LABELS,
-  BATCH_STATUS_LABELS, UpdateOnboardingRecordPayload, ReportingOption, ReportingResolution, REPORTING_STATE_LABELS,
+  UpdateOnboardingRecordPayload, PersonSuggestion, ReportingOption, ReportingResolution, REPORTING_STATE_LABELS,
   EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_TYPE_LABELS,
 } from "@/services/ems.service";
 import { requiredFields } from "../column-map";
@@ -26,7 +41,7 @@ const countryNames = new Intl.DisplayNames(["en"], { type: "region" });
 const PHONE_COUNTRIES = getCountries().map((code) => ({ code, name: countryNames.of(code) ?? code }))
   .sort((a, b) => a.name.localeCompare(b.name));
 
-const EDITABLE_FIELDS: { key: keyof UpdateOnboardingRecordPayload; label: string }[] = [
+const EDITABLE_FIELDS: { key: Exclude<keyof UpdateOnboardingRecordPayload, "extraFields">; label: string }[] = [
   { key: "companyCode",            label: "Company code" },
   { key: "employeeCode",           label: "Employee code" },
   { key: "firstName",              label: "First name" },
@@ -36,29 +51,31 @@ const EDITABLE_FIELDS: { key: keyof UpdateOnboardingRecordPayload; label: string
   { key: "nationality",            label: "Nationality" },
   { key: "mobileNumber",           label: "Personal mobile number (login)" },
   { key: "whatsappNumber",         label: "WhatsApp number" },
-  { key: "workEmail",              label: "Work email" },
+  { key: "workEmail",              label: "Email" },
   { key: "plantBranchCode",        label: "Plant / branch" },
   { key: "currentDepartment",      label: "Department" },
-  { key: "jobDesignation",         label: "Designation" },
+  { key: "jobDesignation",         label: "Job title" },
   { key: "workArea",               label: "Work area" },
+  { key: "fiveSLocationCategory",    label: "5S location category" },
   { key: "subSection",             label: "Sub-section" },
   { key: "shift",                  label: "Shift" },
   { key: "employmentStatus",       label: "Employment status" },
   { key: "employmentType",         label: "Employment type" },
   { key: "beesAccessLevel",        label: "Access level" },
   { key: "hodName",                label: "HOD name" },
-  { key: "hodDesignation",         label: "HOD designation" },
+  { key: "hodDesignation",         label: "HOD job title" },
   { key: "reportingToName",        label: "Reporting to" },
-  { key: "reportingToDesignation", label: "Reporting to designation" },
+  { key: "reportingToDesignation", label: "Reporting to job title" },
   { key: "reliever1Name",          label: "1st reliever" },
-  { key: "reliever1Designation",   label: "1st reliever designation" },
+  { key: "reliever1Designation",   label: "1st reliever job title" },
   { key: "reliever2Name",          label: "2nd reliever" },
-  { key: "reliever2Designation",   label: "2nd reliever designation" },
+  { key: "reliever2Designation",   label: "2nd reliever job title" },
 ];
 
 // These choices and aliases follow the supplied onboarding API's accepted values.
 // Displaying a recognised alias never rewrites the imported draft by itself.
 const EDITOR_CHOICES: Partial<Record<keyof UpdateOnboardingRecordPayload, Record<string, string>>> = {
+  fiveSLocationCategory: FIVE_S_LOCATION_LABELS,
   gender: {MALE: 'Male', FEMALE: 'Female', OTHER: 'Other'},
   employmentStatus: EMPLOYMENT_STATUS_LABELS,
   employmentType: EMPLOYMENT_TYPE_LABELS,
@@ -73,6 +90,10 @@ function editorBlank(value?: string | null) {
 }
 const editorNA = (value?: string | null) => ['na', 'notapplicable'].includes(editorValueKey(value));
 function editorChoice(key: keyof UpdateOnboardingRecordPayload, value?: string | null) {
+  if (key === 'fiveSLocationCategory') {
+    const category = normaliseFiveSLocation(value);
+    return category === undefined ? '__imported__' : category ?? '';
+  }
   if (editorBlank(value)) return '';
   if (key !== 'beesAccessLevel' && editorNA(value)) return 'N/A';
   const normalised = editorValueKey(value);
@@ -85,9 +106,10 @@ function editorChoice(key: keyof UpdateOnboardingRecordPayload, value?: string |
 }
 type EditorFinding = {message: string; stale: boolean};
 function editorFindings(record: OnboardingRecord, draft: UpdateOnboardingRecordPayload,
-  required: Set<keyof UpdateOnboardingRecordPayload>, savedDraft: UpdateOnboardingRecordPayload, resolution?: ReportingResolution) {
+  required: Set<Exclude<keyof UpdateOnboardingRecordPayload, "extraFields">>, savedDraft: UpdateOnboardingRecordPayload, resolution?: ReportingResolution) {
   const result = new Map<string, EditorFinding[]>();
   const sameValue = (key: keyof UpdateOnboardingRecordPayload) => {
+    if (key === "extraFields") return JSON.stringify(draft.extraFields ?? []) === JSON.stringify(savedDraft.extraFields ?? []);
     const original = savedDraft[key];
     return EDITOR_CHOICES[key] ? editorChoice(key, draft[key]) === editorChoice(key, original) && (editorChoice(key, original) !== '__imported__' || draft[key] === original)
       : (editorBlank(draft[key]) ? '' : draft[key]?.trim()) === (editorBlank(original) ? '' : original?.trim());
@@ -114,35 +136,23 @@ function editorFindings(record: OnboardingRecord, draft: UpdateOnboardingRecordP
       if (editorNA(draft[key])) local(key, 'This field is required; N/A is not accepted.');
       else if (editorBlank(draft[key]) && !(key === 'reportingToName' && ['board', 'boardofdirectors'].includes(editorValueKey(draft.reportingToDesignation)))) local(key, 'Required');
     }
-    for (const key of Object.keys(EDITOR_CHOICES) as (keyof UpdateOnboardingRecordPayload)[]) {
+    for (const key of ['firstName', 'lastName'] as const) {
+      const message = onboardingNameIssue(editorBlank(draft[key]) ? null : draft[key]);
+      if (message && !editorNA(draft[key])) local(key, message);
+    }
+    for (const key of Object.keys(EDITOR_CHOICES) as Exclude<keyof UpdateOnboardingRecordPayload, "extraFields">[]) {
       if (editorChoice(key, draft[key]) === '__imported__') local(key, 'Choose one of the listed values.');
     }
   }
   return result;
 }
 
-// A presentation status only: backend eligibility remains unchanged.
-function isChainFinding(field: string, resolution?: ReportingResolution) {
-  return field === 'reportingToName' && resolution?.errorScope === 'UPSTREAM';
-}
-function waitingOnChain(record: OnboardingRecord, resolution?: ReportingResolution) {
-  return record.status === 'NEEDS_FIXING' && resolution?.errorScope === 'UPSTREAM'
-    && !!record.validationErrors?.length
-    && record.validationErrors.every(e => isChainFinding(e.field, resolution) && e.message === resolution.error);
-}
-
-function needsDuplicateReview(record: OnboardingRecord, resolution?: ReportingResolution) {
-  return record.status === 'NEEDS_FIXING' && !!record.duplicateReview?.requiresReview
-    && !!record.validationErrors?.length && record.validationErrors.every(finding =>
-      finding.field === 'duplicateReview' || isChainFinding(finding.field, resolution));
-}
-
 type RecordFilters = { search: string; department: string; status: '' | OnboardingRecordStatus | 'WAITING' | 'NEEDS_REVIEW';
-  reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT' };
-const EMPTY_FILTERS: RecordFilters = {search: '', department: '', status: '', reportingTarget: '', reportingLabel: '', scope: 'BRANCH'};
+  duplicate: DuplicateFilter; reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT' };
+const EMPTY_FILTERS: RecordFilters = {search: '', department: '', status: '', duplicate: '', reportingTarget: '', reportingLabel: '', scope: 'BRANCH'};
 const normaliseFilter = (value: string | null | undefined) => (value ?? '').normalize('NFKD').replace(/\p{M}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase();
 const departmentKey = (value: string | null) => normaliseFilter(value) ? `department:${normaliseFilter(value)}` : 'MISSING';
-const hasFilters = (filters: RecordFilters) => !!(filters.search.trim() || filters.department || filters.status || filters.reportingTarget);
+const hasFilters = (filters: RecordFilters) => !!(filters.search.trim() || filters.department || filters.status || filters.duplicate || filters.reportingTarget);
 
 // Use person IDs and known reporting edges. Never infer a link from matching names.
 function reportingFilterModel(batch?: OnboardingBatchDetail) {
@@ -154,7 +164,7 @@ function reportingFilterModel(batch?: OnboardingBatchDetail) {
   const people = new Map<string, {target: string; name: string; label: string}>();
   const addPerson = (target: string, name: string, details: (string | null | undefined)[]) => {
     const key = canonical(target);
-    if (key !== 'BOARD' && !people.has(key)) people.set(key, {target: key, name,
+    if (!isReportingBody(key) && !people.has(key)) people.set(key, {target: key, name,
       label: [name || 'Unnamed person', ...details.filter(Boolean)].join(' · ')});
   };
   for (const record of records) addPerson(`record:${record.id}`, [record.firstName, record.middleName, record.lastName].filter(Boolean).join(' '),
@@ -210,6 +220,7 @@ function matchingRecordIds(batch: OnboardingBatchDetail | undefined, filters: Re
     return terms.every(term => nameAndCode.includes(term))
       && (!filters.department || filters.department === departmentKey(record.currentDepartment))
       && (!filters.status || filters.status === status)
+      && (!filters.duplicate || duplicateFilterState(record) === filters.duplicate)
       && (!selected || branch.has(model.canonical(`record:${record.id}`)));
   }).map(record => record.id));
 }
@@ -230,13 +241,13 @@ function RecordStatusPill({ status, waiting = false, review = false }: { status:
 }
 
 function reportingTarget(record: OnboardingRecord, resolution?: ReportingResolution) {
-  return resolution?.target ?? (record.reportingToBoard ? 'BOARD'
+  return resolution?.target ?? (isReportingBody(record.reportingToBody) ? record.reportingToBody : record.reportingToBoard ? 'BOARD'
     : record.reportingToRecordId ? `record:${record.reportingToRecordId}`
     : record.reportingToEmployeeId ? `employee:${record.reportingToEmployeeId}` : '');
 }
 const reportingText = (value?: string | null) => (value ?? '').trim().replace(/\s+/g, ' ');
 const importedReportingLabel = (value: UpdateOnboardingRecordPayload | OnboardingRecord) =>
-  [reportingText(value.reportingToName), reportingText(value.reportingToDesignation)].filter(Boolean).join(' · ') || 'No name or designation';
+  [reportingText(value.reportingToName), reportingText(value.reportingToDesignation)].filter(Boolean).join(' · ') || 'No name or job title';
 
 // Compare identities, not display names. A record becoming an employee is still the same person.
 function reportingIdentities(batches: OnboardingBatchDetail[]) {
@@ -248,7 +259,7 @@ function reportingIdentities(batches: OnboardingBatchDetail[]) {
   type Person = {name: string; designation: string; code: string; department: string; source: string};
   const people = new Map<string, Person>();
   const add = (target: string, person: Partial<Person>) => {
-    if (target === 'BOARD') return;
+    if (isReportingBody(target)) return;
     const key = canonical(target), previous = people.get(key);
     people.set(key, {name: person.name || previous?.name || '', designation: person.designation || previous?.designation || '',
       code: person.code || previous?.code || '', department: person.department || previous?.department || '',
@@ -265,7 +276,7 @@ function reportingIdentities(batches: OnboardingBatchDetail[]) {
       source: record.rowNumber != null ? `Import row ${record.rowNumber}` : 'This import'});
   }
   const label = (target: string, fallback = 'Unavailable person') => {
-    if (target === 'BOARD') return 'Board';
+    if (isReportingBody(target)) return reportingBodyLabel(target)!;
     const person = people.get(canonical(target));
     if (!person?.name) return fallback;
     const sameName = [...people.values()].filter(p => normaliseFilter(p.name) === normaliseFilter(person.name));
@@ -375,7 +386,7 @@ function restoreScroll(snapshot: ScrollSnapshot) {
 type SaveNotice = { id?: string; name?: string; action: string; status?: string; summary?: string;
   reporting?: ReportingFeedback; moved: boolean; ready: boolean; showView: boolean; sequence: number };
 type ViewportSnapshot = { scroll: ScrollSnapshot; anchor?: string; offset?: number; recordId?: string; keepVisible?: boolean };
-type ReturnPoint = { destination: string; name?: string; openId: string | null; openStatus?: OnboardingRecordStatus;
+type ReturnPoint = { destination: string; name?: string; reviewOrigin?: boolean; openId: string | null; openStatus?: OnboardingRecordStatus;
   page: number; pageSize: number; lastId: string | null; viewport: ViewportSnapshot; filters: RecordFilters; revealedId: string | null };
 type ViewportAction = { kind: 'context'; snapshot: ViewportSnapshot; focus?: boolean }
   | { kind: 'reveal'; id: string; editor: boolean };
@@ -488,7 +499,7 @@ function restoreViewport(root: HTMLElement | null, snapshot: ViewportSnapshot, f
     const rect = anchor.getBoundingClientRect();
     const offset = snapshot.keepVisible ? Math.max(0, Math.min(snapshot.offset, bounds.bottom - bounds.top - rect.height)) : snapshot.offset;
     restoreScroll({ ...scroll, top: scroll.top + rect.top - bounds.top - offset });
-    if (focus) (anchor.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), button:not(:disabled)') ?? anchor).focus({preventScroll: true});
+    if (focus) (snapshot.anchor?.startsWith('row:') ? anchor : anchor.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), button:not(:disabled)') ?? anchor).focus({preventScroll: true});
     return;
   }
   restoreScroll(snapshot.scroll);
@@ -517,8 +528,12 @@ function revealSavedRow(element: HTMLTableRowElement | undefined, editor = false
 function revealEditorField(root: HTMLElement | null, key: string) {
   const field = Array.from(root?.querySelectorAll<HTMLElement>('[data-editor-field]') ?? []).find(el => el.dataset.editorField === key);
   if (!field) return;
+  // Reveal hidden controls before measuring/focusing a requested field.
+  let parent = field.parentElement;
+  while (parent) { if (parent.tagName === 'DETAILS') (parent as HTMLDetailsElement).open = true; parent = parent.parentElement; }
+  if (key === 'reportingTarget' || key === 'duplicateReview') { const details=field.querySelector<HTMLDetailsElement>(key === 'reportingTarget' ? '[data-reporting-chooser]' : 'details'); if(details) details.open=true; }
   const scroll = scrollSnapshot(field), bounds = viewportBounds(scroll);
-  const toolbar = root?.querySelector<HTMLElement>('[data-editor-toolbar]')?.getBoundingClientRect();
+  const toolbar = root?.closest('[data-onboarding-page]')?.querySelector<HTMLElement>('[data-editor-toolbar]')?.getBoundingClientRect();
   const bottom = toolbar && toolbar.top > bounds.top && toolbar.top < bounds.bottom ? toolbar.top - 16 : bounds.bottom;
   const rect = field.getBoundingClientRect();
   const desired = bounds.top + Math.max(0, Math.min(48, (bottom - bounds.top - rect.height) / 2));
@@ -541,28 +556,30 @@ function SaveFeedback({ notice, hasReturn, disabled, onView, onDismiss }: {
     const timer = window.setTimeout(onDismiss, remaining.current);
     return () => { window.clearTimeout(timer); remaining.current = Math.max(0, remaining.current - (Date.now() - started)); };
   }, [automatic, hovered, focused, onDismiss]);
-  return <div className="p-3 text-sm text-slate-700" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+  return <div className="p-2 text-xs text-slate-700" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
     onFocusCapture={() => setFocused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); }}>
     {notice.summary && <p>{notice.summary}</p>}
     {notice.id && <p>{notice.name} · {notice.action}{notice.status ? ` · ${notice.status}` : ''}{notice.moved ? ' · Position changed' : ''}</p>}
-    {notice.reporting && <div className="mt-2 space-y-1 break-words text-xs" data-reporting-feedback>
-      <p className="font-semibold">{notice.reporting.title}</p>
+    {notice.reporting && <details className="mt-1 space-y-1 break-words text-xs" data-reporting-feedback>
+      <summary className="cursor-pointer font-semibold">{notice.reporting.title}</summary>
       {notice.reporting.before && <p>From: {notice.reporting.before}<br />To: {notice.reporting.after}</p>}
       {notice.reporting.note && <p>{notice.reporting.note}</p>}
       {!!notice.reporting.otherCount && <p>{notice.reporting.otherCount} other {notice.reporting.otherCount === 1 ? 'record has an updated reporting chain' : 'records have updated reporting chains'}.</p>}
-    </div>}
+    </details>}
     {notice.id && notice.showView && <button type="button" disabled={disabled} onClick={onView} className={`mr-3 ${FEEDBACK_LINK}`}>View {notice.name}</button>}
     <button type="button" onClick={onDismiss} className="text-slate-500 underline" aria-label="Dismiss save notification">Dismiss</button>
   </div>;
 }
 
 function RecordEditor({
-  record, batch, required, onSave, onSaved, onSaveHod, onHodSaved, onConfirmDuplicate, onUndoDuplicate, reviewReturnTo, onVisit, onRefreshDuplicates, onExclude, onInclude, saving, exclusionError, inclusionError, reportingOptions, reportingResolution, reportingSuggestions = [], onDirtyChange, reviewSequence = 0,
+  record, batch, actorRole, required, toolbarHost, onSave, onSaved, onSaveHod, onHodSaved, onConfirmDuplicate, onUndoDuplicate, reviewReturnTo, onVisit, onRefreshDuplicates, onExclude, onInclude, saving, exclusionError, inclusionError, reportingOptions, reportingResolution, reportingSuggestions = [], onDirtyChange, reviewSequence = 0,
 }: {
   record: OnboardingRecord;
   batch: OnboardingBatchDetail;
+  actorRole?: string;
+  toolbarHost: HTMLDivElement | null;
   reportingOptions: ReportingOption[];
-  reportingSuggestions?: ReportingOption[];
+  reportingSuggestions?: PersonSuggestion[];
   onDirtyChange: (dirty: boolean) => void;
   reviewSequence?: number;
   reportingResolution?: ReportingResolution;
@@ -580,7 +597,7 @@ function RecordEditor({
   saving: boolean;
   exclusionError?: string;
   inclusionError?: string;
-  required: Set<keyof UpdateOnboardingRecordPayload>;
+  required: Set<Exclude<keyof UpdateOnboardingRecordPayload, "extraFields">>;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -596,11 +613,12 @@ function RecordEditor({
       initial[`reliever${slot}Target`] = employeeId || recordId
         ? (slot === 1 ? people?.first.target : people?.second.target) ?? (employeeId ? `employee:${employeeId}` : `record:${recordId}`) : '';
     }
+    initial.extraFields = source.extraFields ?? [];
     initial.reportingTarget = reportingTarget(source, resolution);
     const selected = options.find(o => o.target === initial.reportingTarget);
-    if (initial.reportingTarget === 'BOARD') {
+    if (isReportingBody(initial.reportingTarget)) {
       initial.reportingToName = '';
-      initial.reportingToDesignation = 'Board';
+      initial.reportingToDesignation = reportingBodyLabel(initial.reportingTarget)!;
     } else if (selected) {
       initial.reportingToName = selected.name;
       initial.reportingToDesignation = selected.designation;
@@ -611,7 +629,7 @@ function RecordEditor({
   const [draft, setDraft] = useState<UpdateOnboardingRecordPayload>(() => baseline);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [hodDirty, setHodDirty] = useState(false);
-  const dirty = Object.keys(draft).some(key => draft[key as keyof UpdateOnboardingRecordPayload] !== baseline[key as keyof UpdateOnboardingRecordPayload]);
+  const dirty = Object.keys(draft).some(key => JSON.stringify(draft[key as keyof UpdateOnboardingRecordPayload]) !== JSON.stringify(baseline[key as keyof UpdateOnboardingRecordPayload]));
   useEffect(() => { onDirtyChange(dirty || hodDirty); }, [dirty, hodDirty, onDirtyChange]);
   // A background refresh may update saved findings; never overwrite an unsaved draft.
   useEffect(() => {
@@ -623,9 +641,11 @@ function RecordEditor({
     setHighlightReview(false);
     const person = reportingOptions.find(o => o.target === target);
     setFeedback(null);
+    const chooser = editorRef.current?.querySelector<HTMLDetailsElement>('[data-reporting-chooser]');
+    if (chooser && target) { chooser.open = false; chooser.querySelector('summary')?.focus({preventScroll:true}); }
     setDraft(d => ({ ...d, reportingTarget: target,
-      reportingToName: target === 'BOARD' ? '' : person?.name ?? d.reportingToName,
-      reportingToDesignation: target === 'BOARD' ? 'Board' : person?.designation ?? d.reportingToDesignation,
+      reportingToName: isReportingBody(target) ? '' : person?.name ?? d.reportingToName,
+      reportingToDesignation: isReportingBody(target) ? reportingBodyLabel(target)! : person?.designation ?? d.reportingToDesignation,
     }));
   }
   async function saveDraft() {
@@ -639,7 +659,7 @@ function RecordEditor({
       setBaseline(next); setDraft(next); onDirtyChange(false);
       // The action notice already confirms success; adding another banner here shifts the fields after scrolling was restored.
       setFeedback(null);
-      // Commit the new batch and viewport together with the clean draft, after both unsaved banners disappear.
+      // Commit the new batch and viewport together with the clean draft.
       onSaved(updated);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Could not save. Your edits are still here.');
@@ -672,16 +692,24 @@ function RecordEditor({
     if (row instanceof HTMLTableRowElement) revealSavedRow(row, true);
     summaryRef.current.focus({preventScroll: true});
   }, [reviewRequest]);
-  const issueLabel = (key: string) => key === 'reportingTarget' ? 'Reporting person or Board'
-    : key === 'duplicateReview' ? 'Duplicate-person review' : EDITABLE_FIELDS.find(field => field.key === key)?.label ?? (key === 'registration' ? 'Registration' : 'Record');
+  const issueLabel = (key: string) => key === 'reportingTarget' ? 'Reporting person or top-level body'
+    : key === 'extraFields' ? 'Additional imported information' : key === 'duplicateReview' ? 'Duplicate-person review' : EDITABLE_FIELDS.find(field => field.key === key)?.label ?? (key === 'registration' ? 'Registration' : 'Record');
   const fieldMessages = (key: string) => findings.get(key)?.length ? <ul id={`issues-${record.id}-${key}`} className="mt-1 space-y-1 text-xs" data-field-findings={key}>
     {findings.get(key)!.map((finding, index) => <li key={index} className={finding.stale ? 'text-slate-500' : 'text-red-700'}>{finding.stale && 'Last saved check: '}{finding.message}</li>)}
   </ul> : null;
   const locked = record.status === "REGISTERED";
   const selectablePeople = reportingOptions.filter(o => o.target !== `record:${record.id}` && o.target !== `employee:${record.employeeId}`);
-  const invalidSelection = !!draft.reportingTarget && draft.reportingTarget !== 'BOARD' && !selectablePeople.some(o => o.target === draft.reportingTarget);
+  const invalidSelection = !!draft.reportingTarget && !isReportingBody(draft.reportingTarget) && !selectablePeople.some(o => o.target === draft.reportingTarget);
   const selfSelected = draft.reportingTarget === `record:${record.id}` || (!!record.employeeId && draft.reportingTarget === `employee:${record.employeeId}`);
   const peopleLinks = batch.peopleLinks?.byRecord[record.id];
+  const fieldOptions = batch.fieldOptions;
+  const workOptions = useMemo(() => ({
+    currentDepartment: fieldOptions?.departments.map(option => ({ value: option.name, disabled: !option.usable,
+      detail: option.usable ? undefined : 'Ambiguous department — resolve in department setup' })) ?? [],
+    jobDesignation: fieldOptions?.designations.map(option => ({ value: option.value,
+      preferred: option.departments.some(department => editorValueKey(department) === editorValueKey(draft.currentDepartment)),
+      detail: option.existing ? 'Used by registered employees' : 'From this import · not confirmed' })) ?? [],
+  }), [fieldOptions, draft.currentDepartment]);
   const peopleOptions = batch.peopleLinks?.options ?? reportingOptions;
   const relieverOptions = peopleOptions.filter(p => p.target !== `record:${record.id}` && p.target !== `employee:${record.employeeId}`);
   function chooseReliever(slot: 1 | 2, target: string) {
@@ -700,10 +728,32 @@ function RecordEditor({
   const proposedReportingLabel = draft.reportingTarget
     ? identities.label(draft.reportingTarget, importedReportingLabel(draft)) : `Resolve on save: ${importedReportingLabel(draft)}`;
 
+  const actions = <div data-editor-toolbar data-viewport-anchor={`actions:${record.id}`} data-record-id={record.id}
+        role="region" aria-label="Current record actions"
+        className="pointer-events-none flex min-w-0 flex-wrap items-end justify-between gap-2">
+        <span data-editor-identity title={[draft.firstName, draft.lastName, draft.employeeCode].filter(Boolean).join(' · ')}
+          className="pointer-events-auto flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm sm:max-w-[40%]"><span className="truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}{draft.employeeCode ? ` · ${draft.employeeCode}` : ''}</span>{(dirty || hodDirty) && <span className="shrink-0 font-semibold text-amber-800"> · Unsaved</span>}</span>
+        <div data-editor-action-buttons className="pointer-events-auto ml-auto flex max-w-full flex-wrap justify-end gap-1.5 rounded-xl border border-slate-300 bg-white p-1.5 shadow-md">
+        <button type="button" disabled={saving || !hasReview} onClick={reviewIssues}
+          aria-expanded={hasReview && reviewRequest > 0} aria-controls={hasReview && reviewRequest > 0 ? `review-summary-${record.id}` : undefined}
+          data-review-highlighted={highlightReview || undefined}
+          className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-40 ${highlightReview
+            ? 'border-purple-700 bg-purple-50 text-purple-900 shadow-[0_0_0_3px_rgba(126,34,206,0.18)]'
+            : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+          Review issues
+        </button>
+        <button type="button" onClick={() => void saveDraft()} disabled={saving || hodDirty}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50">
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+          Save &amp; re-validate
+        </button>
+        </div>
+      </div>;
+
   return (
-    <div ref={editorRef} className="max-sm:max-w-[calc(100vw-3rem)] bg-blue-50/40 border-b-2 border-slate-300 px-3 sm:px-5 py-4 space-y-4">
+    <div ref={editorRef} data-record-editor={record.id} className="max-sm:max-w-[calc(100vw-3rem)] bg-blue-50/40 border-b-2 border-slate-300 px-3 sm:px-5 py-4 space-y-4">
       {hodDirty && <p role="status" className="rounded-lg border border-purple-300 bg-purple-50 p-3 text-sm text-purple-900">Save or discard the department HOD change before editing this record.</p>}
-      {dirty && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Unsaved changes. Record status and saved validation findings describe the last saved version. Choose Save &amp; re-validate to check these edits.</p>}
+      {dirty && <p data-record-unsaved role="status" className="text-xs text-amber-800">Unsaved edits. Save &amp; re-validate this record before using batch actions. Status and findings reflect the last save.</p>}
       {feedback && <p role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">{feedback}</p>}
       {hasReview && reviewRequest > 0 && <div ref={summaryRef} id={`review-summary-${record.id}`} data-review-summary tabIndex={-1} aria-labelledby={`review-title-${record.id}`}
         className="rounded-lg border border-red-200 bg-white p-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-600">
@@ -714,7 +764,7 @@ function RecordEditor({
           <p className="mt-1 text-xs text-slate-600">Select an issue to go to its field.</p>
           <ul className="mt-2 grid gap-x-5 gap-y-2 sm:grid-cols-2">
             {currentIssues.map((issue, index) => <li key={`${issue.key}:${index}`} className="min-w-0 text-xs text-red-700 break-words">
-              {issue.key === 'reportingTarget' || issue.key === 'duplicateReview' || EDITABLE_FIELDS.some(field => field.key === issue.key)
+              {issue.key === 'extraFields' || issue.key === 'reportingTarget' || issue.key === 'duplicateReview' || EDITABLE_FIELDS.some(field => field.key === issue.key)
                 ? <button type="button" disabled={saving} className="text-left font-semibold underline underline-offset-2 hover:text-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50"
                     onClick={() => { setHighlightReview(false); revealEditorField(editorRef.current, issue.key); }}>
                     {issueLabel(issue.key)}: {issue.message}
@@ -729,33 +779,29 @@ function RecordEditor({
         review={record.duplicateReview} batchId={batch.id} recordId={record.id} returnTo={reviewReturnTo} dirty={dirty || hodDirty} disabled={saving}
         onConfirm={onConfirmDuplicate} onUndo={onUndoDuplicate} onVisit={onVisit} onRefresh={onRefreshDuplicates} />}
       <div className="space-y-2" data-viewport-anchor={`manager:${record.id}`} data-record-id={record.id} data-editor-field="reportingTarget" tabIndex={-1}>
-        <label className="block text-xs font-semibold text-slate-600" htmlFor={`manager-${record.id}`}>
-          Reporting person or Board <span className="text-red-500">*</span>
-        </label>
-        <select
-          id={`manager-${record.id}`}
-          disabled={locked || saving || hodDirty}
-          value={draft.reportingTarget ?? ''}
-          aria-invalid={findings.get('reportingTarget')?.some(finding => !finding.stale) || undefined}
-          aria-describedby={findings.has('reportingTarget') ? `issues-${record.id}-reportingTarget` : undefined}
-          onChange={e => choosePerson(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
-        >
-          <option value="">Resolve from imported name and designation</option>
-          <option value="BOARD">Board — most senior person</option>
-          {invalidSelection && (
-            <option value={draft.reportingTarget!} disabled>{selfSelected ? `${[record.firstName, record.middleName, record.lastName].filter(Boolean).join(' ')} — invalid: self-reporting` : 'Previously selected person — unavailable; choose again'}</option>
-          )}
-          {selectablePeople.slice().sort((a, b) => {
-            const key = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
-            const title = key(draft.reportingToDesignation ?? '');
-            return Number(key(b.designation) === title) - Number(key(a.designation) === title) || a.name.localeCompare(b.name);
-          }).map(o => <option key={o.target} value={o.target}>
-            {[o.name, o.designation, o.department, o.branch, o.employeeCode, o.target.startsWith('record:') ? 'This import' : 'Existing employee'].filter(Boolean).join(' · ')}
-          </option>)}
-        </select>
+        <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-slate-800">Reporting to</h3>{reportingEdited && <span className="text-xs text-amber-800">Unsaved change</span>}</div>
+        {isReportingBody(draft.reportingTarget) ? <p className="text-sm font-semibold text-slate-800">{reportingBodyLabel(draft.reportingTarget)}</p> : selectablePeople.find(person=>person.target===draft.reportingTarget)
+          ? <PersonSummary person={selectablePeople.find(person=>person.target===draft.reportingTarget)!} />
+          : <p className="text-sm text-slate-700">{draft.reportingToName ? `Imported: ${draft.reportingToName} · ${draft.reportingToDesignation || 'Job title missing'}` : 'Choose a reporting person or top-level body.'}</p>}
+        {!locked && <details data-reporting-chooser className="text-xs text-slate-700">
+          <summary className="cursor-pointer font-semibold text-purple-800 underline underline-offset-2">{draft.reportingTarget ? 'Change reporting person' : 'Choose or correct reporting person'}</summary>
+          <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+        <PersonLinkPicker id={`manager-${record.id}`} label="Reporting person or top-level body" value={draft.reportingTarget ?? ''}
+          options={selectablePeople} allowImported allowBoard invalid={invalidSelection || findings.get('reportingTarget')?.some(f => !f.stale)} describedBy={findings.get('reportingTarget')?.length ? `issues-${record.id}-reportingTarget` : undefined} disabled={locked || saving || hodDirty} onChange={choosePerson} />
+        {!draft.reportingTarget && <div className="grid gap-2 sm:grid-cols-2">{(['reportingToName','reportingToDesignation'] as const).map(key=><div key={key} data-editor-field={key} tabIndex={-1}>
+          <label htmlFor={`field-${record.id}-${key}`} className="block text-xs font-semibold">{key === 'reportingToName' ? 'Imported reporting name' : 'Imported reporting job title'}</label>
+          <input id={`field-${record.id}-${key}`} value={draft[key] ?? ''} disabled={saving || hodDirty} aria-invalid={findings.get(key)?.some(f=>!f.stale) || undefined}
+            aria-required={required.has(key) && !(key === 'reportingToName' && ['board','boardofdirectors'].includes(editorValueKey(draft.reportingToDesignation))) || undefined}
+            aria-describedby={findings.has(key) ? `issues-${record.id}-${key}` : undefined}
+            onChange={e=>{setHighlightReview(false);setFeedback(null);setDraft(d=>({...d,[key]:e.target.value}));}}
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm" />{fieldMessages(key)}
+        </div>)}</div>}
+        <p className="text-xs text-slate-500">Save &amp; re-validate the record to apply this choice.</p>
+        </div></details>}
+
+        {invalidSelection && <p className="text-xs text-red-700">{selfSelected ? 'Invalid: a person cannot report to themselves.' : 'Previously selected person is unavailable; choose again.'}</p>}
         {fieldMessages('reportingTarget')}
-        <p className="text-xs text-slate-500">Matching designations appear first. Choose the person to fill their name and designation. Board is for the most senior person.</p>
+        {!draft.reportingTarget && (['reportingToName','reportingToDesignation'] as const).some(key=>findings.get(key)?.some(f=>!f.stale)) && <p className="text-xs text-red-700">Imported reporting details need correction. Choose or correct the reporting person above.</p>}
         {!locked && reportingEdited && <div className="rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-700 space-y-1 break-words"
           role="status" aria-live="polite" data-reporting-preview>
           <p className="font-semibold text-amber-800">Reporting change · Unsaved</p>
@@ -763,38 +809,21 @@ function RecordEditor({
           <p>Proposed: {proposedReportingLabel}</p>
           <p className="text-slate-500">The reporting relationship will be checked when you save.</p>
         </div>}
-        {!locked && !dirty && !draft.reportingTarget && reportingSuggestions.length > 0 && (
-          <div className="rounded-lg border border-blue-200 bg-white p-3 space-y-3">
-            <p className="text-sm font-semibold text-slate-800">{reportingSuggestions.length === 1 ? 'Suggested manager — please confirm' : 'Possible managers — choose the correct person'}</p>
-            <p className="text-xs text-slate-600">The first and last names and designation match. The imported name omits a middle name. Confirm the person, then save to validate their reporting chain.</p>
-            {reportingSuggestions.map(person => <div key={person.target} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2">
-              <p className="text-sm text-slate-700">{[person.name, person.designation, person.department, person.branch, person.employeeCode, person.target.startsWith('record:') ? 'This import' : 'Existing employee'].filter(Boolean).join(' · ')}</p>
-              <button type="button" disabled={saving} onClick={() => choosePerson(person.target)} className="rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50">Use this person</button>
-            </div>)}
-          </div>
-        )}
-        {reportingResolution?.errorScope === 'UPSTREAM' && reportingResolution.error && <p className="text-xs text-amber-700">{dirty && 'Last saved check: '}{reportingResolution.error}</p>}
+        {!locked && !dirty && !draft.reportingTarget && <PersonSuggestions label="reporting person" candidates={reportingSuggestions}
+          importedName={record.reportingToName} importedDesignation={record.reportingToDesignation} disabled={saving || hodDirty}
+          onChoose={choosePerson} />}
+        {reportingResolution?.errorScope === 'UPSTREAM' && reportingResolution.error && <details className="text-xs text-amber-800"><summary className="cursor-pointer">{dirty && 'Last saved check: '}Manager selected · wider reporting chain needs attention</summary><p className="mt-1">{reportingResolution.error}</p></details>}
         {!reportingResolution?.error && reportingResolution?.warning && <details className="text-xs text-amber-700"><summary className="cursor-pointer">{dirty && 'Last saved check: '}Reporting details</summary><p>{reportingResolution.warning}</p></details>}
         {locked && record.employeeId && <Link className="inline-block text-sm text-blue-600 underline" href={`/ems/employees/${record.employeeId}#reporting-manager`}>View or correct reporting assignment on employee profile</Link>}
       </div>
       {peopleLinks && <>
-        <DepartmentHodEditor recordId={record.id} hod={peopleLinks.hod} options={peopleOptions}
+        <DepartmentHodEditor recordId={record.id} hod={peopleLinks.hod} options={peopleOptions} directory={batch.peopleLinks?.hodDirectory} evidence={batch.peopleLinks?.hodEvidence?.[peopleLinks.hod.evidenceKey ?? '']}
           importedName={record.hodName} importedDesignation={record.hodDesignation}
           disabled={locked || record.status === 'EXCLUDED' || saving} recordDirty={dirty}
           onDirtyChange={setHodDirty} onSave={onSaveHod} onSaved={updated => {setHodDirty(false); onHodSaved(updated);}} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          {([1, 2] as const).map(slot => <div key={slot} data-editor-field={`reliever${slot}Name`} tabIndex={-1} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-            <PersonLinkPicker id={`reliever-${slot}-${record.id}`} label={slot === 1 ? 'First reliever' : 'Second reliever'}
-              value={draft[`reliever${slot}Target`] ?? ''} options={relieverOptions} allowImported
-              disabled={locked || saving || hodDirty} onChange={target => chooseReliever(slot, target)} />
-            {fieldMessages(`reliever${slot}Name`)}
-            <p className="text-xs text-slate-500">Saved link</p>
-            <PersonLinkStatus link={slot === 1 ? peopleLinks.first : peopleLinks.second} showError={false} />
-          </div>)}
-        </div>
       </>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {EDITABLE_FIELDS.filter(field => !peopleLinks || !["hodName", "hodDesignation"].includes(field.key)).map(({ key, label }) => {
+        {EDITABLE_FIELDS.filter(field => !['reportingToName','reportingToDesignation'].includes(field.key) && (!peopleLinks || !["hodName", "hodDesignation", "reliever1Name", "reliever1Designation", "reliever2Name", "reliever2Designation"].includes(field.key))).map(({ key, label }) => {
           const choices = EDITOR_CHOICES[key];
           const selected = choices ? editorChoice(key, draft[key]) : '';
           const reporting = key === 'reportingToName' || key === 'reportingToDesignation';
@@ -805,12 +834,16 @@ function RecordEditor({
             disabled: locked || saving || hodDirty || (!!draft.reportingTarget && reporting) || (/^reliever[12](Name|Designation)$/.test(key) && !!draft[`reliever${key.includes("1") ? 1 : 2}Target`]),
             'aria-required': requiredHere || undefined,
             'aria-invalid': findings.get(key)?.some(finding => !finding.stale) || undefined,
-            'aria-describedby': [findings.has(key) ? `issues-${record.id}-${key}` : '', key === 'companyCode' ? `help-${record.id}-${key}` : ''].filter(Boolean).join(' ') || undefined,
+            'aria-describedby': [findings.has(key) ? `issues-${record.id}-${key}` : '', ['companyCode', 'firstName', 'lastName', 'currentDepartment', 'jobDesignation', 'beesAccessLevel'].includes(key) ? `help-${record.id}-${key}` : ''].filter(Boolean).join(' ') || undefined,
             className: `mt-1 w-full min-w-0 px-3 py-2 rounded-lg border text-sm bg-white disabled:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${findings.get(key)?.some(finding => !finding.stale) ? 'border-red-300' : 'border-slate-200'}`,
             onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setHighlightReview(false); setFeedback(null); setDraft(d => ({...d, [key]: event.target.value})); },
           };
-          return <div key={key} className="min-w-0" data-viewport-anchor={`field:${record.id}:${key}`} data-record-id={record.id} data-editor-field={key} tabIndex={-1}>
-            <label htmlFor={props.id} className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          const groupTitle = key === 'companyCode' ? 'Identity' : key === 'mobileNumber' ? 'Contact details'
+            : key === 'plantBranchCode' ? 'Work and access' : key === 'hodName' ? 'HOD and relievers' : null;
+          return <Fragment key={key}>
+          {groupTitle && <h3 className="col-span-full border-b border-slate-200 pb-2 pt-2 text-sm font-semibold text-slate-800">{groupTitle}</h3>}
+          <div className="min-w-0" data-viewport-anchor={`field:${record.id}:${key}`} data-record-id={record.id} data-editor-field={key} tabIndex={-1}>
+            <label htmlFor={props.id} className="text-xs font-semibold text-slate-700">
               {label}
             </label>
             {requiredHere && <span aria-hidden="true" className="text-[11px] font-semibold text-red-500"> *</span>}
@@ -818,17 +851,52 @@ function RecordEditor({
               <option value="">{key === 'beesAccessLevel' ? 'Choose access level' : key === 'employmentStatus' ? 'Not provided — registers as Active' : 'Not provided'}</option>
               {selected === '__imported__' && <option value="__imported__" disabled>Imported: {draft[key]} — not recognised</option>}
               {Object.entries(choices).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
-              {key !== 'beesAccessLevel' && <option value="N/A">{key === 'employmentStatus' ? 'N/A — registers as Active' : 'Not applicable (N/A)'}</option>}
-            </select> : <input {...props} type="text" value={draft[key] ?? ''} />}
+              {!['beesAccessLevel', 'fiveSLocationCategory'].includes(key) && <option value="N/A">{key === 'employmentStatus' ? 'N/A — registers as Active' : 'Not applicable (N/A)'}</option>}
+            </select> : (key === 'currentDepartment' || key === 'jobDesignation') ? <OnboardingWorkField {...props}
+              value={draft[key] ?? ''} label={label} options={workOptions[key]}
+              onChangeValue={value => { setHighlightReview(false); setFeedback(null); setDraft(d => ({...d, [key]: value})); }} />
+              : <input {...props} type="text" value={draft[key] ?? ''} />}
+            {key === 'beesAccessLevel' && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-600">
+              {!locked && registrationAccess(actorRole, draft.beesAccessLevel) === 'ADMIN_REQUIRED'
+                ? `${ADMIN_REGISTRATION_MESSAGE} You can save this choice for them.`
+                : 'Account permissions are separate from job title and HOD assignment. Supervisor uses Employee access.'}
+            </p>}
+            {(key === 'firstName' || key === 'lastName') && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-500">At least 2 letters; spaces and punctuation do not count.</p>}
+            {(key === 'currentDepartment' || key === 'jobDesignation') && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-500">
+              {!fieldOptions ? 'Choices are unavailable. You can keep editing; save to validate.' : key === 'currentDepartment'
+                ? 'Choose an existing organisation department. Changing it may require HOD review after saving.'
+                : 'Choose a suggestion or type a new job title. Suggestions from this department appear first.'}
+            </p>}
             {!(peopleLinks && /^reliever[12]Name$/.test(key)) && fieldMessages(key)}
+            {key === 'fiveSLocationCategory' && <p className="mt-1 text-xs text-slate-500">Optional. Classifies the employee’s work location for 5S.</p>}
             {key === "companyCode" && (
               <p id={`help-${record.id}-${key}`} className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-500">
                 Optional. Enter the company code used in your existing records, if applicable.
               </p>
             )}
-          </div>;
+          </div></Fragment>;
         })}
       </div>
+
+      <ImportedExtraFields fields={draft.extraFields ?? []} disabled={locked || saving || hodDirty}
+        issues={(findings.get('extraFields') ?? []).filter(f => !f.stale).map(f => f.message)}
+        onChange={locked ? undefined : fields => { setFeedback(null); setHighlightReview(false); setDraft(d => ({...d, extraFields: fields})); }}
+        registered={record.status === 'REGISTERED'} />
+
+      {peopleLinks && <section aria-label="Relievers" className="space-y-3"><h3 className="text-sm font-semibold text-slate-800">Relievers</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {([1, 2] as const).map(slot => <div key={slot} data-editor-field={`reliever${slot}Name`} tabIndex={-1} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+            <RelieverEditor id={`reliever-${slot}-${record.id}`} label={slot === 1 ? 'First reliever' : 'Second reliever'}
+              value={draft[`reliever${slot}Target`] ?? ''} options={relieverOptions} link={slot === 1 ? peopleLinks.first : peopleLinks.second}
+              suggestionsCurrent={(draft[`reliever${slot}Name`] ?? '') === (record[`reliever${slot}Name`] ?? '') && (draft[`reliever${slot}Designation`] ?? '') === (record[`reliever${slot}Designation`] ?? '')}
+              name={draft[`reliever${slot}Name`] ?? ''} designation={draft[`reliever${slot}Designation`] ?? ''} department={draft.currentDepartment}
+              disabled={locked || saving || hodDirty} onChange={target => chooseReliever(slot, target)}
+              onTextChange={(field, value) => {setHighlightReview(false);setFeedback(null);setDraft(d => ({...d, [`reliever${slot}${field}`]: value}));}} />
+            {fieldMessages(`reliever${slot}Name`)}
+            <div data-editor-field={`reliever${slot}Designation`} tabIndex={-1}>{fieldMessages(`reliever${slot}Designation`)}</div>
+          </div>)}
+        </div>
+      </section>}
 
       {!locked && (
         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200">
@@ -882,32 +950,18 @@ function RecordEditor({
           )}
         </div>
       )}
-      {!locked && <div data-editor-toolbar data-viewport-anchor={`actions:${record.id}`} data-record-id={record.id}
-        className="sticky bottom-3 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-slate-300 bg-white p-3 shadow-md">
-        <span className="min-w-0 flex-1 basis-full sm:basis-auto text-xs font-medium text-slate-600 break-words">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}{draft.employeeCode ? ` · ${draft.employeeCode}` : ''}</span>
-        <button type="button" disabled={saving || !hasReview} onClick={reviewIssues}
-          aria-expanded={hasReview && reviewRequest > 0} aria-controls={hasReview && reviewRequest > 0 ? `review-summary-${record.id}` : undefined}
-          data-review-highlighted={highlightReview || undefined}
-          className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-40 ${highlightReview
-            ? 'border-purple-700 bg-purple-50 text-purple-900 shadow-[0_0_0_3px_rgba(126,34,206,0.18)]'
-            : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
-          Review issues
-        </button>
-        <button type="button" onClick={() => void saveDraft()} disabled={saving || hodDirty}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50">
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-          Save &amp; re-validate
-        </button>
-      </div>}
+      {!locked && (toolbarHost ? createPortal(actions, toolbarHost) : actions)}
     </div>
   );
 }
 
 export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const queryClient = useQueryClient();
   const [openRow, setOpenRow] = useState<string | null>(null);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [editorToolbarHost, setEditorToolbarHost] = useState<HTMLDivElement | null>(null);
   const [lastRow, setLastRow] = useState<string | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
   const onDirtyChange = useCallback((dirty: boolean) => setEditorDirty(dirty), []);
@@ -915,6 +969,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState<number>(25);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const [countryExpanded, setCountryExpanded] = useState(false);
+  const countryToggleRef = useRef<HTMLButtonElement>(null);
+  const focusCountryToggle = useRef(false);
 
   const pageRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
@@ -938,15 +996,31 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     setEditorDirty(false); setOpenRow(nextOpen); setLastRow(recordId); setRevealedId(recordId);
     setViewportAction({kind: 'reveal', id: recordId, editor: !!nextOpen});
   };
-  const visitRow = (targetId: string, fromId?: string) => {
+  const visitRow = (targetId: string, fromId?: string, reviewOrigin = false) => {
     if (busy || !batch?.records.some(r => r.id === targetId) || !mayLeaveEditor()) return;
     if (fromId && fromId !== targetId) {
       const record = batch?.records.find(r => r.id === fromId);
       const point = returnPoint(`manager:${targetId}`, batch?.hierarchy.byRecord[fromId]?.chain?.[0]?.label || [record?.firstName, record?.middleName, record?.lastName].filter(Boolean).join(' ') || 'record');
+      point.reviewOrigin = reviewOrigin;
+      point.lastId = fromId;
+      // Return to the clicked person even if another row was the nearest viewport anchor.
+      if (reviewOrigin) {
+        const rect = rowRefs.current.get(fromId)?.getBoundingClientRect();
+        point.viewport = {...point.viewport, anchor: `row:${fromId}`, recordId: fromId,
+          offset: rect ? Math.max(0, rect.top - viewportBounds(point.viewport.scroll).top) : 0};
+      }
       setReturnPoints(points => [...points, point]);
     }
     setEditorDirty(false); setOpenRow(targetId); setLastRow(targetId); setRevealedId(targetId);
     setViewportAction({kind: 'reveal', id: targetId, editor: true});
+  };
+  const visitChartRecord = (recordId: string) => {
+    if (busy || !batch?.records.some(record => record.id === recordId) || !mayLeaveEditor()) return;
+    const point = returnPoint('chart', 'hierarchy chart');
+    point.viewport = {scroll: scrollSnapshot(pageRef.current), anchor: 'batch-hierarchy', offset: 0};
+    setReturnPoints(points => [...points, point]);
+    setEditorDirty(false); setOpenRow(recordId); setLastRow(recordId); setRevealedId(recordId);
+    setViewportAction({kind: 'reveal', id: recordId, editor: true});
   };
   const viewSavedRow = () => {
     const record = batch?.records.find(r => r.id === saveNotice?.id);
@@ -960,8 +1034,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     setEditorDirty(false); setOpenRow(nextOpen); setLastRow(record.id); setRevealedId(record.id);
     setViewportAction({kind: 'reveal', id: record.id, editor: !!nextOpen});
   };
-  const returnToRecord = () => {
-    const point = returnPoints[returnPoints.length - 1];
+  const returnToRecord = (index = returnPoints.length - 1) => {
+    const point = returnPoints[index];
     if (busy || !point || !mayLeaveEditor()) return;
     const record = batch?.records.find(r => r.id === point.openId);
     const becameClosed = record && record.status !== point.openStatus && ['READY', 'EXCLUDED', 'REGISTERED'].includes(record.status);
@@ -974,7 +1048,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     const returnRows = (batch?.records ?? []).filter(r => returnMatches.has(r.id) || r.id === origin || r.id === point.openId || r.id === point.revealedId);
     setPageNumber(recordPage(returnRows, origin ?? point.openId ?? undefined, point.pageSize) ?? point.page);
     setFilters(point.filters); setRevealedId(origin && !returnMatches.has(origin) ? origin : point.revealedId);
-    setReturnPoints(points => points.slice(0, -1));
+    setReturnPoints(points => points.slice(0, index));
     setViewportAction({kind: 'context', snapshot: point.viewport, focus: true});
   };
 
@@ -1033,6 +1107,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     const toolbar = root?.querySelector<HTMLElement>('[data-editor-toolbar]');
     const update = () => {
       const rect = toolbar?.getBoundingClientRect();
+      root?.style.setProperty('--ems-editor-clearance', `${rect && rect.height > 0 ? Math.ceil(rect.height) + 28 : 0}px`);
       const visible = rect && rect.top < window.innerHeight && rect.bottom > window.innerHeight / 2;
       root?.style.setProperty('--ems-feedback-bottom', `${visible ? Math.max(16, window.innerHeight - rect.top + 12) : 16}px`);
     };
@@ -1100,11 +1175,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     if (record && ['READY', 'EXCLUDED', 'REGISTERED'].includes(record.status)) {
       setEditorDirty(false); setOpenRow(null); setLastRow(record.id);
     }
-    const waiting = updated.records.filter(r => waitingOnChain(r, updated.hierarchy.byRecord[r.id])).length;
-    const reviews = updated.records.filter(r => needsDuplicateReview(r, updated.hierarchy.byRecord[r.id])).length;
-    const fixing = updated.records.filter(r => r.status === 'NEEDS_FIXING').length - waiting - reviews;
-    const ready = updated.records.filter(r => r.status === 'READY').length;
-    const excluded = updated.records.filter(r => r.status === 'EXCLUDED').length;
+    const {ready, needsFixing: fixing, needsReview: reviews, waiting, excluded} = summarizeBatchProgress(updated).counts;
     setSaveNotice({id: record?.id, name: record ? recordName(updated, record) : undefined, action: 'Validated',
       status: record ? statusText(record, updated) : undefined,
       reporting: record ? reportingFeedback(queryClient.getQueryData<OnboardingBatchDetail>(queryKey), updated, record.id, moved) : undefined,
@@ -1182,7 +1253,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const register = useMutation({
     onMutate: beginAction,
     mutationFn: () => EmsService.registerOnboardingBatch(id, accessToken!),
-    onSuccess: (result) => finishBatchAction(result.batch, `Registration complete · ${result.registered} registered · ${result.failed} failed`),
+    onSuccess: (result) => finishBatchAction(result.batch, registrationOutcomeMessage(result)),
     onError: (error: Error) => { failedAction('register', error); queryClient.invalidateQueries({queryKey}); },
   });
 
@@ -1194,13 +1265,34 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const country = countryDraft ?? batch?.defaultPhoneCountry ?? "";
   const countryUnsaved = country !== (batch?.defaultPhoneCountry ?? "");
   const closed = batch?.status === "CANCELLED" || batch?.status === "REGISTERED";
-  const mutationError = actionError && !actionError.recordId ? actionError.message : null;
+  const countryError = actionError?.kind === 'country' ? actionError.message : null;
+  const countryOpen = countryExpanded || countryUnsaved || !!countryError;
+  const countryLabel = PHONE_COUNTRIES.find(item => item.code === (batch?.defaultPhoneCountry ?? ''))?.name || batch?.defaultPhoneCountry || 'Not set';
+  const countryFixed = closed || (!!batch?.defaultPhoneCountry && records.some(record => record.status === 'REGISTERED'));
+  const mayLeavePage = () => mayLeaveEditor() && (!countryUnsaved || window.confirm('Discard the unsaved default country change?'));
+  const discardCountryChange = () => {
+    setCountryDraft(null); setCountryExpanded(false); updateCountry.reset();
+    setActionError(current => current?.kind === 'country' ? null : current);
+    focusCountryToggle.current = true;
+  };
+  useLayoutEffect(() => {
+    if (!countryOpen && focusCountryToggle.current) {
+      focusCountryToggle.current = false;
+      countryToggleRef.current?.focus({preventScroll: true});
+    }
+  }, [countryOpen]);
+  // Keep a duplicate-review origin available even after View adds a local return point.
+  const reviewReturnIndex = returnPoints.reduce((last, point, index) => point.reviewOrigin ? index : last, -1);
+  const reviewReturnPoint = returnPoints[reviewReturnIndex];
+  const advancedFilterCount = Number(!!filters.reportingTarget);
+  const mutationError = actionError && !actionError.recordId && actionError.kind !== 'country' ? actionError.message : null;
 
-  const readyCount = records.filter((r) => r.status === "READY").length;
-  const waitingCount = records.filter(r => waitingOnChain(r, hierarchy?.byRecord[r.id])).length;
-  const reviewCount = records.filter(r => needsDuplicateReview(r, hierarchy?.byRecord[r.id])).length;
-  const problemCount = records.filter((r) => r.status === "NEEDS_FIXING").length - waitingCount - reviewCount;
-  const registeredCount = records.filter((r) => r.status === "REGISTERED").length;
+  const progress = useMemo(() => summarizeBatchProgress(batch), [batch]);
+  const {ready: readyCount, registered: registeredCount} = progress.counts;
+  const registerableReadyCount = records.filter(record => record.status === 'READY'
+    && registrationAccess(user?.roleLevel, record.beesAccessLevel) === 'ALLOWED').length;
+  const adminRequiredReadyCount = records.filter(record => record.status === 'READY'
+    && registrationAccess(user?.roleLevel, record.beesAccessLevel) === 'ADMIN_REQUIRED').length;
   const displayedRecords = records.filter(r => matchingIds.has(r.id) || r.id === openRow || r.id === revealedId);
   const extraCount = displayedRecords.length - matchingIds.size;
   const departments = [...new Map(records.map(r => [departmentKey(r.currentDepartment),
@@ -1230,42 +1322,67 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     update(); window.addEventListener('scroll', update, true); window.addEventListener('resize', update);
     return () => { window.removeEventListener('scroll', update, true); window.removeEventListener('resize', update); };
   }, []);
-  const pageControls = (location: string) => <nav aria-label={`${location} record pages`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs">
-    <span aria-live="polite">{displayedRecords.length ? `${pagination.start + 1}–${pagination.end} of ${displayedRecords.length}` : '0 records'}{pinnedRecord ? ' · open editor retained above page' : ''}</span>
-    <div className="flex flex-wrap items-center gap-2">
-      <label className="flex items-center gap-1">Per page <select aria-label={`${location} records per page`} value={pageSize} disabled={busy}
-        onChange={e => changePage(1, Number(e.target.value))} className="rounded border border-slate-300 bg-white px-2 py-1.5">
-        {PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
-      </select></label>
-      <button type="button" disabled={busy || pagination.page === 1} onClick={() => changePage(pagination.page - 1)} className="rounded border border-slate-300 px-2 py-1.5 disabled:opacity-40">Previous</button>
-      <span>Page {pagination.page} of {pagination.pages}</span>
-      <button type="button" disabled={busy || pagination.page === pagination.pages} onClick={() => changePage(pagination.page + 1)} className="rounded border border-slate-300 px-2 py-1.5 disabled:opacity-40">Next</button>
-    </div>
-  </nav>;
+  const pageControls = (location: string) => <OnboardingPageControls location={location}
+    total={displayedRecords.length} page={pagination.page} pages={pagination.pages} start={pagination.start} end={pagination.end}
+    pageSize={pageSize} busy={busy} pinned={!!pinnedRecord} filtered={filterActive} onChange={changePage} />;
+  const recordPositions = new Map(records.map((record, index) => [record.id, index + 1]));
+  const blockerLocation = (recordId?: string) => {
+    if (!recordId) return undefined;
+    const page = recordPage(displayedRecords, recordId, pageSize);
+    return page ? `page ${page}${filterActive ? ' in this view' : ''}` : records.some(record => record.id === recordId) ? 'outside filters' : undefined;
+  };
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
-      <div ref={pageRef} data-onboarding-page style={{overflowAnchor: 'none', paddingBottom: '40vh'}}>
-        {(saveNotice || returnPoints.length > 0 || externalReturn) && <div data-onboarding-feedback style={{bottom: 'var(--ems-feedback-bottom, 16px)'}} className={`fixed right-4 z-50 max-w-sm rounded-xl border-2 ${saveNotice?.moved ? 'border-purple-800' : 'border-slate-400'} bg-white shadow-lg`} role="status" aria-live="polite">
-          {saveNotice && <SaveFeedback key={saveNotice.sequence} notice={saveNotice} hasReturn={returnPoints.length > 0} disabled={busy} onView={viewSavedRow} onDismiss={dismissNotice} />}
-          {returnPoints.length > 0 && <button type="button" disabled={busy} onClick={returnToRecord} className={`mx-2 mb-2 py-1 text-sm ${FEEDBACK_LINK}`}>{(() => {
+      <div ref={pageRef} data-onboarding-page
+        style={{overflowAnchor: 'none', paddingBottom: openRow ? 'max(4rem, var(--ems-editor-clearance, 8rem))' : '2rem'}}
+        onFocusCapture={event => {
+          // Keyboard focus and field review must stay above the floating actions.
+          // Row/return anchors retain their existing navigation and scroll policy.
+          const field = event.target;
+          if (!(field instanceof HTMLElement) || !field.matches('input, select, textarea, button, a')
+            || field.closest('[data-editor-toolbar], [data-onboarding-feedback]')) return;
+          const rect = field.getBoundingClientRect();
+          const obstacles = Array.from(pageRef.current?.querySelectorAll<HTMLElement>('[data-editor-identity], [data-editor-action-buttons]') ?? [])
+            .map(element => element.getBoundingClientRect())
+            .filter(box => box.height > 0 && box.top >= 0 && box.top < window.innerHeight
+              && rect.right > box.left && rect.left < box.right && rect.bottom > box.top - 16 && rect.top < box.bottom);
+          if (obstacles.length) {
+            const top = Math.min(...obstacles.map(box => box.top));
+            const scroll = scrollSnapshot(field);
+            restoreScroll({...scroll, top: scroll.top + rect.bottom - top + 16});
+          }
+        }}>
+        {(saveNotice || returnPoints.length > 0 || externalReturn) && <div data-onboarding-feedback style={{bottom: 'var(--ems-feedback-bottom, 16px)'}} className={`fixed right-3 z-50 w-auto max-w-[min(20rem,calc(100vw-1.5rem))] rounded-lg border-2 ${saveNotice?.moved ? 'border-purple-800' : 'border-slate-400'} bg-white shadow-lg`} role="status" aria-live="polite">
+          {saveNotice && <SaveFeedback key={saveNotice.sequence} notice={saveNotice} hasReturn={returnPoints.length > 0 || !!externalReturn} disabled={busy} onView={viewSavedRow} onDismiss={dismissNotice} />}
+          {returnPoints.length > 0 && returnPoints.length - 1 !== reviewReturnIndex && <button type="button" disabled={busy} onClick={() => returnToRecord()} className={`mx-2 mb-2 py-1 text-sm ${FEEDBACK_LINK}`}>{(() => {
             const point = returnPoints[returnPoints.length - 1];
             return point.name ? `Return to ${point.name}` : 'Return to previous place';
           })()}</button>}
-          {returnPoints.length === 0 && externalReturn && <Link href={externalReturn}
-            onClick={event => { if (busy || !mayLeaveEditor()) event.preventDefault(); }}
+          {reviewReturnPoint && <button type="button" disabled={busy} onClick={() => returnToRecord(reviewReturnIndex)}
+            className={`mx-2 mb-2 block py-1 text-left text-sm ${FEEDBACK_LINK}`}>Return to review: {reviewReturnPoint.name || 'record'}</button>}
+          {externalReturn && <Link href={externalReturn}
+            aria-disabled={busy || undefined}
+            onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }}
             className={`mx-3 my-2 block py-1 text-sm ${FEEDBACK_LINK}`}>Return to review record</Link>}
         </div>}
 
         <div className="space-y-5">
         <div data-batch-toolbar role="navigation" aria-label="Batch actions" style={{top: 'var(--ems-batch-top, 0px)'}} className="sticky z-30 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm" data-viewport-anchor="batch-heading">
-          <Link href="/ems/onboarding" onClick={event => { if (busy || !mayLeaveEditor() || (countryUnsaved && !window.confirm('Discard the unsaved default country change?'))) event.preventDefault(); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900">
+          <Link href="/ems/onboarding" onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900">
             <span>Back to imports</span>
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="min-w-0 flex-1 basis-32">
-            <h1 title={batch?.label ?? "Import"} className="truncate text-sm font-bold text-slate-900">{batch?.label ?? "Import"}</h1>
+          <div className="min-w-0 flex-1 basis-60">
+            <h1 title={batch?.label ?? "Import"} className="whitespace-normal break-words text-sm font-bold leading-5 text-slate-900 [overflow-wrap:anywhere]">{batch?.label ?? "Import"}</h1>
           </div>
+          {batch && <button type="button" aria-expanded={progressOpen} aria-controls="batch-progress-details"
+            aria-label={progressOpen ? 'Hide progress details' : 'Show progress details'}
+            onClick={() => setProgressOpen(open => !open)}
+            className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700">
+            <OnboardingStickyProgress progress={progress} dirty={editorDirty} updating={busy} />
+            {progressOpen ? <ChevronDown aria-hidden="true" className="h-3 w-3 text-slate-500" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 text-slate-500" />}
+          </button>}
           <button
             onClick={() => validate.mutate()}
             disabled={busy || editorDirty || !batch || closed || countryUnsaved}
@@ -1277,53 +1394,57 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
 
           <button
             onClick={() => register.mutate()}
-            disabled={busy || editorDirty || readyCount === 0 || closed || countryUnsaved}
-            title={readyCount === 0 ? "No records are ready to register" : undefined}
+            disabled={busy || editorDirty || !canRegisterOnboarding(user?.roleLevel) || registerableReadyCount === 0 || closed || countryUnsaved}
+            title={adminRequiredReadyCount && !registerableReadyCount ? "An Admin must register the remaining Ready records" : readyCount === 0 ? "No records are ready to register" : undefined}
             className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {register.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-            Register all {readyCount} ready
+            {adminRequiredReadyCount ? `Register ${registerableReadyCount} eligible` : `Register all ${registerableReadyCount} ready`}
           </button>
 
 
         </div>
-        <div>
-            <p className="text-sm text-slate-500">
-              {batch
-                ? `${records.length} records · ${readyCount} ready · ${problemCount} need fixing${reviewCount ? ` · ${reviewCount} need review` : ''} · ${waitingCount} waiting on reporting chain · ${registeredCount} registered · ${BATCH_STATUS_LABELS[batch.status]}`
-                : "Loading…"}
-            </p>
-            {register.isSuccess && (
-              <p className="text-xs text-emerald-700">
-                {register.data.registered} registered
-                {register.data.failed > 0 && `, ${register.data.failed} failed`}
-              </p>
-          )}
-        </div>
-
-        {batch && <div data-channel-notice aria-live="polite" className={`text-sm ${channelError || (!channelLoading && !channelData?.communicationChannel) ? 'text-amber-800' : 'text-slate-600'}`}>
+        {adminRequiredReadyCount > 0 && <p data-registration-access-note className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          {adminRequiredReadyCount} Ready {adminRequiredReadyCount === 1 ? 'record requires' : 'records require'} an Admin to register the requested access.
+          {registerableReadyCount > 0 && <> You can register the other {registerableReadyCount}.</>}
+          {' '}Their validation status stays Ready.
+        </p>}
+        <div data-batch-settings className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+        {batch && <div data-channel-notice aria-live="polite" className={`min-w-0 rounded-md px-2 py-1 text-xs font-medium ${channelError || (!channelLoading && !channelData?.communicationChannel) ? 'bg-amber-100 text-amber-950' : 'bg-purple-50 text-purple-950'}`}>
           {channelLoading || (channelFetching && channelError) ? 'Checking communication channel…'
             : channelError ? <>
                 Communication channel could not be confirmed.{' '}
                 <button type="button" onClick={() => void refetchChannel()} disabled={channelFetching}
                   className="font-medium underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50">Retry</button>
               </>
-            : channelData?.communicationChannel === 'EMAIL' ? 'Communication channel: Email · Work email required.'
+            : channelData?.communicationChannel === 'EMAIL' ? 'Communication channel: Email · Email address required.'
             : channelData?.communicationChannel === 'WHATSAPP' ? 'Communication channel: WhatsApp · WhatsApp number required.'
             : 'Communication channel not set · Choose Email or WhatsApp before registering.'}
         </div>}
 
         {batch && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2" data-viewport-anchor="batch-country">
+          <div className={`min-w-0 flex-1 text-xs ${countryOpen ? 'basis-full' : ''}`} data-viewport-anchor="batch-country">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="font-medium text-slate-700">Phone country: {countryLabel}{countryFixed && <span className="font-normal text-slate-500"> · Locked</span>}{countryUnsaved && <span className="text-amber-800"> · Unsaved change</span>}</p>
+              <button ref={countryToggleRef} type="button" aria-expanded={countryOpen} aria-controls="batch-phone-country-settings"
+                disabled={busy || countryUnsaved || !!countryError}
+                onClick={() => setCountryExpanded(!countryOpen)}
+                className="rounded py-1 font-semibold text-purple-800 underline underline-offset-2 disabled:opacity-50">
+                {countryOpen ? 'Hide country details' : countryFixed ? 'Country details' : batch.defaultPhoneCountry ? 'Change country' : 'Choose country'}
+              </button>
+              {!batch.defaultPhoneCountry && <span className="text-amber-800">Local numbers need a country; + numbers keep their own code.</span>}
+            </div>
+            <div id="batch-phone-country-settings" hidden={!countryOpen} className="mt-2 space-y-2">
+            {countryFixed && <p className="text-slate-500">{closed ? 'The country cannot change because this import is closed.' : 'The country is fixed because registration has started.'}</p>}
             <label htmlFor="batch-phone-country" className="block text-sm font-semibold text-slate-700">
               Default country for phone numbers
             </label>
             <div className="flex flex-wrap items-center gap-3">
               <select id="batch-phone-country" value={country}
-                onChange={(event) => { setCountryDraft(event.target.value); updateCountry.reset(); }}
+                onChange={(event) => { setCountryDraft(event.target.value); setCountryExpanded(true); updateCountry.reset(); setActionError(current => current?.kind === 'country' ? null : current); }}
                 disabled={busy || editorDirty || closed || (!!batch.defaultPhoneCountry && registeredCount > 0)}
                 aria-describedby="batch-phone-country-help"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:w-auto">
                 <option value="">Choose a country</option>
                 {PHONE_COUNTRIES.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}
               </select>
@@ -1340,25 +1461,37 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             </p>
             {!batch.defaultPhoneCountry && <p className="text-xs text-amber-700">This older import has no default country. Choose one for local numbers, or enter every number with + and its country code.</p>}
             {countryUnsaved && <p className="text-xs text-amber-700">Save the country before validating or registering records.</p>}
-            {!!batch.defaultPhoneCountry && registeredCount > 0 && <p className="text-xs text-slate-500">The country is fixed because registration has started.</p>}
+            {countryError && <p role="alert" className="text-xs text-red-700">{countryError}</p>}
+            {(countryUnsaved || countryError) && <button type="button" onClick={discardCountryChange} disabled={busy}
+              className="rounded py-1 text-xs font-medium text-purple-800 underline disabled:opacity-50">{countryUnsaved ? 'Discard country change' : 'Close country details'}</button>}
+            </div>
           </div>
         )}
-        {editorDirty && <p role="status" className="text-sm text-amber-800">An open record has unsaved changes. Save that record before validating all, changing the country, or registering.</p>}
+        </div>
+        <div className="space-y-2">
+            {batch ? <div id="batch-progress-details" hidden={!progressOpen}>
+              <OnboardingBatchProgress progress={progress} dirty={editorDirty} updating={busy} />
+            </div> : <p className="text-sm text-slate-500">Loading…</p>}
+            {register.isSuccess && (
+              <p className="text-xs text-emerald-700">
+                {register.data.registered} registered
+                {register.data.failed > 0 && `, ${register.data.failed} failed`}
+              </p>
+          )}
+        </div>
+
         {mutationError && <p role="alert" className="text-sm text-red-600">{mutationError}</p>}
 
-        {batch && <section aria-label="Filter records" data-viewport-anchor="batch-filters" className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-slate-800">Filter records</p>
-            <button type="button" disabled={busy || !filterActive} onClick={() => changeFilters(EMPTY_FILTERS)}
-              className="text-sm text-blue-700 underline disabled:opacity-40">Clear filters</button>
-          </div>
-          <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 disabled:opacity-60">
+        {batch && <OnboardingHierarchyChart batch={batch} busy={busy} dirty={editorDirty} onViewRecord={visitChartRecord} />}
+
+        {batch && <section aria-label="Filter records" data-viewport-anchor="batch-filters" className="rounded-xl border border-slate-200 bg-white px-3 py-2 space-y-2">
+          <div className="grid min-w-0 grid-cols-1 items-end gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(9rem,1fr)_minmax(10rem,1fr)_auto]">
             <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-name">Name or employee code</label>
-              <input id="onboarding-filter-name" type="search" value={filters.search} onChange={event => changeFilters({...filters, search: event.target.value})}
+              <input id="onboarding-filter-name" type="search" disabled={busy} value={filters.search} onChange={event => changeFilters({...filters, search: event.target.value})}
                 placeholder="Search this import" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800" />
             </div>
             <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-department">Department</label>
-              <select id="onboarding-filter-department" value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
+              <select id="onboarding-filter-department" disabled={busy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All departments</option>
                 {filters.department && !departments.some(d => d.key === filters.department) && <option value={filters.department}>{filters.department === 'MISSING' ? 'Not provided' : filters.department.replace(/^department:/, '')} (no records)</option>}
@@ -1366,7 +1499,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               </select>
             </div>
             <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-status">Status</label>
-              <select id="onboarding-filter-status" value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
+              <select id="onboarding-filter-status" disabled={busy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All statuses</option>
                 <option value="READY">Ready</option><option value="NEEDS_FIXING">Needs fixing</option>
@@ -1374,12 +1507,28 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 <option value="EXCLUDED">Excluded</option><option value="REGISTERED">Registered</option>
               </select>
             </div>
-            <div className="min-w-0 text-xs font-medium text-slate-600 sm:col-span-2"><label htmlFor="onboarding-filter-reporting">Reporting branch</label>
+            <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-duplicates">Duplicate check</label>
+              <select id="onboarding-filter-duplicates" disabled={busy} value={filters.duplicate}
+                onChange={event => changeFilters({...filters, duplicate: event.target.value as DuplicateFilter})}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+                {DUPLICATE_FILTERS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <button type="button" disabled={busy} aria-expanded={moreFiltersOpen} aria-controls="onboarding-more-filters"
+              onClick={() => setMoreFiltersOpen(value => !value)}
+              className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">
+              {moreFiltersOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              Reporting branch{advancedFilterCount > 0 && ` (${advancedFilterCount})`}
+            </button>
+          </div>
+          <div id="onboarding-more-filters" hidden={!moreFiltersOpen} className="space-y-2 border-t border-slate-100 pt-2">
+            <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 disabled:opacity-60">
+            <div className="min-w-0 text-xs font-medium text-slate-600 lg:col-span-1"><label htmlFor="onboarding-filter-reporting">Reporting branch</label>
               <select id="onboarding-filter-reporting" value={selectedTarget} onChange={event => changeFilters({...filters, reportingTarget: event.target.value,
                 reportingLabel: event.target.selectedOptions[0]?.text ?? ''})}
                 aria-describedby="reporting-filter-help" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
-                <option value="">All reporting branches</option><option value="BOARD">Board</option>
-                {selectedTarget && selectedTarget !== 'BOARD' && !filterModel.people.some(p => p.target === selectedTarget) && <option value={selectedTarget}>{filters.reportingLabel} (no current links)</option>}
+                <option value="">All reporting branches</option>{REPORTING_BODIES.map(body => <option key={body.value} value={body.value}>{body.label}</option>)}
+                {selectedTarget && !isReportingBody(selectedTarget) && !filterModel.people.some(p => p.target === selectedTarget) && <option value={selectedTarget}>{filters.reportingLabel} (no current links)</option>}
                 {filterModel.people.map(person => <option key={person.target} value={person.target}>{person.label}</option>)}
               </select>
             </div>
@@ -1390,20 +1539,31 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 <option value="BRANCH">Person + full branch</option><option value="DIRECT">Direct reports only</option>
               </select>
             </div>
-          </fieldset>
-          <p id="reporting-filter-help" className="text-xs text-slate-500">Filters combine. Full branch includes the selected person and their known descendants. Direct reports shows only the next level. Only records in this import are listed.</p>
+            </fieldset>
+            <p id="reporting-filter-help" className="text-xs text-slate-500">Full branch includes the selected person and their known descendants. Direct reports shows the next level. Only this import's records are listed.</p>
+          </div>
+          {advancedFilterCount > 0 && <div aria-label="Active additional filters" className="flex min-w-0 flex-wrap gap-1.5">
+            {filters.reportingTarget && <button type="button" disabled={busy} onClick={() => changeFilters({...filters, reportingTarget: '', reportingLabel: ''})}
+              aria-label="Remove reporting branch filter" className="max-w-full break-words rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-left text-xs text-purple-900 disabled:opacity-50">
+              Branch: {isReportingBody(selectedTarget) ? reportingBodyLabel(selectedTarget) : filterModel.people.find(person => person.target === selectedTarget)?.label || filters.reportingLabel || 'Selected person'} · {filters.scope === 'DIRECT' ? 'Direct reports' : 'Full branch'} <span aria-hidden="true">×</span>
+            </button>}
+          </div>}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <p role="status" aria-live="polite" className="font-medium text-slate-700" data-filter-count>
-              Showing {matchingIds.size} of {records.length} records{extraCount > 0 && ` · ${extraCount} extra shown outside filters`}
+              Showing {matchingIds.size} of {records.length} records{extraCount > 0 && ` · ${extraCount} extra shown outside filters`} · Page {pagination.page} of {pagination.pages}
             </p>
+            <button type="button" disabled={busy || !filterActive} onClick={() => changeFilters(EMPTY_FILTERS)}
+              className="ml-auto rounded py-1 font-medium text-purple-800 underline disabled:opacity-40">Clear filters</button>
             {extraCount > 0 && <button type="button" disabled={busy} onClick={hideExtraRecords}
-              className="text-blue-700 underline disabled:opacity-50">Hide extra {extraCount === 1 ? 'record' : 'records'}</button>}
+              className="rounded py-1 text-purple-800 underline disabled:opacity-50">Hide extra {extraCount === 1 ? 'record' : 'records'}</button>}
           </div>
-          {filterActive && <p className="text-xs text-slate-500">Filters change this view. Validate all checks the batch; Register all registers all {readyCount} ready records in the batch.</p>}
+          {filters.duplicate === 'NO_MATCHES' && <p className="text-xs text-slate-500">No matches found by the latest check; this does not establish that a person is unique. Records without a duplicate check are not included.</p>}
+          {filterActive && <p className="text-xs text-slate-500">Matches keep reporting order. Page numbers above describe this view; row locations show the full import. Validate all checks the whole import. Registration uses eligible Ready records across the whole import.</p>}
         </section>}
 
         {batch && !loading && !error && <section data-viewport-anchor="batch-records" tabIndex={-1} className="rounded-xl border border-slate-200 bg-white focus:outline-none">
           {pageControls('Top')}
+          {filterActive && matchingIds.size === 0 && <p className="px-4 pb-3 text-sm font-semibold text-slate-700" data-no-filter-matches>No matching records in this import.{extraCount > 0 ? ' The retained records below are outside your filters.' : ''}</p>}
           {pinnedRecord && <p className="px-4 pb-3 text-xs text-amber-800">The open record is kept above this page so its edits are not lost. Changing page will ask before discarding unsaved changes.</p>}
         </section>}
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-x-auto">
@@ -1422,7 +1582,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               <thead>
                 <tr className="bg-slate-50 text-slate-500 border-b border-slate-100">
                   <th className="w-10 px-3 py-3" />
-                  <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Row</th>
+                  <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Excel row</th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Code</th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Name</th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Department</th>
@@ -1433,6 +1593,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 {pageRecords.map((rec) => {
                   const resolution = hierarchy?.byRecord[rec.id];
                   const waiting = waitingOnChain(rec, resolution);
+                  const chainNotice = chainRegistrationNotice(rec, resolution);
                   const open = openRow === rec.id;
                   const recent = !open && lastRow === rec.id;
                   return (
@@ -1461,13 +1622,14 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                           <p className="font-medium text-slate-800">
                             {[rec.firstName, rec.middleName, rec.lastName].filter(Boolean).join(" ") || "—"}
                           </p>
-                          {!matchingIds.has(rec.id) && <p className="mt-1 text-xs font-medium text-blue-700">Shown outside filters{open ? ' · open record' : ''}</p>}
-                          {(!open || resolution?.errorScope === 'UPSTREAM') && hierarchy?.byRecord[rec.id]?.error && !rec.validationErrors?.some(e => e.field === 'reportingToName') && (
+                          <p data-record-location className="mt-1 text-[11px] text-slate-500">Import position {recordPositions.get(rec.id)} · Page {Math.ceil((recordPositions.get(rec.id) ?? 1) / pageSize)}{filterActive ? ' of full import' : ''}</p>
+                          {!matchingIds.has(rec.id) && <p className="mt-1 text-xs font-semibold text-amber-800">Retained for review · not a filter match{open ? ' · open record' : ''}</p>}
+                          {(!open || resolution?.errorScope === 'UPSTREAM') && !chainNotice && hierarchy?.byRecord[rec.id]?.error && !rec.validationErrors?.some(e => e.field === 'reportingToName') && (
                             <p className={`mt-1 text-xs ${resolution?.errorScope === 'UPSTREAM' ? 'text-amber-700' : 'text-red-600'}`}>{hierarchy.byRecord[rec.id].error} {rec.status === 'REGISTERED' ? 'Registration is preserved; correct reporting on the employee profile.' : 'Save or validate to refresh the record status.'}</p>
                           )}
-                          {rec.validationErrors?.some(err => !open || isChainFinding(err.field, resolution)) && (
+                          {rec.validationErrors?.some(err => (!open || isChainFinding(err.field, resolution)) && !(chainNotice?.kind === 'blocked' && isChainFinding(err.field, resolution))) && (
                             <ul className="mt-1 space-y-0.5">
-                              {rec.validationErrors.filter(err => !open || isChainFinding(err.field, resolution)).map((err, i) => (
+                              {rec.validationErrors.filter(err => (!open || isChainFinding(err.field, resolution)) && !(chainNotice?.kind === 'blocked' && isChainFinding(err.field, resolution))).map((err, i) => (
                                 <li key={i} className={`flex items-start gap-1 text-xs ${isChainFinding(err.field, resolution) || err.field === 'duplicateReview' ? 'text-amber-700' : 'text-red-600'}`}>
                                   <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
                                   {isChainFinding(err.field, resolution) ? (resolution?.error ?? err.message) : err.field === 'duplicateReview' ? err.message : `${err.field}: ${err.message}`}
@@ -1483,14 +1645,18 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                         <td className="px-4 py-3 text-slate-500">{rec.currentDepartment ?? "—"}</td>
                         <td className="px-4 py-3">
                           <RecordStatusPill status={rec.status} waiting={waiting} review={needsDuplicateReview(rec, resolution)} />
-                          {rec.status !== 'EXCLUDED' && hierarchy?.byRecord[rec.id] && (
+                          {rec.status === 'READY' && registrationAccess(user?.roleLevel, rec.beesAccessLevel) === 'ADMIN_REQUIRED'
+                            && <p className="mt-1 text-xs text-amber-800">Admin registration required</p>}
+                          {rec.status !== 'EXCLUDED' && !chainNotice && hierarchy?.byRecord[rec.id] && (
                             <p className={`mt-2 text-xs ${resolution?.errorScope === 'UPSTREAM' ? 'text-amber-700' : hierarchy.byRecord[rec.id].error ? 'text-red-600' : 'text-slate-600'}`}>
-                              {resolution?.errorScope === 'UPSTREAM' ? 'Reporting chain needs attention' : REPORTING_STATE_LABELS[hierarchy.byRecord[rec.id].state]}
+                              {resolution?.errorScope === 'UPSTREAM' ? 'Reporting chain needs attention' : isReportingBody(resolution?.target) ? `Reports to ${reportingBodyLabel(resolution.target)}` : REPORTING_STATE_LABELS[hierarchy.byRecord[rec.id].state]}
                             </p>
                           )}
-                          {!resolution?.error && resolution?.warning && <p className="mt-1 text-xs text-amber-700">{resolution.chain?.length
+                          {!chainNotice && !resolution?.error && resolution?.warning && <p className="mt-1 text-xs text-amber-700">{resolution.chain?.length
                             ? resolution.state === 'PENDING' ? `Awaiting ${resolution.managerName || 'manager'}’s registration.` : 'Further reporting details shown in chain.'
                             : resolution.warning}</p>}
+                          <OnboardingChainNotice record={rec} resolution={resolution} batchId={id} returnTo={externalReturn}
+                            disabled={busy} location={blockerLocation(resolution?.blocker?.recordId)} onVisit={targetId => visitRow(targetId, rec.id, true)} />
                           {rec.status === 'REGISTERED' && rec.employeeId && (
                             <Link onClick={e => e.stopPropagation()} href={`/ems/employees/${rec.employeeId}#reporting-manager`} className="mt-2 inline-block text-xs text-blue-600 underline">View reporting assignment</Link>
                           )}
@@ -1500,6 +1666,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                         <tr key={`${rec.id}-editor`} id={`editor-${rec.id}`}>
                           <td colSpan={6} className="p-0 border-l-4 border-blue-500">
                             <RecordEditor
+                              actorRole={user?.roleLevel}
+                              toolbarHost={editorToolbarHost}
                               record={rec}
                               batch={batch!}
                               reportingOptions={hierarchy?.options ?? []}
@@ -1522,7 +1690,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                               onConfirmDuplicate={async token => { await confirmDuplicate.mutateAsync({recordId: rec.id, token}); }}
                               onUndoDuplicate={async token => { await undoDuplicate.mutateAsync({recordId: rec.id, token}); }}
                               reviewReturnTo={externalReturn}
-                              onVisit={targetId => visitRow(targetId, rec.id)}
+                              onVisit={targetId => visitRow(targetId, rec.id, true)}
                               onRefreshDuplicates={() => { queryClient.invalidateQueries({queryKey}); }}
                               onExclude={(reason) => exclude.mutate({ recordId: rec.id, reason })}
                               onInclude={() => include.mutate(rec.id)}
@@ -1546,6 +1714,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         </div>
         {batch && !loading && !error && pageControls('Bottom')}
         </div>
+        {/* Outside the horizontal table scroller: stick to the actual page scroll area. */}
+        <div ref={setEditorToolbarHost} data-editor-toolbar-host className="pointer-events-none sticky bottom-3 z-40" />
       </div>
     </ProtectedRoute>
   );

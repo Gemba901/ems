@@ -26,7 +26,7 @@ function fixture() {
   const same = (value: any, query: any) => typeof query === 'object' && query !== null
     ? (!query.in || query.in.includes(value)) && (!query.notIn || !query.notIn.includes(value)) && (query.not === undefined || value !== query.not)
     : value instanceof Date && query instanceof Date ? value.getTime() === query.getTime() : value === query;
-  const matches = (value: any, where: any = {}) => Object.entries(where).every(([key, query]) =>
+  const matches = (value: any, where: any = {}): boolean => Object.entries(where).every(([key, query]) =>
     query === undefined || key === 'batch' ? query === undefined || matches(state.batches.find(b => b.id === value.batchId), query)
       : same(value?.[key], query));
   const rows = (where: any) => state.rows.filter(r => matches(r, where));
@@ -177,10 +177,10 @@ it('registers confirmed different people and skips them on repeat registration',
   const f = fixture(); f.state().rows.push(f.row('b'));
   const result = await f.validate();
   for (const r of result.records) await f.service.confirmOnboardingDifferentPerson('org', r.id, 'hr', r.duplicateReview!.token!);
-  const registration = await f.service.registerOnboardingBatch('org', 'batch');
+  const registration = await f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN);
   expect(registration).toMatchObject({registered: 2, failed: 0});
   expect(f.state().employees).toHaveLength(2); expect(f.state().users).toHaveLength(2);
-  await expect(f.service.registerOnboardingBatch('org', 'batch')).rejects.toThrow('No records are ready');
+  await expect(f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN)).rejects.toThrow('No records are ready');
   expect(f.state().employees).toHaveLength(2); expect(f.state().users).toHaveLength(2);
 });
 
@@ -192,7 +192,7 @@ it('refuses a newly arrived match between preflight and the locked registration 
     if (!added) { added = true; f.state().batches.push(f.batch('other')); f.state().rows.push(f.row('b', {batchId: 'other'})); }
     return real(callback);
   });
-  const result = await f.service.registerOnboardingBatch('org', 'batch');
+  const result = await f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN);
   expect(result).toMatchObject({registered: 0, failed: 1});
   expect(result.batch.records[0]).toMatchObject({status: 'NEEDS_FIXING', duplicateReview: {requiresReview: true}});
   expect(f.db.employee.create).not.toHaveBeenCalled(); expect(f.db.user.create).not.toHaveBeenCalled();
@@ -202,12 +202,12 @@ it('allows registration after a cross-import duplicate is excluded without deman
   const f = fixture(); f.state().batches.push(f.batch('other')); f.state().rows.push(f.row('b', {batchId: 'other'}));
   await f.validate(); f.state().rows[1].status = 'EXCLUDED';
   expect((await f.get()).records[0].status).toBe('READY');
-  expect(await f.service.registerOnboardingBatch('org', 'batch')).toMatchObject({registered: 1, failed: 0});
+  expect(await f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN)).toMatchObject({registered: 1, failed: 0});
 });
 
 it('keeps raw Draft rows unvalidated and does not register them', async () => {
   const f = fixture(); expect((await f.get()).records[0].status).toBe('DRAFT');
-  await expect(f.service.registerOnboardingBatch('org', 'batch')).rejects.toThrow('No records are ready');
+  await expect(f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN)).rejects.toThrow('No records are ready');
 });
 
 it('preserves legacy ambiguous-phone blocking independently of soft-name review', async () => {

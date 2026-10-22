@@ -1,6 +1,7 @@
+import { EXTRA_PROFILE_FIELDS, ImportedExtraField } from '../onboarding-extra-fields';
 import { Transform, Type } from 'class-transformer';
 import {
-  IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
+  ArrayMaxSize, Max, Min, IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
 } from 'class-validator';
 import { getCountries } from 'libphonenumber-js';
 import { OrgCommunicationChannel } from 'db';
@@ -21,7 +22,18 @@ export class UpdateOnboardingBatchCountryDto {
   defaultPhoneCountry!: string;
 }
 
+export class OnboardingExtraFieldDto implements ImportedExtraField {
+  @IsInt() @Min(1) @Max(16384) column!: number;
+  @IsString() @MaxLength(200) heading!: string;
+  @IsString() @MaxLength(4000) originalValue!: string;
+  @IsString() @MaxLength(4000) value!: string;
+  @IsOptional() @IsIn(EXTRA_PROFILE_FIELDS.map(f => f.key)) target!: ImportedExtraField['target'];
+}
+
 export class OnboardingRecordInputDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => OnboardingExtraFieldDto)
+  extraFields?: OnboardingExtraFieldDto[];
+
   @IsInt() @IsOptional() rowNumber?: number;
 
   // Module 1 — raw text as imported
@@ -40,6 +52,7 @@ export class OnboardingRecordInputDto {
   @IsString() @IsOptional() hodName?: string;
   @IsString() @IsOptional() hodDesignation?: string;
   @IsString() @IsOptional() workArea?: string;
+  @IsString() @IsOptional() @MaxLength(100) fiveSLocationCategory?: string;
   @IsString() @IsOptional() subSection?: string;
   @IsString() @IsOptional() jobDesignation?: string;
   @IsString() @IsOptional() beesAccessLevel?: string;
@@ -62,13 +75,16 @@ export class AddOnboardingRecordsDto {
 }
 
 export class UpdateOnboardingRecordDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => OnboardingExtraFieldDto)
+  extraFields?: OnboardingExtraFieldDto[];
+
   @IsString() @IsOptional() @MaxLength(100) @Matches(/^(?:NONE|(?:record|employee):[A-Za-z0-9_-]+)?$/)
   reliever1Target?: string;
   @IsString() @IsOptional() @MaxLength(100) @Matches(/^(?:NONE|(?:record|employee):[A-Za-z0-9_-]+)?$/)
   reliever2Target?: string;
   // Empty string clears the saved choice; all referenced IDs are checked by the service.
   @IsString() @IsOptional() @MaxLength(100)
-  @Matches(/^(?:BOARD|(?:record|employee):[A-Za-z0-9_-]+)?$/)
+  @Matches(/^(?:BOARD|COMMITTEE|MANAGEMENT_COMMITTEE|OWNER|(?:record|employee):[A-Za-z0-9_-]+)?$/)
   reportingTarget?: string;
   @IsString() @IsOptional() companyCode?: string;
   @IsString() @IsOptional() plantBranchCode?: string;
@@ -85,6 +101,7 @@ export class UpdateOnboardingRecordDto {
   @IsString() @IsOptional() hodName?: string;
   @IsString() @IsOptional() hodDesignation?: string;
   @IsString() @IsOptional() workArea?: string;
+  @IsString() @IsOptional() @MaxLength(100) fiveSLocationCategory?: string;
   @IsString() @IsOptional() subSection?: string;
   @IsString() @IsOptional() jobDesignation?: string;
   @IsString() @IsOptional() beesAccessLevel?: string;
@@ -122,7 +139,7 @@ export class UpdateCommunicationChannelDto {
 
 export class UpdateEmployeeReportingDto {
   @IsString() @MaxLength(100)
-  @Matches(/^(?:BOARD|employee:[A-Za-z0-9_-]+)$/)
+  @Matches(/^(?:BOARD|COMMITTEE|MANAGEMENT_COMMITTEE|OWNER|employee:[A-Za-z0-9_-]+)$/)
   target!: string;
 }
 

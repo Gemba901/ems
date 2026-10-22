@@ -1,12 +1,61 @@
-import { CommunicationChannel, UpdateOnboardingRecordPayload } from "@/services/ems.service";
+import { EXTRA_PROFILE_FIELDS, type ExtraProfileField } from '../../../components/ems/onboarding-extra-fields';
+import type { CommunicationChannel, UpdateOnboardingRecordPayload } from "@/services/ems.service";
 
-export type Field = keyof UpdateOnboardingRecordPayload;
+export type Field = Exclude<keyof UpdateOnboardingRecordPayload, "extraFields">;
 
-/** What a column can map to: a record field, or a full name that is split into first/middle/last on import. */
-export type MapField = Field | "fullName";
+/** Core record fields, a split full name, retained extras, or an explicit existing-profile target. */
+export type MapField = Field | "fullName" | "extra" | `profile:${ExtraProfileField}`;
+
+/** Workbook Position/Role wording is another spelling of these existing title fields.
+ * Keep the person prefix: a bare Role or Position ID must not become a job title.
+ */
+const POSITION_ROLE_HEADERS: Record<string, MapField> = {};
+const TITLE_HEADER_GROUPS: { prefixes: string[]; field: Field }[] = [
+  { prefixes: ['job'], field: 'jobDesignation' },
+  { prefixes: ['hod', 'headofdepartment'], field: 'hodDesignation' },
+  { prefixes: ['reportingto', 'reportingmanager'], field: 'reportingToDesignation' },
+  { prefixes: ['reliever1', 'firstreliever', '1streliever'], field: 'reliever1Designation' },
+  { prefixes: ['reliever2', 'secondreliever', '2ndreliever'], field: 'reliever2Designation' },
+];
+for (const { prefixes, field } of TITLE_HEADER_GROUPS) {
+  for (const prefix of prefixes) {
+    for (const suffix of ['position', 'pos', 'positionrole', 'posrole']) {
+      POSITION_ROLE_HEADERS[prefix + suffix] = field;
+      if (prefix !== 'job') POSITION_ROLE_HEADERS[prefix + 'job' + suffix] = field;
+    }
+  }
+}
 
 /** Spreadsheet header text → record field. Keys are normalised (lowercase, no spaces/punctuation). */
 const HEADER_MAP: Record<string, MapField> = {
+  ...POSITION_ROLE_HEADERS,
+  '5slocationcategory': 'fiveSLocationCategory',
+  '5slocationcategiry': 'fiveSLocationCategory',
+  '5scategory': 'fiveSLocationCategory',
+  'fiveslocationcategory': 'fiveSLocationCategory',
+  'fivescategory': 'fiveSLocationCategory',
+  // Current headings and historical synonyms share the same stored fields.
+  jobtitle:               "jobDesignation",
+  jobposition:            "jobDesignation",
+  hodjobtitle:            "hodDesignation",
+  hodtitle:               "hodDesignation",
+  reportingtojobtitle:    "reportingToDesignation",
+  reportingtotitle:       "reportingToDesignation",
+  reportingmanagerjobtitle: "reportingToDesignation",
+  reliever1jobtitle:      "reliever1Designation",
+  firstrelieverjobtitle:  "reliever1Designation",
+  "1strelieverjobtitle":  "reliever1Designation",
+  "1strelieverdesignation": "reliever1Designation",
+  firstrelieverdesignation: "reliever1Designation",
+  reliever2jobtitle:      "reliever2Designation",
+  secondrelieverjobtitle: "reliever2Designation",
+  "2ndrelieverjobtitle":  "reliever2Designation",
+  "2ndrelieverdesignation": "reliever2Designation",
+  secondrelieverdesignation: "reliever2Designation",
+  emailaddress:          "workEmail",
+  workemailaddress:      "workEmail",
+  personalemail:         "workEmail",
+  personalemailaddress:  "workEmail",
   companycode:            "companyCode",
   plantbranchcode:        "plantBranchCode",
   plantbranch:            "plantBranchCode",
@@ -76,7 +125,11 @@ export function normaliseHeader(value: unknown): string {
 }
 
 export function mapHeaders(headerRow: unknown[]): (MapField | null)[] {
-  return headerRow.map((cell) => HEADER_MAP[normaliseHeader(cell)] ?? null);
+  return headerRow.map((cell) => {
+    const key = normaliseHeader(cell);
+    const additional = EXTRA_PROFILE_FIELDS.find(f => normaliseHeader(f.key) === key || normaliseHeader(f.label) === key);
+    return HEADER_MAP[key] ?? (additional ? `profile:${additional.key}` as MapField : key === 'dob' ? 'profile:dateOfBirth' : null);
+  });
 }
 
 /** How many cells in this row match a known header. */
@@ -116,25 +169,27 @@ export const MAPPABLE_FIELDS: { key: MapField; label: string }[] = [
   { key: "nationality",            label: "Nationality" },
   { key: "mobileNumber",           label: "Personal mobile number (login)" },
   { key: "whatsappNumber",         label: "WhatsApp number" },
-  { key: "workEmail",              label: "Work email" },
+  { key: "workEmail",              label: "Email" },
   { key: "companyCode",            label: "Company code" },
   { key: "plantBranchCode",        label: "Plant / branch code" },
   { key: "currentDepartment",      label: "Department" },
-  { key: "jobDesignation",         label: "Job designation" },
+  { key: "jobDesignation",         label: "Job title" },
   { key: "workArea",               label: "Work area" },
+  { key: "fiveSLocationCategory",    label: "5S location category" },
   { key: "subSection",             label: "Sub-section" },
   { key: "shift",                  label: "Shift" },
   { key: "employmentStatus",       label: "Employment status" },
   { key: "employmentType",         label: "Employment type" },
   { key: "beesAccessLevel",        label: "BEES access level" },
   { key: "hodName",                label: "HOD name" },
-  { key: "hodDesignation",         label: "HOD designation" },
+  { key: "hodDesignation",         label: "HOD job title" },
   { key: "reportingToName",        label: "Reporting to" },
-  { key: "reportingToDesignation", label: "Reporting to designation" },
+  { key: "reportingToDesignation", label: "Reporting to job title" },
   { key: "reliever1Name",          label: "1st reliever" },
-  { key: "reliever1Designation",   label: "1st reliever designation" },
+  { key: "reliever1Designation",   label: "1st reliever job title" },
   { key: "reliever2Name",          label: "2nd reliever" },
-  { key: "reliever2Designation",   label: "2nd reliever designation" },
+  { key: "reliever2Designation",   label: "2nd reliever job title" },
+  ...EXTRA_PROFILE_FIELDS.map(f => ({key: `profile:${f.key}` as MapField, label: `${f.label} (profile)`})),
 ];
 
 /** Fields every record needs, whatever the organisation's channel. Keep in sync with the API's validateOnboardingBatch. */
@@ -200,7 +255,7 @@ export type MappingConflict = { field: MapField; columns: number[] };
 export function findMappingConflicts(mapping: (MapField | null)[]): MappingConflict[] {
   const byField = new Map<MapField, number[]>();
   mapping.forEach((field, col) => {
-    if (field) byField.set(field, [...(byField.get(field) ?? []), col]);
+    if (field && field !== "extra") byField.set(field, [...(byField.get(field) ?? []), col]);
   });
   return [...byField.entries()]
     .filter(([, columns]) => columns.length > 1)

@@ -1,3 +1,5 @@
+import type { FiveSLocationCategory } from '@/components/ems/five-s-location';
+import type { ImportedExtraField } from '@/components/ems/onboarding-extra-fields';
 import { apiClient } from "@/lib/api-client";
 const API_URL = "/api";
 
@@ -92,6 +94,7 @@ export interface EmployeeImportSource {
 }
 
 export interface EmployeeProfile {
+  importedExtraFields?: ImportedExtraField[] | null;
   id: string;
   firstName: string;
   lastName: string;
@@ -117,11 +120,13 @@ export interface EmployeeProfile {
   dateJoined: string | null;
   plantBranch: string | null;
   workStation: string | null;
+  fiveSLocationCategory?: FiveSLocationCategory | null;
   section: string | null;
   subSection: string | null;
   shift: string | null;
   reportingManagerId: string | null;
   reportsToBoard: boolean;
+  reportingBody?: string | null;
   pendingReportingRecordId: string | null;
   reportingManager: {
     id: string; firstName: string; lastName: string;
@@ -189,7 +194,11 @@ export interface CompletionResult {
   lowestGroup?: GroupKey;
 }
 
+export type EmployeeListSort = 'BEST_MATCH' | 'NAME_ASC' | 'NAME_DESC' | 'IMPORT_NEWEST' | 'IMPORT_OLDEST';
+export interface EmployeeImportBatch { id: string; label: string | null; sourceFileName: string | null; importedAt: string }
+
 export interface EmployeeWithCompletion extends EmployeeProfile {
+  sourceImport?: EmployeeImportSource | null;
   completion: CompletionResult;
 }
 
@@ -228,6 +237,24 @@ export interface EmsDashboard {
   }[];
 }
 
+export interface EmploymentStatusDetail {
+  status: EmploymentStatus;
+  activityState: 'ACTIVE' | 'INACTIVE';
+  revision: number;
+  updatedAt: string;
+  syncChangeId: string | null;
+  activitySync: string | null;
+  history: { id: string; fromStatus: EmploymentStatus; toStatus: EmploymentStatus; reason: string; actorName: string | null; actorUserId: string; source: string; changedAt: string; activitySync: string }[];
+  hasMoreHistory: boolean;
+}
+export interface ChangeEmploymentStatusPayload {
+  status: EmploymentStatus;
+  reason: string;
+  expectedRevision: number;
+  expectedUpdatedAt: string;
+  requestId: string;
+}
+
 export interface UpdateEmployeeEmsPayload {
   // Identity
   employeeCode?: string;
@@ -244,6 +271,7 @@ export interface UpdateEmployeeEmsPayload {
   dateJoined?: string;
   plantBranch?: string;
   workStation?: string;
+  fiveSLocationCategory?: FiveSLocationCategory | null;
   section?: string;
   subSection?: string;
   shift?: string;
@@ -324,23 +352,28 @@ export interface OnboardingBatchSummary {
 
 export interface ReportingOption {
   target: string; name: string; designation: string; employeeCode: string; department: string; branch: string;
+  /** People-link responses include these identifiers; other reporting responses may omit them. */
+  employeeId?: string | null; recordId?: string; batchId?: string;
 }
-export type ReportingState = 'BOARD' | 'ASSIGNED' | 'PENDING' | 'UNKNOWN' | 'NEEDS_ATTENTION';
+export type PersonSuggestion = ReportingOption & { suggestionReasons?: string[] };
+export type ReportingState = 'BOARD' | 'BODY' | 'ASSIGNED' | 'PENDING' | 'UNKNOWN' | 'NEEDS_ATTENTION';
 export interface ReportingChainItem {
   target: string; name: string; label: string; designation: string; employeeCode: string;
   recordId?: string; employeeId?: string;
-  status: 'PENDING' | 'REGISTERED' | 'NEEDS_ATTENTION' | 'UNKNOWN' | 'BOARD';
+  status: 'PENDING' | 'REGISTERED' | 'NEEDS_ATTENTION' | 'UNKNOWN' | 'BOARD' | 'BODY';
 }
 export interface ReportingResolution {
+  /** Person whose reporting assignment needs correction, from the full validation walk. */
+  blocker?: { target: string; label: string; reason: string; recordId?: string; batchId?: string; employeeId?: string };
   target: string | null; error: string | null; warning: string | null; depth: number | null;
   state: ReportingState; managerName: string | null;
   errorScope?: 'DIRECT' | 'UPSTREAM';
   chain?: ReportingChainItem[];
-  chainEnd?: 'BOARD' | 'UNRESOLVED' | 'UNKNOWN' | 'CYCLE' | 'LIMIT';
+  chainEnd?: 'BOARD' | 'BODY' | 'UNRESOLVED' | 'UNKNOWN' | 'CYCLE' | 'LIMIT';
 }
 export interface EmployeeReportingDetail { assignment: ReportingResolution; options: ReportingOption[]; }
 export const REPORTING_STATE_LABELS: Record<ReportingState, string> = {
-  BOARD: 'Reports to Board', ASSIGNED: 'Manager assigned', PENDING: 'Valid manager assignment pending',
+  BOARD: 'Reports to Board', BODY: 'Top-level reporting body assigned', ASSIGNED: 'Manager assigned', PENDING: 'Valid manager assignment pending',
   UNKNOWN: 'Reporting information incomplete', NEEDS_ATTENTION: 'Reporting needs attention',
 };
 
@@ -374,11 +407,13 @@ export interface DuplicateReview {
 }
 
 export interface OnboardingRecord {
+  extraFields?: ImportedExtraField[] | null;
   reliever1RecordId?: string | null; reliever1EmployeeId?: string | null;
   reliever2RecordId?: string | null; reliever2EmployeeId?: string | null;
   reportingToRecordId: string | null;
   reportingToEmployeeId: string | null;
   reportingToBoard: boolean;
+  reportingToBody?: string | null;
   id: string;
   rowNumber: number | null;
   companyCode: string | null;
@@ -396,6 +431,7 @@ export interface OnboardingRecord {
   hodName: string | null;
   hodDesignation: string | null;
   workArea: string | null;
+  fiveSLocationCategory?: string | null;
   subSection: string | null;
   jobDesignation: string | null;
   beesAccessLevel: string | null;
@@ -422,8 +458,20 @@ export interface PersonLinkResolution {
   person: ReportingOption | null;
   error: string | null;
   warning: string | null;
+  suggestions?: PersonSuggestion[];
+}
+export interface HodEvidence {
+  total: number; blank: number;
+  groups: {name: string; designation: string; count: number; records: {id: string; name: string; employeeCode: string; rowNumber: number | null}[]}[];
+}
+export interface HodDirectoryEntry {
+  key: string; source: 'CONFIRMED' | 'IMPORTED'; department: string; branch: string;
+  departmentId?: string | null; branchKey?: string;
+  target: string | null; person: ReportingOption | null; selectable: boolean; note: string | null;
 }
 export interface DepartmentHodResolution extends PersonLinkResolution {
+  recordedSuggestions?: PersonSuggestion[];
+  evidenceKey?: string;
   departmentId: string | null; departmentName: string; branchKey: string; branchLabel: string;
   version: string; reviewKey: string | null; suggestedTarget: string | null; affectedRecords: number;
 }
@@ -431,20 +479,29 @@ export interface RecordPeopleLinks {
   hod: DepartmentHodResolution; first: PersonLinkResolution; second: PersonLinkResolution;
 }
 export interface EmployeePeopleLinks {
+  hasHodAssignment?: boolean;
+  hodDirectory?: HodDirectoryEntry[]; recordedHodSuggestions?: PersonSuggestion[];
   previousHod: {name: string; designation: string} | null;
   hod: PersonLinkResolution; first: PersonLinkResolution; second: PersonLinkResolution;
   departmentId: string | null; departmentName: string; branchLabel: string;
   options: ReportingOption[]; hodOptions: ReportingOption[]; version: string; hodVersion: string;
 }
 
+export interface OnboardingFieldOptions {
+  departments: { name: string; usable: boolean }[];
+  designations: { value: string; departments: string[]; existing: boolean; imported: boolean }[];
+}
+
 export interface OnboardingBatchDetail extends OnboardingBatchSummary {
-  peopleLinks?: { options: ReportingOption[]; byRecord: Record<string, RecordPeopleLinks> };
-  hierarchy: { suggestionsByRecord?: Record<string, ReportingOption[]>; options: ReportingOption[]; byRecord: Record<string, ReportingResolution>; orderedIds: string[] };
+  fieldOptions?: OnboardingFieldOptions;
+  peopleLinks?: { hodEvidence?: Record<string, HodEvidence>; hodDirectory?: HodDirectoryEntry[]; options: ReportingOption[]; byRecord: Record<string, RecordPeopleLinks> };
+  hierarchy: { suggestionsByRecord?: Record<string, PersonSuggestion[]>; options: ReportingOption[]; byRecord: Record<string, ReportingResolution>; orderedIds: string[] };
   organizationId: string;
   records: OnboardingRecord[];
 }
 
 export interface UpdateOnboardingRecordPayload {
+  extraFields?: ImportedExtraField[];
   reliever1Target?: string;
   reliever2Target?: string;
   reportingTarget?: string;
@@ -463,6 +520,7 @@ export interface UpdateOnboardingRecordPayload {
   hodName?: string;
   hodDesignation?: string;
   workArea?: string;
+  fiveSLocationCategory?: string;
   subSection?: string;
   jobDesignation?: string;
   beesAccessLevel?: string;
@@ -504,7 +562,7 @@ export const EmsService = {
 
   async getEmployees(
     token: string,
-    params: { page?: number; limit?: number; departmentId?: string; employmentStatus?: EmploymentStatus },
+    params: { page?: number; limit?: number; departmentId?: string; employmentStatus?: EmploymentStatus; activityState?: 'ACTIVE' | 'INACTIVE'; search?: string; source?: 'IMPORTED' | 'UNLINKED'; importBatchId?: string; sort?: EmployeeListSort },
   ): Promise<{ data: EmployeeWithCompletion[]; pagination: { page: number; limit: number; total: number; pages: number } }> {
     const q = Object.entries(params)
       .filter(([, v]) => v !== undefined)
@@ -512,6 +570,24 @@ export const EmsService = {
       .join("&");
     const res = await apiClient(`${API_URL}/ems/employees${q ? `?${q}` : ""}`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
+  },
+
+  async getEmployeeImportBatches(token: string): Promise<EmployeeImportBatch[]> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/import-batches`, { headers: authHeaders(token) }, token));
+  },
+
+  async getEmploymentStatus(id: string, token: string): Promise<EmploymentStatusDetail> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/${id}/employment-status`, { headers: authHeaders(token) }, token));
+  },
+  async changeEmploymentStatus(id: string, data: ChangeEmploymentStatusPayload, token: string): Promise<EmploymentStatusDetail> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/${id}/employment-status`, {
+      method: 'PATCH', headers: authHeaders(token), body: JSON.stringify(data),
+    }, token));
+  },
+  async retryEmploymentActivitySync(id: string, changeId: string, token: string): Promise<EmploymentStatusDetail> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/${id}/employment-status/${changeId}/retry-sync`, {
+      method: 'POST', headers: authHeaders(token),
+    }, token));
   },
 
   async getEmployeeReporting(id: string, token: string): Promise<EmployeeReportingDetail> {
@@ -704,7 +780,7 @@ export const EmsService = {
   async registerOnboardingBatch(
     id: string,
     token: string,
-  ): Promise<{ registered: number; failed: number; batch: OnboardingBatchDetail }> {
+  ): Promise<{ registered: number; failed: number; awaitingAdmin?: number; batch: OnboardingBatchDetail }> {
     const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/register`, {
       method: "POST",
       headers: authHeaders(token),

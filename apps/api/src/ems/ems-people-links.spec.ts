@@ -158,3 +158,45 @@ describe('people-link boundary contracts',()=>{
     expect(validateSync(plainToInstance(UpdateEmployeeRelieversDto,{first:'NONE',second:'employee:x'})).length).toBeGreaterThan(0);
   });
 });
+
+describe('HOD scope and existing-system suggestions',()=>{
+  it('replaces the same profile scope once and removes the old head from that directory entry',async()=>{
+    const f=fixture();
+    let current=await employeePeopleLinks(f.db,'org','employee');
+    expect(current.hasHodAssignment).toBe(false);
+    await saveEmployeeHod(f.db,'org','employee','employee:employee',current.hodVersion,'reviewer');
+    current=await employeePeopleLinks(f.db,'org','employee');
+    await saveEmployeeHod(f.db,'org','employee','employee:replacement',current.hodVersion,'reviewer');
+    const after=await employeePeopleLinks(f.db,'org','employee');
+    expect(f.assignments).toHaveLength(1);expect(after.hod.target).toBe('employee:replacement');expect(after.hasHodAssignment).toBe(true);
+    expect(after.hodDirectory).toHaveLength(1);expect(after.hodDirectory[0]).toMatchObject({departmentId:'production',branchKey:'nairobi',target:'employee:replacement'});
+  });
+  it('keeps two branch appointments separate even when both heads work in Nairobi',async()=>{
+    const f=fixture();
+    await saveDepartmentHod(f.db,'org','batch','a','employee:employee',await f.version(),'reviewer');
+    const other=(await loadPeopleLinks(f.db,'org',f.rows)).byRecord['other-branch'].hod;
+    await saveDepartmentHod(f.db,'org','batch','other-branch','employee:replacement',other.version,'reviewer');
+    expect(f.assignments).toHaveLength(2);
+    const result=await loadPeopleLinks(f.db,'org',f.rows);
+    expect(result.byRecord.a.hod.target).toBe('employee:employee');
+    expect(result.byRecord['other-branch'].hod.target).toBe('employee:replacement');
+    expect(result.hodDirectory.find(e=>e.branch==='Mombasa')).toMatchObject({branchKey:'mombasa',person:{branch:'Nairobi'}});
+  });
+  it('returns existing recorded hints only for the same department and branch without extra queries or writes',async()=>{
+    const f=fixture();Object.assign(f.employees[0],{hodName:'replacement Person',hodDesignation:'Operator'});
+    const batch=await loadPeopleLinks(f.db,'org',f.rows);
+    expect(batch.byRecord.a.hod.recordedSuggestions?.[0].target).toBe('employee:replacement');
+    expect(batch.byRecord['other-branch'].hod.recordedSuggestions).toEqual([]);
+    expect(batch.byRecord.a.hod.target).toBeNull();expect(f.assignments).toEqual([]);
+    expect(f.db.employee.findMany).toHaveBeenCalledTimes(1);expect(f.db.emsDepartmentHod.upsert).not.toHaveBeenCalled();
+    expect((await employeePeopleLinks(f.db,'org','employee')).recordedHodSuggestions?.[0].target).toBe('employee:replacement');
+  });
+  it('retains a confirmed choice even when older profile text names another head',async()=>{
+    const f=fixture();Object.assign(f.employees[0],{hodName:'employee Person',hodDesignation:'Operator'});
+    const before=await employeePeopleLinks(f.db,'org','employee');
+    await saveEmployeeHod(f.db,'org','employee','employee:replacement',before.hodVersion,'reviewer');
+    const after=await employeePeopleLinks(f.db,'org','employee');
+    expect(after.hod.target).toBe('employee:replacement');expect(after.recordedHodSuggestions?.[0].target).toBe('employee:employee');
+    expect(f.assignments).toHaveLength(1);
+  });
+});

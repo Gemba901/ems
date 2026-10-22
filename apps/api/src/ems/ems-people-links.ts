@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from 'db';
 import { normaliseKey } from './onboarding-text';
+import { recordedHodSuggestions } from './onboarding-hod-suggestions';
 import { branchKey, LinkPerson, LinkRecord, peopleIndex, personName,
   RecordPeopleLinks, resolveBatchPeopleLinks, scopeKey } from './onboarding-people-links';
 
@@ -32,7 +33,12 @@ export async function loadPeopleLinks(db: Prisma.TransactionClient, organization
     name: personName(r), designation: r.jobDesignation ?? '', employeeCode: r.employeeCode ?? '', department: r.currentDepartment ?? '', branch: r.plantBranchCode ?? '',
     unavailable: r.status === 'EXCLUDED' || r.batch?.status === 'CANCELLED' });
   const resolved = resolveBatchPeopleLinks(rows, options, departments, assignments, records);
-  return { ...resolved, employees, departments, assignments, records, allOptions: options };
+  const recordedSuggestions = recordedHodSuggestions(employees, options);
+  for (const links of Object.values(resolved.byRecord)) {
+    links.hod.recordedSuggestions = links.hod.departmentId
+      ? recordedSuggestions.get(scopeKey(links.hod.departmentId, links.hod.branchKey)) ?? [] : [];
+  }
+  return { ...resolved, recordedSuggestions, employees, departments, assignments, records, allOptions: options };
 }
 
 export async function saveDepartmentHod(db: Prisma.TransactionClient, organizationId: string, batchId: string,
@@ -150,7 +156,9 @@ export async function employeePeopleLinks(db: Prisma.TransactionClient, organiza
   const first = index.resolve(employee.firstRelieverId ? `employee:${employee.firstRelieverId}` : employee.pendingFirstRelieverRecordId ? `record:${employee.pendingFirstRelieverRecordId}` : null, 'First reliever');
   const second = index.resolve(employee.secondRelieverId ? `employee:${employee.secondRelieverId}` : employee.pendingSecondRelieverRecordId ? `record:${employee.pendingSecondRelieverRecordId}` : null, 'Second reliever');
   return { hod, first, second, departmentName: employee.department?.name ?? '', branchLabel: employee.plantBranch?.trim() || 'Branch not specified',
-    departmentId: employee.departmentId,
+    departmentId: employee.departmentId, hasHodAssignment: !!assignment,
+    hodDirectory: context.hodDirectory,
+    recordedHodSuggestions: employee.departmentId ? context.recordedSuggestions.get(scopeKey(employee.departmentId, branchKey(employee.plantBranch))) ?? [] : [],
     previousHod: !assignment && (employee.hodName || employee.hodDesignation) ? {name: employee.hodName ?? '', designation: employee.hodDesignation ?? ''} : null,
     hodVersion: JSON.stringify([scopeKey(employee.departmentId ?? '', branchKey(employee.plantBranch)), assignment ? `${assignment.id}:${assignment.revision}` : null]),
     hodOptions: context.allOptions.filter(p => p.target.startsWith('employee:')),

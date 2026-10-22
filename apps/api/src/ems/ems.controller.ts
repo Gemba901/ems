@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { EmsService } from './ems.service';
 import { EmsDemoOnly, EmsDemoToolsGuard } from './ems-demo-tools.guard';
-import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
+import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto, ChangeEmploymentStatusDto } from './dto/ems.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
@@ -52,6 +52,13 @@ export class EmsController {
     return this.ems.getEmployees(user.organizationId, query);
   }
 
+  /** Import sources for the employee-list filter; must precede employees/:id. */
+  @Get('employees/import-batches')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getEmployeeImportBatches(@CurrentUser() user: { organizationId: string }) {
+    return this.ems.getEmployeeImportBatches(user.organizationId);
+  }
+
   /** GET /ems/employees/:id — single employee detail */
   @Get('employees/:id')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
@@ -60,6 +67,26 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.getEmployeeById(id, user.organizationId);
+  }
+
+  @Get('employees/:id/employment-status')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getEmploymentStatus(@Param('id') id: string, @CurrentUser() user: { organizationId: string }) {
+    return this.ems.getEmploymentStatus(id, user.organizationId);
+  }
+
+  @Patch('employees/:id/employment-status')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async changeEmploymentStatus(@Param('id') id: string, @Body() dto: ChangeEmploymentStatusDto,
+    @CurrentUser() user: { organizationId: string; userId: string }) {
+    return this.ems.changeEmploymentStatus(id, user.organizationId, user.userId, dto);
+  }
+
+  @Post('employees/:id/employment-status/:changeId/retry-sync')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async retryEmploymentActivitySync(@Param('id') id: string, @Param('changeId') changeId: string,
+    @CurrentUser() user: { organizationId: string }) {
+    return this.ems.retryEmploymentActivitySync(id, user.organizationId, changeId);
   }
 
   @Get('employees/:id/reporting')
@@ -229,9 +256,9 @@ export class EmsController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
   async registerOnboardingBatch(
     @Param('id') id: string,
-    @CurrentUser() user: { organizationId: string },
+    @CurrentUser() user: { organizationId: string; roleLevel: Role },
   ) {
-    return this.ems.registerOnboardingBatch(user.organizationId, id);
+    return this.ems.registerOnboardingBatch(user.organizationId, id, user.roleLevel);
   }
 
   /** PATCH /ems/onboarding/batches/:id/cancel — abandon an import */

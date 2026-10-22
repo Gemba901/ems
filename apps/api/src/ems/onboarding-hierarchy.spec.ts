@@ -16,7 +16,7 @@ describe('designation-led reporting resolution', () => {
     expect(resolveReporting([r], [boss]).byRecord.staff.error).toBeNull();
   });
   it.each(['Managing DIR', 'HR Mgr'])('does not silently expand title %s', title => {
-    expect(resolveReporting([{ ...staff(), reportingToDesignation: title }], [boss]).byRecord.staff.error).toMatch(/designation was not found/);
+    expect(resolveReporting([{ ...staff(), reportingToDesignation: title }], [boss]).byRecord.staff.error).toMatch(/job title was not found/);
   });
   it.each(['Janet Boss', 'Jane'])('requires selection for name variation %s', name => {
     expect(resolveReporting([{ ...staff(), reportingToName: name }], [boss]).byRecord.staff.error).toMatch(/name does not/);
@@ -91,7 +91,7 @@ describe('reporting placeholders', () => {
   });
   it.each(['N/A', 'not applicable'])('rejects a selected manager with designation %s', designation => {
     const r = { ...staff(), reportingToEmployeeId: 'boss' };
-    expect(resolveReporting([r], [{ ...boss, jobTitle: designation }]).byRecord.staff.error).toMatch(/needs a name and job designation/);
+    expect(resolveReporting([r], [{ ...boss, jobTitle: designation }]).byRecord.staff.error).toMatch(/needs a name and job title/);
   });
 });
 
@@ -149,7 +149,7 @@ describe('Clive workbook scenarios under the combined policy', () => {
   });
   it('rejects an unmatched title even when the name is present twice', () => {
     const ann = row('ann', { reportingToName: 'Peter Otieno', reportingToDesignation: 'Line Supervisor' });
-    expect(resolveReporting([director, manager, supervisor, ann], []).byRecord.ann.error).toMatch(/designation was not found/);
+    expect(resolveReporting([director, manager, supervisor, ann], []).byRecord.ann.error).toMatch(/job title was not found/);
   });
   it('rejects the self-reporting cleaner, not the designation Cleaner', () => {
     const paul = row('paul', { firstName: 'Paul', lastName: 'Njoroge', jobDesignation: 'Cleaner', reportingToName: 'Paul Njoroge', reportingToDesignation: 'Cleaner' });
@@ -257,13 +257,15 @@ describe('reporting feedback and suggestions', () => {
     const h = resolveReporting([report, grace, { ...grace, id: 'other', middleName: 'A' }], []);
     expect(h.suggestionsByRecord.report).toHaveLength(2); expect(h.byRecord.report.target).toBeNull();
   });
-  it.each(['G Wanjiru', 'Gracie Wanjiru', 'Grace', 'Grace W'])('does not suggest partial or nickname %s', name => {
+  it.each(['G Wanjiru', 'Gigi Wanjiru', 'Grace', 'Grace W'])('does not suggest partial or nickname %s', name => {
     expect(resolveReporting([{ ...report, reportingToName: name }, grace], []).suggestionsByRecord.report).toEqual([]);
   });
-  it('does not suggest excluded people, other imports, or different titles', () => {
+  it('excludes unavailable and foreign candidates but flags a different title', () => {
     expect(resolveReporting([report, { ...grace, status: 'EXCLUDED' }], []).suggestionsByRecord.report).toEqual([]);
     expect(resolveReporting([report], [], [{ ...grace, batchId: 'other' }]).suggestionsByRecord.report).toEqual([]);
-    expect(resolveReporting([{ ...report, reportingToDesignation: 'DIR' }, grace], []).suggestionsByRecord.report).toEqual([]);
+    const differing = resolveReporting([{ ...report, reportingToDesignation: 'DIR' }, grace], []);
+    expect(differing.suggestionsByRecord.report[0].suggestionReasons).toContain('Job title differs — check the imported and recorded values');
+    expect(differing.byRecord.report.target).toBeNull();
   });
   it('honours an explicit choice instead of suggesting alternatives', () => {
     expect(resolveReporting([{ ...report, reportingToRecordId: 'grace' }, grace], []).suggestionsByRecord.report).toEqual([]);
@@ -368,5 +370,32 @@ describe('compact reporting chains and person labels', () => {
     const r=resolveReporting([staff()],[manager],[other]).byRecord.staff;
     expect(r.chain?.[2].recordId).toBe(undefined);
     expect(r.chain?.[2].target).toBe('record:other');
+  });
+});
+
+
+describe('explicit review of broader reporting suggestions', () => {
+  const manager = row('grace', {batchId:'batch', firstName:'Grace', middleName:'Muthoni', lastName:'Wanjiru', jobDesignation:'Director'});
+  const report = row('report', {batchId:'batch', reportingToName:'Grace Wanjiku', reportingToDesignation:'Director'});
+  it('offers a supported spelling candidate without assigning or changing eligibility',()=>{
+    const h=resolveReporting([report,manager],[]);
+    expect(h.byRecord.report.target).toBeNull();expect(h.byRecord.report.error).not.toBeNull();
+    expect(h.suggestionsByRecord.report[0]).toMatchObject({target:'record:grace',suggestionReasons:expect.arrayContaining(['Possible spelling match — check spelling and confirm'])});
+  });
+  it('an explicit choice still goes through cycle validation',()=>{
+    const h=resolveReporting([{...report,reportingToRecordId:'grace'},{...manager,reportingToRecordId:'report'}],[]);
+    expect(h.byRecord.report.error).toMatch(/Circular/);expect(h.suggestionsByRecord.report).toEqual([]);
+  });
+  it('shows same-name designation differences without auto-assigning',()=>{
+    const h=resolveReporting([{...report,reportingToName:'Grace Muthoni Wanjiru',reportingToDesignation:'DIR'}], [{id:'g',firstName:'Grace',middleName:'Muthoni',lastName:'Wanjiru',jobTitle:'Director',reportsToBoard:true}]);
+    expect(h.byRecord.report.target).toBeNull();expect(h.suggestionsByRecord.report[0].suggestionReasons).toContain('Job title differs — check the imported and recorded values');
+  });
+  it('never offers self or another import pending record even when both rows are supplied',()=>{
+    const self={...report,firstName:'Grace',lastName:'Wanjiku',jobDesignation:'Director'};
+    const h=resolveReporting([self,{...manager,batchId:'other'}],[]);
+    expect(h.suggestionsByRecord.report).toEqual([]);
+  });
+  it('does not offer spelling candidates when designation also differs',()=>{
+    expect(resolveReporting([{...report,reportingToDesignation:'Operator'},manager],[]).suggestionsByRecord.report).toEqual([]);
   });
 });

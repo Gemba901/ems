@@ -1,3 +1,11 @@
+import { normaliseFiveSLocation, FIVE_S_LOCATION_ERROR } from './five-s-location';
+import { importedAccountRole, canRegisterOnboarding, registrationAccess } from './onboarding-access';
+import { employeeListWhere, employeeNameOrder, employeeSearchGroups, registeredSourceWhere, EMPLOYEE_SOURCE_SELECT, employeeImportSource } from './ems-employee-list';
+import { assertProfileBirthDate } from './employee-profile-dates';
+import { readExtraFields, reviseExtraFields, extraProfileData, ExtraFieldsError } from './onboarding-extra-fields';
+import { isReportingBody, reportingBodyLabel } from './reporting-bodies';
+import { onboardingNameIssue } from './onboarding-name-rule';
+import { departmentIndex, departmentIssue, onboardingFieldOptions } from './onboarding-field-options';
 import { onboardingReadContext, OnboardingEmployeeSnapshot } from './onboarding-read-context';
 import { onboardingPerformance } from './onboarding-performance';
 import { retryOnboardingTransaction } from './onboarding-transaction';
@@ -7,13 +15,15 @@ import { cleanRecord, isBlankValue, isNotApplicable, matchEnumValue, normaliseKe
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
-import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto } from './dto/ems.dto';
+import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto, ChangeEmploymentStatusDto } from './dto/ems.dto';
+import { isActiveEmployment } from './employment-status';
+import { getEmploymentStatus, changeEmploymentStatus, retryEmploymentActivitySync } from './ems-employment-status';
 import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
 import { 
   AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto,
 } from './dto/onboarding.dto';
-import { Prisma, RoleName } from 'db';
+import { Prisma } from 'db';
 import { getCountries } from 'libphonenumber-js/max';
 import { normalisePhone, storedPhone, phoneLookupDigits } from './onboarding-phone';
 import { resolveReporting, ReportingRow } from './onboarding-hierarchy';
@@ -25,6 +35,20 @@ class OnboardingDuplicateConflict extends BadRequestException {
     super('Possible duplicate or identity conflict. Review the matching people before registration.');
   }
 }
+
+class OnboardingFieldConflict extends BadRequestException {
+  constructor(readonly findings: { field: string; message: string }[]) {
+    const labels: Record<string, string> = {
+      fiveSLocationCategory: '5S location category', jobDesignation: 'Job title', workEmail: 'Email', hodDesignation: 'HOD job title',
+      reportingToDesignation: 'Reporting to job title',
+      reliever1Designation: '1st reliever job title', reliever2Designation: '2nd reliever job title',
+    };
+    super(findings.map(f => `${labels[f.field] ?? f.field}: ${f.message}`).join('; '));
+  }
+}
+
+// Caller authority is separate from record validation; never downgrade a row for it.
+class OnboardingAdminRegistrationRequired extends Error {}
 
 // An organisation setting changed, rather than a person's imported data.
 class OnboardingChannelChangedError extends Error {}
@@ -54,7 +78,7 @@ export function calcEmployeeCompletion(emp: Record<string, unknown>) {
   let totalFilled = 0;
 
   for (const [groupKey, fields] of Object.entries(EMS_GROUPS)) {
-    const filled = fields.filter((f) => f === 'reportingManagerId' ? isFilled(emp[f]) || emp.reportsToBoard === true : isFilled(emp[f])).length;
+    const filled = fields.filter((f) => f === 'reportingManagerId' ? isFilled(emp[f]) || emp.reportsToBoard === true || isReportingBody(emp.reportingBody) : isFilled(emp[f])).length;
     groups[groupKey] = Math.round((filled / fields.length) * 100);
     totalFilled += filled;
   }
@@ -92,9 +116,9 @@ const EMS_EMPLOYEE_SELECT = {
 
   // Work Allocation
   employmentStatus: true, employmentType: true, jobTitle: true, dateJoined: true,
-  plantBranch: true, workStation: true, section: true, subSection: true, shift: true,
+  plantBranch: true, workStation: true, fiveSLocationCategory: true, section: true, subSection: true, shift: true,
   reportingManagerId: true,
-  reportsToBoard: true, pendingReportingRecordId: true,
+  reportsToBoard: true, reportingBody: true, pendingReportingRecordId: true,
   reportingManager: { select: { id: true, firstName: true, lastName: true, jobTitle: true, avatarUrl: true } },
 
   hodName: true, hodDesignation: true, beesAccessLevel: true,
@@ -181,24 +205,9 @@ const FORMAT_CHECKED_OPTIONAL_FIELDS = [
 
 function notApplicableMessage(field: string): string {
   return field === 'reportingToName'
-    ? 'N/A is not accepted. For the most senior person, leave this blank and enter Board as the designation.'
+    ? 'N/A is not accepted. Choose a reporting person, or leave this blank and enter Board, Committee, Management Committee or Owner in the Reporting to job title field.'
     : 'This field applies to every employee, so N/A is not accepted';
 }
-
-//rbac new acc to BEES
-const ACCESS_LEVEL_VALUES: Record<string, RoleName> = {
-  employee:          RoleName.EMPLOYEE,
-  supervisor:        RoleName.EMPLOYEE,   // elevated permissions handled separately
-  management:        RoleName.MANAGEMENT,
-  manager:           RoleName.MANAGEMENT,
-  hod:               RoleName.HOD,
-  headofdepartment:  RoleName.HOD,
-  hr:                RoleName.HR,
-  humanresources:    RoleName.HR,
-  admin:             RoleName.ADMIN,
-  administrator:     RoleName.ADMIN,
-  systemadministrator: RoleName.ADMIN,
-};
 
 @Injectable()
 export class EmsService {
@@ -261,7 +270,7 @@ export class EmsService {
   async getEmployeeById(employeeId: string, organizationId: string) {
     const emp = await this.prisma.employee.findFirst({
       where: { id: employeeId, organizationId },
-      select: EMS_EMPLOYEE_SELECT,
+      select: { ...EMS_EMPLOYEE_SELECT, importedExtraFields: true },
     });
     if (!emp) throw new NotFoundException('Employee not found');
 
@@ -288,30 +297,80 @@ export class EmsService {
 
   // ── HR/Admin: paginated employee list with completion ─────────────────────
   async getEmployees(organizationId: string, query: QueryEmsEmployeesDto) {
-    const { page, limit, departmentId, employmentStatus } = query;
-    const skip = (page - 1) * limit;
+    const limit = query.limit ?? 20;
+    const where = employeeListWhere(organizationId, query);
+    const select = { ...EMS_EMPLOYEE_SELECT, emsOnboardingRecord: { select: EMPLOYEE_SOURCE_SELECT } };
+    // One read snapshot keeps totals, clamped page and rows consistent during registration.
+    return this.prisma.$transaction(async tx => {
+      const total = await tx.employee.count({ where });
+      const pages = Math.ceil(total / limit);
+      const page = Math.min(query.page ?? 1, Math.max(1, pages));
+      const skip = (page - 1) * limit;
+      const byImport = query.sort === 'IMPORT_NEWEST' || query.sort === 'IMPORT_OLDEST';
+      let employees;
+      if (query.search?.trim() && (!query.sort || query.sort === 'BEST_MATCH')) {
+        employees = [] as Prisma.EmployeeGetPayload<{ select: typeof select }>[];
+        const groups = employeeSearchGroups(query.search);
+        let offset = skip;
+        let remaining = total;
+        for (let index = 0; index < groups.length && employees.length < limit && remaining > 0; index++) {
+          const groupWhere: Prisma.EmployeeWhereInput = { AND: [where, groups[index]] };
+          // The final count is the remainder: at most two extra count queries.
+          const count = index === groups.length - 1 ? remaining : await tx.employee.count({ where: groupWhere });
+          remaining -= count;
+          if (offset >= count) { offset -= count; continue; }
+          employees.push(...await tx.employee.findMany({
+            where: groupWhere, select, skip: offset, take: Math.min(limit - employees.length, count - offset),
+            orderBy: employeeNameOrder(),
+          }));
+          offset = 0;
+        }
+      } else if (byImport) {
+        // Always put employees without an import last, in both date directions.
+        // Paginate across the two segments in SQL; never load all employees to sort.
+        const importedWhere: Prisma.EmployeeWhereInput = { AND: [where, { emsOnboardingRecord: { is: registeredSourceWhere(organizationId) } }] };
+        const importedCount = await tx.employee.count({ where: importedWhere });
+        const direction = query.sort === 'IMPORT_NEWEST' ? 'desc' : 'asc';
+        const imported = skip < importedCount ? await tx.employee.findMany({
+          where: importedWhere, select, skip, take: Math.min(limit, importedCount - skip),
+          orderBy: [{ emsOnboardingRecord: { batch: { createdAt: direction } } }, { id: 'asc' }],
+        }) : [];
+        const unlinked = imported.length < limit ? await tx.employee.findMany({
+          where: { AND: [where, { emsOnboardingRecord: { isNot: registeredSourceWhere(organizationId) } }] }, select,
+          skip: Math.max(0, skip - importedCount), take: limit - imported.length, orderBy: employeeNameOrder(),
+        }) : [];
+        employees = [...imported, ...unlinked];
+      } else {
+        employees = await tx.employee.findMany({ where, select, skip, take: limit, orderBy: employeeNameOrder(query.sort === 'NAME_DESC') });
+      }
+      const data = employees.map(({ emsOnboardingRecord, ...emp }) => ({
+        ...emp, completion: calcEmployeeCompletion(emp as Record<string, unknown>),
+        sourceImport: employeeImportSource(emsOnboardingRecord, organizationId),
+      }));
+      return { data, pagination: { page, limit, total, pages } };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
 
-    const where: Record<string, unknown> = { organizationId };
-    if (departmentId) where.departmentId = departmentId;
-    if (employmentStatus) where.employmentStatus = employmentStatus;
-
-    const [employees, total] = await Promise.all([
-      this.prisma.employee.findMany({
-        where,
-        select: EMS_EMPLOYEE_SELECT,
-        orderBy: { firstName: 'asc' },
-        skip,
-        take: limit,
-      }),
-      this.prisma.employee.count({ where }),
-    ]);
-
-    const data = employees.map((emp) => {
-      const { overall, groups, lowestGroup } = calcEmployeeCompletion(emp as Record<string, unknown>);
-      return { ...emp, completion: { overall, groups, lowestGroup } };
+  // Small source list only; excludes batches with no linked registered employees.
+  async getEmployeeImportBatches(organizationId: string) {
+    const batches = await this.prisma.emsOnboardingBatch.findMany({
+      where: { organizationId, records: { some: { organizationId, status: 'REGISTERED', employee: { is: { organizationId } } } } },
+      select: { id: true, label: true, sourceFileName: true, createdAt: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     });
+    return batches.map(({ createdAt, ...batch }) => ({ ...batch, importedAt: createdAt }));
+  }
 
-    return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+  getEmploymentStatus(employeeId: string, organizationId: string) {
+    return getEmploymentStatus(this.prisma, organizationId, employeeId);
+  }
+
+  changeEmploymentStatus(employeeId: string, organizationId: string, actorUserId: string, dto: ChangeEmploymentStatusDto) {
+    return changeEmploymentStatus(this.prisma, this.dwmsService, organizationId, employeeId, actorUserId, dto);
+  }
+
+  retryEmploymentActivitySync(employeeId: string, organizationId: string, changeId: string) {
+    return retryEmploymentActivitySync(this.prisma, this.dwmsService, organizationId, employeeId, changeId);
   }
 
   // ── HR/Admin: update employee EMS data ───────────────────────────────────
@@ -323,23 +382,31 @@ export class EmsService {
         departmentId: true,
         jobTitle: true,
         employmentStatus: true,
+        organization: { select: { timeZone: true } },
       },
     });
     if (!existing) throw new NotFoundException('Employee not found');
+    assertProfileBirthDate(dto.dateOfBirth, existing.organization?.timeZone);
+    const fiveSCategory = normaliseFiveSLocation(dto.fiveSLocationCategory);
+    if (dto.fiveSLocationCategory !== undefined && fiveSCategory === undefined)
+      throw new BadRequestException(FIVE_S_LOCATION_ERROR);
 
     const updated = await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
       await this.lockReporting(tx, organizationId);
       const current = await tx.employee.findFirst({
         where: { id: employeeId, organizationId },
-        select: { id: true, reportingManagerId: true, pendingReportingRecordId: true, reportsToBoard: true },
+        select: { id: true, employmentStatus: true, reportingManagerId: true, pendingReportingRecordId: true, reportsToBoard: true, reportingBody: true },
       });
       if (!current) throw new NotFoundException('Employee not found');
+      if (dto.employmentStatus !== undefined && dto.employmentStatus !== current.employmentStatus)
+        throw new BadRequestException('Use Change employment status on the profile, with a reason and confirmation.');
       const DATE_FIELDS = new Set(['dateOfBirth', 'dateJoined']);
       const updateData: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(dto)) {
-        if (['reportingManagerId', 'firstRelieverId', 'secondRelieverId', 'pendingFirstRelieverRecordId', 'pendingSecondRelieverRecordId', 'hodName', 'hodDesignation'].includes(key) || value === undefined || value === '') continue;
+        if (['fiveSLocationCategory', 'employmentStatus', 'employmentStatusRevision', 'employmentStatusChanges', 'reportingManagerId', 'firstRelieverId', 'secondRelieverId', 'pendingFirstRelieverRecordId', 'pendingSecondRelieverRecordId', 'hodName', 'hodDesignation'].includes(key) || value === undefined || value === '') continue;
         updateData[key] = DATE_FIELDS.has(key) ? new Date(value as string) : value;
       }
+      if (dto.fiveSLocationCategory !== undefined) updateData.fiveSLocationCategory = fiveSCategory;
       if (dto.reportingManagerId && dto.reportingManagerId !== current.reportingManagerId) {
         Object.assign(updateData, await this.reportingAssignmentData(tx, organizationId, employeeId, `employee:${dto.reportingManagerId}`));
       }
@@ -374,7 +441,7 @@ export class EmsService {
 
     const total = employees.length;
     const activeOrProbation = employees.filter(
-      (e) => e.employmentStatus === 'ACTIVE' || e.employmentStatus === 'PROBATION',
+      (e) => isActiveEmployment(e.employmentStatus),
     ).length;
 
     // Per-employee completion
@@ -458,7 +525,7 @@ export class EmsService {
 
     const deptBreakdown = departments.map((d) => {
       const active = d.employees.filter(
-        (e) => e.employmentStatus === 'ACTIVE' || e.employmentStatus === 'PROBATION',
+        (e) => isActiveEmployment(e.employmentStatus),
       ).length;
       const pct = d.employees.length > 0 ? Math.round((active / d.employees.length) * 100) : 0;
       return { id: d.id, name: d.name, activeCount: active, totalCount: d.employees.length, pct };
@@ -722,7 +789,7 @@ export class EmsService {
         firstName: true, middleName: true, lastName: true, employeeCode: true,
         currentDepartment: true, plantBranchCode: true, jobDesignation: true,
         reportingToName: true, reportingToDesignation: true,
-        reportingToRecordId: true, reportingToEmployeeId: true, reportingToBoard: true,
+        reportingToRecordId: true, reportingToEmployeeId: true, reportingToBoard: true, reportingToBody: true,
         batch: { select: { status: true } },
       },
     });
@@ -748,7 +815,7 @@ export class EmsService {
       // Conditional update is idempotent and cannot overwrite an HR replacement.
       await db.employee.updateMany({
         where: { id: employee.id, organizationId, pendingReportingRecordId: employee.pendingReportingRecordId,
-          reportingManagerId: null, reportsToBoard: false },
+          reportingManagerId: null, reportsToBoard: false, reportingBody: null },
         data: { reportingManagerId: managerId, pendingReportingRecordId: null },
       });
     }
@@ -757,11 +824,11 @@ export class EmsService {
   private async reportingAssignmentData(db: Prisma.TransactionClient, organizationId: string, employeeId: string, target: string) {
     const context = await this.reportingContext(db, organizationId);
     if (!context.employees.some(e => e.id === employeeId)) throw new NotFoundException('Employee not found');
-    if (target !== 'BOARD' && (!target.startsWith('employee:') || !context.employees.some(e => `employee:${e.id}` === target))) {
-      throw new BadRequestException('Choose Board or an existing reporting manager in this organization');
+    if (!isReportingBody(target) && (!target.startsWith('employee:') || !context.employees.some(e => `employee:${e.id}` === target))) {
+      throw new BadRequestException('Choose a top-level reporting body or an existing reporting manager in this organization');
     }
-    const data = { reportingManagerId: target === 'BOARD' ? null : target.slice(9),
-      reportsToBoard: target === 'BOARD', pendingReportingRecordId: null };
+    const data = { reportingManagerId: isReportingBody(target) ? null : target.slice(9),
+      reportsToBoard: target === 'BOARD', reportingBody: isReportingBody(target) && target !== 'BOARD' ? target : null, pendingReportingRecordId: null };
     const employees = context.employees.map(e => e.id === employeeId ? { ...e, ...data } : e);
     const resolved = resolveReporting(context.records, employees).byEmployee[employeeId];
     if (data.reportingManagerId === employeeId) throw new BadRequestException('A person cannot report to themselves');
@@ -797,7 +864,7 @@ export class EmsService {
       select: {
         id: true, firstName: true, middleName: true, lastName: true, jobTitle: true,
         employeeCode: true, plantBranch: true, reportingManagerId: true,
-        reportsToBoard: true, pendingReportingRecordId: true,
+        reportsToBoard: true, reportingBody: true, pendingReportingRecordId: true,
         department: { select: { name: true } },
       },
     });
@@ -900,7 +967,8 @@ export class EmsService {
         index && !['REGISTERED', 'EXCLUDED'].includes(record.status)
           ? index.review(duplicateImportPerson(record, organizationId, batch.defaultPhoneCountry), record.duplicateReviewReceipt) : null));
       timing.mark('duplicateReview');
-      const peopleLinks = await loadPeopleLinks(tx, organizationId, batch.records, { employees, departments: await context.departments() });
+      const departments = await context.departments();
+      const peopleLinks = await loadPeopleLinks(tx, organizationId, batch.records, { employees, departments });
       timing.mark('peopleLinks');
       for (const record of records) {
         if (['REGISTERED', 'EXCLUDED'].includes(record.status) || batch.status === 'CANCELLED') continue;
@@ -916,7 +984,12 @@ export class EmsService {
           f.code === 'PEOPLE_LINK';
 
         const findings = [
-          ...old.filter(f => !isPeopleLinkFinding(f)),
+          ...old.filter(f => !isPeopleLinkFinding(f) && !(f && typeof f === 'object' && !Array.isArray(f) && 'field' in f && ['firstName', 'lastName'].includes(String(f.field)))),
+          ...(['firstName', 'lastName'] as const).flatMap(field => {
+            const value = cleanRecord(record)[field];
+            const message = isNotApplicable(value) ? notApplicableMessage(field) : onboardingNameIssue(value);
+            return message ? [{ field, message }] : [];
+          }),
           ...peopleLinkFindings(peopleLinks.byRecord[record.id]),
         ];
 
@@ -934,12 +1007,20 @@ export class EmsService {
       const status = batch.status === 'CANCELLED' ? batch.status
         : records.some(r => r.status === 'REGISTERED') ? pending.length ? 'PARTIALLY_REGISTERED' : 'REGISTERED'
         : pending.length && pending.every(r => r.status === 'READY') ? 'READY' : 'DRAFT';
-      const result = { ...batch, status, records: hierarchy.orderedIds.map(id => byId.get(id)!), hierarchy, peopleLinks: { options: peopleLinks.options, byRecord: peopleLinks.byRecord } };
+      const result = { ...batch, status, fieldOptions: onboardingFieldOptions(departments, employees, batch.records), records: hierarchy.orderedIds.map(id => byId.get(id)!), hierarchy, peopleLinks: { options: peopleLinks.options, byRecord: peopleLinks.byRecord, hodDirectory: peopleLinks.hodDirectory, hodEvidence: peopleLinks.hodEvidence } };
       timing.mark('responseAssembly');
       timing.finish(records.length);
       return result;
 
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 20000 });
+  }
+
+  private checkedExtraFields(input: unknown, previous?: {stored: unknown}) {
+    try { return previous ? reviseExtraFields(previous.stored, input) : readExtraFields(input); }
+    catch (error) {
+      if (error instanceof ExtraFieldsError) throw new BadRequestException(error.message);
+      throw error;
+    }
   }
 
   async addOnboardingRecords(
@@ -965,6 +1046,7 @@ export class EmsService {
       await tx.emsOnboardingRecord.createMany({
         data: dto.records.map(record => ({
           ...Object.fromEntries(ONBOARDING_TEXT_FIELDS.filter(key => record[key] !== undefined).map(key => [key, record[key]])),
+          ...(record.extraFields === undefined ? {} : { extraFields: this.checkedExtraFields(record.extraFields) }),
           rowNumber: record.rowNumber, batchId, organizationId,
           status: 'DRAFT' as const, duplicateReviewReceipt: Prisma.DbNull,
         })),
@@ -1013,7 +1095,7 @@ export class EmsService {
 
     const departments = await context.departments();
     timing.mark('employeesAndDepartments');
-    const knownDepartments = new Set(departments.map((d) => normaliseKey(d.name)));
+    const knownDepartments = departmentIndex(departments);
 
     // Codes seen within this batch, to detect internal duplicates
     const seenCodes = new Set<string>();
@@ -1061,9 +1143,9 @@ export class EmsService {
       const record = cleanRecord(raw);
       const resolution = hierarchy.byRecord[record.id];
       const selected = resolution?.target ? reportingOptions.get(resolution.target) : undefined;
-      if (resolution?.target === 'BOARD') {
+      if (isReportingBody(resolution?.target)) {
         record.reportingToName = null;
-        record.reportingToDesignation = 'Board';
+        record.reportingToDesignation = reportingBodyLabel(resolution.target);
       } else if (selected && !resolution.error) {
         record.reportingToName = selected.name;
         record.reportingToDesignation = selected.designation;
@@ -1078,7 +1160,7 @@ export class EmsService {
         if (!requiredNow.includes(field) && isNotApplicable(values[field])) values[field] = null;
       }
 
-      const findings: ValidationFinding[] = [];
+      const findings: ValidationFinding[] = [...extraProfileData(record.extraFields, value => normalisePhone(value, batch.defaultPhoneCountry)).findings];
 
       if (!record.employeeCode?.trim()) {
         findings.push({ field: 'employeeCode', message: 'Required' });
@@ -1093,8 +1175,10 @@ export class EmsService {
         seenCodes.add(key);
       }
 
-      if (!record.firstName?.trim()) findings.push({ field: 'firstName', message: 'Required' });
-      if (!record.lastName?.trim())  findings.push({ field: 'lastName',  message: 'Required' });
+      for (const field of ['firstName', 'lastName'] as const) {
+        const message = onboardingNameIssue(record[field]);
+        if (message) findings.push({ field, message });
+      }
       
       const phone = normalisePhone(
         record.mobileNumber,
@@ -1144,21 +1228,15 @@ export class EmsService {
 
       if (!record.beesAccessLevel?.trim()) {
         findings.push({ field: 'beesAccessLevel', message: 'Required' });
-      } else if (!ACCESS_LEVEL_VALUES[normaliseKey(record.beesAccessLevel)]) {
+      } else if (!importedAccountRole(record.beesAccessLevel)) {
         findings.push({
           field: 'beesAccessLevel',
           message: `Unrecognised access level "${record.beesAccessLevel}"`,
         });
       }
 
-      if (!record.currentDepartment?.trim()) {
-        findings.push({ field: 'currentDepartment', message: 'Required' });
-      } else if (!knownDepartments.has(normaliseKey(record.currentDepartment))) {
-        findings.push({
-          field: 'currentDepartment',
-          message: `No department named "${record.currentDepartment}" in this organisation`,
-        });
-      }
+      const departmentError = departmentIssue(record.currentDepartment, knownDepartments);
+      if (departmentError) findings.push({ field: 'currentDepartment', message: departmentError });
 
       if (record.workEmail?.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(record.workEmail.trim())) {
         findings.push({
@@ -1190,21 +1268,21 @@ export class EmsService {
       }
 
       
+      if (normaliseFiveSLocation(record.fiveSLocationCategory) === undefined)
+        findings.push({field: 'fiveSLocationCategory', message: FIVE_S_LOCATION_ERROR});
       if (!record.jobDesignation?.trim()) {
         findings.push({ field: 'jobDesignation', message: 'Required' });
       }
 
-      // The most senior person reports to the board, not a named person.
-      const reportsToBoard = ['board', 'boardofdirectors'].includes(
-        normaliseKey(record.reportingToDesignation),
-      );
-      if (!record.reportingToName?.trim() && !reportsToBoard) {
+      // A resolved top-level body is a valid alternative to a named manager.
+      const reportsToBody = isReportingBody(resolution?.target) && !resolution.error;
+      if (!record.reportingToName?.trim() && !reportsToBody) {
         findings.push({
           field: 'reportingToName',
-          message: 'Required. For the most senior person, leave this blank and enter Board as the designation.',
+          message: 'Choose a reporting person, or leave the name blank and use Board, Committee, Management Committee or Owner in the Reporting to job title field.',
         });
       }
-      if (!record.reportingToDesignation?.trim() && !reportsToBoard) {
+      if (!record.reportingToDesignation?.trim() && !reportsToBody) {
         findings.push({field: 'reportingToDesignation', message: 'Required' });
       }
       
@@ -1293,13 +1371,15 @@ export class EmsService {
         data.reportingToRecordId = null;
         data.reportingToEmployeeId = null;
         data.reportingToBoard = false;
+        data.reportingToBody = null;
       }
       if (dto.reportingTarget) {
         const employees = await this.reportingEmployees(tx, organizationId);
         const options = resolveReporting(batch.records, employees).options;
         const target = dto.reportingTarget;
-        if (target === 'BOARD') {
-          data.reportingToBoard = true; data.reportingToName = null; data.reportingToDesignation = 'Board';
+        if (isReportingBody(target)) {
+          data.reportingToBoard = target === 'BOARD'; data.reportingToBody = target === 'BOARD' ? null : target;
+          data.reportingToName = null; data.reportingToDesignation = reportingBodyLabel(target);
         } else {
           const selected = options.find(o => o.target === target);
           if (!selected || target === `record:${recordId}`) throw new BadRequestException('Choose another person in this organization/import');
@@ -1310,7 +1390,7 @@ export class EmsService {
       }
       await tx.emsOnboardingRecord.update({
         where: { id: recordId },
-        data: { ...data, status: found.status === 'EXCLUDED' ? 'EXCLUDED' : 'DRAFT', validationErrors: Prisma.DbNull },
+        data: { ...data, ...(dto.extraFields === undefined ? {} : { extraFields: this.checkedExtraFields(dto.extraFields, {stored: found.extraFields}) }), status: found.status === 'EXCLUDED' ? 'EXCLUDED' : 'DRAFT', validationErrors: Prisma.DbNull },
       });
       await this.validateOnboardingBatchLocked(tx, organizationId, record.batchId);
     }, { timeout: 20000 }));
@@ -1352,7 +1432,8 @@ export class EmsService {
     return this.getOnboardingBatch(organizationId, batchId);
   }
 
-  async registerOnboardingBatch(organizationId: string, batchId: string) {
+  async registerOnboardingBatch(organizationId: string, batchId: string, actorRole: Role) {
+    if (!canRegisterOnboarding(actorRole)) throw new ForbiddenException('Only HR or an Admin can register imported employees.');
     const batch = await this.prisma.emsOnboardingBatch.findFirst({
       where: { id: batchId, organizationId }, include: { records: true },
     });
@@ -1377,16 +1458,17 @@ export class EmsService {
       );
     }
 
-    const departments = await this.prisma.department.findMany({
-      where: { organizationId }, select: { id: true, name: true },
-    });
-    const departmentIds = new Map(departments.map((d) => [normaliseKey(d.name), d.id]));
     const roles = await this.prisma.role.findMany({ select: { id: true, name: true } });
     const roleIds = new Map(roles.map((r) => [r.name, r.id]));
     const results: { recordId: string; employeeId?: string; error?: string }[] = [];
     let interruption: string | null = null;
+    const awaitingAdmin = new Set<string>();
 
     for (const candidate of ready) {
+      if (registrationAccess(actorRole, candidate.beesAccessLevel) === 'ADMIN_REQUIRED') {
+        awaitingAdmin.add(candidate.id);
+        continue;
+      }
       try {
         const employee = await retryOnboardingTransaction(() => this.prisma.$transaction(async (tx) => {
           await this.lockReporting(tx, organizationId);
@@ -1414,6 +1496,20 @@ export class EmsService {
             throw new BadRequestException('This record is no longer ready; validate the import again');
           }
           const record = cleanRecord(found);
+          // Recheck the locked row: another reviewer may have changed its access
+          // after the initial batch read. This happens before account/employee writes.
+          if (registrationAccess(actorRole, record.beesAccessLevel) === 'ADMIN_REQUIRED')
+            throw new OnboardingAdminRegistrationRequired();
+          const additional = extraProfileData(found.extraFields, value => normalisePhone(value, current.defaultPhoneCountry));
+          if (additional.findings.length) throw new OnboardingFieldConflict(additional.findings);
+          const fiveSCategory = normaliseFiveSLocation(record.fiveSLocationCategory);
+          if (fiveSCategory === undefined) throw new OnboardingFieldConflict([{field: 'fiveSLocationCategory', message: FIVE_S_LOCATION_ERROR}]);
+          const nameFindings: { field: string; message: string }[] = [];
+          for (const field of ['firstName', 'lastName'] as const) {
+            const problem = isNotApplicable(record[field]) ? notApplicableMessage(field) : onboardingNameIssue(record[field]);
+            if (problem) nameFindings.push({field, message: problem});
+          }
+          if (nameFindings.length) throw new OnboardingFieldConflict(nameFindings);
           const duplicateIndex = await this.duplicateContext(tx, organizationId);
           const duplicateReview = duplicateIndex.review(
             duplicateImportPerson(found, organizationId, current.defaultPhoneCountry), found.duplicateReviewReceipt);
@@ -1422,7 +1518,7 @@ export class EmsService {
             throw new BadRequestException('This record is no longer ready; validate the import again');
           const hierarchy = await this.reportingHierarchy(tx, organizationId, current.records);
           const reporting = hierarchy.byRecord[record.id];
-          if (!reporting || reporting.error || !reporting.target) throw new BadRequestException(reporting?.error ?? 'Choose a reporting person or Board');
+          if (!reporting || reporting.error || !reporting.target) throw new BadRequestException(reporting?.error ?? 'Choose a reporting person or top-level body');
           let reportingManagerId: string | null = null;
           let pendingReportingRecordId: string | null = null;
           if (reporting.target.startsWith('employee:')) reportingManagerId = reporting.target.slice(9);
@@ -1434,6 +1530,10 @@ export class EmsService {
           }
 
           const peopleContext = await loadPeopleLinks(tx, organizationId, current.records);
+          const currentDepartments = departmentIndex(peopleContext.departments);
+          const departmentError = departmentIssue(record.currentDepartment, currentDepartments);
+          if (departmentError) throw new OnboardingFieldConflict([{ field: 'currentDepartment', message: departmentError }]);
+          const departmentId = currentDepartments.get(normaliseKey(record.currentDepartment))![0].id;
           const personLinks = registrationPeopleData(peopleContext.byRecord[record.id]);
           const phone = normalisePhone(record.mobileNumber, current.defaultPhoneCountry);
           if (!phone) throw new BadRequestException('Enter a valid phone number and check the default country');
@@ -1444,8 +1544,8 @@ export class EmsService {
           if (duplicates.length > 1) {
             throw new BadRequestException('This phone number appears on another record in this import');
           }
-          const roleName = ACCESS_LEVEL_VALUES[normaliseKey(record.beesAccessLevel)];
-          const roleId = roleIds.get(roleName);
+          const roleName = importedAccountRole(record.beesAccessLevel);
+          const roleId = roleName ? roleIds.get(roleName) : undefined;
           if (!roleId) throw new BadRequestException('The selected access level is not configured');
           // N/A is a valid answer, but never an address to send to.
           const email = isNotApplicable(record.workEmail) ? null : record.workEmail?.toLowerCase() ?? null;
@@ -1468,6 +1568,7 @@ export class EmsService {
               reportingManagerId,
               pendingReportingRecordId,
               reportsToBoard: reporting.target === 'BOARD',
+              reportingBody: isReportingBody(reporting.target) && reporting.target !== 'BOARD' ? reporting.target : null,
               firstName: record.firstName!,
               lastName: record.lastName!,
               middleName: record.middleName,
@@ -1479,14 +1580,17 @@ export class EmsService {
               plantBranch: record.plantBranchCode,
               gender: GENDER_VALUES[normaliseKey(record.gender)] as any,
               nationality: record.nationality,
-              departmentId: departmentIds.get(normaliseKey(record.currentDepartment)) ?? null,
+              departmentId,
               jobTitle: record.jobDesignation,
               workStation: record.workArea,
+              fiveSLocationCategory: fiveSCategory,
               subSection: record.subSection,
               shift: record.shift,
               employmentStatus: (matchEnumValue(record.employmentStatus, EMPLOYMENT_STATUS_VALUES) ?? 'ACTIVE') as any,
               employmentType: matchEnumValue(record.employmentType, EMPLOYMENT_TYPE_VALUES) as any,
               beesAccessLevel: record.beesAccessLevel,
+              ...additional.data,
+              ...(found.extraFields == null ? {} : { importedExtraFields: readExtraFields(found.extraFields) }),
               ...personLinks,
             },
           });
@@ -1497,6 +1601,7 @@ export class EmsService {
               reportingToRecordId: pendingReportingRecordId,
               reportingToEmployeeId: reportingManagerId,
               reportingToBoard: reporting.target === 'BOARD',
+              reportingToBody: isReportingBody(reporting.target) && reporting.target !== 'BOARD' ? reporting.target : null,
               status: 'REGISTERED',
               employeeId: employee.id,
               registeredAt: new Date(),
@@ -1508,6 +1613,10 @@ export class EmsService {
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
         if (employee) results.push({ recordId: candidate.id, employeeId: employee.id });
       } catch (error: unknown) {
+        if (error instanceof OnboardingAdminRegistrationRequired) {
+          awaitingAdmin.add(candidate.id);
+          continue;
+        }
         if (!(error instanceof BadRequestException)) {
           // Database/connection/programming failures describe the operation, not the
           // person's data. Preserve already committed registrations and stop safely.
@@ -1521,11 +1630,16 @@ export class EmsService {
         // Do not downgrade a record another request has already registered/excluded.
         await this.prisma.emsOnboardingRecord.updateMany({
           where: { id: candidate.id, organizationId, status: { in: ['READY', 'NEEDS_FIXING'] }, updatedAt: candidate.updatedAt },
-          data: { status: 'NEEDS_FIXING', validationErrors: error instanceof OnboardingDuplicateConflict ? error.findings : [{ field: 'registration', message }] },
+          data: { status: 'NEEDS_FIXING', validationErrors: error instanceof OnboardingDuplicateConflict || error instanceof OnboardingFieldConflict ? error.findings : [{ field: 'registration', message }] },
         });
         results.push({ recordId: candidate.id, error: message });
       }
     }
+    // A permissions-only skip changes neither records nor the batch status.
+    if (awaitingAdmin.size === ready.length && !interruption) return {
+      registered: 0, failed: 0, awaitingAdmin: awaitingAdmin.size,
+      batch: await this.getOnboardingBatch(organizationId, batchId),
+    };
     const after = await this.prisma.emsOnboardingRecord.findMany({
       where: { batchId, organizationId }, select: { status: true },
     });
@@ -1543,11 +1657,13 @@ export class EmsService {
         message: `Registration stopped. ${registeredNow} record(s) registered in this request before it stopped. ${interruption} Refresh this import to see the current results.`,
         registered: registeredNow,
         failed: results.filter(r => r.error).length,
+        awaitingAdmin: awaitingAdmin.size,
       });
     }
     return {
       registered: results.filter((r) => r.employeeId).length,
       failed: results.filter((r) => r.error).length,
+      awaitingAdmin: awaitingAdmin.size,
       batch: await this.getOnboardingBatch(organizationId, batchId),
     };
   }

@@ -1,3 +1,5 @@
+import { importedReportingBody, isReportingBody, reportingBodyLabel } from './reporting-bodies';
+import { createPersonSuggester, PersonSuggestion } from './onboarding-person-suggestions';
 import { completeNameKey, isNotApplicable, reportingKey } from './onboarding-text';
 
 export interface ReportingRow {
@@ -6,29 +8,31 @@ export interface ReportingRow {
   firstName?: string | null; middleName?: string | null; lastName?: string | null;
   employeeCode?: string | null; currentDepartment?: string | null; plantBranchCode?: string | null;
   jobDesignation?: string | null; reportingToName?: string | null; reportingToDesignation?: string | null;
-  reportingToRecordId?: string | null; reportingToEmployeeId?: string | null; reportingToBoard?: boolean;
+  reportingToRecordId?: string | null; reportingToEmployeeId?: string | null; reportingToBoard?: boolean; reportingToBody?: string | null;
 }
 export interface ReportingEmployee {
   id: string; firstName: string; middleName?: string | null; lastName: string;
   jobTitle?: string | null; employeeCode?: string | null; plantBranch?: string | null;
   reportingManagerId?: string | null; department?: { name: string } | null;
-  reportsToBoard?: boolean; pendingReportingRecordId?: string | null;
+  reportsToBoard?: boolean; reportingBody?: string | null; pendingReportingRecordId?: string | null;
 }
 export interface ReportingOption {
   target: string; name: string; designation: string; employeeCode: string; department: string; branch: string;
 }
-export type ReportingState = 'BOARD' | 'ASSIGNED' | 'PENDING' | 'UNKNOWN' | 'NEEDS_ATTENTION';
+export type ReportingState = 'BOARD' | 'BODY' | 'ASSIGNED' | 'PENDING' | 'UNKNOWN' | 'NEEDS_ATTENTION';
 export interface ReportingChainItem {
   target: string; name: string; label: string; designation: string; employeeCode: string;
   recordId?: string; employeeId?: string;
-  status: 'PENDING' | 'REGISTERED' | 'NEEDS_ATTENTION' | 'UNKNOWN' | 'BOARD';
+  status: 'PENDING' | 'REGISTERED' | 'NEEDS_ATTENTION' | 'UNKNOWN' | 'BOARD' | 'BODY';
 }
 export interface ReportingResolution {
+  /** Full validation walk, independent of the shortened display chain. No eligibility change. */
+  blocker?: { target: string; label: string; reason: string; recordId?: string; batchId?: string; employeeId?: string };
   target: string | null; error: string | null; warning: string | null; depth: number | null;
   state: ReportingState; managerName: string | null;
   errorScope?: 'DIRECT' | 'UPSTREAM';
   chain?: ReportingChainItem[];
-  chainEnd?: 'BOARD' | 'UNRESOLVED' | 'UNKNOWN' | 'CYCLE' | 'LIMIT';
+  chainEnd?: 'BOARD' | 'BODY' | 'UNRESOLVED' | 'UNKNOWN' | 'CYCLE' | 'LIMIT';
 }
 const fullName = (p: { firstName?: string | null; middleName?: string | null; lastName?: string | null }) =>
   [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ').trim();
@@ -83,7 +87,9 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
   };
   for (const e of employees) {
     let target: string | null = null, state: ReportingState = 'UNKNOWN', error: string | null = null;
-    if ([!!e.reportingManagerId, !!e.pendingReportingRecordId, !!e.reportsToBoard].filter(Boolean).length > 1) error = 'Conflicting reporting assignments. HR must choose one reporting target.';
+    if ([!!e.reportingManagerId, !!e.pendingReportingRecordId, !!e.reportsToBoard, !!e.reportingBody].filter(Boolean).length > 1) error = 'Conflicting reporting assignments. HR must choose one reporting target.';
+    else if (e.reportingBody && !isReportingBody(e.reportingBody)) error = 'Unknown reporting body. HR must choose a supported reporting target.';
+    else if (e.reportingBody) { target = e.reportingBody; state = target === 'BOARD' ? 'BOARD' : 'BODY'; }
     else if (e.reportsToBoard) { target = 'BOARD'; state = 'BOARD'; }
     else if (e.reportingManagerId) { target = `employee:${e.reportingManagerId}`; state = 'ASSIGNED'; }
     else if (e.pendingReportingRecordId) {
@@ -104,38 +110,40 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
     }
     let target: string | null = null, error: string | null = null;
     const batchIndex = batchIndexes.get(r.batchId);
-    if ([!!r.reportingToRecordId, !!r.reportingToEmployeeId, !!r.reportingToBoard].filter(Boolean).length > 1) error = 'Choose only one reporting target.';
+    if ([!!r.reportingToRecordId, !!r.reportingToEmployeeId, !!r.reportingToBoard, !!r.reportingToBody].filter(Boolean).length > 1) error = 'Choose only one reporting target.';
+    else if (r.reportingToBody && !isReportingBody(r.reportingToBody)) error = 'Unknown reporting body. Choose a supported reporting target.';
+    else if (r.reportingToBody) target = r.reportingToBody;
     else if (r.reportingToBoard) target = 'BOARD';
     else if (r.reportingToEmployeeId) target = `employee:${r.reportingToEmployeeId}`;
     else if (r.reportingToRecordId) {
       const manager = rowMap.get(r.reportingToRecordId);
       target = rowTarget(r.reportingToRecordId);
       if (!manager || manager.batchId !== r.batchId || unavailable(manager)) error = 'The selected reporting person is unavailable, excluded, or outside this organization/import.';
-    } else if (!reportingKey(r.reportingToName) && isBoardDesignation(r.reportingToDesignation)) target = 'BOARD';
+    } else if (!reportingKey(r.reportingToName) && importedReportingBody(r.reportingToDesignation)) target = importedReportingBody(r.reportingToDesignation);
     else {
       const designation = reportingKey(r.reportingToDesignation), name = reportingKey(r.reportingToName);
-      if (!designation || !name) error = 'Choose the reporting person, or Board for the most senior person.';
+      if (!designation || !name) error = 'Choose a reporting person or a top-level reporting body (Board, Committee, Management Committee or Owner).';
       else {
         const titlesExist = existingIndex.titles.has(designation) || batchIndex?.titles.has(designation);
         const matchKey = JSON.stringify([designation, completeNameKey(name)]);
         const matches = [...(existingIndex.names.get(matchKey) ?? []), ...(batchIndex?.names.get(matchKey) ?? [])];
         if (matches.length === 1) target = matches[0].target;
-        else error = matches.length > 1 ? 'Multiple people have this name and designation. Choose the correct employee.'
-          : titlesExist ? 'The reporting name does not uniquely match that designation. Choose the reporting person; confirm missing middle names or other differences.'
-          : 'Reporting designation was not found. Choose the reporting person to use their recorded designation.';
+        else error = matches.length > 1 ? 'Multiple people have this name and job title. Choose the correct employee.'
+          : titlesExist ? 'The reporting name does not uniquely match that job title. Choose the reporting person; confirm missing middle names or other differences.'
+          : 'Reporting job title was not found. Choose the reporting person to use their recorded job title.';
       }
     }
     if (!error && (target === node || (r.employeeId && target === `employee:${r.employeeId}`))) error = 'A person cannot report to themselves.';
-    if (!error && target !== 'BOARD') {
+    if (!error && !isReportingBody(target)) {
       const selected = target ? optionMap.get(target) : undefined;
       if (!selected) error = 'The selected reporting person is unavailable, excluded, or outside this organization/import.';
-      else if (!reportingKey(selected.name) || !reportingKey(selected.designation) || isNotApplicable(selected.designation)) error = 'The selected reporting person needs a name and job designation.';
+      else if (!reportingKey(selected.name) || !reportingKey(selected.designation) || isNotApplicable(selected.designation)) error = 'The selected reporting person needs a name and job title.';
     }
-    nodes.set(node, { target, error, name: labelFor(node), state: target === 'BOARD' ? 'BOARD' : target?.startsWith('record:') ? 'PENDING' : 'ASSIGNED',
+    nodes.set(node, { target, error, name: labelFor(node), state: target === 'BOARD' ? 'BOARD' : isReportingBody(target) ? 'BODY' : target?.startsWith('record:') ? 'PENDING' : 'ASSIGNED',
       pendingName: target?.startsWith('record:') ? labelFor(target) : undefined });
   }
 
-  type Placement = { depth: number | null; relative: number; root: string; warning: string | null; error: string | null };
+  type Placement = { depth: number | null; relative: number; root: string; warning: string | null; error: string | null; blocker?: string };
   const placed = new Map<string, Placement>();
   // Database IDs identify nodes, but must not decide the visible order. Reimports
   // create new IDs. Source rows and person details survive that change.
@@ -167,10 +175,10 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
       if (saved) { base = saved; break; }
       if (seen.has(cursor)) { base = { depth: null, relative: -1, root: cursor, warning: null, error: 'Circular reporting chain. Change a reporting selection to break the loop.' }; break; }
       const n = nodes.get(cursor);
-      if (!n) { base = { depth: null, relative: -1, root: cursor, warning: null, error: 'The reporting chain contains an unresolved or unavailable manager in this organization.' }; break; }
+      if (!n) { base = { depth: null, relative: -1, root: cursor, blocker: path[path.length - 1], warning: null, error: 'The reporting chain contains an unresolved or unavailable manager in this organization.' }; break; }
       seen.set(cursor, path.length); path.push(cursor);
-      if (n.error) { base = { depth: null, relative: -1, root: cursor, warning: null, error: n.error }; break; }
-      if (n.target === 'BOARD') { base = { depth: -1, relative: -1, root: cursor, warning: null, error: null }; break; }
+      if (n.error) { base = { depth: null, relative: -1, root: cursor, blocker: cursor, warning: null, error: n.error }; break; }
+      if (isReportingBody(n.target)) { base = { depth: -1, relative: -1, root: cursor, warning: null, error: null }; break; }
       if (n.target === null) { base = { depth: null, relative: -1, root: cursor, error: null,
         warning: `${n.name || 'This employee'}’s reporting manager has not been recorded. Full hierarchy level is unknown.` }; break; }
       cursor = n.target;
@@ -190,9 +198,11 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
     const chain: ReportingChainItem[] = [], seen = new Set<string>();
     let cursor: string | null = start;
     while (cursor && chain.length < 24) {
-      if (cursor === 'BOARD') {
-        chain.push({ target: 'BOARD', name: 'Board', label: 'Board', designation: '', employeeCode: '', status: 'BOARD' });
-        return {chain, chainEnd: 'BOARD'};
+      if (isReportingBody(cursor)) {
+        const label = reportingBodyLabel(cursor)!;
+        const status = cursor === 'BOARD' ? 'BOARD' : 'BODY';
+        chain.push({ target: cursor, name: label, label, designation: '', employeeCode: '', status });
+        return {chain, chainEnd: status};
       }
       if (seen.has(cursor)) return {chain, chainEnd: 'CYCLE'};
       seen.add(cursor);
@@ -216,7 +226,7 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
   };
   const resolution = (id: string): ReportingResolution => {
     const n = nodes.get(id), p = placed.get(id);
-    const managerName = n?.target === 'BOARD' ? 'Board' : n?.pendingName || (n?.target ? nodes.get(n.target)?.name ?? null : null);
+    const managerName = isReportingBody(n?.target) ? reportingBodyLabel(n?.target) : n?.pendingName || (n?.target ? nodes.get(n.target)?.name ?? null : null);
     const direct = n?.state === 'PENDING' ? `Manager assignment pending ${managerName || 'the selected manager'}’s registration. The reporting relationship is valid.` : null;
     const ancestorWarning = n?.target ? placed.get(n.target)?.warning : p?.warning;
     const wider = ancestorWarning ? `Wider reporting chain: ${ancestorWarning}` : null;
@@ -225,9 +235,17 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
     const error = upstream
       ? `${managerName || 'The selected person'} is selected as manager. Wider reporting chain: ${nodes.get(p!.root)?.name || 'An upstream manager'} — ${p!.error}`
       : p?.error ?? null;
+    const problem = upstream && p?.blocker ? p.blocker : undefined;
+    const problemRow = problem?.startsWith('record:') ? rowMap.get(problem.slice(7)) : undefined;
+    const problemEmployee = problem?.startsWith('employee:') ? employeeMap.get(problem.slice(9)) : undefined;
+    const blocker = problem && (problemRow || problemEmployee) ? {
+      target: problem, label: labelFor(problem) || nodes.get(problem)?.name || 'Reporting person',
+      reason: p!.error!,
+      ...(problemEmployee ? {employeeId: problemEmployee.id} : {recordId: problemRow!.id, batchId: problemRow!.batchId}),
+    } : undefined;
     return { ...chainFor(id), errorScope: error ? (upstream ? 'UPSTREAM' : 'DIRECT') : undefined, target: n?.target ?? null, state: p?.error ? 'NEEDS_ATTENTION' : n?.state ?? 'UNKNOWN',
       error, warning, depth: p?.depth ?? null,
-      managerName };
+      managerName, ...(blocker ? {blocker} : {}) };
   };
   const byEmployee: Record<string, ReportingResolution> = {};
   for (const e of employees) byEmployee[e.id] = resolution(`employee:${e.id}`);
@@ -252,20 +270,15 @@ export function resolveReporting(rows: readonly ReportingRow[], employees: reado
     }
     return (byRecord[a.id].depth ?? Infinity) - (byRecord[b.id].depth ?? Infinity) || compareRows(a, b);
   });
-  // Suggestions never create an assignment. HR must explicitly confirm a candidate.
-  const suggestionsByRecord: Record<string, ReportingOption[]> = {};
+  // Suggestions never create an assignment; exact resolution above stays unchanged.
+  const suggest = createPersonSuggester(options);
+  const suggestionsByRecord: Record<string, PersonSuggestion<ReportingOption>[]> = {};
   for (const r of rows) {
     suggestionsByRecord[r.id] = [];
-    if (unavailable(r) || r.status === 'REGISTERED' || r.reportingToRecordId || r.reportingToEmployeeId || r.reportingToBoard || byRecord[r.id].target) continue;
-    const name = completeNameKey(r.reportingToName), title = reportingKey(r.reportingToDesignation);
-    if (!name || !title) continue;
-    suggestionsByRecord[r.id] = options.filter(option => {
-      if (option.target === `record:${r.id}` || option.target === `employee:${r.employeeId}` || reportingKey(option.designation) !== title) return false;
-      const person = option.target.startsWith('employee:') ? employeeMap.get(option.target.slice(9)) : rowMap.get(option.target.slice(7));
-      if (!person || !reportingKey(person.firstName) || !reportingKey(person.lastName) || !reportingKey(person.middleName)) return false;
-      // Only omitted middle names qualify; nicknames and partial first/last names do not.
-      return name === completeNameKey(`${person.firstName} ${person.lastName}`);
-    }).sort((a, b) => a.name.localeCompare(b.name) || a.employeeCode.localeCompare(b.employeeCode));
+    if (unavailable(r) || r.status === 'REGISTERED' || r.reportingToRecordId || r.reportingToEmployeeId || r.reportingToBoard || r.reportingToBody || byRecord[r.id].target) continue;
+    suggestionsByRecord[r.id] = suggest(r.reportingToName, r.reportingToDesignation).filter(option =>
+      option.target !== `record:${r.id}` && option.target !== `employee:${r.employeeId}`
+      && (option.target.startsWith('employee:') || rowMap.get(option.target.slice(7))?.batchId === r.batchId));
   }
   return { options, byRecord, byEmployee, suggestionsByRecord, orderedIds: ordered.map(r => r.id) };
 }

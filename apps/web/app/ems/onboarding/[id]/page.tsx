@@ -19,6 +19,8 @@ import { use, useState, useEffect, useCallback, useLayoutEffect, useRef, useMemo
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import OnboardingDuplicateReview from "@/components/ems/OnboardingDuplicateReview";
+import ExcludeRemainingDialog from "@/components/ems/ExcludeRemainingDialog";
+import OnboardingMoreActions from "@/components/ems/OnboardingMoreActions";
 import { pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
 import { safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -697,7 +699,9 @@ function RecordEditor({
   const fieldMessages = (key: string) => findings.get(key)?.length ? <ul id={`issues-${record.id}-${key}`} className="mt-1 space-y-1 text-xs" data-field-findings={key}>
     {findings.get(key)!.map((finding, index) => <li key={index} className={finding.stale ? 'text-slate-500' : 'text-red-700'}>{finding.stale && 'Last saved check: '}{finding.message}</li>)}
   </ul> : null;
-  const locked = record.status === "REGISTERED";
+  // Excluded records are read-only until put back in; registered ones are final.
+  const excluded = record.status === "EXCLUDED";
+  const locked = record.status === "REGISTERED" || excluded;
   const selectablePeople = reportingOptions.filter(o => o.target !== `record:${record.id}` && o.target !== `employee:${record.employeeId}`);
   const invalidSelection = !!draft.reportingTarget && !isReportingBody(draft.reportingTarget) && !selectablePeople.some(o => o.target === draft.reportingTarget);
   const selfSelected = draft.reportingTarget === `record:${record.id}` || (!!record.employeeId && draft.reportingTarget === `employee:${record.employeeId}`);
@@ -752,6 +756,18 @@ function RecordEditor({
 
   return (
     <div ref={editorRef} data-record-editor={record.id} className="max-sm:max-w-[calc(100vw-3rem)] bg-blue-50/40 border-b-2 border-slate-300 px-3 sm:px-5 py-4 space-y-4">
+      {excluded && <div data-excluded-banner className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-300 bg-white p-3 text-sm">
+        <div className="min-w-0">
+          <p className="font-semibold text-slate-800">Excluded · read-only</p>
+          {record.exclusionReason && <p className="mt-0.5 text-xs text-slate-500 break-words">Reason: {record.exclusionReason}</p>}
+          <p className="mt-0.5 text-xs text-slate-500">Put this record back in to edit, validate or register it.</p>
+          {inclusionError && <p role="alert" className="mt-1 text-xs text-red-600">{inclusionError}</p>}
+        </div>
+        <button type="button" onClick={onInclude} disabled={saving}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+          <Undo2 className="h-3.5 w-3.5" /> Put back in
+        </button>
+      </div>}
       {hodDirty && <p role="status" className="rounded-lg border border-purple-300 bg-purple-50 p-3 text-sm text-purple-900">Save or discard the department HOD change before editing this record.</p>}
       {dirty && <p data-record-unsaved role="status" className="text-xs text-amber-800">Unsaved edits. Save &amp; re-validate this record before using batch actions. Status and findings reflect the last save.</p>}
       {feedback && <p role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">{feedback}</p>}
@@ -790,7 +806,7 @@ function RecordEditor({
           options={selectablePeople} allowImported allowBoard invalid={invalidSelection || findings.get('reportingTarget')?.some(f => !f.stale)} describedBy={findings.get('reportingTarget')?.length ? `issues-${record.id}-reportingTarget` : undefined} disabled={locked || saving || hodDirty} onChange={choosePerson} />
         {!draft.reportingTarget && <div className="grid gap-2 sm:grid-cols-2">{(['reportingToName','reportingToDesignation'] as const).map(key=><div key={key} data-editor-field={key} tabIndex={-1}>
           <label htmlFor={`field-${record.id}-${key}`} className="block text-xs font-semibold">{key === 'reportingToName' ? 'Imported reporting name' : 'Imported reporting job title'}</label>
-          <input id={`field-${record.id}-${key}`} value={draft[key] ?? ''} disabled={saving || hodDirty} aria-invalid={findings.get(key)?.some(f=>!f.stale) || undefined}
+          <input id={`field-${record.id}-${key}`} value={draft[key] ?? ''} disabled={locked || saving || hodDirty} aria-invalid={findings.get(key)?.some(f=>!f.stale) || undefined}
             aria-required={required.has(key) && !(key === 'reportingToName' && ['board','boardofdirectors'].includes(editorValueKey(draft.reportingToDesignation))) || undefined}
             aria-describedby={findings.has(key) ? `issues-${record.id}-${key}` : undefined}
             onChange={e=>{setHighlightReview(false);setFeedback(null);setDraft(d=>({...d,[key]:e.target.value}));}}
@@ -900,18 +916,7 @@ function RecordEditor({
 
       {!locked && (
         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200">
-          {record.status === "EXCLUDED" ? (
-            <div>
-            <button
-              onClick={onInclude}
-              disabled={saving || dirty || hodDirty}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-            >
-              <Undo2 className="h-3.5 w-3.5" /> Put back in
-            </button>
-            {inclusionError && <p role="alert" className="mt-1 text-xs text-red-600">{inclusionError}</p>}
-            </div>
-          ) : (
+          {(
             <div className="flex flex-wrap items-center gap-2 ml-auto max-w-full">
               <div className="w-56 max-w-full">
                 <input
@@ -1166,6 +1171,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
       reporting: action === 'Saved' ? reportingFeedback(saveBaseline.current, updated, recordId, moved) : undefined,
       moved, ready: record.status === 'READY', showView: moved || outsideFilters, sequence: ++noticeSequence.current} : null);
     queryClient.setQueryData(queryKey, updated);
+    queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
   };
   const finishBatchAction = (updated: OnboardingBatchDetail, action: string) => {
     const snapshot = captureViewport(pageRef.current);
@@ -1183,6 +1189,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
       moved, ready: false, showView: !!record, sequence: ++noticeSequence.current});
     setViewportAction({kind: 'context', snapshot});
     queryClient.setQueryData(queryKey, updated);
+    queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
   };
 
   const updateCountry = useMutation({
@@ -1257,6 +1264,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     onError: (error: Error) => { failedAction('register', error); queryClient.invalidateQueries({queryKey}); },
   });
 
+  // "Exclude remaining records" dialog for a partially registered import.
+  const [excludeRemainingOpen, setExcludeRemainingOpen] = useState(false);
   const error = queryError ? (queryError as any).message : null;
   const hierarchy = batch?.hierarchy;
   const records: OnboardingRecord[] = batch?.records ?? [];
@@ -1401,6 +1410,12 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             {register.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
             {adminRequiredReadyCount ? `Register ${registerableReadyCount} eligible` : `Register all ${registerableReadyCount} ready`}
           </button>
+
+          <OnboardingMoreActions disabled={busy || editorDirty || countryUnsaved} actions={batch?.status === "PARTIALLY_REGISTERED" ? [{
+            key: "exclude-remaining", label: "Exclude remaining records…", danger: true, icon: <Ban className="h-3.5 w-3.5" />,
+            title: "Exclude every unregistered record in this import; registered employees are kept",
+            onSelect: () => { beginAction(); setExcludeRemainingOpen(true); },
+          }] : []} />
 
 
         </div>
@@ -1641,6 +1656,15 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                           {rec.exclusionReason && (
                             <p className="mt-1 text-xs text-slate-400 italic">{rec.exclusionReason}</p>
                           )}
+                          {rec.status === 'EXCLUDED' && (
+                            <button type="button" data-row-put-back
+                              disabled={busy || editorDirty || countryUnsaved || (closed && batch?.status !== "REGISTERED")}
+                              onClick={event => { event.stopPropagation(); include.mutate(rec.id); }}
+                              onKeyDown={event => event.stopPropagation()}
+                              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 disabled:opacity-50 disabled:no-underline">
+                              <Undo2 className="h-3 w-3" /> Put back in
+                            </button>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-slate-500">{rec.currentDepartment ?? "—"}</td>
                         <td className="px-4 py-3">
@@ -1676,7 +1700,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                               reviewSequence={saveNotice?.id === rec.id ? saveNotice.sequence : 0}
                               reportingResolution={hierarchy?.byRecord[rec.id]}
                               required={required}
-                              saving={busy || countryUnsaved || closed}
+                              saving={busy || countryUnsaved || (closed && !(batch?.status === "REGISTERED" && rec.status === "EXCLUDED"))}
                               exclusionError={
                                 actionError?.kind === 'exclude' && actionError.recordId === rec.id
                                   ? actionError.message
@@ -1717,6 +1741,19 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         {/* Outside the horizontal table scroller: stick to the actual page scroll area. */}
         <div ref={setEditorToolbarHost} data-editor-toolbar-host className="pointer-events-none sticky bottom-3 z-40" />
       </div>
+      {excludeRemainingOpen && accessToken && (
+        <ExcludeRemainingDialog
+          batchId={id}
+          accessToken={accessToken}
+          onClose={() => setExcludeRemainingOpen(false)}
+          onDone={(updated, excluded) => {
+            setExcludeRemainingOpen(false);
+            setEditorDirty(false); setOpenRow(null);
+            finishBatchAction(updated, `Excluded ${excluded} remaining record${excluded === 1 ? '' : 's'}`);
+            queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
+          }}
+        />
+      )}
     </ProtectedRoute>
   );
 }

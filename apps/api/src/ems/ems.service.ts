@@ -11,6 +11,7 @@ import { onboardingPerformance } from './onboarding-performance';
 import { retryOnboardingTransaction } from './onboarding-transaction';
 import { assertPeopleLinksAllowBatchRemoval, employeePeopleLinks, loadPeopleLinks, registrationPeopleData, relieverDraftData, resolvePendingPeopleLinks, saveDepartmentHod, saveEmployeeHod, saveEmployeeRelievers } from './ems-people-links';
 import { peopleLinkFindings } from './onboarding-people-links';
+import { buildExcludeRemainingPreview, isRemainingRecord } from './onboarding-exclude-remaining';
 import { cleanRecord, isBlankValue, isNotApplicable, matchEnumValue, normaliseKey } from './onboarding-text';
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -22,6 +23,7 @@ import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
 import { 
   AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto,
+  ExcludeRemainingOnboardingRecordsDto,
 } from './dto/onboarding.dto';
 import { Prisma } from 'db';
 import { getCountries } from 'libphonenumber-js/max';
@@ -1357,6 +1359,8 @@ export class EmsService {
       const found = batch?.records.find(r => r.id === recordId);
       if (!batch || !found || batch.status === 'CANCELLED') throw new BadRequestException('This import is unavailable or cancelled');
       if (found.status === 'REGISTERED') throw new BadRequestException('This record has already been registered');
+      // Excluded rows skip validation, so edits would be stored unchecked. Put back first.
+      if (found.status === 'EXCLUDED') throw new BadRequestException('This record is excluded. Put it back in before editing it.');
       const data: Record<string, string | boolean | null> = {};
       for (const key of ONBOARDING_TEXT_FIELDS) {
         const value = dto[key];
@@ -1390,7 +1394,7 @@ export class EmsService {
       }
       await tx.emsOnboardingRecord.update({
         where: { id: recordId },
-        data: { ...data, ...(dto.extraFields === undefined ? {} : { extraFields: this.checkedExtraFields(dto.extraFields, {stored: found.extraFields}) }), status: found.status === 'EXCLUDED' ? 'EXCLUDED' : 'DRAFT', validationErrors: Prisma.DbNull },
+        data: { ...data, ...(dto.extraFields === undefined ? {} : { extraFields: this.checkedExtraFields(dto.extraFields, {stored: found.extraFields}) }), status: 'DRAFT', validationErrors: Prisma.DbNull },
       });
       await this.validateOnboardingBatchLocked(tx, organizationId, record.batchId);
     }, { timeout: 20000 }));
@@ -1428,6 +1432,74 @@ export class EmsService {
       await tx.emsOnboardingRecord.update({ where: { id: recordId }, data: { status: 'DRAFT', exclusionReason: null } });
       await this.validateOnboardingBatchLocked(tx, organizationId, record.batchId);
       return record.batchId;
+    }, { timeout: 20000 }));
+    return this.getOnboardingBatch(organizationId, batchId);
+  }
+
+  /**
+   * What "Exclude remaining records" would do to a partially registered import:
+   * counts, pending people links that would point at excluded records, and a token
+   * identifying exactly which records were reviewed.
+   */
+  private async excludeRemainingPlan(db: Prisma.TransactionClient, organizationId: string, batchId: string) {
+    const batch = await db.emsOnboardingBatch.findFirst({
+      where: { id: batchId, organizationId },
+      select: { id: true, status: true,
+        records: { select: { id: true, status: true, firstName: true, lastName: true, employeeCode: true } } },
+    });
+    if (!batch) throw new NotFoundException('Onboarding batch not found');
+    if (batch.status === 'CANCELLED') throw new BadRequestException('This import is cancelled');
+    const remainingIds = batch.records.filter(r => isRemainingRecord(r.status)).map(r => r.id);
+    if (!batch.records.some(r => r.status === 'REGISTERED')) {
+      throw new BadRequestException('No employees from this import are registered yet. Cancel the import instead.');
+    }
+    if (!remainingIds.length) throw new BadRequestException('Every record in this import is already registered or excluded.');
+    // Record ids are already organization-scoped; employees are also filtered by organization.
+    const [employees, hods] = await Promise.all([
+      db.employee.findMany({
+        where: { organizationId, OR: [
+          { pendingReportingRecordId: { in: remainingIds } },
+          { pendingFirstRelieverRecordId: { in: remainingIds } },
+          { pendingSecondRelieverRecordId: { in: remainingIds } },
+        ] },
+        select: { id: true, firstName: true, lastName: true,
+          pendingReportingRecordId: true, pendingFirstRelieverRecordId: true, pendingSecondRelieverRecordId: true },
+      }),
+      db.emsDepartmentHod.findMany({
+        where: { pendingRecordId: { in: remainingIds } },
+        select: { pendingRecordId: true, branchLabel: true, department: { select: { name: true } } },
+      }),
+    ]);
+    return { preview: buildExcludeRemainingPreview(batch.id, batch.records, employees, hods), remainingIds };
+  }
+
+  async previewExcludeRemainingOnboardingRecords(organizationId: string, batchId: string) {
+    const { preview } = await this.prisma.$transaction(tx => this.excludeRemainingPlan(tx, organizationId, batchId),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 20000 });
+    return preview;
+  }
+
+  /**
+   * Exclude every unregistered record of a partially registered import in one step.
+   * Registered employees, their import history and their pending links are kept;
+   * links to excluded records show Needs attention, as with a single exclusion.
+   */
+  async excludeRemainingOnboardingRecords(organizationId: string, batchId: string, dto: ExcludeRemainingOnboardingRecordsDto) {
+    const reason = dto.reason?.trim();
+    if (!reason) throw new BadRequestException('An exclusion reason is required');
+    if (reason.length < 5) throw new BadRequestException('Exclusion reason must contain at least 5 characters');
+    if (reason.length > 300) throw new BadRequestException('Exclusion reason must contain at most 300 characters');
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
+      await this.lockReporting(tx, organizationId);
+      const { preview, remainingIds } = await this.excludeRemainingPlan(tx, organizationId, batchId);
+      if (preview.token !== dto.expectedToken) {
+        throw new ConflictException('This import changed after you reviewed it. Review the records to exclude again before confirming.');
+      }
+      await tx.emsOnboardingRecord.updateMany({
+        where: { id: { in: remainingIds }, batchId, organizationId, status: { notIn: ['REGISTERED', 'EXCLUDED'] } },
+        data: { status: 'EXCLUDED', exclusionReason: reason, validationErrors: Prisma.DbNull },
+      });
+      await this.validateOnboardingBatchLocked(tx, organizationId, batchId);
     }, { timeout: 20000 }));
     return this.getOnboardingBatch(organizationId, batchId);
   }
@@ -1684,9 +1756,13 @@ export class EmsService {
         throw new BadRequestException('This import is already cancelled');
       }
       if (batch._count.records > 0) {
-        throw new BadRequestException(
-          `Cannot cancel — ${batch._count.records} record(s) have already been registered`,
-        );
+        const remaining = await tx.emsOnboardingRecord.count({
+          where: { batchId, organizationId, status: { notIn: ['REGISTERED', 'EXCLUDED'] } },
+        });
+        throw new BadRequestException(remaining > 0
+          ? `Cannot cancel — ${batch._count.records} employee(s) from this import are already registered. `
+            + `Open the import and use "Exclude remaining records" to stop the other ${remaining}; registered employees are kept.`
+          : `Cannot cancel — every record in this import is already registered or excluded, so there is nothing left to cancel.`);
       }
 
       await assertPeopleLinksAllowBatchRemoval(tx, organizationId, batchId);

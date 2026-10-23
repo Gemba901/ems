@@ -19,7 +19,8 @@ import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
 import { Post, Delete } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
 import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto,
-  UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto, ConfirmOnboardingDuplicateDto } from './dto/onboarding.dto';
+  UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto, ConfirmOnboardingDuplicateDto,
+  ExcludeRemainingOnboardingRecordsDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -249,6 +250,27 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.includeOnboardingRecord(user.organizationId, id);
+  }
+
+  /** GET /ems/onboarding/batches/:id/exclude-remaining — preview excluding every unregistered record */
+  @Get('onboarding/batches/:id/exclude-remaining')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async previewExcludeRemainingOnboardingRecords(
+    @Param('id') id: string,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.previewExcludeRemainingOnboardingRecords(user.organizationId, id);
+  }
+
+  /** POST /ems/onboarding/batches/:id/exclude-remaining — exclude the reviewed unregistered records */
+  @Post('onboarding/batches/:id/exclude-remaining')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async excludeRemainingOnboardingRecords(
+    @Param('id') id: string,
+    @Body() dto: ExcludeRemainingOnboardingRecordsDto,
+    @CurrentUser() user: { organizationId: string },
+  ) {
+    return this.ems.excludeRemainingOnboardingRecords(user.organizationId, id, dto);
   }
 
   /** POST /ems/onboarding/batches/:id/register — turn ready records into employees */

@@ -132,6 +132,17 @@ export class ExcludeOnboardingRecordDto {
   reason!: string;
 }
 
+/**
+ * Exclude every unregistered record left in a partially registered import.
+ * expectedToken comes from the preview, so a stale confirmation cannot exclude
+ * records HR has not reviewed.
+ */
+export class ExcludeRemainingOnboardingRecordsDto extends ExcludeOnboardingRecordDto {
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/, { message: 'Review the records to exclude again before confirming' })
+  expectedToken!: string;
+}
+
 export class UpdateCommunicationChannelDto {
   @IsEnum(OrgCommunicationChannel, { message: 'Choose WhatsApp or email' })
   communicationChannel!: OrgCommunicationChannel;

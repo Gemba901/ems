@@ -537,6 +537,26 @@ export interface UpdateOnboardingRecordPayload {
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
+export type ExcludeRemainingLinkKind = "REPORTING" | "FIRST_RELIEVER" | "SECOND_RELIEVER" | "DEPARTMENT_HOD";
+
+export const EXCLUDE_REMAINING_LINK_LABELS: Record<ExcludeRemainingLinkKind, string> = {
+  REPORTING: "reports to",
+  FIRST_RELIEVER: "first reliever is",
+  SECOND_RELIEVER: "second reliever is",
+  DEPARTMENT_HOD: "HOD is",
+};
+
+export interface ExcludeRemainingPreview {
+  batchId: string;
+  registered: number;
+  alreadyExcluded: number;
+  toExclude: number;
+  byStatus: { READY: number; NEEDS_FIXING: number; DRAFT: number };
+  affectedLinkCount: number;
+  affectedLinks: { kind: ExcludeRemainingLinkKind; subject: string; pendingName: string }[];
+  token: string;
+}
+
 export const EmsService = {
   async updateOnboardingDepartmentHod(batchId: string, data: {recordId: string; target: string; expectedVersion: string}, token: string): Promise<OnboardingBatchDetail> {
     return handleResponse(await apiClient(`${API_URL}/ems/onboarding/batches/${batchId}/department-hod`, {method: 'PATCH', headers: authHeaders(token), body: JSON.stringify(data)}, token));
@@ -655,6 +675,38 @@ export const EmsService = {
 
   async getOnboardingBatch(id: string, token: string): Promise<OnboardingBatchDetail> {
     const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  /** Remembered destinations for these headings, in the same order (null where none). */
+  async lookupImportColumnChoices(headings: string[], token: string): Promise<{ choices: (string | null)[] }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/column-choices/lookup`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ headings }),
+    }, token);
+    return handleResponse(res);
+  },
+
+  /** Remember confirmed column choices for this organisation's future imports. */
+  async saveImportColumnChoices(choices: { heading: string; destination: string }[], token: string): Promise<{ saved: number }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/column-choices`, {
+      method: "PUT",
+      headers: authHeaders(token),
+      body: JSON.stringify({ choices }),
+    }, token);
+    return handleResponse(res);
+  },
+
+  /** Send one extra column to a profile field (or null: keep for reference) for every unregistered record. */
+  async setOnboardingColumnDestination(
+    id: string, data: { column: number; heading: string; target: string | null }, token: string,
+  ): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/column-destination`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
     return handleResponse(res);
   },
 
@@ -784,6 +836,27 @@ export const EmsService = {
     const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/register`, {
       method: "POST",
       headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  /** What "Exclude remaining records" would exclude and keep; its token is required to confirm. */
+  async previewExcludeRemainingOnboardingRecords(id: string, token: string): Promise<ExcludeRemainingPreview> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/exclude-remaining`, {
+      headers: authHeaders(token),
+    }, token);
+    return handleResponse(res);
+  },
+
+  async excludeRemainingOnboardingRecords(
+    id: string,
+    data: { reason: string; expectedToken: string },
+    token: string,
+  ): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/exclude-remaining`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
     }, token);
     return handleResponse(res);
   },

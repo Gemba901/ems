@@ -203,17 +203,28 @@ export default function EmsOnboardingPage() {
   const [bulkProgress, setBulkProgress] = useState<string | null>(null);
   const [bulkResult, setBulkResult] = useState<{ done: string; problems: string[] } | null>(null);
   // The import waiting for HR to confirm cancelling or deleting it.
-  const [confirming, setConfirming] = useState<{ kind: "cancel" | "delete"; batch: OnboardingBatchSummary } | null>(null);
+  const [confirming, setConfirming] = useState<{ kind: "cancel" | "delete" | "blocked"; batch: OnboardingBatchSummary } | null>(null);
   const queryClient = useQueryClient();
+
+  // A refused cancel/delete closes its dialog and explains why, instead of failing silently.
+  const showRefusal = (kind: "cancel" | "delete", batchId: string, error: unknown) => {
+    const name = allBatches.find((b) => b.id === batchId)?.label ?? "Untitled import";
+    setConfirming(null);
+    setBulkResult({ done: kind === "cancel" ? "Not cancelled" : "Not deleted",
+      problems: [`${name}: ${(error as Error)?.message || "the server refused this action"}`] });
+    queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
+  };
 
   const cancel = useMutation({
     mutationFn: (batchId: string) => EmsService.cancelOnboardingBatch(batchId, accessToken!),
     onSuccess: () => { setConfirming(null); queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] }); },
+    onError: (error, batchId) => showRefusal("cancel", batchId, error),
   });
 
   const remove = useMutation({
     mutationFn: (batchId: string) => EmsService.deleteOnboardingBatch(batchId, accessToken!),
     onSuccess: () => { setConfirming(null); queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] }); },
+    onError: (error, batchId) => showRefusal("delete", batchId, error),
   });
 
   const allBatches: OnboardingBatchSummary[] = data ?? [];
@@ -269,7 +280,8 @@ export default function EmsOnboardingPage() {
       : [];
     setBulkConfirm(null);
     setBulkResult(null);
-    const problems = skipped.map((b) => `${b.label ?? "Untitled import"}: skipped, it has registered employees`);
+    const problems = skipped.map((b) => `${b.label ?? "Untitled import"}: skipped, it has registered employees${
+      b.status === "PARTIALLY_REGISTERED" ? ". Open it and use Exclude remaining to stop the rest" : ""}`);
     let ok = 0;
     for (const [i, b] of targets.entries()) {
       setBulkProgress(`${kind === "cancel" ? "Cancelling" : "Deleting"} ${i + 1} of ${targets.length}…`);
@@ -399,7 +411,7 @@ export default function EmsOnboardingPage() {
                   </button>
                 )}
                 {toCancel.length === 0 && toDelete.length === 0 && (
-                  <span className="text-blue-900">Registered imports can’t be cancelled or deleted.</span>
+                  <span className="text-blue-900">Registered imports can’t be cancelled or deleted. To stop a partly registered import, open it and use Exclude remaining.</span>
                 )}
                 <button type="button" onClick={() => setSelected(new Set())} className="ml-auto font-medium text-blue-800 hover:underline">Clear selection</button>
               </div>
@@ -519,9 +531,9 @@ export default function EmsOnboardingPage() {
                             </button>
                           ) : (
                             <button
-                              onClick={() => setConfirming({ kind: "cancel", batch })}
+                              onClick={() => { setBulkResult(null); setConfirming({ kind: cannotCancel(batch) ? "blocked" : "cancel", batch }); }}
                               disabled={cancel.isPending}
-                              title="Cancel this import"
+                              title={cannotCancel(batch) ? "Can’t cancel: employees from this import are registered" : "Cancel this import"}
                               className="text-slate-300 hover:text-amber-600 disabled:opacity-40"
                             >
                               <Ban className="h-3.5 w-3.5" />
@@ -578,7 +590,29 @@ export default function EmsOnboardingPage() {
         );
       })()}
 
-      {confirming && (() => {
+      {confirming?.kind === "blocked" && (() => {
+        const { batch } = confirming;
+        const name = batch.label ?? "this import";
+        const registered = batch.statusCounts?.REGISTERED ?? 0;
+        const remaining = (["READY", "NEEDS_FIXING", "DRAFT"] as const).reduce((n, key) => n + (batch.statusCounts?.[key] ?? 0), 0);
+        const people = (n: number) => `${n} employee${n === 1 ? " is" : "s are"}`;
+        const partial = batch.status === "PARTIALLY_REGISTERED" && remaining > 0;
+        return (
+          <ConfirmDialog
+            open
+            title={`"${name}" can’t be cancelled`}
+            message={partial
+              ? `${people(registered)} already registered from this import, so it can’t be cancelled.\n\nTo stop the other ${remaining} record${remaining === 1 ? "" : "s"}, open the import and use “Exclude remaining”. Registered employees are kept.`
+              : `Every record in this import is already registered or excluded, so there is nothing left to cancel.`}
+            keepLabel="Close"
+            confirmLabel={partial ? "Open import" : "View import"}
+            onConfirm={() => { setConfirming(null); router.push(`/ems/onboarding/${batch.id}`); }}
+            onClose={() => setConfirming(null)}
+          />
+        );
+      })()}
+
+      {confirming && confirming.kind !== "blocked" && (() => {
         const { kind, batch } = confirming;
         const name = batch.label ?? "this import";
         const n = batch._count.records;

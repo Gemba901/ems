@@ -44,6 +44,7 @@ function setup() {
     },
     emsOnboardingRecord: {
       findFirst: jest.fn().mockImplementation(async ({ where }: any) => batch.records.find((r: any) => r.id === where.id && r.organizationId === where.organizationId) ?? null),
+      count: jest.fn().mockImplementation(async ({ where }: any) => batch.records.filter((r: any) => !where.status.notIn.includes(r.status)).length),
       findMany: jest.fn().mockImplementation(async (args: any) => args?.select?.mobileNumber
         ? batch.records.filter((r: any) => !['REGISTERED','EXCLUDED'].includes(r.status)).map((r: any) => ({...r, batch: {defaultPhoneCountry: batch.defaultPhoneCountry, label: null, sourceFileName: null}}))
         : batch.records),
@@ -111,6 +112,7 @@ describe('valid pending assignment lifecycle', () => {
   it('keeps cancellation prohibited after Ann has registered', async () => {
     const {service,batch}=setup();await service.registerOnboardingBatch('org','batch', Role.ADMIN);
     await expect(service.cancelOnboardingBatch('org','batch')).rejects.toThrow('Cannot cancel');
+    await expect(service.cancelOnboardingBatch('org','batch')).rejects.toThrow('Exclude remaining records');
     expect(batch.status).not.toBe('CANCELLED');
   });
   it('does not expose reporting options for another organization’s employee', async () => {

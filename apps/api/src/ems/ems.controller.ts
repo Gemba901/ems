@@ -17,10 +17,10 @@ import { RequiresModule, SkipModuleCheck } from 'src/auth/decorators/module.deco
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
-import { Post, Delete } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
+import { Post, Delete, Put } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
 import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto,
   UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto, ConfirmOnboardingDuplicateDto,
-  ExcludeRemainingOnboardingRecordsDto } from './dto/onboarding.dto';
+  ExcludeRemainingOnboardingRecordsDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -136,6 +136,20 @@ export class EmsController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   async resetCommunicationChannel(@CurrentUser() user: { organizationId: string }) {
     return this.ems.resetCommunicationChannel(user.organizationId);
+  }
+
+  /** POST /ems/onboarding/column-choices/lookup — remembered destinations for these headings */
+  @Post('onboarding/column-choices/lookup')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async lookupImportColumnChoices(@Body() dto: LookupImportColumnChoicesDto, @CurrentUser() user: { organizationId: string }) {
+    return this.ems.lookupImportColumnChoices(user.organizationId, dto);
+  }
+
+  /** PUT /ems/onboarding/column-choices — remember confirmed column choices */
+  @Put('onboarding/column-choices')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async saveImportColumnChoices(@Body() dto: SaveImportColumnChoicesDto, @CurrentUser() user: { organizationId: string; userId: string }) {
+    return this.ems.saveImportColumnChoices(user.organizationId, user.userId, dto);
   }
 
     /** POST /ems/onboarding/batches — start a new import */
@@ -271,6 +285,17 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.excludeRemainingOnboardingRecords(user.organizationId, id, dto);
+  }
+
+  /** PATCH /ems/onboarding/batches/:id/column-destination — one extra column's destination for all unregistered records */
+  @Patch('onboarding/batches/:id/column-destination')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async setOnboardingColumnDestination(
+    @Param('id') id: string,
+    @Body() dto: SetOnboardingColumnDestinationDto,
+    @CurrentUser() user: { organizationId: string; userId: string },
+  ) {
+    return this.ems.setOnboardingColumnDestination(user.organizationId, id, user.userId, dto);
   }
 
   /** POST /ems/onboarding/batches/:id/register — turn ready records into employees */

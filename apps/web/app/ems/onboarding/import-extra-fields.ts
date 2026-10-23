@@ -1,20 +1,69 @@
 import * as XLSX from 'xlsx';
 import type { UpdateOnboardingRecordPayload } from '@/services/ems.service';
 import { readExtraFields, type ImportedExtraField, isExtraProfileField } from '../../../components/ems/onboarding-extra-fields';
-import { mapHeaders, findMappingConflicts, splitFullName, type Field, type MapField, type NameOrder } from './column-map';
+import { excelSerialToIso, readDate, type DateKind, type DateOrder } from '../../../components/ems/import-dates';
+import { mapHeaders, findMappingConflicts, splitFullName, MAPPABLE_FIELDS, type Field, type MapField, type NameOrder } from './column-map';
 
 export function importHeaderCells(grid: unknown[][], headerIndex: number): unknown[] {
   if (headerIndex < 0) return [];
   const width = grid.slice(headerIndex).reduce((max, row) => Math.max(max, row.length), 0);
   return Array.from({length: width}, (_, col) => grid[headerIndex]?.[col] ?? '');
 }
+/** A heading containing "ignore" in any case starts as Ignore, e.g. "Test case (ignore this column)". */
+export function headingSaysIgnore(heading: unknown): boolean {
+  return /ignore/i.test(String(heading ?? ''));
+}
 export function initialImportMapping(headers: unknown[], dataRows: unknown[][] = []): (MapField | null)[] {
-  return mapHeaders(headers).map((field, i) => field ?? (String(headers[i] ?? '').trim() || dataRows.some(row => String(row[i] ?? '').trim()) ? 'extra' : null));
+  return mapHeaders(headers).map((field, i) => headingSaysIgnore(headers[i]) ? null
+    : field ?? (String(headers[i] ?? '').trim() || dataRows.some(row => String(row[i] ?? '').trim()) ? 'extra' : null));
+}
+const REMEMBERABLE = new Set<string>(['extra', ...MAPPABLE_FIELDS.map(field => field.key)]);
+/**
+ * Apply the organisation's remembered choices on top of built-in recognition.
+ * Order: "ignore" in the heading, then a remembered choice, then built-in recognition.
+ * Remembered destinations this page no longer offers are skipped.
+ */
+export function applyRememberedChoices(headers: unknown[], mapping: (MapField | null)[], remembered: (string | null)[]) {
+  const next = [...mapping], flags = mapping.map(() => false);
+  const dateOrders: Record<number, DateOrder> = {};
+  headers.forEach((heading, i) => {
+    // A date column may carry its day/month order, e.g. "profile:dateOfBirth@DMY".
+    const [choice, order] = (remembered[i] ?? '').split('@');
+    if (!choice || !String(heading ?? '').trim() || headingSaysIgnore(heading)) return;
+    if (choice === 'ignore') { next[i] = null; flags[i] = true; }
+    else if (REMEMBERABLE.has(choice)) {
+      next[i] = choice as MapField; flags[i] = true;
+      if (order === 'DMY' || order === 'MDY') dateOrders[i] = order;
+    }
+  });
+  return { mapping: next, remembered: flags, dateOrders };
+}
+/** What to remember once an import's rows are saved: every titled column's final choice. */
+export function columnChoicesToSave(headers: unknown[], mapping: (MapField | null)[], dateOrders: Record<number, DateOrder | null> = {}) {
+  return headers.flatMap((heading, i) => {
+    const text = String(heading ?? '').trim();
+    const order = mapping[i]?.startsWith('profile:date') ? dateOrders[i] : null;
+    return text ? [{ heading: text.slice(0, 200), destination: `${mapping[i] ?? 'ignore'}${order ? `@${order}` : ''}` }] : [];
+  }).slice(0, 500);
 }
 export type ParsedImportRow = UpdateOnboardingRecordPayload & {rowNumber: number};
 /** Extra columns use Excel positions, so repeated headings cannot overwrite each other. */
+export type ImportDateOptions = {
+  /** Day/month order per 0-based sheet column; null when unknown (ambiguous values stay as written). */
+  dateOrders?: Record<number, DateOrder | null>;
+  /** Reference day for plausibility (ages, future dates); defaults to today. */
+  today?: string;
+};
+const DATE_KIND: Partial<Record<string, DateKind>> = { dateOfBirth: 'birth', dateJoined: 'event' };
+/** True when Excel stores the cell as a date: a date-formatted number, or a parsed date. */
+function isDateCell(cell: XLSX.CellObject | undefined): boolean | null {
+  if (!cell) return null;
+  if (cell.t === 'd') return true;
+  return typeof cell.z === 'string' ? XLSX.SSF.is_date(cell.z) : null;
+}
 export function buildImportRows(grid: unknown[][], headerIndex: number, firstRow: number, mapping: (MapField | null)[], nameOrder: NameOrder,
-  sheet?: XLSX.WorkSheet, date1904 = false): {rows: ParsedImportRow[]; errors: string[]} {
+  sheet?: XLSX.WorkSheet, date1904 = false, dates: ImportDateOptions = {}): {rows: ParsedImportRow[]; errors: string[]} {
+  const today = dates.today ?? new Date().toISOString().slice(0, 10);
   const rows: ParsedImportRow[] = [], errors: string[] = [];
   if (headerIndex < 0) return {rows, errors};
   const firstColumn = sheet?.["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]).s.c : 0;
@@ -34,10 +83,16 @@ export function buildImportRows(grid: unknown[][], headerIndex: number, firstRow
         const cell = sheet?.[XLSX.utils.encode_cell({r: rowNumber - 1, c: firstColumn + col})];
         const originalValue = cell?.w ?? String(raw ?? '');
         let value = originalValue;
-        if ((target === 'dateOfBirth' || target === 'dateJoined') && typeof raw === 'number') {
-          const d = XLSX.SSF.parse_date_code(raw, {date1904});
-          if (d && !(d.y === 1900 && d.m === 2 && d.d === 29) && raw >= 0 && d.d >= 1)
-            value = `${String(d.y).padStart(4, '0')}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+        const kind = target ? DATE_KIND[target] : undefined;
+        if (kind) {
+          // A date-formatted cell is a real date. A plain number (General) is digits such as 220987,
+          // except when the format is unknown and the number reads as a plausible date.
+          const dateCell = isDateCell(cell);
+          const serial = typeof raw === 'number' && dateCell !== false ? excelSerialToIso(raw, date1904, kind, today) : null;
+          const text = typeof raw === 'number' && !serial ? String(raw) : originalValue;
+          const reading = serial ? { iso: serial } : readDate(text, kind, today, dates.dateOrders?.[col] ?? null);
+          // Only one plausible reading converts; anything else stays as written for HR to choose.
+          if ('iso' in reading) value = reading.iso;
         }
         extras.push({column: firstColumn + col + 1, heading: String(grid[headerIndex]?.[col] ?? ''), originalValue, value, target});
       } else {

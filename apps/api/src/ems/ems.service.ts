@@ -2,7 +2,7 @@ import { normaliseFiveSLocation, FIVE_S_LOCATION_ERROR } from './five-s-location
 import { importedAccountRole, canRegisterOnboarding, registrationAccess } from './onboarding-access';
 import { employeeListWhere, employeeNameOrder, employeeSearchGroups, registeredSourceWhere, EMPLOYEE_SOURCE_SELECT, employeeImportSource } from './ems-employee-list';
 import { assertProfileBirthDate } from './employee-profile-dates';
-import { readExtraFields, reviseExtraFields, extraProfileData, ExtraFieldsError } from './onboarding-extra-fields';
+import { readExtraFields, reviseExtraFields, extraProfileData, ExtraFieldsError, isExtraProfileField } from './onboarding-extra-fields';
 import { isReportingBody, reportingBodyLabel } from './reporting-bodies';
 import { onboardingNameIssue } from './onboarding-name-rule';
 import { departmentIndex, departmentIssue, onboardingFieldOptions } from './onboarding-field-options';
@@ -12,6 +12,7 @@ import { retryOnboardingTransaction } from './onboarding-transaction';
 import { assertPeopleLinksAllowBatchRemoval, employeePeopleLinks, loadPeopleLinks, registrationPeopleData, relieverDraftData, resolvePendingPeopleLinks, saveDepartmentHod, saveEmployeeHod, saveEmployeeRelievers } from './ems-people-links';
 import { peopleLinkFindings } from './onboarding-people-links';
 import { buildExcludeRemainingPreview, isRemainingRecord } from './onboarding-exclude-remaining';
+import { columnHeadingKey, normaliseColumnChoices } from './onboarding-column-choices';
 import { cleanRecord, isBlankValue, isNotApplicable, matchEnumValue, normaliseKey } from './onboarding-text';
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -23,7 +24,7 @@ import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
 import { 
   AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto,
-  ExcludeRemainingOnboardingRecordsDto,
+  ExcludeRemainingOnboardingRecordsDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto,
 } from './dto/onboarding.dto';
 import { Prisma } from 'db';
 import { getCountries } from 'libphonenumber-js/max';
@@ -1471,6 +1472,73 @@ export class EmsService {
       }),
     ]);
     return { preview: buildExcludeRemainingPreview(batch.id, batch.records, employees, hods), remainingIds };
+  }
+
+  /** Remembered destination for each heading, in the same order; null where nothing is remembered. */
+  async lookupImportColumnChoices(organizationId: string, dto: LookupImportColumnChoicesDto) {
+    const keys = dto.headings.map(columnHeadingKey);
+    const wanted = [...new Set(keys.filter(Boolean))];
+    const rows = wanted.length ? await this.prisma.emsImportColumnChoice.findMany({
+      where: { organizationId, headingKey: { in: wanted } }, select: { headingKey: true, destination: true },
+    }) : [];
+    const byKey = new Map(rows.map(row => [row.headingKey, row.destination]));
+    return { choices: keys.map(key => (key && byKey.get(key)) || null) };
+  }
+
+  /** Remember HR's confirmed choices. Called after an import's rows are saved; last choice per heading wins. */
+  async saveImportColumnChoices(organizationId: string, userId: string, dto: SaveImportColumnChoicesDto) {
+    const choices = normaliseColumnChoices(dto.choices);
+    if (choices.length) await this.prisma.$transaction(choices.map(choice => this.prisma.emsImportColumnChoice.upsert({
+      where: { organizationId_headingKey: { organizationId, headingKey: choice.headingKey } },
+      create: { organizationId, ...choice, updatedById: userId },
+      update: { heading: choice.heading, destination: choice.destination, updatedById: userId },
+    })));
+    return { saved: choices.length };
+  }
+
+  /**
+   * Send one extra column to a profile field (or keep it for reference) for every
+   * unregistered, non-excluded record in the import, then re-validate. Registered
+   * employees keep what they had. The choice is also remembered for future imports.
+   */
+  async setOnboardingColumnDestination(organizationId: string, batchId: string, userId: string, dto: SetOnboardingColumnDestinationDto) {
+    const target = dto.target ?? null;
+    if (target !== null && !isExtraProfileField(target)) throw new BadRequestException('Choose a supported profile field or keep this for reference');
+    const heading = dto.heading ?? '';
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
+      await this.lockReporting(tx, organizationId);
+      await tx.$queryRaw`SELECT id FROM "EmsOnboardingBatch" WHERE id = ${batchId} AND "organizationId" = ${organizationId} FOR UPDATE`;
+      const batch = await tx.emsOnboardingBatch.findFirst({
+        where: { id: batchId, organizationId },
+        select: { status: true, records: { select: { id: true, status: true, extraFields: true } } },
+      });
+      if (!batch) throw new NotFoundException('Onboarding batch not found');
+      if (batch.status === 'CANCELLED') throw new BadRequestException('This import is cancelled');
+      let changed = 0;
+      for (const record of batch.records) {
+        if (record.status === 'REGISTERED' || record.status === 'EXCLUDED') continue;
+        let fields;
+        // A record with unreadable extra data keeps its validation finding; it is not rewritten here.
+        try { fields = readExtraFields(record.extraFields); } catch (error) { if (error instanceof ExtraFieldsError) continue; throw error; }
+        const index = fields.findIndex(field => field.column === dto.column && field.heading === heading);
+        if (index < 0) continue;
+        if (fields[index].target !== target) {
+          fields[index] = { ...fields[index], target: target as (typeof fields)[number]['target'] };
+          await tx.emsOnboardingRecord.update({ where: { id: record.id },
+            data: { extraFields: fields as unknown as Prisma.InputJsonValue, validationErrors: Prisma.DbNull } });
+        }
+        changed++;
+      }
+      if (!changed) throw new BadRequestException('No unregistered records in this import have that column.');
+      await this.validateOnboardingBatchLocked(tx, organizationId, batchId);
+      const key = columnHeadingKey(heading);
+      if (key) await tx.emsImportColumnChoice.upsert({
+        where: { organizationId_headingKey: { organizationId, headingKey: key } },
+        create: { organizationId, headingKey: key, heading: heading.trim().slice(0, 200), destination: target ? `profile:${target}` : 'extra', updatedById: userId },
+        update: { heading: heading.trim().slice(0, 200), destination: target ? `profile:${target}` : 'extra', updatedById: userId },
+      });
+    }, { timeout: 20000 }));
+    return this.getOnboardingBatch(organizationId, batchId);
   }
 
   async previewExcludeRemainingOnboardingRecords(organizationId: string, batchId: string) {

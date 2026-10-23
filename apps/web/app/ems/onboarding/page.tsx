@@ -36,7 +36,7 @@ function RecordBreakdown({ batch }: { batch: OnboardingBatchSummary }) {
   if (!counts || total === 0) return <span className="text-slate-500">{total}</span>;
   const registered = counts.REGISTERED ?? 0;
   const intended = total - (counts.EXCLUDED ?? 0);
-  // Rounded down, so it never shows 100% until everyone meant to be registered is.
+  // Rounded down, so it never shows 100% until everyone meant to be registered is; a start shows as <1%, not 0%.
   const pct = intended > 0 ? Math.floor((registered / intended) * 100) : 0;
   const parts = COUNT_PARTS.filter((p) => (counts[p.key] ?? 0) > 0);
   const others = parts.filter((p) => p.key !== "REGISTERED");
@@ -48,7 +48,7 @@ function RecordBreakdown({ batch }: { batch: OnboardingBatchSummary }) {
           <span className="text-slate-500"> of </span>
           <span className="font-semibold text-slate-800">{intended}</span>
           <span className="text-slate-500"> registered · </span>
-          <span className={`font-semibold ${pct === 100 ? "text-emerald-700" : "text-slate-800"}`}>{pct}%</span>
+          <span className={`font-semibold ${pct === 100 ? "text-emerald-700" : "text-slate-800"}`}>{registered > 0 && pct === 0 ? "<1" : pct}%</span>
         </> : <span className="text-slate-500">{total} records · all excluded</span>}
       </p>
       <div className="flex h-1.5 w-48 overflow-hidden rounded-full bg-slate-100" aria-hidden>

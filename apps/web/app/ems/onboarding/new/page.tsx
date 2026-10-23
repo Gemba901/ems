@@ -15,7 +15,11 @@ import { ArrowLeft, Loader2, Upload, AlertCircle, FileSpreadsheet, CheckCircle2,
 import {
   findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, MapField, NameOrder, requiredFields, findMappingConflicts,
 } from "../column-map";
-import { importHeaderCells, initialImportMapping, buildImportRows, packImportRows } from "../import-extra-fields";
+import {
+  importHeaderCells, initialImportMapping, buildImportRows, packImportRows,
+  applyRememberedChoices, columnChoicesToSave, headingSaysIgnore,
+} from "../import-extra-fields";
+import { inferDateOrder, type DateOrder } from "@/components/ems/import-dates";
 import TemplateCard from "./TemplateCard";
 import ConfirmDialog from "@/components/ems/ConfirmDialog";
 import SearchableSelect from "@/components/ems/SearchableSelect";
@@ -102,6 +106,12 @@ export default function NewOnboardingImportPage() {
   // An import whose rows all arrived but whose check didn't finish: kept, so HR can open it and retry.
   const [savedImport, setSavedImport] = useState<{ id: string; label: string; rows: number } | null>(null);
   const [mapping, setMapping] = useState<(MapField | null)[]>([]);
+  // Columns whose choice came from this organisation's remembered choices.
+  const [remembered, setRemembered] = useState<boolean[]>([]);
+  // Day/month order HR chose (or remembered) for date columns whose values don't show it.
+  const [dateOrderChoice, setDateOrderChoice] = useState<Record<number, DateOrder>>({});
+  // Discards a late remembered-choices answer after the sheet, header row or a choice changed.
+  const lookupSequence = useRef(0);
   // How names in a mapped "Full name" column are written.
   const [nameOrder, setNameOrder] = useState<NameOrder>("FIRST_LAST");
 
@@ -202,6 +212,28 @@ export default function NewOnboardingImportPage() {
     }
   }
 
+  /** Built-in recognition first, then this organisation's remembered choices on top. */
+  function startMapping(rows: unknown[][], index: number) {
+    const headers = importHeaderCells(rows, index);
+    const initial = initialImportMapping(headers, rows.slice(index + 1));
+    setMapping(initial);
+    setRemembered([]);
+    setDateOrderChoice({});
+    const sequence = ++lookupSequence.current;
+    const headings = headers.slice(0, 500).map(cell => String(cell ?? "").trim().slice(0, 200));
+    if (!accessToken || !headings.some(Boolean)) return;
+    EmsService.lookupImportColumnChoices(headings, accessToken)
+      .then(({ choices }) => {
+        if (sequence !== lookupSequence.current) return;
+        const applied = applyRememberedChoices(headers, initial, choices);
+        setMapping(applied.mapping);
+        setRemembered(applied.remembered);
+        setDateOrderChoice(applied.dateOrders);
+      })
+      // Remembered choices are a convenience: built-in recognition still applies without them.
+      .catch(() => undefined);
+  }
+
   /** Read a sheet into a grid and guess where its headers are. */
   function loadSheet(wb: XLSX.WorkBook, name: string) {
     const sheet = wb.Sheets[name];
@@ -223,7 +255,8 @@ export default function NewOnboardingImportPage() {
 
     const found = findHeaderRow(rows, HEADER_SEARCH_DEPTH);
     setHeaderIndex(found);
-    setMapping(found >= 0 ? initialImportMapping(importHeaderCells(rows, found), rows.slice(found + 1)) : []);
+    if (found >= 0) startMapping(rows, found);
+    else { lookupSequence.current++; setMapping([]); setRemembered([]); setDateOrderChoice({}); }
     setError(
       found === -1
         ? "Couldn't find a header row — pick one below, or check the column names."
@@ -238,7 +271,8 @@ export default function NewOnboardingImportPage() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array" });
+      // cellNF keeps each cell's number format, so date cells can be told apart from plain numbers like 220987.
+      const wb = XLSX.read(buffer, { type: "array", cellNF: true });
       setWorkbook(wb);
 
       const first = wb.SheetNames[0];
@@ -280,6 +314,7 @@ export default function NewOnboardingImportPage() {
   };
   /** Keep one column for a field; the others it was competing with become "ignore". */
   function resolveConflict(field: MapField, keep: number | null) {
+    lookupSequence.current++;
     setMapping((prev) => prev.map((f, i) => (f === field && i !== keep ? null : f)));
   }
 
@@ -290,8 +325,24 @@ export default function NewOnboardingImportPage() {
           .filter((v): v is string => !!v)
       : [];
 
+  // Each date column's day/month order: proven by its values when possible, otherwise HR's choice
+  // (remembered or picked below), defaulting to Day/Month/Year. A column showing both orders stays
+  // unresolved: its unclear dates are left as written for HR to choose in the editor.
+  const dateEvidence: Record<number, DateOrder | 'MIXED' | null> = {};
+  const dateOrders: Record<number, DateOrder | null> = {};
+  if (headerIndex >= 0) fields.forEach((field, col) => {
+    if (field !== 'profile:dateOfBirth' && field !== 'profile:dateJoined') return;
+    const sheet = workbook?.Sheets[sheetName];
+    const values = grid.slice(headerIndex + 1).map((row, i) => {
+      const cell = sheet?.[XLSX.utils.encode_cell({ r: firstRow + headerIndex + 1 + i, c: (sheet?.["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]).s.c : 0) + col })];
+      return String(cell?.w ?? row[col] ?? "").trim();
+    });
+    const evidence = inferDateOrder(values);
+    dateEvidence[col] = evidence;
+    dateOrders[col] = evidence === 'MIXED' ? null : evidence ?? dateOrderChoice[col] ?? 'DMY';
+  });
   const parsed = buildImportRows(grid, headerIndex, firstRow, fields, nameOrder,
-    workbook?.Sheets[sheetName], !!workbook?.Workbook?.WBProps?.date1904);
+    workbook?.Sheets[sheetName], !!workbook?.Workbook?.WBProps?.date1904, { dateOrders });
   const rows = parsed.rows;
   const extraColumns = fields.filter(f => f === 'extra').length;
   const profileColumns = fields.filter(f => f?.startsWith('profile:')).length;
@@ -352,6 +403,8 @@ export default function NewOnboardingImportPage() {
 
       // Every chunk was acknowledged: all rows are saved on the server from here on.
       step = "validate";
+      // Remember these choices for the next import. Never blocks or fails the import.
+      await EmsService.saveImportColumnChoices(columnChoicesToSave(headerRow, fields, dateOrders), accessToken).catch(() => undefined);
       setProgress(`Checking ${rows.length} rows…`);
       await EmsService.validateOnboardingBatchAck(batch.id, accessToken);
       queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batches"] });
@@ -704,7 +757,7 @@ export default function NewOnboardingImportPage() {
                       key={i}
                       onClick={() => {
                         setHeaderIndex(i);
-                        setMapping(initialImportMapping(importHeaderCells(grid, i), grid.slice(i + 1)));
+                        startMapping(grid, i);
                         setPickingHeader(false);
                         setError(null);
                       }}
@@ -729,8 +782,9 @@ export default function NewOnboardingImportPage() {
           )}
 
           {headerIndex >= 0 && (extraColumns > 0 || profileColumns > 0) && <p className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-900">
-            {extraColumns} additional column(s) kept as extra information · {profileColumns} mapped to existing profile fields.
-            Review or change each choice below. Ignored columns are not uploaded. Additional information stays available after registration.
+            {extraColumns} additional column(s) kept for reference · {profileColumns} mapped to existing profile fields.
+            Review or change each choice below. Ignored columns are not uploaded. Reference values stay available after registration.
+            Your choices are remembered for this organisation’s next import.
           </p>}
           {!!parsed.errors.length && <p role="alert" className="text-xs text-red-700">{parsed.errors[0]}{parsed.errors.length > 1 ? ` (${parsed.errors.length} affected rows)` : ''}</p>}
           {unmatched.length > 0 && (
@@ -799,7 +853,7 @@ export default function NewOnboardingImportPage() {
                       Match your columns to the fields they hold · <span className="text-red-500">*</span> required
                     </p>
                     <p className="text-xs text-slate-400">
-                      {fields.filter(f => f && f !== "extra").length} mapped · {extraColumns} kept as extra
+                      {fields.filter(f => f && f !== "extra").length} mapped · {extraColumns} kept for reference
                     </p>
                   </div>
                   <div className="max-h-72 overflow-auto divide-y divide-slate-50">
@@ -823,6 +877,25 @@ export default function NewOnboardingImportPage() {
                             {sample && (
                               <p className="text-[11px] text-slate-400 truncate">e.g. {sample}</p>
                             )}
+                            {remembered[col] && (
+                              <p className="text-[11px] font-medium text-blue-700">Remembered from a previous import</p>
+                            )}
+                            {!fields[col] && headingSaysIgnore(cell) && (
+                              <p className="text-[11px] font-medium text-slate-500">Ignored: the heading says “ignore”</p>
+                            )}
+                            {col in dateEvidence && (dateEvidence[col] === 'MIXED'
+                              ? <p className="text-[11px] font-medium text-amber-700">Dates use both day-first and month-first orders. Unclear dates will offer both readings to choose from.</p>
+                              : dateEvidence[col]
+                              ? <p className="text-[11px] text-slate-500">Dates read {dateEvidence[col] === 'DMY' ? 'Day/Month/Year' : 'Month/Day/Year'}, shown by values in this column</p>
+                              : <label className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-600">
+                                  <span>No value shows the order. Dates are written</span>
+                                  <select aria-label={`Date order for ${name}`} value={dateOrders[col] ?? 'DMY'}
+                                    onChange={(event) => { const value = event.target.value as DateOrder; setDateOrderChoice((prev) => ({ ...prev, [col]: value })); }}
+                                    className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px]">
+                                    <option value="DMY">Day/Month/Year (09/08/87 = 9 Aug 1987)</option>
+                                    <option value="MDY">Month/Day/Year (09/08/87 = 8 Sep 1987)</option>
+                                  </select>
+                                </label>)}
                             {fields[col] && conflictFields.has(fields[col]!) && (
                               <p className="text-[11px] font-medium text-amber-700">Competing with another column: choose one above</p>
                             )}
@@ -831,6 +904,8 @@ export default function NewOnboardingImportPage() {
                             value={fields[col] ?? ""}
                             onChange={(e) => {
                               const value = (e.target.value || null) as MapField | null;
+                              lookupSequence.current++;
+                              setRemembered((prev) => prev.map((flag, i) => (i === col ? false : flag)));
                               setMapping((prev) => {
                                 const next = [...prev];
                                 // A field can only be used once — clear any other column holding it
@@ -849,7 +924,7 @@ export default function NewOnboardingImportPage() {
                             }`}
                           >
                             <option value="">— ignore this column —</option>
-                            <option value="extra">Keep as extra information</option>
+                            <option value="extra">Keep for reference</option>
                             {MAPPABLE_FIELDS.map(({ key, label }) => (
                               <option key={key} value={key} disabled={takenElsewhere(key)}>
                                 {label}{isRequired(key) ? " *" : ""}{takenElsewhere(key) ? " (already used)" : ""}

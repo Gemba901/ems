@@ -151,3 +151,21 @@ model EmsDepartmentHod {
   @@index([employeeId])
   @@index([pendingRecordId])
 }
+
+/// HR's remembered destination for an import column heading, per organisation.
+/// A pre-fill hint for future imports; the import page still shows every choice.
+model EmsImportColumnChoice {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// Heading compared case- and punctuation-insensitively, e.g. "staff no".
+  headingKey     String   @db.VarChar(200)
+  /// Last heading text as written in a workbook, for display.
+  heading        String   @db.VarChar(200)
+  /// Core field key, "fullName", "extra", "ignore" or "profile:<field>".
+  destination    String   @db.VarChar(80)
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, headingKey])
+}

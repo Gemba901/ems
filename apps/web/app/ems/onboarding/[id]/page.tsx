@@ -21,6 +21,7 @@ import { createPortal } from "react-dom";
 import OnboardingDuplicateReview from "@/components/ems/OnboardingDuplicateReview";
 import ExcludeRemainingDialog from "@/components/ems/ExcludeRemainingDialog";
 import OnboardingMoreActions from "@/components/ems/OnboardingMoreActions";
+import ImportedColumnsDialog from "@/components/ems/ImportedColumnsDialog";
 import { pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
 import { safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -527,9 +528,13 @@ function revealSavedRow(element: HTMLTableRowElement | undefined, editor = false
   element.focus({preventScroll: true});
 }
 
-function revealEditorField(root: HTMLElement | null, key: string) {
-  const field = Array.from(root?.querySelectorAll<HTMLElement>('[data-editor-field]') ?? []).find(el => el.dataset.editorField === key);
-  if (!field) return;
+function revealEditorField(root: HTMLElement | null, key: string, message?: string) {
+  const section = Array.from(root?.querySelectorAll<HTMLElement>('[data-editor-field]') ?? []).find(el => el.dataset.editorField === key);
+  if (!section) return;
+  // Additional-information findings name their Excel column, e.g. "Date of birth (column AG): …": go to that value.
+  if (section.tagName === 'DETAILS') (section as HTMLDetailsElement).open = true;
+  const column = key === 'extraFields' ? /\(column ([A-Z]{1,3})\)/.exec(message ?? '')?.[1] : undefined;
+  const field = (column && section.querySelector<HTMLElement>(`[data-extra-column="${column}"]`)) || section;
   // Reveal hidden controls before measuring/focusing a requested field.
   let parent = field.parentElement;
   while (parent) { if (parent.tagName === 'DETAILS') (parent as HTMLDetailsElement).open = true; parent = parent.parentElement; }
@@ -540,7 +545,7 @@ function revealEditorField(root: HTMLElement | null, key: string) {
   const rect = field.getBoundingClientRect();
   const desired = bounds.top + Math.max(0, Math.min(48, (bottom - bounds.top - rect.height) / 2));
   restoreScroll({...scroll, top: scroll.top + rect.top - desired});
-  (field.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled)') ?? field).focus({preventScroll: true});
+  (field.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), textarea:not(:disabled)') ?? field).focus({preventScroll: true});
 }
 
 const FEEDBACK_LINK = 'rounded px-1 font-medium underline underline-offset-2 text-purple-800 hover:text-purple-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-700 disabled:opacity-50';
@@ -574,7 +579,7 @@ function SaveFeedback({ notice, hasReturn, disabled, onView, onDismiss }: {
 }
 
 function RecordEditor({
-  record, batch, actorRole, required, toolbarHost, onSave, onSaved, onSaveHod, onHodSaved, onConfirmDuplicate, onUndoDuplicate, reviewReturnTo, onVisit, onRefreshDuplicates, onExclude, onInclude, saving, exclusionError, inclusionError, reportingOptions, reportingResolution, reportingSuggestions = [], onDirtyChange, reviewSequence = 0,
+  record, batch, actorRole, required, toolbarHost, onSave, onSaved, onSaveHod, onHodSaved, onConfirmDuplicate, onUndoDuplicate, reviewReturnTo, onVisit, onRefreshDuplicates, onExclude, onInclude, onManageColumns, saving, exclusionError, inclusionError, reportingOptions, reportingResolution, reportingSuggestions = [], onDirtyChange, reviewSequence = 0,
 }: {
   record: OnboardingRecord;
   batch: OnboardingBatchDetail;
@@ -596,6 +601,8 @@ function RecordEditor({
   onRefreshDuplicates: () => void;
   onExclude: (reason: string) => void;
   onInclude: () => void;
+  /** Opens the import-wide column destinations. */
+  onManageColumns?: () => void;
   saving: boolean;
   exclusionError?: string;
   inclusionError?: string;
@@ -782,7 +789,7 @@ function RecordEditor({
             {currentIssues.map((issue, index) => <li key={`${issue.key}:${index}`} className="min-w-0 text-xs text-red-700 break-words">
               {issue.key === 'extraFields' || issue.key === 'reportingTarget' || issue.key === 'duplicateReview' || EDITABLE_FIELDS.some(field => field.key === issue.key)
                 ? <button type="button" disabled={saving} className="text-left font-semibold underline underline-offset-2 hover:text-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50"
-                    onClick={() => { setHighlightReview(false); revealEditorField(editorRef.current, issue.key); }}>
+                    onClick={() => { setHighlightReview(false); revealEditorField(editorRef.current, issue.key, issue.message); }}>
                     {issueLabel(issue.key)}: {issue.message}
                   </button>
                 : <span><strong>{issueLabel(issue.key)}:</strong> {issue.message}</span>}
@@ -895,6 +902,7 @@ function RecordEditor({
       </div>
 
       <ImportedExtraFields fields={draft.extraFields ?? []} disabled={locked || saving || hodDirty}
+        onManageColumns={locked || dirty ? undefined : onManageColumns}
         issues={(findings.get('extraFields') ?? []).filter(f => !f.stale).map(f => f.message)}
         onChange={locked ? undefined : fields => { setFeedback(null); setHighlightReview(false); setDraft(d => ({...d, extraFields: fields})); }}
         registered={record.status === 'REGISTERED'} />
@@ -1260,12 +1268,18 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const register = useMutation({
     onMutate: beginAction,
     mutationFn: () => EmsService.registerOnboardingBatch(id, accessToken!),
-    onSuccess: (result) => finishBatchAction(result.batch, registrationOutcomeMessage(result)),
+    onSuccess: (result) => {
+      finishBatchAction(result.batch, registrationOutcomeMessage(result));
+      queryClient.invalidateQueries({ queryKey: ["ems-employees"] });
+      queryClient.invalidateQueries({ queryKey: ["ems-employee-import-batches"] });
+    },
     onError: (error: Error) => { failedAction('register', error); queryClient.invalidateQueries({queryKey}); },
   });
 
   // "Exclude remaining records" dialog for a partially registered import.
   const [excludeRemainingOpen, setExcludeRemainingOpen] = useState(false);
+  // "Imported columns" dialog: where each extra column goes, for the whole import.
+  const [columnsOpen, setColumnsOpen] = useState(false);
   const error = queryError ? (queryError as any).message : null;
   const hierarchy = batch?.hierarchy;
   const records: OnboardingRecord[] = batch?.records ?? [];
@@ -1411,11 +1425,18 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             {adminRequiredReadyCount ? `Register ${registerableReadyCount} eligible` : `Register all ${registerableReadyCount} ready`}
           </button>
 
-          <OnboardingMoreActions disabled={busy || editorDirty || countryUnsaved} actions={batch?.status === "PARTIALLY_REGISTERED" ? [{
-            key: "exclude-remaining", label: "Exclude remaining records…", danger: true, icon: <Ban className="h-3.5 w-3.5" />,
-            title: "Exclude every unregistered record in this import; registered employees are kept",
-            onSelect: () => { beginAction(); setExcludeRemainingOpen(true); },
-          }] : []} />
+          <OnboardingMoreActions disabled={busy || editorDirty || countryUnsaved} actions={[
+            ...(batch?.records.some(r => r.extraFields?.length) ? [{
+              key: "imported-columns", label: "Imported columns…",
+              title: "Choose once where each extra column goes for this whole import",
+              onSelect: () => { beginAction(); setColumnsOpen(true); },
+            }] : []),
+            ...(batch?.status === "PARTIALLY_REGISTERED" ? [{
+              key: "exclude-remaining", label: "Exclude remaining records…", danger: true, icon: <Ban className="h-3.5 w-3.5" />,
+              title: "Exclude every unregistered record in this import; registered employees are kept",
+              onSelect: () => { beginAction(); setExcludeRemainingOpen(true); },
+            }] : []),
+          ]} />
 
 
         </div>
@@ -1718,6 +1739,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                               onRefreshDuplicates={() => { queryClient.invalidateQueries({queryKey}); }}
                               onExclude={(reason) => exclude.mutate({ recordId: rec.id, reason })}
                               onInclude={() => include.mutate(rec.id)}
+                              onManageColumns={() => { beginAction(); setColumnsOpen(true); }}
                             />
                           </td>
                         </tr>
@@ -1741,6 +1763,11 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         {/* Outside the horizontal table scroller: stick to the actual page scroll area. */}
         <div ref={setEditorToolbarHost} data-editor-toolbar-host className="pointer-events-none sticky bottom-3 z-40" />
       </div>
+      {columnsOpen && batch && accessToken && (
+        <ImportedColumnsDialog batch={batch} accessToken={accessToken}
+          onClose={() => setColumnsOpen(false)}
+          onDone={(updated, message) => finishBatchAction(updated, message)} />
+      )}
       {excludeRemainingOpen && accessToken && (
         <ExcludeRemainingDialog
           batchId={id}

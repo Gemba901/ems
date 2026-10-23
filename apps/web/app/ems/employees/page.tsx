@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -20,6 +21,7 @@ function importDate(value: string) {
 
 export default function EmsEmployeesPage() {
   const { accessToken, user } = useAuthStore();
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState(initialFilters);
   const [pageInput, setPageInput] = useState('1');
@@ -115,7 +117,9 @@ export default function EmsEmployeesPage() {
               <thead className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500"><tr>
                 {['Code', 'Name', 'Department', 'Status', 'Import source', 'Completion'].map(heading => <th key={heading} scope="col" className="px-4 py-3 font-semibold">{heading}</th>)}
               </tr></thead>
-              <tbody className="divide-y divide-slate-100">{employees.map(employee => <tr key={employee.id} className="align-top hover:bg-slate-50/70">
+              <tbody className="divide-y divide-slate-100">{employees.map(employee => <tr key={employee.id} className="cursor-pointer align-top hover:bg-slate-50/70"
+                // The whole row opens the profile for mouse users; the name link stays the keyboard and screen-reader route.
+                onClick={event => { if ((event.target as HTMLElement).closest('a, button, input, select, textarea') || window.getSelection()?.toString()) return; router.push(`/ems/employees/${encodeURIComponent(employee.id)}`); }}>
                 <td className="px-4 py-3 font-mono text-xs text-slate-500">{employee.employeeCode ?? '—'}</td>
                 <td className="min-w-40 px-4 py-3"><Link href={`/ems/employees/${encodeURIComponent(employee.id)}`} className="font-semibold text-purple-800 underline decoration-purple-200 underline-offset-2 hover:decoration-purple-800">{[employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(' ')}</Link></td>
                 <td className="px-4 py-3 text-slate-600">{employee.department?.name ?? '—'}</td>

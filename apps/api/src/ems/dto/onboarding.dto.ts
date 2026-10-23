@@ -143,6 +143,30 @@ export class ExcludeRemainingOnboardingRecordsDto extends ExcludeOnboardingRecor
   expectedToken!: string;
 }
 
+export class LookupImportColumnChoicesDto {
+  @IsArray() @ArrayMaxSize(500)
+  @IsString({ each: true }) @MaxLength(200, { each: true })
+  headings!: string[];
+}
+
+export class ImportColumnChoiceDto {
+  @IsString() @MaxLength(200) heading!: string;
+  @IsString() @MaxLength(80) destination!: string;
+}
+
+export class SaveImportColumnChoicesDto {
+  @IsArray() @ArrayMaxSize(500)
+  @ValidateNested({ each: true }) @Type(() => ImportColumnChoiceDto)
+  choices!: ImportColumnChoiceDto[];
+}
+
+/** Where one extra column's values go for every unregistered record in an import. null = keep for reference. */
+export class SetOnboardingColumnDestinationDto {
+  @Type(() => Number) @IsInt() @Min(1) @Max(16384) column!: number;
+  @IsString() @MaxLength(200) heading!: string;
+  @IsOptional() @IsIn([null, ...EXTRA_PROFILE_FIELDS.map(field => field.key)]) target!: string | null;
+}
+
 export class UpdateCommunicationChannelDto {
   @IsEnum(OrgCommunicationChannel, { message: 'Choose WhatsApp or email' })
   communicationChannel!: OrgCommunicationChannel;

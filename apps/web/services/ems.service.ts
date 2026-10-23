@@ -1,5 +1,6 @@
 import type { FiveSLocationCategory } from '@/components/ems/five-s-location';
 import type { ImportedExtraField } from '@/components/ems/onboarding-extra-fields';
+import type { InvitationKind, InvitationStatus, InvitationSummary } from "@/components/ems/ems-invitations";
 import { apiClient } from "@/lib/api-client";
 const API_URL = "/api";
 
@@ -199,6 +200,7 @@ export interface EmployeeImportBatch { id: string; label: string | null; sourceF
 
 export interface EmployeeWithCompletion extends EmployeeProfile {
   sourceImport?: EmployeeImportSource | null;
+  invitation?: InvitationSummary | null;
   completion: CompletionResult;
 }
 
@@ -557,7 +559,54 @@ export interface ExcludeRemainingPreview {
   token: string;
 }
 
+export type EmployeeInvitationFilter = 'NOT_INVITED' | 'PENDING' | 'ACCEPTED' | 'ATTENTION';
+export type EmployeeListFilters = {
+  departmentId?: string; employmentStatus?: EmploymentStatus; activityState?: 'ACTIVE' | 'INACTIVE'; search?: string;
+  source?: 'IMPORTED' | 'UNLINKED'; importBatchId?: string; sort?: EmployeeListSort; invitation?: EmployeeInvitationFilter;
+};
+/** Who to invite: explicit employees, or everyone matching employee-list filters. */
+export type InvitationSelection = { employeeIds?: string[]; filters?: EmployeeListFilters; resend?: boolean };
+export type InvitationCategory = 'SETUP' | 'ACCESS_NOTICE' | 'CONTACT_NOTICE' | 'PENDING' | 'ACCEPTED' | 'SKIPPED';
+export interface InvitationPreview {
+  channel: 'EMAIL' | 'WHATSAPP'; total: number; counts: Record<InvitationCategory, number>;
+  skipped: { employeeId: string; name: string; reason: string }[];
+}
+export interface InvitationSendResult {
+  channel: 'EMAIL' | 'WHATSAPP'; sent: number; shared: number; notices: number; failed: number; skipped: number; unchanged: number;
+  share: { employeeId: string; name: string; number: string; kind: InvitationKind; message: string }[];
+  inPerson: { employeeId: string; name: string }[];
+  failures: { employeeId: string; name: string; error: string }[];
+}
+export interface EmployeeInvitationDetail {
+  invitation: null | { kind: InvitationKind; channel: 'EMAIL' | 'WHATSAPP'; status: InvitationStatus; destination: string | null;
+    skipReason: string | null; lastError: string | null; expiresAt: string | null; sendCount: number;
+    sentAt: string | null; acceptedAt: string | null; cancelledAt: string | null };
+}
+
 export const EmsService = {
+  async previewInvitations(selection: InvitationSelection, token: string): Promise<InvitationPreview> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/invitations/preview`, {
+      method: "POST", headers: authHeaders(token), body: JSON.stringify(selection),
+    }, token));
+  },
+
+  /** `origin` is the company address in the browser; the API checks it before building links. */
+  async sendInvitations(selection: InvitationSelection, origin: string, token: string): Promise<InvitationSendResult> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/invitations/send`, {
+      method: "POST", headers: authHeaders(token), body: JSON.stringify({ ...selection, origin }),
+    }, token));
+  },
+
+  async getEmployeeInvitation(employeeId: string, token: string): Promise<EmployeeInvitationDetail> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/${employeeId}/invitation`, { headers: authHeaders(token) }, token));
+  },
+
+  async cancelEmployeeInvitation(employeeId: string, token: string): Promise<EmployeeInvitationDetail> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/${employeeId}/invitation/cancel`, {
+      method: "PATCH", headers: authHeaders(token),
+    }, token));
+  },
+
   async updateOnboardingDepartmentHod(batchId: string, data: {recordId: string; target: string; expectedVersion: string}, token: string): Promise<OnboardingBatchDetail> {
     return handleResponse(await apiClient(`${API_URL}/ems/onboarding/batches/${batchId}/department-hod`, {method: 'PATCH', headers: authHeaders(token), body: JSON.stringify(data)}, token));
   },
@@ -582,7 +631,7 @@ export const EmsService = {
 
   async getEmployees(
     token: string,
-    params: { page?: number; limit?: number; departmentId?: string; employmentStatus?: EmploymentStatus; activityState?: 'ACTIVE' | 'INACTIVE'; search?: string; source?: 'IMPORTED' | 'UNLINKED'; importBatchId?: string; sort?: EmployeeListSort },
+    params: EmployeeListFilters & { page?: number; limit?: number },
   ): Promise<{ data: EmployeeWithCompletion[]; pagination: { page: number; limit: number; total: number; pages: number } }> {
     const q = Object.entries(params)
       .filter(([, v]) => v !== undefined)

@@ -6,13 +6,16 @@ import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
-import { EmsService, type EmployeeListSort, type EmploymentStatus, EMPLOYMENT_STATUS_LABELS, completionBg } from "@/services/ems.service";
+import { EmsService, type EmployeeListSort, type EmploymentStatus, type EmployeeInvitationFilter, type EmployeeListFilters, EMPLOYMENT_STATUS_LABELS, completionBg } from "@/services/ems.service";
+import InvitationDialog from "@/components/ems/InvitationDialog";
+import { invitationBadge } from "@/components/ems/ems-invitations";
 import { reviewRecordHref } from "@/components/ems/onboarding-review-navigation";
-import { Search, ChevronLeft, ChevronRight, Loader2, ArrowLeft } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Loader2, ArrowLeft, Send } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 const PAGE_SIZE = 20;
-type StatusFilter = EmploymentStatus | "ACTIVE_GROUP" | "INACTIVE_GROUP" | "";
+// Invitation states share the status filter (as "INVITE:…") rather than taking a permanent column.
+type StatusFilter = EmploymentStatus | "ACTIVE_GROUP" | "INACTIVE_GROUP" | `INVITE:${EmployeeInvitationFilter}` | "";
 const initialFilters = { page: 1, search: "", status: "" as StatusFilter, source: "", sort: "BEST_MATCH" as EmployeeListSort };
 const fieldClass = "w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500";
 function importDate(value: string) {
@@ -30,17 +33,25 @@ export default function EmsEmployeesPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // The same filters drive the list and "invite all matching", so both always agree.
+  const listFilters: EmployeeListFilters = {
+    search: filters.search || undefined, sort: filters.sort,
+    employmentStatus: filters.status && !filters.status.startsWith('INVITE:') && filters.status !== 'ACTIVE_GROUP' && filters.status !== 'INACTIVE_GROUP' ? filters.status as EmploymentStatus : undefined,
+    activityState: filters.status === 'ACTIVE_GROUP' ? 'ACTIVE' : filters.status === 'INACTIVE_GROUP' ? 'INACTIVE' : undefined,
+    invitation: filters.status.startsWith('INVITE:') ? filters.status.slice(7) as EmployeeInvitationFilter : undefined,
+    source: filters.source === 'IMPORTED' || filters.source === 'UNLINKED' ? filters.source : undefined,
+    importBatchId: filters.source.startsWith('batch:') ? filters.source.slice(6) : undefined,
+  };
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["ems-employees", user?.organizationId, filters],
-    queryFn: () => EmsService.getEmployees(accessToken!, {
-      page: filters.page, limit: PAGE_SIZE, search: filters.search || undefined, sort: filters.sort,
-      employmentStatus: filters.status && filters.status !== 'ACTIVE_GROUP' && filters.status !== 'INACTIVE_GROUP' ? filters.status : undefined,
-      activityState: filters.status === 'ACTIVE_GROUP' ? 'ACTIVE' : filters.status === 'INACTIVE_GROUP' ? 'INACTIVE' : undefined,
-      source: filters.source === 'IMPORTED' || filters.source === 'UNLINKED' ? filters.source : undefined,
-      importBatchId: filters.source.startsWith('batch:') ? filters.source.slice(6) : undefined,
-    }),
+    queryFn: () => EmsService.getEmployees(accessToken!, { ...listFilters, page: filters.page, limit: PAGE_SIZE }),
     enabled: !!accessToken,
   });
+  // Selection: individual rows, or every employee matching the current filters (across pages).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [allMatching, setAllMatching] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  useEffect(() => { setSelected(new Set()); setAllMatching(false); }, [filters.search, filters.status, filters.source]);
   const sources = useQuery({
     queryKey: ['ems-employee-import-batches', user?.organizationId],
     queryFn: () => EmsService.getEmployeeImportBatches(accessToken!), enabled: !!accessToken,
@@ -54,6 +65,11 @@ export default function EmsEmployeesPage() {
   useEffect(() => { setPageInput(String(page)); }, [page]);
   const changed = search.length > 0 || !!filters.status || !!filters.source || filters.sort !== 'BEST_MATCH';
   const update = (change: Partial<typeof filters>) => setFilters(previous => ({ ...previous, ...change, page: 1 }));
+  const pageIds = employees.map(employee => employee.id);
+  const pageAllSelected = pageIds.length > 0 && pageIds.every(id => selected.has(id));
+  const toggle = (id: string) => { setAllMatching(false); setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
+  const togglePage = () => { setAllMatching(false); setSelected(previous => { const next = new Set(previous); pageIds.forEach(id => pageAllSelected ? next.delete(id) : next.add(id)); return next; }); };
+  const selectionCount = allMatching ? total : selected.size;
   const goToPage = () => {
     const requested = Number(pageInput);
     if (!Number.isInteger(requested) || requested < 1 || requested > pages) { setPageInput(String(page)); return; }
@@ -88,6 +104,10 @@ export default function EmsEmployeesPage() {
             <select aria-label="Employment status filter" value={filters.status} onChange={event => update({status: event.target.value as StatusFilter})} className={`${fieldClass} font-normal`}>
               <option value="">All statuses</option><option value="ACTIVE_GROUP">Active (includes probation)</option><option value="INACTIVE_GROUP">Inactive (all reasons)</option>
               {(Object.entries(EMPLOYMENT_STATUS_LABELS) as [EmploymentStatus, string][]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              <optgroup label="Account invitation">
+                <option value="INVITE:NOT_INVITED">Not invited</option><option value="INVITE:PENDING">Invite pending</option>
+                <option value="INVITE:ACCEPTED">Has access</option><option value="INVITE:ATTENTION">Invite needs attention</option>
+              </optgroup>
             </select>
           </label>
           <label className="min-w-0 space-y-1 text-xs font-semibold text-slate-600"><span>Sort by</span>
@@ -109,27 +129,41 @@ export default function EmsEmployeesPage() {
           <span>{isLoading || searching ? 'Finding employees…' : error ? 'Employees could not load' : total ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} of ${total} employees` : '0 employees'}</span>
           {busy && <Loader2 aria-label="Updating results" className="h-4 w-4 animate-spin text-purple-700" />}
         </div>
+        {selectionCount > 0 && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-100 bg-purple-50/60 px-4 py-2 text-xs text-purple-950" role="status">
+          <span>
+            {allMatching ? `All ${total} matching employees selected.` : `${selected.size} selected.`}
+            {!allMatching && pageAllSelected && total > pageIds.length && <> <button type="button" className="font-semibold underline" onClick={() => setAllMatching(true)}>Select all {total} matching</button></>}
+            {' '}<button type="button" className="text-purple-800 underline" onClick={() => { setSelected(new Set()); setAllMatching(false); }}>Clear</button>
+          </span>
+          <button type="button" onClick={() => setInviteOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-700">
+            <Send className="h-3.5 w-3.5" /> Send invitations
+          </button>
+        </div>}
         {isLoading ? <p className="py-12 text-center text-sm text-slate-500">Loading employees…</p> : error ?
           <div role="alert" className="px-5 py-6 text-sm text-red-700"><p>{error instanceof Error ? error.message : 'Could not load employees.'}</p><button onClick={() => void refetch()} className="mt-2 rounded border border-red-200 px-3 py-2 font-medium">Retry</button></div> :
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Employees matching the current search and filters</caption>
               <thead className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500"><tr>
+                <th scope="col" className="w-10 px-4 py-3"><input type="checkbox" aria-label="Select all employees on this page" checked={pageAllSelected} onChange={togglePage} /></th>
                 {['Code', 'Name', 'Department', 'Status', 'Import source', 'Completion'].map(heading => <th key={heading} scope="col" className="px-4 py-3 font-semibold">{heading}</th>)}
               </tr></thead>
               <tbody className="divide-y divide-slate-100">{employees.map(employee => <tr key={employee.id} className="cursor-pointer align-top hover:bg-slate-50/70"
                 // The whole row opens the profile for mouse users; the name link stays the keyboard and screen-reader route.
                 onClick={event => { if ((event.target as HTMLElement).closest('a, button, input, select, textarea') || window.getSelection()?.toString()) return; router.push(`/ems/employees/${encodeURIComponent(employee.id)}`); }}>
+                <td className="px-4 py-3"><input type="checkbox" aria-label={`Select ${[employee.firstName, employee.lastName].filter(Boolean).join(' ')}`}
+                  checked={allMatching || selected.has(employee.id)} onChange={() => toggle(employee.id)} /></td>
                 <td className="px-4 py-3 font-mono text-xs text-slate-500">{employee.employeeCode ?? '—'}</td>
                 <td className="min-w-40 px-4 py-3"><Link href={`/ems/employees/${encodeURIComponent(employee.id)}`} className="font-semibold text-purple-800 underline decoration-purple-200 underline-offset-2 hover:decoration-purple-800">{[employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(' ')}</Link></td>
                 <td className="px-4 py-3 text-slate-600">{employee.department?.name ?? '—'}</td>
-                <td className="px-4 py-3"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${employee.employmentStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : employee.employmentStatus === 'PROBATION' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]}</span></td>
+                <td className="px-4 py-3"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${employee.employmentStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : employee.employmentStatus === 'PROBATION' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]}</span>
+                  {(() => { const badge = invitationBadge(employee.invitation); return badge && <span className={`mt-1 block w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.tone === 'warn' ? 'bg-amber-100 text-amber-900' : 'bg-blue-50 text-blue-800'}`}>{badge.label}</span>; })()}</td>
                 <td className="min-w-48 max-w-xs px-4 py-3">{employee.sourceImport ? <>
                   <Link href={reviewRecordHref(employee.sourceImport.batchId, employee.sourceImport.recordId)} className="break-words text-xs font-medium text-purple-800 underline underline-offset-2">{employee.sourceImport.label?.trim() || employee.sourceImport.sourceFileName?.trim() || 'View import'}</Link>
                   <time dateTime={employee.sourceImport.importedAt} className="mt-1 block text-xs text-slate-500">Imported {importDate(employee.sourceImport.importedAt)}</time>
                 </> : <span className="text-xs text-slate-500">{employee.sourceImport === null ? 'No linked import' : 'Source unavailable'}</span>}</td>
                 <td className="px-4 py-3"><div className="flex items-center gap-2"><div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${completionBg(employee.completion.overall)}`} style={{width: `${employee.completion.overall}%`}} /></div><span className="text-xs font-semibold text-slate-600">{employee.completion.overall}%</span></div></td>
-              </tr>)}{!employees.length && <tr><td colSpan={6} className="px-5 py-12 text-center text-slate-500">No employees match these filters.</td></tr>}</tbody>
+              </tr>)}{!employees.length && <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-500">No employees match these filters.</td></tr>}</tbody>
             </table>
           </div>}
         {!error && !isLoading && total > 0 && <nav aria-label="Employee pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
@@ -143,6 +177,10 @@ export default function EmsEmployeesPage() {
           </div>
         </nav>}
       </div>
+      {inviteOpen && accessToken && <InvitationDialog accessToken={accessToken}
+        title={`Invite ${selectionCount} employee${selectionCount === 1 ? '' : 's'}`}
+        selection={allMatching ? { filters: listFilters } : { employeeIds: [...selected] }}
+        onClose={() => setInviteOpen(false)} />}
     </div>
   </ProtectedRoute>;
 }

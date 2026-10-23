@@ -151,7 +151,7 @@ describe('Onboarding access authority', () => {
 
   it('passes the trusted caller role from the controller and keeps its existing route roles', async () => {
     const register = jest.fn().mockResolvedValue({registered:0, failed:0, awaitingAdmin:1});
-    const controller = new EmsController({registerOnboardingBatch:register} as unknown as EmsService);
+    const controller = new EmsController({registerOnboardingBatch:register} as unknown as EmsService, {} as never);
     await controller.registerOnboardingBatch('b1', {organizationId:'org1',roleLevel:Role.HR});
     expect(register).toHaveBeenCalledWith('org1','b1',Role.HR);
     expect(Reflect.getMetadata('roles', controller.registerOnboardingBatch)).toEqual(expect.arrayContaining([Role.ADMIN,Role.SUPER_ADMIN,Role.HR]));

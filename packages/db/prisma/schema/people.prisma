@@ -1,6 +1,8 @@
 model Employee {
   // Imported additional columns, with original text and explicit profile mappings.
   importedExtraFields Json?
+  // Current account invitation, if any (EMS onboarding).
+  emsInvitation EmsInvitation?
 
   id             String  @id @default(uuid())
   firstName      String

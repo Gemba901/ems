@@ -22,6 +22,7 @@ import OnboardingDuplicateReview from "@/components/ems/OnboardingDuplicateRevie
 import ExcludeRemainingDialog from "@/components/ems/ExcludeRemainingDialog";
 import OnboardingMoreActions from "@/components/ems/OnboardingMoreActions";
 import ImportedColumnsDialog from "@/components/ems/ImportedColumnsDialog";
+import InvitationDialog from "@/components/ems/InvitationDialog";
 import { pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
 import { safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -1280,6 +1281,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const [excludeRemainingOpen, setExcludeRemainingOpen] = useState(false);
   // "Imported columns" dialog: where each extra column goes, for the whole import.
   const [columnsOpen, setColumnsOpen] = useState(false);
+  // Account invitations for the employees this import registered.
+  const [inviteOpen, setInviteOpen] = useState(false);
   const error = queryError ? (queryError as any).message : null;
   const hierarchy = batch?.hierarchy;
   const records: OnboardingRecord[] = batch?.records ?? [];
@@ -1430,6 +1433,11 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               key: "imported-columns", label: "Imported columns…",
               title: "Choose once where each extra column goes for this whole import",
               onSelect: () => { beginAction(); setColumnsOpen(true); },
+            }] : []),
+            ...(batch?.records.some(r => r.status === "REGISTERED") ? [{
+              key: "invite", label: "Invite registered employees…",
+              title: "Send account invitations to the employees this import registered",
+              onSelect: () => { beginAction(); setInviteOpen(true); },
             }] : []),
             ...(batch?.status === "PARTIALLY_REGISTERED" ? [{
               key: "exclude-remaining", label: "Exclude remaining records…", danger: true, icon: <Ban className="h-3.5 w-3.5" />,
@@ -1763,6 +1771,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         {/* Outside the horizontal table scroller: stick to the actual page scroll area. */}
         <div ref={setEditorToolbarHost} data-editor-toolbar-host className="pointer-events-none sticky bottom-3 z-40" />
       </div>
+      {inviteOpen && batch && accessToken && (
+        <InvitationDialog accessToken={accessToken} title={`Invite employees registered from “${batch.label ?? 'this import'}”`}
+          selection={{ filters: { source: "IMPORTED", importBatchId: batch.id } }} onClose={() => setInviteOpen(false)} />
+      )}
       {columnsOpen && batch && accessToken && (
         <ImportedColumnsDialog batch={batch} accessToken={accessToken}
           onClose={() => setColumnsOpen(false)}

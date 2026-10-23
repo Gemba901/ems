@@ -1,5 +1,6 @@
 import {
   IsString, IsOptional, IsIn, IsEnum, IsBoolean, IsDateString, IsNumber, Min, IsInt, Max, IsUUID, MinLength, MaxLength,
+  IsArray, ArrayMaxSize, ValidateNested,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { optionalProfileDate } from '../employee-profile-dates';
@@ -102,7 +103,10 @@ export class ChangeEmploymentStatusDto {
 export enum EmployeeSourceFilterDto { IMPORTED = 'IMPORTED', UNLINKED = 'UNLINKED' }
 export enum EmployeeListSortDto { BEST_MATCH = 'BEST_MATCH', NAME_ASC = 'NAME_ASC', NAME_DESC = 'NAME_DESC', IMPORT_NEWEST = 'IMPORT_NEWEST', IMPORT_OLDEST = 'IMPORT_OLDEST' }
 
+export enum EmployeeInvitationFilterDto { NOT_INVITED = 'NOT_INVITED', PENDING = 'PENDING', ACCEPTED = 'ACCEPTED', ATTENTION = 'ATTENTION' }
+
 export class QueryEmsEmployeesDto {
+  @IsEnum(EmployeeInvitationFilterDto) @IsOptional() invitation?: EmployeeInvitationFilterDto;
   @IsEnum(EmployeeActivityStateDto) @IsOptional() activityState?: EmployeeActivityStateDto;
   @IsString() @IsOptional() departmentId?: string;
   @IsEnum(EmploymentStatusDto) @IsOptional() employmentStatus?: EmploymentStatusDto;
@@ -115,4 +119,16 @@ export class QueryEmsEmployeesDto {
 
   @Type(() => Number) @IsInt() @Min(1) @Max(2147483647) @IsOptional() page: number = 1;
   @Type(() => Number) @IsInt() @Min(1) @Max(100) @IsOptional() limit: number = 20;
+}
+
+/** Who to invite: explicit employees, or everyone matching the employee-list filters. */
+export class InvitationSelectionDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(2000) @IsString({ each: true }) @MaxLength(128, { each: true }) employeeIds?: string[];
+  @IsOptional() @ValidateNested() @Type(() => QueryEmsEmployeesDto) filters?: QueryEmsEmployeesDto;
+  @IsOptional() @IsBoolean() resend?: boolean;
+}
+
+export class SendInvitationsDto extends InvitationSelectionDto {
+  /** The company web address HR is using; invitation links point there. */
+  @IsString() @MaxLength(300) origin!: string;
 }

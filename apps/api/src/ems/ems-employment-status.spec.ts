@@ -123,7 +123,7 @@ test('DTO validates trimmed reasons and rejects forged actor/source fields under
   const errors=await validate(dto,{whitelist:true,forbidNonWhitelisted:true});expect(errors.map(e=>e.property)).toEqual(expect.arrayContaining(['actorUserId','source']));expect(dto.reason).toBe('HR review decision');
 });
 test('status controller takes organisation and actor from current user, with HR-only metadata', async () => {
-  const change=jest.fn(),controller=new EmsController({changeEmploymentStatus:change} as unknown as EmsService),dto=fixture().dto();
+  const change=jest.fn(),controller=new EmsController({changeEmploymentStatus:change} as unknown as EmsService, {} as never),dto=fixture().dto();
   await controller.changeEmploymentStatus('employee',dto,{organizationId:'trusted-org',userId:'trusted-user'});
   expect(change).toHaveBeenCalledWith('employee','trusted-org','trusted-user',dto);
   for(const handler of ['getEmploymentStatus','changeEmploymentStatus','retryEmploymentActivitySync'] as const){

@@ -263,7 +263,7 @@ describe('EMS demo-only communication reset', () => {
 
   it('passes the authenticated organisation to the service', async () => {
     const resetCommunicationChannel = jest.fn(async () => ({ communicationChannel: null }));
-    const controller = new EmsController({ resetCommunicationChannel } as unknown as EmsService);
+    const controller = new EmsController({ resetCommunicationChannel } as unknown as EmsService, {} as never);
     await controller.resetCommunicationChannel({ organizationId: orgId });
     expect(resetCommunicationChannel).toHaveBeenCalledWith(orgId);
   });

@@ -4,11 +4,13 @@ import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import { TenantGuard } from 'src/tenancy/tenant.guard';
 import {
-  Controller, Get, Patch, Body, Param, Query, UseGuards,
+  Controller, Get, Patch, Body, Param, Query, UseGuards, Req,
 } from '@nestjs/common';
 import { EmsService } from './ems.service';
+import { EmsInvitationsService } from './ems-invitations';
+import type { TenantRequest } from 'src/tenancy/tenant-context';
 import { EmsDemoOnly, EmsDemoToolsGuard } from './ems-demo-tools.guard';
-import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto, ChangeEmploymentStatusDto } from './dto/ems.dto';
+import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto, ChangeEmploymentStatusDto, InvitationSelectionDto, SendInvitationsDto } from './dto/ems.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { ModuleGuard } from 'src/auth/guards/module.guard';
@@ -27,7 +29,7 @@ import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationC
 @UseGuards(EmsDemoToolsGuard, TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
 @RequiresModule(ModuleType.EMS)
 export class EmsController {
-  constructor(private ems: EmsService) {}
+  constructor(private ems: EmsService, private invitations: EmsInvitationsService) {}
 
   /** GET /ems/me — employee's own profile + completion. Every user has a profile, so this isn't EMS-gated. */
   @Get('me')
@@ -51,6 +53,35 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string },
   ) {
     return this.ems.getEmployees(user.organizationId, query);
+  }
+
+  /** POST /ems/employees/invitations/preview — who would get which invitation, and who is skipped */
+  @Post('employees/invitations/preview')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async previewInvitations(@Body() dto: InvitationSelectionDto, @CurrentUser() user: { organizationId: string }) {
+    return this.invitations.preview(user.organizationId, dto);
+  }
+
+  /** POST /ems/employees/invitations/send — email them, or prepare WhatsApp messages for HR to share */
+  @Post('employees/invitations/send')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async sendInvitations(@Body() dto: SendInvitationsDto, @Req() request: TenantRequest,
+    @CurrentUser() user: { organizationId: string; userId: string }) {
+    // The guard has verified this header; links may only point at this company's address.
+    const host = request.headers['x-gemba-tenant-hostname'];
+    return this.invitations.send(user.organizationId, user.userId, dto, dto.origin, typeof host === 'string' ? host : undefined);
+  }
+
+  @Get('employees/:id/invitation')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getEmployeeInvitation(@Param('id') id: string, @CurrentUser() user: { organizationId: string }) {
+    return this.invitations.getForEmployee(user.organizationId, id);
+  }
+
+  @Patch('employees/:id/invitation/cancel')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async cancelEmployeeInvitation(@Param('id') id: string, @CurrentUser() user: { organizationId: string }) {
+    return this.invitations.cancel(user.organizationId, id);
   }
 
   /** Import sources for the employee-list filter; must precede employees/:id. */

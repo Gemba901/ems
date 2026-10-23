@@ -117,7 +117,7 @@ test('import choices only query batches containing linked employees in the trust
   expect(f.prisma.emsOnboardingBatch.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{organizationId:'org',records:{some:{organizationId:'org',status:'REGISTERED',employee:{is:{organizationId:'org'}}}}}}));
 });
 test('import-source route uses trusted organisation and HR/admin permissions',async()=>{
-  const service={getEmployeeImportBatches:jest.fn(async()=>[])};const controller=new EmsController(service as unknown as EmsService);
+  const service={getEmployeeImportBatches:jest.fn(async()=>[])};const controller=new EmsController(service as unknown as EmsService, {} as never);
   await controller.getEmployeeImportBatches({organizationId:'trusted-org'});expect(service.getEmployeeImportBatches).toHaveBeenCalledWith('trusted-org');
   expect(Reflect.getMetadata('roles',EmsController.prototype.getEmployeeImportBatches)).toEqual(expect.arrayContaining(['ADMIN','HR','SUPER_ADMIN']));
   expect(Reflect.getMetadata('roles',EmsController.prototype.getEmployeeImportBatches)).not.toContain('EMPLOYEE');

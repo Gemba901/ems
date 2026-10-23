@@ -20,6 +20,7 @@ import { Role } from 'src/common/enum/role.enum';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto, ChangeEmploymentStatusDto } from './dto/ems.dto';
 import { isActiveEmployment } from './employment-status';
 import { getEmploymentStatus, changeEmploymentStatus, retryEmploymentActivitySync } from './ems-employment-status';
+import { endAccessForInactiveEmployee } from './ems-invitations';
 import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
 import { 
@@ -302,7 +303,8 @@ export class EmsService {
   async getEmployees(organizationId: string, query: QueryEmsEmployeesDto) {
     const limit = query.limit ?? 20;
     const where = employeeListWhere(organizationId, query);
-    const select = { ...EMS_EMPLOYEE_SELECT, emsOnboardingRecord: { select: EMPLOYEE_SOURCE_SELECT } };
+    const select = { ...EMS_EMPLOYEE_SELECT, emsOnboardingRecord: { select: EMPLOYEE_SOURCE_SELECT },
+      emsInvitation: { select: { status: true, kind: true, expiresAt: true, skipReason: true } } };
     // One read snapshot keeps totals, clamped page and rows consistent during registration.
     return this.prisma.$transaction(async tx => {
       const total = await tx.employee.count({ where });
@@ -346,8 +348,8 @@ export class EmsService {
       } else {
         employees = await tx.employee.findMany({ where, select, skip, take: limit, orderBy: employeeNameOrder(query.sort === 'NAME_DESC') });
       }
-      const data = employees.map(({ emsOnboardingRecord, ...emp }) => ({
-        ...emp, completion: calcEmployeeCompletion(emp as Record<string, unknown>),
+      const data = employees.map(({ emsOnboardingRecord, emsInvitation, ...emp }) => ({
+        ...emp, completion: calcEmployeeCompletion(emp as Record<string, unknown>), invitation: emsInvitation ?? null,
         sourceImport: employeeImportSource(emsOnboardingRecord, organizationId),
       }));
       return { data, pagination: { page, limit, total, pages } };
@@ -368,8 +370,12 @@ export class EmsService {
     return getEmploymentStatus(this.prisma, organizationId, employeeId);
   }
 
-  changeEmploymentStatus(employeeId: string, organizationId: string, actorUserId: string, dto: ChangeEmploymentStatusDto) {
-    return changeEmploymentStatus(this.prisma, this.dwmsService, organizationId, employeeId, actorUserId, dto);
+  async changeEmploymentStatus(employeeId: string, organizationId: string, actorUserId: string, dto: ChangeEmploymentStatusDto) {
+    const result = await changeEmploymentStatus(this.prisma, this.dwmsService, organizationId, employeeId, actorUserId, dto);
+    // Becoming inactive cancels pending invitation links and ends current sessions here. Best effort:
+    // the status change is already saved, and login itself is checked separately.
+    await endAccessForInactiveEmployee(this.prisma, organizationId, employeeId).catch(() => undefined);
+    return result;
   }
 
   retryEmploymentActivitySync(employeeId: string, organizationId: string, changeId: string) {

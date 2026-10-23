@@ -12,6 +12,7 @@ export function employeeListWhere(organizationId: string, query: QueryEmsEmploye
   const { departmentId, employmentStatus, activityState, source, importBatchId } = query;
   const where: Prisma.EmployeeWhereInput = { organizationId };
   if (departmentId) where.departmentId = departmentId;
+  if (query.invitation) Object.assign(where, invitationWhere(query.invitation, new Date()));
   if (activityState) where.employmentStatus = { in: activityState === 'ACTIVE' ? ACTIVE_EMPLOYMENT_STATUSES : INACTIVE_EMPLOYMENT_STATUSES };
   if (employmentStatus) {
     if (activityState && (isActiveEmployment(employmentStatus) ? 'ACTIVE' : 'INACTIVE') !== activityState)
@@ -84,4 +85,21 @@ export function employeeImportSource(record: SourceRecord | null, organizationId
   return { recordId: record.id, batchId: record.batch.id, importedAt: record.batch.createdAt,
     label: record.batch.label, sourceFileName: record.batch.sourceFileName,
     rowNumber: record.rowNumber, registeredAt: record.registeredAt };
+}
+
+/**
+ * Invitation filter on the employee list. Pending = a link sent and still valid; Accepted = signed up
+ * (or told to sign in with an existing password); Needs attention = failed, skipped, cancelled,
+ * expired, or a shared contact that needs in-person setup.
+ */
+export function invitationWhere(filter: string, now: Date): Prisma.EmployeeWhereInput {
+  if (filter === 'NOT_INVITED') return { emsInvitation: { is: null } };
+  if (filter === 'PENDING') return { emsInvitation: { is: { status: { in: ['SENT', 'SHARED'] }, expiresAt: { gt: now } } } };
+  if (filter === 'ACCEPTED') return { emsInvitation: { is: { OR: [{ status: 'ACCEPTED' }, { status: 'NOTICE_SENT', kind: 'ACCESS_NOTICE' }] } } };
+  if (filter === 'ATTENTION') return { emsInvitation: { is: { OR: [
+    { status: { in: ['FAILED', 'SKIPPED', 'CANCELLED'] } },
+    { status: { in: ['SENT', 'SHARED'] }, expiresAt: { lte: now } },
+    { status: 'NOTICE_SENT', kind: 'CONTACT_NOTICE' },
+  ] } } };
+  throw new BadRequestException('Unknown invitation filter');
 }

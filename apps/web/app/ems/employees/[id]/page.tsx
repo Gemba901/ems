@@ -2,6 +2,7 @@
 import { FIVE_S_LOCATION_LABELS } from "@/components/ems/five-s-location";
 import { localCalendarToday, profileSavePayload } from "@/components/ems/employee-profile-dates";
 import EmployeeEmploymentStatusCard from "@/components/ems/EmployeeEmploymentStatusCard";
+import EmployeeInvitationCard from "@/components/ems/EmployeeInvitationCard";
 import EmployeeImportedInformation from "@/components/ems/EmployeeImportedInformation";
 import EmployeePeopleLinksCard from "@/components/ems/EmployeePeopleLinksCard";
 
@@ -456,6 +457,7 @@ export default function EmployeeDetailPage() {
         {employee && accessToken && isAdminOrHr && (
           <>
             <EmployeeEmploymentStatusCard key={id} employeeId={id} employeeName={`${employee.firstName} ${employee.lastName}`} token={accessToken} />
+            <EmployeeInvitationCard key={`invite-${id}`} employeeId={id} employeeName={`${employee.firstName} ${employee.lastName}`} token={accessToken} />
             <EmployeeReportingCard employeeId={id} token={accessToken} />
             <EmployeePeopleLinksCard employeeId={id} token={accessToken} />
           </>

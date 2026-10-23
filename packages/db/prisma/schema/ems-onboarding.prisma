@@ -169,3 +169,34 @@ model EmsImportColumnChoice {
 
   @@unique([organizationId, headingKey])
 }
+
+/// The current account invitation for one employee (one row per employee; resending replaces it).
+/// Only a hash of the link token is stored. Status is SENT (email), SHARED (link created for
+/// WhatsApp or copying), NOTICE_SENT (no link: already has a password, or a shared contact),
+/// ACCEPTED, FAILED, CANCELLED or SKIPPED (with skipReason). Expiry is derived from expiresAt.
+model EmsInvitation {
+  id             String    @id @default(uuid())
+  organizationId String
+  employeeId     String    @unique
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  userId         String?
+  /// SETUP (create a password), ACCESS_NOTICE (already has a password) or CONTACT_NOTICE (shared contact).
+  kind           String    @db.VarChar(20)
+  /// EMAIL or WHATSAPP
+  channel        String    @db.VarChar(20)
+  status         String    @db.VarChar(20)
+  destination    String?   @db.VarChar(320)
+  skipReason     String?   @db.VarChar(200)
+  lastError      String?   @db.VarChar(500)
+  tokenHash      String?   @unique @db.VarChar(64)
+  expiresAt      DateTime?
+  sendCount      Int       @default(0)
+  sentById       String?
+  sentAt         DateTime?
+  acceptedAt     DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([organizationId, status])
+}

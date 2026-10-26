@@ -199,6 +199,8 @@ model WorkSprintMember {
 }
 
 // Open while clockOutAt is null; there is deliberately no separate status column.
+// One clock-in session. An employee can have several sessions on one work date; the day's
+// punctuality comes from its first clock-in and last clock-out.
 model AttendanceRecord {
   id                String    @id @default(uuid())
   organizationId    String
@@ -254,8 +256,8 @@ model AttendanceRecord {
   employee     Employee               @relation("AttendanceEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
   corrections  AttendanceCorrection[]
 
-  @@unique([organizationId, employeeId, workDate])
   @@unique([organizationId, employeeId, clockInRequestId])
+  @@index([organizationId, employeeId, workDate])
   @@index([organizationId, workDate])
   @@index([employeeId, workDate])
 }

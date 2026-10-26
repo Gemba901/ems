@@ -21,7 +21,7 @@ function setup(count = 1) {
         notification: { create: jest.fn().mockResolvedValue({}) },
     };
     const db = {
-        attendanceRecord: { findMany: jest.fn().mockResolvedValue([record]) },
+        attendanceRecord: { findMany: jest.fn().mockResolvedValue([record]), fields: { scheduledEndAt: 'scheduledEndAt-ref' } },
         $transaction: jest.fn((fn: (client: unknown) => unknown) => fn(tx)),
     };
     return { service: new AttendanceAutoClockOutService(db as unknown as PrismaService), db, tx };
@@ -31,13 +31,18 @@ describe('automatic clock-out', () => {
     beforeEach(() => jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined));
     afterEach(() => jest.restoreAllMocks());
 
-    it('scans only overdue scheduled open records in enabled organizations', async () => {
+    it('scans only overdue open sessions that began before the scheduled finish, in enabled organizations', async () => {
         const { service, db } = setup();
         db.attendanceRecord.findMany.mockResolvedValue([]);
         expect(await service.processDue(cutoff)).toBe(0);
         expect(db.attendanceRecord.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: { clockOutAt: null, scheduledEndAt: { lte: end }, organization: { modules: { has: 'WORK' } } },
+                where: {
+                    clockOutAt: null,
+                    scheduledEndAt: { lte: end },
+                    clockInAt: { lt: 'scheduledEndAt-ref' },
+                    organization: { modules: { has: 'WORK' } },
+                },
                 take: 100,
             }),
         );

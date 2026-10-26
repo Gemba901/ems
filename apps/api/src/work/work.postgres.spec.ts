@@ -423,14 +423,33 @@ suite('Team Workspace API on PostgreSQL', () => {
       expect(again.body.clockOutAt).toBe(clockOutAt);
     });
 
-    it('allows one record per work day', async () => {
-      const { body } = await api('member').post('/work/attendance/clock-in', { requestId: randomUUID(), ...missing }).expect(409);
-      expect(body.code).toBe('ATTENDANCE_DAY_COMPLETED');
+    it('lets the employee clock in again the same day and groups the sessions', async () => {
+      const second = await api('member').post('/work/attendance/clock-in', { requestId: randomUUID(), ...missing }).expect(200);
+      expect(second.body).toMatchObject({ isOpen: true, sessionNumber: 2, daySessionCount: 2, earlyLeaveMinutes: 0 });
+      // Only the day's first session can be late.
+      expect(second.body.lateMinutes).toBe(0);
+      await api('member').post(`/work/attendance/${second.body.id}/clock-out`, { requestId: randomUUID() }).expect(200);
+
+      const status = await api('member').get('/work/attendance/me/status').expect(200);
+      expect(status.body.openRecord).toBeNull();
+      expect(status.body.todaySessions.map((r: { id: string }) => r.id)).toEqual([recordId, second.body.id]);
+      expect(status.body.todayWorkedSeconds).toBe(
+        status.body.todaySessions.reduce((sum: number, r: { durationSeconds: number }) => sum + r.durationSeconds, 0),
+      );
+
+      const week = await api('member').get('/work/attendance/week').expect(200);
+      const today = week.body.days.find((d: { date: string }) => d.date === status.body.today);
+      expect(week.body.days).toHaveLength(7);
+      expect(today).toMatchObject({ status: 'PRESENT', isOpen: false, workedSeconds: status.body.todayWorkedSeconds });
+      expect(today.sessions).toHaveLength(2);
+      await api('member').get(`/work/attendance/week?employeeId=${emp('admin')}`).expect(403);
+      await api('hr').get(`/work/attendance/week?employeeId=${emp('member')}`).expect(200);
     });
 
     it('returns coordinates only to the owner and attendance managers', async () => {
       const mine = await api('member').get('/work/attendance/me').expect(200);
-      expect(mine.body.total).toBe(1);
+      // Two sessions today.
+      expect(mine.body.total).toBe(2);
       expect(JSON.stringify(mine.body)).not.toContain('36.8167');
 
       const own = await api('member').get(`/work/attendance/${recordId}/location`).expect(200);
@@ -444,7 +463,7 @@ suite('Team Workspace API on PostgreSQL', () => {
     it('limits the team view to attendance managers', async () => {
       await api('member').get('/work/attendance/team').expect(403);
       const { body } = await api('hr').get(`/work/attendance/team?employeeId=${emp('member')}`).expect(200);
-      expect(body.items).toHaveLength(1);
+      expect(body.items).toHaveLength(2);
       expect(body.items[0].employee.name).toBe('Mary Member');
 
       const range = await api('hr').get('/work/attendance/team?from=2026-10-10&to=2026-10-01').expect(400);
@@ -513,7 +532,8 @@ suite('Team Workspace API on PostgreSQL', () => {
       const record = await db.attendanceRecord.create({ data: {
         organizationId: orgId, employeeId: emp('onsite'), workDate: new Date('2020-01-06T00:00:00Z'),
         timezoneAtClockIn: 'Africa/Nairobi', clockInAt: new Date('2020-01-06T06:00:00Z'),
-        scheduledEndAt: new Date('2020-01-06T14:00:00Z'),
+        scheduledStartAt: new Date('2020-01-06T06:00:00Z'), scheduledEndAt: new Date('2020-01-06T14:00:00Z'),
+        scheduledBreakMinutes: 0, lateGraceMinutes: 0,
         locationStatus: 'MISSING', locationMissingReason: 'Automatic clock-out integration test', clockInRequestId: randomUUID(),
       } });
       const worker = app.get(AttendanceAutoClockOutService);

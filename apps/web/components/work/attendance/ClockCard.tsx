@@ -36,6 +36,33 @@ function LocationLine({ record }: { record: AttendanceRecord }) {
   );
 }
 
+// Today's earlier sessions, so someone who stepped out can see what has already been counted.
+function TodaySessions({ sessions, totalSeconds, timeZone }: { sessions: AttendanceRecord[]; totalSeconds: number; timeZone: string }) {
+  const closed = sessions.filter((s) => s.clockOutAt);
+  if (closed.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="font-medium text-slate-700">Today&apos;s sessions</span>
+        <span className="text-slate-600">
+          Total <strong className="font-semibold text-slate-900">{formatDuration(totalSeconds)}</strong>
+        </span>
+      </div>
+      <ul className="space-y-1">
+        {closed.map((s) => (
+          <li key={s.id} className="flex items-center justify-between gap-2 text-slate-700">
+            <span>
+              {formatTime(s.clockInAt, timeZone)} – {formatTime(s.clockOutAt!, timeZone)}
+              {s.autoClockedOutAt && <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Auto</span>}
+            </span>
+            <span className="tabular-nums text-slate-500">{formatDuration(s.durationSeconds ?? 0)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ScheduleLine({ schedule, timeZone }: { schedule: AttendanceStatus["todaySchedule"]; timeZone: string }) {
   if (schedule.dayType === "HOLIDAY") {
     return <p className="-mt-2 mb-4 text-sm text-slate-600">{schedule.holidayName ?? "Holiday"}: no one is expected in today.</p>;
@@ -84,7 +111,7 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
       setReason("");
       setPhase({ kind: "idle" });
     } catch (e) {
-      if (e instanceof WorkApiError && (e.code === "ATTENDANCE_ALREADY_OPEN" || e.code === "ATTENDANCE_DAY_COMPLETED")) {
+      if (e instanceof WorkApiError && e.code === "ATTENDANCE_ALREADY_OPEN") {
         clockInRequest.current = null;
         setPhase({ kind: "idle" });
       } else if (payload.reason !== undefined) {
@@ -159,6 +186,8 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
       </div>
     );
   } else if (open) {
+    // A session that began at or after the scheduled finish has no automatic cutoff.
+    const autoClockOut = open.scheduledEndAt && open.clockInAt < open.scheduledEndAt ? open.scheduledEndAt : null;
     body = (
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
@@ -175,49 +204,23 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
           </div>
         </dl>
         <LocationLine record={open} />
-        {open.scheduledEndAt && (
+        <TodaySessions sessions={data.todaySessions} totalSeconds={data.todayWorkedSeconds} timeZone={data.timeZone} />
+        {autoClockOut ? (
           <p className="text-xs text-slate-500">
-            Automatic clock-out at {formatTime(new Date(new Date(open.scheduledEndAt).getTime() + 30 * 60_000).toISOString(), data.timeZone)} if you
+            Automatic clock-out at {formatTime(new Date(new Date(autoClockOut).getTime() + 30 * 60_000).toISOString(), data.timeZone)} if you
             haven&apos;t clocked out.
           </p>
+        ) : (
+          <p className="text-xs text-slate-500">
+            {open.scheduledEndAt ? "This session started after work hours." : "No scheduled finish for this day."} Remember to clock out manually.
+          </p>
         )}
-        {!open.scheduledEndAt && <p className="text-xs text-slate-500">No scheduled finish for this day. Remember to clock out manually.</p>}
         <div>
           <button type="button" className={primaryButton} disabled={clockOut.isPending} onClick={() => submitClockOut(open)}>
             {clockOut.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {clockOut.isPending ? "Saving…" : "Clock out"}
           </button>
         </div>
-      </div>
-    );
-  } else if (data.todayRecord) {
-    const done = data.todayRecord;
-    body = (
-      <div className="space-y-4">
-        <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <CheckCircle2 className="h-5 w-5 text-slate-500" aria-hidden="true" /> Finished for today
-        </p>
-        <dl className="grid grid-cols-3 gap-3 text-sm">
-          <div>
-            <dt className="text-slate-500">Start</dt>
-            <dd className="font-semibold text-slate-900">{formatTime(done.clockInAt, data.timeZone)}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">End</dt>
-            <dd className="font-semibold text-slate-900">{done.clockOutAt ? formatTime(done.clockOutAt, data.timeZone) : "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Duration</dt>
-            <dd className="font-semibold text-slate-900">{done.durationSeconds != null ? formatDuration(done.durationSeconds) : "—"}</dd>
-          </div>
-        </dl>
-        {done.autoClockedOutAt && (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            You were automatically clocked out 30 minutes after your scheduled finish.{" "}
-            {done.edited ? "This record has since been corrected." : "Contact HR if this time needs correcting."}
-          </p>
-        )}
-        <LocationLine record={done} />
       </div>
     );
   } else if (phase.kind === "needs-reason") {
@@ -272,12 +275,29 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
     );
   } else {
     const busy = phase.kind === "locating" || phase.kind === "saving";
+    const last = data.todaySessions[data.todaySessions.length - 1];
     body = (
       <div className="space-y-3">
-        <p className="text-sm text-slate-600">You haven&apos;t clocked in today.</p>
+        {last ? (
+          <>
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <CheckCircle2 className="h-5 w-5 text-slate-500" aria-hidden="true" /> Clocked out
+            </p>
+            <TodaySessions sessions={data.todaySessions} totalSeconds={data.todayWorkedSeconds} timeZone={data.timeZone} />
+            {last.autoClockedOutAt && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                You were automatically clocked out 30 minutes after your scheduled finish.{" "}
+                {last.edited ? "This record has since been corrected." : "Contact HR if this time needs correcting."}
+              </p>
+            )}
+            <p className="text-sm text-slate-600">Back at work? Clock in again; the time is added to today.</p>
+          </>
+        ) : (
+          <p className="text-sm text-slate-600">You haven&apos;t clocked in today.</p>
+        )}
         <button type="button" className={primaryButton} disabled={busy} onClick={startClockIn}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {phase.kind === "locating" ? "Getting your location…" : phase.kind === "saving" ? "Saving…" : "Clock in"}
+          {phase.kind === "locating" ? "Getting your location…" : phase.kind === "saving" ? "Saving…" : last ? "Clock in again" : "Clock in"}
         </button>
         <p className="text-xs text-slate-500">Your location is captured once, when you clock in. It is not tracked during the day or at clock-out.</p>
       </div>
@@ -287,20 +307,20 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
   if (compact) {
     const busy = phase.kind === "locating" || phase.kind === "saving" || clockOut.isPending;
     const unavailable = status.isError || (!status.isLoading && !data);
-    const finished = !open && !!data?.todayRecord;
-    const seconds = open
-      ? Math.max(0, Math.floor((serverNow - new Date(open.clockInAt).getTime()) / 1000))
-      : data?.todayRecord?.durationSeconds ?? 0;
+    const workedToday = !!data?.todaySessions.length;
+    // The day's closed sessions plus the open one; a session left open from an earlier day counts alone.
+    const openSeconds = open ? Math.max(0, Math.floor((serverNow - new Date(open.clockInAt).getTime()) / 1000)) : 0;
+    const seconds = open && open.workDate !== data?.today ? openSeconds : (data?.todayWorkedSeconds ?? 0) + openSeconds;
     const elapsed = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60]
       .map((part) => String(part).padStart(2, "0")).join(":");
 
     return (
       <>
         <div className="inline-flex max-w-full flex-wrap items-center gap-3">
-          {(open || finished) && (
+          {(open || workedToday) && (
             <span className="flex flex-col gap-0.5">
               <span className="text-[11px] font-medium text-slate-400">Time clocked in</span>
-              <span className="font-mono text-sm tabular-nums text-slate-200" aria-label={`${open ? "Time since clock-in" : "Total time clocked in"}: ${elapsed}`}>
+              <span className="font-mono text-sm tabular-nums text-slate-200" aria-label={`Total time clocked in today: ${elapsed}`}>
                 {elapsed}
               </span>
             </span>
@@ -308,13 +328,13 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
           <button
             type="button"
             className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={status.isLoading || busy || finished}
+            disabled={status.isLoading || busy}
             aria-busy={status.isLoading || busy}
             aria-label={unavailable ? "Attendance unavailable. Try again" : phase.kind === "locating" ? "Getting your location" : undefined}
             onClick={() => unavailable ? void status.refetch() : open ? void submitClockOut(open) : void startClockIn()}
           >
             {(status.isLoading || busy) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {unavailable ? "Try again" : finished ? "Clocked out" : open ? "Clock out" : "Clock in"}
+            {unavailable ? "Try again" : open ? "Clock out" : "Clock in"}
           </button>
         </div>
         <WorkDialog

@@ -254,8 +254,13 @@ export interface AttendanceRecord {
   // From the schedule saved at clock-in; null on days that weren't scheduled.
   scheduledStartAt: string | null;
   scheduledEndAt: string | null;
+  // For the day as a whole: only the first session can be late and only the last can leave early.
   lateMinutes: number;
   earlyLeaveMinutes: number;
+  // This session's place among the day's sessions (1-based) and the day's total of closed sessions.
+  sessionNumber: number;
+  daySessionCount: number;
+  dayWorkedSeconds: number;
   // Checked once at clock-in; null on records from before location checks.
   locationCheck: LocationCheck | null;
   checkedPlaceKind: WorkPlaceKind | null;
@@ -270,7 +275,9 @@ export interface AttendanceStatus {
   today: string;
   timeZone: string;
   openRecord: AttendanceRecord | null;
-  todayRecord: AttendanceRecord | null;
+  // Earliest first; an employee can clock in again after clocking out.
+  todaySessions: AttendanceRecord[];
+  todayWorkedSeconds: number;
   todaySchedule: {
     dayType: DayType;
     holidayName: string | null;
@@ -278,6 +285,36 @@ export interface AttendanceStatus {
     endsAt: string | null;
     lateAfter: string | null;
   };
+}
+
+export type AttendanceWeekStatus = "PRESENT" | "ABSENT" | "LEAVE" | "HOLIDAY" | "DAY_OFF" | "TODAY" | "UPCOMING" | "NOT_JOINED";
+
+export interface AttendanceWeekDay {
+  date: string;
+  dayType: DayType;
+  holidayName: string | null;
+  status: AttendanceWeekStatus;
+  firstClockInAt: string | null;
+  lastClockOutAt: string | null;
+  // Closed sessions only; add the open session's elapsed time when isOpen.
+  workedSeconds: number;
+  isOpen: boolean;
+  lateMinutes: number;
+  earlyLeaveMinutes: number;
+  sessions: AttendanceRecord[];
+}
+
+// Sunday to Saturday.
+export interface AttendanceWeek {
+  serverNow: string;
+  today: string;
+  timeZone: string;
+  employeeId: string;
+  from: string;
+  to: string;
+  workStartTime: string;
+  workEndTime: string;
+  days: AttendanceWeekDay[];
 }
 
 export interface CapturedLocation {
@@ -612,6 +649,9 @@ export const WorkService = {
   },
   teamAttendance(range: AttendanceRange & { employeeId?: string }, token: string): Promise<Page<TeamAttendanceRecord>> {
     return get(`/attendance/team${query({ pageSize: 100, ...range })}`, token);
+  },
+  attendanceWeek(params: { date?: string; employeeId?: string }, token: string): Promise<AttendanceWeek> {
+    return get(`/attendance/week${query(params)}`, token);
   },
   clockIn(data: ClockInPayload, token: string): Promise<AttendanceRecord> {
     return send("POST", "/attendance/clock-in", data, token);

@@ -30,6 +30,9 @@ export class AttendanceAutoClockOutService {
             where: {
                 clockOutAt: null,
                 scheduledEndAt: { lte: new Date(now.getTime() - AUTO_CLOCK_OUT_GRACE_MS) },
+                // A session started at or after the scheduled finish (e.g. coming back in the
+                // evening) has no automatic cutoff; it stays open until clocked out.
+                clockInAt: { lt: this.prisma.attendanceRecord.fields.scheduledEndAt },
                 organization: { modules: { has: ModuleType.WORK } },
             },
             select: { id: true, employeeId: true, organizationId: true, version: true, scheduledEndAt: true, clockInAt: true, timezoneAtClockIn: true },

@@ -325,6 +325,18 @@ export function useTeamAttendance(range: AttendanceRange & { employeeId?: string
   });
 }
 
+export function useAttendanceWeek(params: { date?: string; employeeId?: string }, enabledFlag = true) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "attendance", "week", params],
+    queryFn: () => WorkService.attendanceWeek(params, token),
+    retry: retryTransient,
+    enabled: enabled && enabledFlag,
+    refetchOnWindowFocus: "always",
+    gcTime: 0,
+  });
+}
+
 // Coordinates are fetched only when someone opens the location dialog, never cached
 // after it closes, and never retried in the background.
 export function useAttendanceLocation(recordId: string | null) {

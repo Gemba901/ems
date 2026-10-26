@@ -1,10 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AttendanceLocationCheck, AttendanceLocationStatus, Prisma, WorkPlaceKind } from 'db';
+import { AttendanceLocationCheck, AttendanceLocationStatus, LeaveStatus, Prisma, WorkPlaceKind } from 'db';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Page, pageArgs } from '../dto/common.dto';
 import {
     AttendanceRangeQueryDto,
+    AttendanceWeekQueryDto,
     ClockInDto,
     ClockOutDto,
     CorrectAttendanceDto,
@@ -12,11 +13,11 @@ import {
 } from '../dto/attendance.dto';
 import { LocationsService } from '../locations/locations.service';
 import { WorkAccessService, WorkActor } from '../work-access.service';
-import { fromDbDate, localDateIn, monthRange, toDbDate } from '../work-date';
+import { addDays, eachDate, fromDbDate, localDateIn, monthRange, toDbDate, weekdayOf } from '../work-date';
 import { WorkErrorCode, isUniqueViolation, workBadRequest, workConflict } from '../work-errors';
 import { EMPLOYEE_SUMMARY_SELECT, EmployeeSummary, toEmployeeSummary } from '../work-people';
 import { checkLocation } from '../work-location';
-import { DayType, WorkScheduleService, punctuality } from '../work-schedule';
+import { AttendanceDay, DayType, WorkScheduleService, attendanceDays, dayKey, sessionPunctuality } from '../work-schedule';
 
 // Everything a list or status response may show. Coordinates (the employee's and the
 // checked place's) and the missing-location reason are deliberately absent; they are only
@@ -45,6 +46,20 @@ const RECORD_SELECT = {
 
 type RecordRow = Prisma.AttendanceRecordGetPayload<{ select: typeof RECORD_SELECT }>;
 
+// What a day's punctuality and worked time are worked out from.
+const SESSION_SELECT = {
+    id: true,
+    employeeId: true,
+    workDate: true,
+    clockInAt: true,
+    clockOutAt: true,
+    scheduledStartAt: true,
+    scheduledEndAt: true,
+    lateGraceMinutes: true,
+} satisfies Prisma.AttendanceRecordSelect;
+
+type Days = Map<string, AttendanceDay>;
+
 export type AttendanceView = {
     id: string;
     employeeId: string;
@@ -62,8 +77,14 @@ export type AttendanceView = {
     // Against the schedule saved at clock-in; scheduledStartAt is null on unscheduled days.
     scheduledStartAt: Date | null;
     scheduledEndAt: Date | null;
+    // For the day as a whole: only its first session can be late and only its last can leave early.
     lateMinutes: number;
     earlyLeaveMinutes: number;
+    // This session's place among the employee's sessions that work date (1-based), and the
+    // day's total of closed sessions.
+    sessionNumber: number;
+    daySessionCount: number;
+    dayWorkedSeconds: number;
     // Null on records from before location checks existed.
     locationCheck: AttendanceLocationCheck | null;
     checkedPlaceKind: WorkPlaceKind | null;
@@ -76,7 +97,9 @@ export type AttendanceStatusView = {
     today: string;
     timeZone: string;
     openRecord: AttendanceView | null;
-    todayRecord: AttendanceView | null;
+    // Today's sessions, earliest first, and the total of the closed ones.
+    todaySessions: AttendanceView[];
+    todayWorkedSeconds: number;
     todaySchedule: {
         dayType: DayType;
         holidayName: string | null;
@@ -86,8 +109,37 @@ export type AttendanceStatusView = {
     };
 };
 
-function toView(record: RecordRow): AttendanceView {
-    const { lateMinutes, earlyLeaveMinutes } = punctuality(record);
+export type AttendanceWeekStatus = 'PRESENT' | 'ABSENT' | 'LEAVE' | 'HOLIDAY' | 'DAY_OFF' | 'TODAY' | 'UPCOMING' | 'NOT_JOINED';
+
+export type AttendanceWeekView = {
+    serverNow: Date;
+    today: string;
+    timeZone: string;
+    employeeId: string;
+    // Sunday to Saturday.
+    from: string;
+    to: string;
+    workStartTime: string;
+    workEndTime: string;
+    days: {
+        date: string;
+        dayType: DayType;
+        holidayName: string | null;
+        // PRESENT whenever there is a session, even on a holiday or day off.
+        status: AttendanceWeekStatus;
+        firstClockInAt: Date | null;
+        lastClockOutAt: Date | null;
+        workedSeconds: number;
+        isOpen: boolean;
+        lateMinutes: number;
+        earlyLeaveMinutes: number;
+        sessions: AttendanceView[];
+    }[];
+};
+
+function toView(record: RecordRow, days: Days): AttendanceView {
+    const day = days.get(dayKey({ employeeId: record.employeeId, workDate: fromDbDate(record.workDate) }));
+    const { lateMinutes, earlyLeaveMinutes } = day ? sessionPunctuality(day, record.id) : { lateMinutes: 0, earlyLeaveMinutes: 0 };
     return {
         id: record.id,
         employeeId: record.employeeId,
@@ -108,6 +160,9 @@ function toView(record: RecordRow): AttendanceView {
         scheduledEndAt: record.scheduledEndAt,
         lateMinutes,
         earlyLeaveMinutes,
+        sessionNumber: day ? day.sessions.findIndex((s) => s.id === record.id) + 1 : 1,
+        daySessionCount: day?.sessions.length ?? 1,
+        dayWorkedSeconds: day?.workedSeconds ?? 0,
         locationCheck: record.locationCheck,
         checkedPlaceKind: record.checkedPlaceKind,
         checkedPlaceName: record.checkedPlaceName,
@@ -131,18 +186,20 @@ export class AttendanceService {
         const serverNow = new Date();
         const today = localDateIn(serverNow, actor.timeZone);
 
-        const [openRecord, todayRecord, calendar] = await Promise.all([
+        const [openRecord, todaySessions, calendar] = await Promise.all([
             this.findOpen(actor),
             this.findForDay(actor, today),
             this.schedules.calendar(actor.organizationId, today, today),
         ]);
+        const days = await this.daysFor(actor.organizationId, openRecord ? [openRecord, ...todaySessions] : todaySessions);
         const plan = calendar.snapshotFor(today, actor.timeZone);
         return {
             serverNow,
             today,
             timeZone: actor.timeZone,
-            openRecord: openRecord && toView(openRecord),
-            todayRecord: todayRecord && toView(todayRecord),
+            openRecord: openRecord && toView(openRecord, days),
+            todaySessions: todaySessions.map((r) => toView(r, days)),
+            todayWorkedSeconds: days.get(dayKey({ employeeId: actor.employeeId, workDate: today }))?.workedSeconds ?? 0,
             todaySchedule: {
                 dayType: calendar.dayType(today),
                 holidayName: calendar.holidayName(today),
@@ -165,23 +222,106 @@ export class AttendanceService {
             this.prisma.attendanceRecord.findMany({
                 where,
                 select: RECORD_SELECT,
-                orderBy: [{ workDate: 'desc' }, { id: 'asc' }],
+                orderBy: [{ workDate: 'desc' }, { clockInAt: 'asc' }, { id: 'asc' }],
                 ...pageArgs(query),
             }),
             this.prisma.attendanceRecord.count({ where }),
         ]);
-        return { items: records.map(toView), page: query.page, pageSize: query.pageSize, total };
+        const days = await this.daysFor(actor.organizationId, records);
+        return { items: records.map((r) => toView(r, days)), page: query.page, pageSize: query.pageSize, total };
     }
 
-    // Idempotent on requestId: a retry returns the record the first attempt created.
+    // The Sunday-to-Saturday week containing `date` (default today), one entry per day. Other
+    // employees follow the team listing's rules: attendance managers anyone, managers direct reports.
+    async week(user: AccessTokenPayload, query: AttendanceWeekQueryDto): Promise<AttendanceWeekView> {
+        const actor = await this.access.resolveActor(user);
+        const employeeId = query.employeeId ?? actor.employeeId;
+        if (employeeId !== actor.employeeId) await this.teamFilter(actor, employeeId);
+
+        const employee = await this.prisma.employee.findFirst({
+            where: { id: employeeId, organizationId: actor.organizationId },
+            select: { dateJoined: true },
+        });
+        if (!employee) throw new NotFoundException('Employee not found');
+
+        const serverNow = new Date();
+        const today = localDateIn(serverNow, actor.timeZone);
+        const anchor = query.date ?? today;
+        const from = addDays(anchor, -weekdayOf(anchor));
+        const to = addDays(from, 6);
+
+        const [calendar, records, leaves] = await Promise.all([
+            this.schedules.calendar(actor.organizationId, from, to),
+            this.prisma.attendanceRecord.findMany({
+                where: { organizationId: actor.organizationId, employeeId, workDate: { gte: toDbDate(from), lte: toDbDate(to) } },
+                select: RECORD_SELECT,
+                orderBy: [{ clockInAt: 'asc' }, { id: 'asc' }],
+            }),
+            this.prisma.leaveRequest.findMany({
+                where: {
+                    organizationId: actor.organizationId,
+                    employeeId,
+                    status: LeaveStatus.APPROVED,
+                    startDate: { lte: toDbDate(to) },
+                    endDate: { gte: toDbDate(from) },
+                },
+                select: { startDate: true, endDate: true },
+            }),
+        ]);
+        const days = attendanceDays(records.map((r) => ({ ...r, workDate: fromDbDate(r.workDate) })));
+        const joinedOn = employee.dateJoined ? fromDbDate(employee.dateJoined) : null;
+
+        return {
+            serverNow,
+            today,
+            timeZone: actor.timeZone,
+            employeeId,
+            from,
+            to,
+            workStartTime: calendar.schedule.workStartTime,
+            workEndTime: calendar.schedule.workEndTime,
+            days: eachDate(from, to).map((date) => {
+                const day = days.get(dayKey({ employeeId, workDate: date }));
+                const dayType = calendar.dayType(date);
+                const onLeave = leaves.some((l) => fromDbDate(l.startDate) <= date && date <= fromDbDate(l.endDate));
+
+                let status: AttendanceWeekStatus;
+                if (day) status = 'PRESENT';
+                else if (dayType === 'HOLIDAY') status = 'HOLIDAY';
+                else if (dayType === 'NON_WORKING') status = 'DAY_OFF';
+                else if (onLeave) status = 'LEAVE';
+                else if (date > today) status = 'UPCOMING';
+                else if (date === today) status = 'TODAY';
+                else if (joinedOn && date < joinedOn) status = 'NOT_JOINED';
+                else status = 'ABSENT';
+
+                return {
+                    date,
+                    dayType,
+                    holidayName: calendar.holidayName(date),
+                    status,
+                    firstClockInAt: day?.firstClockInAt ?? null,
+                    lastClockOutAt: day?.lastClockOutAt ?? null,
+                    workedSeconds: day?.workedSeconds ?? 0,
+                    isOpen: day?.open ?? false,
+                    lateMinutes: day?.lateMinutes ?? 0,
+                    earlyLeaveMinutes: day?.earlyLeaveMinutes ?? 0,
+                    sessions: records.filter((r) => fromDbDate(r.workDate) === date).map((r) => toView(r, days)),
+                };
+            }),
+        };
+    }
+
+    // Idempotent on requestId: a retry returns the record the first attempt created. After clocking
+    // out, the employee can clock in again; each session is its own record on the same work date.
     async clockIn(user: AccessTokenPayload, dto: ClockInDto): Promise<AttendanceView> {
         const actor = await this.access.resolveActor(user);
         const location = this.locationFields(dto);
 
         const now = new Date();
         const workDate = localDateIn(now, actor.timeZone);
-        const existing = await this.resolveClockInConflict(actor, dto.requestId, workDate);
-        if (existing) return toView(existing);
+        const existing = await this.resolveClockInConflict(actor, dto.requestId);
+        if (existing) return this.view(actor.organizationId, existing);
 
         // Snapshot today's schedule so later settings changes never rewrite this record's punctuality.
         const calendar = await this.schedules.calendar(actor.organizationId, workDate, workDate);
@@ -206,12 +346,12 @@ export class AttendanceService {
                 },
                 select: RECORD_SELECT,
             });
-            return toView(record);
+            return this.view(actor.organizationId, record);
         } catch (error) {
             // A concurrent request won the race; answer as if we had arrived second.
             if (!isUniqueViolation(error)) throw error;
-            const winner = await this.resolveClockInConflict(actor, dto.requestId, workDate);
-            if (winner) return toView(winner);
+            const winner = await this.resolveClockInConflict(actor, dto.requestId);
+            if (winner) return this.view(actor.organizationId, winner);
             throw error;
         }
     }
@@ -223,14 +363,14 @@ export class AttendanceService {
 
         const record = await this.prisma.attendanceRecord.findFirst({ where, select: RECORD_SELECT });
         if (!record) throw new NotFoundException('Attendance record not found');
-        if (record.clockOutAt) return toView(record);
+        if (record.clockOutAt) return this.view(actor.organizationId, record);
 
         await this.prisma.attendanceRecord.updateMany({
             where: { ...where, clockOutAt: null },
             data: { clockOutAt: new Date(), clockOutRequestId: dto.requestId, version: { increment: 1 } },
         });
         const closed = await this.prisma.attendanceRecord.findFirstOrThrow({ where, select: RECORD_SELECT });
-        return toView(closed);
+        return this.view(actor.organizationId, closed);
     }
 
     // HR, management and admins see everyone; a reporting manager sees their direct reports.
@@ -256,7 +396,8 @@ export class AttendanceService {
             }),
             this.prisma.attendanceRecord.count({ where }),
         ]);
-        const items = records.map((r) => ({ ...toView(r), employee: toEmployeeSummary(r.employee) }));
+        const days = await this.daysFor(actor.organizationId, records);
+        const items = records.map((r) => ({ ...toView(r, days), employee: toEmployeeSummary(r.employee) }));
         return { items, page: query.page, pageSize: query.pageSize, total };
     }
 
@@ -414,12 +555,12 @@ export class AttendanceService {
             });
 
             const updated = await tx.attendanceRecord.findUniqueOrThrow({ where: { id: record.id }, select: RECORD_SELECT });
-            return toView(updated);
+            return toView(updated, await this.daysFor(record.organizationId, [updated], tx));
         });
     }
 
-    // Returns the record a retry should get back, or throws if the employee can't clock in.
-    private async resolveClockInConflict(actor: WorkActor, requestId: string, workDate: string): Promise<RecordRow | null> {
+    // Returns the record a retry should get back, or throws if a session is still open.
+    private async resolveClockInConflict(actor: WorkActor, requestId: string): Promise<RecordRow | null> {
         const replay = await this.prisma.attendanceRecord.findUnique({
             where: {
                 organizationId_employeeId_clockInRequestId: {
@@ -441,13 +582,6 @@ export class AttendanceService {
                 workDate: fromDbDate(open.workDate),
             });
         }
-        const today = await this.findForDay(actor, workDate);
-        if (today?.clockInRequestId === requestId) return today;
-        if (today) {
-            throw workConflict(WorkErrorCode.ATTENDANCE_DAY_COMPLETED, 'You have already clocked in and out today', {
-                recordId: today.id,
-            });
-        }
         return null;
     }
 
@@ -458,17 +592,35 @@ export class AttendanceService {
         });
     }
 
-    private findForDay(actor: WorkActor, workDate: string): Promise<RecordRow | null> {
-        return this.prisma.attendanceRecord.findUnique({
-            where: {
-                organizationId_employeeId_workDate: {
-                    organizationId: actor.organizationId,
-                    employeeId: actor.employeeId,
-                    workDate: toDbDate(workDate),
-                },
-            },
+    private findForDay(actor: WorkActor, workDate: string): Promise<RecordRow[]> {
+        return this.prisma.attendanceRecord.findMany({
+            where: { organizationId: actor.organizationId, employeeId: actor.employeeId, workDate: toDbDate(workDate) },
             select: RECORD_SELECT,
+            orderBy: [{ clockInAt: 'asc' }, { id: 'asc' }],
         });
+    }
+
+    private async view(organizationId: string, record: RecordRow): Promise<AttendanceView> {
+        return toView(record, await this.daysFor(organizationId, [record]));
+    }
+
+    // Every session on the work dates the records belong to, including ones not in the list
+    // (e.g. on another page), so a session's day totals and punctuality are always complete.
+    private async daysFor(
+        organizationId: string,
+        records: { employeeId: string; workDate: Date }[],
+        db: Prisma.TransactionClient = this.prisma,
+    ): Promise<Days> {
+        if (!records.length) return new Map();
+        const sessions = await db.attendanceRecord.findMany({
+            where: {
+                organizationId,
+                employeeId: { in: [...new Set(records.map((r) => r.employeeId))] },
+                workDate: { in: [...new Set(records.map((r) => fromDbDate(r.workDate)))].map(toDbDate) },
+            },
+            select: SESSION_SELECT,
+        });
+        return attendanceDays(sessions.map((s) => ({ ...s, workDate: fromDbDate(s.workDate) })));
     }
 
     // Owners see their own records, reporting managers their direct reports', and

@@ -9,6 +9,7 @@ import type { AttendanceRecord, EmployeeSummary, TeamAttendanceRecord } from "@/
 import { AttendanceTable } from "@/components/work/attendance/AttendanceTable";
 import { CorrectTimeDialog } from "@/components/work/attendance/CorrectTimeDialog";
 import { RecordDetailsDialog } from "@/components/work/attendance/RecordDetailsDialog";
+import { WeekStrip } from "@/components/work/attendance/WeekStrip";
 import { EmptyState, ErrorNote, Loading, Surface, errorMessage, inputClass, secondaryButton } from "@/components/work/ui";
 
 const PAGE_SIZE = 50;
@@ -174,6 +175,8 @@ export default function AttendancePage() {
           ))}
         </div>
       )}
+
+      {!team ? <WeekStrip /> : employee && <WeekStrip key={employee.id} employeeId={employee.id} title={`${employee.name}'s week`} />}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">

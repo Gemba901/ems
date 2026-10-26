@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { EmsService, type EmployeeListSort, type EmploymentStatus, type EmployeeInvitationFilter, type EmployeeListFilters, EMPLOYMENT_STATUS_LABELS, completionBg } from "@/services/ems.service";
 import InvitationDialog from "@/components/ems/InvitationDialog";
 import { invitationBadge } from "@/components/ems/ems-invitations";
+import { saveEmployeeNav } from "@/components/ems/employee-navigation";
 import { reviewRecordHref } from "@/components/ems/onboarding-review-navigation";
 import { Search, ChevronLeft, ChevronRight, Loader2, ArrowLeft, Send } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -47,11 +48,12 @@ export default function EmsEmployeesPage() {
     queryFn: () => EmsService.getEmployees(accessToken!, { ...listFilters, page: filters.page, limit: PAGE_SIZE }),
     enabled: !!accessToken,
   });
-  // Selection: individual rows, or every employee matching the current filters (across pages).
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Selection: ticked people are kept across searches, filters and pages (id → name, for the summary).
+  // "All matching" means everyone the current filters find, so it ends when the filters change.
+  const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [allMatching, setAllMatching] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
-  useEffect(() => { setSelected(new Set()); setAllMatching(false); }, [filters.search, filters.status, filters.source]);
+  useEffect(() => { setAllMatching(false); }, [filters.search, filters.status, filters.source]);
   const sources = useQuery({
     queryKey: ['ems-employee-import-batches', user?.organizationId],
     queryFn: () => EmsService.getEmployeeImportBatches(accessToken!), enabled: !!accessToken,
@@ -67,9 +69,26 @@ export default function EmsEmployeesPage() {
   const update = (change: Partial<typeof filters>) => setFilters(previous => ({ ...previous, ...change, page: 1 }));
   const pageIds = employees.map(employee => employee.id);
   const pageAllSelected = pageIds.length > 0 && pageIds.every(id => selected.has(id));
-  const toggle = (id: string) => { setAllMatching(false); setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
-  const togglePage = () => { setAllMatching(false); setSelected(previous => { const next = new Set(previous); pageIds.forEach(id => pageAllSelected ? next.delete(id) : next.add(id)); return next; }); };
+  const fullName = (employee: { firstName: string; middleName?: string | null; lastName: string }) =>
+    [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(' ');
+  const toggle = (employee: (typeof employees)[number]) => {
+    setAllMatching(false);
+    setSelected(previous => { const next = new Map(previous); if (next.has(employee.id)) next.delete(employee.id); else next.set(employee.id, fullName(employee)); return next; });
+  };
+  const togglePage = () => {
+    setAllMatching(false);
+    setSelected(previous => { const next = new Map(previous); employees.forEach(e => pageAllSelected ? next.delete(e.id) : next.set(e.id, fullName(e))); return next; });
+  };
+  // With "all matching", ticked people from other searches are still included; the preview shows the exact total.
   const selectionCount = allMatching ? total : selected.size;
+  const selectedNames = [...selected.values()];
+  // "Matching" only means something when a search or filter narrows the list.
+  const narrowed = !!(filters.search || filters.status || filters.source);
+  // Profiles' Previous / Next follow this exact list (same filters, sort and page).
+  useEffect(() => {
+    if (data) saveEmployeeNav({ filters: listFilters, page, limit: PAGE_SIZE, pages, total, ids: pageIds });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- saved whenever a page of results arrives
+  }, [data]);
   const goToPage = () => {
     const requested = Number(pageInput);
     if (!Number.isInteger(requested) || requested < 1 || requested > pages) { setPageInput(String(page)); return; }
@@ -131,9 +150,11 @@ export default function EmsEmployeesPage() {
         </div>
         {selectionCount > 0 && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-100 bg-purple-50/60 px-4 py-2 text-xs text-purple-950" role="status">
           <span>
-            {allMatching ? `All ${total} matching employees selected.` : `${selected.size} selected.`}
-            {!allMatching && pageAllSelected && total > pageIds.length && <> <button type="button" className="font-semibold underline" onClick={() => setAllMatching(true)}>Select all {total} matching</button></>}
-            {' '}<button type="button" className="text-purple-800 underline" onClick={() => { setSelected(new Set()); setAllMatching(false); }}>Clear</button>
+            {allMatching ? `All ${total} employees${narrowed ? ' matching your search/filters' : ''} selected${selected.size ? ', plus anyone you ticked in other searches' : ''}.`
+              : `${selected.size} selected: ${selectedNames.slice(0, 2).join(', ')}${selectedNames.length > 2 ? ` +${selectedNames.length - 2}` : ''}.`}
+            {!allMatching && selected.size > pageIds.filter(id => selected.has(id)).length && <span className="text-purple-800"> Includes people from other searches.</span>}
+            {!allMatching && pageAllSelected && total > pageIds.length && <> <button type="button" className="font-semibold underline" onClick={() => setAllMatching(true)}>Select all {total} employees{narrowed ? ' matching your search/filters' : ''}</button></>}
+            {' '}<button type="button" className="text-purple-800 underline" onClick={() => { setSelected(new Map()); setAllMatching(false); }}>Clear</button>
           </span>
           <button type="button" onClick={() => setInviteOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-700">
             <Send className="h-3.5 w-3.5" /> Send invitations
@@ -152,7 +173,7 @@ export default function EmsEmployeesPage() {
                 // The whole row opens the profile for mouse users; the name link stays the keyboard and screen-reader route.
                 onClick={event => { if ((event.target as HTMLElement).closest('a, button, input, select, textarea') || window.getSelection()?.toString()) return; router.push(`/ems/employees/${encodeURIComponent(employee.id)}`); }}>
                 <td className="px-4 py-3"><input type="checkbox" aria-label={`Select ${[employee.firstName, employee.lastName].filter(Boolean).join(' ')}`}
-                  checked={allMatching || selected.has(employee.id)} onChange={() => toggle(employee.id)} /></td>
+                  checked={allMatching || selected.has(employee.id)} onChange={() => toggle(employee)} /></td>
                 <td className="px-4 py-3 font-mono text-xs text-slate-500">{employee.employeeCode ?? '—'}</td>
                 <td className="min-w-40 px-4 py-3"><Link href={`/ems/employees/${encodeURIComponent(employee.id)}`} className="font-semibold text-purple-800 underline decoration-purple-200 underline-offset-2 hover:decoration-purple-800">{[employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(' ')}</Link></td>
                 <td className="px-4 py-3 text-slate-600">{employee.department?.name ?? '—'}</td>
@@ -178,8 +199,8 @@ export default function EmsEmployeesPage() {
         </nav>}
       </div>
       {inviteOpen && accessToken && <InvitationDialog accessToken={accessToken}
-        title={`Invite ${selectionCount} employee${selectionCount === 1 ? '' : 's'}`}
-        selection={allMatching ? { filters: listFilters } : { employeeIds: [...selected] }}
+        title={allMatching ? 'Invite selected employees' : `Invite ${selectionCount} employee${selectionCount === 1 ? '' : 's'}`}
+        selection={allMatching ? { filters: listFilters, ...(selected.size ? { employeeIds: [...selected.keys()] } : {}) } : { employeeIds: [...selected.keys()] }}
         onClose={() => setInviteOpen(false)} />}
     </div>
   </ProtectedRoute>;

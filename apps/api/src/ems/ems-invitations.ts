@@ -105,14 +105,17 @@ export class EmsInvitationsService {
     return org.communicationChannel;
   }
 
+  /** Ticked employees, everyone matching the list filters, or both together. */
   private selectionWhere(organizationId: string, selection: InvitationSelection): Prisma.EmployeeWhereInput {
     const ids = selection.employeeIds?.filter(id => typeof id === 'string' && id);
+    const parts: Prisma.EmployeeWhereInput[] = [];
     if (ids?.length) {
       if (ids.length > MAX_INVITE_SELECTION) throw new BadRequestException(`Select at most ${MAX_INVITE_SELECTION} employees at once.`);
-      return { organizationId, id: { in: ids } };
+      parts.push({ id: { in: ids } });
     }
-    if (selection.filters) return employeeListWhere(organizationId, { ...selection.filters, page: 1, limit: 20 } as QueryEmsEmployeesDto);
-    throw new BadRequestException('Select employees to invite.');
+    if (selection.filters) parts.push(employeeListWhere(organizationId, { ...selection.filters, page: 1, limit: 20 } as QueryEmsEmployeesDto));
+    if (!parts.length) throw new BadRequestException('Select employees to invite.');
+    return parts.length === 1 ? { organizationId, ...parts[0] } : { organizationId, OR: parts };
   }
 
   private async candidates(organizationId: string, selection: InvitationSelection) {

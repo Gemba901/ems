@@ -120,6 +120,17 @@ describe('sending', () => {
   });
 });
 
+describe('selection', () => {
+  it('combines ticked people with everyone matching the filters', async () => {
+    const { service, prisma } = setup([person('ann')]);
+    await service.preview('org', { employeeIds: ['ann'], filters: { search: 'otieno' } });
+    const where = prisma.employee.count.mock.calls[0][0].where;
+    expect(where.organizationId).toBe('org');
+    expect(where.OR).toHaveLength(2);
+    expect(where.OR[0]).toEqual({ id: { in: ['ann'] } });
+  });
+});
+
 describe('accepting', () => {
   const invitation = (extra: any = {}) => ({ id: 'inv', organizationId: 'org', kind: 'SETUP', status: 'SENT', tokenHash: hashInviteToken('t'.repeat(40)),
     expiresAt: new Date(Date.now() + 86_400_000),

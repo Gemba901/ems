@@ -3,6 +3,7 @@ import { FIVE_S_LOCATION_LABELS } from "@/components/ems/five-s-location";
 import { localCalendarToday, profileSavePayload } from "@/components/ems/employee-profile-dates";
 import EmployeeEmploymentStatusCard from "@/components/ems/EmployeeEmploymentStatusCard";
 import EmployeeInvitationCard from "@/components/ems/EmployeeInvitationCard";
+import EmployeeListNav from "@/components/ems/EmployeeListNav";
 import EmployeeImportedInformation from "@/components/ems/EmployeeImportedInformation";
 import EmployeePeopleLinksCard from "@/components/ems/EmployeePeopleLinksCard";
 
@@ -405,7 +406,7 @@ export default function EmployeeDetailPage() {
 
         {reviewReturn && <Link href={reviewReturn} className="inline-block text-sm font-medium text-purple-800 underline">Return to review record</Link>}
         {/* ── Page header ──────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={goBack}
             aria-label={reviewReturn ? "Return to review record" : "Back"}
@@ -424,6 +425,7 @@ export default function EmployeeDetailPage() {
               {employee.employeeCode}
             </span>
           )}
+          {accessToken && <EmployeeListNav employeeId={id} token={accessToken} blocked={editingPersonal || editingRole || editingDept} />}
         </div>
 
         {/* ── Tabs ─────────────────────────────────────────────────────── */}

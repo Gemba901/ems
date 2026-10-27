@@ -2,7 +2,7 @@ import { normaliseFiveSLocation, FIVE_S_LOCATION_ERROR } from './five-s-location
 import { importedAccountRole, canRegisterOnboarding, registrationAccess } from './onboarding-access';
 import { employeeListWhere, employeeNameOrder, employeeSearchGroups, registeredSourceWhere, EMPLOYEE_SOURCE_SELECT, employeeImportSource } from './ems-employee-list';
 import { assertProfileBirthDate } from './employee-profile-dates';
-import { readExtraFields, reviseExtraFields, extraProfileData, ExtraFieldsError, isExtraProfileField } from './onboarding-extra-fields';
+import { readExtraFields, reviseExtraFields, extraProfileData, blockingFindings, ExtraFieldsError, isExtraProfileField } from './onboarding-extra-fields';
 import { isReportingBody, reportingBodyLabel } from './reporting-bodies';
 import { onboardingNameIssue } from './onboarding-name-rule';
 import { departmentIndex, departmentIssue, onboardingFieldOptions } from './onboarding-field-options';
@@ -25,7 +25,7 @@ import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
 import { 
   AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto,
-  ExcludeRemainingOnboardingRecordsDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto,
+  ExcludeRemainingOnboardingRecordsDto, ForgetImportColumnChoicesDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto,
 } from './dto/onboarding.dto';
 import { Prisma } from 'db';
 import { getCountries } from 'libphonenumber-js/max';
@@ -172,7 +172,8 @@ const emptyOnboardingStatusCounts = () => ({
 });
 
 // ── Onboarding validation ────────────────────────────────────────────────────
-type ValidationFinding = { field: string; message: string };
+/** A finding with severity 'warning' is shown but doesn't stop the record being Ready. */
+type ValidationFinding = { field: string; message: string; severity?: 'warning' };
 
 // JSONB may return object keys in a different order. Compare JSON values, not
 // object prototypes, and retain array order because it controls finding display.
@@ -773,7 +774,18 @@ export class EmsService {
         const statusCounts = counts.get(group.batchId);
         if (statusCounts) statusCounts[group.status] = group._count._all;
       }
-      return batches.map(batch => ({ ...batch, statusCounts: counts.get(batch.id)! }));
+      // An import's last activity: its newest record change (edit, validation, registration), else its upload time.
+      const touched = await tx.emsOnboardingRecord.groupBy({
+        by: ['batchId'],
+        where: { organizationId, batchId: { in: batches.map(batch => batch.id) } },
+        _max: { updatedAt: true },
+      });
+      const lastChange = new Map(touched.map(group => [group.batchId, group._max.updatedAt]));
+      return batches.map(batch => {
+        const changed = lastChange.get(batch.id);
+        const updatedAt = changed && changed > batch.createdAt ? changed : batch.createdAt;
+        return { ...batch, updatedAt, statusCounts: counts.get(batch.id)! };
+      });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   }
 
@@ -1006,7 +1018,7 @@ export class EmsService {
           record.status === 'READY' ||
           (record.status === 'NEEDS_FIXING' && old.some(isPeopleLinkFinding))
         ) {
-          record.status = findings.length ? 'NEEDS_FIXING' : 'READY';
+          record.status = blockingFindings(findings as { severity?: string }[]).length ? 'NEEDS_FIXING' : 'READY';
         }
 
         record.validationErrors = findings.length ? findings : null;
@@ -1318,7 +1330,7 @@ export class EmsService {
         findings.push(duplicate);
       }
       findings.push(...peopleLinkFindings(peopleLinks.byRecord[record.id]));
-      const status = findings.length > 0 ? 'NEEDS_FIXING' : 'READY';
+      const status = blockingFindings(findings).length > 0 ? 'NEEDS_FIXING' : 'READY';
       if (status === 'READY') readyCount++;
 
       // JSONB object-key order is not meaningful. Avoid rewriting identical results
@@ -1491,6 +1503,14 @@ export class EmsService {
     return { choices: keys.map(key => (key && byKey.get(key)) || null) };
   }
 
+  /** Forget this organisation's remembered choices for these headings; the next import starts from built-in recognition. */
+  async forgetImportColumnChoices(organizationId: string, dto: ForgetImportColumnChoicesDto) {
+    const keys = [...new Set(dto.headings.map(columnHeadingKey).filter(Boolean))];
+    if (!keys.length) return { forgotten: 0 };
+    const { count } = await this.prisma.emsImportColumnChoice.deleteMany({ where: { organizationId, headingKey: { in: keys } } });
+    return { forgotten: count };
+  }
+
   /** Remember HR's confirmed choices. Called after an import's rows are saved; last choice per heading wins. */
   async saveImportColumnChoices(organizationId: string, userId: string, dto: SaveImportColumnChoicesDto) {
     const choices = normaliseColumnChoices(dto.choices);
@@ -1647,7 +1667,9 @@ export class EmsService {
           if (registrationAccess(actorRole, record.beesAccessLevel) === 'ADMIN_REQUIRED')
             throw new OnboardingAdminRegistrationRequired();
           const additional = extraProfileData(found.extraFields, value => normalisePhone(value, current.defaultPhoneCountry));
-          if (additional.findings.length) throw new OnboardingFieldConflict(additional.findings);
+          // Warnings (unusable optional values) don't stop registration: those profile fields are left empty.
+          const blocking = blockingFindings(additional.findings);
+          if (blocking.length) throw new OnboardingFieldConflict(blocking);
           const fiveSCategory = normaliseFiveSLocation(record.fiveSLocationCategory);
           if (fiveSCategory === undefined) throw new OnboardingFieldConflict([{field: 'fiveSLocationCategory', message: FIVE_S_LOCATION_ERROR}]);
           const nameFindings: { field: string; message: string }[] = [];

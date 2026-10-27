@@ -167,11 +167,13 @@ describe('onboarding registration with independent people links', () => {
     await expect(service.registerOnboardingBatch('org','batch', Role.ADMIN)).rejects.toThrow('No records are ready');
     expect(employees).toHaveLength(2);
   });
-  it('blocks registration when a stale Ready row now has an excluded reliever', async () => {
+  it('registers a stale Ready row whose reliever was excluded, leaving that reliever empty', async () => {
     const {service,manager,ann,employees}=setup();
     Object.assign(ann,{reliever1RecordId:'manager',reportingToRecordId:null,reportingToBoard:true,reportingToName:null,reportingToDesignation:'Board'});
     manager.status='EXCLUDED';
-    expect((await service.registerOnboardingBatch('org','batch', Role.ADMIN)).failed).toBe(1);
-    expect(employees).toHaveLength(0);
+    // Relievers are optional: one that can't be linked is a warning, so registration goes ahead without it.
+    expect((await service.registerOnboardingBatch('org','batch', Role.ADMIN)).registered).toBe(1);
+    expect(employees).toHaveLength(1);
+    expect(employees[0]).toMatchObject({firstRelieverId:null,pendingFirstRelieverRecordId:null});
   });
 });

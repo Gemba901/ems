@@ -91,19 +91,30 @@ describe('additional information across the onboarding service', () => {
     await f.service.updateOnboardingRecord('org', 'a', {middleName: 'New'});
     expect(f.state().rows[0].extraFields).toEqual(extras());
   });
-  it('accepts corrected values, retains originals and clears findings after correction', async () => {
+  it('warns on an unusable optional value, retains originals and clears the warning after correction', async () => {
     const f = fixture(); f.state().rows[0].extraFields = extras();
     const edited = extras(); edited[0] = {...edited[0], value: '2026-02-30', originalValue: 'forged', heading: 'forged'};
     await f.service.updateOnboardingRecord('org', 'a', {extraFields: edited} as never);
-    expect(f.state().rows[0].status).toBe('NEEDS_FIXING');
+    // An unreadable optional date is a warning: the record stays Ready.
+    expect(f.state().rows[0].status).toBe('READY');
+    expect(f.state().rows[0].validationErrors).toEqual([expect.objectContaining({field: 'extraFields', severity: 'warning'})]);
     expect(f.state().rows[0].extraFields[0]).toMatchObject({heading: 'Date of birth', originalValue: '1990-01-02', value: '2026-02-30'});
     edited[0].value = '1990-01-03';
     await f.service.updateOnboardingRecord('org', 'a', {extraFields: edited} as never);
     expect(f.state().rows[0].status).toBe('READY');
     expect(f.state().rows[0].validationErrors ?? []).toEqual([]);
   });
-  it('rechecks mapped values during registration even if persisted status is Ready', async () => {
+  it('registers with an unusable optional value left empty, keeping the imported value', async () => {
     const f = fixture(); f.state().rows[0].extraFields = extras(); f.state().rows[0].extraFields[0].value = 'impossible'; f.state().rows[0].status = 'READY';
+    await f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN);
+    expect(f.state().employees).toHaveLength(1);
+    expect(f.state().employees[0].dateOfBirth ?? null).toBeNull();
+    expect(f.state().employees[0].importedExtraFields[0]).toMatchObject({target: 'dateOfBirth', value: 'impossible'});
+  });
+
+  it('still blocks registration when two columns map to the same profile field', async () => {
+    const f = fixture(); f.state().rows[0].extraFields = [...extras(), {column: 32, heading: 'DOB', originalValue: '1991-01-01', value: '1991-01-01', target: 'dateOfBirth'}];
+    f.state().rows[0].status = 'READY';
     await f.service.registerOnboardingBatch('org', 'batch', Role.ADMIN);
     expect(f.state().employees).toHaveLength(0);
     expect(f.state().rows[0].validationErrors[0]).toMatchObject({field: 'extraFields'});

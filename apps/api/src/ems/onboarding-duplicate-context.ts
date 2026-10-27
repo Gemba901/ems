@@ -1,6 +1,7 @@
 import { createDuplicateIndex, DuplicatePerson, DuplicateReview } from './onboarding-duplicates';
 import { cleanRecord } from './onboarding-text';
 import { normalisePhone } from './onboarding-phone';
+import { blockingFindings } from './onboarding-extra-fields';
 
 export const ONBOARDING_TEXT_FIELDS = [
   'companyCode', 'plantBranchCode', 'employeeCode', 'firstName', 'middleName', 'lastName',
@@ -53,7 +54,8 @@ export function refreshedDuplicateRecord<T extends { status: string; validationE
   // Draft still needs full validation. Excluded/registered records are never passed a review.
   const wasDuplicateBlocked = previous.some(finding => finding?.code === 'DUPLICATE_PERSON');
   const status = record.status === 'READY' || (record.status === 'NEEDS_FIXING' && wasDuplicateBlocked)
-    ? findings.length ? 'NEEDS_FIXING' : 'READY' : record.status;
+    // Warnings (e.g. an unreadable optional date) are shown but never make a record Needs fixing.
+    ? blockingFindings(findings).length ? 'NEEDS_FIXING' : 'READY' : record.status;
   return { ...publicRecord, status: status as T['status'], validationErrors: findings.length ? findings : null, duplicateReview: review };
 }
 

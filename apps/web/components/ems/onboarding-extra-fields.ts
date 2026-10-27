@@ -69,7 +69,8 @@ export function reviseExtraFields(stored: unknown, incoming: unknown): ImportedE
 export type ExtraProfileData = Partial<Record<Exclude<ExtraProfileField, 'trainingNeeded' | 'skillLevel'>, string | null>> & {
   trainingNeeded?: boolean | null; skillLevel?: 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3' | 'LEVEL_4' | null;
 };
-export type ExtraFinding = { field: 'extraFields'; column?: number; message: string };
+/** A warning doesn't block registration: the profile field stays empty and the value is kept for reference. */
+export type ExtraFinding = { field: 'extraFields'; column?: number; message: string; severity?: 'warning' };
 export function extraProfileData(input: unknown, phone: (value: string) => string | null, today = new Date().toISOString().slice(0, 10)) {
   const findings: ExtraFinding[] = [];
   let fields: ImportedExtraField[];
@@ -82,7 +83,12 @@ export function extraProfileData(input: unknown, phone: (value: string) => strin
   for (const f of fields) {
     if (!f.target) continue;
     const config = EXTRA_PROFILE_FIELDS.find(x => x.key === f.target)!;
-    const problem = (message: string) => findings.push({field: 'extraFields', column: f.column, message: `${config.label} (column ${excelColumn(f.column)}): ${message}`});
+    const prefix = `${config.label} (column ${excelColumn(f.column)}): `;
+    // Two columns for one field is a mapping mistake: it blocks until HR keeps one.
+    const problem = (message: string) => findings.push({field: 'extraFields', column: f.column, message: prefix + message});
+    // These fields are optional: a value that can't be used warns, leaves the profile field empty and stays for reference.
+    const unusable = (message: string) => findings.push({field: 'extraFields', column: f.column, severity: 'warning',
+      message: `${prefix}${message} Registration leaves this profile field empty and keeps the value for reference.`});
     if (assigned.has(f.target)) { problem('Two columns map here. Keep one mapping and retain the other as extra information.'); continue; }
     assigned.add(f.target);
     const value = f.value.trim();
@@ -92,22 +98,25 @@ export function extraProfileData(input: unknown, phone: (value: string) => strin
       const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
       const date = match ? new Date(value + 'T00:00:00.000Z') : null;
       if (!date || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value || Number(match![1]) < 1900) {
-        problem('Use a real date as YYYY-MM-DD (1900 or later).'); continue;
+        unusable('Use a real date as YYYY-MM-DD (1900 or later).'); continue;
       }
-      if (f.target === 'dateOfBirth' && value > today) { problem('Date of birth cannot be in the future.'); continue; }
+      if (f.target === 'dateOfBirth' && value > today) { unusable('Date of birth cannot be in the future.'); continue; }
       Object.assign(data, {[f.target]: date.toISOString()});
     } else if (config.kind === 'boolean') {
-      if (!/^(?:yes|no|true|false|1|0)$/i.test(value)) { problem('Use Yes or No.'); continue; }
+      if (!/^(?:yes|no|true|false|1|0)$/i.test(value)) { unusable('Use Yes or No.'); continue; }
       data.trainingNeeded = /^(?:yes|true|1)$/i.test(value);
     } else if (config.kind === 'skill') {
       const match = /^(?:level[ _-]?)?([1-4])$/i.exec(value);
-      if (!match) { problem('Use Level 1, Level 2, Level 3 or Level 4.'); continue; }
+      if (!match) { unusable('Use Level 1, Level 2, Level 3 or Level 4.'); continue; }
       data.skillLevel = `LEVEL_${match[1]}` as NonNullable<ExtraProfileData['skillLevel']>;
     } else if (config.kind === 'phone') {
       const normalised = phone(value);
-      if (!normalised) { problem('Enter a valid phone number and check the import’s default country.'); continue; }
+      if (!normalised) { unusable('Enter a valid phone number and check the import’s default country.'); continue; }
       data.emergencyContactPhone = normalised;
     } else Object.assign(data, {[f.target]: value});
   }
   return {data, findings};
 }
+
+/** Findings that stop a record from being Ready; warnings don't. */
+export const blockingFindings = <T extends { severity?: string }>(findings: T[]) => findings.filter(finding => finding.severity !== 'warning');

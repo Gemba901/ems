@@ -15,7 +15,7 @@ import OnboardingBatchProgress from '@/components/ems/OnboardingBatchProgress';
 import { isChainFinding, waitingOnChain, needsDuplicateReview, summarizeBatchProgress } from '@/components/ems/onboarding-batch-progress';
 import { DepartmentHodEditor, PersonLinkPicker, PersonSuggestions, PersonSummary, RelieverEditor } from '@/components/ems/OnboardingPeopleLinks';
 
-import { use, useState, useEffect, useCallback, useLayoutEffect, useRef, useMemo, Fragment, type ChangeEvent } from "react";
+import { use, useState, useEffect, useCallback, useLayoutEffect, useRef, useMemo, Fragment, type ChangeEvent, type FocusEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import OnboardingDuplicateReview from "@/components/ems/OnboardingDuplicateReview";
@@ -23,6 +23,9 @@ import ExcludeRemainingDialog from "@/components/ems/ExcludeRemainingDialog";
 import OnboardingMoreActions from "@/components/ems/OnboardingMoreActions";
 import ImportedColumnsDialog from "@/components/ems/ImportedColumnsDialog";
 import InvitationDialog from "@/components/ems/InvitationDialog";
+import CloseRecordDialog from "@/components/ems/CloseRecordDialog";
+import ConfirmDialog from "@/components/ems/ConfirmDialog";
+import { OnboardingEdgeProgress } from "@/components/ems/OnboardingStickyProgress";
 import { pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
 import { safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -35,7 +38,7 @@ import {
 } from "@/services/ems.service";
 import { requiredFields } from "../column-map";
 import {
-  ArrowLeft, Loader2, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Ban, Undo2, UserPlus,
+  ArrowLeft, Loader2, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Ban, Undo2, UserPlus, X, SlidersHorizontal,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -76,6 +79,12 @@ const EDITABLE_FIELDS: { key: Exclude<keyof UpdateOnboardingRecordPayload, "extr
   { key: "reliever2Designation",   label: "2nd reliever job title" },
 ];
 
+/** A finding's field as HR reads it: "Reporting to", not "reportingToName". */
+function findingFieldLabel(field: string): string {
+  return EDITABLE_FIELDS.find(f => f.key === field)?.label
+    ?? field.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/^./, c => c.toUpperCase());
+}
+
 // These choices and aliases follow the supplied onboarding API's accepted values.
 // Displaying a recognised alias never rewrites the imported draft by itself.
 const EDITOR_CHOICES: Partial<Record<keyof UpdateOnboardingRecordPayload, Record<string, string>>> = {
@@ -108,7 +117,8 @@ function editorChoice(key: keyof UpdateOnboardingRecordPayload, value?: string |
   }
   return Object.keys(EDITOR_CHOICES[key] ?? {}).find(choice => editorValueKey(choice) === normalised) ?? '__imported__';
 }
-type EditorFinding = {message: string; stale: boolean};
+/** `warning`: shown but doesn't block registration (an unusable optional value). */
+type EditorFinding = {message: string; stale: boolean; warning?: boolean};
 function editorFindings(record: OnboardingRecord, draft: UpdateOnboardingRecordPayload,
   required: Set<Exclude<keyof UpdateOnboardingRecordPayload, "extraFields">>, savedDraft: UpdateOnboardingRecordPayload, resolution?: ReportingResolution) {
   const result = new Map<string, EditorFinding[]>();
@@ -120,17 +130,20 @@ function editorFindings(record: OnboardingRecord, draft: UpdateOnboardingRecordP
   };
   const reportingChanged = (draft.reportingTarget ?? '') !== (savedDraft.reportingTarget ?? '')
     || !sameValue('reportingToName') || !sameValue('reportingToDesignation');
-  const add = (key: string, message: string, stale: boolean) => {
+  const add = (key: string, message: string, stale: boolean, warning?: boolean) => {
     const findings = result.get(key) ?? [];
-    if (!findings.some(finding => finding.message === message && finding.stale === stale)) result.set(key, [...findings, {message, stale}]);
+    if (!findings.some(finding => finding.message === message && finding.stale === stale)) result.set(key, [...findings, {message, stale, ...(warning ? {warning} : {})}]);
   };
   for (const finding of record.validationErrors ?? []) {
     if (isChainFinding(finding.field, resolution)) continue;
+    // Choosing a different reliever answers that slot's last finding: drop it rather than wait for validation.
+    const slot = /^reliever([12])(?:Name|Designation)$/.exec(finding.field)?.[1];
+    if (slot && (draft[`reliever${slot}Target` as keyof typeof draft] ?? '') !== (savedDraft[`reliever${slot}Target` as keyof typeof savedDraft] ?? '')) continue;
     const reporting = ['reportingToName', 'reportingToDesignation', 'reportingTarget'].includes(finding.field);
     const key = reporting && (draft.reportingTarget || finding.message === resolution?.error) ? 'reportingTarget' : finding.field;
     add(key, finding.message, reporting ? reportingChanged : key === 'duplicateReview'
       ? (['firstName', 'middleName', 'lastName', 'employeeCode', 'mobileNumber', 'currentDepartment', 'jobDesignation', 'plantBranchCode'] as const).some(field => !sameValue(field))
-      : !sameValue(finding.field as keyof UpdateOnboardingRecordPayload));
+      : !sameValue(finding.field as keyof UpdateOnboardingRecordPayload), finding.severity === 'warning');
   }
   if (resolution?.error && resolution.errorScope !== 'UPSTREAM') add('reportingTarget', resolution.error, reportingChanged);
   if (record.status !== 'REGISTERED') {
@@ -151,12 +164,75 @@ function editorFindings(record: OnboardingRecord, draft: UpdateOnboardingRecordP
   return result;
 }
 
+type IssueType = '' | 'imported' | 'contact' | 'reporting' | 'duplicate' | 'identity' | 'work';
+type RecordSort = 'import' | 'fewest' | 'most' | 'name' | 'recent';
 type RecordFilters = { search: string; department: string; status: '' | OnboardingRecordStatus | 'WAITING' | 'NEEDS_REVIEW';
-  duplicate: DuplicateFilter; reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT' };
-const EMPTY_FILTERS: RecordFilters = {search: '', department: '', status: '', duplicate: '', reportingTarget: '', reportingLabel: '', scope: 'BRANCH'};
+  duplicate: DuplicateFilter; issue: IssueType; sort: RecordSort; reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT' };
+const EMPTY_FILTERS: RecordFilters = {search: '', department: '', status: '', duplicate: '', issue: '', sort: 'import', reportingTarget: '', reportingLabel: '', scope: 'BRANCH'};
+const ISSUE_TYPES: {value: IssueType; label: string}[] = [
+  {value: '', label: 'All issue types'}, {value: 'imported', label: 'Imported values (dates etc.)'}, {value: 'contact', label: 'Contact numbers & email'},
+  {value: 'reporting', label: 'Reporting, HOD & relievers'}, {value: 'duplicate', label: 'Possible duplicates'},
+  {value: 'identity', label: 'Names & employee code'}, {value: 'work', label: 'Work details'},
+];
+const RECORD_SORTS: {value: RecordSort; label: string}[] = [
+  {value: 'import', label: 'Import order'}, {value: 'fewest', label: 'Fewest issues first'}, {value: 'most', label: 'Most issues first'},
+  {value: 'name', label: 'Name A–Z'}, {value: 'recent', label: 'Recently changed'},
+];
+/** Which kind of problem a finding is, for the Issue type filter. */
+function issueTypeOf(field: string, code?: string): Exclude<IssueType, ''> {
+  if (field === 'duplicateReview' || code === 'DUPLICATE_PERSON') return 'duplicate';
+  if (field === 'extraFields') return 'imported';
+  if (['mobileNumber', 'whatsappNumber', 'workEmail'].includes(field)) return 'contact';
+  if (/^(reportingTo|reportingTarget|hod|reliever)/.test(field)) return 'reporting';
+  if (['firstName', 'middleName', 'lastName', 'employeeCode'].includes(field)) return 'identity';
+  return 'work';
+}
+/** Issues that stop registration (warnings don't count). */
+const blockingCount = (record: OnboardingRecord) => (record.validationErrors ?? []).filter(finding => finding.severity !== 'warning').length;
+const fullName = (record: OnboardingRecord) => [record.firstName, record.middleName, record.lastName].filter(Boolean).join(' ');
+/**
+ * Order the shown records. While searching, the best name matches come first (name starts with the text,
+ * then a later word does, then the employee code, then anything containing it); the chosen sort orders within that.
+ */
+function orderRecords(list: OnboardingRecord[], filters: RecordFilters): OnboardingRecord[] {
+  const term = normaliseFilter(filters.search);
+  const tier = (record: OnboardingRecord) => {
+    if (!term) return 0;
+    const name = normaliseFilter(fullName(record));
+    if (name.startsWith(term)) return 0;
+    if (name.split(' ').some(word => word.startsWith(term))) return 1;
+    if (normaliseFilter(record.employeeCode).startsWith(term)) return 2;
+    return 3;
+  };
+  // Records with no issues go last when sorting by issues: "fewest" means closest to Ready.
+  const issues = (record: OnboardingRecord) => blockingCount(record) || Number.POSITIVE_INFINITY;
+  const by: Record<RecordSort, (a: OnboardingRecord, b: OnboardingRecord) => number> = {
+    import: () => 0,
+    fewest: (a, b) => issues(a) - issues(b),
+    most: (a, b) => (blockingCount(b) - blockingCount(a)),
+    name: (a, b) => fullName(a).localeCompare(fullName(b)),
+    recent: (a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
+  };
+  return list.map((record, index) => ({record, index, tier: tier(record)}))
+    .sort((a, b) => a.tier - b.tier || (by[filters.sort](a.record, b.record) || 0) || a.index - b.index)
+    .map(entry => entry.record);
+}
+// Filters kept in the page address, so a reload or a shared link shows the same records.
+const FILTER_PARAMS = {search: 'q', department: 'dept', status: 'status', duplicate: 'dup', issue: 'issue', sort: 'sort'} as const;
+function filtersFromUrl(search: string): Partial<RecordFilters> {
+  const params = new URLSearchParams(search), found: Partial<RecordFilters> = {};
+  const q = params.get(FILTER_PARAMS.search); if (q) found.search = q.slice(0, 200);
+  const department = params.get(FILTER_PARAMS.department); if (department) found.department = department;
+  const status = params.get(FILTER_PARAMS.status);
+  if (status && ['DRAFT', 'READY', 'NEEDS_FIXING', 'REGISTERED', 'EXCLUDED', 'WAITING', 'NEEDS_REVIEW'].includes(status)) found.status = status as RecordFilters['status'];
+  const duplicate = params.get(FILTER_PARAMS.duplicate); if (duplicate && DUPLICATE_FILTERS.some(option => option.value === duplicate)) found.duplicate = duplicate as DuplicateFilter;
+  const issue = params.get(FILTER_PARAMS.issue); if (issue && ISSUE_TYPES.some(option => option.value === issue)) found.issue = issue as IssueType;
+  const sort = params.get(FILTER_PARAMS.sort); if (sort && RECORD_SORTS.some(option => option.value === sort)) found.sort = sort as RecordSort;
+  return found;
+}
 const normaliseFilter = (value: string | null | undefined) => (value ?? '').normalize('NFKD').replace(/\p{M}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase();
 const departmentKey = (value: string | null) => normaliseFilter(value) ? `department:${normaliseFilter(value)}` : 'MISSING';
-const hasFilters = (filters: RecordFilters) => !!(filters.search.trim() || filters.department || filters.status || filters.duplicate || filters.reportingTarget);
+const hasFilters = (filters: RecordFilters) => !!(filters.search.trim() || filters.department || filters.status || filters.duplicate || filters.issue || filters.reportingTarget);
 
 // Use person IDs and known reporting edges. Never infer a link from matching names.
 function reportingFilterModel(batch?: OnboardingBatchDetail) {
@@ -225,6 +301,7 @@ function matchingRecordIds(batch: OnboardingBatchDetail | undefined, filters: Re
       && (!filters.department || filters.department === departmentKey(record.currentDepartment))
       && (!filters.status || filters.status === status)
       && (!filters.duplicate || duplicateFilterState(record) === filters.duplicate)
+      && (!filters.issue || (record.validationErrors ?? []).some(finding => issueTypeOf(finding.field, finding.code) === filters.issue))
       && (!selected || branch.has(model.canonical(`record:${record.id}`)));
   }).map(record => record.id));
 }
@@ -388,7 +465,9 @@ function restoreScroll(snapshot: ScrollSnapshot) {
 }
 
 type SaveNotice = { id?: string; name?: string; action: string; status?: string; summary?: string;
-  reporting?: ReportingFeedback; moved: boolean; ready: boolean; showView: boolean; sequence: number };
+  reporting?: ReportingFeedback; moved: boolean; ready: boolean; showView: boolean; sequence: number;
+  /** After registering: how many were registered, offering to invite them. */
+  invite?: number };
 type ViewportSnapshot = { scroll: ScrollSnapshot; anchor?: string; offset?: number; recordId?: string; keepVisible?: boolean };
 type ReturnPoint = { destination: string; name?: string; reviewOrigin?: boolean; openId: string | null; openStatus?: OnboardingRecordStatus;
   page: number; pageSize: number; lastId: string | null; viewport: ViewportSnapshot; filters: RecordFilters; revealedId: string | null };
@@ -433,7 +512,10 @@ function unobscuredTop(snapshot: ScrollSnapshot, edge: number, ignoreBatchBar = 
 function viewportBounds(snapshot: ScrollSnapshot) {
   const host = snapshot.element?.getBoundingClientRect();
   const feedback = document.querySelector<HTMLElement>('[data-onboarding-feedback]')?.getBoundingClientRect();
-  const visibleBottom = feedback && feedback.height > 0 ? feedback.top - 16 : window.innerHeight;
+  // The editor's dock (sticky at the bottom) also covers the page: what's behind it isn't "visible".
+  const dock = document.querySelector<HTMLElement>('[data-editor-action-buttons]')?.getBoundingClientRect();
+  const covered = [feedback, dock].filter((rect): rect is DOMRect => !!rect && rect.height > 0 && rect.top < window.innerHeight).map(rect => rect.top);
+  const visibleBottom = covered.length ? Math.min(...covered) - 16 : window.innerHeight;
   return {
     top: unobscuredTop(snapshot, Math.max(0, host ? host.top + snapshot.element!.clientTop : 0)) + 32,
     bottom: Math.min(visibleBottom, host ? host.top + snapshot.element!.clientTop + snapshot.element!.clientHeight : window.innerHeight) - 32,
@@ -442,7 +524,9 @@ function viewportBounds(snapshot: ScrollSnapshot) {
 // Store the visible record/field, not only a pixel offset that becomes stale after reordering.
 function captureViewport(root: HTMLElement | null): ViewportSnapshot {
   const scroll = scrollSnapshot(root), bounds = viewportBounds(scroll);
-  const anchors = Array.from(root?.querySelectorAll<HTMLElement>('[data-viewport-anchor]') ?? []);
+  // The editor's action bar sticks to the bottom of the screen, so it never marks a place in the page.
+  const anchors = Array.from(root?.querySelectorAll<HTMLElement>('[data-viewport-anchor]') ?? [])
+    .filter(el => !el.dataset.viewportAnchor?.startsWith('actions:'));
   const visible = anchors.filter(element => {
     const rect = element.getBoundingClientRect();
     return rect.height > 0 && rect.bottom > bounds.top && rect.top < bounds.bottom;
@@ -450,6 +534,21 @@ function captureViewport(root: HTMLElement | null): ViewportSnapshot {
   const element = visible.find(el => el.getBoundingClientRect().top >= bounds.top) ?? visible[0];
   return { scroll, anchor: element?.dataset.viewportAnchor, recordId: element?.dataset.recordId,
     offset: element ? element.getBoundingClientRect().top - bounds.top : undefined };
+}
+// A record that stays open after an action: keep its editor where it was on screen, even if the record moved
+// in the list (e.g. after Put back, or a reporting change). Uses the record's own row and fields, never the
+// sticky action bar. Null when none of the record is on screen.
+function captureEditorViewport(root: HTMLElement | null, recordId: string): ViewportSnapshot | null {
+  const scroll = scrollSnapshot(root), bounds = viewportBounds(scroll);
+  const own = Array.from(root?.querySelectorAll<HTMLElement>('[data-viewport-anchor]') ?? [])
+    .filter(el => el.dataset.recordId === recordId && !el.dataset.viewportAnchor?.startsWith('actions:'));
+  const visible = own.filter(el => {
+    const rect = el.getBoundingClientRect();
+    return rect.height > 0 && rect.bottom > bounds.top && rect.top < bounds.bottom;
+  });
+  const element = visible.find(el => el.getBoundingClientRect().top >= bounds.top) ?? visible[0];
+  if (!element) return null;
+  return { scroll, anchor: element.dataset.viewportAnchor, recordId, offset: element.getBoundingClientRect().top - bounds.top };
 }
 // A moved editor can remove or relocate most of a screenful of content. Preserve a
 // surrounding row, not that editor's old pixel offset or a member of its moved branch.
@@ -551,36 +650,84 @@ function revealEditorField(root: HTMLElement | null, key: string, message?: stri
 
 const FEEDBACK_LINK = 'rounded px-1 font-medium underline underline-offset-2 text-purple-800 hover:text-purple-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-700 disabled:opacity-50';
 
-function SaveFeedback({ notice, hasReturn, disabled, onView, onDismiss }: {
+/** True on phone-width screens (below Tailwind's sm breakpoint), where bottom bars combine into one dock. */
+function useIsPhone() {
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 639.98px)');
+    const update = () => setPhone(query.matches);
+    update(); query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return phone;
+}
+
+function SaveFeedback({ notice, hasReturn, disabled, onView, onDismiss, onInvite, compact = false, extra, closeable = false }: {
   notice: SaveNotice; hasReturn: boolean; disabled: boolean; onView: () => void; onDismiss: () => void;
+  /** Compact form with no record open: a ✕ on the line (there's no Close record button then). In the dock: Dismiss under More. */
+  closeable?: boolean;
+  /** Compact form: Return / View links, shown under "More" so they never widen the line. */
+  extra?: ReactNode;
+  /** Opens the invitation dialog for this import's registered employees. */
+  onInvite?: () => void;
+  /** One line with More / ✕, for the phone's bottom dock. */
+  compact?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const remaining = useRef(7000);
-  const automatic = notice.ready && !notice.showView && !hasReturn;
+  const automatic = notice.ready && !notice.showView && !hasReturn && !notice.invite;
   useEffect(() => {
     if (!automatic || hovered || focused) return;
     const started = Date.now();
     const timer = window.setTimeout(onDismiss, remaining.current);
     return () => { window.clearTimeout(timer); remaining.current = Math.max(0, remaining.current - (Date.now() - started)); };
   }, [automatic, hovered, focused, onDismiss]);
-  return <div className="p-2 text-xs text-slate-700" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-    onFocusCapture={() => setFocused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); }}>
-    {notice.summary && <p>{notice.summary}</p>}
-    {notice.id && <p>{notice.name} · {notice.action}{notice.status ? ` · ${notice.status}` : ''}{notice.moved ? ' · Position changed' : ''}</p>}
-    {notice.reporting && <details className="mt-1 space-y-1 break-words text-xs" data-reporting-feedback>
+  const line = notice.id ? `${notice.name} · ${notice.action}${notice.status ? ` · ${notice.status}` : ''}${notice.moved ? ' · Position changed' : ''}` : notice.summary;
+  const invite = !!notice.invite && onInvite && <button type="button" disabled={disabled} onClick={onInvite} data-invite-offer
+    className={`${compact ? 'shrink-0 ' : 'mr-3 '}${FEEDBACK_LINK}`}>Invite them</button>;
+  const view = notice.id && notice.showView && <button type="button" disabled={disabled} onClick={onView} className={`mr-3 ${FEEDBACK_LINK}`}>View {notice.name}</button>;
+  const reporting = notice.reporting && <details className="mt-1 space-y-1 break-words text-xs" data-reporting-feedback>
       <summary className="cursor-pointer font-semibold">{notice.reporting.title}</summary>
       {notice.reporting.before && <p>From: {notice.reporting.before}<br />To: {notice.reporting.after}</p>}
       {notice.reporting.note && <p>{notice.reporting.note}</p>}
       {!!notice.reporting.otherCount && <p>{notice.reporting.otherCount} other {notice.reporting.otherCount === 1 ? 'record has an updated reporting chain' : 'records have updated reporting chains'}.</p>}
-    </details>}
-    {notice.id && notice.showView && <button type="button" disabled={disabled} onClick={onView} className={`mr-3 ${FEEDBACK_LINK}`}>View {notice.name}</button>}
+    </details>;
+  const handlers = { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false),
+    onFocusCapture: () => setFocused(true),
+    onBlurCapture: (event: FocusEvent<HTMLDivElement>) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); } };
+  if (compact) {
+    // Phones: the outcome first ("Saved · Needs fixing · Name…"), so a cut-short line still says what happened.
+    const shortLine = notice.id ? `${notice.action}${notice.status ? ` · ${notice.status}` : ''}${notice.moved ? ' · Moved' : ''} · ${notice.name}` : notice.summary;
+    return <div className="min-w-0 text-[11px] text-slate-700" {...handlers}>
+      <div className={`flex gap-2 ${expanded ? 'items-start' : 'items-center'}`}>
+        <p className={`min-w-0 flex-1 ${expanded ? 'break-words' : 'truncate'}`} title={expanded ? undefined : shortLine}>{shortLine}</p>
+        {invite}
+        <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="shrink-0 font-semibold text-slate-600 underline">{expanded ? 'Less' : 'More'}</button>
+        {closeable && <button type="button" onClick={onDismiss} aria-label="Dismiss message" className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>}
+      </div>
+      {expanded && <div className="break-words pb-1 [&_a]:block [&_button]:block [&_button]:text-left">
+        {notice.id && notice.summary && <p className="text-slate-600">{notice.summary}</p>}
+        {reporting}
+        {view}
+        {extra}
+        {!closeable && <button type="button" onClick={onDismiss} className="py-0.5 text-slate-500 underline">Dismiss</button>}
+      </div>}
+    </div>;
+  }
+  return <div className="p-2 text-xs text-slate-700" {...handlers}>
+    {notice.summary && <p>{notice.summary}</p>}
+    {notice.id && <p>{line}</p>}
+    {reporting}
+    {view}
+    {invite}
     <button type="button" onClick={onDismiss} className="text-slate-500 underline" aria-label="Dismiss save notification">Dismiss</button>
   </div>;
 }
 
 function RecordEditor({
-  record, batch, actorRole, required, toolbarHost, onSave, onSaved, onSaveHod, onHodSaved, onConfirmDuplicate, onUndoDuplicate, reviewReturnTo, onVisit, onRefreshDuplicates, onExclude, onInclude, onManageColumns, saving, exclusionError, inclusionError, reportingOptions, reportingResolution, reportingSuggestions = [], onDirtyChange, reviewSequence = 0,
+  record, batch, actorRole, required, toolbarHost, onSave, onSaved, onSaveHod, onHodSaved, onConfirmDuplicate, onUndoDuplicate, reviewReturnTo, onVisit, onRefreshDuplicates, onExclude, onInclude, onManageColumns, saving, exclusionError, inclusionError, reportingOptions, reportingResolution, reportingSuggestions = [], onDirtyChange, reviewSequence = 0, onClose, phoneNotice = null, phoneReturn = null,
 }: {
   record: OnboardingRecord;
   batch: OnboardingBatchDetail;
@@ -608,6 +755,12 @@ function RecordEditor({
   exclusionError?: string;
   inclusionError?: string;
   required: Set<Exclude<keyof UpdateOnboardingRecordPayload, "extraFields">>;
+  /** Close this record; `force` skips the page's unsaved-changes question (already answered here). */
+  onClose: (options?: { force?: boolean }) => void;
+  /** Phones: the last save message, shown in the dock's status line instead of "Editing …". */
+  phoneNotice?: ReactNode;
+  /** Phones, no message showing: a short "Return" link at the end of "Editing Name". */
+  phoneReturn?: ReactNode;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -658,8 +811,8 @@ function RecordEditor({
       reportingToDesignation: isReportingBody(target) ? reportingBodyLabel(target)! : person?.designation ?? d.reportingToDesignation,
     }));
   }
-  async function saveDraft() {
-    if (hodDirty) { setFeedback('Save or discard the department HOD change first.'); return; }
+  async function saveDraft(): Promise<boolean> {
+    if (hodDirty) { setFeedback('Save or discard the department HOD change first.'); return false; }
     setFeedback(null);
     try {
       const updated = await onSave({ ...draft });
@@ -671,29 +824,81 @@ function RecordEditor({
       setFeedback(null);
       // Commit the new batch and viewport together with the clean draft.
       onSaved(updated);
+      return true;
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Could not save. Your edits are still here.');
+      return false;
     }
   }
+  // Closing: straight away when nothing is unsaved; otherwise ask Save & close / Discard / Keep editing.
+  const [closeAsk, setCloseAsk] = useState(false);
+  // Discard from the dock asks first, like Close does.
+  const [discardAsk, setDiscardAsk] = useState(false);
+  function requestClose() {
+    if (saving) return;
+    if (dirty || hodDirty) setCloseAsk(true); else onClose();
+  }
+  async function saveAndClose() {
+    const saved = await saveDraft();
+    setCloseAsk(false);
+    if (saved) onClose({ force: true });
+  }
+  function discardAndClose() {
+    setCloseAsk(false); setDraft(baseline); onClose({ force: true });
+  }
+  // Escape closes the record (PC), unless a dialog or menu is open or focus is elsewhere on the page.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || closeAsk) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && !editorRef.current?.contains(active) && !active.closest('[data-editor-toolbar]')) return;
+      event.preventDefault();
+      requestClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
   const [reason, setReason] = useState("");
 
   const currentReporting = makeDraft(record, reportingOptions, reportingResolution);
   const findings = editorFindings(record, draft, required, currentReporting, reportingResolution);
   const issueOrder = ['reportingTarget', ...EDITABLE_FIELDS.map(field => field.key),
     ...[...findings.keys()].filter(key => key !== 'reportingTarget' && !EDITABLE_FIELDS.some(field => field.key === key))];
-  const currentIssues = issueOrder.flatMap(key => (findings.get(key) ?? [])
-    .filter(finding => !finding.stale).map(finding => ({key, message: finding.message})));
-  const staleCount = [...findings.values()].flat().filter(finding => finding.stale).length;
-  const hasReview = currentIssues.length > 0 || staleCount > 0;
+  // Blocking issues in field order. Changed ones stay in the list (marked) so the count doesn't jump while you fix.
+  const issueList = issueOrder.flatMap(key => (findings.get(key) ?? [])
+    .filter(finding => !finding.warning).map(finding => ({key, message: finding.message, stale: finding.stale})));
+  const currentIssues = issueList.filter(issue => !issue.stale);
+  const warningIssues = issueOrder.flatMap(key => (findings.get(key) ?? [])
+    .filter(finding => finding.warning && !finding.stale).map(finding => ({key, message: finding.message})));
+  const staleCount = issueList.length - currentIssues.length;
+  const hasReview = issueList.length > 0 || warningIssues.length > 0;
+  // "Review issues" shows the list once per save; after that the same button steps through the issues.
+  const [stepping, setStepping] = useState(false);
+  const [position, setPosition] = useState(-1);
+  const goToIssue = (index: number) => {
+    const issue = issueList[index];
+    if (!issue) return;
+    setHighlightReview(false); setStepping(true); setPosition(index);
+    revealEditorField(editorRef.current, issue.key, issue.message);
+  };
+  function nextIssue() {
+    for (let step = 1; step <= issueList.length; step++) {
+      const index = (position + step + issueList.length) % issueList.length;
+      if (!issueList[index].stale) { goToIssue(index); return; }
+    }
+  }
   // Each completed action can draw attention once; editing never restarts the highlight.
   useEffect(() => {
     setHighlightReview(!!reviewSequence && record.status === 'NEEDS_FIXING' && currentIssues.length > 0);
+    setStepping(false); setPosition(-1);
     const timer = window.setTimeout(() => setHighlightReview(false), 6000);
     return () => window.clearTimeout(timer);
   }, [reviewSequence]);
   function reviewIssues() {
     setHighlightReview(false);
     setReviewRequest(request => request + 1);
+    setStepping(true); setPosition(-1);
   }
   useLayoutEffect(() => {
     if (!reviewRequest || !summaryRef.current) return;
@@ -705,7 +910,7 @@ function RecordEditor({
   const issueLabel = (key: string) => key === 'reportingTarget' ? 'Reporting person or top-level body'
     : key === 'extraFields' ? 'Additional imported information' : key === 'duplicateReview' ? 'Duplicate-person review' : EDITABLE_FIELDS.find(field => field.key === key)?.label ?? (key === 'registration' ? 'Registration' : 'Record');
   const fieldMessages = (key: string) => findings.get(key)?.length ? <ul id={`issues-${record.id}-${key}`} className="mt-1 space-y-1 text-xs" data-field-findings={key}>
-    {findings.get(key)!.map((finding, index) => <li key={index} className={finding.stale ? 'text-slate-500' : 'text-red-700'}>{finding.stale && 'Last saved check: '}{finding.message}</li>)}
+    {findings.get(key)!.map((finding, index) => <li key={index} className={finding.stale ? 'text-slate-500' : finding.warning ? 'text-amber-800' : 'text-red-700'}>{finding.stale && 'Last saved check: '}{finding.message}</li>)}
   </ul> : null;
   // Excluded records are read-only until put back in; registered ones are final.
   const excluded = record.status === "EXCLUDED";
@@ -744,21 +949,39 @@ function RecordEditor({
         role="region" aria-label="Current record actions"
         className="pointer-events-none flex min-w-0 flex-wrap items-end justify-between gap-2">
         <span data-editor-identity title={[draft.firstName, draft.lastName, draft.employeeCode].filter(Boolean).join(' · ')}
-          className="pointer-events-auto flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm sm:max-w-[40%]"><span className="truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}{draft.employeeCode ? ` · ${draft.employeeCode}` : ''}</span>{(dirty || hodDirty) && <span className="shrink-0 font-semibold text-amber-800"> · Unsaved</span>}</span>
-        <div data-editor-action-buttons className="pointer-events-auto ml-auto flex max-w-full flex-wrap justify-end gap-1.5 rounded-xl border border-slate-300 bg-white p-1.5 shadow-md">
-        <button type="button" disabled={saving || !hasReview} onClick={reviewIssues}
-          aria-expanded={hasReview && reviewRequest > 0} aria-controls={hasReview && reviewRequest > 0 ? `review-summary-${record.id}` : undefined}
+          className="pointer-events-auto max-sm:hidden flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm sm:max-w-[40%]"><span className="truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}{draft.employeeCode ? ` · ${draft.employeeCode}` : ''}</span>{(dirty || hodDirty) && <span className="shrink-0 font-semibold text-amber-800"> · Unsaved</span>}</span>
+        <div data-editor-action-buttons className="pointer-events-auto ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-xl border border-slate-300 bg-white p-1.5 shadow-md max-sm:w-max max-sm:max-w-[min(16rem,calc(100vw-1.5rem))] max-sm:flex-col max-sm:flex-nowrap max-sm:items-stretch">
+        {/* Phones: the box is as wide as its widest line, at most 16rem; longer text is cut short (More shows it). */}
+        <div data-editor-phone-status className="sm:hidden min-w-0 px-1 text-[11px] text-slate-600">
+          {dirty || hodDirty
+            ? <p className="flex min-w-0 items-center gap-1"><span className="min-w-0 truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}</span>
+                <span aria-label="unsaved changes" className="shrink-0 font-bold text-amber-700">•</span>
+                {dirty && <><span aria-hidden="true">·</span><button type="button" disabled={saving} onClick={() => setDiscardAsk(true)} className="shrink-0 font-semibold text-slate-700 underline">Discard</button></>}</p>
+            : phoneNotice ?? <p className="flex min-w-0 items-center gap-1"><span className="min-w-0 truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}{draft.employeeCode ? ` · ${draft.employeeCode}` : ''}</span>
+                {phoneReturn && <><span aria-hidden="true">·</span>{phoneReturn}</>}</p>}
+        </div>
+        <div className="flex items-center justify-end gap-1.5">
+        {!locked && hasReview && <button type="button" disabled={saving || (stepping && currentIssues.length === 0 && issueList.length > 0)}
+          onClick={stepping ? nextIssue : reviewIssues} data-review-button={stepping ? 'next' : 'review'}
+          aria-expanded={!stepping ? reviewRequest > 0 : undefined} aria-controls={reviewRequest > 0 ? `review-summary-${record.id}` : undefined}
           data-review-highlighted={highlightReview || undefined}
-          className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-40 ${highlightReview
+          className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50 ${highlightReview
             ? 'border-purple-700 bg-purple-50 text-purple-900 shadow-[0_0_0_3px_rgba(126,34,206,0.18)]'
             : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
-          Review issues
-        </button>
-        <button type="button" onClick={() => void saveDraft()} disabled={saving || hodDirty}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50">
+          {!stepping ? <>Review issues{currentIssues.length > 0 && ` · ${currentIssues.length}`}</>
+            : currentIssues.length === 0 && issueList.length > 0 ? 'All changed · Save to check'
+            : <>Next issue{position >= 0 ? ` · ${position + 1}/${issueList.length}` : ' ›'}</>}
+        </button>}
+        {!locked && <button type="button" onClick={() => void saveDraft()} disabled={saving || hodDirty} data-editor-save
+          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50 ${dirty ? '' : 'max-sm:hidden'}`}>
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-          Save &amp; re-validate
+          <span className="max-sm:hidden">Save &amp; re-validate</span><span className="sm:hidden">Save</span>
+        </button>}
+        <button type="button" onClick={requestClose} disabled={saving} aria-label="Close record" title="Close record (Esc)" data-editor-close
+          className={`inline-flex min-h-9 min-w-9 items-center justify-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 max-sm:px-2.5 ${dirty && !locked ? 'max-sm:hidden' : ''}`}>
+          <X aria-hidden="true" className="h-3.5 w-3.5" /><span className="max-sm:hidden">Close</span>
         </button>
+        </div>
         </div>
       </div>;
 
@@ -780,23 +1003,34 @@ function RecordEditor({
       {dirty && <p data-record-unsaved role="status" className="text-xs text-amber-800">Unsaved edits. Save &amp; re-validate this record before using batch actions. Status and findings reflect the last save.</p>}
       {feedback && <p role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">{feedback}</p>}
       {hasReview && reviewRequest > 0 && <div ref={summaryRef} id={`review-summary-${record.id}`} data-review-summary tabIndex={-1} aria-labelledby={`review-title-${record.id}`}
-        className="rounded-lg border border-red-200 bg-white p-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-600">
+        className={`rounded-lg border bg-white p-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 ${currentIssues.length ? 'border-red-200' : 'border-amber-200'}`}>
         <h3 id={`review-title-${record.id}`} className="font-semibold text-slate-800">
-          {currentIssues.length ? `${currentIssues.length} ${currentIssues.length === 1 ? 'issue' : 'issues'} to review` : 'Edits awaiting validation'}
+          {currentIssues.length ? `${currentIssues.length} ${currentIssues.length === 1 ? 'issue' : 'issues'} to review` : issueList.length ? 'Edits awaiting validation' : 'No blocking issues'}
         </h3>
-        {!!currentIssues.length && <>
-          <p className="mt-1 text-xs text-slate-600">Select an issue to go to its field.</p>
+        {issueList.length > 0 && <>
+          <p className="mt-1 text-xs text-slate-600">Select an issue to go to its field; then use Next issue.</p>
           <ul className="mt-2 grid gap-x-5 gap-y-2 sm:grid-cols-2">
-            {currentIssues.map((issue, index) => <li key={`${issue.key}:${index}`} className="min-w-0 text-xs text-red-700 break-words">
+            {issueList.map((issue, index) => <li key={`${issue.key}:${index}`} data-issue-changed={issue.stale || undefined}
+              className={`min-w-0 text-xs break-words ${issue.stale ? 'text-slate-500' : 'text-red-700'}`}>
+              {issue.stale && <span aria-label="changed">✓ </span>}
               {issue.key === 'extraFields' || issue.key === 'reportingTarget' || issue.key === 'duplicateReview' || EDITABLE_FIELDS.some(field => field.key === issue.key)
-                ? <button type="button" disabled={saving} className="text-left font-semibold underline underline-offset-2 hover:text-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50"
-                    onClick={() => { setHighlightReview(false); revealEditorField(editorRef.current, issue.key, issue.message); }}>
+                ? <button type="button" disabled={saving} className={`text-left font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50 ${issue.stale ? '' : 'hover:text-red-900'}`}
+                    onClick={() => goToIssue(index)}>
                     {issueLabel(issue.key)}: {issue.message}
                   </button>
                 : <span><strong>{issueLabel(issue.key)}:</strong> {issue.message}</span>}
             </li>)}
           </ul>
         </>}
+        {warningIssues.length > 0 && <div className="mt-3" data-review-warnings>
+          <h4 className="text-xs font-semibold text-amber-900">{warningIssues.length} {warningIssues.length === 1 ? 'warning' : 'warnings'}: don’t block registration</h4>
+          <ul className="mt-1 space-y-1">
+            {warningIssues.map((issue, index) => <li key={`${issue.key}:w${index}`} className="min-w-0 text-xs text-amber-800 break-words">
+              <button type="button" disabled={saving} className="text-left underline underline-offset-2 disabled:opacity-50"
+                onClick={() => revealEditorField(editorRef.current, issue.key, issue.message)}>{issueLabel(issue.key)}: {issue.message}</button>
+            </li>)}
+          </ul>
+        </div>}
         {!!staleCount && <p className="mt-2 text-xs text-slate-600">Edited fields still need validation. Save &amp; re-validate to refresh their findings.</p>}
       </div>}
       {record.status !== 'REGISTERED' && record.status !== 'EXCLUDED' && <OnboardingDuplicateReview
@@ -904,7 +1138,8 @@ function RecordEditor({
 
       <ImportedExtraFields fields={draft.extraFields ?? []} disabled={locked || saving || hodDirty}
         onManageColumns={locked || dirty ? undefined : onManageColumns}
-        issues={(findings.get('extraFields') ?? []).filter(f => !f.stale).map(f => f.message)}
+        issues={(findings.get('extraFields') ?? []).filter(f => !f.stale && !f.warning).map(f => f.message)}
+        warnings={(findings.get('extraFields') ?? []).filter(f => !f.stale && f.warning).map(f => f.message)}
         onChange={locked ? undefined : fields => { setFeedback(null); setHighlightReview(false); setDraft(d => ({...d, extraFields: fields})); }}
         registered={record.status === 'REGISTERED'} />
 
@@ -964,7 +1199,12 @@ function RecordEditor({
           )}
         </div>
       )}
-      {!locked && (toolbarHost ? createPortal(actions, toolbarHost) : actions)}
+      {toolbarHost ? createPortal(actions, toolbarHost) : actions}
+      <ConfirmDialog open={discardAsk} title="Discard your unsaved edits?" message="The record goes back to how it was last saved."
+        confirmLabel="Discard" keepLabel="Keep editing" tone="danger"
+        onConfirm={() => { setDiscardAsk(false); setDraft(baseline); }} onClose={() => setDiscardAsk(false)} />
+      <CloseRecordDialog open={closeAsk} name={[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'this record'}
+        saving={saving} canSave={!hodDirty} onSaveAndClose={() => void saveAndClose()} onDiscard={discardAndClose} onKeepEditing={() => setCloseAsk(false)} />
     </div>
   );
 }
@@ -984,6 +1224,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState<number>(25);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  // Department, status, duplicate and reporting filters sit behind one "Filters" button next to the search.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [countryExpanded, setCountryExpanded] = useState(false);
   const countryToggleRef = useRef<HTMLButtonElement>(null);
   const focusCountryToggle = useRef(false);
@@ -1004,9 +1246,17 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     destination, name, openId: openRow, openStatus: batch?.records.find(r => r.id === openRow)?.status,
     page: pageNumber, pageSize, lastId: lastRow, viewport: captureViewport(pageRef.current), filters: {...filters}, revealedId,
   });
+  /** Close the open record; `force` when the editor already asked about unsaved edits. Lands on its row. */
+  const closeRow = (recordId: string, force = false) => {
+    if (busy || openRow !== recordId || (!force && !mayLeaveEditor())) return;
+    setEditorDirty(false); setOpenRow(null); setLastRow(recordId); setRevealedId(recordId);
+    setViewportAction({kind: 'reveal', id: recordId, editor: false});
+  };
   const toggleRow = (recordId: string) => {
     if (busy || !mayLeaveEditor()) return;
     const nextOpen = openRow === recordId ? null : recordId;
+    // Opening a different record yourself starts a new task: earlier "Return to …" points no longer apply.
+    if (nextOpen && returnPoints.length && returnPoints[returnPoints.length - 1]?.openId !== nextOpen) setReturnPoints([]);
     setEditorDirty(false); setOpenRow(nextOpen); setLastRow(recordId); setRevealedId(recordId);
     setViewportAction({kind: 'reveal', id: recordId, editor: !!nextOpen});
   };
@@ -1102,6 +1352,24 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const filterModel = useMemo(() => reportingFilterModel(batch), [batch]);
   const matchingIds = useMemo(() => matchingRecordIds(batch, filters, filterModel), [batch, filters, filterModel]);
   const filterActive = hasFilters(filters);
+  // Read the filters from the page address once, then keep the address in step with them.
+  const filtersRead = useRef(false);
+  useEffect(() => {
+    if (filtersRead.current) return;
+    filtersRead.current = true;
+    const found = filtersFromUrl(window.location.search);
+    if (Object.keys(found).length) setFilters(current => ({...current, ...found}));
+  }, []);
+  useEffect(() => {
+    if (!filtersRead.current) return;
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, param] of Object.entries(FILTER_PARAMS) as [keyof typeof FILTER_PARAMS, string][]) {
+      const value = String(filters[key] ?? '');
+      if (value && value !== String(EMPTY_FILTERS[key])) params.set(param, value); else params.delete(param);
+    }
+    const next = `${window.location.pathname}${params.size ? `?${params}` : ''}`;
+    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, '', next);
+  }, [filters]);
   const changeFilters = (next: RecordFilters) => {
     if (busy) return;
     // Preserve the open draft. If it falls outside the filters, show it explicitly as an extra row.
@@ -1166,14 +1434,17 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     const beforeVisible = (batch?.records ?? []).filter(r => matchingIds.has(r.id) || r.id === openRow || r.id === revealedId);
     const afterVisible = updated.records.filter(r => updatedMatches.has(r.id) || r.id === recordId);
     const visibleMoved = moved && beforeVisible.findIndex(r => r.id === recordId) !== afterVisible.findIndex(r => r.id === recordId);
-    const snapshot = visibleMoved
-      ? captureSurroundingViewport(pageRef.current, recordId, queryClient.getQueryData<OnboardingBatchDetail>(queryKey), updated)
-      : captureViewport(pageRef.current);
     const closes = record && ['READY', 'EXCLUDED', 'REGISTERED'].includes(record.status);
+    // Still open (e.g. still needs fixing): follow the record, so its editor stays where it was on screen.
+    // Closing: keep the rows around you (the notice offers "View" if the record moved).
+    const followed = !closes && record && openRow === recordId ? captureEditorViewport(pageRef.current, recordId) : null;
+    const snapshot = followed ?? (visibleMoved
+      ? captureSurroundingViewport(pageRef.current, recordId, queryClient.getQueryData<OnboardingBatchDetail>(queryKey), updated)
+      : captureViewport(pageRef.current));
     setEditorDirty(false);
     setRevealedId(recordId);
     if (closes) { setOpenRow(null); setLastRow(recordId); }
-    setViewportAction(visibleMoved ? {kind: 'context', snapshot}
+    setViewportAction(followed || visibleMoved ? {kind: 'context', snapshot}
       : closes ? {kind: 'reveal', id: recordId, editor: false} : {kind: 'context', snapshot});
     setSaveNotice(record ? {id: recordId, name: recordName(updated, record), action,
       status: action === 'Excluded' ? undefined : statusText(record, updated, action === 'Saved' && !moved),
@@ -1271,6 +1542,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     mutationFn: () => EmsService.registerOnboardingBatch(id, accessToken!),
     onSuccess: (result) => {
       finishBatchAction(result.batch, registrationOutcomeMessage(result));
+      // Offer, never send: the invitation dialog shows who gets a link before anything goes out.
+      if (result.registered > 0) setSaveNotice(notice => notice ? {...notice, invite: result.registered} : notice);
       queryClient.invalidateQueries({ queryKey: ["ems-employees"] });
       queryClient.invalidateQueries({ queryKey: ["ems-employee-import-batches"] });
     },
@@ -1283,6 +1556,47 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const [columnsOpen, setColumnsOpen] = useState(false);
   // Account invitations for the employees this import registered.
   const [inviteOpen, setInviteOpen] = useState(false);
+  const openInvites = () => { beginAction(); setInviteOpen(true); };
+  // On phones, a save notice for the open record sits in the bottom dock instead of floating over fields.
+  const isPhone = useIsPhone();
+  const feedbackVisible = !!(saveNotice || returnPoints.length > 0 || externalReturn);
+  const feedbackInDock = isPhone && !!openRow && !!editorToolbarHost;
+  // The save message: a floating box on wider screens, the status line of the editor's dock on phones.
+          const feedbackLinks = (compact: boolean) => {
+    const link = compact ? `block py-0.5 text-left text-[11px] ${FEEDBACK_LINK}` : '';
+    return <>
+      {returnPoints.length > 0 && returnPoints.length - 1 !== reviewReturnIndex && <button type="button" disabled={busy} onClick={() => returnToRecord()} className={compact ? link : `mx-2 mb-2 py-1 text-sm ${FEEDBACK_LINK}`}>{(() => {
+        const point = returnPoints[returnPoints.length - 1];
+        return point.name ? `Return to ${point.name}` : 'Return to previous place';
+      })()}</button>}
+      {reviewReturnPoint && <button type="button" disabled={busy} onClick={() => returnToRecord(reviewReturnIndex)}
+        className={compact ? link : `mx-2 mb-2 block py-1 text-left text-sm ${FEEDBACK_LINK}`}>Return to review: {reviewReturnPoint.name || 'record'}</button>}
+      {externalReturn && <Link href={externalReturn}
+        aria-disabled={busy || undefined}
+        onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }}
+        className={compact ? link : `mx-3 my-2 block py-1 text-sm ${FEEDBACK_LINK}`}>Return to review record</Link>}
+    </>;
+  };
+  // The one way back, for the dock's "· Return" and the small box: the latest return point, else the review link.
+  const returnLink = () => {
+    if (returnPoints.length > 0 && returnPoints.length - 1 !== reviewReturnIndex) {
+      const point = returnPoints[returnPoints.length - 1];
+      return {label: point.name ? `Return to ${point.name}` : 'Return to previous place', go: () => returnToRecord()};
+    }
+    if (reviewReturnPoint) return {label: `Return to review: ${reviewReturnPoint.name || 'record'}`, go: () => returnToRecord(reviewReturnIndex)};
+    return null;
+  };
+  const dismissReturns = () => { setReturnPoints([]); setExternalReturn(null); };
+  const hasFeedbackLinks = () => (returnPoints.length > 0 && returnPoints.length - 1 !== reviewReturnIndex) || !!reviewReturnPoint || !!externalReturn;
+  // Wider screens: a floating box. Phones: the dock's status line, where Return/View sit under "More".
+  const feedbackBody = (compact: boolean) => compact
+    ? saveNotice
+      ? <SaveFeedback key={saveNotice.sequence} notice={saveNotice} hasReturn={returnPoints.length > 0 || !!externalReturn} disabled={busy} onView={viewSavedRow} onDismiss={dismissNotice} onInvite={openInvites} compact extra={hasFeedbackLinks() ? feedbackLinks(true) : undefined} />
+      : <div className="min-w-0">{feedbackLinks(true)}</div>
+    : <>
+      {saveNotice && <SaveFeedback key={saveNotice.sequence} notice={saveNotice} hasReturn={returnPoints.length > 0 || !!externalReturn} disabled={busy} onView={viewSavedRow} onDismiss={dismissNotice} onInvite={openInvites} />}
+      {feedbackLinks(false)}
+    </>;
   const error = queryError ? (queryError as any).message : null;
   const hierarchy = batch?.hierarchy;
   const records: OnboardingRecord[] = batch?.records ?? [];
@@ -1311,6 +1625,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const reviewReturnIndex = returnPoints.reduce((last, point, index) => point.reviewOrigin ? index : last, -1);
   const reviewReturnPoint = returnPoints[reviewReturnIndex];
   const advancedFilterCount = Number(!!filters.reportingTarget);
+  const activeFilterCount = Number(!!filters.department) + Number(!!filters.status) + Number(!!filters.duplicate) + Number(!!filters.issue) + advancedFilterCount;
   const mutationError = actionError && !actionError.recordId && actionError.kind !== 'country' ? actionError.message : null;
 
   const progress = useMemo(() => summarizeBatchProgress(batch), [batch]);
@@ -1319,7 +1634,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     && registrationAccess(user?.roleLevel, record.beesAccessLevel) === 'ALLOWED').length;
   const adminRequiredReadyCount = records.filter(record => record.status === 'READY'
     && registrationAccess(user?.roleLevel, record.beesAccessLevel) === 'ADMIN_REQUIRED').length;
-  const displayedRecords = records.filter(r => matchingIds.has(r.id) || r.id === openRow || r.id === revealedId);
+  const displayedRecords = orderRecords(records.filter(r => matchingIds.has(r.id) || r.id === openRow || r.id === revealedId), filters);
   const extraCount = displayedRecords.length - matchingIds.size;
   const departments = [...new Map(records.map(r => [departmentKey(r.currentDepartment),
     {key: departmentKey(r.currentDepartment), label: r.currentDepartment?.trim().replace(/\s+/g, ' ') || 'Not provided'}])).values()]
@@ -1379,40 +1694,45 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             restoreScroll({...scroll, top: scroll.top + rect.bottom - top + 16});
           }
         }}>
-        {(saveNotice || returnPoints.length > 0 || externalReturn) && <div data-onboarding-feedback style={{bottom: 'var(--ems-feedback-bottom, 16px)'}} className={`fixed right-3 z-50 w-auto max-w-[min(20rem,calc(100vw-1.5rem))] rounded-lg border-2 ${saveNotice?.moved ? 'border-purple-800' : 'border-slate-400'} bg-white shadow-lg`} role="status" aria-live="polite">
-          {saveNotice && <SaveFeedback key={saveNotice.sequence} notice={saveNotice} hasReturn={returnPoints.length > 0 || !!externalReturn} disabled={busy} onView={viewSavedRow} onDismiss={dismissNotice} />}
-          {returnPoints.length > 0 && returnPoints.length - 1 !== reviewReturnIndex && <button type="button" disabled={busy} onClick={() => returnToRecord()} className={`mx-2 mb-2 py-1 text-sm ${FEEDBACK_LINK}`}>{(() => {
-            const point = returnPoints[returnPoints.length - 1];
-            return point.name ? `Return to ${point.name}` : 'Return to previous place';
-          })()}</button>}
-          {reviewReturnPoint && <button type="button" disabled={busy} onClick={() => returnToRecord(reviewReturnIndex)}
-            className={`mx-2 mb-2 block py-1 text-left text-sm ${FEEDBACK_LINK}`}>Return to review: {reviewReturnPoint.name || 'record'}</button>}
-          {externalReturn && <Link href={externalReturn}
-            aria-disabled={busy || undefined}
-            onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }}
-            className={`mx-3 my-2 block py-1 text-sm ${FEEDBACK_LINK}`}>Return to review record</Link>}
+        {feedbackVisible && isPhone && !openRow && <div data-onboarding-feedback role="status" aria-live="polite"
+          className="fixed bottom-3 right-3 z-50 w-max max-w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border border-slate-300 bg-white p-1.5 shadow-md">
+          {saveNotice
+            ? <SaveFeedback key={saveNotice.sequence} notice={saveNotice} hasReturn={returnPoints.length > 0 || !!externalReturn} disabled={busy} onView={viewSavedRow} onDismiss={dismissNotice} onInvite={openInvites}
+                compact closeable extra={hasFeedbackLinks() ? feedbackLinks(true) : undefined} />
+            : <div className="flex min-w-0 items-center gap-2 px-1 text-[11px]">
+                <div className="min-w-0 flex-1 truncate">{feedbackLinks(true)}</div>
+                <button type="button" onClick={dismissReturns} aria-label="Dismiss" className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>
+              </div>}
+        </div>}
+        {feedbackVisible && !feedbackInDock && !isPhone && <div data-onboarding-feedback style={{bottom: 'var(--ems-feedback-bottom, 16px)'}} className={`fixed right-3 max-sm:left-3 z-50 w-auto max-w-[min(20rem,calc(100vw-1.5rem))] max-sm:max-w-none rounded-lg border-2 ${saveNotice?.moved ? 'border-purple-800' : 'border-slate-400'} bg-white shadow-lg`} role="status" aria-live="polite">
+          {feedbackBody(false)}
         </div>}
 
         <div className="space-y-5">
-        <div data-batch-toolbar role="navigation" aria-label="Batch actions" style={{top: 'var(--ems-batch-top, 0px)'}} className="sticky z-30 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm" data-viewport-anchor="batch-heading">
-          <Link href="/ems/onboarding" onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900">
-            <span>Back to imports</span>
+        <div data-batch-toolbar role="navigation" aria-label="Batch actions" style={{top: 'var(--ems-batch-top, 0px)'}} className="sticky z-30 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm max-sm:flex-nowrap max-sm:gap-1.5 max-sm:px-2 max-sm:pb-2.5" data-viewport-anchor="batch-heading">
+          <Link href="/ems/onboarding" aria-label="Back to imports" onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 max-sm:p-1">
+            <span className="max-sm:hidden">Back to imports</span>
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="min-w-0 flex-1 basis-60">
-            <h1 title={batch?.label ?? "Import"} className="whitespace-normal break-words text-sm font-bold leading-5 text-slate-900 [overflow-wrap:anywhere]">{batch?.label ?? "Import"}</h1>
+          <div className="min-w-0 flex-1 basis-60 max-sm:basis-0">
+            {/* On phones the name is cut to one line; tapping it shows the full name with the progress details. */}
+            <h1 title={batch?.label ?? "Import"} className="whitespace-normal break-words text-sm font-bold leading-5 text-slate-900 [overflow-wrap:anywhere] max-sm:truncate max-sm:whitespace-nowrap">
+              <button type="button" aria-expanded={progressOpen} aria-controls="batch-progress-details" onClick={() => setProgressOpen(open => !open)}
+                className="max-w-full text-left font-bold sm:pointer-events-none max-sm:truncate">{batch?.label ?? "Import"}</button>
+            </h1>
           </div>
           {batch && <button type="button" aria-expanded={progressOpen} aria-controls="batch-progress-details"
             aria-label={progressOpen ? 'Hide progress details' : 'Show progress details'}
             onClick={() => setProgressOpen(open => !open)}
-            className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700">
+            className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700 max-sm:px-1">
             <OnboardingStickyProgress progress={progress} dirty={editorDirty} updating={busy} />
-            {progressOpen ? <ChevronDown aria-hidden="true" className="h-3 w-3 text-slate-500" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 text-slate-500" />}
+            {progressOpen ? <ChevronDown aria-hidden="true" className="h-3 w-3 text-slate-500 max-sm:hidden" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 text-slate-500 max-sm:hidden" />}
           </button>}
+          {batch && <OnboardingEdgeProgress progress={progress} />}
           <button
             onClick={() => validate.mutate()}
             disabled={busy || editorDirty || !batch || closed || countryUnsaved}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 max-sm:hidden"
           >
             {validate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             Validate all
@@ -1422,25 +1742,31 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             onClick={() => register.mutate()}
             disabled={busy || editorDirty || !canRegisterOnboarding(user?.roleLevel) || registerableReadyCount === 0 || closed || countryUnsaved}
             title={adminRequiredReadyCount && !registerableReadyCount ? "An Admin must register the remaining Ready records" : readyCount === 0 ? "No records are ready to register" : undefined}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed max-sm:px-2.5 ${registerableReadyCount === 0 && !register.isPending ? 'max-sm:hidden' : ''}`}
           >
             {register.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-            {adminRequiredReadyCount ? `Register ${registerableReadyCount} eligible` : `Register all ${registerableReadyCount} ready`}
+            {/* Phones: "Register 12", shown only when something is ready. */}
+            {adminRequiredReadyCount
+              ? <>Register {registerableReadyCount}<span className="max-sm:hidden"> eligible</span></>
+              : <>Register<span className="max-sm:hidden"> all</span> {registerableReadyCount}<span className="max-sm:hidden"> ready</span></>}
           </button>
 
           <OnboardingMoreActions disabled={busy || editorDirty || countryUnsaved} actions={[
+            // Phones keep the top bar to one line: Validate all moves into this menu.
+            { key: "validate", label: "Validate all", phoneOnly: true, icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+              disabled: !batch || closed, onSelect: () => validate.mutate() },
             ...(batch?.records.some(r => r.extraFields?.length) ? [{
-              key: "imported-columns", label: "Imported columns…",
+              key: "imported-columns", label: "Imported columns",
               title: "Choose once where each extra column goes for this whole import",
               onSelect: () => { beginAction(); setColumnsOpen(true); },
             }] : []),
             ...(batch?.records.some(r => r.status === "REGISTERED") ? [{
-              key: "invite", label: "Invite registered employees…",
+              key: "invite", label: "Invite registered employees",
               title: "Send account invitations to the employees this import registered",
-              onSelect: () => { beginAction(); setInviteOpen(true); },
+              onSelect: openInvites,
             }] : []),
             ...(batch?.status === "PARTIALLY_REGISTERED" ? [{
-              key: "exclude-remaining", label: "Exclude remaining records…", danger: true, icon: <Ban className="h-3.5 w-3.5" />,
+              key: "exclude-remaining", label: "Exclude remaining records", danger: true, icon: <Ban className="h-3.5 w-3.5" />,
               title: "Exclude every unregistered record in this import; registered employees are kept",
               onSelect: () => { beginAction(); setExcludeRemainingOpen(true); },
             }] : []),
@@ -1514,6 +1840,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         </div>
         <div className="space-y-2">
             {batch ? <div id="batch-progress-details" hidden={!progressOpen}>
+              <p className="sm:hidden mb-2 break-words text-sm font-bold text-slate-900">{batch.label ?? "Import"}</p>
               <OnboardingBatchProgress progress={progress} dirty={editorDirty} updating={busy} />
             </div> : <p className="text-sm text-slate-500">Loading…</p>}
             {register.isSuccess && (
@@ -1529,12 +1856,47 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         {batch && <OnboardingHierarchyChart batch={batch} busy={busy} dirty={editorDirty} onViewRecord={visitChartRecord} />}
 
         {batch && <section aria-label="Filter records" data-viewport-anchor="batch-filters" className="rounded-xl border border-slate-200 bg-white px-3 py-2 space-y-2">
-          <div className="grid min-w-0 grid-cols-1 items-end gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(9rem,1fr)_minmax(10rem,1fr)_auto]">
-            <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-name">Name or employee code</label>
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1"><label htmlFor="onboarding-filter-name" className="sr-only">Name or employee code</label>
               <input id="onboarding-filter-name" type="search" disabled={busy} value={filters.search} onChange={event => changeFilters({...filters, search: event.target.value})}
-                placeholder="Search this import" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800" />
+                placeholder="Search name or employee code" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800" />
             </div>
-            <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-department">Department</label>
+            {/* PC: with Filters open, Department and Status join the search row (the search box has room to spare). */}
+            {filtersOpen && <div className="hidden shrink-0 items-center gap-2 lg:flex" data-filters-top>
+            <div className="text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-department-top" className="sr-only">Department</label>
+              <select id="onboarding-filter-department-top" disabled={busy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
+                className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+                <option value="">All departments</option>
+                {filters.department && !departments.some(d => d.key === filters.department) && <option value={filters.department}>{filters.department === 'MISSING' ? 'Not provided' : filters.department.replace(/^department:/, '')} (no records)</option>}
+                {departments.map(department => <option key={department.key} value={department.key}>{department.label}</option>)}
+              </select>
+            </div>
+            <div className="text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-status-top" className="sr-only">Status</label>
+              <select id="onboarding-filter-status-top" disabled={busy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
+                className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+                <option value="">All statuses</option>
+                <option value="READY">Ready</option><option value="NEEDS_FIXING">Needs fixing</option>
+                <option value="NEEDS_REVIEW">Needs review</option><option value="WAITING">Waiting on reporting chain</option><option value="DRAFT">Draft</option>
+                <option value="EXCLUDED">Excluded</option><option value="REGISTERED">Registered</option>
+              </select>
+            </div>
+            </div>}
+            {/* PC: Sort is always on the search row. */}
+            <div className="hidden shrink-0 items-center gap-2 text-xs font-medium text-slate-600 lg:flex"><label htmlFor="onboarding-filter-sort-top">Sort</label>
+              <select id="onboarding-filter-sort-top" disabled={busy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
+                className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+                {RECORD_SORTS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <button type="button" disabled={busy} aria-expanded={filtersOpen} aria-controls="onboarding-filter-panel" data-filters-button
+              onClick={() => setFiltersOpen(value => !value)}
+              className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${activeFilterCount ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-300 text-slate-700'}`}>
+              <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
+              Filters{activeFilterCount > 0 && <> · {activeFilterCount}<span className="max-sm:hidden"> applied</span></>}
+            </button>
+          </div>
+          <div id="onboarding-filter-panel" hidden={!filtersOpen} className="grid min-w-0 grid-cols-1 items-end gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(8rem,1fr))_auto]">
+            <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-department">Department</label>
               <select id="onboarding-filter-department" disabled={busy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All departments</option>
@@ -1542,7 +1904,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 {departments.map(department => <option key={department.key} value={department.key}>{department.label}</option>)}
               </select>
             </div>
-            <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-status">Status</label>
+            <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-status">Status</label>
               <select id="onboarding-filter-status" disabled={busy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All statuses</option>
@@ -1558,6 +1920,18 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 {DUPLICATE_FILTERS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
+            <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-issue">Issue type</label>
+              <select id="onboarding-filter-issue" disabled={busy} value={filters.issue} onChange={event => changeFilters({...filters, issue: event.target.value as IssueType})}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+                {ISSUE_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-sort">Sort</label>
+              <select id="onboarding-filter-sort" disabled={busy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+                {RECORD_SORTS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
             <button type="button" disabled={busy} aria-expanded={moreFiltersOpen} aria-controls="onboarding-more-filters"
               onClick={() => setMoreFiltersOpen(value => !value)}
               className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">
@@ -1565,7 +1939,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               Reporting branch{advancedFilterCount > 0 && ` (${advancedFilterCount})`}
             </button>
           </div>
-          <div id="onboarding-more-filters" hidden={!moreFiltersOpen} className="space-y-2 border-t border-slate-100 pt-2">
+          <div id="onboarding-more-filters" hidden={!filtersOpen || !moreFiltersOpen} className="space-y-2 border-t border-slate-100 pt-2">
             <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 disabled:opacity-60">
             <div className="min-w-0 text-xs font-medium text-slate-600 lg:col-span-1"><label htmlFor="onboarding-filter-reporting">Reporting branch</label>
               <select id="onboarding-filter-reporting" value={selectedTarget} onChange={event => changeFilters({...filters, reportingTarget: event.target.value,
@@ -1626,10 +2000,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               <thead>
                 <tr className="bg-slate-50 text-slate-500 border-b border-slate-100">
                   <th className="w-10 px-3 py-3" />
-                  <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Excel row</th>
-                  <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Code</th>
+                  <th className="max-sm:hidden text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Excel row</th>
+                  <th className="max-sm:hidden text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Code</th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Name</th>
-                  <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Department</th>
+                  <th className="max-sm:hidden text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Department</th>
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Status</th>
                 </tr>
               </thead>
@@ -1640,6 +2014,18 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                   const chainNotice = chainRegistrationNotice(rec, resolution);
                   const open = openRow === rec.id;
                   const recent = !open && lastRow === rec.id;
+                  // The row's findings. Phones show them on a full-width line under the row, so they don't squeeze the name.
+                  const shownFindings = (rec.validationErrors ?? []).filter(err => (!open || isChainFinding(err.field, resolution)) && !(chainNotice?.kind === 'blocked' && isChainFinding(err.field, resolution)));
+                  const rowIssues = shownFindings.length > 0 && (
+                    <ul className="mt-1 space-y-0.5">
+                      {shownFindings.map((err, i) => (
+                        <li key={i} data-finding-severity={err.severity} className={`flex items-start gap-1 text-xs ${isChainFinding(err.field, resolution) || err.field === 'duplicateReview' || err.severity === 'warning' ? 'text-amber-700' : 'text-red-600'}`}>
+                          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                          {isChainFinding(err.field, resolution) ? (resolution?.error ?? err.message) : err.field === 'duplicateReview' || err.field === 'extraFields' ? err.message : `${findingFieldLabel(err.field)}: ${err.message}`}
+                        </li>
+                      ))}
+                    </ul>
+                  );
                   return (
                     <Fragment key={rec.id}>
                       <tr
@@ -1660,27 +2046,21 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                         <td className={`px-3 py-3 border-l-4 ${open ? "border-blue-500 text-blue-500" : recent ? "border-amber-400 text-amber-500" : "border-transparent text-slate-300"}`}>
                           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-400">{rec.rowNumber ?? "—"}</td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">{rec.employeeCode ?? "—"}</td>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-slate-800">
+                        <td className="max-sm:hidden px-4 py-3 text-xs text-slate-400">{rec.rowNumber ?? "—"}</td>
+                        <td className="max-sm:hidden px-4 py-3 text-xs font-mono text-slate-400">{rec.employeeCode ?? "—"}</td>
+                        <td className="px-3 sm:px-4 py-3 min-w-0">
+                          <p className="font-medium text-slate-800 break-words">
                             {[rec.firstName, rec.middleName, rec.lastName].filter(Boolean).join(" ") || "—"}
+                          </p>
+                          <p data-record-mobile-meta className="sm:hidden mt-0.5 text-[11px] text-slate-500 break-words">
+                            Row {rec.rowNumber ?? "—"} · <span className="font-mono">{rec.employeeCode ?? "—"}</span> · {rec.currentDepartment || "No department"}
                           </p>
                           <p data-record-location className="mt-1 text-[11px] text-slate-500">Import position {recordPositions.get(rec.id)} · Page {Math.ceil((recordPositions.get(rec.id) ?? 1) / pageSize)}{filterActive ? ' of full import' : ''}</p>
                           {!matchingIds.has(rec.id) && <p className="mt-1 text-xs font-semibold text-amber-800">Retained for review · not a filter match{open ? ' · open record' : ''}</p>}
                           {(!open || resolution?.errorScope === 'UPSTREAM') && !chainNotice && hierarchy?.byRecord[rec.id]?.error && !rec.validationErrors?.some(e => e.field === 'reportingToName') && (
                             <p className={`mt-1 text-xs ${resolution?.errorScope === 'UPSTREAM' ? 'text-amber-700' : 'text-red-600'}`}>{hierarchy.byRecord[rec.id].error} {rec.status === 'REGISTERED' ? 'Registration is preserved; correct reporting on the employee profile.' : 'Save or validate to refresh the record status.'}</p>
                           )}
-                          {rec.validationErrors?.some(err => (!open || isChainFinding(err.field, resolution)) && !(chainNotice?.kind === 'blocked' && isChainFinding(err.field, resolution))) && (
-                            <ul className="mt-1 space-y-0.5">
-                              {rec.validationErrors.filter(err => (!open || isChainFinding(err.field, resolution)) && !(chainNotice?.kind === 'blocked' && isChainFinding(err.field, resolution))).map((err, i) => (
-                                <li key={i} className={`flex items-start gap-1 text-xs ${isChainFinding(err.field, resolution) || err.field === 'duplicateReview' ? 'text-amber-700' : 'text-red-600'}`}>
-                                  <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
-                                  {isChainFinding(err.field, resolution) ? (resolution?.error ?? err.message) : err.field === 'duplicateReview' ? err.message : `${err.field}: ${err.message}`}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                          {rowIssues && <div className="max-sm:hidden">{rowIssues}</div>}
                           {rec.status !== 'EXCLUDED' && <ReportingChain resolution={resolution} currentId={rec.id} onVisit={visitRow} disabled={busy} />}
                           {rec.exclusionReason && (
                             <p className="mt-1 text-xs text-slate-400 italic">{rec.exclusionReason}</p>
@@ -1695,7 +2075,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                             </button>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-500">{rec.currentDepartment ?? "—"}</td>
+                        <td className="max-sm:hidden px-4 py-3 text-slate-500">{rec.currentDepartment ?? "—"}</td>
                         <td className="px-4 py-3">
                           <RecordStatusPill status={rec.status} waiting={waiting} review={needsDuplicateReview(rec, resolution)} />
                           {rec.status === 'READY' && registrationAccess(user?.roleLevel, rec.beesAccessLevel) === 'ADMIN_REQUIRED'
@@ -1715,10 +2095,24 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                           )}
                         </td>
                       </tr>
+                      {rowIssues && (
+                        <tr data-row-issues className={`sm:hidden !border-t-0 cursor-pointer ${open ? "bg-blue-50" : recent ? "bg-amber-50" : ""}`} onClick={() => toggleRow(rec.id)}>
+                          <td colSpan={6} className={`border-l-4 px-3 pb-3 pt-0 ${open ? "border-blue-500" : recent ? "border-amber-400" : "border-transparent"}`}>{rowIssues}</td>
+                        </tr>
+                      )}
                       {open && (
                         <tr key={`${rec.id}-editor`} id={`editor-${rec.id}`}>
                           <td colSpan={6} className="p-0 border-l-4 border-blue-500">
                             <RecordEditor
+                              onClose={options => closeRow(rec.id, options?.force)}
+                              phoneNotice={feedbackInDock && saveNotice ? feedbackBody(true) : null}
+                              phoneReturn={feedbackInDock && !saveNotice ? (() => {
+                                const link = returnLink();
+                                return link ? <button type="button" disabled={busy} onClick={link.go} title={link.label} aria-label={link.label}
+                                  className={`shrink-0 text-[11px] ${FEEDBACK_LINK}`}>Return</button>
+                                  : externalReturn ? <Link href={externalReturn} title="Return to review record" aria-label="Return to review record"
+                                    onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }} className={`shrink-0 text-[11px] ${FEEDBACK_LINK}`}>Return</Link> : null;
+                              })() : null}
                               actorRole={user?.roleLevel}
                               toolbarHost={editorToolbarHost}
                               record={rec}
@@ -1769,7 +2163,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         {batch && !loading && !error && pageControls('Bottom')}
         </div>
         {/* Outside the horizontal table scroller: stick to the actual page scroll area. */}
-        <div ref={setEditorToolbarHost} data-editor-toolbar-host className="pointer-events-none sticky bottom-3 z-40" />
+        <div ref={setEditorToolbarHost} data-editor-toolbar-host className="pointer-events-none sticky bottom-3 z-40 flex flex-col gap-1.5" />
       </div>
       {inviteOpen && batch && accessToken && (
         <InvitationDialog accessToken={accessToken} title={`Invite employees registered from “${batch.label ?? 'this import'}”`}

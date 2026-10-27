@@ -149,6 +149,13 @@ export class LookupImportColumnChoicesDto {
   headings!: string[];
 }
 
+/** Headings whose remembered choices should be forgotten. */
+export class ForgetImportColumnChoicesDto {
+  @IsArray() @ArrayMaxSize(500)
+  @IsString({ each: true }) @MaxLength(200, { each: true })
+  headings!: string[];
+}
+
 export class ImportColumnChoiceDto {
   @IsString() @MaxLength(200) heading!: string;
   @IsString() @MaxLength(80) destination!: string;

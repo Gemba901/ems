@@ -35,6 +35,11 @@ function setup() {
     },
     emsImportColumnChoice: {
       findMany: jest.fn(async ({ where }: any) => state.choices.filter((c: any) => c.organizationId === where.organizationId && where.headingKey.in.includes(c.headingKey))),
+      deleteMany: jest.fn(async ({ where }: any) => {
+        const before = state.choices.length;
+        state.choices = state.choices.filter((c: any) => !(c.organizationId === where.organizationId && where.headingKey.in.includes(c.headingKey)));
+        return { count: before - state.choices.length };
+      }),
       upsert: jest.fn(async ({ where, create, update }: any) => {
         const { organizationId, headingKey } = where.organizationId_headingKey;
         const found = state.choices.find((c: any) => c.organizationId === organizationId && c.headingKey === headingKey);
@@ -82,6 +87,23 @@ describe('remembered column choices', () => {
     await service.saveImportColumnChoices('org', 'hr', { choices: [{ heading: 'Plant & Department', destination: 'extra' }] });
     await service.saveImportColumnChoices('org', 'hr', { choices: [{ heading: 'plant  & department', destination: 'ignore' }, { heading: 'Bad', destination: 'profile:nope' }] });
     expect(state.choices).toEqual([expect.objectContaining({ organizationId: 'org', headingKey: 'plant department', destination: 'ignore', updatedById: 'hr' })]);
+  });
+});
+
+describe('forgetting remembered column choices', () => {
+  it('forgets only these headings, only for this organization', async () => {
+    const { service, state } = setup();
+    state.choices.push({ organizationId: 'org', headingKey: 'staff no', destination: 'employeeCode' },
+      { organizationId: 'org', headingKey: 'dob', destination: 'profile:dateOfBirth@DMY' },
+      { organizationId: 'other-org', headingKey: 'staff no', destination: 'employeeCode' });
+    await expect(service.forgetImportColumnChoices('org', { headings: ['Staff No.', 'Unknown', ''] })).resolves.toEqual({ forgotten: 1 });
+    expect(state.choices.map((c: any) => `${c.organizationId}:${c.headingKey}`)).toEqual(['org:dob', 'other-org:staff no']);
+  });
+
+  it('does nothing for blank headings', async () => {
+    const { service, prisma } = setup();
+    await expect(service.forgetImportColumnChoices('org', { headings: ['', '  '] })).resolves.toEqual({ forgotten: 0 });
+    expect(prisma.emsImportColumnChoice.deleteMany).not.toHaveBeenCalled();
   });
 });
 

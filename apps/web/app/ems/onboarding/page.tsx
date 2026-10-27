@@ -174,7 +174,8 @@ export default function EmsOnboardingPage() {
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const setFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => setFilters((f) => ({ ...f, [key]: value }));
   const filtersOn = JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
-  const [sortBy, setSortBy] = useState<SortKey>("newest");
+  // Default: the import worked on most recently first, so it is at the top when you come back.
+  const [sortBy, setSortBy] = useState<SortKey>("updated");
 
   // Read filters/sort from the address once on arrival, then keep the address in step with them.
   const fromUrlDone = useRef(false);
@@ -192,7 +193,7 @@ export default function EmsOnboardingPage() {
       const v = filters[k], d = NO_FILTERS[k];
       if (v !== d) params.set(k, typeof v === "boolean" ? (v ? "1" : "0") : String(v));
     }
-    if (sortBy !== "newest") params.set("sort", sortBy);
+    if (sortBy !== "updated") params.set("sort", sortBy);
     const qs = params.toString();
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
   }, [filters, sortBy]);

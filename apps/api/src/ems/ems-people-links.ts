@@ -112,13 +112,15 @@ export async function relieverDraftData(db: Prisma.TransactionClient, organizati
 }
 
 export function registrationPeopleData(links: RecordPeopleLinks) {
-  for (const resolution of [links.hod, links.first, links.second]) if (resolution.error) throw new BadRequestException(resolution.error);
+  // Only the HOD blocks; a reliever that can't be linked is left empty (it was shown as a warning).
+  if (links.hod.error) throw new BadRequestException(links.hod.error);
+  const first = links.first.error ? null : links.first.target, second = links.second.error ? null : links.second.target;
   return {
     hodName: links.hod.person?.name ?? null, hodDesignation: links.hod.person?.designation ?? null,
-    firstRelieverId: links.first.target?.startsWith('employee:') ? links.first.target.slice(9) : null,
-    pendingFirstRelieverRecordId: links.first.target?.startsWith('record:') ? links.first.target.slice(7) : null,
-    secondRelieverId: links.second.target?.startsWith('employee:') ? links.second.target.slice(9) : null,
-    pendingSecondRelieverRecordId: links.second.target?.startsWith('record:') ? links.second.target.slice(7) : null,
+    firstRelieverId: first?.startsWith('employee:') ? first.slice(9) : null,
+    pendingFirstRelieverRecordId: first?.startsWith('record:') ? first.slice(7) : null,
+    secondRelieverId: second?.startsWith('employee:') ? second.slice(9) : null,
+    pendingSecondRelieverRecordId: second?.startsWith('record:') ? second.slice(7) : null,
   };
 }
 

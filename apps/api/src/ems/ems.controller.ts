@@ -22,7 +22,7 @@ import { ModuleType } from 'db';
 import { Post, Delete, Put } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
 import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto,
   UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto, ConfirmOnboardingDuplicateDto,
-  ExcludeRemainingOnboardingRecordsDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto } from './dto/onboarding.dto';
+  ExcludeRemainingOnboardingRecordsDto, ForgetImportColumnChoicesDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -174,6 +174,13 @@ export class EmsController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
   async lookupImportColumnChoices(@Body() dto: LookupImportColumnChoicesDto, @CurrentUser() user: { organizationId: string }) {
     return this.ems.lookupImportColumnChoices(user.organizationId, dto);
+  }
+
+  /** POST /ems/onboarding/column-choices/forget — forget remembered destinations for these headings */
+  @Post('onboarding/column-choices/forget')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async forgetImportColumnChoices(@Body() dto: ForgetImportColumnChoicesDto, @CurrentUser() user: { organizationId: string }) {
+    return this.ems.forgetImportColumnChoices(user.organizationId, dto);
   }
 
   /** PUT /ems/onboarding/column-choices — remember confirmed column choices */

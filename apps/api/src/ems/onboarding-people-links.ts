@@ -230,7 +230,12 @@ export function resolveBatchPeopleLinks(records: readonly LinkRecord[], options:
   return { options: currentOptions.filter(p => !p.unavailable), byRecord, hodDirectory, hodEvidence: Object.fromEntries(evidenceByScope) };
 }
 
+/**
+ * HOD problems block. Relievers are optional: a reliever that can't be linked is a warning, and
+ * registration leaves that reliever empty (see registrationPeopleData).
+ */
 export function peopleLinkFindings(links: RecordPeopleLinks) {
   return ([['hodName', links.hod], ['reliever1Name', links.first], ['reliever2Name', links.second]] as const)
-    .filter(([, result]) => result.error).map(([field, result]) => ({ field, message: result.error!, code: 'PEOPLE_LINK' }));
+    .filter(([, result]) => result.error).map(([field, result]) => ({ field, message: result.error!, code: 'PEOPLE_LINK',
+      ...(field === 'hodName' ? {} : { severity: 'warning' as const }) }));
 }

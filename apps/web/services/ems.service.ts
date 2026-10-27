@@ -347,6 +347,8 @@ export interface OnboardingBatchSummary {
   status: OnboardingBatchStatus;
   createdAt: string;
   uploadedBy: { id: string; name: string } | null;
+  /** List responses: the import's last activity (newest record change, else upload time). */
+  updatedAt?: string;
   _count: { records: number };
    /** Present on list/create responses. NEEDS_FIXING includes upstream-chain waiting. */
   statusCounts?: Record<OnboardingRecordStatus, number>;
@@ -447,7 +449,10 @@ export interface OnboardingRecord {
   reliever2Name: string | null;
   reliever2Designation: string | null;
   status: OnboardingRecordStatus;
-  validationErrors: { field: string; message: string; code?: string }[] | null;
+  /** severity 'warning': shown, but doesn't stop the record being Ready. */
+  validationErrors: { field: string; message: string; code?: string; severity?: 'warning' }[] | null;
+  /** Last change to the record (edit, validation, registration). */
+  updatedAt?: string;
   duplicateReview?: DuplicateReview | null;
   exclusionReason: string | null;
   employeeId: string | null;
@@ -730,6 +735,16 @@ export const EmsService = {
   /** Remembered destinations for these headings, in the same order (null where none). */
   async lookupImportColumnChoices(headings: string[], token: string): Promise<{ choices: (string | null)[] }> {
     const res = await apiClient(`${API_URL}/ems/onboarding/column-choices/lookup`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ headings }),
+    }, token);
+    return handleResponse(res);
+  },
+
+  /** Forget remembered choices for these headings, so imports start from built-in recognition again. */
+  async forgetImportColumnChoices(headings: string[], token: string): Promise<{ forgotten: number }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/column-choices/forget`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify({ headings }),

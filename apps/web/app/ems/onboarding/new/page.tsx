@@ -112,6 +112,9 @@ export default function NewOnboardingImportPage() {
   const [dateOrderChoice, setDateOrderChoice] = useState<Record<number, DateOrder>>({});
   // Discards a late remembered-choices answer after the sheet, header row or a choice changed.
   const lookupSequence = useRef(0);
+  // Result of forgetting remembered choices: a short confirmation or an error, shown above the column list.
+  const [memoryNote, setMemoryNote] = useState<{ text: string; error?: boolean } | null>(null);
+  const [forgetting, setForgetting] = useState(false);
   // How names in a mapped "Full name" column are written.
   const [nameOrder, setNameOrder] = useState<NameOrder>("FIRST_LAST");
 
@@ -219,6 +222,7 @@ export default function NewOnboardingImportPage() {
     setMapping(initial);
     setRemembered([]);
     setDateOrderChoice({});
+    setMemoryNote(null);
     const sequence = ++lookupSequence.current;
     const headings = headers.slice(0, 500).map(cell => String(cell ?? "").trim().slice(0, 200));
     if (!accessToken || !headings.some(Boolean)) return;
@@ -312,6 +316,29 @@ export default function NewOnboardingImportPage() {
     }
     return seen;
   };
+  /**
+   * Forget the organisation's remembered choices for these columns. Each column goes back to built-in
+   * recognition, so HR can see how a sheet imports without memory. Uploading will remember the new choices.
+   */
+  async function forgetRemembered(cols: number[]) {
+    const headings = cols.map(col => String(headerRow[col] ?? "").trim().slice(0, 200)).filter(Boolean);
+    if (!accessToken || !headings.length) return;
+    setForgetting(true); setMemoryNote(null);
+    try {
+      await EmsService.forgetImportColumnChoices(headings, accessToken);
+      lookupSequence.current++;
+      const builtIn = initialImportMapping(headerRow, grid.slice(headerIndex + 1));
+      setMapping(prev => prev.map((f, i) => cols.includes(i) ? builtIn[i] ?? null : f));
+      setRemembered(prev => prev.map((flag, i) => cols.includes(i) ? false : flag));
+      setDateOrderChoice(prev => Object.fromEntries(Object.entries(prev).filter(([col]) => !cols.includes(Number(col)))));
+      setMemoryNote({ text: headings.length === 1 ? `Forgot the remembered choice for “${headings[0]}”.` : `Forgot ${headings.length} remembered choices.` });
+    } catch {
+      setMemoryNote({ text: 'Could not forget the remembered choices. Try again.', error: true });
+    } finally {
+      setForgetting(false);
+    }
+  }
+
   /** Keep one column for a field; the others it was competing with become "ignore". */
   function resolveConflict(field: MapField, keep: number | null) {
     lookupSequence.current++;
@@ -807,7 +834,7 @@ export default function NewOnboardingImportPage() {
                 </div>
               </div>
               {conflicts.map(({ field, columns }) => (
-                <fieldset key={field} className="rounded-lg border border-amber-200 bg-white p-3">
+                <fieldset key={field} className="min-w-0 rounded-lg border border-amber-200 bg-white p-3">
                   <legend className="px-1 text-xs font-semibold text-slate-800">
                     {fieldLabel(field)}{isRequired(field) ? " *" : ""}
                   </legend>
@@ -815,15 +842,15 @@ export default function NewOnboardingImportPage() {
                     {columns.map((col) => {
                       const samples = samplesFor(col);
                       return (
-                        <label key={col} className="flex cursor-pointer items-start gap-2 rounded-md p-1.5 hover:bg-slate-50">
+                        <label key={col} className="flex min-w-0 cursor-pointer items-start gap-2 rounded-md p-1.5 hover:bg-slate-50">
                           <input
                             type="radio"
                             name={`conflict-${field}`}
                             className="mt-0.5"
                             onChange={() => resolveConflict(field, col)}
                           />
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium text-slate-800">
+                          <span className="min-w-0 flex-1">
+                            <span className="block break-words text-sm font-medium text-slate-800">
                               {String(headerRow[col] ?? "").trim() || `Column ${col + 1}`}
                             </span>
                             <span className="block truncate text-xs text-slate-500">
@@ -848,14 +875,18 @@ export default function NewOnboardingImportPage() {
 
           {headerIndex >= 0 && headerRow.length > 0 && (
                 <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 bg-slate-100 border-b border-slate-300 flex items-center justify-between">
+                  <div className="px-3 py-2 bg-slate-100 border-b border-slate-300 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <p className="text-sm font-semibold text-slate-800">
                       Match your columns to the fields they hold · <span className="text-red-500">*</span> required
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-500">
                       {fields.filter(f => f && f !== "extra").length} mapped · {extraColumns} kept for reference
+                      {remembered.some(Boolean) && <> · <button type="button" disabled={forgetting}
+                        onClick={() => void forgetRemembered(remembered.flatMap((flag, i) => flag ? [i] : []))}
+                        className="font-medium text-blue-700 underline underline-offset-2 disabled:opacity-50">Forget all remembered ({remembered.filter(Boolean).length})</button></>}
                     </p>
                   </div>
+                  {memoryNote && <p role="status" className={`border-b border-slate-200 px-3 py-1.5 text-xs ${memoryNote.error ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-800'}`}>{memoryNote.text}</p>}
                   <div className="max-h-72 overflow-auto divide-y divide-slate-50">
                     {headerRow.map((cell, col) => {
                       const name = String(cell ?? "").trim() || `Untitled column ${XLSX.utils.encode_col(col)}`;
@@ -871,14 +902,15 @@ export default function NewOnboardingImportPage() {
                         fields.some((f, i) => f === key && i !== col);
 
                       return (
-                        <div key={col} className="px-3 py-2 flex items-center gap-3">
+                        <div key={col} className="px-3 py-2 flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-slate-700 truncate">{name}</p>
+                            <p className="text-xs font-medium text-slate-700 break-words sm:truncate" title={name}>{name}</p>
                             {sample && (
                               <p className="text-[11px] text-slate-400 truncate">e.g. {sample}</p>
                             )}
                             {remembered[col] && (
-                              <p className="text-[11px] font-medium text-blue-700">Remembered from a previous import</p>
+                              <p className="text-[11px] font-medium text-blue-700">Remembered from a previous import · <button type="button" disabled={forgetting}
+                                onClick={() => void forgetRemembered([col])} className="underline underline-offset-2 disabled:opacity-50">Forget</button></p>
                             )}
                             {!fields[col] && headingSaysIgnore(cell) && (
                               <p className="text-[11px] font-medium text-slate-500">Ignored: the heading says “ignore”</p>
@@ -918,7 +950,8 @@ export default function NewOnboardingImportPage() {
                                 return next;
                               });
                             }}
-                            className={`shrink-0 w-56 px-2 py-1.5 rounded-lg border text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                            aria-label={`Field for ${name}`}
+                            className={`shrink-0 w-full sm:w-56 px-2 py-1.5 rounded-lg border text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
                               fields[col] && conflictFields.has(fields[col]!) ? "border-amber-400 ring-1 ring-amber-300 text-slate-800"
                                 : fields[col] ? "border-slate-200 text-slate-700" : "border-slate-100 text-slate-400"
                             }`}

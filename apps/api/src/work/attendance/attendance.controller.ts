@@ -12,6 +12,7 @@ import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import {
   AttendanceRangeQueryDto,
+  AttendanceWeekQueryDto,
   ClockInDto,
   ClockOutDto,
   CorrectAttendanceDto,
@@ -40,6 +41,13 @@ export class AttendanceController {
   @Header('Cache-Control', 'no-store')
   listMine(@CurrentUser() user: AccessTokenPayload, @Query() query: AttendanceRangeQueryDto) {
     return this.attendance.listMine(user, query);
+  }
+
+  // The caller's own week, or a team member's under the team listing's rules.
+  @Get('week')
+  @Header('Cache-Control', 'no-store')
+  week(@CurrentUser() user: AccessTokenPayload, @Query() query: AttendanceWeekQueryDto) {
+    return this.attendance.week(user, query);
   }
 
   @Post('clock-in')

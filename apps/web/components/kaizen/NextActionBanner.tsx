@@ -48,7 +48,7 @@ function getNextAction(kaizen: Kaizen, ctx: KaizenAccessContext, gating: KaizenG
     case "REJECTED":
       return { tone: "returned", message: `Rejected by ${hod}.`, remarks: kaizen.hodPreReviewRemarks };
     case "MOVED_TO_SGA":
-      return { tone: "done", message: "Moved to a Small Group Activity (SGA), because it needs a team to solve.", remarks: kaizen.hodPreReviewRemarks };
+      return { tone: "done", message: "Moved to a Small Group Activity (SGA), because it needs a team to solve. A draft SGA was raised from it for the owner to complete.", remarks: kaizen.hodPreReviewRemarks };
     case "IN_IMPLEMENTATION":
       return ctx.isKaizenOwner
         ? { tone: "action", message: "Your turn: make the change, add after photos and the result, then submit for verification." }

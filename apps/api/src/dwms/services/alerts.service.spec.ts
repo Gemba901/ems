@@ -33,6 +33,42 @@ describe('DWMS alert histories', () => {
     ]);
   });
 
+  it.each([false, true])('allows a higher manager to view and comment on abnormality=%s', async (isAbnormality) => {
+    prisma.employee.findMany.mockImplementation(({ where }) => Promise.resolve(
+      where.reportingManagerId?.in?.includes('manager') ? [{ id: 'direct' }] :
+      where.reportingManagerId?.in?.includes('direct') ? [{ id: 'indirect' }] : [],
+    ));
+    jest.spyOn(service, 'getDwmsAccessCapabilities').mockResolvedValue({ hasReportees: false, alertViewLevel: 'OWN' } as any);
+    prisma.alert.findFirst.mockResolvedValue({ id: 'alert', title: 'Inspection', isAbnormality, againstUserId: 'indirect', occurrences: [] });
+    prisma.alertComment = { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'comment', comment: 'Please review', createdAt: new Date(), updatedAt: new Date(), author: { id: 'manager', firstName: 'Higher', lastName: 'Manager' } }) };
+    await expect(service.getAlertDetail(user, 'alert')).resolves.toMatchObject({ alert: { id: 'alert' } });
+    await expect(service.addAlertComment(user, 'alert', { comment: 'Please review' })).resolves.toMatchObject({ message: 'Comment added' });
+    expect(prisma.alert.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org', OR: expect.arrayContaining([{ againstUserId: { in: ['direct', 'indirect'] } }]) }) }));
+    for (const [query] of prisma.employee.findMany.mock.calls) expect(query.where.organizationId).toBe('org');
+  });
+
+  it('does not let an unrelated employee comment on an inaccessible alert', async () => {
+    prisma.employee.findMany.mockResolvedValue([]);
+    prisma.alert.findFirst.mockResolvedValue(null);
+    prisma.alertComment = { create: jest.fn() };
+    await expect(service.addAlertComment(user, 'other-alert', { comment: 'Hello' })).rejects.toThrow('Alert not found');
+    expect(prisma.alertComment.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['MANAGEMENT', 'HR', 'ADMIN', 'SUPER_ADMIN'])('allows %s organization-wide alert and abnormality details and comments', async (roleLevel) => {
+    prisma.employee.findMany.mockResolvedValue([]);
+    jest.spyOn(service, 'getDwmsAccessCapabilities').mockResolvedValue({ alertViewLevel: 'OWN' } as any);
+    prisma.alertComment = { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'comment', comment: 'Review', createdAt: new Date(), updatedAt: new Date() }) };
+    for (const isAbnormality of [false, true]) {
+      prisma.alert.findFirst.mockResolvedValue({ id: 'alert', isAbnormality, occurrences: [] });
+      await expect(service.getAlertDetail({ ...user, roleLevel }, 'alert')).resolves.toMatchObject({ alert: { id: 'alert' } });
+      await expect(service.addAlertComment({ ...user, roleLevel }, 'alert', { comment: 'Review' })).resolves.toMatchObject({ message: 'Comment added' });
+      expect(prisma.alert.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: 'alert', organizationId: 'org' } }));
+    }
+    prisma.alert.findFirst.mockResolvedValue(null);
+    await expect(service.getAlertDetail({ ...user, roleLevel }, 'other-org-alert')).rejects.toThrow('Alert not found');
+  });
+
   it('separates own and indirect team alerts', async () => {
     await service.getAlerts(user, 'MY_ALERTS');
     expect(prisma.alert.findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -279,6 +315,159 @@ describe('DWMS alert histories', () => {
     });
   });
 
+  describe('employee work overview', () => {
+    const management = { ...user, roleLevel: 'MANAGEMENT' };
+    beforeEach(() => {
+      prisma.employee.findFirst.mockResolvedValue({
+        id: 'manager',
+        firstName: 'Kareena',
+        lastName: 'Kapoor',
+        department: null,
+        reportingManager: {
+          id: 'reporting-manager',
+          firstName: 'Rodgers',
+          lastName: 'Munene',
+        },
+      });
+      prisma.task = {
+      count: jest.fn().mockResolvedValue(0),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            ...Array.from({ length: 21 }, (_, i) => ({
+              id: `routine-${i}`,
+              activityId: `good-${i}`,
+              title: `Good practice ${i}`,
+              description: 'Daily safety',
+              frequency: 'DAILY',
+              assignedById: null,
+              activity: {
+                id: `good-${i}`,
+                scope: 'ORGANISATION',
+                code: `GOOD-${i}`,
+              },
+            })),
+            ...Array.from({ length: 21 }, (_, i) => ({
+              id: `job-${i}`,
+              activityId: `job-activity-${i}`,
+              title: `Job responsibility ${i}`,
+              description: 'Maintenance',
+              frequency: 'DAILY',
+              assignedById: null,
+              activity: {
+                id: `job-activity-${i}`,
+                scope: 'JOB_TITLE',
+                code: `JOB-${i}`,
+              },
+            })),
+          ]),
+      };
+      prisma.taskInstance = {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      };
+      jest
+        .spyOn(service as any, 'listEmployeeRoleActivities')
+        .mockResolvedValue({ count: 0, activities: [] });
+    });
+
+    it('splits categories before pagination while retaining legacy combined results', async () => {
+      const routine = await service.getEmployeeDwmsProfile(
+        management,
+        'manager',
+        { routineCategory: 'GOOD_PRACTICE', routinePage: 2 },
+      );
+      expect(routine.counts).toMatchObject({
+        routineWork: 42,
+        goodPractices: 21,
+        jobResponsibilities: 21,
+      });
+      expect(routine.pagination.routineWork).toMatchObject({
+        totalItems: 21,
+        totalPages: 2,
+        page: 2,
+      });
+      expect(routine.routineWork.map((item) => item.taskId)).toEqual([
+        'routine-20',
+      ]);
+      const jobs = await service.getEmployeeDwmsProfile(management, 'manager', {
+        routineCategory: 'JOB_RESPONSIBILITY',
+      });
+      expect(jobs.routineWork).toHaveLength(20);
+      expect(
+        jobs.routineWork.every(
+          (item) => item.taskCategory === 'JOB_RESPONSIBILITY',
+        ),
+      ).toBe(true);
+      const combined = await service.getEmployeeDwmsProfile(
+        management,
+        'manager',
+      );
+      expect(combined.pagination.routineWork.totalItems).toBe(42);
+    });
+
+    it('searches all allocations before pagination and scopes alert searches to the employee', async () => {
+      const result = await service.getEmployeeDwmsProfile(
+        management,
+        'manager',
+        { routineCategory: 'JOB_RESPONSIBILITY', search: 'job-20' },
+      );
+      expect(result.routineWork.map((item) => item.taskId)).toEqual(['job-20']);
+      expect(result.pagination.routineWork.totalItems).toBe(1);
+      expect(prisma.alert.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: 'org',
+            againstUserId: 'manager',
+            OR: [
+              { title: { contains: 'job-20', mode: 'insensitive' } },
+              { description: { contains: 'job-20', mode: 'insensitive' } },
+            ],
+          }),
+        }),
+      );
+      await expect(
+        service.getEmployeeDwmsProfile(management, 'manager', {
+          routineCategory: 'INVALID',
+        }),
+      ).rejects.toThrow('Invalid routine category');
+    });
+
+    it('uses twenty items per page without loading the removed attention section', async () => {
+      const result = await service.getEmployeeDwmsProfile(management, 'manager', {
+        assignedPage: 2, currentAlertPage: 2, abnormalityPage: 2,
+      });
+      expect(result).not.toHaveProperty('attention');
+      expect(result.pagination.assignedTasks.pageSize).toBe(20);
+      expect(result.pagination.currentAlerts.pageSize).toBe(20);
+      expect(result.pagination.abnormalities.pageSize).toBe(20);
+      expect(prisma.taskInstance.findMany).not.toHaveBeenCalled();
+      expect(prisma.task.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ assignedById: { not: null } }), skip: 20, take: 20 }));
+      expect(prisma.alert.findMany).toHaveBeenCalledTimes(2);
+      for (const [query] of prisma.alert.findMany.mock.calls) {
+        expect(query).toMatchObject({ skip: 20, take: 20 });
+      }
+    });
+
+    it('lists each assigned task once independently of its instances or completion status', async () => {
+      prisma.task.findMany.mockImplementation(({ where }) => Promise.resolve(typeof where.assignedById === 'object' && where.assignedById !== null ? [{ id: 'assigned-task', title: 'Weekly inspection', frequency: 'WEEKLY', assignedById: 'manager' }] : []));
+      prisma.task.count.mockResolvedValue(1);
+      const result = await service.getEmployeeDwmsProfile(management, 'manager');
+      expect(result.assignedTasks).toEqual([expect.objectContaining({ taskId: 'assigned-task', frequency: 'WEEKLY' })]);
+      expect(result.assignedTasks[0]).not.toHaveProperty('instanceId');
+      expect(result.counts.assignedTasks).toBe(1);
+      expect(prisma.taskInstance.findMany).not.toHaveBeenCalled();
+      expect(prisma.task.count).toHaveBeenCalledWith({ where: { ownerId: 'manager', assignedById: { not: null } } });
+    });
+
+    it('enforces profile access before loading work', async () => {
+      await expect(
+        service.getEmployeeDwmsProfile(user, 'manager'),
+      ).rejects.toThrow('not authorized');
+      expect(prisma.task.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   it('lists allocated routine tasks once instead of scheduled instances', async () => {
     prisma.employee.findFirst.mockResolvedValue({
       id: 'manager',
@@ -287,6 +476,7 @@ describe('DWMS alert histories', () => {
       department: null,
     });
     prisma.task = {
+      count: jest.fn().mockResolvedValue(0),
       findMany: jest.fn().mockResolvedValue([
         {
           id: 'routine-task',

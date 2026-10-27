@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useUrlViewState } from '@/hooks/useUrlViewState';
+import { enumParam, textParam, booleanParam, clearUrlView } from '@/lib/url-view-state';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useAuthStore } from '@/store/auth.store';
 import {
@@ -31,6 +33,17 @@ import {
 } from '../utils/employeePerformanceAccess';
 
 type GraphRange = '7d' | '1m' | '3m' | '1y' | 'all';
+
+const reportsViewSchema = {
+  tab: enumParam(
+    ["overview", "department", "employee", "my-team", "team"] as const,
+    "employee",
+  ),
+  range: enumParam(["7d", "1m", "3m", "1y", "all"] as const, "7d"),
+  department: textParam,
+  employee: textParam,
+  insights: booleanParam,
+};
 
 const REPORT_CACHE_MS = 5 * 60 * 1000;
 
@@ -98,18 +111,32 @@ export default function DashboardRoute() {
 function DashboardPage() {
   const { user, accessToken } = useAuthStore();
 
-  // Tab: 'overview' | 'department' | 'employee' | 'my-team' | 'team'
-  const [requestedTab, setActiveTab] = useState<'overview' | 'department' | 'employee' | 'my-team' | 'team'>('employee');
-  const [graphRange, setGraphRange] = useState<GraphRange>('7d');
-  // Selections
-  const [selectedDeptId, setSelectedDeptId] = useState<string>('');
-  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
-  const [showSelectedEmployeeInsights, setShowSelectedEmployeeInsights] = useState(false);
+  const {
+    state: view,
+    update: updateView,
+    ready,
+  } = useUrlViewState("report", reportsViewSchema);
+  const {
+    tab: requestedTab,
+    range: graphRange,
+    department: selectedDeptId,
+    employee: selectedEmpId,
+    insights: showSelectedEmployeeInsights,
+  } = view;
+  const setActiveTab = (tab: typeof requestedTab) => updateView({ tab });
+  const setGraphRange = (range: GraphRange) => updateView({ range });
+  const setSelectedDeptId = (department: string) => updateView({ department });
+  const setSelectedEmpId = (employee: string) => {
+    if (employee !== selectedEmpId) clearUrlView("work");
+    updateView({ employee });
+  };
+  const setShowSelectedEmployeeInsights = (insights: boolean) =>
+    updateView({ insights });
 
   const accessQuery = useQuery({
     queryKey: ['dwms', 'reports', 'access', user?.organizationId, user?.userId],
     queryFn: () => DwmsService.getAccessCapabilities(accessToken ?? ''),
-    enabled: Boolean(accessToken && user),
+    enabled: Boolean(ready && accessToken && user),
     staleTime: REPORT_CACHE_MS,
   });
   const access: DwmsAccessCapabilities | null = accessQuery.data ?? null;
@@ -126,7 +153,7 @@ function DashboardPage() {
     queryKey: ['dwms', 'reports', 'departments', user?.organizationId],
     queryFn: () => DwmsService.getDepartments(accessToken ?? ''),
     enabled: Boolean(
-      accessToken &&
+      ready && accessToken &&
       access &&
       activeTab === 'department' &&
       access.analyticsViewLevel === 'ORGANIZATION',
@@ -141,7 +168,7 @@ function DashboardPage() {
     queryKey: ['dwms', 'reports', 'employees', user?.organizationId],
     queryFn: () => DwmsService.listUsers(accessToken ?? ''),
     enabled: Boolean(
-      accessToken && access?.canViewEmployeePerformance && activeTab === 'team',
+      ready && accessToken && access?.canViewEmployeePerformance && activeTab === 'team',
     ),
     staleTime: REPORT_CACHE_MS,
   });
@@ -178,7 +205,7 @@ function DashboardPage() {
   const overviewQuery = useQuery({
     queryKey: ['dwms', 'reports', 'overview', user?.organizationId, days],
     queryFn: () => DwmsService.getDashboardOverview(accessToken ?? '', days),
-    enabled: Boolean(accessToken && access && activeTab === 'overview'),
+    enabled: Boolean(ready && accessToken && access && activeTab === 'overview'),
     staleTime: REPORT_CACHE_MS,
     ...performanceQueryOptions,
   });
@@ -191,7 +218,7 @@ function DashboardPage() {
         days,
       ),
     enabled: Boolean(
-      accessToken && access && activeTab === 'department' && resolvedDepartmentId,
+      ready && accessToken && access && activeTab === 'department' && resolvedDepartmentId && (access.analyticsViewLevel !== 'ORGANIZATION' || departmentsQuery.isSuccess),
     ),
     staleTime: REPORT_CACHE_MS,
     ...performanceQueryOptions,
@@ -213,9 +240,9 @@ function DashboardPage() {
         employeeView,
       ),
     enabled: Boolean(
-      accessToken &&
+      ready && accessToken &&
       access &&
-      reportEmployeeId &&
+      reportEmployeeId && (activeTab !== 'team' || usersQuery.isSuccess) &&
       (activeTab === 'employee' || activeTab === 'my-team' || activeTab === 'team'),
     ),
     staleTime: REPORT_CACHE_MS,
@@ -238,7 +265,7 @@ function DashboardPage() {
     (activeTab === 'team' &&
       Boolean(access?.canViewEmployeePerformance) &&
       usersQuery.isPending);
-  const loading = accessQuery.isPending || metadataLoading || activeReportQuery.isFetching;
+  const loading = !ready || accessQuery.isPending || metadataLoading || activeReportQuery.isFetching;
   const activeError = accessQuery.error ?? activeReportQuery.error ??
     (activeTab === 'department' ? departmentsQuery.error : null) ??
     (activeTab === 'team' ? usersQuery.error : null);
@@ -560,6 +587,7 @@ function DashboardPage() {
                   jobTitle={employeeData.employee.role}
                   canManageActivities={false}
                   showApplicableActivities={false}
+                  persistView
                 />
               )}
             </>

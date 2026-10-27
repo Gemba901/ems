@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useUrlViewState } from '@/hooks/useUrlViewState';
+import { enumParam, textParam } from '@/lib/url-view-state';
 import type { DwmsEmployeeDashboardResponse } from '@/services/dwms.service';
 import PerformanceKpiSelect from './PerformanceKpiSelect';
 import PerformanceSortSelect from './PerformanceSortSelect';
 import PerformanceScoreboardSearch from './PerformanceScoreboardSearch';
 import {
+  performanceKpis,
   comparePerformanceKpi,
   formatPerformanceKpiValue,
   getPerformanceKpi,
@@ -13,6 +15,15 @@ import {
   type PerformanceKpiKey,
   type PerformanceSortDirection,
 } from './performanceKpis';
+
+const scoreboardSchema = {
+  kpi: enumParam(
+    performanceKpis.map((item) => item.key),
+    "allTasksCompletionRate",
+  ),
+  sort: enumParam(["asc", "desc"] as const, "desc"),
+  search: textParam,
+};
 
 type EmployeeDashboardProps = {
   employeeData: DwmsEmployeeDashboardResponse;
@@ -27,9 +38,15 @@ export default function EmployeeDashboard({
   onSelectEmployee,
   activeSubTab = 'insights',
 }: EmployeeDashboardProps) {
-  const [selectedKpi, setSelectedKpi] = useState<PerformanceKpiKey>('allTasksCompletionRate');
-  const [sortDirection, setSortDirection] = useState<PerformanceSortDirection>('desc');
-  const [scoreboardSearch, setScoreboardSearch] = useState('');
+  const { state, update } = useUrlViewState("scoreTeam", scoreboardSchema);
+  const {
+    kpi: selectedKpi,
+    sort: sortDirection,
+    search: scoreboardSearch,
+  } = state;
+  const setSelectedKpi = (kpi: PerformanceKpiKey) => update({ kpi });
+  const setSortDirection = (sort: PerformanceSortDirection) => update({ sort });
+  const setScoreboardSearch = (search: string) => update({ search });
   const isSelf = employeeData.employee?.id === loggedInUserId;
 
   if (activeSubTab !== 'team' || !isSelf) return null;

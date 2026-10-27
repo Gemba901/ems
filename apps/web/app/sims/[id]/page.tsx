@@ -4,6 +4,7 @@ import { TenantImage } from "@/components/files/TenantImage";
 import { useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import LinkedRecordChip from "@/components/ui/LinkedRecordChip";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -454,12 +455,20 @@ export default function SuggestionDetailPage() {
                     </span>
                   )}
                   {suggestion.linkedKaizenId && (
-                    <Link
+                    <LinkedRecordChip
                       href={`/kaizen/${suggestion.linkedKaizenId}`}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1.5 hover:bg-emerald-100 transition-colors"
-                    >
-                      <Sparkles className="h-3.5 w-3.5" /> Raised as a Kaizen →
-                    </Link>
+                      label="Raised as a Kaizen:"
+                      title={suggestion.kaizen?.title}
+                      tone="kaizen"
+                    />
+                  )}
+                  {suggestion.linkedSgaId && (
+                    <LinkedRecordChip
+                      href={`/sga/${suggestion.linkedSgaId}`}
+                      label="Moved to SGA:"
+                      title={suggestion.sga?.title}
+                      tone="sga"
+                    />
                   )}
                 </div>
               </div>
@@ -786,6 +795,9 @@ export default function SuggestionDetailPage() {
                               onChange={updateDecisionField}
                               optionsByKey={{ responsibleEmployeeId: responsibleOptions }}
                             />
+                            <p className="text-xs text-slate-500 mt-2">
+                              A draft SGA will be raised with this person as its owner. The suggestion is marked implemented once that SGA is verified and closed.
+                            </p>
                           </div>
                         )}
 

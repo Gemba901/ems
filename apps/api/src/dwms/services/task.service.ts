@@ -634,7 +634,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     attachmentUrl?: string | null;
     attachmentName?: string | null;
   }) {
-    return this.prisma.taskInstanceEvent.create({
+    const event = await this.prisma.taskInstanceEvent.create({
       data: {
         taskInstanceId: data.taskInstanceId,
         actorId: data.actorId ?? null,
@@ -645,6 +645,45 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         attachmentUrl: data.attachmentUrl ?? null,
         attachmentName: data.attachmentName ?? null,
       },
+    });
+    if (data.toStatus && data.toStatus !== data.fromStatus) {
+      await this.publishSourceStatusChange({ ...data, toStatus: data.toStatus });
+    }
+    return event;
+  }
+
+  // Every user-driven status change is recorded through recordTaskInstanceEvent, so this is the one
+  // place a source-linked task (Kaizen, SGA, 5S) tells its source module what happened.
+  private async publishSourceStatusChange(data: {
+    taskInstanceId: string;
+    actorId?: string | null;
+    fromStatus?: TaskStatus | null;
+    toStatus: TaskStatus;
+    note?: string | null;
+  }) {
+    if (!this.taskEvents) return;
+    const instance = await this.prisma.taskInstance.findUnique({
+      where: { id: data.taskInstanceId },
+      select: {
+        taskId: true,
+        ownerId: true,
+        scheduledFor: true,
+        task: { select: { sourceModule: true, sourceId: true, sourceParentId: true } },
+      },
+    });
+    if (!instance?.task.sourceModule || !instance.task.sourceId) return;
+    await this.taskEvents.publish({
+      taskInstanceId: data.taskInstanceId,
+      taskId: instance.taskId,
+      sourceModule: instance.task.sourceModule,
+      sourceId: instance.task.sourceId,
+      sourceParentId: instance.task.sourceParentId,
+      ownerId: instance.ownerId,
+      scheduledFor: instance.scheduledFor,
+      fromStatus: data.fromStatus ?? null,
+      toStatus: data.toStatus,
+      actorId: data.actorId ?? null,
+      note: data.note?.trim() || null,
     });
   }
 
@@ -908,6 +947,105 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         : null,
     };
   }
+  async getTaskDefinitionDetail(
+    user: UserPayload,
+    taskId: string,
+    rawPage?: string,
+    rawStatus?: string,
+    rawDate?: string,
+  ) {
+    const employee = await this.getEmployee(user.userId, user.organizationId);
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, owner: { organizationId: user.organizationId } },
+      include: {
+        owner: true,
+        assignedBy: true,
+        approvedBy: true,
+        activity: true,
+      },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    const allowed =
+      this.getDwmsRole(user.roleLevel) === 'MANAGEMENT' ||
+      [task.ownerId, task.assignedById, task.approvedById].includes(
+        employee.id,
+      ) ||
+      (await this.isSuperior(employee.id, task.ownerId, user.organizationId));
+    if (!allowed) throw new NotFoundException('Task not found');
+    const status = rawStatus?.trim().toUpperCase();
+    if (status && !Object.values(TaskStatus).includes(status as TaskStatus))
+      throw new BadRequestException('Invalid task status');
+    const pageNumber = Number(rawPage) || 1;
+    const page = Number.isFinite(pageNumber)
+      ? Math.max(1, Math.floor(pageNumber))
+      : 1;
+    const limit = 20;
+    const organizationTimeZone = await this.getOrganizationTimeZone(
+      user.organizationId,
+    );
+    const selectedDate = parseDateOnly(rawDate);
+    if (rawDate && !selectedDate)
+      throw new BadRequestException('Invalid instance date');
+    const where = {
+      taskId,
+      ...(status ? { status: status as TaskStatus } : {}),
+      ...(selectedDate
+        ? {
+            scheduledFor: {
+              gte: startOfDayInTimeZone(selectedDate, organizationTimeZone),
+              lte: endOfDayInTimeZone(selectedDate, organizationTimeZone),
+            },
+          }
+        : {}),
+    };
+    const [instances, total] = await Promise.all([
+      this.prisma.taskInstance.findMany({
+        where,
+        orderBy: [{ scheduledFor: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.taskInstance.count({ where }),
+    ]);
+    const person = (value: typeof task.owner | null) =>
+      value
+        ? { id: value.id, name: `${value.firstName} ${value.lastName}`.trim() }
+        : null;
+    return {
+      task: {
+        taskId: task.id,
+        title: task.title,
+        description: task.description,
+        frequency: task.frequency,
+        isActive: task.isActive,
+        owner: person(task.owner),
+        assignedBy: person(task.assignedBy),
+        approvedBy: person(task.approvedBy),
+        activity: task.activity ? { code: task.activity.code } : null,
+      },
+      organizationTimeZone,
+      instances: instances.map((instance) => ({
+        instanceId: instance.id,
+        title: instance.titleSnapshot,
+        scheduledFor: instance.scheduledFor.toISOString(),
+        dueAt: instance.dueAt.toISOString(),
+        status: instance.status,
+        completionPercent: instance.completionPercent,
+        completedAt: instance.completedAt?.toISOString() ?? null,
+        isOverdue:
+          ![TaskStatus.DONE, TaskStatus.NOT_APPLICABLE].includes(
+            instance.status as 'DONE' | 'NOT_APPLICABLE',
+          ) && instance.dueAt < new Date(),
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
+
   async getMyDwmsTaskInstanceDetail(user: UserPayload, instanceId: string) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
     const instance = await this.prisma.taskInstance.findFirst({
@@ -988,9 +1126,15 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     });
 
     const hasFullTaskAccess =
+      this.getDwmsRole(user.roleLevel) === 'MANAGEMENT' ||
       instance.task.ownerId === employee.id ||
       instance.task.assignedById === employee.id ||
-      instance.task.approvedById === employee.id;
+      instance.task.approvedById === employee.id ||
+      (await this.isSuperior(
+        employee.id,
+        instance.ownerId ?? instance.task.ownerId,
+        user.organizationId,
+      ));
     const organizationTimeZone = await this.getOrganizationTimeZone(
       user.organizationId,
     );
@@ -1771,6 +1915,25 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     );
   }
 
+  // Used by DwmsTaskBridge so a source-linked task reaches the owner's list immediately. A planned
+  // task's single instance is ensured on its due date even when that is past or beyond the
+  // generation window, so an overdue Kaizen/SGA item still shows up.
+  async refreshTaskInstances(taskId: string, organizationId: string) {
+    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
+    if (!task || !task.isActive) return 0;
+    if (!isPlannedTaskFrequency(task.frequency)) {
+      return this.generateUpcomingInstancesForTaskId(taskId, organizationId);
+    }
+    if (!task.dueDate) return 0;
+    const timeZone = await this.getOrganizationTimeZone(organizationId);
+    const instance = await this.ensureTaskInstance(
+      task,
+      toUtcDateOnly(task.dueDate),
+      timeZone,
+    );
+    return instance ? 1 : 0;
+  }
+
   async generateUpcomingTaskInstances(days = TASK_INSTANCE_GENERATION_DAYS) {
     const tasks = await this.prisma.task.findMany({
       where: {
@@ -1845,15 +2008,31 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       throw new BadRequestException('Comment is required');
     }
 
+    const reporteeIds = await this.listReporteeIdsRecursive(
+      employee.id,
+      user.organizationId,
+    );
     const instance = await this.prisma.taskInstance.findFirst({
       where: {
         id: instanceId,
+        ...(this.getDwmsRole(user.roleLevel) === 'MANAGEMENT'
+          ? {}
+          : {
+              OR: [
+                { ownerId: { in: reporteeIds } },
+                {
+                  task: {
+                    OR: [
+                      { ownerId: employee.id },
+                      { assignedById: employee.id },
+                      { approvedById: employee.id },
+                    ],
+                  },
+                },
+              ],
+            }),
         task: {
-          OR: [
-            { ownerId: employee.id },
-            { assignedById: employee.id },
-            { approvedById: employee.id },
-          ],
+          owner: { organizationId: user.organizationId },
         },
       },
     });

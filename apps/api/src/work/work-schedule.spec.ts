@@ -1,6 +1,6 @@
 import { attendanceStats, leaveDateSets } from './analytics/attendance-stats';
 import { zonedInstant } from './work-date';
-import { DEFAULT_SCHEDULE, WorkCalendar, holidayCalendar, punctuality, scheduledMinutes } from './work-schedule';
+import { DEFAULT_SCHEDULE, WorkCalendar, attendanceDays, holidayCalendar, punctuality, scheduledMinutes, sessionPunctuality } from './work-schedule';
 
 const TZ = 'Africa/Nairobi';
 
@@ -84,5 +84,47 @@ describe('attendanceStats', () => {
     it('does not count days before an employee joined', () => {
         const { totals } = attendanceStats([{ id: 'b', joinedOn: '2026-10-09', leaveDates: new Set() }], [], calendar, '2026-10-05', '2026-10-09', '2026-10-10');
         expect(totals).toMatchObject({ expectedDays: 1, absentDays: 1, attendanceRate: 0 });
+    });
+
+    it('counts a day with several sessions once, summing worked time and taking punctuality from its ends', () => {
+        const at = (time: string) => zonedInstant('2026-10-05', time, TZ);
+        const records = [
+            // Left at lunch and came back; the afternoon session ends early.
+            { employeeId: 'a', workDate: '2026-10-05', clockInAt: at('13:00'), clockOutAt: at('16:30'), ...snapshot('2026-10-05') },
+            { employeeId: 'a', workDate: '2026-10-05', clockInAt: at('08:50'), clockOutAt: at('12:00'), ...snapshot('2026-10-05') },
+        ];
+        const { totals } = attendanceStats([{ id: 'a', joinedOn: null, leaveDates: new Set() }], records, calendar, '2026-10-05', '2026-10-05', '2026-10-06');
+        expect(totals).toMatchObject({ expectedDays: 1, presentDays: 1, onTimeDays: 1, earlyLeaveDays: 1, workedMinutes: 190 + 210 });
+    });
+});
+
+describe('attendanceDays', () => {
+    const snapshot = {
+        scheduledStartAt: zonedInstant('2026-10-05', '09:00', TZ),
+        scheduledEndAt: zonedInstant('2026-10-05', '17:00', TZ),
+        lateGraceMinutes: 0,
+    };
+    const at = (time: string) => zonedInstant('2026-10-05', time, TZ);
+    const session = (id: string, clockIn: string, clockOut: string | null) => ({
+        id,
+        employeeId: 'a',
+        workDate: '2026-10-05',
+        clockInAt: at(clockIn),
+        clockOutAt: clockOut ? at(clockOut) : null,
+        ...snapshot,
+    });
+
+    it('is late only from the first clock-in and leaves early only from the last clock-out', () => {
+        const day = attendanceDays([session('pm', '14:00', '16:00'), session('am', '09:15', '12:00')]).get('a|2026-10-05')!;
+        expect(day).toMatchObject({ workedSeconds: (165 + 120) * 60, open: false, lateMinutes: 15, earlyLeaveMinutes: 60 });
+        expect(day.firstClockInAt).toEqual(at('09:15'));
+        expect(day.lastClockOutAt).toEqual(at('16:00'));
+        expect(sessionPunctuality(day, 'am')).toEqual({ lateMinutes: 15, earlyLeaveMinutes: 0 });
+        expect(sessionPunctuality(day, 'pm')).toEqual({ lateMinutes: 0, earlyLeaveMinutes: 60 });
+    });
+
+    it('counts only closed sessions and has no early leave while one is open', () => {
+        const day = attendanceDays([session('am', '08:00', '12:00'), session('pm', '13:00', null)]).get('a|2026-10-05')!;
+        expect(day).toMatchObject({ workedSeconds: 4 * 3600, open: true, lastClockOutAt: null, earlyLeaveMinutes: 0 });
     });
 });

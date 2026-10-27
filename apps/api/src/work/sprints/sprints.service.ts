@@ -190,9 +190,15 @@ export class SprintsService {
                 where: { id: sprintId },
                 data: { status: WorkSprintStatus.COMPLETED, completedAt, completionSnapshot: snapshot },
             });
+            const employee = await tx.employee.findUniqueOrThrow({ where: { id: actor.employeeId }, select: { firstName: true, lastName: true } });
+            const unfinished = tasks.filter((t) => t.status !== WorkTaskStatus.DONE);
+            if (unfinished.length) await tx.workTaskActivity.createMany({ data: unfinished.map((t) => ({
+                taskId: t.id, actorId: actor.employeeId, actorName: `${employee.firstName} ${employee.lastName}`.trim(),
+                action: 'UPDATED', changes: { sprintId: { before: sprintId, after: null } },
+            })) });
             await tx.workTask.updateMany({
                 where: { sprintId, status: { not: WorkTaskStatus.DONE } },
-                data: { sprintId: null },
+                data: { sprintId: null, version: { increment: 1 } },
             });
         });
         return this.reload(sprintId);

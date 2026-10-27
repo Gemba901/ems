@@ -3,8 +3,26 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useCreateTask } from "@/hooks/work/useWork";
-import { TASK_STATUS_LABELS, TASK_STATUSES, type ProjectMember, type Sprint, type WorkTaskStatus } from "@/services/work.service";
-import { ErrorNote, Field, SPRINT_TERM, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import {
+  TASK_PRIORITIES,
+  TASK_PRIORITY_LABELS,
+  type WorkTaskPriority,
+  TASK_STATUS_LABELS,
+  TASK_STATUSES,
+  type ProjectMember,
+  type Sprint,
+  type WorkTaskStatus,
+} from "@/services/work.service";
+import {
+  ErrorNote,
+  Field,
+  SPRINT_TERM,
+  WorkDialog,
+  errorMessage,
+  inputClass,
+  primaryButton,
+  secondaryButton,
+} from "@/components/work/ui";
 
 /** Add a task. Only project managers can place it in a sprint; others always add to Unscheduled. Mount only while open. */
 export function TaskFormDialog({
@@ -32,8 +50,13 @@ export function TaskFormDialog({
   const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [status, setStatus] = useState<WorkTaskStatus>("TODO");
+  const [priority, setPriority] = useState<WorkTaskPriority>("MEDIUM");
   const [dueDate, setDueDate] = useState("");
-  const [sprintId, setSprintId] = useState(canManage && assignable.some((s) => s.id === defaultSprintId) ? defaultSprintId! : "");
+  const [sprintId, setSprintId] = useState(
+    canManage && assignable.some((s) => s.id === defaultSprintId)
+      ? defaultSprintId!
+      : "",
+  );
   const [titleError, setTitleError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -51,6 +74,7 @@ export function TaskFormDialog({
         description: description.trim() || undefined,
         assigneeId: assigneeId || undefined,
         status,
+        priority,
         dueDate: dueDate || undefined,
         sprintId: canManage && sprintId ? sprintId : undefined,
       });
@@ -66,14 +90,29 @@ export function TaskFormDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Add task"
-      description={canManage ? undefined : "New tasks start in Unscheduled. A project manager can add them to a sprint."}
+      description={
+        canManage
+          ? undefined
+          : "New tasks start in Unscheduled. A project manager can add them to a sprint."
+      }
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={() => onOpenChange(false)}>
+          <button
+            type="button"
+            className={secondaryButton}
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </button>
-          <button type="submit" form="task-form" className={primaryButton} disabled={create.isPending}>
-            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          <button
+            type="submit"
+            form="task-form"
+            className={primaryButton}
+            disabled={create.isPending}
+          >
+            {create.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            )}
             Add task
           </button>
         </>
@@ -103,7 +142,12 @@ export function TaskFormDialog({
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Assignee" htmlFor="task-assignee">
-            <select id="task-assignee" className={inputClass} value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+            <select
+              id="task-assignee"
+              className={inputClass}
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+            >
               <option value="">Unassigned</option>
               {members.map((m) => (
                 <option key={m.employee.id} value={m.employee.id}>
@@ -126,12 +170,37 @@ export function TaskFormDialog({
               ))}
             </select>
           </Field>
+          <Field label="Priority" htmlFor="task-priority">
+            <select
+              id="task-priority"
+              className={inputClass}
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as WorkTaskPriority)}
+            >
+              {TASK_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {TASK_PRIORITY_LABELS[p]}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Due date (optional)" htmlFor="task-due">
-            <input id="task-due" type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <input
+              id="task-due"
+              type="date"
+              className={inputClass}
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
           </Field>
           {canManage && (
             <Field label={SPRINT_TERM} htmlFor="task-sprint">
-              <select id="task-sprint" className={inputClass} value={sprintId} onChange={(e) => setSprintId(e.target.value)}>
+              <select
+                id="task-sprint"
+                className={inputClass}
+                value={sprintId}
+                onChange={(e) => setSprintId(e.target.value)}
+              >
                 <option value="">Unscheduled</option>
                 {assignable.map((s) => (
                   <option key={s.id} value={s.id}>

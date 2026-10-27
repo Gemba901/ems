@@ -27,6 +27,7 @@ import {
   ClipboardCheck,
   Factory,
   Users2,
+  Layers,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -41,7 +42,7 @@ import MyDayPanel from "@/components/dashboard/MyDayPanel";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "WORK" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "WORK" | "FIVE_S" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -191,6 +192,21 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     href: "/work",
     actions: [
       { label: "Open my day", href: "/work", icon: ArrowRight },
+    ],
+  },
+  FIVE_S: {
+    key: "FIVE_S",
+    label: "5S Workplace",
+    tagline: "20 Keys · Key 1: Cleaning and Organising",
+    description: "Audit workplace areas with the 20-checkpoint 5S checksheet, register red-tagged items, follow up and verify improvement actions, and keep standards and routines in place.",
+    icon: Layers,
+    color: "text-teal-600",
+    bg: "bg-teal-50",
+    ring: "ring-teal-200",
+    href: "/five-s",
+    actions: [
+      { label: "Open 5S overview", href: "/five-s", icon: ArrowRight },
+      { label: "Start an audit", href: "/five-s/audits/new", icon: ClipboardCheck },
     ],
   },
 };

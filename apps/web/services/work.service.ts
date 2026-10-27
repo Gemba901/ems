@@ -140,7 +140,17 @@ export interface UpdateProjectPayload {
   members?: ProjectMemberInput[];
 }
 
+export type WorkTaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export const TASK_PRIORITIES: WorkTaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+export const TASK_PRIORITY_LABELS: Record<WorkTaskPriority, string> = { LOW: "Low", MEDIUM: "Medium", HIGH: "High", URGENT: "Urgent" };
+export interface TaskActivity {
+  id: string; actorName: string; action: string; createdAt: string;
+  changes: Record<string, { before: string | null; after: string | null }>;
+}
+
 export interface WorkTask {
+  priority: WorkTaskPriority;
+  version: number;
   id: string;
   project: { id: string; name: string };
   title: string;
@@ -157,6 +167,7 @@ export interface WorkTask {
 }
 
 export interface CreateTaskPayload {
+  priority?: WorkTaskPriority;
   title: string;
   description?: string;
   assigneeId?: string;
@@ -166,6 +177,8 @@ export interface CreateTaskPayload {
 }
 
 export interface UpdateTaskPayload {
+  expectedVersion: number;
+  priority?: WorkTaskPriority;
   title?: string;
   description?: string | null;
   assigneeId?: string | null;
@@ -225,6 +238,7 @@ export interface SprintTeamPayload {
 }
 
 export interface AttendanceRecord {
+  autoClockedOutAt: string | null;
   id: string;
   employeeId: string;
   workDate: string;
@@ -240,8 +254,13 @@ export interface AttendanceRecord {
   // From the schedule saved at clock-in; null on days that weren't scheduled.
   scheduledStartAt: string | null;
   scheduledEndAt: string | null;
+  // For the day as a whole: only the first session can be late and only the last can leave early.
   lateMinutes: number;
   earlyLeaveMinutes: number;
+  // This session's place among the day's sessions (1-based) and the day's total of closed sessions.
+  sessionNumber: number;
+  daySessionCount: number;
+  dayWorkedSeconds: number;
   // Checked once at clock-in; null on records from before location checks.
   locationCheck: LocationCheck | null;
   checkedPlaceKind: WorkPlaceKind | null;
@@ -256,7 +275,9 @@ export interface AttendanceStatus {
   today: string;
   timeZone: string;
   openRecord: AttendanceRecord | null;
-  todayRecord: AttendanceRecord | null;
+  // Earliest first; an employee can clock in again after clocking out.
+  todaySessions: AttendanceRecord[];
+  todayWorkedSeconds: number;
   todaySchedule: {
     dayType: DayType;
     holidayName: string | null;
@@ -264,6 +285,36 @@ export interface AttendanceStatus {
     endsAt: string | null;
     lateAfter: string | null;
   };
+}
+
+export type AttendanceWeekStatus = "PRESENT" | "ABSENT" | "LEAVE" | "HOLIDAY" | "DAY_OFF" | "TODAY" | "UPCOMING" | "NOT_JOINED";
+
+export interface AttendanceWeekDay {
+  date: string;
+  dayType: DayType;
+  holidayName: string | null;
+  status: AttendanceWeekStatus;
+  firstClockInAt: string | null;
+  lastClockOutAt: string | null;
+  // Closed sessions only; add the open session's elapsed time when isOpen.
+  workedSeconds: number;
+  isOpen: boolean;
+  lateMinutes: number;
+  earlyLeaveMinutes: number;
+  sessions: AttendanceRecord[];
+}
+
+// Sunday to Saturday.
+export interface AttendanceWeek {
+  serverNow: string;
+  today: string;
+  timeZone: string;
+  employeeId: string;
+  from: string;
+  to: string;
+  workStartTime: string;
+  workEndTime: string;
+  days: AttendanceWeekDay[];
 }
 
 export interface CapturedLocation {
@@ -556,6 +607,9 @@ export const WorkService = {
   updateTask(taskId: string, data: UpdateTaskPayload, token: string): Promise<WorkTask> {
     return send("PATCH", `/tasks/${encodeURIComponent(taskId)}`, data, token);
   },
+  listActivity(taskId: string, token: string, page = 1): Promise<Page<TaskActivity>> {
+    return get(`/tasks/${encodeURIComponent(taskId)}/activity${query({ page, pageSize: 20 })}`, token);
+  },
   listComments(taskId: string, token: string): Promise<Page<TaskComment>> {
     return get(`/tasks/${encodeURIComponent(taskId)}/comments${query({ pageSize: 100 })}`, token);
   },
@@ -595,6 +649,9 @@ export const WorkService = {
   },
   teamAttendance(range: AttendanceRange & { employeeId?: string }, token: string): Promise<Page<TeamAttendanceRecord>> {
     return get(`/attendance/team${query({ pageSize: 100, ...range })}`, token);
+  },
+  attendanceWeek(params: { date?: string; employeeId?: string }, token: string): Promise<AttendanceWeek> {
+    return get(`/attendance/week${query(params)}`, token);
   },
   clockIn(data: ClockInPayload, token: string): Promise<AttendanceRecord> {
     return send("POST", "/attendance/clock-in", data, token);

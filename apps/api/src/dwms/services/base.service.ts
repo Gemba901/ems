@@ -4,6 +4,7 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 import { TaskPermissionRole, TaskStatus, type Prisma } from 'db';
 import { TASK_ROLE_VALUES } from '../dto/dwmsSettings.dto';
 import { parseTimeZone } from '../utils/taskSchedule';
+import { DwmsTaskEvents } from './dwms-task-events.service';
 
 export class UserPayload {
   userId!: string;
@@ -43,6 +44,8 @@ export abstract class DwmsBaseService {
   protected constructor(
     protected readonly prisma: PrismaService,
     protected readonly notifications: NotificationsService,
+    // Optional so specs can build the service without it; Nest always provides it.
+    protected readonly taskEvents?: DwmsTaskEvents,
   ) {}
 
   async getEmployee(userId: string, organizationId: string) {

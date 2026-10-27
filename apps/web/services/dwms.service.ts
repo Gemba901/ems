@@ -248,9 +248,12 @@ export interface DwmsEmployeeProfileResponse {
     employeeCode?: string | null;
     jobTitle?: string | null;
     department?: DwmsDepartmentOption | null;
+    reportingManager?: DwmsUserRef | null;
   };
   counts?: {
     routineWork: number;
+    goodPractices: number;
+    jobResponsibilities: number;
     assignedTasks: number;
     currentAlerts: number;
     abnormalities: number;
@@ -264,7 +267,7 @@ export interface DwmsEmployeeProfileResponse {
     abnormalities: DwmsPaginationMeta;
   };
   routineWork?: DwmsAllocatedRoutineTask[];
-  assignedTasks?: DwmsTaskItem[];
+  assignedTasks?: DwmsTaskDefinition[];
   currentAlerts?: DwmsAlertItem[];
   abnormalities?: DwmsAlertItem[];
   applicableActivities?: DwmsEmployeeRoleActivityItem[];
@@ -319,6 +322,38 @@ export interface DwmsActivityEmployeeSearchResponse {
     total: number;
     pages: number;
   };
+}
+
+export interface DwmsTaskDefinition extends Omit<
+  DwmsAllocatedRoutineTask,
+  "taskCategory"
+> {
+  taskCategory: DwmsTaskCategory;
+}
+export interface DwmsTaskDefinitionDetail {
+  task: {
+    taskId: string;
+    title: string;
+    description: string | null;
+    frequency: string;
+    isActive: boolean;
+    owner: { id: string; name: string } | null;
+    assignedBy: { id: string; name: string } | null;
+    approvedBy: { id: string; name: string } | null;
+    activity: { code: string } | null;
+  };
+  organizationTimeZone: string;
+  instances: Array<{
+    instanceId: string;
+    title: string;
+    scheduledFor: string;
+    dueAt: string;
+    status: string;
+    completionPercent: number;
+    completedAt: string | null;
+    isOverdue: boolean;
+  }>;
+  pagination: { page: number; limit: number; total: number; pages: number };
 }
 
 export interface DwmsAllocatedRoutineTask {
@@ -743,6 +778,15 @@ export interface DwmsAlertItem {
   departmentId?: string | null;
   againstUserId?: string | null;
   taskInstanceId?: string | null;
+  // Join 10: the improvement raised from this alert (one Kaizen or one SGA)
+  raisedKaizen?: DwmsRaisedImprovement | null;
+  raisedSga?: DwmsRaisedImprovement | null;
+}
+
+export interface DwmsRaisedImprovement {
+  id: string;
+  title: string | null;
+  status: string;
 }
 
 export interface DwmsAlertComment {
@@ -1097,6 +1141,15 @@ export const DwmsService = {
     return getJson(`/dwms/alerts/${encodeURIComponent(alertId)}`, token);
   },
 
+  async raiseImprovementFromAlert(
+    token: string,
+    alertId: string,
+    kind: "kaizen" | "sga",
+    body: { ownerId?: string } = {},
+  ): Promise<{ kaizen?: DwmsRaisedImprovement; sga?: DwmsRaisedImprovement }> {
+    return sendJson(`/dwms/alerts/${encodeURIComponent(alertId)}/${kind}`, token, "POST", body);
+  },
+
   async addAlertComment(
     token: string,
     alertId: string,
@@ -1257,6 +1310,8 @@ export const DwmsService = {
       assignedPage?: number;
       currentAlertPage?: number;
       abnormalityPage?: number;
+      routineCategory?: "GOOD_PRACTICE" | "JOB_RESPONSIBILITY";
+      search?: string;
     },
   ): Promise<DwmsEmployeeProfileResponse> {
     const query = new URLSearchParams();
@@ -1269,6 +1324,9 @@ export const DwmsService = {
     if (pages?.abnormalityPage) {
       query.set("abnormalityPage", String(pages.abnormalityPage));
     }
+    if (pages?.routineCategory)
+      query.set("routineCategory", pages.routineCategory);
+    if (pages?.search?.trim()) query.set("search", pages.search.trim());
     const queryString = query.toString();
     return getJson(
       `/dwms/employees/${encodeURIComponent(employeeId)}/profile${queryString ? `?${queryString}` : ""}`,
@@ -1343,6 +1401,22 @@ export const DwmsService = {
   ): Promise<DwmsTaskSummaryResponse> {
     return getJson(
       `/dwms/myDwms/tasks/summary${buildQuery({ source })}`,
+      token,
+    );
+  },
+
+  async getTaskDefinitionDetail(
+    token: string,
+    taskId: string,
+    page = 1,
+    status = "",
+    date = "",
+  ): Promise<DwmsTaskDefinitionDetail> {
+    const query = new URLSearchParams({ page: String(page) });
+    if (status) query.set("status", status);
+    if (date) query.set("date", date);
+    return getJson<DwmsTaskDefinitionDetail>(
+      `/dwms/task-definitions/${encodeURIComponent(taskId)}?${query}`,
       token,
     );
   },

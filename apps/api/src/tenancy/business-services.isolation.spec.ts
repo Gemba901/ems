@@ -32,7 +32,7 @@ describe('Business service tenant references', () => {
   });
 
   it('SIMS selects the current company employee for personal suggestions', async () => {
-    const sims = new SimsService(db as PrismaService, notifications as NotificationsService, {} as KaizenService);
+    const sims = new SimsService(db as PrismaService, notifications as NotificationsService, {} as KaizenService, {} as never);
     await sims.getMySuggestions('shared-user', 'org-one');
     expect(db.employee.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'shared-user', organizationId: 'org-one' } }));
     expect(db.suggestion.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { employeeId: employee.id } }));
@@ -69,7 +69,7 @@ describe('Business service tenant references', () => {
   });
 
   it('rejects foreign Kaizen owners and team members before writing', async () => {
-    const service = new KaizenService(db, notifications);
+    const service = new KaizenService(db, notifications, {} as never, {} as never, {} as never);
     await expect(service.updateBasicInfo('kaizen-one', 'shared-user', { kaizenOwnerId: 'foreign', teamMemberIds: ['foreign-two'] } as any, 'org-one')).rejects.toThrow();
     expect(db.employee.count).toHaveBeenCalledWith({ where: { id: { in: ['foreign-two', 'foreign'] }, organizationId: 'org-one' } });
     expect(db.kaizen.update).not.toHaveBeenCalled();

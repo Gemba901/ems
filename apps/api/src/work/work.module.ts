@@ -5,6 +5,7 @@ import { ModuleGuard } from 'src/auth/guards/module.guard';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { AttendanceController } from './attendance/attendance.controller';
+import { AttendanceAutoClockOutService } from './attendance/attendance-auto-clock-out.service';
 import { AttendanceService } from './attendance/attendance.service';
 import { PeopleController } from './people/people.controller';
 import { PeopleService } from './people/people.service';
@@ -27,6 +28,6 @@ import { WorkScheduleService } from './work-schedule';
 @Module({
   imports: [TenancyModule, ConfigModule, PrismaModule, AuthModule],
   controllers: [ProjectsController, TasksController, SprintsController, AttendanceController, PeopleController, SettingsController, TeamController, LocationsController],
-  providers: [WorkAccessService, ModuleGuard, ProjectsService, TasksService, SprintsService, AttendanceService, PeopleService, WorkScheduleService, SettingsService, AnalyticsService, TeamService, LocationsService],
+  providers: [AttendanceAutoClockOutService, WorkAccessService, ModuleGuard, ProjectsService, TasksService, SprintsService, AttendanceService, PeopleService, WorkScheduleService, SettingsService, AnalyticsService, TeamService, LocationsService],
 })
 export class WorkModule {}

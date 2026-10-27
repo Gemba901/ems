@@ -20,7 +20,7 @@ describe('Department controller guard wiring', () => {
   const secret = 'a'.repeat(64);
   const membership = jest.fn();
   const service = {
-    createDepartment: jest.fn(), getDepartments: jest.fn(), getDepartmentById: jest.fn(),
+    createDepartment: jest.fn(), createDepartments: jest.fn(), getDepartments: jest.fn(), getDepartmentById: jest.fn(),
     updateDepartment: jest.fn(), deleteDepartment: jest.fn(),
   };
   const actions = ['createDepartment', 'getDepartments', 'getDepartmentById', 'updateDepartment', 'deleteDepartment'] as const;
@@ -48,7 +48,7 @@ describe('Department controller guard wiring', () => {
       headers: { 'x-gemba-proxy-secret': secret, 'x-gemba-tenant-hostname': 'acme.gembapms.co.in' },
       user: { tokenType: 'ACCESS', userId: 'user-one', organizationId: 'org-one', roleId: 2, roleLevel: Role.ADMIN, email: null, isAdminOrg: false },
       body: { organizationId: 'org-two' },
-    } as TenantRequest;
+    } as unknown as TenantRequest;
   }
   function context(req: TenantRequest, action: typeof actions[number]) {
     return { getClass: () => DepartmentsController, getHandler: () => controller[action], switchToHttp: () => ({ getRequest: () => req }) } as unknown as ExecutionContext;
@@ -70,6 +70,16 @@ describe('Department controller guard wiring', () => {
     expect(membership).not.toHaveBeenCalled();
   });
 
+  it('refuses bulk creation after membership is downgraded', async () => {
+    const req = request();
+    const ctx = context(req, 'createDepartment');
+    await module.get(TrustedTenantContextGuard).canActivate(ctx);
+    membership.mockResolvedValue({ roleId: 6, role: { name: Role.EMPLOYEE }, organization: { status: OrgStatus.ACTIVE, isAdminOrg: false } });
+    await module.get(TenantGuard).canActivate(ctx);
+    expect(new RolesGuard(new Reflector()).canActivate(ctx)).toBe(false);
+    expect(service.createDepartments).not.toHaveBeenCalled();
+  });
+
   it('uses current permissions when authorizing a rename', async () => {
     const req = request();
     const ctx = context(req, 'updateDepartment');
@@ -83,11 +93,13 @@ describe('Department controller guard wiring', () => {
     const req = request();
     await module.get(TrustedTenantContextGuard).canActivate(context(req, 'getDepartments'));
     controller.createDepartment({ name: 'Finance' }, req);
+    controller.createDepartment({ names: ['Production'] }, req);
     controller.getDepartments(req);
     controller.getDepartmentById('dept-one', req);
     controller.updateDepartment('dept-one', { name: 'Renamed' }, req);
     controller.deleteDepartment('dept-one', req);
     expect(service.createDepartment).toHaveBeenCalledWith('Finance', 'org-one');
+    expect(service.createDepartments).toHaveBeenCalledWith(['Production'], 'org-one');
     expect(service.getDepartments).toHaveBeenCalledWith('org-one');
     expect(service.getDepartmentById).toHaveBeenCalledWith('dept-one', 'org-one');
     expect(service.updateDepartment).toHaveBeenCalledWith('dept-one', 'Renamed', 'org-one');

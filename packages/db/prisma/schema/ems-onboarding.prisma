@@ -1,0 +1,202 @@
+// EMS Standalone: Onboarding (Module 1 imports)
+enum EmsOnboardingBatchStatus {
+  DRAFT
+  VALIDATING
+  READY
+  PARTIALLY_REGISTERED
+  REGISTERED
+  CANCELLED
+}
+
+enum EmsOnboardingRecordStatus {
+  DRAFT
+  NEEDS_FIXING
+  READY
+  REGISTERED
+  EXCLUDED
+}
+
+model EmsOnboardingBatch {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  label          String?
+  sourceFileName String?
+
+  // Default country for interpreting phone numbers without a country code.
+  defaultPhoneCountry String? @db.VarChar(2)
+
+  status         EmsOnboardingBatchStatus @default(DRAFT)
+
+  uploadedById String?
+  uploadedBy   User?   @relation("EmsBatchUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  records EmsOnboardingRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model EmsOnboardingRecord {
+  // Imported additional columns, with original text and explicit profile mappings.
+  extraFields Json?
+
+  id             String             @id @default(uuid())
+  batchId        String
+  batch          EmsOnboardingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+
+  rowNumber Int?
+
+  // Module 1 — raw as imported, validated at promotion
+  companyCode     String?
+  plantBranchCode String?
+  employeeCode    String?
+  firstName       String?
+  middleName      String?
+  lastName        String?
+  mobileNumber           String?
+  whatsappNumber         String?
+  workEmail       String?
+  gender                 String?
+  nationality            String?
+  currentDepartment      String?
+  hodName                String?
+  hodDesignation         String?
+  workArea               String?
+  fiveSLocationCategory  String? // Keep imported text until validation/registration.
+  subSection             String?
+  jobDesignation         String?
+  beesAccessLevel        String?
+  shift                  String?
+  reportingToName        String?
+  reportingToDesignation String?
+
+  // Explicit manager choice; imported text remains available until resolved.
+  reportingToRecordId String?
+  reportingToRecord EmsOnboardingRecord? @relation("EmsReportingRecord", fields: [reportingToRecordId], references: [id], onDelete: NoAction)
+  reportingRecords EmsOnboardingRecord[] @relation("EmsReportingRecord")
+  employeesAwaitingManager Employee[] @relation("EmployeePendingReporting")
+  reportingToEmployeeId String?
+  reportingToEmployee Employee? @relation("EmsReportingEmployee", fields: [reportingToEmployeeId], references: [id], onDelete: NoAction)
+  reportingToBody String? // Explicit top-level body; mutually exclusive with all other reporting targets.
+  reportingToBoard Boolean @default(false)
+  employmentStatus       String?
+  employmentType         String?
+  // HR confirmation of the department/branch HOD revision, never accepted from an import payload.
+  hodReviewKey String?
+  pendingHodFor EmsDepartmentHod[]
+  reliever1RecordId String?
+  reliever1Record EmsOnboardingRecord? @relation("OnboardingFirstRelieverRecord", fields: [reliever1RecordId], references: [id], onDelete: NoAction)
+  firstRelieverFor EmsOnboardingRecord[] @relation("OnboardingFirstRelieverRecord")
+  reliever1EmployeeId String?
+  reliever1Employee Employee? @relation("OnboardingFirstRelieverEmployee", fields: [reliever1EmployeeId], references: [id], onDelete: NoAction)
+  reliever2RecordId String?
+  reliever2Record EmsOnboardingRecord? @relation("OnboardingSecondRelieverRecord", fields: [reliever2RecordId], references: [id], onDelete: NoAction)
+  secondRelieverFor EmsOnboardingRecord[] @relation("OnboardingSecondRelieverRecord")
+  reliever2EmployeeId String?
+  reliever2Employee Employee? @relation("OnboardingSecondRelieverEmployee", fields: [reliever2EmployeeId], references: [id], onDelete: NoAction)
+  employeesAwaitingFirstReliever Employee[] @relation("EmployeePendingFirstReliever")
+  employeesAwaitingSecondReliever Employee[] @relation("EmployeePendingSecondReliever")
+  reliever1Name          String?
+  reliever1Designation   String?
+  reliever2Name          String?
+  reliever2Designation   String?
+
+  status           EmsOnboardingRecordStatus @default(DRAFT)
+  validationErrors Json?
+  // Server-issued confirmation of a specific duplicate match set.
+  duplicateReviewReceipt Json?
+  exclusionReason  String?
+
+  employeeId   String?   @unique
+  employee     Employee? @relation("EmsOnboardingRegisteredAs", fields: [employeeId], references: [id])
+  registeredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reliever1RecordId])
+  @@index([reliever1EmployeeId])
+  @@index([reliever2RecordId])
+  @@index([reliever2EmployeeId])
+  @@index([reportingToRecordId])
+  @@index([reportingToEmployeeId])
+  @@index([batchId])
+  @@index([organizationId])
+}
+
+// One explicit HOD choice per department and branch. No access-role changes.
+model EmsDepartmentHod {
+  id String @id @default(uuid())
+  departmentId String
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  branchKey String
+  branchLabel String
+  employeeId String?
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  pendingRecordId String?
+  pendingRecord EmsOnboardingRecord? @relation(fields: [pendingRecordId], references: [id], onDelete: NoAction)
+  isUnassigned Boolean @default(false)
+  revision Int @default(1)
+  updatedByUserId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, branchKey])
+  @@index([employeeId])
+  @@index([pendingRecordId])
+}
+
+/// HR's remembered destination for an import column heading, per organisation.
+/// A pre-fill hint for future imports; the import page still shows every choice.
+model EmsImportColumnChoice {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// Heading compared case- and punctuation-insensitively, e.g. "staff no".
+  headingKey     String   @db.VarChar(200)
+  /// Last heading text as written in a workbook, for display.
+  heading        String   @db.VarChar(200)
+  /// Core field key, "fullName", "extra", "ignore" or "profile:<field>".
+  destination    String   @db.VarChar(80)
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, headingKey])
+}
+
+/// The current account invitation for one employee (one row per employee; resending replaces it).
+/// Only a hash of the link token is stored. Status is SENT (email), SHARED (link created for
+/// WhatsApp or copying), NOTICE_SENT (no link: already has a password, or a shared contact),
+/// ACCEPTED, FAILED, CANCELLED or SKIPPED (with skipReason). Expiry is derived from expiresAt.
+model EmsInvitation {
+  id             String    @id @default(uuid())
+  organizationId String
+  employeeId     String    @unique
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  userId         String?
+  /// SETUP (create a password), ACCESS_NOTICE (already has a password) or CONTACT_NOTICE (shared contact).
+  kind           String    @db.VarChar(20)
+  /// EMAIL or WHATSAPP
+  channel        String    @db.VarChar(20)
+  status         String    @db.VarChar(20)
+  destination    String?   @db.VarChar(320)
+  skipReason     String?   @db.VarChar(200)
+  lastError      String?   @db.VarChar(500)
+  tokenHash      String?   @unique @db.VarChar(64)
+  expiresAt      DateTime?
+  sendCount      Int       @default(0)
+  sentById       String?
+  sentAt         DateTime?
+  acceptedAt     DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([organizationId, status])
+}

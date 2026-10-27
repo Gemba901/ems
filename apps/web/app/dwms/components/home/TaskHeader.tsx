@@ -35,8 +35,8 @@ export default function TaskHeader({ activeTab, setActiveTab, counts, source, ri
   return (
     <div className="w-full">
       {/* Sub-tabs Navigation */}
-      <div className="flex items-end gap-4 border-b border-border-app">
-        <div className="flex min-w-0 flex-1 gap-5 overflow-x-auto select-none whitespace-nowrap">
+      <div className="flex min-w-0 flex-col gap-3 border-b border-border-app sm:flex-row sm:items-end sm:gap-4">
+        <div className="-mx-1 flex min-w-0 flex-1 gap-5 overflow-x-auto px-1 select-none whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {visibleTabs.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
@@ -44,7 +44,7 @@ export default function TaskHeader({ activeTab, setActiveTab, counts, source, ri
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`relative flex shrink-0 cursor-pointer items-center gap-2 border-b-2 pb-3 text-sm font-semibold transition duration-150 ${isActive
+                className={`relative flex min-h-11 shrink-0 cursor-pointer items-center gap-2 border-b-2 pb-2 pt-1 text-sm font-semibold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive
                   ? 'text-blue-700 border-b-2 border-blue-500'
                   : 'text-slate-500 border-b-2 border-transparent hover:text-slate-800'
                   }`}
@@ -63,7 +63,7 @@ export default function TaskHeader({ activeTab, setActiveTab, counts, source, ri
             );
           })}
         </div>
-        {rightContent && <div className="shrink-0 pb-2">{rightContent}</div>}
+        {rightContent && <div className="w-full min-w-0 pb-3 sm:w-auto sm:shrink-0 sm:pb-2">{rightContent}</div>}
       </div>
     </div>
   );

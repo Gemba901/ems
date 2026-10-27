@@ -29,11 +29,11 @@ export default function TaskDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-[2px] transition-colors duration-200"
+      className="dwms-dialog-backdrop fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-[2px] transition-colors duration-200"
       onClick={onClose}
     >
       <article
-        className="max-h-[88vh] w-full max-w-3xl overflow-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl transition-colors duration-200 sm:rounded-[28px] sm:p-7"
+        className="dwms-dialog-panel w-full max-w-3xl overflow-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl transition-colors duration-200 sm:max-h-[88vh] sm:rounded-[28px] sm:p-7"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">

@@ -16,19 +16,146 @@ import {
   type CreateActivityPayload,
   type DwmsActivityItem,
   type DwmsDepartmentOption,
-  type DwmsFrequency,
+  type DwmsRecurringSchedule,
   type IngestActivityRowPayload,
 } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
 import DwmsSelectDropdown from "../DwmsSelectDropdown";
+import FormHelp, { type FormHelpContent } from "./FormHelp";
+import RecurrenceBuilder, { recurrenceSummary } from "./RecurrenceBuilder";
+import {
+  GuidedForm,
+  GuidedFormSection,
+  GuidedFormReview,
+  isRecurringScheduleReady,
+} from "./GuidedForm";
+import { getOrganizationTodayKey } from "../../utils/organizationDate";
 
-const FREQUENCIES: DwmsFrequency[] = [
-  "DAILY",
-  "WEEKLY",
-  "MONTHLY",
-  "QUARTERLY",
-  "YEARLY",
-];
+const ACTIVITY_STAGE_HELP: Record<string, FormHelpContent> = {
+  work: {
+    title: "Work details",
+    options: [
+      {
+        label: "Name & code",
+        description: "Identify the activity with a clear name and unique code.",
+      },
+      {
+        label: "Estimated time",
+        description:
+          "Enter the time needed to complete the work, measured in hours.",
+      },
+      {
+        label: "Expected output",
+        description:
+          "Describe the result that shows the activity has been completed successfully.",
+      },
+      {
+        label: "SOP",
+        description:
+          "Explain the steps or work method the person should follow.",
+      },
+      {
+        label: "Remarks",
+        description:
+          "Add any extra instructions or context that will help with the work.",
+      },
+    ],
+  },
+  audience: {
+    title: "Who it's for",
+    options: [
+      {
+        label: "Organisation",
+        description:
+          "Use when the activity applies to everyone in the company.",
+      },
+      {
+        label: "Department",
+        description:
+          "Choose a department when the activity applies to that team.",
+      },
+      {
+        label: "Job title",
+        description:
+          "Choose a job title when everyone in that role should perform the activity.",
+      },
+      {
+        label: "Employee",
+        description:
+          "Choose one person when the activity is specific to their responsibilities.",
+      },
+    ],
+  },
+  schedule: {
+    title: "When it repeats",
+    options: [
+      {
+        label: "Days",
+        description: "Repeat at a fixed interval, such as every 2 days.",
+      },
+      {
+        label: "Weeks",
+        description: "Choose the weekdays and how many weeks between repeats.",
+      },
+      {
+        label: "Months",
+        description:
+          "Choose a day of the month and how many months between repeats.",
+      },
+      {
+        label: "Starts on",
+        description:
+          "Choose the date from which the repeating schedule begins.",
+      },
+      {
+        label: "Prerequisite",
+        description:
+          "An earlier activity that must finish first; employee scope only.",
+      },
+    ],
+  },
+  extras: {
+    title: "Extra details",
+    options: [
+      {
+        label: "Gemba section",
+        description:
+          "Identify the location or section where this work takes place.",
+      },
+      {
+        label: "Process area",
+        description:
+          "Identify the process or work area this activity belongs to.",
+      },
+      {
+        label: "Documents",
+        description:
+          "Describe the files or references needed to carry out the work.",
+      },
+    ],
+    note: "All fields in this section are optional.",
+  },
+  review: {
+    title: "Review",
+    options: [
+      {
+        label: "Check",
+        description:
+          "Confirm the work details, who it applies to, its schedule and any extra requirements.",
+      },
+      {
+        label: "Back",
+        description:
+          "Return to an earlier section to make changes; your entries are kept.",
+      },
+      {
+        label: "Create activity",
+        description:
+          "Save the recurring activity using the details shown here.",
+      },
+    ],
+  },
+};
 
 const EMPTY_FORM: CreateActivityPayload = {
   name: "",
@@ -304,9 +431,34 @@ function cleanPayload(payload: CreateActivityPayload): CreateActivityPayload {
   return cleaned as unknown as CreateActivityPayload;
 }
 
+function schedulesMatch(
+  activity: DwmsActivityItem,
+  schedule: DwmsRecurringSchedule,
+) {
+  const candidate = activity.schedule;
+  if (!candidate) return false;
+  return (
+    candidate.startsOn === schedule.startsOn &&
+    candidate.unit === schedule.unit &&
+    candidate.interval === schedule.interval &&
+    candidate.dayOfMonth === schedule.dayOfMonth &&
+    JSON.stringify([...(candidate.weekdays ?? [])].sort()) ===
+      JSON.stringify([...(schedule.weekdays ?? [])].sort())
+  );
+}
+
 export default function ActivityForm({ onCreated }: ActivityFormProps) {
   const { accessToken, user } = useAuthStore();
   const [form, setForm] = useState<CreateActivityPayload>(EMPTY_FORM);
+  const [formVersion, setFormVersion] = useState(0);
+  const [activeStage, setActiveStage] = useState("work");
+  const activityToday = getOrganizationTodayKey(user?.organizationTimeZone);
+  const [schedule, setSchedule] = useState<DwmsRecurringSchedule>(() => ({
+    kind: "RECURRING",
+    startsOn: activityToday,
+    unit: "DAY",
+    interval: 1,
+  }));
   const [departments, setDepartments] = useState<DwmsDepartmentOption[]>([]);
   const [activities, setActivities] = useState<DwmsActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -359,7 +511,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
         .filter(
           (activity) =>
             activity.status !== "ARCHIVED" &&
-            activity.frequency === form.frequency,
+            schedulesMatch(activity, schedule),
         )
         .map((activity) => ({
           value: activity.id,
@@ -368,7 +520,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
             .filter(Boolean)
             .join(" | "),
         })),
-    [activities, form.frequency],
+    [activities, schedule],
   );
 
   function setField<K extends keyof CreateActivityPayload>(
@@ -382,11 +534,28 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
   async function submitActivity(event: React.FormEvent) {
     event.preventDefault();
     if (!accessToken) return;
+    if (!activityReady) {
+      setMessage(
+        "Complete the required work details, audience, and schedule before creating the activity.",
+      );
+      return;
+    }
     setLoading(true);
     setMessage(null);
     try {
-      await DwmsService.createActivity(accessToken, cleanPayload(form));
+      await DwmsService.createActivity(
+        accessToken,
+        cleanPayload({ ...form, schedule }),
+      );
       setForm({ ...EMPTY_FORM });
+      setFormVersion((version) => version + 1);
+      setActiveStage("work");
+      setSchedule({
+        kind: "RECURRING",
+        startsOn: activityToday,
+        unit: "DAY",
+        interval: 1,
+      });
       setMessage("Activity created successfully.");
       onCreated?.();
     } catch (error) {
@@ -504,8 +673,36 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
       setImporting(false);
     }
   }
+  const workReady = Boolean(
+    form.name.trim() &&
+    form.code.trim() &&
+    form.workMethod?.trim() &&
+    form.completionOutput?.trim() &&
+    form.remarks.trim() &&
+    Number.isFinite(form.completionDeadline) &&
+    form.completionDeadline >= 0,
+  );
+  const audienceReady =
+    form.scope === ActivityScope.ORGANISATION ||
+    Boolean(form.scopeTarget?.trim());
+  const scheduleReady = isRecurringScheduleReady(schedule, activityToday);
+  const activityReady = workReady && audienceReady && scheduleReady;
+  const scopeLabels = {
+    [ActivityScope.ORGANISATION]: "Entire organisation",
+    [ActivityScope.DEPARTMENT]: "One department",
+    [ActivityScope.JOB_TITLE]: "People with a job title",
+    [ActivityScope.EMPLOYEE]: "One employee",
+  };
+  const formSteps = [
+    { id: "work", title: "Work details", complete: workReady },
+    { id: "audience", title: "Who it's for", complete: audienceReady },
+    { id: "schedule", title: "When it repeats", complete: scheduleReady },
+    { id: "extras", title: "Extra details", complete: true, optional: true },
+    { id: "review", title: "Review", complete: activityReady },
+  ];
+
   return (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+    <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
       {!canManageActivities ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:p-6 lg:col-span-12">
           Activity creation is available to Management, Admin, Super Admin, HR,
@@ -532,173 +729,266 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <SelectField
-              label="Scope of Activity"
-              required
-              value={form.scope}
-              options={Object.values(ActivityScope).map((value) => ({
-                value,
-                label: value.replaceAll("_", " "),
-              }))}
-              placeholder="Choose scope"
-              onChange={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  scope: value as ActivityScope,
-                  scopeTarget: "",
-                  parentActivityIds: [],
-                }))
-              }
-            />
-            {form.scope === ActivityScope.DEPARTMENT ? (
-              <SelectField
-                label="Target"
-                required
-                value={form.scopeTarget ?? ""}
-                options={departmentOptions}
-                placeholder="Choose department"
-                onChange={(value) => setField("scopeTarget", value)}
-              />
-            ) : form.scope === ActivityScope.ORGANISATION ? (
-              <div />
-            ) : (
-              <TextField
-                label="Target"
-                required
-                placeholder={
-                  form.scope === ActivityScope.EMPLOYEE
-                    ? "Employee ID"
-                    : "Exact job title"
-                }
-                value={form.scopeTarget ?? ""}
-                onChange={(value) => setField("scopeTarget", value)}
-              />
-            )}
-            <TextField
-              label="Process Name"
-              placeholder="Daily line startup inspection"
-              required
-              value={form.name}
-              onChange={(value) => setField("name", value)}
-            />
-            <TextField
-              label="Activity Code"
-              required
-              placeholder="PROD-001"
-              value={form.code}
-              onChange={(value) => setField("code", value)}
-            />
-            <TextField
-              label="Estimated Time (Hours)"
-              required
-              type="number"
-              min={0}
-              step={0.01}
-              placeholder="2"
-              value={form.completionDeadline}
-              onChange={(value) =>
-                setField(
-                  "completionDeadline",
-                  value === "" ? 0 : Math.max(0, Number(value)),
-                )
-              }
-            />
-            <SelectField
-              label="Frequency"
-              required
-              value={String(form.frequency)}
-              options={FREQUENCIES.map((value) => ({
-                value,
-                label: value.replaceAll("_", " "),
-              }))}
-              placeholder="Select frequency"
-              onChange={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  frequency: value,
-                  parentActivityIds: [],
-                }))
-              }
-            />
-            <TextField
-              label="Expected Output"
-              required
-              placeholder="Checklist completed and abnormalities reported"
-              value={form.completionOutput ?? ""}
-              onChange={(value) => setField("completionOutput", value)}
-            />
-            <TextField
-              label="Gemba Section"
-              placeholder="Optional"
-              value={form.gembaSection ?? ""}
-              onChange={(value) => setField("gembaSection", value)}
-            />
-            <TextField
-              label="Process Area"
-              placeholder="Optional"
-              value={form.processArea ?? ""}
-              onChange={(value) => setField("processArea", value)}
-            />
-            <TextField
-              label="Documents Required"
-              placeholder="Startup checklist, SOP reference"
-              value={form.evidenceRequired ?? ""}
-              onChange={(value) => setField("evidenceRequired", value)}
-            />
-            {form.scope === ActivityScope.EMPLOYEE && (
-              <label className="block md:col-span-2">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
-                  Parent Activity
-                </span>
-                <DwmsSelectDropdown
-                  value={form.parentActivityIds?.[0] ?? ""}
-                  options={parentActivityOptions}
-                  placeholder="Select prerequisite activity"
-                  searchEnabled
-                  allowClear
-                  emptyMessage="No same-frequency activities found."
-                  onChange={(value) =>
-                    setField("parentActivityIds", value ? [value] : [])
-                  }
-                  triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-                />
-              </label>
-            )}
-          </div>
-
-          <TextArea
-            label="Description / SOP"
-            required
-            placeholder="Describe the exact steps, SOP, or standard method to follow."
-            value={form.workMethod ?? ""}
-            onChange={(value) => setField("workMethod", value)}
-          />
-          <TextArea
-            label="Remarks"
-            required
-            placeholder="Add required operational remarks."
-            value={form.remarks}
-            onChange={(value) => setField("remarks", value)}
-          />
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white py-4 text-sm font-semibold text-text-app shadow-sm transition hover:bg-zinc-50 disabled:opacity-60"
+          <GuidedForm
+            key={formVersion}
+            title="Create an activity"
+            description="Define the work, choose who should do it, and set a repeat schedule, one section at a time. You can go back to change your entries."
+            steps={formSteps}
+            onStepChange={setActiveStage}
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <PlusCircle className="h-4 w-4" />
-            )}
-            <span>{loading ? "Creating..." : "Create activity"}</span>
-          </button>
+            <GuidedFormSection
+              id="work"
+              description="Give this activity a clear name and code. Explain the steps and what a completed result looks like."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <TextField
+                  label="Process Name"
+                  placeholder="Daily line startup inspection"
+                  required
+                  value={form.name}
+                  onChange={(value) => setField("name", value)}
+                />
+                <TextField
+                  label="Activity Code"
+                  required
+                  placeholder="PROD-001"
+                  value={form.code}
+                  onChange={(value) => setField("code", value)}
+                />
+                <TextField
+                  label="Estimated Time (Hours)"
+                  required
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="2"
+                  value={form.completionDeadline}
+                  onChange={(value) =>
+                    setField(
+                      "completionDeadline",
+                      value === "" ? 0 : Math.max(0, Number(value)),
+                    )
+                  }
+                />
+                <TextField
+                  label="Expected Output"
+                  required
+                  placeholder="Checklist completed and abnormalities reported"
+                  value={form.completionOutput ?? ""}
+                  onChange={(value) => setField("completionOutput", value)}
+                />
+              </div>
+              <p className="text-xs leading-5 text-slate-500">
+                The activity code is a short, unique reference, such as
+                PROD-001. Estimated time is the number of hours needed for one
+                occurrence.
+              </p>
+              <TextArea
+                label="How to do the work (SOP)"
+                required
+                placeholder="Describe the exact steps, SOP, or standard method to follow."
+                value={form.workMethod ?? ""}
+                onChange={(value) => setField("workMethod", value)}
+              />
+              <TextArea
+                label="Remarks"
+                required
+                placeholder="e.g. Report abnormalities to the shift supervisor."
+                value={form.remarks}
+                onChange={(value) => setField("remarks", value)}
+              />
+            </GuidedFormSection>
+            <GuidedFormSection
+              id="audience"
+              description="Choose who receives this activity. Entire organisation includes everyone; the other choices narrow it to a department, job title, or employee."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <SelectField
+                  label="Who should do this activity?"
+                  required
+                  value={form.scope}
+                  options={Object.values(ActivityScope).map((value) => ({
+                    value,
+                    label: scopeLabels[value],
+                  }))}
+                  placeholder="Choose scope"
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      scope: value as ActivityScope,
+                      scopeTarget: "",
+                      parentActivityIds: [],
+                    }))
+                  }
+                />
+                {form.scope === ActivityScope.DEPARTMENT ? (
+                  <SelectField
+                    label="Department"
+                    required
+                    value={form.scopeTarget ?? ""}
+                    options={departmentOptions}
+                    placeholder="Choose department"
+                    onChange={(value) => setField("scopeTarget", value)}
+                  />
+                ) : form.scope === ActivityScope.ORGANISATION ? (
+                  <div />
+                ) : (
+                  <TextField
+                    label={
+                      form.scope === ActivityScope.EMPLOYEE
+                        ? "Employee ID"
+                        : "Job title"
+                    }
+                    required
+                    placeholder={
+                      form.scope === ActivityScope.EMPLOYEE
+                        ? "Employee ID"
+                        : "Exact job title"
+                    }
+                    value={form.scopeTarget ?? ""}
+                    onChange={(value) => setField("scopeTarget", value)}
+                  />
+                )}
+              </div>
+            </GuidedFormSection>
+            <GuidedFormSection
+              id="schedule"
+              description="Set how often the work repeats and when it starts. Check the next dates before continuing."
+            >
+              <div className="md:col-span-2">
+                <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                  Recurrence <span className="text-rose-500">*</span>
+                </span>
+                <RecurrenceBuilder
+                  value={schedule}
+                  today={activityToday}
+                  onChange={(nextSchedule) => {
+                    if (!nextSchedule) return;
+                    setSchedule(nextSchedule);
+                    setForm((current) => ({
+                      ...current,
+                      frequency:
+                        nextSchedule.unit === "DAY"
+                          ? "DAILY"
+                          : nextSchedule.unit === "WEEK"
+                            ? "WEEKLY"
+                            : nextSchedule.interval === 3
+                              ? "QUARTERLY"
+                              : "MONTHLY",
+                      parentActivityIds: [],
+                    }));
+                  }}
+                />
+              </div>
+              {form.scope === ActivityScope.EMPLOYEE && (
+                <label className="block md:col-span-2">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Prerequisite activity (optional)
+                  </span>
+                  <DwmsSelectDropdown
+                    value={form.parentActivityIds?.[0] ?? ""}
+                    options={parentActivityOptions}
+                    placeholder="Select prerequisite activity"
+                    searchEnabled
+                    allowClear
+                    emptyMessage="No activities with the same repeat schedule found."
+                    onChange={(value) =>
+                      setField("parentActivityIds", value ? [value] : [])
+                    }
+                    triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                  />
+                </label>
+              )}
+            </GuidedFormSection>
+            <GuidedFormSection
+              id="extras"
+              description="Add a work location or documents only if they help people carry out this activity. You can leave these fields empty."
+            >
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <TextField
+                  label="Gemba section (optional)"
+                  placeholder="Optional"
+                  value={form.gembaSection ?? ""}
+                  onChange={(value) => setField("gembaSection", value)}
+                />
+                <TextField
+                  label="Process area (optional)"
+                  placeholder="Optional"
+                  value={form.processArea ?? ""}
+                  onChange={(value) => setField("processArea", value)}
+                />
+                <TextField
+                  label="Documents required (optional)"
+                  placeholder="Startup checklist, SOP reference"
+                  value={form.evidenceRequired ?? ""}
+                  onChange={(value) => setField("evidenceRequired", value)}
+                />
+              </div>
+            </GuidedFormSection>
+            <GuidedFormSection
+              id="review"
+              description="Check the activity and its audience before creating it. Go back to change any detail."
+            >
+              <GuidedFormReview
+                ready={activityReady}
+                entries={[
+                  { label: "Activity", value: form.name.trim() },
+                  { label: "Code", value: form.code.trim() },
+                  { label: "Who it's for", value: scopeLabels[form.scope] },
+                  {
+                    label: "Target",
+                    value:
+                      form.scope === ActivityScope.ORGANISATION
+                        ? "Everyone in the organisation"
+                        : (departmentOptions.find(
+                            (option) => option.value === form.scopeTarget,
+                          )?.label ??
+                          form.scopeTarget ??
+                          ""),
+                  },
+                  {
+                    label: "Repeat schedule",
+                    value:
+                      recurrenceSummary(schedule) +
+                      " · starts " +
+                      schedule.startsOn,
+                  },
+                  {
+                    label: "Estimated time",
+                    value: form.completionDeadline + " hours per occurrence",
+                  },
+                  {
+                    label: "Expected output",
+                    value: form.completionOutput ?? "",
+                  },
+                  {
+                    label: "Documents",
+                    value: form.evidenceRequired?.trim() || "None specified",
+                  },
+                  { label: "Work instructions", value: form.workMethod ?? "" },
+                  { label: "Remarks", value: form.remarks },
+                ]}
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#52618a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#445174] disabled:opacity-60"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <PlusCircle className="h-4 w-4" />
+                )}
+                <span>{loading ? "Creating..." : "Create activity"}</span>
+              </button>
+            </GuidedFormSection>
+          </GuidedForm>
         </form>
       )}
 
       {canManageActivities && (
-        <aside className="space-y-4 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-6 lg:col-span-4">
+        <aside className="space-y-4 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-5 lg:col-span-4">
+          <FormHelp {...ACTIVITY_STAGE_HELP[activeStage]} />
           <div className="flex items-center gap-3 border-b border-border-app pb-4">
             <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
             <div>
@@ -706,8 +996,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                 Import activities
               </h2>
               <p className="text-xs text-muted-app">
-                Upload an XLSX, XLS, CSV, or TSV with recurring activity
-                columns.
+                Bulk create from XLSX, XLS, CSV or TSV.
               </p>
             </div>
           </div>
@@ -741,37 +1030,42 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               }}
             />
           </label>
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-600">
-            <div>
-              <p className="font-bold text-slate-700">Workbook import</p>
+          <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+              File format guide
+            </summary>
+            <div className="mt-3 space-y-3 text-xs leading-5 text-slate-600">
+              <div>
+                <p className="font-bold text-slate-700">Workbook import</p>
+                <p>
+                  XLSX and XLS imports read every worksheet in the workbook.
+                  Each worksheet should have its own header row; sheets without
+                  activity headers are skipped.
+                </p>
+              </div>
+              <div>
+                <p className="font-bold text-slate-700">Required columns</p>
+                <p>
+                  Scope of Activity, Target (except Organisation), Activity
+                  Code, Process Name, Description / SOP, Frequency, Estimated
+                  Time (Hours), Expected Output, and Remarks.
+                </p>
+              </div>
+              <div>
+                <p className="font-bold text-slate-700">Optional columns</p>
+                <p>
+                  Documents Required, Gemba Section, Process Area, and Parent
+                  Activity Code (Employee scope only).
+                </p>
+              </div>
               <p>
-                XLSX and XLS imports read every worksheet in the workbook. Each
-                worksheet should have its own header row; sheets without
-                activity headers are skipped.
+                Scope of Activity must be Organisation, Department, Job Title,
+                or Employee. Target contains a department name, exact job title,
+                or employee ID; use blank or NA for Organisation. Frequency must
+                be DAILY, WEEKLY, MONTHLY, QUARTERLY, or YEARLY.
               </p>
             </div>
-            <div>
-              <p className="font-bold text-slate-700">Required columns</p>
-              <p>
-                Scope of Activity, Target (except Organisation), Activity Code,
-                Process Name, Description / SOP, Frequency, Estimated Time
-                (Hours), Expected Output, and Remarks.
-              </p>
-            </div>
-            <div>
-              <p className="font-bold text-slate-700">Optional columns</p>
-              <p>
-                Documents Required, Gemba Section, Process Area, and Parent
-                Activity Code (Employee scope only).
-              </p>
-            </div>
-            <p>
-              Scope of Activity must be Organisation, Department, Job Title, or
-              Employee. Target contains a department name, exact job title, or
-              employee ID; use blank or NA for Organisation. Frequency must be
-              DAILY, WEEKLY, MONTHLY, QUARTERLY, or YEARLY.
-            </p>
-          </div>
+          </details>
         </aside>
       )}
     </div>
@@ -799,7 +1093,7 @@ function TextField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+      <span className="mb-1.5 block text-sm font-medium text-slate-700">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>
@@ -832,7 +1126,7 @@ function TextArea({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+      <span className="mb-1.5 block text-sm font-medium text-slate-700">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>
@@ -865,16 +1159,18 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+      <span className="mb-1.5 block text-sm font-medium text-slate-700">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>
       <DwmsSelectDropdown
+        ariaLabel={label}
         value={value}
         options={options}
         onChange={onChange}
         placeholder={placeholder}
-        searchEnabled
+        searchEnabled={options.length > 6}
+        searchPlaceholder="Search options..."
         triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
       />
     </label>

@@ -127,4 +127,21 @@ export const AuthService = {
         if (!res.ok) throw new Error("Failed to load organization info.");
         return res.json();
     },
+
+    // Guided tours the signed-in person has already finished or skipped, on any device.
+    async getCompletedTours(token: string): Promise<string[]> {
+        const res = await apiClient(`${API_URL}/auth/tours`, { headers: { Authorization: `Bearer ${token}` } }, token);
+        if (!res.ok) throw new Error("Failed to load tours.");
+        return res.json();
+    },
+
+    async markTourCompleted(token: string, tourKey: string): Promise<string[]> {
+        const res = await apiClient(`${API_URL}/auth/tours`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ tourKey }),
+        }, token);
+        if (!res.ok) throw new Error("Failed to save tour progress.");
+        return res.json();
+    },
 };

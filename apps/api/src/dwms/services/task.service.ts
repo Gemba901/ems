@@ -12,6 +12,7 @@ import {
   EmployeeActivityStatus,
   NotificationType,
   Priority,
+  RecurrenceUnit,
   TaskFrequency,
   TaskStatus,
 } from 'db';
@@ -29,6 +30,13 @@ import {
   startOfDayInTimeZone,
   parseDateOnly,
   parseTaskFrequency,
+  parseStructuredRecurrence,
+  recurrenceFrequency,
+  isStructuredOccurrenceDate,
+  moveOccurrenceToNextOpenDate,
+  structuredRecurrenceLabel,
+  WEEKDAY_CODES,
+  type StructuredRecurrence,
   toIsoDate,
   toUtcDateOnly,
 } from '../utils/taskSchedule';
@@ -72,9 +80,7 @@ export function resolveTaskCategory(task: {
     return DWMS_TASK_CATEGORIES.JOB_RESPONSIBILITY;
   }
 
-  throw new InternalServerErrorException(
-    'Task category cannot be determined',
-  );
+  throw new InternalServerErrorException('Task category cannot be determined');
 }
 
 const recurringTaskFrequencies = new Set<TaskFrequency>([
@@ -92,6 +98,11 @@ type OfficeScheduledTask = {
   ownerId?: string | null;
   activityId?: string | null;
   owner?: { organizationId?: string | null } | null;
+  recurrenceUnit?: RecurrenceUnit | null;
+  recurrenceInterval?: number | null;
+  recurrenceWeekdays?: number[];
+  recurrenceDayOfMonth?: number | null;
+  recurrenceStartsOn?: Date | null;
 };
 
 type CreateAssignedTaskInput = CreateAssignedTaskDto & {
@@ -135,18 +146,37 @@ function getCurrentRoutinePeriodWhere(referenceDate: Date) {
   nextDay.setUTCDate(nextDay.getUTCDate() + 1);
 
   const weekStart = new Date(referenceDate);
-  weekStart.setUTCDate(weekStart.getUTCDate() - (weekStart.getUTCDay() + 6) % 7);
+  weekStart.setUTCDate(
+    weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7),
+  );
   const nextWeek = new Date(weekStart);
   nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
 
-  const monthStart = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1));
-  const nextMonth = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth() + 1, 1));
+  const monthStart = new Date(
+    Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1),
+  );
+  const nextMonth = new Date(
+    Date.UTC(
+      referenceDate.getUTCFullYear(),
+      referenceDate.getUTCMonth() + 1,
+      1,
+    ),
+  );
 
   return {
     OR: [
-      { frequency: TaskFrequency.DAILY, scheduledFor: { gte: referenceDate, lt: nextDay } },
-      { frequency: TaskFrequency.WEEKLY, scheduledFor: { gte: weekStart, lt: nextWeek } },
-      { frequency: TaskFrequency.MONTHLY, scheduledFor: { gte: monthStart, lt: nextMonth } },
+      {
+        frequency: TaskFrequency.DAILY,
+        scheduledFor: { gte: referenceDate, lt: nextDay },
+      },
+      {
+        frequency: TaskFrequency.WEEKLY,
+        scheduledFor: { gte: weekStart, lt: nextWeek },
+      },
+      {
+        frequency: TaskFrequency.MONTHLY,
+        scheduledFor: { gte: monthStart, lt: nextMonth },
+      },
     ],
   };
 }
@@ -356,6 +386,27 @@ export abstract class DwmsTaskService extends DwmsBaseService {
   ) {
     const date = toUtcDateOnly(referenceDate);
 
+    if (
+      task.recurrenceUnit &&
+      task.recurrenceInterval &&
+      task.recurrenceStartsOn &&
+      isStructuredOccurrenceDate(
+        {
+          unit: task.recurrenceUnit,
+          interval: task.recurrenceInterval,
+          weekdays: task.recurrenceWeekdays ?? [],
+          dayOfMonth: task.recurrenceDayOfMonth ?? null,
+          startsOn: task.recurrenceStartsOn,
+        },
+        date,
+      )
+    ) {
+      return moveOccurrenceToNextOpenDate(date, (candidate) =>
+        this.isOfficeOpenDate(organizationId, candidate),
+      );
+    }
+    if (task.recurrenceUnit) return null;
+
     switch (task.frequency) {
       case TaskFrequency.DAILY:
         return (await this.isOfficeOpenDate(organizationId, date))
@@ -476,8 +527,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           dueAt,
           titleSnapshot: task.title,
           descriptionSnapshot: task.description,
-          requiresDocumentSnapshot:
-            task.requiresCompletionDocument ?? false,
+          requiresDocumentSnapshot: task.requiresCompletionDocument ?? false,
           documentNameSnapshot: task.completionDocumentName ?? null,
           status: initialStatus,
           completionPercent: initialCompletionPercent,
@@ -722,6 +772,15 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       (instance.alerts ?? []).some(
         (alert: any) => alert.type === AlertType.DELAY,
       );
+    const structuredRecurrence = task.recurrenceUnit
+      ? {
+          unit: task.recurrenceUnit,
+          interval: task.recurrenceInterval,
+          weekdays: task.recurrenceWeekdays ?? [],
+          dayOfMonth: task.recurrenceDayOfMonth ?? null,
+          startsOn: task.recurrenceStartsOn,
+        }
+      : null;
 
     return {
       id: instance.id,
@@ -733,6 +792,21 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           ? task.description
           : instance.descriptionSnapshot,
       frequency: task.frequency,
+      schedule: structuredRecurrence
+        ? {
+            kind: 'RECURRING',
+            startsOn: structuredRecurrence.startsOn.toISOString().slice(0, 10),
+            unit: structuredRecurrence.unit,
+            interval: structuredRecurrence.interval,
+            weekdays: structuredRecurrence.weekdays.map(
+              (day: number) => WEEKDAY_CODES[day],
+            ),
+            dayOfMonth: structuredRecurrence.dayOfMonth ?? undefined,
+          }
+        : undefined,
+      scheduleLabel: structuredRecurrence
+        ? structuredRecurrenceLabel(structuredRecurrence)
+        : undefined,
       organizationTimeZone:
         task.organizationTimeZone ?? task.owner?.organization?.timeZone,
       ownerName,
@@ -981,6 +1055,7 @@ export abstract class DwmsTaskService extends DwmsBaseService {
   }
   private async assertTaskCanBeCompletedNow(
     instance: {
+      taskId: string;
       frequency: TaskFrequency;
       scheduledFor: Date;
       dueAt: Date;
@@ -988,18 +1063,26 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     organizationId: string,
   ) {
     const timeZone = await this.getOrganizationTimeZone(organizationId);
-    const windowStart = getCompletionWindowStart(
-      instance.frequency,
-      instance.scheduledFor,
-      timeZone,
-    );
+    const definition = await this.prisma.task.findUnique({
+      where: { id: instance.taskId },
+      select: { recurrenceUnit: true },
+    });
+    const windowStart = definition?.recurrenceUnit
+      ? startOfDayInTimeZone(instance.scheduledFor, timeZone)
+      : getCompletionWindowStart(
+          instance.frequency,
+          instance.scheduledFor,
+          timeZone,
+        );
 
     if (!windowStart) return;
 
     const now = new Date();
     if (now >= windowStart && now <= instance.dueAt) return;
 
-    const windowLabel = getCompletionWindowLabel(instance.frequency);
+    const windowLabel = definition?.recurrenceUnit
+      ? 'day'
+      : getCompletionWindowLabel(instance.frequency);
     throw new BadRequestException(
       `This ${instance.frequency.toLowerCase()} task can only be completed in its scheduled ${windowLabel}, from ${windowStart.toISOString()} until ${instance.dueAt.toISOString()}.`,
     );
@@ -1031,11 +1114,12 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (source && !['routine', 'assigned'].includes(source)) {
       throw new BadRequestException('Invalid task source');
     }
-    const sourceTaskWhere = source === 'routine'
-      ? { activityId: { not: null }, assignedById: null }
-      : source === 'assigned'
-        ? { assignedById: { not: null } }
-        : null;
+    const sourceTaskWhere =
+      source === 'routine'
+        ? { activityId: { not: null }, assignedById: null }
+        : source === 'assigned'
+          ? { assignedById: { not: null } }
+          : null;
     const sourceWhere = sourceTaskWhere ? { task: sourceTaskWhere } : {};
     if (
       scope &&
@@ -1347,7 +1431,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     };
   }
 
-  async getMyDwmsTaskSummary(user: UserPayload, rawDate?: string, rawSource?: string) {
+  async getMyDwmsTaskSummary(
+    user: UserPayload,
+    rawDate?: string,
+    rawSource?: string,
+  ) {
     const employee = await this.getEmployee(user.userId, user.organizationId);
 
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
@@ -1360,11 +1448,12 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (source && !['routine', 'assigned'].includes(source)) {
       throw new BadRequestException('Invalid task source');
     }
-    const sourceTaskWhere = source === 'routine'
-      ? { activityId: { not: null }, assignedById: null }
-      : source === 'assigned'
-        ? { assignedById: { not: null } }
-        : null;
+    const sourceTaskWhere =
+      source === 'routine'
+        ? { activityId: { not: null }, assignedById: null }
+        : source === 'assigned'
+          ? { assignedById: { not: null } }
+          : null;
     const sourceWhere = sourceTaskWhere ? { task: sourceTaskWhere } : {};
 
     const now = new Date();
@@ -1396,24 +1485,39 @@ export abstract class DwmsTaskService extends DwmsBaseService {
           },
         }),
         this.prisma.taskInstance.count({
-          where: { ownerId: employee.id, status: APPROVAL_PENDING_STATUS, ...sourceWhere },
+          where: {
+            ownerId: employee.id,
+            status: APPROVAL_PENDING_STATUS,
+            ...sourceWhere,
+          },
         }),
         this.prisma.taskInstance.count({
-          where: { ownerId: employee.id, status: TaskStatus.DONE, ...sourceWhere },
+          where: {
+            ownerId: employee.id,
+            status: TaskStatus.DONE,
+            ...sourceWhere,
+          },
         }),
         this.prisma.taskInstance.count({
-          where: { ...futureWhere, task: { ...sourceTaskWhere, acknowledgedAt: null } },
+          where: {
+            ...futureWhere,
+            task: { ...sourceTaskWhere, acknowledgedAt: null },
+          },
         }),
         this.prisma.taskInstance.count({
-          where: source === 'routine'
-            ? {
-                ownerId: employee.id,
-                ...sourceWhere,
-                dueAt: { gte: now },
-                status: { notIn: futureStatusExclusions },
-                ...getCurrentRoutinePeriodWhere(referenceDate),
-              }
-            : { ...futureWhere, task: { ...sourceTaskWhere, acknowledgedAt: { not: null } } },
+          where:
+            source === 'routine'
+              ? {
+                  ownerId: employee.id,
+                  ...sourceWhere,
+                  dueAt: { gte: now },
+                  status: { notIn: futureStatusExclusions },
+                  ...getCurrentRoutinePeriodWhere(referenceDate),
+                }
+              : {
+                  ...futureWhere,
+                  task: { ...sourceTaskWhere, acknowledgedAt: { not: null } },
+                },
         }),
       ]);
 
@@ -1812,10 +1916,23 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     if (!title) throw new BadRequestException('Task title is required');
 
     if (dto.priority === Priority.LOW) {
-      throw new BadRequestException('DWMS tasks cannot have low priority');
+      throw new BadRequestException('RTW tasks cannot have low priority');
     }
 
-    const frequency = dto.frequency ?? TaskFrequency.PLANNED;
+    let structuredRecurrence: StructuredRecurrence | null = null;
+    if (dto.schedule) {
+      try {
+        structuredRecurrence = parseStructuredRecurrence(dto.schedule);
+      } catch (error) {
+        throw new BadRequestException((error as Error).message);
+      }
+    }
+    const frequency = structuredRecurrence
+      ? recurrenceFrequency(
+          structuredRecurrence.unit,
+          structuredRecurrence.interval,
+        )
+      : (dto.frequency ?? TaskFrequency.PLANNED);
     if (String(frequency) === 'EVERY_5_MINUTES') {
       throw new BadRequestException(
         'Every 5 minutes task frequency is no longer supported',
@@ -1877,7 +1994,6 @@ export abstract class DwmsTaskService extends DwmsBaseService {
       }
     }
 
-
     const activity = dto.activityId
       ? await this.prisma.activity.findFirst({
           where: { id: dto.activityId, organizationId: user.organizationId },
@@ -1928,6 +2044,11 @@ export abstract class DwmsTaskService extends DwmsBaseService {
         ownerName,
         assignedByName,
         frequency,
+        recurrenceUnit: structuredRecurrence?.unit ?? null,
+        recurrenceInterval: structuredRecurrence?.interval ?? null,
+        recurrenceWeekdays: structuredRecurrence?.weekdays ?? [],
+        recurrenceDayOfMonth: structuredRecurrence?.dayOfMonth ?? null,
+        recurrenceStartsOn: structuredRecurrence?.startsOn ?? null,
         dueDate,
         priority: dto.priority ?? Priority.MEDIUM,
         isAdhoc: dto.isAdhoc ?? true,
@@ -2548,6 +2669,15 @@ export abstract class DwmsTaskService extends DwmsBaseService {
     }
     const timeZone = await this.getOrganizationTimeZone(organizationId);
     const referenceDate = getCurrentUtcDateInTimeZone(timeZone);
+    const existingForToday = await this.prisma.taskInstance.findUnique({
+      where: {
+        taskId_scheduledFor: {
+          taskId: task.id,
+          scheduledFor: referenceDate,
+        },
+      },
+    });
+    if (existingForToday) return existingForToday;
     const scheduledFor = await this.getOfficeScheduledForTaskDate(
       task,
       referenceDate,

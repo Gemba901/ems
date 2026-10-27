@@ -13,6 +13,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import EmployeeActivityManager from "../../components/EmployeeActivityManager";
 import ActivityTabs from "../ActivityTabs";
+import { DwmsDataField, DwmsMobileDataCard } from "../../components/DwmsResponsive";
 
 const PAGE_SIZE = 15;
 const ALLOWED_ROLES = [
@@ -63,7 +64,7 @@ function EmployeeActivitiesContent() {
   const pagination = data?.pagination;
 
   return (
-    <div className="w-full space-y-6 px-4 pt-8 pb-10 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-10 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
       <ActivityTabs active="employees" />
 
       <section className="space-y-4">
@@ -82,7 +83,7 @@ function EmployeeActivitiesContent() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search employee name or job role..."
             aria-label="Search employee name or job role"
-            className="w-full rounded-full border border-slate-200 bg-white py-2.5 pr-11 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
+            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-11 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
           />
           {isFetching && (
             <Loader2 className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-blue-500" />
@@ -103,7 +104,32 @@ function EmployeeActivitiesContent() {
               No active employees match this search.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="space-y-3 p-3 md:hidden">
+              {employees.map((employee) => {
+                const selected = selectedEmployee?.id === employee.id;
+                return (
+                  <DwmsMobileDataCard
+                    key={employee.id}
+                    onClick={() => setSelectedEmployee(employee)}
+                    className={selected ? "border-blue-300 bg-blue-50/60 ring-1 ring-blue-200" : undefined}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-full bg-blue-50 p-2.5 text-blue-600"><UserRound className="h-4 w-4" /></span>
+                      <div className="min-w-0">
+                        <p className="break-words font-semibold text-slate-900">{employee.name}</p>
+                        <p className="mt-0.5 font-mono text-xs text-slate-500">{employee.employeeCode || "No employee code"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+                      <DwmsDataField label="Job role">{employee.jobTitle || "Unassigned"}</DwmsDataField>
+                      <DwmsDataField label="Department">{employee.department?.name || "Unassigned"}</DwmsDataField>
+                    </div>
+                  </DwmsMobileDataCard>
+                );
+              })}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full divide-y divide-slate-100 text-sm">
                 <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
                   <tr>
@@ -154,20 +180,21 @@ function EmployeeActivitiesContent() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
 
           {pagination && pagination.total > 0 && (
-            <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
+            <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-slate-500">
                 Showing {(pagination.page - 1) * pagination.limit + 1}-
                 {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} active employees
               </p>
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
                 <button
                   type="button"
                   disabled={pagination.page <= 1}
                   onClick={() => setPage((value) => Math.max(1, value - 1))}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-40"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" /> Previous
                 </button>
@@ -175,7 +202,7 @@ function EmployeeActivitiesContent() {
                   type="button"
                   disabled={pagination.page >= pagination.pages}
                   onClick={() => setPage((value) => Math.min(pagination.pages, value + 1))}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-40"
                 >
                   Next <ChevronRight className="h-3.5 w-3.5" />
                 </button>

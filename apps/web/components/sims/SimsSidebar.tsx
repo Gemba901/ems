@@ -16,6 +16,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import { CommitteeService } from "@/services/committee.service";
 import { ModuleSidebar, type SidebarNavItem } from "@/components/shell/ModuleSidebar";
+import { SIMS_TOUR } from "@/components/onboarding/tours";
 
 interface SimsSidebarProps {
   open?: boolean;
@@ -98,6 +99,7 @@ export function SimsSidebar(props: SimsSidebarProps) {
       title="Suggestions & Ideas"
       subtitle="SIMS"
       homeHref="/sims"
+      tour={{ id: "sims", steps: SIMS_TOUR }}
       ariaLabel="Suggestions navigation"
       actions={[{ label: "New Suggestion", shortLabel: "New", href: "/sims/new", icon: Plus }]}
       groups={[

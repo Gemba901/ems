@@ -357,7 +357,7 @@ export default function AssignedByMeView({ rightContent }: { rightContent: React
   ]);
 
   return (
-    <div className="w-full px-4 pt-8 sm:px-6 lg:px-8 space-y-6 pb-8">
+    <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-8 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
       <DwmsTabHeader
         activeTab={historySubTab}
         onTabChange={setHistorySubTab}

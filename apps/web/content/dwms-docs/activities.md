@@ -10,7 +10,7 @@ Management, Admin, Super Admin, HR, and HOD users can create activities through 
 
 ## 2. Browse the activity master
 
-Open **Activities** from the DWMS Manage menu. Use:
+Open **Activities** from the RTW Manage menu. Use:
 
 ![The activity master provides search, status filtering, ingestion history, and activity records.](../../public/dwms-docs/activities/01-activity-master.png)
 
@@ -70,7 +70,7 @@ Archiving does not delete past task occurrences or their audit history.
 
 ## 7. Create a task from an activity
 
-In Assign Task, select **Create from activity** and choose an active activity. DWMS carries the activity title, SOP, evidence requirement, and relationship context into the task while keeping a link to the master record.
+In Assign Task, select **Create from activity** and choose an active activity. RTW carries the activity title, SOP, evidence requirement, and relationship context into the task while keeping a link to the master record.
 
 ![Choose Create from activity to base a new task on an active standard activity.](../../public/dwms-docs/activities/05-create-task-from-activity.png)
 
@@ -96,7 +96,7 @@ Up to 500 rows can be submitted in one ingestion.
 
 ### Activate an activity for one particular employee
 
-Open **DWMS → Activities → Employee Activities**. Search active employees by name or job role, select the employee, and then use **Activate** or **Deactivate** beside the required activity. The same controls remain available in the employee's EMS **DWMS** tab. Management, Admin, Super Admin, HR, and HOD users can manage this status.
+Open **RTW → Activities → Employee Activities**. Search active employees by name or job role, select the employee, and then use **Activate** or **Deactivate** beside the required activity. The same controls remain available in the employee's EMS **RTW** tab. Management, Admin, Super Admin, HR, and HOD users can manage this status.
 
 ![Applicable Activities shows which job-role activities are active or inactive for the selected employee.](../../public/dwms-docs/activities/06-activate-employee-activity.png)
 
@@ -106,7 +106,7 @@ Parent Activity Code connects imported work to an existing or imported prerequis
 
 ## 10. Import results and failures
 
-After import, DWMS reports created activities, assigned users, and failed rows. If rows fail, select **Download failed rows** to obtain a CSV containing worksheet, source row, error reason, and original values.
+After import, RTW reports created activities, assigned users, and failed rows. If rows fail, select **Download failed rows** to obtain a CSV containing worksheet, source row, error reason, and original values.
 
 ![Ingestion History lists each imported file with its uploader and row totals.](../../public/dwms-docs/activities/04-ingestion-history.png)
 

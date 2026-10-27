@@ -66,7 +66,7 @@ function QueueCard({ s, router }: { s: Suggestion; router: ReturnType<typeof use
         <div className="flex flex-col items-end gap-2 shrink-0 text-right">
           <button
             onClick={(e) => { e.stopPropagation(); router.push(`/sims/${s.id}`); }}
-            className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
+            className="px-3 py-1.5 text-xs font-semibold bg-[#52618a] hover:bg-[#445174] text-white rounded-lg transition-colors whitespace-nowrap"
           >
             Review
           </button>
@@ -101,12 +101,12 @@ export default function QueuePage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.HOD]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 space-y-5">
+      <div className="space-y-6">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Department Review Queue</h1>
+            <h1 className="text-lg font-bold tracking-tight text-slate-900">Department Review Queue</h1>
             <p className="text-sm text-slate-500 mt-1">
               {loading
                 ? "Loading..."
@@ -121,7 +121,7 @@ export default function QueuePage() {
 
         {/* All caught up */}
         {!loading && suggestions.length === 0 && (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col items-center gap-3 py-20">
+          <div className="bg-white border border-slate-200 rounded-xl flex flex-col items-center gap-3 py-20">
             <div className="h-14 w-14 rounded-full bg-emerald-50 flex items-center justify-center">
               <Clock className="h-7 w-7 text-emerald-400" />
             </div>
@@ -132,7 +132,7 @@ export default function QueuePage() {
 
         {/* Under Review section */}
         {!loading && underReview.length > 0 && (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Ready for Review</p>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{underReview.length}</span>
@@ -147,7 +147,7 @@ export default function QueuePage() {
 
         {/* On Hold section */}
         {!loading && onHold.length > 0 && (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">On Hold</p>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{onHold.length}</span>
@@ -162,7 +162,7 @@ export default function QueuePage() {
 
         {/* Selected for SGA section */}
         {!loading && selectedForSGA.length > 0 && (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Selected for SGA</p>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{selectedForSGA.length}</span>

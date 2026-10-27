@@ -11,10 +11,11 @@ import {
   Settings2,
   Plus,
   BellPlus,
-  Repeat,
+  CalendarClock,
   TriangleAlert,
 } from "lucide-react";
 import { ModuleSidebar, type SidebarNavGroup } from "@/components/shell/ModuleSidebar";
+import { DWMS_TOUR } from "@/components/onboarding/tours";
 import { useAuthStore } from "@/store/auth.store";
 
 interface SidebarProps {
@@ -34,7 +35,7 @@ export function Sidebar(props: SidebarProps) {
       name: "Your work",
       items: [
         { label: "Home", href: "/dwms", icon: Home },
-        { label: "Routine Work", shortLabel: "Routine", href: "/dwms/routine-work", icon: Repeat },
+        { label: "Routine Work", shortLabel: "Routine", href: "/dwms/routine-work", icon: CalendarClock },
         { label: "Assigned Task", shortLabel: "Tasks", href: "/dwms/tasks", icon: ClipboardList },
         { label: "Alert", href: "/dwms/alerts", icon: AlertTriangle },
         { label: "Abnormalities", href: "/dwms/abnormalities", icon: TriangleAlert },
@@ -60,9 +61,10 @@ export function Sidebar(props: SidebarProps) {
     <ModuleSidebar
       {...props}
       id="dwms-sidebar"
-      title="Daily Work Management"
+      title="Routine and Task Management"
       homeHref="/dwms"
-      ariaLabel="Daily work navigation"
+      tour={{ id: "dwms", steps: DWMS_TOUR }}
+      ariaLabel="Routine and task navigation"
       actions={[
         { label: "Assign task", shortLabel: "Assign", href: "/dwms/actions/new?mode=TASK", icon: Plus },
         {

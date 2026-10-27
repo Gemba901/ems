@@ -251,11 +251,11 @@ export default function AnalyticsPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 space-y-6">
+      <div className="space-y-6">
 
         {/* Header */}
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Analytics</h1>
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics</h1>
           <p className="hidden sm:block text-sm text-slate-500 mt-1">
             {role === Role.HOD ? "Department performance insights." : "Organisation-wide suggestion intelligence."}
             {" "}<span className="font-medium text-slate-700">{kpis.total} total suggestions analysed.</span>
@@ -263,7 +263,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Monthly report */}
-        <div className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl sm:rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
               <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
@@ -289,7 +289,7 @@ export default function AnalyticsPage() {
             <select
               value={reportMonth}
               onChange={(e) => setReportMonth(e.target.value)}
-              className="w-full sm:w-auto text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="w-full sm:w-auto text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
             >
               {REPORT_MONTHS.map((m) => (
                 <option key={m.key} value={m.key}>{m.label}</option>

@@ -10,6 +10,7 @@ import {
   EmploymentStatus,
   NotificationType,
   Priority,
+  RecurrenceUnit,
   TaskFrequency,
   TaskStatus,
 } from 'db';
@@ -27,6 +28,11 @@ import {
   addUtcDays,
   getUtcDateInTimeZone,
   parseDateOnly,
+  parseStructuredRecurrence,
+  recurrenceFrequency,
+  structuredRecurrenceLabel,
+  WEEKDAY_CODES,
+  type StructuredRecurrence,
 } from '../utils/taskSchedule';
 import { randomUUID } from 'node:crypto';
 
@@ -67,6 +73,11 @@ const ACTIVITY_INCLUDE = {
       name: true,
       code: true,
       frequency: true,
+      recurrenceUnit: true,
+      recurrenceInterval: true,
+      recurrenceWeekdays: true,
+      recurrenceDayOfMonth: true,
+      effectiveFrom: true,
       status: true,
     },
   },
@@ -120,8 +131,32 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           : activity.scope === ActivityScope.EMPLOYEE
             ? (activity.scopeEmployee?.employeeCode ?? null)
             : null;
+    const structuredRecurrence = activity.recurrenceUnit
+      ? {
+          unit: activity.recurrenceUnit,
+          interval: activity.recurrenceInterval,
+          weekdays: activity.recurrenceWeekdays ?? [],
+          dayOfMonth: activity.recurrenceDayOfMonth ?? null,
+          startsOn: activity.effectiveFrom,
+        }
+      : null;
     return {
       ...activity,
+      schedule: structuredRecurrence
+        ? {
+            kind: 'RECURRING',
+            startsOn: structuredRecurrence.startsOn.toISOString().slice(0, 10),
+            unit: structuredRecurrence.unit,
+            interval: structuredRecurrence.interval,
+            weekdays: structuredRecurrence.weekdays.map(
+              (day: number) => WEEKDAY_CODES[day],
+            ),
+            dayOfMonth: structuredRecurrence.dayOfMonth ?? undefined,
+          }
+        : undefined,
+      scheduleLabel: structuredRecurrence
+        ? structuredRecurrenceLabel(structuredRecurrence)
+        : undefined,
       scopeTarget,
       status:
         activity.status === ARCHIVED_ACTIVITY_STATUS
@@ -413,6 +448,13 @@ export abstract class DwmsActivityService extends DwmsTaskService {
   private async validateParentActivities(
     organizationId: string,
     targetFrequency: TaskFrequency,
+    targetRecurrence?: {
+      unit: RecurrenceUnit;
+      interval: number;
+      weekdays: number[];
+      dayOfMonth: number | null;
+      startsOn: Date;
+    } | null,
     parentActivityIds?: string[] | null,
     activityId?: string,
   ) {
@@ -425,7 +467,16 @@ export abstract class DwmsActivityService extends DwmsTaskService {
 
     const activities = await this.prisma.activity.findMany({
       where: { id: { in: normalizedIds }, organizationId },
-      select: { id: true, name: true, frequency: true },
+      select: {
+        id: true,
+        name: true,
+        frequency: true,
+        recurrenceUnit: true,
+        recurrenceInterval: true,
+        recurrenceWeekdays: true,
+        recurrenceDayOfMonth: true,
+        effectiveFrom: true,
+      },
     });
     const activityById = new Map<string, (typeof activities)[number]>(
       activities.map((activity) => [activity.id, activity]),
@@ -437,12 +488,25 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       );
     }
 
-    const frequencyMismatches = activities.filter(
-      (activity) => activity.frequency !== targetFrequency,
-    );
+    const frequencyMismatches = activities.filter((activity) => {
+      if (!targetRecurrence) {
+        return (
+          activity.recurrenceUnit || activity.frequency !== targetFrequency
+        );
+      }
+      return (
+        activity.recurrenceUnit !== targetRecurrence.unit ||
+        activity.recurrenceInterval !== targetRecurrence.interval ||
+        activity.recurrenceDayOfMonth !== targetRecurrence.dayOfMonth ||
+        activity.effectiveFrom.getTime() !==
+          targetRecurrence.startsOn.getTime() ||
+        JSON.stringify(activity.recurrenceWeekdays) !==
+          JSON.stringify(targetRecurrence.weekdays)
+      );
+    });
     if (frequencyMismatches.length > 0) {
       throw new BadRequestException(
-        `Parent activity must have the same frequency as this activity: ${frequencyMismatches.map((activity) => activity.name).join(', ')}`,
+        `Parent activity must have the exact same recurrence as this activity: ${frequencyMismatches.map((activity) => activity.name).join(', ')}`,
       );
     }
 
@@ -543,7 +607,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       TaskFrequency.QUARTERLY,
       TaskFrequency.YEARLY,
     ];
-    if (!supportedFrequencies.includes(dto.frequency)) {
+    if (!dto.schedule && !supportedFrequencies.includes(dto.frequency!)) {
       throw new BadRequestException(
         'Frequency must be Daily, Weekly, Monthly, Quarterly, or Yearly',
       );
@@ -884,6 +948,21 @@ export abstract class DwmsActivityService extends DwmsTaskService {
       );
     }
     this.assertScopedActivityPayload(dto);
+    let structuredRecurrence: StructuredRecurrence | null = null;
+    if (dto.schedule) {
+      try {
+        structuredRecurrence = parseStructuredRecurrence(dto.schedule);
+      } catch (error) {
+        throw new BadRequestException((error as Error).message);
+      }
+    }
+    const frequency = structuredRecurrence
+      ? recurrenceFrequency(
+          structuredRecurrence.unit,
+          structuredRecurrence.interval,
+        )
+      : dto.frequency!;
+    assertSupportedActivityFrequency(frequency);
     if (
       dto.scope !== ActivityScope.EMPLOYEE &&
       (dto.parentActivityId || dto.parentActivityIds?.length)
@@ -901,7 +980,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
     const timeZone = await this.getOrganizationTimeZone(user.organizationId);
     const parentActivityIds = await this.validateParentActivities(
       user.organizationId,
-      dto.frequency,
+      frequency,
+      structuredRecurrence,
       dto.parentActivityId ? [dto.parentActivityId] : dto.parentActivityIds,
     );
     const organization = await this.prisma.organization.findUnique({
@@ -942,12 +1022,18 @@ export abstract class DwmsActivityService extends DwmsTaskService {
                 ? String(dto.completionDeadline)
                 : null,
             purpose: dto.purpose ?? null,
-            frequency: dto.frequency,
+            frequency,
+            recurrenceUnit: structuredRecurrence?.unit ?? null,
+            recurrenceInterval: structuredRecurrence?.interval ?? null,
+            recurrenceWeekdays: structuredRecurrence?.weekdays ?? [],
+            recurrenceDayOfMonth: structuredRecurrence?.dayOfMonth ?? null,
             completionOutput: dto.completionOutput ?? null,
             primaryResponsibleDesignation:
               dto.primaryResponsibleDesignation ?? null,
             evidenceRequired: dto.evidenceRequired ?? null,
-            effectiveFrom: this.parseActivityDate(undefined, timeZone),
+            effectiveFrom:
+              structuredRecurrence?.startsOn ??
+              this.parseActivityDate(dto.effectiveFrom, timeZone),
             status: ACTIVE_ACTIVITY_STATUS,
             remarks: dto.remarks ?? null,
             scope: dto.scope,
@@ -995,8 +1081,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             employeeId,
             type: NotificationType.INFO,
             module: 'DWMS',
-            title: 'DWMS activities updated',
-            message: '1 activity has been added to your DWMS profile.',
+            title: 'RTW activities updated',
+            message: '1 activity has been added to your RTW profile.',
             actionUrl: '/dwms/tasks',
           })),
         );
@@ -1477,9 +1563,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             createdActivityIdByCode.get(
               rowRecord.parentActivityCode.toLowerCase(),
             ) ??
-            existingParentByCode.get(
-              rowRecord.parentActivityCode.toLowerCase(),
-            )?.id;
+            existingParentByCode.get(rowRecord.parentActivityCode.toLowerCase())
+              ?.id;
           if (!parentActivityId) {
             throw new BadRequestException(
               `Parent Activity Code "${rowRecord.parentActivityCode}" was not found`,
@@ -1490,7 +1575,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
             | null;
           const parentActivityIds = await this.validateParentActivities(
             ingestion.organizationId,
-            activityPayload!.activity.frequency,
+            activityPayload!.activity.frequency!,
+            null,
             [parentActivityId],
             rowRecord.activityId,
           );
@@ -1559,8 +1645,8 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         employeeId,
         type: NotificationType.INFO,
         module: 'DWMS',
-        title: 'DWMS activities updated',
-        message: `${count} ${count === 1 ? 'activity has' : 'activities have'} been added to your DWMS profile.`,
+        title: 'RTW activities updated',
+        message: `${count} ${count === 1 ? 'activity has' : 'activities have'} been added to your RTW profile.`,
         actionUrl: '/dwms/tasks',
       }),
     );
@@ -1905,7 +1991,9 @@ export abstract class DwmsActivityService extends DwmsTaskService {
           ? dto.workMethod.trim()
           : existing.workMethod,
       purpose:
-        dto.purpose !== undefined ? dto.purpose.trim() || null : existing.purpose,
+        dto.purpose !== undefined
+          ? dto.purpose.trim() || null
+          : existing.purpose,
       startTrigger:
         dto.startTrigger !== undefined
           ? dto.startTrigger.trim() || null
@@ -2047,6 +2135,18 @@ export abstract class DwmsActivityService extends DwmsTaskService {
 
     const frequency = dto.frequency ?? activity.frequency;
     assertSupportedActivityFrequency(frequency);
+    const schedule = activity.recurrenceUnit
+      ? {
+          kind: 'RECURRING' as const,
+          startsOn: activity.effectiveFrom.toISOString().slice(0, 10),
+          unit: activity.recurrenceUnit,
+          interval: activity.recurrenceInterval!,
+          weekdays: activity.recurrenceWeekdays.map(
+            (day) => WEEKDAY_CODES[day],
+          ),
+          dayOfMonth: activity.recurrenceDayOfMonth ?? undefined,
+        }
+      : undefined;
 
     return this.createAssignedTask(
       user,
@@ -2058,6 +2158,7 @@ export abstract class DwmsActivityService extends DwmsTaskService {
         dueDate: dto.dueDate,
         priority: dto.priority ?? Priority.MEDIUM,
         frequency,
+        schedule,
         approvedById: dto.approvedById ?? undefined,
         backupOwnerId: dto.backupOwnerId ?? undefined,
         requiresCompletionDocument: !!activity.evidenceRequired?.trim(),

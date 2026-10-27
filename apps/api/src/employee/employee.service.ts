@@ -4,6 +4,7 @@ import { AuthService } from 'src/auth/auth.service';
 import * as XLSX from 'xlsx';
 import { Prisma, RoleName } from 'db';
 import { DwmsService } from 'src/dwms/dwms.service';
+import { EmployeeImportMapping, IMPORT_FIELD_ALIASES, ImportField, splitFullName } from './employee-import-mapping';
 
 type EmployeeImportRow = {
     rowNumber: number;
@@ -498,11 +499,12 @@ export class EmployeeService {
         organizationId: string,
         currentUserId?: string,
         dryRun = false,
+        mapping?: EmployeeImportMapping,
     ) {
         const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
         if (!org) throw new BadRequestException('Organization not found');
 
-        const rows = this.parseEmployeeWorkbook(buffer);
+        const rows = this.parseEmployeeWorkbook(buffer, mapping);
         if (rows.rows.length === 0) {
             throw new BadRequestException('No employee rows were found in the workbook');
         }
@@ -677,22 +679,25 @@ export class EmployeeService {
         return { message: 'Employee deleted successfully' };
     }
 
-    private parseEmployeeWorkbook(buffer: Buffer): { rows: EmployeeImportRow[]; issues: ImportIssue[] } {
+    private parseEmployeeWorkbook(buffer: Buffer, mapping?: EmployeeImportMapping): { rows: EmployeeImportRow[]; issues: ImportIssue[] } {
         const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-        const sheetName =
-            workbook.SheetNames.find((name) => this.normalizeKey(name) === 'employee master') ??
-            workbook.SheetNames.find((name) => this.normalizeKey(name) === 'employee data') ??
-            workbook.SheetNames[0];
+        const sheetName = mapping
+            ? mapping.sheetName
+            : workbook.SheetNames.find((name) => this.normalizeKey(name) === 'employee master') ??
+              workbook.SheetNames.find((name) => this.normalizeKey(name) === 'employee data') ??
+              workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        if (!sheet) throw new BadRequestException('Workbook does not contain a readable sheet');
+        if (!sheet) throw new BadRequestException(mapping ? `Sheet "${mapping.sheetName}" was not found in the workbook` : 'Workbook does not contain a readable sheet');
 
         const matrix = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: null, raw: true });
-        const headerIndex = matrix.findIndex((row) =>
-            row.some((cell) => ['first name', 'employee full name'].includes(this.normalizeKey(cell))) &&
-            row.some((cell) => ['employee code', 'email address', 'company email', 'email id'].includes(this.normalizeKey(cell))),
-        );
-        if (headerIndex === -1) {
-            throw new BadRequestException('Could not find the employee header row in the workbook');
+        const headerIndex = mapping
+            ? mapping.headerRow - 1
+            : matrix.findIndex((row) =>
+                  row.some((cell) => ['first name', 'employee full name'].includes(this.normalizeKey(cell))) &&
+                  row.some((cell) => ['employee code', 'email address', 'company email', 'email id'].includes(this.normalizeKey(cell))),
+              );
+        if (headerIndex < 0 || headerIndex >= matrix.length) {
+            throw new BadRequestException(mapping ? `Header row ${mapping.headerRow} is outside the sheet` : 'Could not find the employee header row in the workbook');
         }
 
         const headerMap = new Map<string, number>();
@@ -701,23 +706,51 @@ export class EmployeeService {
             if (key) headerMap.set(key, index);
         });
 
+        // Resolve every field to a column index — from the user's explicit mapping when one was
+        // sent, otherwise by guessing from the known header aliases.
+        const columns: Partial<Record<ImportField, number>> = {};
+        for (const field of Object.keys(IMPORT_FIELD_ALIASES) as ImportField[]) {
+            if (mapping) {
+                const index = mapping.columns[field];
+                if (index !== undefined && index !== null) columns[field] = index;
+            } else {
+                for (const alias of IMPORT_FIELD_ALIASES[field]) {
+                    const index = headerMap.get(this.normalizeKey(alias));
+                    if (index !== undefined) { columns[field] = index; break; }
+                }
+            }
+        }
+        const serialIndex = headerMap.get('sr no') ?? headerMap.get('#');
+        const nameMode = mapping?.nameMode ?? 'auto';
+        if (nameMode === 'full' && columns.fullName === undefined) {
+            throw new BadRequestException('Map the Full Name column, or switch to separate first and last name columns');
+        }
+        if (nameMode === 'separate' && (columns.firstName === undefined || columns.lastName === undefined)) {
+            throw new BadRequestException('Map both the First Name and Last Name columns');
+        }
+
         const issues: ImportIssue[] = [];
         const rows: EmployeeImportRow[] = [];
 
         for (let i = headerIndex + 1; i < matrix.length; i++) {
             const source = matrix[i];
             if (!source?.some((value) => !this.isBlank(value))) continue;
-            if (this.normalizeKey(this.valueAt(source, headerMap, ['sr no', '#'])) === 'auto serial number for this employee row') continue;
-            if (this.normalizeKey(this.valueAt(source, headerMap, ['sr no', '#'])) === 'example') continue;
+            const serial = this.normalizeKey(serialIndex !== undefined ? source[serialIndex] : null);
+            if (serial === 'auto serial number for this employee row' || serial === 'example') continue;
+            // Templates ship a sample row marked "EXAMPLE" in its first cell — never import it.
+            if (this.normalizeKey(source.find((value) => !this.isBlank(value))) === 'example') continue;
 
-            const firstName = this.cleanString(this.valueAt(source, headerMap, ['first name']));
-            const middleName = this.cleanString(this.valueAt(source, headerMap, ['middle name']));
-            const lastName = this.cleanString(this.valueAt(source, headerMap, ['last name surname', 'last name']));
-            const fullName = this.cleanString(this.valueAt(source, headerMap, ['employee full name', 'name']));
-            const companyEmail = this.cleanEmail(this.valueAt(source, headerMap, ['company email', 'email address', 'email', 'email id']));
-            const personalEmail = this.cleanEmail(this.valueAt(source, headerMap, ['personal email']));
-            const phone = this.cleanPhone(this.valueAt(source, headerMap, ['mobile number', 'phone number', 'phone']));
-            const employeeCode = this.cleanString(this.valueAt(source, headerMap, ['employee code', 'employee numbers']));
+            const cell = (field: ImportField) => (columns[field] === undefined ? null : source[columns[field]!]);
+            const str = (field: ImportField) => this.cleanString(cell(field));
+
+            const firstName = nameMode === 'full' ? undefined : str('firstName');
+            const middleName = nameMode === 'full' ? undefined : str('middleName');
+            const lastName = nameMode === 'full' ? undefined : str('lastName');
+            const fullName = nameMode === 'separate' ? undefined : str('fullName');
+            const companyEmail = this.cleanEmail(cell('email'));
+            const personalEmail = this.cleanEmail(cell('personalEmail'));
+            const phone = this.cleanPhone(cell('phone'));
+            const employeeCode = str('employeeCode');
             const rowNumber = i + 1;
 
             // Template rows with no identifying data (e.g. a leftover formula fill-down in an
@@ -726,12 +759,19 @@ export class EmployeeService {
                 continue;
             }
 
-            const names = this.resolveNames(firstName, middleName, lastName, fullName);
+            const names = nameMode === 'full'
+                ? splitFullName(fullName, mapping?.nameSplit ?? 'first-rest')
+                : this.resolveNames(firstName, middleName, lastName, fullName);
             const email = companyEmail || personalEmail || undefined;
-            const roleName = this.toImportRoleName(this.cleanString(this.valueAt(source, headerMap, ['role', 'access level', 'bees access level'])));
+            const roleName = this.toImportRoleName(str('role'));
 
             if (!names.firstName || !names.lastName) {
-                issues.push({ row: rowNumber, message: 'First name and last name are required' });
+                issues.push({
+                    row: rowNumber,
+                    message: nameMode === 'full' && fullName
+                        ? `Full name "${fullName}" has only one word, so it can't be split into first and last name`
+                        : 'First name and last name are required',
+                });
                 continue;
             }
 
@@ -739,27 +779,27 @@ export class EmployeeService {
                 rowNumber,
                 employeeCode,
                 firstName: names.firstName,
-                middleName,
+                middleName: middleName ?? names.middleName,
                 lastName: names.lastName,
                 fullName,
                 email,
                 personalEmail,
                 phone,
-                department: this.cleanString(this.valueAt(source, headerMap, ['department', 'employees department location', 'employees department', 'employee s current department', 'current department'])),
-                plantBranch: this.cleanString(this.valueAt(source, headerMap, ['plant branch name or code', 'company plant branch name or code', 'plant branch'])),
-                section: this.cleanString(this.valueAt(source, headerMap, ['section area', 'sub section line'])),
-                workStation: this.cleanString(this.valueAt(source, headerMap, ['work location'])),
-                jobTitle: this.cleanString(this.valueAt(source, headerMap, ['designation', 'role job title', 'employees job designation', 'employee s job designation'])),
-                gender: this.cleanString(this.valueAt(source, headerMap, ['gender'])),
-                dateOfBirth: this.toDate(this.valueAt(source, headerMap, ['date of birth'])),
-                nationalId: this.cleanString(this.valueAt(source, headerMap, ['national id passport no', 'national id'])),
-                employmentStatus: this.cleanString(this.valueAt(source, headerMap, ['employment status', 'employee status'])),
-                employmentType: this.cleanString(this.valueAt(source, headerMap, ['employment type'])),
-                dateJoined: this.toDate(this.valueAt(source, headerMap, ['date of joining', 'date joined'])),
-                skillLevel: this.cleanString(this.valueAt(source, headerMap, ['skill level'])),
-                trainingNeeded: this.toBoolean(this.valueAt(source, headerMap, ['training needed'])),
-                jobDescription: this.cleanString(this.valueAt(source, headerMap, ['primary work role'])),
-                homeAddress: this.cleanString(this.valueAt(source, headerMap, ['address'])),
+                department: str('department'),
+                plantBranch: str('plantBranch'),
+                section: str('section'),
+                workStation: str('workStation'),
+                jobTitle: str('jobTitle'),
+                gender: str('gender'),
+                dateOfBirth: this.toDate(cell('dateOfBirth')),
+                nationalId: str('nationalId'),
+                employmentStatus: str('employmentStatus'),
+                employmentType: str('employmentType'),
+                dateJoined: this.toDate(cell('dateJoined')),
+                skillLevel: str('skillLevel'),
+                trainingNeeded: this.toBoolean(cell('trainingNeeded')),
+                jobDescription: str('jobDescription'),
+                homeAddress: str('homeAddress'),
                 roleName: roleName ?? undefined,
             });
         }
@@ -862,21 +902,13 @@ export class EmployeeService {
                     : '';
     }
 
-    private valueAt(row: any[], headerMap: Map<string, number>, names: string[]) {
-        for (const name of names) {
-            const index = headerMap.get(this.normalizeKey(name));
-            if (index !== undefined) return row[index];
-        }
-        return null;
-    }
-
     private resolveNames(firstName?: string, middleName?: string, lastName?: string, fullName?: string) {
-        if (firstName && lastName) return { firstName, lastName };
+        if (firstName && lastName) return { firstName, lastName, middleName: undefined as string | undefined };
         const parts = (fullName ?? '').trim().split(/\s+/).filter(Boolean);
         if (!firstName && parts.length > 0) firstName = parts[0];
         if (!lastName && parts.length > 1) lastName = parts.slice(1).join(' ');
         if (!lastName && middleName) lastName = middleName;
-        return { firstName: firstName ?? '', lastName: lastName ?? '' };
+        return { firstName: firstName ?? '', lastName: lastName ?? '', middleName: undefined as string | undefined };
     }
 
     // maps the workbook's "Role" / "Access Level" column to a system RoleName.

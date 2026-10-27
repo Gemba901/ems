@@ -30,12 +30,12 @@ export default function ActivityTabs({ active }: { active: ActivityTabKey }) {
   ];
 
   return (
-    <div className="flex gap-6 overflow-x-auto border-b border-border-app select-none">
+    <div className="-mx-1 flex gap-5 overflow-x-auto border-b border-border-app px-1 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((tab) => (
         <Link
           key={tab.key}
           href={tab.href}
-          className={`relative flex items-center whitespace-nowrap border-b-2 pb-3 text-sm font-semibold transition duration-150 ${
+          className={`relative flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 pb-2 pt-1 text-sm font-semibold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
             active === tab.key
               ? "border-blue-500 text-blue-700"
               : "border-transparent text-slate-500 hover:text-slate-800"

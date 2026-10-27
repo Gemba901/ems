@@ -7,17 +7,6 @@ import { formatOrganizationDateKey } from "../../utils/organizationDate";
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const statusStyles: Record<TaskStatus, string> = {
-  PENDING: "border-slate-200 bg-slate-50 text-slate-600",
-  IN_PROGRESS: "border-blue-200 bg-blue-50 text-blue-700",
-  LESS_THAN_50: "border-amber-200 bg-amber-50 text-amber-700",
-  PARTLY_DONE: "border-violet-200 bg-violet-50 text-violet-700",
-  DONE: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  APPROVAL_PENDING: "border-cyan-200 bg-cyan-50 text-cyan-700",
-  NOT_APPLICABLE: "border-slate-200 bg-slate-50 text-slate-400",
-  OVERDUE: "border-rose-200 bg-rose-50 text-rose-700",
-};
-
 function addDays(dateKey: string, days: number) {
   const date = new Date(`${dateKey}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -77,21 +66,16 @@ export default function TaskCalendar({
     }) ?? monthStart;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Task calendar
-          </p>
-          <h3 className="mt-0.5 text-base font-bold text-slate-900">
-            {monthLabel}
-          </h3>
+          <h3 className="text-sm font-semibold text-slate-900">{monthLabel}</h3>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 sm:flex">
           <button
             type="button"
             onClick={onToday}
-            className="h-8 rounded-full border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+            className="min-h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 sm:min-h-8 sm:rounded-full"
           >
             Today
           </button>
@@ -99,7 +83,7 @@ export default function TaskCalendar({
             type="button"
             onClick={onPreviousMonth}
             aria-label="Show previous month"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 sm:h-8 sm:w-8 sm:rounded-full"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -107,20 +91,69 @@ export default function TaskCalendar({
             type="button"
             onClick={onNextMonth}
             aria-label="Show next month"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 sm:h-8 sm:w-8 sm:rounded-full"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[760px]">
+      <div className="sm:hidden">
+        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
+          {weekDays.map((day) => (
+            <div
+              key={day}
+              className="py-2 text-center text-[10px] font-bold uppercase text-slate-400"
+            >
+              {day.slice(0, 1)}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 p-1">
+          {calendarDays.map((dateKey) => {
+            const dayTasks = tasksByDate.get(dateKey) ?? [];
+            const isOutsideMonth = dateKey.slice(0, 7) !== monthKey;
+            const isToday = dateKey === todayKey;
+            const isSelected = dateKey === selectedDate;
+            return (
+              <button
+                key={dateKey}
+                type="button"
+                onClick={() => onSelectDate(dateKey)}
+                aria-label={`${dateKey}, ${dayTasks.length} ${dayTasks.length === 1 ? "task" : "tasks"}`}
+                aria-pressed={isSelected}
+                className={`relative flex min-h-12 flex-col items-center justify-center rounded-xl text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#52618a] ${
+                  isOutsideMonth ? "text-slate-300" : "text-slate-700"
+                } ${isSelected ? "bg-[#52618a] text-white shadow-sm" : "hover:bg-slate-100"}`}
+              >
+                <span
+                  className={
+                    isToday && !isSelected ? "text-blue-700" : undefined
+                  }
+                >
+                  {Number(dateKey.slice(8, 10))}
+                </span>
+                {dayTasks.length > 0 && (
+                  <span
+                    className={`mt-0.5 h-1.5 w-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blue-500"}`}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <p className="border-t border-slate-100 px-4 py-2 text-center text-[11px] text-slate-500">
+          Select a date to view its agenda below.
+        </p>
+      </div>
+
+      <div className="hidden sm:block">
+        <div className="min-w-0">
           <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
             {weekDays.map((day) => (
               <div
                 key={day}
-                className="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400"
+                className="px-2 py-3 text-center text-xs font-medium text-slate-500"
               >
                 {day}
               </div>
@@ -137,7 +170,7 @@ export default function TaskCalendar({
                 <div
                   key={dateKey}
                   onClick={() => onSelectDate(dateKey)}
-                  className={`min-h-28 cursor-pointer border-b border-r border-slate-100 p-1.5 transition-colors ${index % 7 === 6 ? "border-r-0" : ""} ${isOutsideMonth ? "bg-slate-50/70 hover:bg-slate-100" : "bg-white hover:bg-slate-50"} ${isSelected ? "ring-2 ring-inset ring-[#52618a]" : ""}`}
+                  className={`min-h-24 min-w-0 cursor-pointer border-b border-r border-slate-200 p-2 transition-colors ${index % 7 === 6 ? "border-r-0" : ""} ${isSelected ? "bg-blue-50" : isOutsideMonth ? "bg-slate-50/70 hover:bg-slate-100" : "bg-white hover:bg-slate-50"}`}
                 >
                   <button
                     type="button"
@@ -157,9 +190,15 @@ export default function TaskCalendar({
                           onOpenTask(task);
                         }}
                         title={`${task.title} — ${getStatusLabel(task.status)}`}
-                        className={`block w-full truncate rounded-md border px-1.5 py-1 text-left text-[10px] font-semibold transition hover:brightness-95 ${statusStyles[task.status]}`}
+                        className={`flex w-full min-w-0 items-start gap-1.5 rounded px-0.5 py-1 text-left text-xs leading-4 transition hover:bg-slate-100 ${task.status === "OVERDUE" || task.isOverdue ? "text-rose-600" : "text-slate-600"}`}
                       >
-                        {task.title}
+                        <span
+                          aria-hidden="true"
+                          className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current"
+                        />
+                        <span className="line-clamp-3 min-w-0 break-words">
+                          {task.title}
+                        </span>
                       </button>
                     ))}
                     {dayTasks.length > 3 && (

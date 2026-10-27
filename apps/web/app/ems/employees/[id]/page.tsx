@@ -396,7 +396,7 @@ export default function EmployeeDetailPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "master-data", label: "Master Data" },
-    ...(canUseDwms ? [{ id: "dwms" as const, label: "DWMS" }] : []),
+    ...(canUseDwms ? [{ id: "dwms" as const, label: "RTW" }] : []),
     { id: "activity", label: "Activity" },
   ];
 

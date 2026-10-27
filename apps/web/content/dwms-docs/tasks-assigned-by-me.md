@@ -6,7 +6,7 @@ Tasks assigned by me lets an assigner follow acknowledgement, progress, deadline
 
 ## 1. Open the workspace
 
-In Daily Work Management, open the left menu and select **Assigned Tasks**, then choose **Assigned by me** in the filter beside the status tabs. After a new task is assigned successfully, DWMS opens this view.
+In Routine and Task Management, open the left menu and select **Assigned Tasks**, then choose **Assigned by me** in the filter beside the status tabs. After a new task is assigned successfully, RTW opens this view.
 
 ## 2. Use the tabs
 
@@ -37,7 +37,7 @@ Select a card to open the full task record, including approver, dependencies, li
 3. **In progress:** The owner advances the task through its allowed progress states.
 4. **Approval pending:** If an approver applies, Done submits the work for review.
 5. **Done or returned:** Approval completes the task; rejection returns it to active work with the reviewer comment.
-6. **Overdue:** DWMS marks unfinished work overdue after its due time and creates configured delay alerts.
+6. **Overdue:** RTW marks unfinished work overdue after its due time and creates configured delay alerts.
 
 The assigner monitors this flow but does not change the owner's task progress from this page.
 

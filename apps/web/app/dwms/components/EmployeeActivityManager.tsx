@@ -9,6 +9,7 @@ import {
   type DwmsEmployeeRoleActivityItem,
   type EmployeeActivityAssignmentStatus,
 } from "@/services/dwms.service";
+import { DwmsDataField, DwmsMobileDataCard } from "./DwmsResponsive";
 
 type EmployeeActivityManagerProps = {
   employeeId: string;
@@ -145,10 +146,45 @@ export default function EmployeeActivityManager({
           </div>
         ) : !items.length ? (
           <div className="m-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
-            No DWMS activities apply to this employee yet.
+            No RTW activities apply to this employee yet.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="space-y-3 p-3 md:hidden">
+            {paginatedItems.map((item) => {
+              const { activity, status } = item;
+              const isUpdating = statusMutation.isPending && statusMutation.variables?.item.activity.id === activity.id;
+              return (
+                <DwmsMobileDataCard key={activity.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words font-semibold text-slate-900">{activity.name}</p>
+                      <p className="mt-1 text-xs text-slate-500">{activity.code}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                      {status === "ACTIVE" ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+                    <DwmsDataField label="Scope">{scopeLabel(activity.scope)}</DwmsDataField>
+                    <DwmsDataField label="Frequency">{String(activity.frequency).replaceAll("_", " ")}</DwmsDataField>
+                  </div>
+                  {canManageActivities && activity.status !== "ARCHIVED" ? (
+                    <button
+                      type="button"
+                      disabled={isUpdating}
+                      onClick={() => status === "ACTIVE" ? setPendingDeactivation(item) : updateStatus(item, "ACTIVE")}
+                      className={`mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold disabled:opacity-60 ${status === "ACTIVE" ? "bg-slate-100 text-slate-700" : "bg-blue-600 text-white"}`}
+                    >
+                      {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {status === "ACTIVE" ? "Deactivate" : "Activate"}
+                    </button>
+                  ) : null}
+                </DwmsMobileDataCard>
+              );
+            })}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
                 <tr>
@@ -224,10 +260,11 @@ export default function EmployeeActivityManager({
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {items.length > 0 && (
-          <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
+          <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-slate-500">
               Showing {(currentPage - 1) * pageSize + 1}-
               {Math.min(currentPage * pageSize, items.length)} of {items.length} activities
@@ -256,7 +293,7 @@ export default function EmployeeActivityManager({
 
       {pendingDeactivation && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          className="dwms-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
           role="presentation"
           onMouseDown={(event) => {
             if (event.currentTarget === event.target && !statusMutation.isPending) {
@@ -268,7 +305,7 @@ export default function EmployeeActivityManager({
             role="dialog"
             aria-modal="true"
             aria-labelledby="deactivate-activity-title"
-            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
+            className="dwms-dialog-panel w-full max-w-md rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <div>

@@ -12,6 +12,12 @@ import {
 import { useAuthStore } from "@/store/auth.store";
 import DwmsSelectDropdown from "../components/DwmsSelectDropdown";
 import ActivityTabs from "./ActivityTabs";
+import {
+  DwmsDataField,
+  DwmsMobileDataCard,
+  DwmsPageContainer,
+  DwmsResponsiveToolbar,
+} from "../components/DwmsResponsive";
 
 const MANAGEMENT_ROLES = new Set(["MANAGEMENT", "SUPER_ADMIN", "ADMIN", "HR"]);
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
@@ -120,7 +126,7 @@ function ActivitiesContent() {
   }
 
   return (
-    <div className="w-full space-y-6 px-4 pt-8 pb-10 sm:px-6 lg:px-8">
+    <DwmsPageContainer className="pb-10">
       <ActivityTabs active="activities" />
 
       {message && (
@@ -129,14 +135,14 @@ function ActivitiesContent() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+      <DwmsResponsiveToolbar className="md:flex-nowrap">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search process, code, department, SOP, output..."
-            className="w-full rounded-full border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
+            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
           />
         </div>
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
@@ -149,12 +155,12 @@ function ActivitiesContent() {
               triggerClassName="h-10 rounded-full border-slate-200 px-4 text-sm font-medium shadow-sm"
             />
           </div>
-          <a href="/dwms/actions/new?mode=ACTIVITY" className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 md:whitespace-nowrap">
+          <a href="/dwms/actions/new?mode=ACTIVITY" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 md:whitespace-nowrap md:rounded-full">
             <PlusCircle className="h-4 w-4" />
             <span>Add Activity</span>
           </a>
         </div>
-      </div>
+      </DwmsResponsiveToolbar>
 
       <div className="overflow-hidden rounded-2xl border border-border-app bg-white shadow-sm">
         {loading ? (
@@ -165,7 +171,47 @@ function ActivitiesContent() {
         ) : filteredActivities.length === 0 ? (
           <div className="py-16 text-center text-sm text-slate-500">No activities found.</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="space-y-3 p-3 md:hidden">
+            {filteredActivities.map((activity) => (
+              <DwmsMobileDataCard
+                key={activity.id}
+              >
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words font-semibold text-slate-900">{activity.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">{activity.code}</p>
+                  </div>
+                  <ActivityStatusBadge status={activity.status} />
+                </div>
+                <p className="mt-3 line-clamp-2 text-xs leading-5 text-slate-500">{activity.workMethod || "No SOP added"}</p>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+                  <DwmsDataField label="Department">{activity.mainDepartment?.name ?? "Unassigned"}</DwmsDataField>
+                  <DwmsDataField label="Frequency">{activity.frequency}</DwmsDataField>
+                  <DwmsDataField label="Estimated time">{activity.completionDeadline || "Not set"}</DwmsDataField>
+                  <DwmsDataField label="Output">{activity.completionOutput || "Not set"}</DwmsDataField>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dwms/activities/${activity.id}`)}
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white"
+                  >
+                    View details
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId === activity.id || activity.status === "ARCHIVED"}
+                    onClick={() => void archiveActivity(activity)}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-600 disabled:opacity-40"
+                  >
+                    <Archive className="h-4 w-4" /> Archive
+                  </button>
+                </div>
+              </DwmsMobileDataCard>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
               <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
                 <tr>
@@ -233,9 +279,10 @@ function ActivitiesContent() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
-    </div>
+    </DwmsPageContainer>
   );
 }
 

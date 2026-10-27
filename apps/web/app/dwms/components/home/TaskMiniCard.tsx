@@ -4,9 +4,6 @@ import type {
   DwmsTaskStatus as TaskStatus,
 } from "@/services/dwms.service";
 import {
-  ArrowUp,
-  Minus,
-  Repeat,
   Clock,
   CheckCircle,
   ChevronDown,
@@ -209,46 +206,34 @@ export default function TaskMiniCard({
     onAcknowledgement(task.taskId);
   };
 
-  // Priority element matching mockup with extra light stroke, color-free SVG icons
+  // Keep the priority readable without decorative icons.
   const renderPriority = () => {
     const p = task.priority === "LOW" ? "MEDIUM" : task.priority || "MEDIUM";
     if (p === "CRITICAL") {
       return (
         <span className="flex items-center gap-1.25 text-[13px] font-normal text-rose-500">
-          <ArrowUp
-            className="h-3.5 w-3.5 text-rose-500 shrink-0"
-            strokeWidth={1.5}
-          />
-          <span>Critical</span>
+          <span>Critical priority</span>
         </span>
       );
     }
     if (p === "HIGH") {
       return (
         <span className="flex items-center gap-1.25 text-[13px] font-normal text-slate-500">
-          <ArrowUp
-            className="h-3.5 w-3.5 text-amber-500 shrink-0"
-            strokeWidth={1.5}
-          />
-          <span>High</span>
+          <span>High priority</span>
         </span>
       );
     }
     if (p === "MEDIUM") {
       return (
         <span className="flex items-center gap-1.25 text-[13px] font-normal text-slate-500">
-          <Minus
-            className="h-3.5 w-3.5 text-slate-400 shrink-0"
-            strokeWidth={1.5}
-          />
-          <span>Medium</span>
+          <span>Medium priority</span>
         </span>
       );
     }
     return null;
   };
 
-  // Frequency element matching mockup with extra light stroke, color-free SVG icon
+  // Frequency is shown as plain text in the compact metadata row.
   const renderFrequency = () => {
     const label = task.frequency
       .replace(/_/g, " ")
@@ -256,10 +241,6 @@ export default function TaskMiniCard({
       .replace(/\b\w/g, (char) => char.toUpperCase());
     return (
       <div className="flex items-center gap-1.5 text-slate-500 font-normal text-[13px]">
-        <Repeat
-          className="h-3.5 w-3.5 text-slate-500 shrink-0"
-          strokeWidth={1.5}
-        />
         <span>{label}</span>
       </div>
     );
@@ -351,13 +332,13 @@ export default function TaskMiniCard({
         }
         if (event.key === "Escape") setIsStatusOpen(false);
       }}
-      className={`group flex min-w-0 flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 transition-colors hover:bg-slate-50/50 cursor-pointer ${
+      className={`group flex min-w-0 flex-col gap-3 rounded-[18px] border border-slate-200 bg-white p-[13px] transition-colors hover:bg-slate-50/50 cursor-pointer ${
         isCompleted ? "opacity-85" : ""
       }`}
     >
       {/* Top row */}
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 basis-40 flex flex-col justify-center">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 flex flex-col justify-center self-center">
           {/* Title */}
           <h4
             className={`text-sm font-medium leading-snug text-text-app line-clamp-2 group-hover:text-accent-app transition duration-150 ${
@@ -424,7 +405,7 @@ export default function TaskMiniCard({
                     ? prerequisiteLabel
                     : (statusLockReason ?? undefined)
                 }
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[34px]"
               >
                 <span>{formatTaskStatus(task.status)}</span>
                 {!isPrerequisiteBlocked &&
@@ -466,7 +447,7 @@ export default function TaskMiniCard({
                 handleAckSelect();
               }}
               disabled={saving}
-              className="inline-flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 sm:min-h-8 sm:rounded-lg"
             >
               {saving ? "Acknowledging…" : "Acknowledge"}
             </button>
@@ -475,9 +456,9 @@ export default function TaskMiniCard({
       </div>
 
       {/* Bottom row */}
-      <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         {/* Left indicators */}
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 [&>span]:text-xs [&>div]:text-xs">
           {renderPriority()}
           {isOverdue && (
             <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700">
@@ -494,7 +475,9 @@ export default function TaskMiniCard({
         </div>
 
         {/* Right indicator (Due Date) */}
-        {renderDueDate()}
+        <div className="ml-auto shrink-0 text-slate-500 [&>div]:text-xs">
+          {renderDueDate()}
+        </div>
       </div>
     </article>
   );

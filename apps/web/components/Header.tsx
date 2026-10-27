@@ -82,7 +82,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dwms/activities": "Activities",
   "/dwms/activities/ingestions": "Activity Import History",
   "/dwms/actions/new": "New Work",
-  "/dwms/settings": "DWMS Settings",
+  "/dwms/settings": "RTW Settings",
   "/docs/dwms": "Documentation",
   "/sga": "Small Group Activities",
   "/sga/all": "All SGAs",
@@ -116,7 +116,7 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/docs/kaizen/")) return "Documentation";
   if (pathname.startsWith("/kaizen/")) return "Kaizen Details";
   if (pathname.startsWith("/dwms/activities/ingestions/")) return "Activity Import Details";
-  if (pathname.startsWith("/dwms/")) return "Daily Work";
+  if (pathname.startsWith("/dwms/")) return "Routine and Task Management";
   if (pathname.startsWith("/sims/")) return "Suggestions";
   if (pathname.startsWith("/tickets/")) return "Ticket Details";
   if (pathname.startsWith("/admin/organizations/")) return "Organization";
@@ -157,28 +157,29 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <header
-      className={`sticky top-0 z-30 flex h-14 items-center justify-between px-4 lg:px-8 bg-slate-50/85 backdrop-blur-md border-b border-slate-200/70 transition-transform duration-300 will-change-transform ${
+      className={`sticky top-0 z-30 flex h-14 min-w-0 items-center justify-between gap-2 border-b border-slate-200/70 bg-slate-50/90 px-3 backdrop-blur-md transition-transform duration-300 will-change-transform sm:px-4 lg:px-8 ${
         visible ? "translate-y-0" : "-translate-y-full"
       }`}
     >
 
       {/* Left: brand + page context */}
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {onMenuClick && (
           <button
             className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100"
             onClick={onMenuClick}
+            data-tour="tour-menu"
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
           </button>
         )}
 
-        <div className="flex items-center gap-2" title="Business Excellence EcoSystem">
+        <div className="flex min-w-0 items-center gap-2" title="Business Excellence EcoSystem">
           <div className="flex shrink-0 items-center justify-center text-indigo-600">
             <BrandGear size={22} />
           </div>
-          <span className="text-sm font-black tracking-tight text-slate-900 leading-none">
+          <span className="shrink-0 text-sm font-black leading-none tracking-tight text-slate-900">
             BEES
           </span>
           {pageTitle && (
@@ -191,7 +192,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       {/* Right: calendar + notifications + user */}
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-3 lg:gap-4">
         {hasModule("CALENDAR") && (
           <Link
             href="/calendar"

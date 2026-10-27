@@ -187,7 +187,7 @@ function TaskDetailContent() {
   }, [detail?.relatedTaskInstances, task]);
 
   return (
-    <div className="mx-auto flex w-full  flex-col gap-5 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-[1200px] min-w-0 flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <button
         type="button"
         onClick={() => router.back()}
@@ -412,7 +412,7 @@ function TaskDetailContent() {
               <button
                 type="button"
                 onClick={() => setIsCommentOpen(true)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-xs font-semibold text-white transition hover:bg-blue-700"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white transition hover:bg-blue-700 sm:w-auto sm:rounded-full"
               >
                 <MessageSquare className="h-4 w-4" />
                 Add Comment
@@ -423,7 +423,7 @@ function TaskDetailContent() {
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
                   placeholder="Add a comment..."
-                  className="min-h-10 flex-1 rounded-full border border-slate-200 px-4 text-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  className="min-h-11 flex-1 rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
                 />
                 <button
                   type="button"
@@ -431,14 +431,14 @@ function TaskDetailContent() {
                     setIsCommentOpen(false);
                     setComment("");
                   }}
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:rounded-full"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingComment || !comment.trim()}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-full"
                 >
                   <Send className="h-3.5 w-3.5" />
                   {savingComment ? "Adding..." : "Add Comment"}

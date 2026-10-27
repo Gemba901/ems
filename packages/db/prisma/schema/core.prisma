@@ -210,6 +210,10 @@ model User {
   passwordResetTokens PasswordResetToken[]
   reviewedLeaves      LeaveRequest[]       @relation("LeaveReviewer")
 
+  // Guided tours this person has finished or skipped ("<tourId>_<version>"), so a tour
+  // runs once per person rather than once per browser.
+  completedTours String[] @default([])
+
   createdAt DateTime @default(now())
 }
 

@@ -1,10 +1,10 @@
 # My Routine Work
 
-**Home** is the DWMS dashboard. It shows the signed-in employee's routine work, current alerts, and completion progress in the organization's time zone. **Routine Work** opens a searchable list of routine task occurrences with status tabs.
+**Home** is the RTW dashboard. It shows the signed-in employee's routine work, current alerts, and completion progress in the organization's time zone. **Routine Work** opens a searchable list of routine task occurrences with status tabs.
 
 ## 1. Open the page
 
-Open **Daily Work Management** and select **Home** for the dashboard, or **Routine Work** for the task list. Both are available to every signed-in DWMS user. Tasks explicitly assigned by another employee appear in **Assigned Tasks → Assigned to me**, not Routine Work.
+Open **Routine and Task Management** and select **Home** for the dashboard, or **Routine Work** for the task list. Both are available to every signed-in RTW user. Tasks explicitly assigned by another employee appear in **Assigned Tasks → Assigned to me**, not Routine Work.
 
 In Routine Work, **Pending** shows daily occurrences scheduled today, weekly occurrences scheduled this week, and monthly occurrences scheduled this month. Overdue and approval-pending work have separate tabs. **Not Acknowledged** is only shown for person-assigned tasks. The Routine Work **Completed** tab has no total badge because it is a history view rather than a current workload count.
 
@@ -51,7 +51,7 @@ Recurring activity tasks are separate dated occurrences. Updating one occurrence
 
 ## 5. Acknowledge assigned work
 
-New work assigned by another employee shows **Not Acknowledged** in **Assigned Tasks → Assigned to me**. Select **Acknowledge** to confirm that you have seen and accepted the task. DWMS records the acknowledgement time and informs the assigner.
+New work assigned by another employee shows **Not Acknowledged** in **Assigned Tasks → Assigned to me**. Select **Acknowledge** to confirm that you have seen and accepted the task. RTW records the acknowledgement time and informs the assigner.
 
 Acknowledgement is separate from progress. Acknowledging a task does not start or complete it.
 
@@ -66,7 +66,7 @@ Open the status control on an editable task and move it forward through the avai
 - **Done:** Work is complete or submitted for approval.
 - **Not Applicable:** The occurrence does not apply.
 
-Progress cannot move backward. **Overdue** and **Approval Pending** are controlled by DWMS. Done, Not Applicable, and Approval Pending occurrences are locked against further owner updates.
+Progress cannot move backward. **Overdue** and **Approval Pending** are controlled by RTW. Done, Not Applicable, and Approval Pending occurrences are locked against further owner updates.
 
 If a task is already overdue, it can only be completed or submitted for approval.
 
@@ -74,7 +74,7 @@ If a task is already overdue, it can only be completed or submitted for approval
 
 Recurring work can be updated only in its scheduled completion window. Before that window, or after its due date, the status control explains why it is locked.
 
-An activity may have a parent prerequisite. DWMS prevents progress on the dependent occurrence until the matching parent activity occurrence for the same scheduled date is Done. The task detail page shows the dependency chain and links to related occurrences.
+An activity may have a parent prerequisite. RTW prevents progress on the dependent occurrence until the matching parent activity occurrence for the same scheduled date is Done. The task detail page shows the dependency chain and links to related occurrences.
 
 ## 8. Complete a task
 
@@ -106,6 +106,6 @@ Use **Add comment** to record context or a handoff. Comments are visible to user
 - A dependent task stays locked until its prerequisite is complete.
 - A required completion document cannot be omitted.
 - A completed or approval-pending task cannot be changed by the owner.
-- Past-due active work is managed as overdue by DWMS.
+- Past-due active work is managed as overdue by RTW.
 
 For person-assigned work, open **Assigned Tasks → Assigned to me**.

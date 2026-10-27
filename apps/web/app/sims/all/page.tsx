@@ -196,13 +196,12 @@ function SimsAllSuggestionsContent() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
-      <div className="mx-5 pt-4 md:pt-6 space-y-5">
+      <div className="space-y-6">
 
         {/* Page header */}
         <div className="flex items-center sm:items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wider text-blue-600">SIMS</p>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 sm:mt-0.5 truncate">{pageTitle}</h1>
+            <h1 className="text-lg font-bold tracking-tight text-slate-900 truncate">{pageTitle}</h1>
             <p className="hidden sm:block text-sm text-slate-500 mt-1 max-w-xl">
               Browse, search, and filter {role === Role.HOD ? "your department's" : "the organisation's"} full suggestion history.
             </p>
@@ -231,7 +230,7 @@ function SimsAllSuggestionsContent() {
                 placeholder="Search suggestions…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setListPage(1); }}
-                className="pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all w-full sm:w-52"
+                className="pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all w-full sm:w-52"
               />
             </div>
 
@@ -252,7 +251,7 @@ function SimsAllSuggestionsContent() {
               <select
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value as SuggestionStatus | ""); setListPage(1); }}
-                className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
               >
                 <option value="">All Statuses</option>
                 {ALL_STATUSES.map((s) => (
@@ -262,7 +261,7 @@ function SimsAllSuggestionsContent() {
               <select
                 value={categoryFilter}
                 onChange={(e) => { setCategoryFilter(e.target.value as SuggestionCategory | ""); setListPage(1); }}
-                className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
               >
                 <option value="">All Categories</option>
                 {ALL_CATEGORIES.map((c) => (
@@ -362,7 +361,7 @@ function SimsAllSuggestionsContent() {
         </div>
 
         {/* ── Desktop: list view ─────────────────────────────────────────────── */}
-        <div className="hidden sm:block bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="hidden sm:block bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50/80 border-b border-slate-100">

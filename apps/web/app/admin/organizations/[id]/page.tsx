@@ -6,11 +6,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { AdminService, OrgDetail, OrgStats, OrgStatus, ModuleType, AVAILABLE_MODULES } from "@/services/admin.service";
 import { EmployeeService } from "@/services/employee.service";
+import ColumnMappingDialog from "@/components/employee-import/ColumnMappingDialog";
+import { EmployeeImportMapping, SheetData, readWorkbook } from "@/lib/employee-import-mapping";
 import {
     ArrowLeft, Building2, Users, Lightbulb, BarChart2,
     CircleDot, Mail, Phone, MapPin, ChevronDown,
     EyeOff, Puzzle, Loader2, Filter, ShieldCheck, X, Trash2, ShieldAlert,
-    Upload,
+    Upload, Columns3,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -113,6 +115,9 @@ export default function OrgDetailPage() {
     const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
     const [importing, setImporting] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
+    const [importSheets, setImportSheets] = useState<SheetData[] | null>(null);
+    const [importMapping, setImportMapping] = useState<EmployeeImportMapping | null>(null);
+    const [mappingOpen, setMappingOpen] = useState(false);
 
     // Role change modal
     const [roleModal, setRoleModal] = useState<{ emp: any } | null>(null);
@@ -194,14 +199,32 @@ export default function OrgDetailPage() {
         setDepartments(deptData);
     }, [accessToken, id, deptFilter]);
 
-    const handleImportDryRun = async (file: File) => {
-        if (!accessToken || !org) return;
+    // Step 1: read the workbook in the browser and let the user map its columns.
+    const handleImportFileSelected = async (file: File) => {
         setImportFile(file);
+        setImportSummary(null);
+        setImportError(null);
+        setImportMapping(null);
+        try {
+            setImportSheets(await readWorkbook(file));
+            setMappingOpen(true);
+        } catch {
+            setImportSheets(null);
+            setImportError("Couldn't read that file. Make sure it's an Excel workbook (.xlsx or .xls).");
+        }
+    };
+
+    // Step 2: dry run with the confirmed mapping.
+    const handleImportDryRun = async (mapping: EmployeeImportMapping) => {
+        const file = importFile;
+        if (!accessToken || !org || !file) return;
+        setImportMapping(mapping);
+        setMappingOpen(false);
         setImportSummary(null);
         setImportError(null);
         setImporting(true);
         try {
-            const summary = await AdminService.importOrgEmployees(accessToken, org.id, file, true);
+            const summary = await AdminService.importOrgEmployees(accessToken, org.id, file, true, mapping);
             setImportSummary(summary);
         } catch (e: any) {
             setImportError(e.message || "Failed to read employee workbook.");
@@ -215,7 +238,7 @@ export default function OrgDetailPage() {
         setImportError(null);
         setImporting(true);
         try {
-            const summary = await AdminService.importOrgEmployees(accessToken, org.id, importFile, false);
+            const summary = await AdminService.importOrgEmployees(accessToken, org.id, importFile, false, importMapping);
             setImportSummary(summary);
             await refreshEmployeeData();
         } catch (e: any) {
@@ -578,17 +601,36 @@ export default function OrgDetailPage() {
                                     onChange={(e) => {
                                         const file = e.target.files?.[0];
                                         e.target.value = "";
-                                        if (file) void handleImportDryRun(file);
+                                        if (file) void handleImportFileSelected(file);
                                     }}
                                 />
                             </label>
                             <span className="ml-auto text-[11px] text-slate-400">{employees.length} shown</span>
                         </div>
 
+                        {mappingOpen && importFile && importSheets && (
+                            <ColumnMappingDialog
+                                fileName={importFile.name}
+                                sheets={importSheets}
+                                initialMapping={importMapping}
+                                onCancel={() => setMappingOpen(false)}
+                                onConfirm={(mapping) => void handleImportDryRun(mapping)}
+                            />
+                        )}
+
                         {(importSummary || importError) && (
-                            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+                            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 space-y-2">
                                 {importError && (
                                     <p className="text-xs font-medium text-red-600">{importError}</p>
+                                )}
+                                {importSheets && (importError || importSummary?.dryRun) && (
+                                    <button
+                                        onClick={() => setMappingOpen(true)}
+                                        disabled={importing}
+                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:underline disabled:opacity-50"
+                                    >
+                                        <Columns3 className="h-3.5 w-3.5" /> Edit column mapping
+                                    </button>
                                 )}
                                 {importSummary && (
                                     <div className="space-y-3">

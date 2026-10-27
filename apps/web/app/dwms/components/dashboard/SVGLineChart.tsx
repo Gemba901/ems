@@ -217,7 +217,7 @@ export default function SVGLineChart({
       {/* Tooltip */}
       {hoveredIdx !== null && trendData[hoveredIdx] && getValue(trendData[hoveredIdx]) !== null && (
         <div
-          className="pointer-events-none absolute z-10 min-w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-lg transition-all duration-150"
+          className="pointer-events-none absolute z-10 min-w-28 max-w-[calc(100%-1rem)] rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-lg transition-all duration-150"
           style={{
             left: `${(getX(hoveredIdx) / width) * 100}%`,
             top: `${(getY(getValue(trendData[hoveredIdx])!) / height) * 100 - 16}%`,

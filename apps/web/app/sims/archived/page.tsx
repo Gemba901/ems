@@ -62,14 +62,14 @@ export default function ArchivedPage() {
 
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-      <div className="px-4 py-4 md:px-8 md:py-6 space-y-6">
+      <div className="space-y-6">
 
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center">
             <CheckCircle2 className="h-5 w-5 text-slate-500" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Closed Suggestions</h1>
+            <h1 className="text-lg font-bold tracking-tight text-slate-900">Closed Suggestions</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               {loading ? "Loading..." : `${suggestions.length} resolved suggestion${suggestions.length !== 1 ? "s" : ""}`}
             </p>
@@ -85,7 +85,7 @@ export default function ArchivedPage() {
               placeholder="Search archived..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
+              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 bg-white"
             />
             {search && (
               <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -141,7 +141,7 @@ export default function ArchivedPage() {
               <div
                 key={s.id}
                 onClick={() => router.push(`/sims/${s.id}`)}
-                className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md cursor-pointer transition-all group flex items-center justify-between gap-4 opacity-80 hover:opacity-100"
+                className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md cursor-pointer transition-all group flex items-center justify-between gap-4 opacity-80 hover:opacity-100"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">

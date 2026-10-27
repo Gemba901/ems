@@ -72,17 +72,17 @@ function AbnormalitiesPage() {
   useEffect(() => { void load(); }, [load]);
   const formatDate = (value: string) => new Intl.DateTimeFormat("en-US", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 
-  return <main className="mx-auto flex w-full flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+  return <main className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
     <DwmsTabHeader activeTab={tab} onTabChange={(next) => { setTab(next as DwmsAlertListTab); setPage(1); }} tabs={tabs} />
-    <div className="flex flex-wrap items-center gap-3">
-      <input aria-label="Search abnormalities" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search abnormalities..." className="min-w-48 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm" />
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+      <input aria-label="Search abnormalities" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search abnormalities..." className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm" />
       <DwmsSelectDropdown
         value={severity}
         options={severityOptions}
         onChange={(next) => { setSeverity(next); setPage(1); }}
         placeholder="All severities"
         ariaLabel="Severity"
-        className="w-44"
+        className="w-full sm:w-44"
         triggerClassName="h-10 rounded-xl px-4 text-sm shadow-none"
       />
     </div>
@@ -94,12 +94,12 @@ function AbnormalitiesPage() {
         const person = showResponsible ? item.responsibleEmployee : item.raisedBy;
         const personLabel = showResponsible ? "Responsible" : "Raised by";
 
-        return <button key={item.id} type="button" onClick={() => router.push(`/dwms/alerts/${item.id}`)} className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-rose-300">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold"><span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">Abnormality</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{item.severity}</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">Raised {item.raiseCount} times</span>{item.responsibleEmployee && <span className={item.pendingAcknowledgments ? "rounded-full bg-amber-50 px-2.5 py-1 text-amber-800" : "rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-800"}>{item.pendingAcknowledgments ? `${item.pendingAcknowledgments} Not Acknowledged` : "Acknowledged"}</span>}<span className="ml-auto font-normal text-slate-500">{formatDate(item.updatedAt ?? item.createdAt)}</span></div>
+        return <button key={item.id} type="button" onClick={() => router.push(`/dwms/alerts/${item.id}`)} className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-rose-300 sm:p-5">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold"><span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">Abnormality</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{item.severity}</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">Raised {item.raiseCount} times</span>{item.responsibleEmployee && <span className={item.pendingAcknowledgments ? "rounded-full bg-amber-50 px-2.5 py-1 text-amber-800" : "rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-800"}>{item.pendingAcknowledgments ? `${item.pendingAcknowledgments} Not Acknowledged` : "Acknowledged"}</span>}<span className="w-full font-normal text-slate-500 sm:ml-auto sm:w-auto">{formatDate(item.updatedAt ?? item.createdAt)}</span></div>
         <h2 className="mt-3 text-base font-semibold text-slate-900">{item.title}</h2><p className="mt-1 line-clamp-2 text-sm text-slate-600">{item.description}</p>
         {person && <div className="mt-3 text-xs text-slate-500">{personLabel}: {person.name}</div>}
       </button>;
       })}</div>}
-    {pages > 1 && <div className="flex items-center justify-end gap-3 text-sm"><button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-lg border px-3 py-2 disabled:opacity-50">Previous</button><span>Page {page} of {pages}</span><button type="button" disabled={page >= pages} onClick={() => setPage(page + 1)} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button></div>}
+    {pages > 1 && <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-sm sm:flex sm:justify-end sm:gap-3"><button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="min-h-11 rounded-lg border px-3 py-2 disabled:opacity-50">Previous</button><span>Page {page} of {pages}</span><button type="button" disabled={page >= pages} onClick={() => setPage(page + 1)} className="min-h-11 rounded-lg border px-3 py-2 disabled:opacity-50">Next</button></div>}
   </main>;
 }

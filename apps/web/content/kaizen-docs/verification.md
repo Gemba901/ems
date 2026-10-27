@@ -6,7 +6,7 @@ Reviewers confirm the result before a kaizen is closed.
 
 - **HOD:** The department HOD confirms the change was made and works.
 - **Steering committee:** A steering committee member confirms the result for the organization.
-- **Finance:** The Finance HOD confirms the money benefit. This stage only applies when the kaizen targets **Cost**; otherwise it is marked not applicable.
+- **Finance:** The Finance HOD reviews every kaizen before it closes and confirms any money benefit.
 
 The department HOD can also collect the committee or Finance decision and record it on their behalf. The kaizen shows when a decision was recorded this way.
 

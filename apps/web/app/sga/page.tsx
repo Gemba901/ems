@@ -163,14 +163,14 @@ export default function SgaOverviewPage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div data-tour="overview-kpis" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KpiCard label="My SGAs" value={mine.length} icon={<Users2 className="h-4 w-4 text-indigo-600" />} accent="bg-indigo-50" />
           <KpiCard label="In Progress" value={inProgressCount} icon={<Loader2 className="h-4 w-4 text-amber-600" />} accent="bg-amber-50" />
           <KpiCard label="Pending My Review" value={pendingMyVerificationCount} icon={<ShieldCheck className="h-4 w-4 text-purple-600" />} accent="bg-purple-50" />
           <KpiCard label="Verified This Month" value={verifiedThisMonthCount} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" />
         </div>
 
-        <div className="flex gap-6 overflow-x-auto whitespace-nowrap border-b border-slate-200">
+        <div data-tour="overview-tabs" className="flex gap-6 overflow-x-auto whitespace-nowrap border-b border-slate-200">
           {TABS.filter((t) => t.visible).map((t) => (
             <button
               key={t.key}

@@ -1,5 +1,6 @@
 "use client";
 
+import TaskCompletionDialog from "./TaskCompletionDialog";
 import React, {
   useCallback,
   useEffect,
@@ -499,7 +500,7 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
 
   return (
     <div className="relative">
-      <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-none flex-col gap-6 px-4 pb-8 pt-0 sm:px-6 lg:px-8">
+      <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 pb-8 pt-0 sm:gap-6 sm:px-6 lg:px-8">
         {/* Sticky Header Zone */}
         <div className="flex flex-col gap-4 pt-8 pb-4">
           {/* Title Zone & Filter Pills */}
@@ -515,7 +516,7 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
           />
 
           {/* Search & Action Filter Inputs */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
+          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
             {/* Search Input */}
             <div className="relative flex-1 w-full">
               <svg
@@ -542,13 +543,13 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-start sm:justify-end shrink-0">
+            <div className="grid w-full grid-cols-2 gap-2.5 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:justify-end">
               {/* Frequency Toggle */}
               <div className="relative">
                 <button
                   ref={filterButtonRef}
                   onClick={toggleFilterMenu}
-                  className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-4 text-xs font-semibold transition cursor-pointer select-none ${
+                  className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition cursor-pointer select-none sm:w-auto sm:rounded-full sm:px-4 ${
                     frequencyFilter !== "ALL"
                       ? "bg-blue-50 text-blue-700 border-blue-200"
                       : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
@@ -603,7 +604,7 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                 <button
                   ref={assigneeButtonRef}
                   onClick={toggleAssigneeMenu}
-                  className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-4 text-xs font-semibold transition cursor-pointer select-none ${
+                  className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition cursor-pointer select-none sm:w-auto sm:rounded-full sm:px-4 ${
                     assigneeFilter !== "ALL"
                       ? "bg-blue-50 text-blue-700 border-blue-200"
                       : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
@@ -902,103 +903,20 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
       </main>
 
       {completionTask && (
-        <div
-          className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
-          onClick={() => {
-            if (!savingId) setCompletionTask(null);
+        <TaskCompletionDialog
+          task={completionTask}
+          note={completionNote}
+          file={completionFile}
+          error={completionError}
+          saving={!!savingId}
+          onNoteChange={setCompletionNote}
+          onFileChange={setCompletionFile}
+          onClose={() => {
+            setCompletionTask(null);
+            setCompletionError(null);
           }}
-        >
-          <form
-            onSubmit={handleCompletionSubmit}
-            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">
-                  Complete task
-                </p>
-                <h2 className="mt-1 text-lg font-semibold text-slate-900">
-                  Attach completion file
-                </h2>
-                {completionTask.requiresCompletionDocument && (
-                  <p className="mt-1 text-xs text-rose-600">
-                    {completionTask.completionDocumentName
-                      ? `Required document: ${completionTask.completionDocumentName}`
-                      : "A document is required before this task can be completed."}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setCompletionTask(null);
-                  setCompletionError(null);
-                }}
-                disabled={!!savingId}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="Close completion dialog"
-              >
-                <span aria-hidden="true">×</span>
-              </button>
-            </div>
-
-            {completionError && (
-              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
-                {completionError}
-              </div>
-            )}
-
-            <label className="mt-5 block text-xs font-semibold text-slate-700">
-              Completion note
-              <textarea
-                value={completionNote}
-                onChange={(event) => setCompletionNote(event.target.value)}
-                rows={3}
-                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                placeholder="Add a short note for the approver..."
-              />
-            </label>
-
-            <label className="mt-4 block text-xs font-semibold text-slate-700">
-              {completionTask.completionDocumentName
-                ? `Upload ${completionTask.completionDocumentName}`
-                : "Completion file"}
-              {completionTask.requiresCompletionDocument && (
-                <span className="ml-0.5 text-red-500">*</span>
-              )}
-              <input
-                type="file"
-                required={completionTask.requiresCompletionDocument}
-                onChange={(event) =>
-                  setCompletionFile(event.target.files?.[0] ?? null)
-                }
-                className="mt-2 block w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
-              />
-            </label>
-
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setCompletionTask(null);
-                  setCompletionError(null);
-                }}
-                disabled={!!savingId}
-                className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!!savingId}
-                className="inline-flex h-9 items-center justify-center rounded-full bg-emerald-600 px-4 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingId ? "Uploading..." : "Mark Done"}
-              </button>
-            </div>
-          </form>
-        </div>
+          onSubmit={handleCompletionSubmit}
+        />
       )}
     </div>
   );

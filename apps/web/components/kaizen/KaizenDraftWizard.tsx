@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, Save, Send, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle2, Compass, Loader2, Save, Send, Trash2 } from "lucide-react";
+import { ModuleTour, startTour } from "@/components/onboarding/ModuleTour";
+import { KAIZEN_CREATE_TOURS } from "@/components/onboarding/tours";
 import { Kaizen, KaizenDraftMissingItem, KaizenIncompleteError, KaizenService } from "@/services/kaizen.service";
 import {
   formatDate,
@@ -185,8 +187,19 @@ export default function KaizenDraftWizard({
   return (
     <SectionNumberingContext.Provider value={false}>
       <div className="space-y-5">
+        {/* Each step has its own short walkthrough, shown the first time the step is opened. */}
+        <ModuleTour key={step} tourId={`kaizen-create-step-${step}`} steps={KAIZEN_CREATE_TOURS[step - 1]} />
+        <div className="flex justify-end -mb-2">
+          <button
+            type="button"
+            onClick={() => startTour(`kaizen-create-step-${step}`)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <Compass className="h-3.5 w-3.5" /> Show me how
+          </button>
+        </div>
         {/* Step header: each step is clickable so the checklist links and "Back" are never a dead end. */}
-        <nav aria-label="Draft steps" className="bg-white border border-slate-100 rounded-xl shadow-sm p-2">
+        <nav aria-label="Draft steps" data-tour="draft-steps" className="bg-white border border-slate-100 rounded-xl shadow-sm p-2">
           <ol className="grid grid-cols-4 gap-1">
             {STEPS.map((s) => {
               const isCurrent = s.n === step;
@@ -229,27 +242,27 @@ export default function KaizenDraftWizard({
 
         {step === 1 && (
           <>
-            <ReasonSection ref={reasonRef} {...sectionProps} />
-            <ConditionSection ref={conditionRef} {...sectionProps} />
-            <ReferenceSection ref={referenceRef} {...sectionProps} />
+            <div data-tour="kz-reason"><ReasonSection ref={reasonRef} {...sectionProps} /></div>
+            <div data-tour="kz-condition"><ConditionSection ref={conditionRef} {...sectionProps} /></div>
+            <div data-tour="kz-reference"><ReferenceSection ref={referenceRef} {...sectionProps} /></div>
           </>
         )}
         {step === 2 && (
           <>
-            <QcdsmtImpactSection ref={qcdsmtImpactRef} {...sectionProps} />
-            <WasteSection ref={wasteRef} {...sectionProps} />
+            <div data-tour="kz-impact"><QcdsmtImpactSection ref={qcdsmtImpactRef} {...sectionProps} /></div>
+            <div data-tour="kz-waste"><WasteSection ref={wasteRef} {...sectionProps} /></div>
           </>
         )}
         {step === 3 && (
           <>
-            <BasicInfoSection ref={basicInfoRef} {...sectionProps} />
-            <ImplementationPlanSection ref={implementationPlanRef} {...sectionProps} />
+            <div data-tour="kz-basic-info"><BasicInfoSection ref={basicInfoRef} {...sectionProps} /></div>
+            <div data-tour="kz-plan"><ImplementationPlanSection ref={implementationPlanRef} {...sectionProps} /></div>
           </>
         )}
 
         {step === 4 && (
           <>
-            <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+            <div data-tour="draft-checklist" className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
               <h3 className="text-sm font-semibold text-indigo-600 pb-2 mb-4 border-b border-indigo-100">Before you submit</h3>
               {checklist.length === 0 ? (
                 <p className="flex items-center gap-2 text-sm text-emerald-700">
@@ -280,7 +293,7 @@ export default function KaizenDraftWizard({
               )}
             </div>
 
-            <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+            <div data-tour="draft-summary" className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
               <h3 className="text-sm font-semibold text-indigo-600 pb-2 mb-2 border-b border-indigo-100">Summary</h3>
               <dl>
                 <SummaryRow label="Title" value={kaizen.title} />
@@ -378,6 +391,7 @@ export default function KaizenDraftWizard({
               {step < LAST_STEP && (
                 <button
                   type="button"
+                  data-tour="draft-save"
                   onClick={handleSaveDraft}
                   disabled={disabled}
                   className="flex items-center justify-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
@@ -389,6 +403,7 @@ export default function KaizenDraftWizard({
               {step < LAST_STEP ? (
                 <button
                   type="button"
+                  data-tour="draft-next"
                   onClick={() => goTo(step + 1)}
                   disabled={disabled}
                   className="flex items-center justify-center gap-2 bg-[#52618a] hover:bg-[#445174] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
@@ -399,6 +414,7 @@ export default function KaizenDraftWizard({
               ) : (
                 <button
                   type="button"
+                  data-tour="draft-submit"
                   onClick={handleSubmit}
                   disabled={disabled || checklist.length > 0}
                   title={checklist.length > 0 ? "Complete the items above first" : undefined}

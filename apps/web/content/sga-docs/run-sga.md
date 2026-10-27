@@ -60,7 +60,7 @@ Add lessons learned so other teams can benefit.
 
 ## Stage 6: Verify & Close
 
-If another department is affected by the change, select it and, optionally, a representative who will verify the result.
+If another department is affected by the change, select it and, optionally, a representative from that department to keep informed.
 
 The **Ready to submit?** checklist shows which stages are complete. Once stages 3 to 5 are complete, the raiser or the SGA leader selects **Submit for Verification**.
 

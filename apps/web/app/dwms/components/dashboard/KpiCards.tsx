@@ -101,7 +101,7 @@ export default function KpiCards({ stats, activeTab, periodLabel }: KpiCardsProp
         {cards.map((card) => (
           <div
             key={card.label}
-            className="relative min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3"
+            className="relative min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4"
           >
             <p className="pr-5 text-xs font-medium text-slate-500">{card.label}</p>
             <Tooltip>
@@ -111,7 +111,7 @@ export default function KpiCards({ stats, activeTab, periodLabel }: KpiCardsProp
                     {...triggerProps}
                     type="button"
                     aria-label={`About ${card.label}`}
-                    className="absolute right-3 top-3 inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
                   >
                     <Info className="h-3.5 w-3.5" />
                   </button>
@@ -119,7 +119,7 @@ export default function KpiCards({ stats, activeTab, periodLabel }: KpiCardsProp
               />
               <TooltipContent>{card.detail}</TooltipContent>
             </Tooltip>
-            <p className="mt-2 whitespace-nowrap text-2xl font-semibold tabular-nums text-slate-900">
+            <p className="mt-2 break-words text-xl font-semibold tabular-nums text-slate-900 sm:text-2xl">
               {card.value ?? "—"}
             </p>
           </div>

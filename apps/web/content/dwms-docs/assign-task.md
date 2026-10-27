@@ -6,7 +6,7 @@ Assign Task creates work for one employee. The task can happen once or repeat au
 
 ## 1. What Assign Task does
 
-The feature stores the work to be done, the employee who owns it, its schedule, priority, approval route, and evidence rules. DWMS then creates dated task occurrences that the owner works on.
+The feature stores the work to be done, the employee who owns it, its schedule, priority, approval route, and evidence rules. RTW then creates dated task occurrences that the owner works on.
 
 - **Task:** The assignment and its repeating rules.
 - **Occurrence:** One scheduled instance, such as a daily check for 15 September.
@@ -19,7 +19,7 @@ Each occurrence keeps its own status, due time, completion note, attachment, com
 
 ## 2. Who can use it
 
-Every signed-in employee who can enter DWMS can open the Task tab. The people available in **Assign to** depend on the creator's role and reporting relationships.
+Every signed-in employee who can enter RTW can open the Task tab. The people available in **Assign to** depend on the creator's role and reporting relationships.
 
 - **Super Admin, Admin, Management, and HR:** Can assign to all active employees in the current organization.
 - **HOD:** The **Assign to** list includes:
@@ -27,15 +27,15 @@ Every signed-in employee who can enter DWMS can open the Task tab. The people av
   - employees who have the HOD role in the same organization, including HODs of other departments; and
   - the HOD's direct and indirect reportees, even when a reportee belongs to another department.
 
-  DWMS combines these groups, shows each person only once, and removes the HOD who is creating the task. For example, a Production HOD can select Production employees, other HODs, and everyone who reports under them through the reporting hierarchy. The Production HOD cannot select themselves.
+  RTW combines these groups, shows each person only once, and removes the HOD who is creating the task. For example, a Production HOD can select Production employees, other HODs, and everyone who reports under them through the reporting hierarchy. The Production HOD cannot select themselves.
 
 - **Employee:** Can assign to direct and indirect reportees. The employee is not included as their own assignee.
 
-> Opening the form does not give permission to assign work to everyone. DWMS checks the selected employee again when the task is saved.
+> Opening the form does not give permission to assign work to everyone. RTW checks the selected employee again when the task is saved.
 
 ### Employer view when no valid reportee exists
 
-If the employee opening the **Task** tab has no eligible person to assign work to, DWMS does not display the Assign Task form. Instead, the page shows a **No team members available** message explaining that nobody is currently available within the employee's reporting scope.
+If the employee opening the **Task** tab has no eligible person to assign work to, RTW does not display the Assign Task form. Instead, the page shows a **No team members available** message explaining that nobody is currently available within the employee's reporting scope.
 
 ![Employer view when no valid reportee exists: the Task tab displays a No team members available message instead of the Assign Task form.](../../public/dwms-docs/assign-task/12-no-valid-reportee.png)
 
@@ -43,12 +43,12 @@ The other action tabs remain available. When a valid reportee is added to the em
 
 ## 3. Where to click
 
-1. Open **Daily Work Management**.
+1. Open **Routine and Task Management**.
 2. Open the left menu.
 3. Click **Assign task** at the top of the menu.
 4. The Actions screen opens with the **Task** tab selected.
 
-![Open the Daily Work Management menu and select Assign task.](../../public/dwms-docs/assign-task/00-open-assign-task.png)
+![Open the Routine and Task Management menu and select Assign task.](../../public/dwms-docs/assign-task/00-open-assign-task.png)
 
 ![The Actions screen opens on the Task tab with Simple task selected.](../../public/dwms-docs/assign-task/01-assign-task-form.png)
 
@@ -60,7 +60,7 @@ Enter the task title and description yourself. You decide whether a completion d
 
 ### Create from activity
 
-Choose an active standard activity. DWMS fills the title, description, evidence requirement, and other available task details from that activity.
+Choose an active standard activity. RTW fills the title, description, evidence requirement, and other available task details from that activity.
 
 ![Create from activity adds a searchable Activity field and inherits the activity's completion requirements.](../../public/dwms-docs/assign-task/05-from-activity.png)
 
@@ -91,14 +91,14 @@ Each option shows the employee's name and designation. The employees in this lis
 
 ### How all reportees are found
 
-1. DWMS finds employees whose reporting manager is the task assigner.
+1. RTW finds employees whose reporting manager is the task assigner.
 2. It finds employees reporting to those employees.
 3. It continues through each lower level of the reporting structure.
 4. Repeated employee IDs are removed.
 
 If B reports to A and C reports to B, both B and C are reportees of A. Job title alone does not create this relationship.
 
-After an owner is selected, DWMS loads the valid approvers and overdue-alert recipients for that owner. Changing the owner clears selections that are no longer valid.
+After an owner is selected, RTW loads the valid approvers and overdue-alert recipients for that owner. Changing the owner clears selections that are no longer valid.
 
 ## 7. Frequency and dates
 
@@ -117,7 +117,7 @@ Once creates a one-time task. The other choices run on an automatic repeating sc
 
 Recurring work does not ask for a due date, start date, end date, or custom weekday.
 
-![A recurring Daily task uses the automatic DWMS schedule instead of a manually selected due date.](../../public/dwms-docs/assign-task/04-recurring-task.png)
+![A recurring Daily task uses the automatic RTW schedule instead of a manually selected due date.](../../public/dwms-docs/assign-task/04-recurring-task.png)
 
 ### One-time due date
 
@@ -141,7 +141,7 @@ Priority appears on the owner's task card.
 
 ### Approver
 
-The approver list is calculated for the selected owner using DWMS approver settings. The creator and owner are removed unless the rules specifically allow them. Selecting **None (No approval required)** means there is no named approver.
+The approver list is calculated for the selected owner using RTW approver settings. The creator and owner are removed unless the rules specifically allow them. Selecting **None (No approval required)** means there is no named approver.
 
 ![The Approver picker lists employees eligible for the selected assignee.](../../public/dwms-docs/assign-task/09-approver-options.png)
 
@@ -163,7 +163,7 @@ In activity mode, the evidence rule and document name come from the activity. Th
 
 ## 11. What happens after clicking Assign task
 
-1. **Validation:** DWMS checks required fields, creator access, selected owner, date, priority, approver, recipient count, and evidence settings.
+1. **Validation:** RTW checks required fields, creator access, selected owner, date, priority, approver, recipient count, and evidence settings.
 2. **Task saved:** The creator is stored as Assigned By and the selected employee as Owner.
 3. **Occurrences created:** A one-time occurrence is created for its date. Recurring occurrences are generated according to the automatic schedule.
 4. **Owner notified:** The owner receives a **New Task Assigned** notification that opens the **Assigned to me** view of Assigned Tasks.

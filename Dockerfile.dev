@@ -1,0 +1,23 @@
+# Local development image shared by every service in docker-compose.yml.
+# Source is bind-mounted at runtime; this image only provides Node + pnpm.
+FROM node:20-bookworm-slim
+
+ENV COREPACK_HOME=/corepack npm_config_store_dir=/pnpm-store
+# Prisma's CLI engines need OpenSSL, which the slim image leaves out.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+
+# Run as the host user's uid/gid so files written into the bind-mounted
+# checkout (build output, generated Prisma client) stay owned by the developer.
+ARG DEV_UID=1000
+ARG DEV_GID=1000
+RUN groupmod -o -g "$DEV_GID" node && usermod -o -u "$DEV_UID" -g "$DEV_GID" node
+
+# Named volumes copy ownership from these paths on first use, so pre-create
+# them as the node user instead of letting Docker create them as root.
+WORKDIR /app
+RUN mkdir -p /pnpm-store node_modules apps/api/node_modules \
+      apps/web/node_modules apps/web/.next packages/db/node_modules \
+    && chown -R node:node /app /pnpm-store /corepack /home/node
+USER node

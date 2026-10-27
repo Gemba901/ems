@@ -122,7 +122,7 @@ export default function MyDayPanel({ dwmsEnabled }: { dwmsEnabled: boolean }) {
             href={active.key === "approvals" ? "/dwms/approvalTasks" : "/dwms"}
             className="ml-auto flex shrink-0 items-center gap-1 text-xs font-medium text-slate-500 transition hover:text-slate-900"
           >
-            Open DWMS <ArrowRight className="h-3 w-3" />
+            Open RTW <ArrowRight className="h-3 w-3" />
           </Link>
         )}
       </div>

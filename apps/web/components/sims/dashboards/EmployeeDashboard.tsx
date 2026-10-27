@@ -62,7 +62,7 @@ export default function EmployeeDashboard() {
   return (
     <div className="space-y-6">
       {/* KPI row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="Your Suggestions" value={loading ? "—" : kpis.total} sub="Total submitted" icon={<Lightbulb className="h-5 w-5 text-blue-600" />} accent="bg-blue-50" />
         <KpiCard label="Pending Review" value={loading ? "—" : kpis.pending} sub="Awaiting a decision" icon={<Clock className="h-5 w-5 text-amber-500" />} accent="bg-amber-50" />
         <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="For implementation" icon={<CheckCircle2 className="h-5 w-5 text-teal-600" />} accent="bg-teal-50" />
@@ -73,7 +73,7 @@ export default function EmployeeDashboard() {
       <StatusCountStrip suggestions={mine} />
 
       {/* Org pulse strip — org-wide context, kept visually distinct from personal KPIs */}
-      <div className="bg-slate-900 rounded-2xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-2">
+      <div className="bg-slate-900 rounded-xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-2">
         <div className="flex items-center gap-2">
           <Building2 className="h-4 w-4 text-slate-400" />
           <p className="text-sm font-semibold text-white">Organisation pulse</p>

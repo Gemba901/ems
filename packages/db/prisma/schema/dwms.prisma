@@ -3,6 +3,11 @@ model Task {
   activityId                 String?
   title                      String
   frequency                  TaskFrequency
+  recurrenceUnit             RecurrenceUnit?
+  recurrenceInterval         Int?
+  recurrenceWeekdays         Int[]                  @default([])
+  recurrenceDayOfMonth       Int?
+  recurrenceStartsOn         DateTime?
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
   assignedById               String?
@@ -199,6 +204,12 @@ enum TaskFrequency {
   QUARTERLY
   YEARLY
   PLANNED
+}
+
+enum RecurrenceUnit {
+  DAY
+  WEEK
+  MONTH
 }
 
 enum TaskStatus {

@@ -129,7 +129,7 @@ export function RecentActivityTable({
     .slice(0, limit);
 
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
         <p className="text-sm font-bold text-slate-800">Recent Activity</p>
         <Link href={viewAllHref} className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
@@ -339,7 +339,7 @@ export function TopContributors({
   const userInTop3 = userIdx >= 0 && userIdx < 3;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
 
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center px-5 py-3.5 border-b border-slate-100">
@@ -413,7 +413,7 @@ export function DepartmentLeaderboard({
   const maxMarks = ranked[0]?.marks ?? 1;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100">
         <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
         <p className="text-sm font-semibold text-slate-900">Department Marks</p>
@@ -540,7 +540,7 @@ export function OrgOverviewView({
   return (
     <div className="flex flex-col gap-6">
       {/* KPI row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label={totalLabel} value={loading ? "—" : kpis.total} sub={totalSub} icon={<Lightbulb className="h-5 w-5 text-blue-600" />} accent="bg-blue-50" />
         <KpiCard label="Pending" value={loading ? "—" : kpis.pending} icon={<Clock className="h-5 w-5 text-amber-500" />} accent="bg-amber-50" />
         <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="Approved / implemented" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
@@ -571,7 +571,7 @@ export function OrgOverviewView({
       {/* Target dial + charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {employeeCount !== undefined && (
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex items-center justify-center">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 flex items-center justify-center">
             <TargetDial
               implemented={kpis.implemented}
               target={employeeCount * 4}

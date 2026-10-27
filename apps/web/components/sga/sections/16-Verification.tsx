@@ -14,7 +14,7 @@ import {
 import { canActOnVerificationStage, isDelegatedVerification, SgaAccessContext } from "@/components/sga/gating";
 import { SgaSectionProps } from "./types";
 
-const STAGES: SgaVerificationStage[] = ["AFFECTED_DEPARTMENT", "HOD", "STEERING_COMMITTEE", "FINANCE"];
+const STAGES: SgaVerificationStage[] = ["HOD", "STEERING_COMMITTEE", "FINANCE"];
 
 function StageCard({ sga, stage, ctx, token, onSaved }: {
   sga: SgaSectionProps["sga"];

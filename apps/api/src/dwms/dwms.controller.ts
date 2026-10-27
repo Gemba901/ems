@@ -625,8 +625,9 @@ export class DwmsController {
     @CurrentUser() user: UserPayload,
     @Param('employeeId') employeeId: string,
     @Query('days') days?: string,
+    @Query('view') view?: string,
   ) {
-    return this.dwmsService.getEmployeeStats(user, employeeId, days);
+    return this.dwmsService.getEmployeeStats(user, employeeId, days, view);
   }
 
   // --- DWMS Settings Endpoints ---

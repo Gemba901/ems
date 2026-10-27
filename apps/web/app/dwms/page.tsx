@@ -1,10 +1,12 @@
 "use client";
 
+import TaskCompletionDialog from "./components/home/TaskCompletionDialog";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import TaskMiniCard from "./components/home/TaskMiniCard";
 import TaskCalendar from "./components/home/TaskCalendar";
+import DwmsSelectDropdown from "./components/DwmsSelectDropdown";
 import { useAuthStore } from "@/store/auth.store";
 import {
   DwmsService,
@@ -17,6 +19,7 @@ import { uploadImage } from "@/services/uploads.service";
 import { addDaysToDateKey } from "./utils/organizationDate";
 import {
   CalendarDays,
+  List,
   Minus,
   PlusCircle,
   TrendingDown,
@@ -210,6 +213,7 @@ function HomeContent() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [previousTasks, setPreviousTasks] = useState<TaskItem[]>([]);
   const [taskView, setTaskView] = useState<HomeTaskView>("TODAY");
+  const [lastListView, setLastListView] = useState<HomeTaskView>("TODAY");
   const [mobileTaskCategory, setMobileTaskCategory] =
     useState<MobileTaskCategory>("ALL");
   const [organizationDate, setOrganizationDate] = useState<string | null>(null);
@@ -407,6 +411,7 @@ function HomeContent() {
   }, [stats.productivityChange, taskView]);
 
   function handleTaskViewChange(view: HomeTaskView) {
+    if (view !== "CALENDAR") setLastListView(view);
     if (view === "CALENDAR") {
       const todayKey = organizationDate ?? new Date().toISOString().slice(0, 10);
       setCalendarMonthStart(`${todayKey.slice(0, 7)}-01`);
@@ -529,7 +534,7 @@ function HomeContent() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-none flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
           {error}
@@ -580,7 +585,7 @@ function HomeContent() {
 
       {/* Tasks Section */}
       <section className="min-w-0">
-        <div className="border-b border-border-app pb-4">
+        <div className="pb-2">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-lg font-bold tracking-tight text-text-app">
@@ -609,11 +614,11 @@ function HomeContent() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div
               role="tablist"
               aria-label="Task time range"
-              className="flex w-full rounded-full border border-slate-200 bg-white p-1 shadow-sm sm:w-auto"
+              className="flex rounded-xl border border-slate-200 bg-white p-1"
             >
               {[
                 { key: "TODAY", label: "Today" },
@@ -630,7 +635,7 @@ function HomeContent() {
                     onClick={() =>
                       handleTaskViewChange(view.key as HomeTaskView)
                     }
-                    className={`h-9 flex-1 rounded-full px-5 text-xs font-bold transition sm:flex-none ${active ? "bg-[#52618a] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}
+                    className={`min-h-10 rounded-lg px-4 text-xs font-semibold transition ${active ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}
                   >
                     {view.label}
                   </button>
@@ -638,26 +643,10 @@ function HomeContent() {
               })}
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleTaskViewChange("CALENDAR")}
-              aria-pressed={taskView === "CALENDAR"}
-              className={`group flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 text-left transition sm:w-auto sm:min-w-52 ${taskView === "CALENDAR" ? "border-[#52618a] bg-[#52618a] text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-[#52618a]/50 hover:bg-slate-50"}`}
-            >
-              <span
-                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${taskView === "CALENDAR" ? "bg-white/15 text-white" : "bg-[#52618a]/10 text-[#52618a]"}`}
-              >
-                <CalendarDays className="h-4 w-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-xs font-bold">Calendar view</span>
-                <span
-                  className={`mt-0.5 block text-[10px] ${taskView === "CALENDAR" ? "text-white/75" : "text-slate-500"}`}
-                >
-                  Explore every task by date
-                </span>
-              </span>
-            </button>
+            <div role="group" aria-label="Task display" className="flex rounded-xl border border-slate-200 bg-white p-1">
+              <button type="button" aria-pressed={taskView !== "CALENDAR"} onClick={() => { if (taskView === "CALENDAR") handleTaskViewChange(lastListView); }} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition ${taskView !== "CALENDAR" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><List className="h-4 w-4" aria-hidden="true" />List</button>
+              <button type="button" aria-pressed={taskView === "CALENDAR"} onClick={() => handleTaskViewChange("CALENDAR")} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition ${taskView === "CALENDAR" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><CalendarDays className="h-4 w-4" aria-hidden="true" />Calendar</button>
+            </div>
           </div>
         </div>
 
@@ -728,29 +717,26 @@ function HomeContent() {
         ) : (
           <>
             <div className="mt-3 lg:hidden">
-              <label
-                htmlFor="mobile-task-category"
-                className="mb-1.5 block text-xs font-semibold text-slate-600"
-              >
+              <p className="mb-1.5 block text-xs font-semibold text-slate-600">
                 Filter tasks
-              </label>
-              <select
-                id="mobile-task-category"
+              </p>
+              <DwmsSelectDropdown
+                ariaLabel="Filter tasks"
                 value={mobileTaskCategory}
-                onChange={(event) =>
-                  setMobileTaskCategory(
-                    event.target.value as MobileTaskCategory,
-                  )
+                onChange={(value) =>
+                  setMobileTaskCategory(value as MobileTaskCategory)
                 }
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition focus:border-[#52618a] focus:ring-2 focus:ring-[#52618a]/15"
-              >
-                <option value="ALL">All</option>
-                {TASK_CATEGORIES.map((category) => (
-                  <option key={category.key} value={category.key}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
+                placeholder="All"
+                options={[
+                  { value: "ALL", label: "All" },
+                  ...TASK_CATEGORIES.map((category) => ({
+                    value: category.key,
+                    label: category.label,
+                  })),
+                ]}
+                triggerClassName="h-11 rounded-xl border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 sm:rounded-xl"
+                contentClassName="w-full max-w-full rounded-xl sm:w-full [&_button]:min-h-11"
+              />
 
               {mobileVisibleTasks.length === 0 ? (
                 <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white py-10 text-center text-sm italic text-slate-500">
@@ -771,17 +757,17 @@ function HomeContent() {
               )}
             </div>
 
-            <div className="mt-3 hidden lg:block">
+            <div className="mt-4 hidden lg:block">
               <div className="grid grid-cols-3 gap-4">
                 {TASK_CATEGORIES.map((category) => (
                   <div
                     key={category.key}
-                    className="flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-2"
+                    className="flex min-w-0 items-center gap-2"
                   >
-                    <h3 className="text-sm font-bold text-slate-800">
+                    <h3 className="text-sm font-semibold text-slate-800">
                       {category.label}
                     </h3>
-                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500">
+                    <span className="text-xs font-normal tabular-nums text-slate-500">
                       {tasksByCategory[category.key].length}
                     </span>
                   </div>
@@ -811,103 +797,20 @@ function HomeContent() {
       </section>
 
       {completionTask && (
-        <div
-          className="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]"
-          onClick={() => {
-            if (!savingId) setCompletionTask(null);
+        <TaskCompletionDialog
+          task={completionTask}
+          note={completionNote}
+          file={completionFile}
+          error={completionError}
+          saving={!!savingId}
+          onNoteChange={setCompletionNote}
+          onFileChange={setCompletionFile}
+          onClose={() => {
+            setCompletionTask(null);
+            setCompletionError(null);
           }}
-        >
-          <form
-            onSubmit={handleCompletionSubmit}
-            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">
-                  Complete task
-                </p>
-                <h2 className="mt-1 text-lg font-semibold text-slate-900">
-                  Attach completion file
-                </h2>
-                {completionTask.requiresCompletionDocument && (
-                  <p className="mt-1 text-xs text-rose-600">
-                    {completionTask.completionDocumentName
-                      ? `Required document: ${completionTask.completionDocumentName}`
-                      : "A document is required before this task can be completed."}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setCompletionTask(null);
-                  setCompletionError(null);
-                }}
-                disabled={!!savingId}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="Close completion dialog"
-              >
-                <span aria-hidden="true">x</span>
-              </button>
-            </div>
-
-            {completionError && (
-              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
-                {completionError}
-              </div>
-            )}
-
-            <label className="mt-5 block text-xs font-semibold text-slate-700">
-              Completion note
-              <textarea
-                value={completionNote}
-                onChange={(event) => setCompletionNote(event.target.value)}
-                rows={3}
-                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                placeholder="Add a short note for the approver..."
-              />
-            </label>
-
-            <label className="mt-4 block text-xs font-semibold text-slate-700">
-              {completionTask.completionDocumentName
-                ? `Upload ${completionTask.completionDocumentName}`
-                : "Completion file"}
-              {completionTask.requiresCompletionDocument && (
-                <span className="ml-0.5 text-red-500">*</span>
-              )}
-              <input
-                type="file"
-                required={completionTask.requiresCompletionDocument}
-                onChange={(event) =>
-                  setCompletionFile(event.target.files?.[0] ?? null)
-                }
-                className="mt-2 block w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-700 file:mr-3 file:rounded-full file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
-              />
-            </label>
-
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setCompletionTask(null);
-                  setCompletionError(null);
-                }}
-                disabled={!!savingId}
-                className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!!savingId}
-                className="inline-flex h-9 items-center justify-center rounded-full bg-emerald-600 px-4 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingId ? "Uploading..." : "Mark Done"}
-              </button>
-            </div>
-          </form>
-        </div>
+          onSubmit={handleCompletionSubmit}
+        />
       )}
     </div>
   );

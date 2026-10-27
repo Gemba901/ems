@@ -1,16 +1,16 @@
-# Employee DWMS details
+# Employee RTW details
 
-Employee DWMS details adds an operational DWMS panel to an employee's EMS profile. It brings together the employee's current work, alert responsibility, abnormalities, and activities applicable through organization, department, job-title, or employee scope.
+Employee RTW details adds an operational RTW panel to an employee's EMS profile. It brings together the employee's current work, alert responsibility, abnormalities, and activities applicable through organization, department, job-title, or employee scope.
 
-> Use this page when supporting one employee. It answers “What work and issues currently involve this person?” without searching several DWMS pages separately.
+> Use this page when supporting one employee. It answers “What work and issues currently involve this person?” without searching several RTW pages separately.
 
 ## 1. Open the panel
 
-Open **EMS**, choose an employee, and view the employee detail page. The DWMS section is available only to authorized Management, Admin, Super Admin, and HR users.
+Open **EMS**, choose an employee, and view the employee detail page. The RTW section is available only to authorized Management, Admin, Super Admin, and HR users.
 
 The selected employee must belong to the current organization.
 
-![Open the DWMS tab from an employee profile to see summary counts and current operational work.](../../public/dwms-docs/employee-dwms-details/01-dwms-summary.png)
+![Open the RTW tab from an employee profile to see summary counts and current operational work.](../../public/dwms-docs/employee-dwms-details/01-dwms-summary.png)
 
 ## 2. Read the summary
 
@@ -25,7 +25,7 @@ The summary counts current tasks, current alerts, abnormalities, raised alerts, 
 
 ## 3. Current Tasks
 
-Current Tasks lists the employee's open DWMS task occurrences with status, priority, and due information. Select a task to open its full DWMS detail when a link is available.
+Current Tasks lists the employee's open RTW task occurrences with status, priority, and due information. Select a task to open its full RTW detail when a link is available.
 
 Completed and terminal historical work is not the focus of this panel; use Reports or the task workspaces for broader history.
 
@@ -60,11 +60,11 @@ Authorized activity managers can select **Activate** or **Deactivate** beside an
 
 Activating stores the employee-activity assignment and enables routine task generation according to the activity frequency and effective rules. Deactivating requires confirmation, disables recurrence, and deletes untouched pending instances scheduled after today in the organization's timezone. Today's work, started work, and historical instances remain available.
 
-## 9. Effects across DWMS
+## 9. Effects across RTW
 
 - Active activity assignments feed My Routine Work and Tasks assigned to me.
 - Current task and alert changes refresh the employee's operational picture.
 - Completion and acknowledgement metrics appear in Reports.
 - Alert responsibility contributes to the employee's open-alert count.
 
-Access to this panel does not grant permission to alter task progress or approve work; those actions continue to use their normal DWMS ownership and approval rules.
+Access to this panel does not grant permission to alter task progress or approve work; those actions continue to use their normal RTW ownership and approval rules.

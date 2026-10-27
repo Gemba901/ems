@@ -6,7 +6,7 @@ Reports presents task completion, acknowledgement speed, completion speed, overd
 
 ## 1. Open Reports
 
-Select **Reports** in Daily Work Management. The initial tab is **My Performance**.
+Select **Reports** in Routine and Task Management. The initial tab is **My Performance**.
 
 ## 2. Available views
 

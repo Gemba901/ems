@@ -163,7 +163,7 @@ function ActivityDetailContent() {
   }
 
   return (
-    <div className="w-full space-y-6 px-4 pt-8 pb-10 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-10 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"

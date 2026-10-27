@@ -40,9 +40,8 @@ Every SGA moves through the same six stages. The progress bar at the top of an S
 - **SGA leader:** Runs the meetings, owns the actions, and is the only person who can record implementation details.
 - **Team members:** Can update stages 3 to 5 while the SGA is In Progress or Returned for Rework.
 - **HOD of the main department:** Approves the SGA and completes the HOD verification.
-- **Verifying department HOD or representative:** Confirms the result when another department is affected.
 - **Steering committee:** Confirms the result for the organization.
-- **Finance HOD:** Confirms the money benefit when the SGA targets Cost.
+- **Finance HOD:** Reviews every SGA before it closes and confirms any money benefit.
 
 ## 5. Where to find what you need
 

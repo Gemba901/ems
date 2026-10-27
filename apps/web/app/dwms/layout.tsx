@@ -16,7 +16,7 @@ export default function DwmsLayout({
   const { collapsed: sidebarCollapsed, toggle: toggleSidebar } = useSidebarCollapsed();
   return (
     <ModuleGuard moduleKey="DWMS">
-      <div className="min-h-screen bg-[#F4F7FA] font-sans">
+      <div className="dwms-shell min-h-screen bg-[#F4F7FA] font-sans">
         <Sidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -29,7 +29,7 @@ export default function DwmsLayout({
           }`}
         >
           <Header onMenuClick={() => setSidebarOpen(true)} />
-          <main className="flex-1">{children}</main>
+          <main className="min-w-0 flex-1">{children}</main>
         </div>
       </div>
     </ModuleGuard>

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>Phase 1 — A 30-minute design walkthrough</title>
+    <title>Phases 0 &amp; 1 — A 30-minute design walkthrough</title>
     <style>
       :root {
         --bg: #f7f8fa;
@@ -13,7 +13,7 @@
         --muted: #737373;
         --border: #e5e5e5;
         --soft: #f5f5f5;
-        --primary: #171717;
+        --primary: #283548;
         --on-primary: #fafafa;
         --success: #4a7512;
         --success-bg: #f0f7e5;
@@ -35,8 +35,8 @@
         --muted: #a3a3a3;
         --border: #343434;
         --soft: #262626;
-        --primary: #e5e5e5;
-        --on-primary: #171717;
+        --primary: #81bb28;
+        --on-primary: #1e2837;
         --success: #a3d65c;
         --success-bg: #243616;
         --warning: #facc15;
@@ -853,7 +853,9 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="brand"><span>G</span> PHASE 1 · SHARED UI DESIGNS</div>
+      <div class="brand">
+        <span>G</span> PHASES 0 &amp; 1 · SHARED UI DESIGNS
+      </div>
       <div class="actions">
         <button
           class="btn outline"
@@ -870,21 +872,22 @@
     <nav class="agenda" aria-label="Presentation sections">
       <button type="button" data-slide="0" aria-current="step">
         1. Overview · 2 min</button
-      ><button type="button" data-slide="1">2. Buttons · 5 min</button
-      ><button type="button" data-slide="2">3. Forms & select · 6 min</button
-      ><button type="button" data-slide="3">4. Tabs & tables · 6 min</button
-      ><button type="button" data-slide="4">5. Dialogs · 4 min</button
-      ><button type="button" data-slide="5">6. Feedback · 4 min</button
-      ><button type="button" data-slide="6">7. Phase 0 & next · 3 min</button>
+      ><button type="button" data-slide="1">2. Foundations · 5 min</button
+      ><button type="button" data-slide="2">3. Buttons · 4 min</button
+      ><button type="button" data-slide="3">4. Forms & select · 5 min</button
+      ><button type="button" data-slide="4">5. Tabs & tables · 5 min</button
+      ><button type="button" data-slide="5">6. Dialogs · 3 min</button
+      ><button type="button" data-slide="6">7. Feedback · 3 min</button
+      ><button type="button" data-slide="7">8. Review & next · 3 min</button>
     </nav>
     <main class="shell">
       <section class="slide" data-title="Overview" aria-labelledby="title-0">
         <p class="kicker">A 30-minute walkthrough</p>
         <h1 id="title-0">These are the controls our modules can now share.</h1>
         <p class="subtitle">
-          Phase 1 gives us a consistent set of buttons, inputs, selects, tabs,
-          tables and dialogs. Today’s focus is how they look and when to use
-          them.
+          Phases 0 and 1 give us shared design rules plus a consistent set of
+          buttons, inputs, selects, tabs, tables and dialogs. Today’s focus is
+          how they look and when to use them.
         </p>
         <div class="samples">
           <button
@@ -929,15 +932,152 @@
       </section>
       <section
         class="slide"
+        data-title="Phase 0 foundations"
+        aria-labelledby="title-foundations"
+        hidden
+      >
+        <p class="kicker">Phase 0 · Foundations · 5 minutes</p>
+        <h2 id="title-foundations">The shared rules behind these designs.</h2>
+        <p class="subtitle">
+          We have now implemented the foundations: brand colours, readable text
+          sizes, consistent spacing, icon sizes and one shared status map.
+        </p>
+        <div class="cols">
+          <div class="preview">
+            <h3>One text scale</h3>
+            <div style="display: grid; gap: 12px; margin-top: 18px">
+              <p
+                style="
+                  font-size: 30px;
+                  line-height: 1.2;
+                  font-weight: 700;
+                  color: var(--text);
+                "
+              >
+                Page title <small>24 / 30px</small>
+              </p>
+              <p
+                style="
+                  font-size: 20px;
+                  line-height: 1.4;
+                  font-weight: 600;
+                  color: var(--text);
+                "
+              >
+                Section title <small>20px</small>
+              </p>
+              <p style="font-size: 14px; line-height: 1.5; color: var(--text)">
+                Body text · 14px
+              </p>
+              <p style="font-size: 12px; line-height: 1.4">
+                Caption and help · 12px
+              </p>
+            </div>
+            <hr class="divider" />
+            <h3>One icon rule</h3>
+            <div class="row" style="margin-top: 16px; align-items: end">
+              <span class="field"
+                ><svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" /></svg
+                ><small>Inline · 16px</small></span
+              ><span class="field"
+                ><svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" /></svg
+                ><small>Buttons · 20px</small></span
+              ><span class="field"
+                ><svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" /></svg
+                ><small>Headers · 24px</small></span
+              >
+            </div>
+          </div>
+          <div class="preview">
+            <h3>One spacing scale</h3>
+            <div
+              style="
+                border: 1px dashed var(--border);
+                border-radius: 10px;
+                padding: 24px;
+                margin-top: 18px;
+              "
+            >
+              <small>Page · 16px mobile / 24px desktop</small>
+              <div
+                style="
+                  padding: 16px;
+                  border: 1px solid var(--border);
+                  border-radius: 10px;
+                  margin-top: 14px;
+                  background: var(--bg);
+                "
+              >
+                <span style="font-size: 14px">Card padding · 16px</span>
+                <p style="font-size: 12px; margin-top: 8px">
+                  Compact cards · 12px<br />Between sections · 24px<br />Between
+                  controls · 8px
+                </p>
+              </div>
+            </div>
+            <hr class="divider" />
+            <h3>One primary action colour</h3>
+            <div class="row" style="margin-top: 14px">
+              <button
+                class="btn"
+                type="button"
+                data-toast="Primary uses Gemba navy in light mode and Gemba lime in dark mode."
+              >
+                Save changes</button
+              ><small>Switch the theme to compare.</small>
+            </div>
+          </div>
+        </div>
+        <details class="presenter">
+          <summary>Presenter cue</summary>
+          <p>
+            Explain that these rules remove repeated styling decisions. Show the
+            text and icon sizes, then toggle dark mode to demonstrate the new
+            brand primary. The rules are written in conventions.md.
+          </p>
+        </details>
+      </section>
+      <section
+        class="slide"
         data-title="Buttons"
         aria-labelledby="title-1"
         hidden
       >
-        <p class="kicker">Actions · 5 minutes</p>
+        <p class="kicker">Actions · 4 minutes</p>
         <h2 id="title-1">Buttons for different kinds of actions.</h2>
         <p class="subtitle">
           Choose the style by the importance of the action. These previews
-          follow the kit’s neutral primary colour, compact sizing and rounded
+          follow the kit’s Gemba brand colours, compact sizing and rounded
           corners.
         </p>
         <div class="preview">
@@ -1044,7 +1184,7 @@
         aria-labelledby="title-2"
         hidden
       >
-        <p class="kicker">Data entry · 6 minutes</p>
+        <p class="kicker">Data entry · 5 minutes</p>
         <h2 id="title-2">Consistent fields and choices.</h2>
         <p class="subtitle">
           A familiar look for typing, choosing an option and changing a
@@ -1191,7 +1331,7 @@
         aria-labelledby="title-3"
         hidden
       >
-        <p class="kicker">Organising information · 6 minutes</p>
+        <p class="kicker">Organising information · 5 minutes</p>
         <h2 id="title-3">Tabs for sections. Tables for records.</h2>
         <p class="subtitle">
           Click between the tabs to see the shared navigation styles and a
@@ -1405,7 +1545,7 @@
         aria-labelledby="title-4"
         hidden
       >
-        <p class="kicker">Focused actions · 4 minutes</p>
+        <p class="kicker">Focused actions · 3 minutes</p>
         <h2 id="title-4">Choose the right overlay.</h2>
         <p class="subtitle">
           Open each example to show how it appears over the current page.
@@ -1466,7 +1606,7 @@
         aria-labelledby="title-5"
         hidden
       >
-        <p class="kicker">Communicating state · 4 minutes</p>
+        <p class="kicker">Communicating state · 3 minutes</p>
         <h2 id="title-5">Make status and feedback readable.</h2>
         <p class="subtitle">
           Shared status tones, toast messages and loading placeholders keep
@@ -1542,81 +1682,85 @@
       </section>
       <section
         class="slide"
-        data-title="Phase 0 and next steps"
+        data-title="Review and next steps"
         aria-labelledby="title-6"
         hidden
       >
-        <p class="kicker">Status & next steps · 3 minutes</p>
-        <h2 id="title-6">Phase 0 is not complete.</h2>
+        <p class="kicker">Review &amp; next steps · 3 minutes</p>
+        <h2 id="title-6">Foundations implemented. Team review next.</h2>
         <p class="subtitle">
-          We brought the status colour tokens forward so Phase 1 could use them.
-          The rest of the foundations still needs to be completed.
+          Phase 0 now has code and documented rules. Team review and merging
+          remain its formal exit criteria.
         </p>
         <div class="cols">
           <div class="preview">
-            <h3>Phase 0 checklist</h3>
+            <h3>Phase 0 implementation checklist</h3>
             <ul class="checklist">
               <li>
-                <span class="state done" aria-label="Done">✓</span
-                ><span
-                  >Status colours, including light/dark values and contrast
-                  checks</span
-                >
+                <span class="state done" aria-label="Implemented">✓</span
+                ><span>Status colours and AA contrast checks</span>
               </li>
               <li>
-                <span class="state pending" aria-label="Pending">○</span
-                ><span
-                  >Conventions: folders, naming, icons and how to request shared
-                  components</span
-                >
+                <span class="state done" aria-label="Implemented">✓</span
+                ><span>Brand primary: navy in light, lime in dark</span>
               </li>
               <li>
-                <span class="state pending" aria-label="Pending">○</span
-                ><span>Type scale and spacing rules</span>
+                <span class="state done" aria-label="Implemented">✓</span
+                ><span>Text, spacing and icon size rules</span>
               </li>
               <li>
-                <span class="state pending" aria-label="Pending">○</span
-                ><span>Central status-to-tone map</span>
+                <span class="state done" aria-label="Implemented">✓</span
+                ><span>One status-to-tone map for every module</span>
               </li>
               <li>
-                <span class="state pending" aria-label="Pending">○</span
-                ><span>Brand mapping for the primary colour</span>
+                <span class="state done" aria-label="Implemented">✓</span
+                ><span>Conventions for folders, naming and kit requests</span>
               </li>
               <li>
-                <span class="state pending" aria-label="Pending">○</span
-                ><span>Patterns and templates folders</span>
+                <span class="state done" aria-label="Implemented">✓</span
+                ><span>Patterns and templates folders reserved</span>
               </li>
             </ul>
+            <p class="caption">
+              The conventions also explain how a developer requests a new shared
+              component instead of copying one.
+            </p>
           </div>
           <div class="preview stack">
-            <h3>Phase 1: kit built, in review</h3>
+            <h3>How to use the kit</h3>
             <p>
-              Controls, form helpers and the live gallery are implemented.
-              Browser checks, TypeScript and the build with a local font fixture
-              passed.
+              Use the shared controls and tokens. Statuses such as DRAFT,
+              PENDING and APPROVED get their tone from the same central map.
+            </p>
+            <div class="row">
+              <span class="badge neutral">DRAFT</span
+              ><span class="badge warning">PENDING</span
+              ><span class="badge success">APPROVED</span>
+            </div>
+            <hr class="divider" style="margin: 0" />
+            <h3>Next: Phase 2 patterns</h3>
+            <p>
+              Build reusable pieces such as PageHeader, DataTable and
+              StatusBadge. Existing modules migrate later.
             </p>
             <p class="caption">
-              Review limits: repository-wide lint has existing failures; normal
-              font downloads timed out in the test environment.
-            </p>
-            <hr class="divider" style="margin: 0" />
-            <h3>Next</h3>
-            <p>
-              Review these designs, finish the remaining Phase 0 decisions, then
-              build shared patterns in Phase 2.
+              Phase 1 remains in review. Existing full-lint failures and the
+              test environment’s font download issue are recorded in the report.
+              Both toast systems still coexist.
             </p>
             <div>
-              <a href="roadmap.md">Full roadmap</a> ·
-              <a href="phase-1-report.md">Verification report</a>
+              <a href="conventions.md">Conventions</a> ·
+              <a href="roadmap.md">Roadmap</a> ·
+              <a href="phase-0-report.md">Phase 0 checks</a>
             </div>
           </div>
         </div>
         <details class="presenter">
           <summary>Presenter cue</summary>
           <p>
-            Be clear that Phase 0 was not completed. Ask for feedback on the
-            control designs, the primary colour choice and the preferred toast
-            system. Leave a minute for questions.
+            Review the completed foundations and ask the team to review the
+            conventions. Implementation is ready; do not claim that team review
+            or merging has already happened. Finish with questions.
           </p>
         </details>
       </section>
@@ -1626,7 +1770,7 @@
           <button type="button" class="btn outline" id="previous">
             ← Previous</button
           ><span class="counter" id="counter" role="status" aria-live="polite"
-            >1 / 7</span
+            >1 / 8</span
           ><button type="button" class="btn" id="next">Next →</button>
         </div>
       </div>

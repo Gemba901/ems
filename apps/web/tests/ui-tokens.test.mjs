@@ -52,6 +52,18 @@ for (const mode of [":root", ".dark"]) {
       value,
     ]),
   );
+  test(`${mode} brand primary uses Gemba colours and has AA text contrast`, () => {
+    const ratio = contrast(
+      luminance(tokens.primary, tokens),
+      luminance(tokens["primary-foreground"], tokens),
+    );
+    assert.ok(ratio >= 4.5, `Primary contrast: ${ratio.toFixed(2)}:1`);
+    assert.equal(
+      tokens.primary,
+      mode === ":root" ? "var(--color-gemba-navy)" : "var(--color-gemba-lime)",
+    );
+    console.log(`${mode} primary: ${ratio.toFixed(2)}:1`);
+  });
   for (const tone of tones) {
     test(`${mode} ${tone}: normal text has AA contrast on base and subtle backgrounds`, () => {
       for (const suffix of ["", "-foreground", "-subtle"]) {

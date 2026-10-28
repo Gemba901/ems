@@ -1,5 +1,7 @@
 # Phase 1 primitive kit review
 
+> Historical Phase 1 snapshot. The subsequent [Phase 0 implementation](phase-0-report.md) now maps primary to the Gemba brand, adds the central status map and establishes conventions/scales/icon rules. The earlier owner-decision notes below describe the state before that follow-up.
+
 Implemented on `feat/frontend-kit-phase-1`. No module migrations, patterns, templates or enforcement changes are included.
 
 ## Files

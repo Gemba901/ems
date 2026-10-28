@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Check, LoaderCircle, Plus } from "lucide-react";
+import { statusToTone } from "@/lib/status";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -157,9 +158,9 @@ function Section({
   return (
     <section
       aria-label={title}
-      className="space-y-4 rounded-xl border border-border p-6"
+      className="space-y-4 rounded-xl border border-border p-card"
     >
-      <h2 className="text-xl font-semibold">{title}</h2>
+      <h2 className="text-section-title">{title}</h2>
       {children}
     </section>
   );
@@ -377,10 +378,10 @@ export function UiShowcase() {
   }, [dark]);
   return (
     <TooltipProvider>
-      <main className="min-h-screen space-y-8 bg-background p-6 text-foreground md:p-10">
+      <main className="min-h-screen space-y-section bg-background p-page text-body text-foreground">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold">Primitive kit</h1>
+            <h1 className="text-page-title">Primitive kit</h1>
             <p className="text-muted-foreground">
               Development showcase · sample data only
             </p>
@@ -415,6 +416,46 @@ export function UiShowcase() {
                 <p className="text-sm">{name}</p>
               </div>
             ))}
+          </div>
+        </Section>
+        <Section title="Phase 0 foundations">
+          <p className="text-body text-muted-foreground">
+            Brand primary: navy in light mode, lime with dark text in dark mode.
+            The same tokens drive the whole kit.
+          </p>
+          <div className="grid gap-section md:grid-cols-2">
+            <div className="space-y-control">
+              <p className="text-page-title">Page title</p>
+              <p className="text-section-title">Section title</p>
+              <p className="text-body">Body text · 14px</p>
+              <p className="text-caption">Caption · 12px</p>
+            </div>
+            <div className="space-y-control">
+              <p className="text-body">
+                Icons: <Check className="inline size-4" aria-hidden="true" />{" "}
+                inline · <Plus className="inline size-5" aria-hidden="true" />{" "}
+                button · <Check className="inline size-6" aria-hidden="true" />{" "}
+                header
+              </p>
+              <p className="text-caption">
+                Page padding: 16 / 24px · section gap: 24px · card: 16px ·
+                compact card: 12px
+              </p>
+              <div className="flex flex-wrap gap-control">
+                {[
+                  "DRAFT",
+                  "PENDING",
+                  "APPROVED",
+                  "IN_PROGRESS",
+                  "REJECTED",
+                  "VERIFIED_CLOSED",
+                ].map((status) => (
+                  <Badge key={status} variant={statusToTone(status)}>
+                    {status}
+                  </Badge>
+                ))}
+              </div>
+            </div>
           </div>
         </Section>
         <Section title="Button">

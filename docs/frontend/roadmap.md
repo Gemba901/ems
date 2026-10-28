@@ -61,20 +61,20 @@ Sizes: **S** is a few days, **M** is about a week, **L** is two weeks or more, a
 
 The goal is to decide the rules before writing components.
 
-- [ ] Write `docs/frontend/conventions.md`:
+- [x] Write `docs/frontend/conventions.md`:
   - folder rules (which layer goes where)
   - naming
   - how to request a kit component
   - "never write a colour value, use a token"
-- [ ] Complete the design tokens in `globals.css`:
+- [x] Complete the design tokens in `globals.css`:
   - semantic status tokens: `success`, `warning`, `info`, `danger`, `neutral`, each with `-foreground` and `-subtle`
   - confirm `primary` maps to the Gemba brand colours
-- [ ] Set the type scale (page title, section title, body, caption) and the spacing scale for page, section and card padding.
-- [ ] Create `lib/status.ts`. It holds one map from every status enum across modules (DRAFT, PENDING, APPROVED, REJECTED, IN_PROGRESS, CLOSED…) to a status tone. It replaces `steelStatusColors.ts`.
-- [ ] Fix icon rules: lucide only, with set sizes (`size-4` inline, `size-5` buttons, `size-6` headers).
-- [ ] Create the folders `components/patterns/` and `components/templates/`.
+- [x] Set the type scale (page title, section title, body, caption) and the spacing scale for page, section and card padding.
+- [x] Create `lib/status.ts`. It holds one map from every status enum across modules (DRAFT, PENDING, APPROVED, REJECTED, IN_PROGRESS, CLOSED…) to a status tone. It replaces `steelStatusColors.ts`.
+- [x] Fix icon rules: lucide only, with set sizes (`size-4` inline, `size-5` buttons, `size-6` headers).
+- [x] Create the folders `components/patterns/` and `components/templates/`.
 
-**Phase 1 prerequisite:** semantic status tokens were added early for the primitive kit, including light/dark values and contrast coverage. Other Phase 0 work remains outstanding.
+**Phase 1 prerequisite:** semantic status tokens were added early for the primitive kit, including light/dark values and contrast coverage. The remaining Phase 0 foundations are now implemented; see [conventions](conventions.md) and the [Phase 0 report](phase-0-report.md). Team review and merge are still pending.
 
 **Exit:** the conventions doc is reviewed by the team, the tokens are merged, and `lib/status.ts` covers every module's status enums.
 
@@ -178,7 +178,7 @@ Checklist for each module:
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0. Foundations | Not started | |
+| 0. Foundations | In review | Implementation complete: conventions, tokens/scales/icons, central status map and reserved folders. Awaiting team review and merge; see [report](phase-0-report.md). |
 | 1. Primitives | In review | Kit and showcase implemented; see [Phase 1 report](phase-1-report.md) for verification and owner decisions. |
 | 2. Patterns | Not started | |
 | 3. Templates | Not started | |

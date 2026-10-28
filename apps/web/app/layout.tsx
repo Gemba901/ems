@@ -1,8 +1,9 @@
-import { SessionProvider } from "@/contexts/SessionProvider";
+import { SessionBoundary } from "@/components/dev/session-boundary";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/contexts/toast.context";
+import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/contexts/QueryProvider";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -51,7 +52,12 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} bg-slate-50 text-slate-900`}>
         <QueryProvider>
-          <SessionProvider><ToastProvider>{children}</ToastProvider></SessionProvider>
+          <SessionBoundary>
+            <ToastProvider>
+              {children}
+              <Toaster />
+            </ToastProvider>
+          </SessionBoundary>
         </QueryProvider>
       </body>
     </html>

@@ -8,13 +8,13 @@ These are the Phase 0 foundations for new shared UI work. Existing modules migra
 
 Every layer may import the layers below it. Shared kit code must not import module components, services or organization-specific business rules.
 
-| Layer         | Location                                                  | Contains                                                                                    |
-| ------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Design tokens | `apps/web/app/globals.css`, `apps/web/lib/status.ts`      | Colour, type, spacing, radius and the central status-tone map                               |
-| Primitives    | `apps/web/components/ui/`                                 | General controls; Base UI/shadcn base-nova, without module business logic                   |
-| Patterns      | `apps/web/components/patterns/`                           | Repeated compositions such as PageHeader, DataTable and StatusBadge; implemented in Phase 2 |
-| Templates     | `apps/web/components/templates/`                          | Complete list/detail/form/dashboard layouts; implemented in Phase 3                         |
-| Module UI     | `apps/web/app/<module>/`, `apps/web/components/<module>/` | Data fetching, permissions, workflow and domain-specific content                            |
+| Layer         | Location                                                  | Contains                                                                                                               |
+| ------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Design tokens | `apps/web/app/globals.css`, `apps/web/lib/status.ts`      | Colour, type, spacing, radius and the central status-tone map                                                          |
+| Primitives    | `apps/web/components/ui/`                                 | General controls; Base UI/shadcn base-nova, without module business logic                                              |
+| Patterns      | `apps/web/components/patterns/`                           | Repeated compositions such as PageHeader, DataTable and StatusBadge; implemented in Phase 2; see `phase-2-patterns.md` |
+| Templates     | `apps/web/components/templates/`                          | Complete list/detail/form/dashboard layouts; implemented in Phase 3                                                    |
+| Module UI     | `apps/web/app/<module>/`, `apps/web/components/<module>/` | Data fetching, permissions, workflow and domain-specific content                                                       |
 
 Use `@/components/ui/...` and `@/lib/status` imports in app code. Keep relative imports within a helper's own layer when needed for standalone tests. Do not import another module's components to reuse a shared UI element; ask for a kit component instead.
 
@@ -83,7 +83,7 @@ import { statusToTone } from "@/lib/status";
 
 Mapping decisions: pending/review/partial progress → warning; ongoing work → info; successful completion → success; rejection/failure → danger; draft/archive/not-applicable → neutral. `ACTIVE` is informational; `CANCELLED` remains danger to preserve the existing Steel meaning. Lowercase/title-case values and surrounding whitespace are normalized; unknown values safely return neutral. Preserve a readable text label so colour is never the only signal. These tones must never be used for permissions or workflow transitions.
 
-If the same status string needs different business meanings in two modules, request an explicit central API decision from the frontend owner; do not introduce a local status-colour map. A future StatusBadge pattern will consume this helper in Phase 2.
+If the same status string needs different business meanings in two modules, request an explicit central API decision from the frontend owner; do not introduce a local status-colour map. The `components/patterns/StatusBadge.tsx` pattern consumes this helper.
 
 ## Icons
 
@@ -115,3 +115,7 @@ The owner decides whether to extend a primitive, create a shared pattern/templat
 Inspect the real components in `/dev/ui`; use the HTML presentation to discuss designs. Check light/dark mode, keyboard use, invalid/disabled/loading states and an existing consumer when a shared API changes. Run targeted tests, TypeScript and scoped lint. Token changes must retain AA normal-text contrast for status and primary colour pairs.
 
 Team review and merge of these foundations are the Phase 0 exit criteria. Implementation checkboxes do not imply that team review has already happened. Module migration, patterns, templates, new lint rules and CI changes remain separate phases.
+
+## Pattern kit usage
+
+See [Phase 2 pattern APIs and examples](phase-2-patterns.md) for table, filter, form, confirmation, chart and history contracts. Keep module data fetching and permissions outside the patterns.

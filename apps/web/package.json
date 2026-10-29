@@ -12,7 +12,8 @@
     "test:proxy": "node tests/api-proxy.test.mjs",
     "test:slugs": "node tests/reserved-slugs.test.mjs",
     "test:session": "../../packages/db/node_modules/.bin/tsx tests/session.test.ts",
-    "test:proxy-integration": "node tests/proxy-route.integration.mjs"
+    "test:proxy-integration": "node tests/proxy-route.integration.mjs",
+    "test:ui-patterns": "jest --runInBand"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -42,12 +43,18 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/jest": "^30",
     "@types/leaflet": "^1.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
+    "jest": "^30",
+    "jest-environment-jsdom": "^30",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

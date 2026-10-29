@@ -10,19 +10,20 @@ The backend stays consistent because NestJS gives every module the same shape: m
 
 ### Baseline (2026-10-26)
 
-| Module | Hand-written `<button>` | Uses `ui/button` | Hand-written `<table>` | Hand-rolled modals | Hex colours | Raw Tailwind palette classes |
-|---|---|---|---|---|---|---|
-| steel | 36 | 57 files | 24 | 11 | 26 | 1,640 |
-| dwms | 120 | 0 | 5 | 5 | 28 | 1,531 |
-| sga | 70 | 0 | 1 | 0 | 30 | 1,051 |
-| sims | 38 | 0 | 3 | 1 | 67 | 933 |
-| five-s | 81 | 0 | 5 | 0 | 41 | 564 |
-| kaizen | 35 | 0 | 1 | 0 | 20 | 560 |
-| leave | 32 | 0 | 1 | 0 | 1 | 538 |
-| work | 80 | 0 | 3 | 2 | 16 | 496 |
-| tickets | 3 | 0 | 0 | 0 | 0 | 106 |
+| Module  | Hand-written `<button>` | Uses `ui/button` | Hand-written `<table>` | Hand-rolled modals | Hex colours | Raw Tailwind palette classes |
+| ------- | ----------------------- | ---------------- | ---------------------- | ------------------ | ----------- | ---------------------------- |
+| steel   | 36                      | 57 files         | 24                     | 11                 | 26          | 1,640                        |
+| dwms    | 120                     | 0                | 5                      | 5                  | 28          | 1,531                        |
+| sga     | 70                      | 0                | 1                      | 0                  | 30          | 1,051                        |
+| sims    | 38                      | 0                | 3                      | 1                  | 67          | 933                          |
+| five-s  | 81                      | 0                | 5                      | 0                  | 41          | 564                          |
+| kaizen  | 35                      | 0                | 1                      | 0                  | 20          | 560                          |
+| leave   | 32                      | 0                | 1                      | 0                  | 1           | 538                          |
+| work    | 80                      | 0                | 3                      | 2                  | 16          | 496                          |
+| tickets | 3                       | 0                | 0                      | 0                  | 0           | 106                          |
 
 What already exists:
+
 - `components/ui/` has shadcn (`base-nova` style) `Button`, `Card`, `Badge`, `Input`, `Popover`, `Tooltip`, `Progress` and `Avatar`. Only Steel uses them.
 - `app/globals.css` defines brand tokens (`gemba-navy`, `gemba-lime`, `gemba-red`) and shadcn semantic tokens (`primary`, `muted`, `destructive`, `chart-1..5`).
 - `components/shell/ModuleSidebar.tsx` is the shared module navigation.
@@ -93,21 +94,23 @@ The goal is to give every common HTML control a shared component.
 
 The goal is to build the pieces that every module currently rebuilds. This phase removes most of the drift.
 
-- [ ] `PageHeader`: title, description, breadcrumb, actions slot
-- [ ] `PageSection` / `SectionCard`: titled content block
-- [ ] `StatCard`: KPI tile with value, label, trend and icon
-- [ ] `DataTable`: columns, sorting, search, filters, pagination, row actions, loading, empty and error states
-- [ ] `FilterBar`: search, select filters, date range and reset
-- [ ] `StatusBadge`: reads from `lib/status.ts`
-- [ ] `EmptyState`, `LoadingState`, `ErrorState`
-- [ ] `ConfirmDialog`: destructive and confirm actions
-- [ ] `FormField` / `FormSection` / `FormActions`
-- [ ] `DetailList`: label/value pairs for detail pages
-- [ ] `ChartCard`: a Recharts wrapper that uses the `chart-*` tokens
-- [ ] `Timeline` / `ActivityFeed`: for approval history, which SIMS, SGA and Kaizen all have
-- [ ] Add each one to `/dev/ui`, plus Jest and RTL tests for the behaviour-heavy ones (`DataTable`, `ConfirmDialog`, `FormField`).
+- [x] `PageHeader`: title, description, breadcrumb, actions slot
+- [x] `PageSection` / `SectionCard`: titled content block
+- [x] `StatCard`: KPI tile with value, label, trend and icon
+- [x] `DataTable`: columns, sorting, search, filters, pagination, row actions, loading, empty and error states
+- [x] `FilterBar`: search, select filters, date range and reset
+- [x] `StatusBadge`: reads from `lib/status.ts`
+- [x] `EmptyState`, `LoadingState`, `ErrorState`
+- [x] `ConfirmDialog`: destructive and confirm actions
+- [x] `FormField` / `FormSection` / `FormActions`
+- [x] `DetailList`: label/value pairs for detail pages
+- [x] `ChartCard`: a Recharts wrapper that uses the `chart-*` tokens
+- [x] `Timeline` / `ActivityFeed`: for approval history, which SIMS, SGA and Kaizen all have
+- [x] Add each one to `/dev/ui`, plus Jest and RTL tests for the behaviour-heavy ones (`DataTable`, `ConfirmDialog`, `FormField`).
 
 **Exit:** every pattern is in `/dev/ui` with tests, and the patterns cover the list, detail, form and dashboard needs of the pilot module.
+
+**Implementation:** see [pattern guide](phase-2-patterns.md) and [verification report](phase-2-report.md). Tickets fixture compositions cover list, detail, form and dashboard needs in `/dev/ui`; production migration remains Phase 5.
 
 ### Phase 3: Page templates (M)
 
@@ -143,20 +146,21 @@ The goal is to make the rules automatic instead of relying on reminders.
 
 The goal is to move every module onto the kit, one module per PR series, alongside feature work.
 
-| Order | Module | Why this order |
-|---|---|---|
-| 1 | tickets | Smallest (5 files). Pilot to test the kit, fix gaps in it before scaling. |
-| 2 | leave | Small and shows how forms and lists work in the kit. |
-| 3 | dwms | Highest drift (120 raw buttons, 1.5k palette classes). |
-| 4 | sga | High drift; shares approval patterns with SIMS and Kaizen. |
-| 5 | sims | Uses the most hex colours; approval and timeline heavy. |
-| 6 | kaizen | Reuses the SGA/SIMS patterns. |
-| 7 | five-s | Audit tables and forms. |
-| 8 | work | Attendance and analytics dashboards; tests `DashboardPageTemplate`. |
-| 9 | steel | Already uses the primitives; mostly swapping to the patterns and `lib/status.ts`. |
-| 10 | dashboard, hr, ems, admin, settings, reports, calendar | Shared and shell pages. |
+| Order | Module                                                 | Why this order                                                                    |
+| ----- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| 1     | tickets                                                | Smallest (5 files). Pilot to test the kit, fix gaps in it before scaling.         |
+| 2     | leave                                                  | Small and shows how forms and lists work in the kit.                              |
+| 3     | dwms                                                   | Highest drift (120 raw buttons, 1.5k palette classes).                            |
+| 4     | sga                                                    | High drift; shares approval patterns with SIMS and Kaizen.                        |
+| 5     | sims                                                   | Uses the most hex colours; approval and timeline heavy.                           |
+| 6     | kaizen                                                 | Reuses the SGA/SIMS patterns.                                                     |
+| 7     | five-s                                                 | Audit tables and forms.                                                           |
+| 8     | work                                                   | Attendance and analytics dashboards; tests `DashboardPageTemplate`.               |
+| 9     | steel                                                  | Already uses the primitives; mostly swapping to the patterns and `lib/status.ts`. |
+| 10    | dashboard, hr, ems, admin, settings, reports, calendar | Shared and shell pages.                                                           |
 
 Checklist for each module:
+
 - [ ] Swap primitives (buttons, inputs, tables, modals) for kit components.
 - [ ] Swap colours for tokens, and statuses for `StatusBadge`.
 - [ ] Rebuild pages on templates.
@@ -176,12 +180,12 @@ Checklist for each module:
 
 ## Tracking
 
-| Phase | Status | Notes |
-|---|---|---|
-| 0. Foundations | In review | Implementation complete: conventions, tokens/scales/icons, central status map and reserved folders. Awaiting team review and merge; see [report](phase-0-report.md). |
-| 1. Primitives | In review | Kit and showcase implemented; see [Phase 1 report](phase-1-report.md) for verification and owner decisions. |
-| 2. Patterns | Not started | |
-| 3. Templates | Not started | |
-| 4. Enforcement | Not started | Phase 4 can start in parallel with Phase 2 as lint rules in `warn` mode. |
-| 5. Migration | Not started | |
-| 6. Lock-in | Not started | |
+| Phase          | Status      | Notes                                                                                                                                                                |
+| -------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0. Foundations | In review   | Implementation complete: conventions, tokens/scales/icons, central status map and reserved folders. Awaiting team review and merge; see [report](phase-0-report.md). |
+| 1. Primitives  | In review   | Kit and showcase implemented; see [Phase 1 report](phase-1-report.md) for verification and owner decisions.                                                          |
+| 2. Patterns    | In review   | Pattern kit, Tickets fixture compositions and behaviour tests implemented; see [report](phase-2-report.md).                                                          |
+| 3. Templates   | Not started |                                                                                                                                                                      |
+| 4. Enforcement | Not started | Phase 4 can start in parallel with Phase 2 as lint rules in `warn` mode.                                                                                             |
+| 5. Migration   | Not started |                                                                                                                                                                      |
+| 6. Lock-in     | Not started |                                                                                                                                                                      |

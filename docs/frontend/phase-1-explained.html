@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>Phases 0 &amp; 1 — A 30-minute design walkthrough</title>
+    <title>Phases 0–2 — A 30-minute design walkthrough</title>
     <style>
       :root {
         --bg: #f7f8fa;
@@ -853,9 +853,7 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="brand">
-        <span>G</span> PHASES 0 &amp; 1 · SHARED UI DESIGNS
-      </div>
+      <div class="brand"><span>G</span> PHASES 0–2 · SHARED UI DESIGNS</div>
       <div class="actions">
         <button
           class="btn outline"
@@ -872,22 +870,23 @@
     <nav class="agenda" aria-label="Presentation sections">
       <button type="button" data-slide="0" aria-current="step">
         1. Overview · 2 min</button
-      ><button type="button" data-slide="1">2. Foundations · 5 min</button
+      ><button type="button" data-slide="1">2. Foundations · 3 min</button
       ><button type="button" data-slide="2">3. Buttons · 4 min</button
-      ><button type="button" data-slide="3">4. Forms & select · 5 min</button
-      ><button type="button" data-slide="4">5. Tabs & tables · 5 min</button
+      ><button type="button" data-slide="3">4. Forms & select · 4 min</button
+      ><button type="button" data-slide="4">5. Tabs & tables · 4 min</button
       ><button type="button" data-slide="5">6. Dialogs · 3 min</button
       ><button type="button" data-slide="6">7. Feedback · 3 min</button
-      ><button type="button" data-slide="7">8. Review & next · 3 min</button>
+      ><button type="button" data-slide="7">8. Patterns · 4 min</button
+      ><button type="button" data-slide="8">9. Review & next · 3 min</button>
     </nav>
     <main class="shell">
       <section class="slide" data-title="Overview" aria-labelledby="title-0">
         <p class="kicker">A 30-minute walkthrough</p>
         <h1 id="title-0">These are the controls our modules can now share.</h1>
         <p class="subtitle">
-          Phases 0 and 1 give us shared design rules plus a consistent set of
-          buttons, inputs, selects, tabs, tables and dialogs. Today’s focus is
-          how they look and when to use them.
+          Phases 0–2 give us shared design rules plus a consistent set of
+          buttons, inputs, selects, tabs, tables, dialogs and reusable page
+          patterns. Today’s focus is how they look and when to use them.
         </p>
         <div class="samples">
           <button
@@ -916,8 +915,9 @@
           <div class="intro-card">
             <h3>What we now have</h3>
             <p>
-              A shared kit with 16 new primitives, status colours and form
-              helpers. Existing modules can adopt it in a later phase.
+              A shared kit with controls, status colours, form helpers and
+              reusable page patterns. Existing modules can adopt it in a later
+              phase.
             </p>
           </div>
         </div>
@@ -936,7 +936,7 @@
         aria-labelledby="title-foundations"
         hidden
       >
-        <p class="kicker">Phase 0 · Foundations · 5 minutes</p>
+        <p class="kicker">Phase 0 · Foundations · 3 minutes</p>
         <h2 id="title-foundations">The shared rules behind these designs.</h2>
         <p class="subtitle">
           We have now implemented the foundations: brand colours, readable text
@@ -1184,7 +1184,7 @@
         aria-labelledby="title-2"
         hidden
       >
-        <p class="kicker">Data entry · 5 minutes</p>
+        <p class="kicker">Data entry · 4 minutes</p>
         <h2 id="title-2">Consistent fields and choices.</h2>
         <p class="subtitle">
           A familiar look for typing, choosing an option and changing a
@@ -1331,7 +1331,7 @@
         aria-labelledby="title-3"
         hidden
       >
-        <p class="kicker">Organising information · 5 minutes</p>
+        <p class="kicker">Organising information · 4 minutes</p>
         <h2 id="title-3">Tabs for sections. Tables for records.</h2>
         <p class="subtitle">
           Click between the tabs to see the shared navigation styles and a
@@ -1682,12 +1682,128 @@
       </section>
       <section
         class="slide"
+        data-title="Phase 2 patterns"
+        aria-labelledby="title-patterns"
+        hidden
+      >
+        <p class="kicker">Phase 2 · Patterns · 4 minutes</p>
+        <h2 id="title-patterns">Build a page from familiar pieces.</h2>
+        <p class="subtitle">
+          The Tickets examples combine our controls into a list, detail view,
+          form and dashboard. Try the real React patterns at
+          <code>/dev/ui</code>.
+        </p>
+        <div class="cols">
+          <div class="preview stack">
+            <div class="row" style="justify-content: space-between">
+              <div>
+                <p class="caption">PageHeader</p>
+                <h3>Support tickets</h3>
+              </div>
+              <button
+                class="btn"
+                type="button"
+                data-toast="The shared FormSection and FormField collect a ticket request."
+              >
+                New ticket
+              </button>
+            </div>
+            <div class="intro-grid">
+              <div class="intro-card">
+                <p class="caption">StatCard · Open</p>
+                <h3>12</h3>
+              </div>
+              <div class="intro-card">
+                <p class="caption">StatCard · Resolved</p>
+                <h3>28</h3>
+              </div>
+            </div>
+            <div class="row">
+              <span class="badge warning">Open</span
+              ><span class="badge info">In progress</span
+              ><span class="badge success">Resolved</span>
+            </div>
+            <p class="caption">StatusBadge reads the central status map.</p>
+            <div style="overflow-x: auto">
+              <table>
+                <caption>
+                  DataTable + FilterBar
+                </caption>
+                <thead>
+                  <tr>
+                    <th>Reference</th>
+                    <th>Request</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>T-101</td>
+                    <td>Replace scanner</td>
+                    <td>
+                      <button
+                        class="btn outline"
+                        type="button"
+                        data-toast="DetailList shows fields; Timeline shows the record history."
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>T-102</td>
+                    <td>Printer offline</td>
+                    <td>
+                      <button
+                        class="btn outline"
+                        type="button"
+                        data-toast="The live table supports search, sort, status/date filters and pagination."
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="preview stack">
+            <h3>What the patterns handle</h3>
+            <ul class="checklist">
+              <li>Consistent headings, sections and KPI cards</li>
+              <li>Search, sorting, filters and pagination</li>
+              <li>Loading, empty and error states with retry</li>
+              <li>Labelled fields, errors and pending form actions</li>
+              <li>Confirmations that wait for success and allow retry</li>
+              <li>Charts with a readable data table; details and history</li>
+            </ul>
+            <p class="caption">
+              Demo data only. Modules still own API calls, permissions and
+              workflow rules. Production migration follows later.
+            </p>
+            <a href="phase-2-patterns.md">Component guide and usage examples</a>
+          </div>
+        </div>
+        <details class="presenter">
+          <summary>Presenter cue</summary>
+          <p>
+            Show how patterns combine controls. Open /dev/ui for live filtering,
+            validation, confirmation failure/retry and chart data. These offline
+            previews illustrate design; they do not replace the React
+            demonstrations.
+          </p>
+        </details>
+      </section>
+      <section
+        class="slide"
         data-title="Review and next steps"
         aria-labelledby="title-6"
         hidden
       >
         <p class="kicker">Review &amp; next steps · 3 minutes</p>
-        <h2 id="title-6">Foundations implemented. Team review next.</h2>
+        <h2 id="title-6">
+          Foundations, controls and patterns are ready for review.
+        </h2>
         <p class="subtitle">
           Phase 0 now has code and documented rules. Team review and merging
           remain its formal exit criteria.
@@ -1718,7 +1834,7 @@
               </li>
               <li>
                 <span class="state done" aria-label="Implemented">✓</span
-                ><span>Patterns and templates folders reserved</span>
+                ><span>Pattern kit built; templates folder reserved</span>
               </li>
             </ul>
             <p class="caption">
@@ -1738,10 +1854,10 @@
               ><span class="badge success">APPROVED</span>
             </div>
             <hr class="divider" style="margin: 0" />
-            <h3>Next: Phase 2 patterns</h3>
+            <h3>Next: Phase 3 page templates</h3>
             <p>
-              Build reusable pieces such as PageHeader, DataTable and
-              StatusBadge. Existing modules migrate later.
+              Compose the shared patterns into list, detail, form and dashboard
+              templates. Existing modules migrate in Phase 5.
             </p>
             <p class="caption">
               Phase 1 remains in review. Existing full-lint failures and the
@@ -1751,7 +1867,9 @@
             <div>
               <a href="conventions.md">Conventions</a> ·
               <a href="roadmap.md">Roadmap</a> ·
-              <a href="phase-0-report.md">Phase 0 checks</a>
+              <a href="phase-0-report.md">Phase 0 checks</a> ·
+              <a href="phase-2-patterns.md">Pattern guide</a> ·
+              <a href="phase-2-report.md">Phase 2 checks</a>
             </div>
           </div>
         </div>
@@ -1770,7 +1888,7 @@
           <button type="button" class="btn outline" id="previous">
             ← Previous</button
           ><span class="counter" id="counter" role="status" aria-live="polite"
-            >1 / 8</span
+            >1 / 9</span
           ><button type="button" class="btn" id="next">Next →</button>
         </div>
       </div>

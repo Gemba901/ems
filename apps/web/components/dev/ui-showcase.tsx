@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
+import { PatternShowcase } from "./pattern-showcase";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -1051,6 +1052,7 @@ export function UiShowcase() {
             <SpeechToTextButton onResult={setTranscript} disabled />
           </div>
         </Section>
+        <PatternShowcase />
       </main>
     </TooltipProvider>
   );

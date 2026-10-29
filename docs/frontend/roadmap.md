@@ -116,13 +116,15 @@ The goal is to build the pieces that every module currently rebuilds. This phase
 
 The goal is to stop every module laying out its pages differently.
 
-- [ ] `ListPageTemplate`: PageHeader + FilterBar + DataTable
-- [ ] `DetailPageTemplate`: PageHeader + status + main column + side panel (DetailList, Timeline)
-- [ ] `FormPageTemplate`: PageHeader + FormSections + sticky FormActions
-- [ ] `DashboardPageTemplate`: PageHeader + StatCard row + ChartCard grid
-- [ ] Document each template in `conventions.md` with a code example.
+- [x] `ListPageTemplate`: PageHeader + FilterBar + DataTable
+- [x] `DetailPageTemplate`: PageHeader + status + main column + side panel (DetailList, Timeline)
+- [x] `FormPageTemplate`: PageHeader + FormSections + sticky FormActions
+- [x] `DashboardPageTemplate`: PageHeader + StatCard row + ChartCard grid
+- [x] Document each template in `conventions.md` with a code example.
 
 **Exit:** a new module page can be built using only a template, patterns and module logic.
+
+**Implementation:** all four templates have live Tickets fixture examples in `/dev/ui`, documented APIs/examples in [conventions](conventions.md#phase-3-page-templates), and behaviour tests. See the [Phase 3 report](phase-3-report.md). Production modules migrate in Phase 5.
 
 ### Phase 4: Enforcement (M)
 
@@ -185,7 +187,7 @@ Checklist for each module:
 | 0. Foundations | In review   | Implementation complete: conventions, tokens/scales/icons, central status map and reserved folders. Awaiting team review and merge; see [report](phase-0-report.md). |
 | 1. Primitives  | In review   | Kit and showcase implemented; see [Phase 1 report](phase-1-report.md) for verification and owner decisions.                                                          |
 | 2. Patterns    | In review   | Pattern kit, Tickets fixture compositions and behaviour tests implemented; see [report](phase-2-report.md).                                                          |
-| 3. Templates   | Not started |                                                                                                                                                                      |
+| 3. Templates   | In review   | Four templates implemented with fixture examples, documentation and tests; see [report](phase-3-report.md).                                                          |
 | 4. Enforcement | Not started | Phase 4 can start in parallel with Phase 2 as lint rules in `warn` mode.                                                                                             |
 | 5. Migration   | Not started |                                                                                                                                                                      |
 | 6. Lock-in     | Not started |                                                                                                                                                                      |

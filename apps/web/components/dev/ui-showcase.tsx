@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
+import { TemplateShowcase } from "./template-showcase";
 import { PatternShowcase } from "./pattern-showcase";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1053,6 +1054,7 @@ export function UiShowcase() {
           </div>
         </Section>
         <PatternShowcase />
+        <TemplateShowcase />
       </main>
     </TooltipProvider>
   );

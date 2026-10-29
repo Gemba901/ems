@@ -119,3 +119,115 @@ Team review and merge of these foundations are the Phase 0 exit criteria. Implem
 ## Pattern kit usage
 
 See [Phase 2 pattern APIs and examples](phase-2-patterns.md) for table, filter, form, confirmation, chart and history contracts. Keep module data fetching and permissions outside the patterns.
+
+## Phase 3 page templates
+
+Templates live in `apps/web/components/templates/`. They compose the pattern kit and keep module data fetching, authorization, validation and navigation in callers. The surrounding app shell supplies page padding; templates supply section spacing and responsive internal layout. Use one template per page: each owns the page h1. Do not nest templates or add another main landmark inside the app shell.
+
+### ListPageTemplate
+
+```tsx
+import { ListPageTemplate } from "@/components/templates/ListPageTemplate";
+
+<ListPageTemplate
+  header={{ title: "Tickets", description: "Requests needing attention" }}
+  table={{
+    caption: "Tickets",
+    rows: tickets,
+    getRowId: (t) => t.id,
+    searchText: (t) => t.subject,
+    columns: [
+      {
+        id: "subject",
+        header: "Subject",
+        cell: (t) => t.subject,
+        sortValue: (t) => t.subject,
+      },
+    ],
+  }}
+/>;
+```
+
+`header` accepts PageHeader props; `table` accepts the complete typed DataTable API. Its FilterBar is already included when search/filters are configured; do not add a second independent filter bar. Optional `beforeTable` / `afterTable` slots accept module content. Pass a complete client-side collection; the Phase 2 table contract still applies. Module callers pass loading/error/retry through `table` and enforce row-action permissions.
+
+### DetailPageTemplate
+
+```tsx
+import { DetailPageTemplate } from "@/components/templates/DetailPageTemplate";
+import { SectionCard } from "@/components/patterns/SectionCard";
+
+<DetailPageTemplate
+  header={{ title: ticket.reference }}
+  status={ticket.status}
+  details={[{ label: "Assignee", value: ticket.assigneeName }]}
+  activity={events}
+>
+  <SectionCard title="Request">{ticket.message}</SectionCard>
+</DetailPageTemplate>;
+```
+
+The main column is `children`. `details` feeds DetailList; `activity` feeds Timeline. Optional `sidebar` adds module content, with `sidebarLabel` naming the aside. The sidebar is omitted when none of these are supplied, so the main content uses the available width. On small screens, main content appears before the sidebar; from `lg`, columns use a 2:1 split. Omit `status` to hide the badge; explicit null renders Unknown. `statusLabel` overrides its readable label. Callers handle record-level loading/not-found/error/permission states before rendering a populated detail view; individual sections can use shared data-state patterns.
+
+### FormPageTemplate
+
+```tsx
+import { FormPageTemplate } from "@/components/templates/FormPageTemplate";
+import { FormField } from "@/components/patterns/FormField";
+import { Input } from "@/components/ui/input";
+
+<FormPageTemplate
+  header={{ title: "Create ticket" }}
+  onSubmit={handleSubmit(save)}
+  noValidate
+  sections={[
+    {
+      id: "request",
+      title: "Request",
+      content: (
+        <FormField label="Subject" required error={errors.subject?.message}>
+          <Input {...register("subject", { required: "Enter a subject" })} />
+        </FormField>
+      ),
+    },
+  ]}
+  actions={{
+    pending: isSubmitting,
+    onCancel: cancel,
+    submitLabel: "Create ticket",
+  }}
+  error={saveError}
+/>;
+```
+
+Supply stable section IDs; each becomes a FormSection fieldset. The template owns one labelled native form and its FormActions: do not wrap it in another form or supply nested forms inside sections. `onSubmit` belongs to the module; use RHF/Zod or native constraints as appropriate. Native validation remains enabled unless `noValidate` is set. `actions.pending` and `actions.disabled` also guard submit events, including Enter-key/programmatic submit events, rather than disabling only the button. Pending disables cancellation; disabled only disables saving. Callers must still own mutation guards, server validation and idempotency. `error` is a page-level save error, while field errors belong in FormField. Use safe user-facing messages.
+
+The action footer is `position: sticky; bottom: 0` with an opaque token-based background and remains in form flow. Avoid overflow wrappers that unintentionally establish another scroll container. The form supplies scroll margins to inputs, textareas and buttons so focused controls can clear the footer; check custom composite controls and the mobile keyboard in the consuming page. Optional `id` overrides the generated form ID. Cancel actions are buttons with `type="button"` and never submit.
+
+### DashboardPageTemplate
+
+```tsx
+import { DashboardPageTemplate } from "@/components/templates/DashboardPageTemplate";
+
+<DashboardPageTemplate
+  header={{ title: "Tickets overview" }}
+  stats={[{ id: "open", label: "Open tickets", value: openCount }]}
+  charts={[
+    {
+      id: "volume",
+      title: "Tickets by day",
+      categoryKey: "day",
+      data: volume,
+      series: [{ key: "count", label: "Tickets", token: "chart-1" }],
+    },
+  ]}
+  loading={isLoading}
+  error={loadError}
+  onRetry={refetch}
+/>;
+```
+
+Stats render in one/two/four columns depending on available breakpoint; charts render in one/two columns. Supply stable IDs separately from pattern props. `children` adds module sections below the grid. Loading/error replaces stale dashboard content while preserving the header; retry remains caller-owned. Empty stats/charts without children show EmptyState. Each chart can also use its own loading/error/retry props for partial failures. ChartCard's accessible data alternative remains available.
+
+`ListPageTemplate`, `FormPageTemplate` and `DashboardPageTemplate` are client entry points; functions such as column renderers and submit handlers must be defined in a client module, rather than passed across a Server Component boundary. DetailPageTemplate can compose server-rendered content with the client status badge. See the installed Next.js client/server guidance when integrating a new route.
+
+Live Tickets fixture examples for all four templates are in `/dev/ui` under **Phase 3 · Page templates**. Production module migration stays in Phase 5.

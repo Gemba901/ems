@@ -1,5 +1,5 @@
-# Templates
+# Page templates
 
-Reserved in Phase 0 for whole page layouts such as list, detail, form and dashboard. Implementation begins in Phase 3.
+ListPageTemplate, DetailPageTemplate, FormPageTemplate and DashboardPageTemplate compose the shared patterns. Import them directly from `@/components/templates/<Name>`.
 
-Follow [the frontend conventions](../../../../docs/frontend/conventions.md). Do not add module-specific data fetching or imports from module components here.
+See [frontend conventions and examples](../../../../docs/frontend/conventions.md#phase-3-page-templates). Live fixture examples are in `/dev/ui`. Templates handle layout and shared composition; callers own data fetching, permissions, validation and navigation. The app shell supplies page padding.

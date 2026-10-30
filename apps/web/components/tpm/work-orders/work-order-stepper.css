@@ -1,0 +1,126 @@
+.wo-stepper {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid #e3e9f1;
+  border-radius: 12px;
+  padding: 25px 22px 21px;
+  margin-bottom: 24px;
+  background: #fff;
+  box-shadow: 0 2px 4px #152d5103;
+  scrollbar-width: thin;
+  scrollbar-color: #d1dbe9 transparent;
+  overscroll-behavior-x: contain;
+}
+.wo-stepper-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  min-width: 720px;
+  padding: 0;
+  margin: 0;
+}
+.wo-stepper-item {
+  position: relative;
+  min-width: 0;
+  isolation: isolate;
+}
+.wo-stepper-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 21px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: #e5eaf1;
+  z-index: -1;
+}
+.wo-stepper-item.is-complete::after {
+  background: #2e75e2;
+}
+.wo-stepper-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0 7px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #8491a4;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.wo-stepper-circle {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 2px solid #e6ebf2;
+  border-radius: 50%;
+  background: #f6f8fb;
+  color: #8a97a9;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 0 0 7px #fff;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.wo-stepper-label {
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  text-align: center;
+  white-space: nowrap;
+}
+.wo-stepper-item.is-complete .wo-stepper-circle {
+  background: #2e75e2;
+  border-color: #2e75e2;
+  color: #fff;
+}
+.wo-stepper-item.is-active .wo-stepper-circle {
+  background: #fff;
+  border-color: #2e75e2;
+  color: #2466c9;
+}
+.wo-editor {
+  scroll-margin-top: 90px;
+}
+.wo-stepper-item.is-active .wo-stepper-label {
+  color: #2466c9;
+  font-weight: 650;
+}
+.wo-stepper-item.is-complete .wo-stepper-label {
+  color: #536e92;
+}
+.wo-stepper-button:not(:disabled):hover .wo-stepper-circle {
+  border-color: #90b7ef;
+}
+.wo-stepper-button:focus-visible {
+  outline: 2px solid #2e75e2;
+  outline-offset: 5px;
+}
+.wo-stepper-button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+@media (max-width: 640px) {
+  .wo-stepper {
+    padding: 21px 12px 17px;
+    margin-bottom: 18px;
+  }
+  .wo-stepper-list {
+    min-width: 690px;
+  }
+  .wo-stepper-label {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wo-stepper-circle {
+    transition: none;
+  }
+}

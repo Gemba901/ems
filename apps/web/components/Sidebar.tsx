@@ -15,7 +15,6 @@ import {
   UserCircle,
   Lightbulb,
   Ticket,
-  Factory,
   Sparkles,
   Users2,
   Briefcase,

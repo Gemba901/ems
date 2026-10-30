@@ -13,7 +13,13 @@ interface HeaderProps {
   onMenuClick?: () => void;
 }
 
-function BrandGear({ size = 18, teeth = 8 }: { size?: number; teeth?: number }) {
+function BrandGear({
+  size = 18,
+  teeth = 8,
+}: {
+  size?: number;
+  teeth?: number;
+}) {
   const r = size / 2;
   const innerR = r * 0.72;
   const holeR = r * 0.28;
@@ -45,6 +51,24 @@ function BrandGear({ size = 18, teeth = 8 }: { size?: number; teeth?: number }) 
 }
 
 const PAGE_TITLES: Record<string, string> = {
+  "/tpm/assets": "TPM · Assets",
+  "/tpm/assets/new": "TPM · New Asset",
+  "/tpm/assets/import": "TPM · Import Assets",
+  "/tpm/health-checkups": "TPM · Health Standards",
+  "/tpm/health-checkups/standards/new": "TPM · New Health Standard",
+  "/tpm/health-checkups/schedule": "TPM · Health Schedule",
+  "/tpm/health-checkups/schedule/new": "TPM · Assign Health Standard",
+  "/tpm/health-checkups/checkups": "TPM · Health Checkups",
+  "/tpm/health-checkups/checkups/new": "TPM · Start Health Checkup",
+  "/tpm/health-checkups/reports": "TPM · Health Reports",
+  "/tpm/work-orders": "TPM · Work Orders",
+  "/tpm/planning": "TPM · PM Planning & Calendar",
+  "/tpm/planning/new": "TPM · New Maintenance Plan",
+  "/tpm/work-orders/new": "TPM · New Work Order",
+  "/tpm/inspections": "TPM · Inspection Checklists",
+  "/tpm/inspections/new": "TPM · New Checklist",
+  "/tpm/inspection-reports": "TPM · Inspection Reports",
+  "/tpm/inspection-reports/new": "TPM · Start Inspection",
   "/": "Dashboard",
   "/hr": "People",
   "/hr/reports": "People Reports",
@@ -103,6 +127,22 @@ const PAGE_TITLES: Record<string, string> = {
 
 function resolveTitle(pathname: string): string {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  if (pathname.startsWith("/tpm/work-orders/"))
+    return "TPM · Work Order Details";
+  if (pathname.startsWith("/tpm/planning/"))
+    return pathname.endsWith("/edit")
+      ? "TPM · Edit Maintenance Plan"
+      : "TPM · Maintenance Plan";
+  if (pathname.startsWith("/tpm/health-checkups/reports/"))
+    return "TPM · Health Report";
+  if (pathname.startsWith("/tpm/health-checkups/checkups/"))
+    return "TPM · Health Checkup";
+  if (pathname.startsWith("/tpm/health-checkups/standards/"))
+    return "TPM · Edit Health Standard";
+  if (pathname.startsWith("/tpm/inspection-reports/"))
+    return "TPM · Inspection Report";
+  if (pathname.startsWith("/tpm/inspections/")) return "TPM · Edit Checklist";
+  if (pathname.startsWith("/tpm/")) return "TPM · Asset Details";
   if (pathname.startsWith("/operations/employees/me")) return "My Profile";
   if (pathname.startsWith("/operations/employees/")) return "Employee Profile";
   if (pathname.startsWith("/ems/employees/")) return "Employee Details";
@@ -113,7 +153,8 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/sga/")) return "SGA Details";
   if (pathname.startsWith("/docs/kaizen/")) return "Documentation";
   if (pathname.startsWith("/kaizen/")) return "Kaizen Details";
-  if (pathname.startsWith("/dwms/activities/ingestions/")) return "Activity Import Details";
+  if (pathname.startsWith("/dwms/activities/ingestions/"))
+    return "Activity Import Details";
   if (pathname.startsWith("/dwms/")) return "Routine and Task Management";
   if (pathname.startsWith("/sims/")) return "Suggestions";
   if (pathname.startsWith("/tickets/")) return "Ticket Details";
@@ -128,7 +169,11 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { hasModule } = useOrgModules();
 
   const getInitials = (name: string) =>
-    name.split(" ").map((n) => n[0]).join("").toUpperCase();
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase();
 
   const pageTitle = resolveTitle(pathname);
 
@@ -159,7 +204,6 @@ export function Header({ onMenuClick }: HeaderProps) {
         visible ? "translate-y-0" : "-translate-y-full"
       }`}
     >
-
       {/* Left: brand + page context */}
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {onMenuClick && (
@@ -173,7 +217,10 @@ export function Header({ onMenuClick }: HeaderProps) {
           </button>
         )}
 
-        <div className="flex min-w-0 items-center gap-2" title="Business Excellence EcoSystem">
+        <div
+          className="flex min-w-0 items-center gap-2"
+          title="Business Excellence EcoSystem"
+        >
           <div className="flex shrink-0 items-center justify-center text-indigo-600">
             <BrandGear size={22} />
           </div>
@@ -183,7 +230,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           {pageTitle && (
             <div className="hidden sm:flex items-center gap-2 min-w-0">
               <span className="text-slate-300 text-sm select-none">/</span>
-              <span className="text-sm font-semibold text-slate-700 truncate max-w-[200px]">{pageTitle}</span>
+              <span className="text-sm font-semibold text-slate-700 truncate max-w-[200px]">
+                {pageTitle}
+              </span>
             </div>
           )}
         </div>
@@ -204,7 +253,9 @@ export function Header({ onMenuClick }: HeaderProps) {
             <CalendarDays className="h-5 w-5" />
           </Link>
         )}
-        <span data-tour="tour-notifications"><NotificationsBell /></span>
+        <span data-tour="tour-notifications">
+          <NotificationsBell />
+        </span>
 
         <Link
           href="/operations/employees/me"

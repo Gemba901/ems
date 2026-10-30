@@ -28,6 +28,7 @@ import {
   Factory,
   Users2,
   Layers,
+  Wrench,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -353,7 +354,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!loadingModules && enabledModules.length > 0 && (
+        {!loadingModules && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {enabledModules.map((mod) => (
               <div
@@ -402,6 +403,28 @@ export default function DashboardPage() {
                 )}
               </div>
             ))}
+            <Link
+              href="/tpm/assets"
+              className="group h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:ring-2 hover:ring-teal-200 hover:border-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="h-11 w-11 rounded-xl flex items-center justify-center bg-teal-50">
+                  <Wrench className="h-5 w-5 text-teal-600" />
+                </div>
+                <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-teal-600 transition-colors mt-1" />
+              </div>
+              <div className="flex items-center gap-2">
+                <p className="text-base font-bold text-slate-900">TPM</p>
+                <span className="rounded bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-600">UI preview</span>
+              </div>
+              <p className="text-xs font-semibold mt-0.5 text-teal-600">Total Productive Maintenance</p>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed line-clamp-2">Explore your assets and machines, review equipment details, and track their condition and criticality.</p>
+              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs font-medium text-slate-600 group-hover:text-teal-600 transition-colors">
+                <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                Open assets
+                <ChevronRight className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </Link>
           </div>
         )}
       </section>

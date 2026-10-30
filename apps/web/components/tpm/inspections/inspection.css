@@ -1,0 +1,115 @@
+.insp-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--tpm-border);
+  margin: 0 0 22px;
+}
+.insp-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px 13px;
+  color: #768294;
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 2px solid transparent;
+}
+.insp-tabs a[aria-current="page"],
+.insp-tabs a.is-active,
+.insp-tabs a.active {
+  color: #272783;
+  border-bottom-color: #272783;
+}
+.insp-panel {
+  background: #fff;
+  border: 1px solid var(--tpm-border);
+  border-radius: 12px;
+  padding: 22px;
+  box-shadow: 0 1px 3px #24334806;
+  min-width: 0;
+}
+.insp-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.insp-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--tpm-border);
+  border-radius: 10px;
+  padding: 15px 17px;
+  background: #fff;
+}
+.insp-summary-card strong {
+  display: block;
+  font-size: 23px;
+  line-height: 1.2;
+  color: #173252;
+}
+.insp-summary-card small {
+  display: block;
+  color: #768294;
+  margin-top: 4px;
+}
+.insp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 6px;
+  background: #f0f3f8;
+  color: #5e6c81;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.insp-badge.green,
+.insp-badge.published,
+.insp-badge.completed {
+  background: #eaf8f1;
+  color: #16815a;
+}
+.insp-badge.am,
+.insp-badge.blue {
+  background: #edf3ff;
+  color: #3965b3;
+}
+.insp-badge.pm,
+.insp-badge.purple {
+  background: #f2edff;
+  color: #7851b3;
+}
+.insp-badge.amber,
+.insp-badge.draft {
+  background: #fff5e8;
+  color: #af741c;
+}
+.insp-badge.red {
+  background: #fff0ef;
+  color: #bc4e46;
+}
+@media (max-width: 700px) {
+  .insp-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .insp-summary-card {
+    padding: 12px;
+    gap: 9px;
+  }
+  .insp-panel {
+    padding: 16px;
+  }
+  .insp-tabs {
+    gap: 22px;
+  }
+}
+@media (max-width: 380px) {
+  .insp-summary-card strong {
+    font-size: 20px;
+  }
+}

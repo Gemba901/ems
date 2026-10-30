@@ -1,0 +1,41 @@
+.wo-documents {
+  min-width: 0;
+}
+.wo-document-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 8px;
+}
+.wo-document-list li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e1e8f1;
+  border-radius: 8px;
+  background: #f8fafc;
+  min-width: 0;
+}
+.wo-document-list li > svg {
+  flex-shrink: 0;
+  color: #5a60a1;
+}
+.wo-document-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #243348;
+  font-size: 13px;
+}
+.wo-document-name small {
+  display: block;
+  margin-top: 3px;
+  color: #6c7f99;
+  font-size: 11px;
+}
+.wo-document-list .tpm-button {
+  padding: 8px;
+  flex-shrink: 0;
+}

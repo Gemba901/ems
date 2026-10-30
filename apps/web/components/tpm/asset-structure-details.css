@@ -1,0 +1,69 @@
+.tpm-asset-structure {
+  margin-top: 18px;
+  padding: 13px 15px;
+  border: 1px solid #e3eaf2;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.tpm-asset-structure > .tpm-overline {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.tpm-asset-structure ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tpm-asset-structure li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.tpm-asset-structure li > svg {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.tpm-asset-structure a,
+.tpm-asset-structure [aria-current="page"] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tpm-asset-structure a {
+  color: #255caa;
+  border-radius: 3px;
+}
+
+.tpm-asset-structure a:hover {
+  text-decoration: underline;
+}
+
+.tpm-asset-structure a:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 4px;
+}
+
+.tpm-asset-structure [aria-current="page"] {
+  color: #334155;
+  font-weight: 600;
+}
+
+.tpm-asset-structure small {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 400;
+  color: #64748b;
+}

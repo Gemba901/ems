@@ -1,0 +1,149 @@
+.wo-module {
+  --wo-accent: #252780;
+  --wo-muted: #6c7f99;
+  min-width: 0;
+}
+.wo-module *,
+.wo-module *::before,
+.wo-module *::after {
+  box-sizing: border-box;
+}
+.wo-module .tpm-button.primary {
+  background: var(--wo-accent);
+  border-color: var(--wo-accent);
+}
+.wo-module .tpm-button.primary:hover {
+  background: #191b64;
+}
+.wo-module .tpm-page-heading h1 {
+  color: #132e50;
+}
+.wo-panel {
+  background: white;
+  border: 1px solid #e1e8f1;
+  border-radius: 12px;
+  padding: 22px;
+  box-shadow: 0 1px 3px #19355506;
+}
+.wo-muted {
+  color: var(--wo-muted);
+}
+.wo-error,
+.wo-success {
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 14px 0;
+  line-height: 1.6;
+}
+.wo-error {
+  color: #a22d37;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+}
+.wo-success {
+  color: #16624e;
+  background: #effbf5;
+  border: 1px solid #bbebd0;
+}
+.wo-empty {
+  padding: 42px 20px;
+  text-align: center;
+  color: var(--wo-muted);
+}
+.wo-empty > svg {
+  margin: 0 auto 14px;
+}
+.wo-empty h2,
+.wo-empty h3 {
+  color: #243348;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+.wo-empty p {
+  margin: 8px auto 18px;
+  max-width: 440px;
+  line-height: 1.7;
+}
+.wo-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.wo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.wo-field > label {
+  color: #41556e;
+  font-weight: 500;
+  font-size: 12px;
+}
+.wo-field input:not([type="checkbox"]):not([type="radio"]),
+.wo-field select,
+.wo-field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #d7e1ed;
+  border-radius: 7px;
+  background: white;
+  color: #243348;
+  font: inherit;
+}
+.wo-field textarea {
+  resize: vertical;
+  min-height: 86px;
+}
+.wo-field input:focus,
+.wo-field select:focus,
+.wo-field textarea:focus {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 1px;
+}
+.wo-field small {
+  font-size: 11px;
+  color: var(--wo-muted);
+}
+.wo-field [aria-invalid="true"] {
+  border-color: #dc5262 !important;
+}
+.wo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #eef2f7;
+  color: #49617e;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wo-module input:disabled,
+.wo-module select:disabled,
+.wo-module textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.wo-module dialog::backdrop {
+  background: #14243e69;
+  backdrop-filter: blur(2px);
+}
+@media (max-width: 640px) {
+  .wo-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .wo-panel {
+    padding: 17px;
+  }
+  .wo-module .tpm-page-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .wo-module .tpm-actions {
+    flex-wrap: wrap;
+  }
+}

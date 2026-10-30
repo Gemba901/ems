@@ -1,0 +1,224 @@
+.wod-finance-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 18px;
+}
+.wod-finance-metrics > div {
+  min-width: 0;
+  border: 1px solid #e8edf4;
+  border-radius: 9px;
+  padding: 17px 15px;
+  background: #f8fafc;
+}
+.wod-finance-metrics span {
+  display: block;
+  color: #728199;
+  font-size: 11px;
+  margin-bottom: 9px;
+}
+.wod-finance-metrics strong {
+  display: block;
+  font-size: 18px;
+  color: #2b4263;
+  font-weight: 650;
+  letter-spacing: -0.3px;
+  overflow-wrap: anywhere;
+}
+.wod-finance-metrics .wod-finance-net {
+  background: #f0f1fb;
+  border-color: #e1e3f5;
+}
+.wod-finance-net strong {
+  color: #2c307d;
+}
+.wod-budget-note {
+  margin: 0;
+  color: #4d7a65;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.wod-budget-note.is-over {
+  color: #a36828;
+}
+.wod-timer-costing {
+  border: 1px solid #e0e5f5;
+  border-radius: 9px;
+  padding: 17px;
+  margin-bottom: 20px;
+  background: #f8f9fe;
+}
+.wod-timer-costing-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #494d8a;
+  margin-bottom: 15px;
+  font-size: 12px;
+}
+.wod-timer-costing-title strong {
+  font-weight: 600;
+}
+.wod-timer-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.wod-timer-picker .wo-field {
+  min-width: 0;
+}
+.wod-timer-picker select {
+  text-overflow: ellipsis;
+}
+.wod-timer-picker .tpm-button {
+  min-height: 40px;
+  justify-content: center;
+}
+.wod-timer-costing .wo-help {
+  margin-bottom: 0;
+  line-height: 1.6;
+}
+.wod-finance-entry-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.wod-entry-source {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  background: #eef1f6;
+  border-radius: 5px;
+  padding: 4px 7px;
+  color: #68778e;
+  font-size: 10px;
+}
+.wod-entry-source.is-timed {
+  background: #eeedfa;
+  color: #64539a;
+}
+.wod-linked-task {
+  color: #657691;
+  font-size: 12px;
+  margin: -4px 0 17px;
+  overflow-wrap: anywhere;
+}
+.wod-finance .wo-field input[readonly] {
+  background: #f3f5fa;
+  color: #61718b;
+}
+.wod-duration-value {
+  font-variant-numeric: tabular-nums;
+}
+.wod-finance-expense-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr) minmax(100px, 1fr);
+  gap: 15px;
+}
+.wod-finance-attachments {
+  border-top: 1px solid #e9edf4;
+  padding-top: 14px;
+  margin-top: 17px;
+}
+.wod-finance-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.wod-finance-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  color: #62748d;
+}
+.wod-finance-table th,
+.wod-finance-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #e9edf4;
+  text-align: right;
+}
+.wod-finance-table th:first-child {
+  text-align: left;
+  padding-left: 0;
+}
+.wod-finance-table td:last-child,
+.wod-finance-table th:last-child {
+  padding-right: 0;
+}
+.wod-finance-table thead th {
+  font-size: 11px;
+  font-weight: 500;
+  color: #7b899f;
+  padding-top: 0;
+}
+.wod-finance-table tbody th {
+  font-weight: 500;
+}
+.wod-finance-table td {
+  font-variant-numeric: tabular-nums;
+}
+.wod-finance-table-total th,
+.wod-finance-table-total td {
+  color: #2b4263;
+  font-weight: 650 !important;
+  border-bottom: 0;
+}
+.wod-finance .wo-help {
+  line-height: 1.65;
+}
+.wod-scrap-approval {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(130px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 17px;
+  margin: 18px 0;
+  border-radius: 8px;
+  background: #f4f6fb;
+}
+.wod-scrap-approval .wo-help {
+  margin-bottom: 0;
+}
+.wod-approval-record {
+  grid-column: 1/-1;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #597465;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1000px) {
+  .wod-finance-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .wod-finance-metrics {
+    gap: 9px;
+  }
+  .wod-finance-metrics > div {
+    padding: 13px;
+  }
+  .wod-finance-metrics strong {
+    font-size: 16px;
+  }
+  .wod-timer-picker,
+  .wod-finance-expense-grid,
+  .wod-scrap-approval {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wod-timer-costing,
+  .wod-scrap-approval {
+    padding: 13px;
+  }
+  .wod-finance-table th,
+  .wod-finance-table td {
+    padding: 12px 6px;
+    font-size: 11px;
+  }
+  .wod-finance-table thead th {
+    font-size: 10px;
+  }
+}

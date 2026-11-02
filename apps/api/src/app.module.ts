@@ -30,6 +30,7 @@ import { KaizenModule } from './kaizen/kaizen.module';
 import { SgaModule } from './sga/sga.module';
 import { WorkModule } from './work/work.module';
 import { FiveSModule } from './five-s/five-s.module';
+import { LeadershipExcellenceModule } from './leadership-excellence/leadership-excellence.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
 
@@ -71,6 +72,7 @@ import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
     SgaModule,
     WorkModule,
     FiveSModule,
+    LeadershipExcellenceModule,
   ],
   controllers: [AppController],
   providers: [

@@ -20,6 +20,7 @@ import {
   Users2,
   Briefcase,
   Layers,
+  Compass,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -95,6 +96,14 @@ const NAV_ITEMS: MainNavItem[] = [
     href: "/five-s",
     icon: Layers,
     module: "FIVE_S",
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+  },
+  {
+    label: "Leadership Excellence",
+    shortLabel: "Leadership",
+    href: "/leadership-excellence",
+    icon: Compass,
+    module: "LEADERSHIP_EXCELLENCE",
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
   },
   {

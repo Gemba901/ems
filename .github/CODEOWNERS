@@ -1,0 +1,59 @@
+# Leadership Excellence — see docs/leadership-excellence/README.md
+# Later lines win. Replace @rodgers-munene on an area with its owner once assigned.
+
+# Shared module files (module owner)
+/apps/api/src/leadership-excellence/                                @rodgers-munene
+/apps/web/app/leadership-excellence/                                @rodgers-munene
+/apps/web/components/leadership-excellence/                         @rodgers-munene
+/apps/web/services/leadership-excellence/                           @rodgers-munene
+/packages/db/prisma/schema/lex-*.prisma                             @rodgers-munene
+/docs/leadership-excellence/                                        @rodgers-munene
+
+# 01 Strategic Direction
+/apps/api/src/leadership-excellence/strategic-direction/            @rodgers-munene
+/apps/web/app/leadership-excellence/strategic-direction/            @rodgers-munene
+/apps/web/components/leadership-excellence/strategic-direction/     @rodgers-munene
+/apps/web/services/leadership-excellence/strategic-direction.service.ts  @rodgers-munene
+/packages/db/prisma/schema/lex-01-strategic-direction.prisma        @rodgers-munene
+
+# 02 Organisation Framework — owner TBD
+# /apps/api/src/leadership-excellence/organisation-framework/        @owner
+# /apps/web/app/leadership-excellence/organisation-framework/        @owner
+# /apps/web/components/leadership-excellence/organisation-framework/ @owner
+# /apps/web/services/leadership-excellence/organisation-framework.service.ts @owner
+# /packages/db/prisma/schema/lex-02-organisation-framework.prisma    @owner
+
+# 03 Performance Planning — owner TBD
+# /apps/api/src/leadership-excellence/performance-planning/          @owner
+# /apps/web/app/leadership-excellence/performance-planning/          @owner
+# /apps/web/components/leadership-excellence/performance-planning/   @owner
+# /apps/web/services/leadership-excellence/performance-planning.service.ts @owner
+# /packages/db/prisma/schema/lex-03-performance-planning.prisma      @owner
+
+# 04 Execution — owner TBD
+# /apps/api/src/leadership-excellence/execution/                     @owner
+# /apps/web/app/leadership-excellence/execution/                     @owner
+# /apps/web/components/leadership-excellence/execution/              @owner
+# /apps/web/services/leadership-excellence/execution.service.ts      @owner
+# /packages/db/prisma/schema/lex-04-execution.prisma                 @owner
+
+# 05 Monitoring & Control — owner TBD
+# /apps/api/src/leadership-excellence/monitoring-control/            @owner
+# /apps/web/app/leadership-excellence/monitoring-control/            @owner
+# /apps/web/components/leadership-excellence/monitoring-control/     @owner
+# /apps/web/services/leadership-excellence/monitoring-control.service.ts @owner
+# /packages/db/prisma/schema/lex-05-monitoring-control.prisma        @owner
+
+# 06 Reviews & Development — owner TBD
+# /apps/api/src/leadership-excellence/reviews-development/           @owner
+# /apps/web/app/leadership-excellence/reviews-development/           @owner
+# /apps/web/components/leadership-excellence/reviews-development/    @owner
+# /apps/web/services/leadership-excellence/reviews-development.service.ts @owner
+# /packages/db/prisma/schema/lex-06-reviews-development.prisma       @owner
+
+# 07 Performance Intelligence — owner TBD
+# /apps/api/src/leadership-excellence/performance-intelligence/      @owner
+# /apps/web/app/leadership-excellence/performance-intelligence/      @owner
+# /apps/web/components/leadership-excellence/performance-intelligence/ @owner
+# /apps/web/services/leadership-excellence/performance-intelligence.service.ts @owner
+# /packages/db/prisma/schema/lex-07-performance-intelligence.prisma  @owner

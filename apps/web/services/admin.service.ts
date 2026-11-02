@@ -16,7 +16,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 
 export type OrgStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
-export type ModuleType = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "WORK" | "FIVE_S";
+export type ModuleType = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "WORK" | "FIVE_S" | "LEADERSHIP_EXCELLENCE";
 
 export interface CreateOrganizationPayload {
     name: string;
@@ -47,6 +47,7 @@ export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: s
     { key: "SGA",      label: "Small Group Activities", description: "Team-based CAPDo Improvement Cycles" },
     { key: "WORK",     label: "Team Workspace", description: "Attendance, Projects, Tasks & Sprints" },
     { key: "FIVE_S",   label: "5S Workplace", description: "20 Keys Key 1: 5S audits, red tags, actions & standards" },
+    { key: "LEADERSHIP_EXCELLENCE", label: "Leadership Excellence", description: "BEES Pillar 01: direction, planning, execution, reviews & performance intelligence" },
 ];
 
 export interface Organization {

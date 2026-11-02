@@ -31,6 +31,7 @@ enum ModuleType {
   SGA
   WORK
   FIVE_S
+  LEADERSHIP_EXCELLENCE
 }
 
 enum CommitteeType {

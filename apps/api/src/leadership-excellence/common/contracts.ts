@@ -32,7 +32,7 @@ export interface ApprovedStrategicDirection {
   missionWhy: string;
   values: CoreValue[];
   approvedAt: Date;
-  approvedById: string;
+  approvedById: string | null;
 }
 
 /** The six fixed BEES pillars (01.02). Reference data; never edited by orgs. */

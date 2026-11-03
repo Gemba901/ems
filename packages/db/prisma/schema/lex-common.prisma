@@ -1,1 +1,7 @@
 // Leadership Excellence — common. Owner: see docs/leadership-excellence/README.md
+enum LexWorkflowStatus { 
+    DRAFT 
+    IN_REVIEW 
+    APPROVED 
+}
+

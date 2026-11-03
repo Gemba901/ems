@@ -1,1 +1,82 @@
+enum LexStrategicDirectionAction {
+    DRAFT_SAVED
+    SUBMITTED
+    RETURNED
+    WITHDRAWN
+    APPROVED
+    REVISION_STARTED
+}
+
 // Leadership Excellence — 01-strategic-direction. Owner: see docs/leadership-excellence/README.md
+ model LexStrategicDirection {
+    id                 String       @id @default(uuid())
+    organizationId     String       @unique
+    status             LexWorkflowStatus  @default(DRAFT)
+    company            String?
+    business           String?
+    purpose            String?
+    vision             String?
+    visionWhy          String?
+    mission            String?
+    missionWhy         String?
+
+    values             Json  @default("[]")
+    sectionMeta        Json  @default("{}")
+
+    submittedAt        DateTime? 
+    submittedById      String?
+    submittedBy        Employee? @relation("LexDirectionSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+
+
+    returnReason       String?
+    revisionReason     String?
+
+    currentVersion     Int?
+
+    createdAt          DateTime @default(now())
+    updatedAt          DateTime @updatedAt
+
+    organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    versions     LexStrategicDirectionVersion[]
+    events       LexStrategicDirectionEvent[]
+
+ }
+
+ model LexStrategicDirectionVersion {
+    id                String @id @default(uuid())
+    directionId       String
+    organizationId    String    
+    version           Int   
+
+    snapshot          Json
+    sectionMeta       Json
+
+    approvedAt        DateTime @default(now())
+    approvedById   String?
+    approvedBy     Employee? @relation("LexDirectionApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+    direction    LexStrategicDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+
+    @@unique([directionId, version])
+    @@index([organizationId])
+ }
+
+ model LexStrategicDirectionEvent {
+    id                String @id @default(uuid())
+    directionId       String
+    organizationId    String
+
+    action            LexStrategicDirectionAction
+    changes           Json
+    reason            String?
+    version           Int?
+
+    actorId        String?
+    actor          Employee? @relation("LexDirectionEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+    createdAt         DateTime @default(now())
+    direction    LexStrategicDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+
+    @@index([directionId, createdAt])
+    @@index([organizationId])
+ }

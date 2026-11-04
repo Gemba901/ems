@@ -1,4 +1,4 @@
-import { Controller, UseGuards, Get, Patch, Body } from '@nestjs/common';
+import { Controller, UseGuards, Get, Patch, Body, Post } from '@nestjs/common';
 import { ModuleType } from 'db';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
@@ -46,5 +46,11 @@ export class StrategicDirectionController {
     @Body() dto: SaveDraftDto,
   ) {
     return this.service.saveDraft(user, dto);
+  }
+
+  @Post('submit')
+  @Roles(...LEX_EDITORS)
+  submit(@CurrentUser() user: AccessTokenPayload) {
+    return this.service.submit(user);
   }
 }

@@ -33,10 +33,28 @@ const TEXT_FIELDS = [
   'missionWhy',
 ] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
+const FIELD_LABELS: Record<TextField, string> = {
+  company: 'Company name',
+  business: 'What the business does',
+  purpose: 'Purpose',
+  vision: 'Vision',
+  visionWhy: 'Why this vision?',
+  mission: 'Mission',
+  missionWhy: 'Why this mission?',
+};
 
 @Injectable()
 export class StrategicDirectionService implements StrategicDirectionProvider {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async findActorId(user: AccessTokenPayload): Promise<string | null> {
+    const actor = await this.prisma.employee.findFirst({
+      where: { userId: user.userId, organizationId: user.organizationId },
+      select: { id: true },
+    });
+
+    return actor?.id ?? null;
+  }
 
   async getApproved(
     organizationId: string,
@@ -112,16 +130,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
   }
 
   async saveDraft(user: AccessTokenPayload, dto: SaveDraftDto) {
-    const actor = await this.prisma.employee.findFirst({
-      where: {
-        userId: user.userId,
-        organizationId: user.organizationId,
-      },
-      select: {
-        id: true,
-      },
-    });
-    const actorId = actor?.id ?? null;
+    const actorId = await this.findActorId(user);
 
     const draft = await this.prisma.lexStrategicDirection.findUnique({
       where: {
@@ -188,6 +197,72 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
           organizationId: user.organizationId,
           action: 'DRAFT_SAVED',
           changes: changes as Prisma.InputJsonObject,
+          actorId,
+        },
+      });
+
+      return saved;
+    });
+  }
+
+  async submit(user: AccessTokenPayload) {
+    const actorId = await this.findActorId(user);
+
+    const draft = await this.prisma.lexStrategicDirection.findUnique({
+      where: {
+        organizationId: user.organizationId,
+      },
+    });
+    if (!draft)
+      throw new BadRequestException('Save a draft before submitting.');
+    if (draft.status !== 'DRAFT') {
+      throw new ConflictException('Only a draft can be submitted for review.');
+    }
+
+    const problems: { field: string; label: string }[] = [];
+
+    for (const field of TEXT_FIELDS) {
+      if (!draft[field]?.trim())
+        problems.push({ field, label: FIELD_LABELS[field] });
+    }
+
+    const values = draft.values as unknown as CoreValue[];
+    if (values.length === 0)
+      problems.push({ field: 'values', label: 'At least one core value' });
+    values.forEach((v, i) => {
+      if (!v.name?.trim())
+        problems.push({ field: `${v.id}-name`, label: `Value ${i + 1} name` });
+      if (!v.why?.trim())
+        problems.push({
+          field: `${v.id}-why`,
+          label: `Value ${i + 1} explanation`,
+        });
+    });
+    if (problems.length > 0) {
+      throw new BadRequestException({
+        message: 'Complete these fields before sending for review.',
+        problems,
+      });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const saved = await tx.lexStrategicDirection.update({
+        where: { id: draft.id },
+        data: {
+          status: 'IN_REVIEW',
+          submittedAt: new Date(),
+          submittedById: actorId,
+          returnReason: null,
+        },
+      });
+
+      await tx.lexStrategicDirectionEvent.create({
+        data: {
+          directionId: saved.id,
+          organizationId: user.organizationId,
+          action: 'SUBMITTED',
+          changes: {},
+          version: draft.currentVersion,
           actorId,
         },
       });

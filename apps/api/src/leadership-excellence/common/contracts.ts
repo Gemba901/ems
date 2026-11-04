@@ -53,5 +53,7 @@ export type LexPillarCode = (typeof LEX_PILLARS)[number]['code'];
 export interface StrategicDirectionProvider {
   getSummary(organizationId: string): Promise<StrategicDirectionSummary>;
   /** Null until the first approval. */
-  getApproved(organizationId: string): Promise<ApprovedStrategicDirection | null>;
+  getApproved(
+    organizationId: string,
+  ): Promise<ApprovedStrategicDirection | null>;
 }

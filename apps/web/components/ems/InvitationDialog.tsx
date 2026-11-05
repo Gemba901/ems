@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, ExternalLink, Loader2, Send } from "lucide-react";
 import { EmsService, type InvitationSelection, type InvitationSendResult } from "@/services/ems.service";
-import { whatsappLink } from "./ems-invitations";
+import { sharedContactResults, whatsappLink } from "./ems-invitations";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -43,7 +43,7 @@ export default function InvitationDialog({ selection, title, accessToken, onClos
   }, [busy, onClose]);
 
   const data = preview.data, result = send.data;
-  const outgoing = data ? data.counts.SETUP + data.counts.ACCESS_NOTICE + data.counts.CONTACT_NOTICE : 0;
+  const outgoing = data ? data.counts.SETUP + data.counts.ACCESS_NOTICE + data.counts.CONTACT_NOTICE + (data.counts.ACCOUNT_LINK ?? 0) : 0;
   const copy = async (key: string, text: string) => {
     try { await navigator.clipboard.writeText(text); setCopied(key); } catch { setCopied(null); }
   };
@@ -63,9 +63,10 @@ export default function InvitationDialog({ selection, title, accessToken, onClos
             : data && <>
               <p className="text-slate-700"><strong>{plural(data.total, "employee")}</strong> selected</p>
               <ul className="space-y-1 text-xs text-slate-700">
+                {(data.counts.ACCOUNT_LINK ?? 0) > 0 && <li><strong>{data.counts.ACCOUNT_LINK}</strong> will receive verification directly at an existing account email, even if the company uses WhatsApp. New login access stays pending until they verify and accept. HR cannot view or copy that link.</li>}
                 {data.counts.SETUP > 0 && <li><strong>{data.counts.SETUP}</strong> will get a link to create their password (valid 7 days, single use)</li>}
-                {data.counts.ACCESS_NOTICE > 0 && <li><strong>{data.counts.ACCESS_NOTICE}</strong> already have a password: they get a notice to sign in</li>}
-                {data.counts.CONTACT_NOTICE > 0 && <li className="text-amber-800"><strong>{data.counts.CONTACT_NOTICE}</strong> share an email or number with someone else: notice only, set up their access in person</li>}
+                {data.counts.ACCESS_NOTICE > 0 && <li><strong>{data.counts.ACCESS_NOTICE}</strong> will receive an account-access notice, without a password-setup link; some accounts require verification</li>}
+                {data.counts.CONTACT_NOTICE > 0 && <li className="text-amber-800"><strong>{data.counts.CONTACT_NOTICE}</strong> share an email or number with someone else: notice only, without a password-setup link. Review their contact details and account access.</li>}
                 {data.counts.PENDING > 0 && <li className="text-slate-500"><strong>{data.counts.PENDING}</strong> already have a valid invitation: unchanged</li>}
                 {data.counts.ACCEPTED > 0 && <li className="text-slate-500"><strong>{data.counts.ACCEPTED}</strong> already accepted: unchanged</li>}
                 {data.counts.SKIPPED > 0 && <li className="text-amber-800"><strong>{data.counts.SKIPPED}</strong> skipped (saved on each profile; filter the list by “Needs attention” later)</li>}
@@ -90,7 +91,7 @@ export default function InvitationDialog({ selection, title, accessToken, onClos
           {!result && <button type="button" disabled={!data || outgoing === 0 || busy} onClick={() => send.mutate()}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40">
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            {data?.channel === "WHATSAPP" ? `Prepare ${plural(outgoing, "message")}` : `Send ${plural(outgoing, "invitation")}`}
+            {data?.channel === "WHATSAPP" ? `Send / prepare ${plural(outgoing, "request")}` : `Send ${plural(outgoing, "invitation")}`}
           </button>}
         </div>
       </div>
@@ -102,11 +103,13 @@ function ResultView({ result, opened, setOpened, copied, copy }: {
   result: InvitationSendResult; opened: Set<string>; setOpened: (next: Set<string>) => void;
   copied: string | null; copy: (key: string, text: string) => void;
 }) {
+  const sharedContacts = sharedContactResults(result);
   return <div className="space-y-3">
     <p role="status" className="text-slate-700">
       {result.channel === "EMAIL"
         ? <>{plural(result.sent, "invitation")} and {plural(result.notices, "notice")} emailed.</>
         : <>{plural(result.share.length, "message")} ready to send from WhatsApp.</>}
+      {result.verificationSent > 0 && <> {plural(result.verificationSent, "account-verification email")} sent directly to existing account contacts.</>}
       {result.skipped > 0 && <> {result.skipped} skipped.</>}{result.failed > 0 && <span className="text-red-700"> {result.failed} failed.</span>}
     </p>
     {result.failures.length > 0 && <ul className="list-disc rounded-lg border border-red-200 bg-red-50 py-2 pl-7 pr-3 text-xs text-red-800">
@@ -131,9 +134,11 @@ function ResultView({ result, opened, setOpened, copied, copy }: {
       </ul>
     </div>}
     {result.inPerson.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-      <p className="font-semibold">Set up in person ({result.inPerson.length})</p>
-      <p>Their email or number is shared, so they got a notice without a link. Give each a temporary password in person.</p>
-      <ul className="mt-1 list-disc pl-5">{result.inPerson.map(p => <li key={p.employeeId}>{p.name}</li>)}</ul>
+      <p className="font-semibold">Shared contacts — review required ({sharedContacts.length})</p>
+      <p>No password-setup link was generated for these employees because their email or number is shared. Review their contact details and account access with an authorised administrator.</p>
+      <ul className="mt-1 list-disc pl-5">{sharedContacts.map(p => <li key={p.employeeId}>
+        {p.name}: <span className={p.failed ? "text-red-800" : undefined}>{p.outcome}</span>
+      </li>)}</ul>
     </div>}
   </div>;
 }

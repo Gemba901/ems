@@ -19,12 +19,14 @@ const row = (id = 'r1', mobileNumber = '0712345678') => ({
 function fixture() {
   const batch = { id: 'b1', organizationId: 'org1', status: 'READY', defaultPhoneCountry: 'KE', records: [row()] };
   const db = {
+    emsAccountLink: { create: jest.fn() },
+    emsInvitation: { create: jest.fn() },
     emsDepartmentHod: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     emsOnboardingBatch: { findFirst: jest.fn().mockResolvedValue(batch), findMany: jest.fn().mockResolvedValue([batch]), update: jest.fn(), updateMany: jest.fn() },
     emsOnboardingRecord: { update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn().mockImplementation(async args => args?.select?.mobileNumber
       ? batch.records.filter(r => !['REGISTERED','EXCLUDED'].includes(r.status)).map(r => ({...r, batch: {defaultPhoneCountry: batch.defaultPhoneCountry, label: null, sourceFileName: null}}))
       : args?.select?.firstName ? batch.records : [{ status: 'REGISTERED' }]) },
-    employee: { findMany: jest.fn().mockImplementation(async (args) => args?.select?.firstName
+    employee: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockImplementation(async (args) => args?.select?.firstName
       ? [{ id: 'boss', firstName: 'Jane', lastName: 'Boss', jobTitle: 'HR Manager', reportingManagerId: null, reportsToBoard: true, pendingReportingRecordId: null }]
       : []), create: jest.fn().mockResolvedValue({ id: 'emp1' }), updateMany: jest.fn() },
     department: { findMany: jest.fn().mockResolvedValue([{ id: 'dept1', name: 'HR' }]) },
@@ -144,9 +146,8 @@ describe('Onboarding access authority', () => {
       ? [{id:'existing',phone:'+254712345678',email:null}] : []);
     await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(db.user.create).not.toHaveBeenCalled();
-    expect(db.userOrganization.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where:{userId_organizationId:{userId:'existing',organizationId:'org1'}}, update:{},
-    }));
+    expect(db.userOrganization.upsert).not.toHaveBeenCalled();
+    expect(db.emsAccountLink.create).toHaveBeenCalledWith(expect.objectContaining({data: expect.objectContaining({userId: 'existing', roleId: 14})}));
   });
 
   it('passes the trusted caller role from the controller and keeps its existing route roles', async () => {

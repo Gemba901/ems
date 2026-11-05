@@ -148,6 +148,7 @@ model Organization {
   tickets               Tickets[]
   kaizens               Kaizen[]
   sgas                  Sga[]
+  emsAccountLinks EmsAccountLink[]
   emsOnboardingBatches EmsOnboardingBatch[]
   emsOnboardingRecords EmsOnboardingRecord[]
   workProjects          WorkProject[]
@@ -208,6 +209,7 @@ model User {
   password String?
   name     String
 
+  emsAccountLinks     EmsAccountLink[]
   organizations       UserOrganization[]
   employees           Employee[]
   emsBatchesUploaded  EmsOnboardingBatch[] @relation("EmsBatchUploadedBy")
@@ -278,6 +280,7 @@ model Role {
   id   Int      @id
   name RoleName @unique
 
+  emsAccountLinks EmsAccountLink[]
   userOrganizations UserOrganization[]
   permissions       RolePermission[]
 }

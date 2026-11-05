@@ -6,9 +6,9 @@ import {
 } from './ems-invitations';
 
 const person = (id: string, extra: Partial<InviteCandidate> = {}): InviteCandidate => ({
-  id, firstName: id[0].toUpperCase() + id.slice(1), lastName: 'Test', employeeCode: id.toUpperCase(), employmentStatus: 'ACTIVE',
+  organizationId: 'org', id, firstName: id[0].toUpperCase() + id.slice(1), lastName: 'Test', employeeCode: id.toUpperCase(), employmentStatus: 'ACTIVE',
   email: `${id}@example.com`, phone: '+254700000' + String(100 + id.length), whatsappNumber: null, userId: `user-${id}`,
-  user: { password: null }, emsInvitation: null, ...extra,
+  user: { password: null, organizations: [{ organizationId: 'org' }] }, emsInvitation: null, ...extra,
 });
 const now = new Date('2026-10-24T08:00:00Z');
 
@@ -18,7 +18,7 @@ describe('who gets which invitation', () => {
     expect(classifyInvitation(person('ann'), 'EMAIL', none, now, false)).toEqual({ category: 'SETUP', destination: 'ann@example.com' });
   });
   it('only notifies someone who already has a password', () => {
-    expect(classifyInvitation(person('ann', { user: { password: 'hash' } }), 'EMAIL', none, now, false).category).toBe('ACCESS_NOTICE');
+    expect(classifyInvitation(person('ann', { user: { password: 'hash', organizations: [{ organizationId: 'org' }] } }), 'EMAIL', none, now, false).category).toBe('ACCESS_NOTICE');
   });
   it('sends a notice without a link to a shared contact', () => {
     expect(classifyInvitation(person('ann'), 'EMAIL', new Set(['ann@example.com']), now, false).category).toBe('CONTACT_NOTICE');
@@ -57,6 +57,7 @@ function setup(people: InviteCandidate[], channel = 'EMAIL') {
       findMany: jest.fn(async ({ select }: any) => select?.user ? people : people.map(p => ({ email: p.email, phone: p.phone, whatsappNumber: p.whatsappNumber }))),
       findFirst: jest.fn(async ({ where }: any) => people.find(p => p.id === where.id) ? { id: where.id, userId: 'user-ann', employmentStatus: 'TERMINATED' } : null),
     },
+    emsAccountLink: { findFirst: jest.fn(async () => null), updateMany: jest.fn(async () => ({ count: 0 })) },
     emsInvitation: {
       upsert: jest.fn(async ({ where, create, update }: any) => {
         const row = rows.get(where.employeeId);
@@ -67,7 +68,7 @@ function setup(people: InviteCandidate[], channel = 'EMAIL') {
       findUnique: jest.fn(),
       findFirst: jest.fn(async () => null),
     },
-    user: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    user: { findFirst: jest.fn(async () => ({ id: 'user-ann' })), updateMany: jest.fn(async () => ({ count: 1 })) },
     refreshToken: { deleteMany: jest.fn(async () => ({ count: 2 })) },
     $transaction: jest.fn(async (fn: any) => fn(prisma)),
   };
@@ -78,7 +79,7 @@ function setup(people: InviteCandidate[], channel = 'EMAIL') {
 
 describe('sending', () => {
   it('emails setup links and notices, records skips, and never stores the raw token', async () => {
-    const { service, rows, email } = setup([person('ann'), person('ben', { user: { password: 'x' } }), person('cy', { email: null })]);
+    const { service, rows, email } = setup([person('ann'), person('ben', { user: { password: 'x', organizations: [{ organizationId: 'org' }] } }), person('cy', { email: null })]);
     const result = await service.send('org', 'hr', { employeeIds: ['ann', 'ben', 'cy'] }, 'https://acme.bees.example', 'acme.bees.example');
     expect(result).toMatchObject({ sent: 1, notices: 1, skipped: 1, failed: 0 });
     const link = (email.send.mock.calls as any[]).find(([p]) => p.to === 'ann@example.com')[0].actionUrl as string;
@@ -132,7 +133,7 @@ describe('selection', () => {
 });
 
 describe('accepting', () => {
-  const invitation = (extra: any = {}) => ({ id: 'inv', organizationId: 'org', kind: 'SETUP', status: 'SENT', tokenHash: hashInviteToken('t'.repeat(40)),
+  const invitation = (extra: any = {}) => ({ id: 'inv', userId: 'user-ann', organizationId: 'org', kind: 'SETUP', status: 'SENT', tokenHash: hashInviteToken('t'.repeat(40)),
     expiresAt: new Date(Date.now() + 86_400_000),
     employee: { firstName: 'Ann', lastName: 'Akinyi', employeeCode: 'A1', employmentStatus: 'ACTIVE', organizationId: 'org', userId: 'user-ann' }, ...extra });
 
@@ -149,7 +150,7 @@ describe('accepting', () => {
     prisma.emsInvitation.findUnique.mockResolvedValue(invitation());
     await expect(service.accept('org', 't'.repeat(40), 'Abcdefghij12')).resolves.toEqual({ alreadyHadPassword: false });
     expect(prisma.emsInvitation.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'ACCEPTED', tokenHash: null }) }));
-    expect(prisma.user.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'user-ann', password: null } }));
+    expect(prisma.user.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'user-ann', password: null, organizations: { some: { organizationId: 'org' }, none: { organizationId: { not: 'org' } } } }) }));
   });
 
   it('rejects expired, used, inactive or other-company links, and weak passwords', async () => {
@@ -178,5 +179,82 @@ describe('becoming inactive', () => {
     await endAccessForInactiveEmployee(prisma, 'org', 'ann');
     expect(prisma.emsInvitation.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ employeeId: 'ann', organizationId: 'org' }) }));
     expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-ann', organizationId: 'org' } });
+  });
+});
+
+// Regression cases for PR blocker 1. Imported contact equality is not ownership proof.
+describe('cross-company setup protection', () => {
+  const shared = person('jane', { email: 'different-person@example.com', user: {
+    password: null, organizations: [{ organizationId: 'org' }, { organizationId: 'org-b' }],
+  } });
+  const pending = () => ({ id: 'inv', userId: 'user-jane', organizationId: 'org', kind: 'SETUP', status: 'SENT',
+    tokenHash: hashInviteToken('t'.repeat(40)), expiresAt: new Date(Date.now() + 86400000),
+    employee: { firstName: 'Jane', lastName: 'Test', employeeCode: 'J1', employmentStatus: 'ACTIVE', organizationId: 'org', userId: 'user-jane' } });
+
+  it('does not issue setup to a matching or differing imported contact for a foreign passwordless account', () => {
+    for (const email of ['different-person@example.com', 'jane@example.com']) {
+      expect(classifyInvitation({ ...shared, email }, 'EMAIL', new Set(), now, true).category).toBe('ACCESS_NOTICE');
+    }
+  });
+
+  it('replaces an older pending setup invitation with a tokenless notice', async () => {
+    const { service, rows, email } = setup([{ ...shared, emsInvitation: { status: 'SENT', kind: 'SETUP', expiresAt: new Date(Date.now() + 86400000) } }]);
+    await service.send('org', 'hr', { employeeIds: ['jane'] }, 'https://acme.bees.example', 'acme.bees.example');
+    expect(rows.get('jane')).toMatchObject({ kind: 'ACCESS_NOTICE', tokenHash: null, expiresAt: null });
+    const sent = (email.send.mock.calls as any[])[0][0];
+    expect(sent.actionUrl).toBeUndefined();
+    expect(sent.message).not.toContain('/invite?');
+    expect(sent.message).not.toContain('existing password');
+  });
+
+  it('does not expose a setup token through WhatsApp either', async () => {
+    const { service, rows } = setup([shared], 'WHATSAPP');
+    const result = await service.send('org', 'hr', { employeeIds: ['jane'] }, 'https://acme.bees.example', 'acme.bees.example');
+    expect(result.share[0].message).not.toContain('/invite?');
+    expect(rows.get('jane').tokenHash).toBeNull();
+  });
+
+  it('rechecks membership when sending after preview/selection', async () => {
+    const { service, prisma, rows } = setup([person('jane')]);
+    prisma.user.findFirst.mockResolvedValue(null);
+    await service.send('org', 'hr', { employeeIds: ['jane'] }, 'https://acme.bees.example', 'acme.bees.example');
+    expect(rows.get('jane')).toMatchObject({ kind: 'ACCESS_NOTICE', tokenHash: null });
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
+      organizations: { some: { organizationId: 'org' }, none: { organizationId: { not: 'org' } } },
+    }) }));
+  });
+
+  it('rejects pre-fix tokens for foreign accounts in lookup and acceptance', async () => {
+    const { service, prisma } = setup([]);
+    prisma.emsInvitation.findUnique.mockResolvedValue(pending());
+    prisma.user.findFirst.mockResolvedValue(null);
+    await expect(service.lookup('org', 'Acme', 't'.repeat(40))).resolves.toMatchObject({ valid: false });
+    await expect(service.accept('org', 't'.repeat(40), 'Abcdefghij12')).rejects.toThrow('invalid or has expired');
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rechecks membership inside the transaction after password hashing', async () => {
+    const { service, prisma } = setup([]);
+    prisma.emsInvitation.findUnique.mockResolvedValue(pending());
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-jane' }).mockResolvedValueOnce(null);
+    await expect(service.accept('org', 't'.repeat(40), 'Abcdefghij12')).rejects.toThrow('invalid or has expired');
+    expect(prisma.emsInvitation.updateMany).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects employee-account reassignment rather than setting the replacement account password', async () => {
+    const { service, prisma } = setup([]);
+    prisma.emsInvitation.findUnique.mockResolvedValue({ ...pending(), userId: 'original-user' });
+    await expect(service.accept('org', 't'.repeat(40), 'Abcdefghij12')).rejects.toThrow('invalid or has expired');
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rechecks expiry and cancellation within the acceptance transaction', async () => {
+    for (const changed of [{ status: 'CANCELLED' }, { expiresAt: new Date(0) }]) {
+      const { service, prisma } = setup([]);
+      prisma.emsInvitation.findUnique.mockResolvedValueOnce(pending()).mockResolvedValueOnce({ ...pending(), ...changed });
+      await expect(service.accept('org', 't'.repeat(40), 'Abcdefghij12')).rejects.toThrow('invalid or has expired');
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    }
   });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { personFullName } from '@/components/ems/person-name';
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -70,7 +71,7 @@ export default function EmsEmployeesPage() {
   const pageIds = employees.map(employee => employee.id);
   const pageAllSelected = pageIds.length > 0 && pageIds.every(id => selected.has(id));
   const fullName = (employee: { firstName: string; middleName?: string | null; lastName: string }) =>
-    [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(' ');
+    personFullName(employee);
   const toggle = (employee: (typeof employees)[number]) => {
     setAllMatching(false);
     setSelected(previous => { const next = new Map(previous); if (next.has(employee.id)) next.delete(employee.id); else next.set(employee.id, fullName(employee)); return next; });
@@ -100,6 +101,7 @@ export default function EmsEmployeesPage() {
       <div className="flex items-center gap-3">
         <Link href="/ems" aria-label="Back to EMS" className="text-slate-500 hover:text-purple-800"><ArrowLeft className="h-5 w-5" /></Link>
         <div><h1 className="text-2xl font-bold text-slate-900">Employees</h1><p className="text-sm text-slate-500">Profiles and completeness across your organisation</p></div>
+        <Link href="/ems/departments" className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Departments</Link>
       </div>
 
       <div className="space-y-2">
@@ -175,7 +177,7 @@ export default function EmsEmployeesPage() {
                 <td className="px-4 py-3"><input type="checkbox" aria-label={`Select ${[employee.firstName, employee.lastName].filter(Boolean).join(' ')}`}
                   checked={allMatching || selected.has(employee.id)} onChange={() => toggle(employee)} /></td>
                 <td className="px-4 py-3 font-mono text-xs text-slate-500">{employee.employeeCode ?? '—'}</td>
-                <td className="min-w-40 px-4 py-3"><Link href={`/ems/employees/${encodeURIComponent(employee.id)}`} className="font-semibold text-purple-800 underline decoration-purple-200 underline-offset-2 hover:decoration-purple-800">{[employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(' ')}</Link></td>
+                <td className="min-w-40 px-4 py-3"><Link href={`/ems/employees/${encodeURIComponent(employee.id)}`} className="font-semibold text-purple-800 underline decoration-purple-200 underline-offset-2 hover:decoration-purple-800">{personFullName(employee)}</Link></td>
                 <td className="px-4 py-3 text-slate-600">{employee.department?.name ?? '—'}</td>
                 <td className="px-4 py-3"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${employee.employmentStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : employee.employmentStatus === 'PROBATION' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]}</span>
                   {(() => { const badge = invitationBadge(employee.invitation); return badge && <span className={`mt-1 block w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.tone === 'warn' ? 'bg-amber-100 text-amber-900' : 'bg-blue-50 text-blue-800'}`}>{badge.label}</span>; })()}</td>

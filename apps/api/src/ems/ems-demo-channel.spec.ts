@@ -227,10 +227,10 @@ describe('EMS demo-only communication reset', () => {
     expect(f.state().channel).toBe('EMAIL');
   });
 
-  it('checks demo availability before existing controller guards, without removing any', () => {
+  it('checks demo availability after tenant, authentication and authorization guards', () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, EmsController);
     expect(guards.map((g: Function) => g.name)).toEqual([
-      'EmsDemoToolsGuard', 'TrustedTenantContextGuard', 'JwtAuthGuard', 'TenantGuard', 'RolesGuard', 'ModuleGuard',
+      'TrustedTenantContextGuard', 'JwtAuthGuard', 'TenantGuard', 'RolesGuard', 'ModuleGuard', 'EmsDemoToolsGuard',
     ]);
     const guard = new EmsDemoToolsGuard(new Reflector());
     expect(() => guard.canActivate(context(EmsController.prototype.resetCommunicationChannel, Role.HR))).toThrow(NotFoundException);

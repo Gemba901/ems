@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { normaliseKey } from './onboarding-text';
+import { normaliseKey, personFullName } from './onboarding-text';
 
 /** The caller supplies phones normalised by the existing onboarding phone helper. */
 export interface DuplicatePerson {
@@ -66,7 +66,7 @@ const personKey = (person: DuplicatePerson) => person.kind === 'IMPORT'
   ? `record:${person.id}` : person.originRecordId ? `record:${person.originRecordId}` : `employee:${person.id}`;
 
 function nameTokens(person: DuplicatePerson): string[] {
-  return [person.firstName, person.middleName, person.lastName].filter(Boolean).join(' ')
+  return personFullName(person)
     .normalize('NFKD').toLocaleLowerCase('en').replace(/\p{M}/gu, '')
     .replace(/['’‘`]/gu, '').split(/[^\p{L}\p{N}]+/gu).filter(Boolean).sort();
 }
@@ -178,7 +178,7 @@ function matchDetails(candidate: IndexedPerson, reasons: DuplicateReason[], subj
     recordId: person.kind === 'IMPORT' ? person.id : person.originRecordId ?? null,
     batchId: person.batchId ?? null, batchLabel: person.batchLabel ?? null,
     sourceFileName: person.sourceFileName ?? null, rowNumber: person.rowNumber ?? null,
-    name: [person.firstName, person.middleName, person.lastName].map(value => text(value)).filter(Boolean).join(' ') || 'Unnamed record',
+    name: text(personFullName(person)) || 'Unnamed record',
     employeeCode: text(person.employeeCode) || null, personalMobile: person.canonicalPhone || null,
     department: text(person.department) || null, designation: text(person.designation) || null, branch: text(person.branch) || null,
     reasons, supportingDetails,

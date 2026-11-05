@@ -200,3 +200,36 @@ model EmsInvitation {
 
   @@index([organizationId, status])
 }
+
+/// Pending reuse of an existing global login. No membership is granted by this row.
+/// Destination is a snapshot of the existing account's contact, never A's import.
+model EmsAccountLink {
+  employeeId String @id
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId Int
+  role Role @relation(fields: [roleId], references: [id])
+  requestedPhone String
+  importedEmail String?
+  contactMatches Boolean?
+  sourceKind String?
+  sourceEmployeeId String?
+  destination String?
+  status String @default("PENDING") @db.VarChar(20)
+  tokenHash String? @unique @db.VarChar(64)
+  expiresAt DateTime?
+  sentById String?
+  sentAt DateTime?
+  verifiedAt DateTime?
+  verificationMethod String?
+  acceptedAt DateTime?
+  declinedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([organizationId, status])
+}

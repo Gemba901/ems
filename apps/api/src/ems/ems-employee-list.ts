@@ -95,11 +95,12 @@ export function employeeImportSource(record: SourceRecord | null, organizationId
 export function invitationWhere(filter: string, now: Date): Prisma.EmployeeWhereInput {
   if (filter === 'NOT_INVITED') return { emsInvitation: { is: null } };
   if (filter === 'PENDING') return { emsInvitation: { is: { status: { in: ['SENT', 'SHARED'] }, expiresAt: { gt: now } } } };
-  if (filter === 'ACCEPTED') return { emsInvitation: { is: { OR: [{ status: 'ACCEPTED' }, { status: 'NOTICE_SENT', kind: 'ACCESS_NOTICE' }] } } };
+  if (filter === 'ACCEPTED') return { emsInvitation: { is: { OR: [{ status: 'ACCEPTED' }, { status: 'NOTICE_SENT', kind: 'ACCESS_NOTICE', skipReason: null }] } } };
   if (filter === 'ATTENTION') return { emsInvitation: { is: { OR: [
     { status: { in: ['FAILED', 'SKIPPED', 'CANCELLED'] } },
     { status: { in: ['SENT', 'SHARED'] }, expiresAt: { lte: now } },
     { status: 'NOTICE_SENT', kind: 'CONTACT_NOTICE' },
+    { status: 'NOTICE_SENT', kind: 'ACCESS_NOTICE', skipReason: { not: null } },
   ] } } };
   throw new BadRequestException('Unknown invitation filter');
 }

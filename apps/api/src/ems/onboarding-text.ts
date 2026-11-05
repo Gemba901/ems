@@ -33,6 +33,16 @@ export function isNotApplicable(value: string | null | undefined): boolean {
   return !!value?.trim() && NOT_APPLICABLE_VALUES.has(normaliseKey(value));
 }
 
+/** A middle name written as N/A (the template asks for it when there is none) means no middle name. */
+export function middleNameOrNull(value: string | null | undefined): string | null {
+  return isBlankValue(value) || isNotApplicable(value) ? null : value!.trim();
+}
+
+/** First, middle and last name as one name; an N/A or blank middle name is left out. */
+export function personFullName(p: { firstName?: string | null; middleName?: string | null; lastName?: string | null }): string {
+  return [p.firstName, middleNameOrNull(p.middleName), p.lastName].filter(Boolean).join(' ').trim();
+}
+
 /** A copy of the record with text trimmed and "unknown" placeholders turned into null. */
 export function cleanRecord<T extends object>(record: T): T {
   const copy = { ...record } as Record<string, unknown>;

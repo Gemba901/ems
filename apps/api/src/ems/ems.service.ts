@@ -1,3 +1,4 @@
+import { createPendingAccountLink } from './ems-account-links';
 import { normaliseFiveSLocation, FIVE_S_LOCATION_ERROR } from './five-s-location';
 import { importedAccountRole, canRegisterOnboarding, registrationAccess } from './onboarding-access';
 import { employeeListWhere, employeeNameOrder, employeeSearchGroups, registeredSourceWhere, EMPLOYEE_SOURCE_SELECT, employeeImportSource } from './ems-employee-list';
@@ -13,7 +14,7 @@ import { assertPeopleLinksAllowBatchRemoval, employeePeopleLinks, loadPeopleLink
 import { peopleLinkFindings } from './onboarding-people-links';
 import { buildExcludeRemainingPreview, isRemainingRecord } from './onboarding-exclude-remaining';
 import { columnHeadingKey, normaliseColumnChoices } from './onboarding-column-choices';
-import { cleanRecord, isBlankValue, isNotApplicable, matchEnumValue, normaliseKey } from './onboarding-text';
+import { cleanRecord, isBlankValue, isNotApplicable, matchEnumValue, normaliseKey, middleNameOrNull } from './onboarding-text';
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
@@ -791,7 +792,7 @@ export class EmsService {
 
   /** Serialize reporting writes within an organization, including cross-import pending links. */
   private async lockReporting(db: Prisma.TransactionClient, organizationId: string) {
-    await db.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
+    await db.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR NO KEY UPDATE`;
   }
 
   private async reportingContext(db: Prisma.TransactionClient, organizationId: string, knownEmployees?: OnboardingEmployeeSnapshot[]) {
@@ -1718,6 +1719,7 @@ export class EmsService {
           // N/A is a valid answer, but never an address to send to.
           const email = isNotApplicable(record.workEmail) ? null : record.workEmail?.toLowerCase() ?? null;
           let user = await this.checkOnboardingIdentity(tx, organizationId, phone);
+          const reuseExistingAccount = !!user;
           if (!user) {
             user = await tx.user.create({
               data: { phone, name: [record.firstName, record.lastName].filter(Boolean).join(' ') },
@@ -1725,21 +1727,22 @@ export class EmsService {
             });
           }
           // Importing an employee must not overwrite an existing company role.
-          await tx.userOrganization.upsert({
+          if (!reuseExistingAccount) await tx.userOrganization.upsert({
             where: { userId_organizationId: { userId: user.id, organizationId } },
             update: {}, create: { userId: user.id, organizationId, roleId },
           });
           const employee = await tx.employee.create({
             data: {
               organizationId,
-              userId: user.id,
+              userId: reuseExistingAccount ? null : user.id,
               reportingManagerId,
               pendingReportingRecordId,
               reportsToBoard: reporting.target === 'BOARD',
               reportingBody: isReportingBody(reporting.target) && reporting.target !== 'BOARD' ? reporting.target : null,
               firstName: record.firstName!,
               lastName: record.lastName!,
-              middleName: record.middleName,
+              // N/A means "no middle name": the profile stores none.
+              middleName: middleNameOrNull(record.middleName),
               email,
               phone,
               whatsappNumber: normalisePhone(record.whatsappNumber, current.defaultPhoneCountry),
@@ -1762,6 +1765,10 @@ export class EmsService {
               ...personLinks,
             },
           });
+
+          if (reuseExistingAccount) {
+            await createPendingAccountLink(tx, organizationId, employee.id, user, phone, email, roleId);
+          }
 
           await tx.emsOnboardingRecord.update({
             where: { id: record.id },

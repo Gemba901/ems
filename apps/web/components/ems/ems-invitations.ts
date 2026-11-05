@@ -1,6 +1,6 @@
 /** Shared helpers for employee account invitations (web). */
 export type InvitationStatus = 'SENT' | 'SHARED' | 'NOTICE_SENT' | 'ACCEPTED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
-export type InvitationKind = 'SETUP' | 'ACCESS_NOTICE' | 'CONTACT_NOTICE';
+export type InvitationKind = 'SETUP' | 'ACCESS_NOTICE' | 'CONTACT_NOTICE' | 'ACCOUNT_LINK';
 export type InvitationSummary = { status: InvitationStatus; kind: InvitationKind; expiresAt: string | null; skipReason?: string | null };
 
 /** A click-to-chat link that opens WhatsApp on this device with the message filled in. HR presses send. */
@@ -17,18 +17,42 @@ export function whatsappLink(number: string, message: string): string | null {
  */
 export function invitationBadge(invitation: InvitationSummary | null | undefined, now = new Date()): { label: string; tone: 'info' | 'warn' } | null {
   if (!invitation) return null;
+  if (invitation.kind === 'ACCOUNT_LINK' && invitation.status === 'SKIPPED') return { label: invitation.skipReason?.includes('declined') ? 'Account link declined' : 'Account verification required', tone: 'warn' };
   const expired = !!invitation.expiresAt && new Date(invitation.expiresAt) <= now;
   switch (invitation.status) {
     case 'SENT': case 'SHARED': return expired ? { label: 'Invite expired', tone: 'warn' } : { label: 'Invite pending', tone: 'info' };
     case 'FAILED': return { label: 'Invite failed', tone: 'warn' };
     case 'SKIPPED': return { label: `Not invited: ${invitation.skipReason ?? 'skipped'}`, tone: 'warn' };
     case 'CANCELLED': return { label: 'Invite cancelled', tone: 'warn' };
-    case 'NOTICE_SENT': return invitation.kind === 'CONTACT_NOTICE' ? { label: 'Needs in-person setup', tone: 'warn' } : null;
+    case 'NOTICE_SENT': if (invitation.skipReason) return { label: 'Account verification required', tone: 'warn' };
+      return invitation.kind === 'CONTACT_NOTICE' ? { label: 'Shared contact: review required', tone: 'warn' } : null;
     default: return null;
   }
 }
 
 export const INVITATION_STATUS_TEXT: Record<InvitationStatus, string> = {
   SENT: 'Link sent by email', SHARED: 'Link prepared for WhatsApp', NOTICE_SENT: 'Notice sent (no link)',
-  ACCEPTED: 'Accepted · password created', FAILED: 'Sending failed', CANCELLED: 'Link cancelled', SKIPPED: 'Not invited',
+  ACCEPTED: 'Accepted', FAILED: 'Sending failed', CANCELLED: 'Link cancelled', SKIPPED: 'Not invited',
 };
+
+/** inPerson identifies shared contacts, not successful delivery. Match outcomes by ID. */
+export function sharedContactResults(result: {
+  channel: 'EMAIL' | 'WHATSAPP';
+  inPerson: { employeeId: string; name: string }[];
+  failures: { employeeId: string }[];
+  share: { employeeId: string; kind: InvitationKind }[];
+}) {
+  const failed = new Set(result.failures.map(person => person.employeeId));
+  const prepared = new Set(result.share.filter(item => item.kind === 'CONTACT_NOTICE').map(item => item.employeeId));
+  return result.inPerson.map(person => ({
+    ...person,
+    failed: failed.has(person.employeeId),
+    outcome: failed.has(person.employeeId)
+      ? 'Notice could not be sent.'
+      : result.channel === 'EMAIL'
+        ? 'Notice sent by email.'
+        : prepared.has(person.employeeId)
+          ? 'Notice prepared for WhatsApp; sending is not confirmed.'
+          : 'Notice sending is not confirmed.',
+  }));
+}

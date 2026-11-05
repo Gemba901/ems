@@ -1,5 +1,6 @@
 "use client";
 
+import AccountLinkInvitation from "@/components/ems/AccountLinkInvitation";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Check, ArrowRight, Loader2, AlertCircle, CheckCircle2, UserCheck } from "lucide-react";
@@ -125,6 +126,22 @@ function InviteForm() {
   );
 }
 
+function InvitationEntry() {
+  const [accountToken, setAccountToken] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.hash.slice(1)).get("account-link");
+    if (token) {
+      setAccountToken(token);
+      // Keep the secret in memory, out of referrers and subsequent browser history entries.
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    setReady(true);
+  }, []);
+  if (!ready) return <p role="status">Loading invitation…</p>;
+  return accountToken ? <AccountLinkInvitation token={accountToken} /> : <InviteForm />;
+}
+
 export default function InvitePage() {
-  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-900 text-sm text-slate-400">Loading…</div>}><InviteForm /></Suspense>;
+  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-900 text-sm text-slate-400">Loading…</div>}><InvitationEntry /></Suspense>;
 }

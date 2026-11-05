@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 jest.mock('bcrypt');
 
 const mockPrisma = {
+    emsAccountLink: { findFirst: jest.fn() },
     userOrganization: { findMany: jest.fn() },
     refreshToken: { create: jest.fn() },
     employee: { findFirst: jest.fn() },

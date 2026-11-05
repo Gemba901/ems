@@ -1,3 +1,4 @@
+import { personFullName } from './person-name';
 import { isReportingBody, reportingBodyLabel } from './reporting-bodies';
 import type { OnboardingBatchDetail, OnboardingRecordStatus } from '@/services/ems.service';
 
@@ -27,7 +28,7 @@ export function buildOnboardingChart(batch: OnboardingBatchDetail) {
   };
   for (const record of batch.records) {
     const node = ensure(`record:${record.id}`);
-    Object.assign(node, {recordId:record.id, name:[record.firstName,record.middleName,record.lastName].filter(Boolean).join(' ') || 'Unnamed record',
+    Object.assign(node, {recordId:record.id, name:personFullName(record) || 'Unnamed record',
       designation:record.jobDesignation ?? '', code:record.employeeCode ?? '', department:record.currentDepartment ?? '',
       branch:record.plantBranchCode ?? '', status:record.status});
   }

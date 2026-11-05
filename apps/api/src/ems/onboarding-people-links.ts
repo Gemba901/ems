@@ -1,5 +1,5 @@
 import { createPersonSuggester, PersonSuggestion } from './onboarding-person-suggestions';
-import { completeNameKey, isNotApplicable, normaliseKey, reportingKey } from './onboarding-text';
+import { completeNameKey, isNotApplicable, normaliseKey, reportingKey, personFullName } from './onboarding-text';
 
 export interface LinkPerson {
   target: string; name: string; designation: string; employeeCode: string; department: string; branch: string;
@@ -39,8 +39,8 @@ export interface HodResolution extends LinkResolution {
   version: string; reviewKey: string | null; suggestedTarget: string | null; affectedRecords: number;
 }
 export interface RecordPeopleLinks { hod: HodResolution; first: LinkResolution; second: LinkResolution; }
-export const personName = (p: {firstName?: string | null; middleName?: string | null; lastName?: string | null}) =>
-  [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ').trim();
+/** A person's name for matching and display; an N/A middle name is left out. */
+export const personName = personFullName;
 export const branchKey = (value?: string | null) => normaliseKey(value ?? null);
 export const scopeKey = (departmentId: string, branch: string) => JSON.stringify([departmentId, branch]);
 export const noLink = (): LinkResolution => ({ target: null, state: 'UNASSIGNED', person: null, error: null, warning: null });

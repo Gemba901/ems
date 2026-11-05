@@ -1,6 +1,6 @@
 import { importedReportingBody, isReportingBody, reportingBodyLabel } from './reporting-bodies';
 import { createPersonSuggester, PersonSuggestion } from './onboarding-person-suggestions';
-import { completeNameKey, isNotApplicable, reportingKey } from './onboarding-text';
+import { completeNameKey, isNotApplicable, reportingKey, personFullName } from './onboarding-text';
 
 export interface ReportingRow {
   id: string; batchId?: string; batch?: { status: string }; status: string;
@@ -34,8 +34,8 @@ export interface ReportingResolution {
   chain?: ReportingChainItem[];
   chainEnd?: 'BOARD' | 'BODY' | 'UNRESOLVED' | 'UNKNOWN' | 'CYCLE' | 'LIMIT';
 }
-const fullName = (p: { firstName?: string | null; middleName?: string | null; lastName?: string | null }) =>
-  [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ').trim();
+// An N/A middle name is no middle name, so "Daniel Ochieng" matches a row written Daniel / N/A / Ochieng.
+const fullName = personFullName;
 export const isBoardDesignation = (value?: string | null) => ['board', 'board of directors'].includes(reportingKey(value));
 const unavailable = (r: ReportingRow) => r.status === 'EXCLUDED' || r.batch?.status === 'CANCELLED';
 

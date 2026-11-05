@@ -1,4 +1,5 @@
 "use client";
+import { personFullName } from '@/components/ems/person-name';
 import { FIVE_S_LOCATION_LABELS, normaliseFiveSLocation } from "@/components/ems/five-s-location";
 import { ADMIN_REGISTRATION_MESSAGE, canRegisterOnboarding, registrationAccess, registrationOutcomeMessage } from '@/components/ems/onboarding-access';
 import ImportedExtraFields from "@/components/ems/ImportedExtraFields";
@@ -24,6 +25,8 @@ import OnboardingMoreActions from "@/components/ems/OnboardingMoreActions";
 import ImportedColumnsDialog from "@/components/ems/ImportedColumnsDialog";
 import InvitationDialog from "@/components/ems/InvitationDialog";
 import CloseRecordDialog from "@/components/ems/CloseRecordDialog";
+import HodBulkConfirmDialog from "@/components/ems/HodBulkConfirmDialog";
+import { suggestedHodConfirmations } from "@/components/ems/onboarding-hod-bulk";
 import ConfirmDialog from "@/components/ems/ConfirmDialog";
 import { OnboardingEdgeProgress } from "@/components/ems/OnboardingStickyProgress";
 import { pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
@@ -189,7 +192,7 @@ function issueTypeOf(field: string, code?: string): Exclude<IssueType, ''> {
 }
 /** Issues that stop registration (warnings don't count). */
 const blockingCount = (record: OnboardingRecord) => (record.validationErrors ?? []).filter(finding => finding.severity !== 'warning').length;
-const fullName = (record: OnboardingRecord) => [record.firstName, record.middleName, record.lastName].filter(Boolean).join(' ');
+const fullName = (record: OnboardingRecord) => personFullName(record);
 /**
  * Order the shown records. While searching, the best name matches come first (name starts with the text,
  * then a later word does, then the employee code, then anything containing it); the chosen sort orders within that.
@@ -247,7 +250,7 @@ function reportingFilterModel(batch?: OnboardingBatchDetail) {
     if (!isReportingBody(key) && !people.has(key)) people.set(key, {target: key, name,
       label: [name || 'Unnamed person', ...details.filter(Boolean)].join(' · ')});
   };
-  for (const record of records) addPerson(`record:${record.id}`, [record.firstName, record.middleName, record.lastName].filter(Boolean).join(' '),
+  for (const record of records) addPerson(`record:${record.id}`, personFullName(record),
     [record.jobDesignation, record.employeeCode || (record.rowNumber != null ? `Row ${record.rowNumber}` : ''), record.currentDepartment]);
   const options = new Map((batch?.hierarchy.options ?? []).map(option => [canonical(option.target), option]));
   for (const record of records) {
@@ -352,7 +355,7 @@ function reportingIdentities(batches: OnboardingBatchDetail[]) {
     }
     for (const option of batch.hierarchy.options) add(option.target, {name: option.name, designation: option.designation,
       code: option.employeeCode, department: option.department, source: option.target.startsWith('employee:') ? 'Existing employee' : ''});
-    for (const record of batch.records) add(`record:${record.id}`, {name: [record.firstName, record.middleName, record.lastName].filter(Boolean).join(' '),
+    for (const record of batch.records) add(`record:${record.id}`, {name: personFullName(record),
       designation: record.jobDesignation ?? '', code: record.employeeCode ?? '', department: record.currentDepartment ?? '',
       source: record.rowNumber != null ? `Import row ${record.rowNumber}` : 'This import'});
   }
@@ -1264,7 +1267,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     if (busy || !batch?.records.some(r => r.id === targetId) || !mayLeaveEditor()) return;
     if (fromId && fromId !== targetId) {
       const record = batch?.records.find(r => r.id === fromId);
-      const point = returnPoint(`manager:${targetId}`, batch?.hierarchy.byRecord[fromId]?.chain?.[0]?.label || [record?.firstName, record?.middleName, record?.lastName].filter(Boolean).join(' ') || 'record');
+      const point = returnPoint(`manager:${targetId}`, batch?.hierarchy.byRecord[fromId]?.chain?.[0]?.label || personFullName(record) || 'record');
       point.reviewOrigin = reviewOrigin;
       point.lastId = fromId;
       // Return to the clicked person even if another row was the nearest viewport anchor.
@@ -1415,7 +1418,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const beginAction = () => { setActionError(null); setSaveNotice(null); };
   const failedAction = (kind: string, error: Error, recordId?: string) => setActionError({kind, recordId, message: error.message || 'Could not complete this action. Please try again.'});
   const recordName = (updated: OnboardingBatchDetail, record: OnboardingRecord) =>
-    updated.hierarchy.byRecord[record.id]?.chain?.[0]?.label || [record.firstName, record.middleName, record.lastName].filter(Boolean).join(' ');
+    updated.hierarchy.byRecord[record.id]?.chain?.[0]?.label || personFullName(record);
   const positionChanged = (updated: OnboardingBatchDetail, recordId: string) => {
     const previous = queryClient.getQueryData<OnboardingBatchDetail>(queryKey);
     const before = previous?.records.findIndex(r => r.id === recordId) ?? -1;
@@ -1600,8 +1603,37 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const error = queryError ? (queryError as any).message : null;
   const hierarchy = batch?.hierarchy;
   const records: OnboardingRecord[] = batch?.records ?? [];
+  // Confirming several suggested HODs runs one save per department; the page stays busy until all are done.
+  const [hodBulkOpen, setHodBulkOpen] = useState(false);
+  const [hodBulkRunning, setHodBulkRunning] = useState(false);
+  const [hodBulkProgress, setHodBulkProgress] = useState<string | undefined>();
+  const [hodBulkError, setHodBulkError] = useState<string | null>(null);
+  const hodSuggestions = useMemo(() => suggestedHodConfirmations(batch), [batch]);
   const busy = saveHod.isPending || undoDuplicate.isPending || confirmDuplicate.isPending || save.isPending || exclude.isPending || include.isPending ||
-    updateCountry.isPending || validate.isPending || register.isPending;
+    updateCountry.isPending || validate.isPending || register.isPending || hodBulkRunning;
+  async function confirmSuggestedHods(keys: string[]) {
+    setHodBulkRunning(true); setHodBulkError(null);
+    let latest = batch, done = 0;
+    try {
+      for (const [index, key] of keys.entries()) {
+        // Re-read from the latest result: each save revalidates the import and gives new versions.
+        const current = suggestedHodConfirmations(latest).ready.find(s => s.key === key);
+        if (!current) continue;
+        setHodBulkProgress(`${index + 1} of ${keys.length}`);
+        latest = await saveHod.mutateAsync({recordId: current.recordId, target: current.target, expectedVersion: current.version});
+        done++;
+      }
+      setHodBulkOpen(false);
+    } catch (error) {
+      setHodBulkError(`${done} confirmed. ${error instanceof Error ? error.message : 'Could not confirm the next HOD.'} The ones left are still listed.`);
+    } finally {
+      setHodBulkRunning(false); setHodBulkProgress(undefined);
+      if (latest && latest !== batch) {
+        finishBatchAction(latest, `${done} ${done === 1 ? 'HOD' : 'HODs'} confirmed`);
+        queryClient.invalidateQueries({queryKey: ['ems-people-links']});
+      }
+    }
+  }
   const country = countryDraft ?? batch?.defaultPhoneCountry ?? "";
   const countryUnsaved = country !== (batch?.defaultPhoneCountry ?? "");
   const closed = batch?.status === "CANCELLED" || batch?.status === "REGISTERED";
@@ -1755,6 +1787,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             // Phones keep the top bar to one line: Validate all moves into this menu.
             { key: "validate", label: "Validate all", phoneOnly: true, icon: <CheckCircle2 className="h-3.5 w-3.5" />,
               disabled: !batch || closed, onSelect: () => validate.mutate() },
+            ...(hodSuggestions.ready.length > 0 && !closed ? [{
+              key: "confirm-hods", label: `Confirm suggested HODs (${hodSuggestions.ready.length})`, icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+              onSelect: () => { beginAction(); setHodBulkError(null); setHodBulkOpen(true); },
+            }] : []),
             ...(batch?.records.some(r => r.extraFields?.length) ? [{
               key: "imported-columns", label: "Imported columns",
               title: "Choose once where each extra column goes for this whole import",
@@ -2050,7 +2086,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                         <td className="max-sm:hidden px-4 py-3 text-xs font-mono text-slate-400">{rec.employeeCode ?? "—"}</td>
                         <td className="px-3 sm:px-4 py-3 min-w-0">
                           <p className="font-medium text-slate-800 break-words">
-                            {[rec.firstName, rec.middleName, rec.lastName].filter(Boolean).join(" ") || "—"}
+                            {personFullName(rec) || "—"}
                           </p>
                           <p data-record-mobile-meta className="sm:hidden mt-0.5 text-[11px] text-slate-500 break-words">
                             Row {rec.rowNumber ?? "—"} · <span className="font-mono">{rec.employeeCode ?? "—"}</span> · {rec.currentDepartment || "No department"}
@@ -2165,6 +2201,9 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         {/* Outside the horizontal table scroller: stick to the actual page scroll area. */}
         <div ref={setEditorToolbarHost} data-editor-toolbar-host className="pointer-events-none sticky bottom-3 z-40 flex flex-col gap-1.5" />
       </div>
+      <HodBulkConfirmDialog open={hodBulkOpen} suggestions={hodSuggestions.ready} individual={hodSuggestions.individual}
+        running={hodBulkRunning} progress={hodBulkProgress} error={hodBulkError}
+        onConfirm={keys => void confirmSuggestedHods(keys)} onClose={() => setHodBulkOpen(false)} />
       {inviteOpen && batch && accessToken && (
         <InvitationDialog accessToken={accessToken} title={`Invite employees registered from “${batch.label ?? 'this import'}”`}
           selection={{ filters: { source: "IMPORTED", importBatchId: batch.id } }} onClose={() => setInviteOpen(false)} />

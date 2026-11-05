@@ -26,7 +26,7 @@ import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationC
 
 @TenantRequired()
 @Controller('ems')
-@UseGuards(EmsDemoToolsGuard, TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard)
+@UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard, EmsDemoToolsGuard)
 @RequiresModule(ModuleType.EMS)
 export class EmsController {
   constructor(private ems: EmsService, private invitations: EmsInvitationsService) {}

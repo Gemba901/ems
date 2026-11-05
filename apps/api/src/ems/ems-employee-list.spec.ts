@@ -196,3 +196,16 @@ test('literal code punctuation stays literal when ranking exact and prefix match
 test('DTO accepts BEST_MATCH as a validated sort value',async()=>{
   expect(await validate(query({sort:'BEST_MATCH',search:'na'}))).toEqual([]);
 });
+
+describe('account verification invitation filters', () => {
+  it('keeps passwordless account notices out of Accepted and in Needs attention', () => {
+    const { invitationWhere } = require('./ems-employee-list');
+    const now = new Date();
+    expect(invitationWhere('ACCEPTED', now).emsInvitation.is.OR).toContainEqual({
+      status: 'NOTICE_SENT', kind: 'ACCESS_NOTICE', skipReason: null,
+    });
+    expect(invitationWhere('ATTENTION', now).emsInvitation.is.OR).toContainEqual({
+      status: 'NOTICE_SENT', kind: 'ACCESS_NOTICE', skipReason: { not: null },
+    });
+  });
+});

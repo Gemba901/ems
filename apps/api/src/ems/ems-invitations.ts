@@ -1,7 +1,9 @@
+import { EmsAccountLinksService } from './ems-account-links';
 import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
-import type { Prisma } from 'db';
+import { Prisma } from 'db';
+import { retryOnboardingTransaction } from './onboarding-transaction';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmailService } from 'src/notifications/channels/email.service';
 import { isActiveEmployment } from './employment-status';
@@ -20,7 +22,7 @@ import type { QueryEmsEmployeesDto } from './dto/ems.dto';
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_INVITE_SELECTION = 2000;
 export type InviteChannel = 'EMAIL' | 'WHATSAPP';
-export type InviteKind = 'SETUP' | 'ACCESS_NOTICE' | 'CONTACT_NOTICE';
+export type InviteKind = 'SETUP' | 'ACCESS_NOTICE' | 'CONTACT_NOTICE' | 'ACCOUNT_LINK';
 export type InviteCategory = InviteKind | 'PENDING' | 'ACCEPTED' | 'SKIPPED';
 const PENDING = ['SENT', 'SHARED'];
 const INVALID_LINK = 'This invitation link is invalid or has expired. Ask HR to send a new one.';
@@ -49,9 +51,11 @@ export function contactKey(channel: InviteChannel, value: string | null) {
 }
 
 export type InviteCandidate = {
+  organizationId: string;
   id: string; firstName: string; lastName: string; employeeCode: string | null; employmentStatus: string;
   email: string | null; phone: string | null; whatsappNumber: string | null; userId: string | null;
-  user: { password: string | null } | null;
+  user: { password: string | null; organizations: { organizationId: string }[] } | null;
+  emsAccountLink?: { status: string } | null;
   emsInvitation: { status: string; kind: string; expiresAt: Date | null } | null;
 };
 
@@ -59,6 +63,13 @@ export type InviteCandidate = {
 export function classifyInvitation(e: InviteCandidate, channel: InviteChannel, sharedKeys: Set<string>, now: Date, resend: boolean):
   { category: InviteCategory; reason?: string; destination?: string } {
   const current = e.emsInvitation;
+  // Re-evaluate security before treating an older pending setup link as unchanged.
+  const foreignAccount = !!e.user?.organizations.some(m => m.organizationId !== e.organizationId);
+  if (foreignAccount && !e.user?.password && isActiveEmployment(e.employmentStatus)) {
+    const destination = inviteDestination(channel, e);
+    return destination ? { category: 'ACCESS_NOTICE', destination }
+      : { category: 'SKIPPED', reason: 'Account verification required; contact the existing account administrator' };
+  }
   if (current?.status === 'ACCEPTED') return { category: 'ACCEPTED' };
   if (!resend && current && PENDING.includes(current.status) && current.expiresAt && current.expiresAt > now) return { category: 'PENDING' };
   if (!isActiveEmployment(e.employmentStatus)) return { category: 'SKIPPED', reason: 'Inactive employee' };
@@ -71,9 +82,13 @@ export function classifyInvitation(e: InviteCandidate, channel: InviteChannel, s
 }
 
 /** Message text per kind. The link is only part of SETUP and ACCESS_NOTICE messages. */
-export function inviteMessage(kind: InviteKind, name: string, organization: string, link: string | null) {
+export function inviteMessage(kind: InviteKind, name: string, organization: string, link: string | null, hasPassword = true) {
   if (kind === 'SETUP') return { subject: `Set up your ${organization} account`, label: 'Create your password',
     text: `Hello ${name}, ${organization} has set up your BEES account. Create your password using this link (valid for 7 days, use once): ${link}` };
+  if (kind === 'ACCESS_NOTICE' && !hasPassword) return {
+    subject: `Account verification required for ${organization}`, label: undefined,
+    text: `Hello ${name}, an employee record was registered at ${organization}. This import cannot set up the existing BEES login. Contact the administrator responsible for your existing account to complete secure account verification. No password-setup link is included.`,
+  };
   if (kind === 'ACCESS_NOTICE') return { subject: `You've been added to ${organization}`, label: 'Sign in',
     text: `Hello ${name}, you've been added to ${organization} on BEES. Sign in with your existing password: ${link}` };
   return { subject: `An account was created for you at ${organization}`, label: undefined,
@@ -87,15 +102,16 @@ export type InvitationSelection = {
 };
 
 const CANDIDATE_SELECT = {
-  id: true, firstName: true, lastName: true, employeeCode: true, employmentStatus: true,
+  organizationId: true, id: true, firstName: true, lastName: true, employeeCode: true, employmentStatus: true,
   email: true, phone: true, whatsappNumber: true, userId: true,
-  user: { select: { password: true } },
+  user: { select: { password: true, organizations: { select: { organizationId: true } } } },
   emsInvitation: { select: { status: true, kind: true, expiresAt: true } },
+  emsAccountLink: { select: { status: true } },
 } satisfies Prisma.EmployeeSelect;
 
 @Injectable()
 export class EmsInvitationsService {
-  constructor(private prisma: PrismaService, @Optional() private email?: EmailService) {}
+  constructor(private prisma: PrismaService, @Optional() private email?: EmailService, @Optional() private accountLinks?: EmsAccountLinksService) {}
 
   private async channel(organizationId: string): Promise<InviteChannel> {
     const org = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { communicationChannel: true } });
@@ -137,10 +153,12 @@ export class EmsInvitationsService {
     const [channel, people] = await Promise.all([this.channel(organizationId), this.candidates(organizationId, selection)]);
     const shared = await this.sharedKeys(organizationId, channel);
     const now = new Date();
-    const counts: Record<InviteCategory, number> = { SETUP: 0, ACCESS_NOTICE: 0, CONTACT_NOTICE: 0, PENDING: 0, ACCEPTED: 0, SKIPPED: 0 };
+    const counts: Record<InviteCategory, number> = { SETUP: 0, ACCESS_NOTICE: 0, CONTACT_NOTICE: 0, ACCOUNT_LINK: 0, PENDING: 0, ACCEPTED: 0, SKIPPED: 0 };
     const skipped: { employeeId: string; name: string; reason: string }[] = [];
     for (const e of people) {
-      const result = classifyInvitation(e, channel, shared, now, !!selection.resend);
+      const result = e.emsAccountLink
+        ? await this.accountLinks?.preview(organizationId, e.id, !!selection.resend) ?? { category: 'SKIPPED' as const, reason: 'Account verification unavailable' }
+        : classifyInvitation(e, channel, shared, now, !!selection.resend);
       counts[result.category]++;
       if (result.category === 'SKIPPED') skipped.push({ employeeId: e.id, name: `${e.firstName} ${e.lastName}`.trim(), reason: result.reason! });
     }
@@ -162,12 +180,28 @@ export class EmsInvitationsService {
     const people = await this.candidates(organizationId, selection);
     const shared = await this.sharedKeys(organizationId, channel);
     const now = new Date();
-    const result = { channel, sent: 0, shared: 0, notices: 0, failed: 0, skipped: 0, unchanged: 0,
+    const result = { channel, verificationSent: 0, sent: 0, shared: 0, notices: 0, failed: 0, skipped: 0, unchanged: 0,
       share: [] as { employeeId: string; name: string; number: string; kind: InviteKind; message: string }[],
       inPerson: [] as { employeeId: string; name: string }[], failures: [] as { employeeId: string; name: string; error: string }[] };
 
     for (const e of people) {
       const name = `${e.firstName} ${e.lastName}`.trim();
+      if (e.emsAccountLink) {
+        try {
+          const decision = await this.accountLinks?.send(organizationId, e.id, actorUserId, base.origin, !!selection.resend);
+          if (decision?.category === 'ACCOUNT_LINK') result.verificationSent++;
+          else if (decision?.category === 'ACCEPTED' || decision?.category === 'PENDING') result.unchanged++;
+          else {
+            if (decision && 'failed' in decision && decision.failed) result.failed++;
+            else result.skipped++;
+            result.failures.push({ employeeId: e.id, name, error: decision && 'reason' in decision ? decision.reason! : 'Account verification unavailable' });
+          }
+        } catch {
+          result.failed++;
+          result.failures.push({ employeeId: e.id, name, error: 'Account verification could not be sent; review the account and retry' });
+        }
+        continue;
+      }
       const decision = classifyInvitation(e, channel, shared, now, !!selection.resend);
       const common = { organizationId, userId: e.userId, channel, sentById: actorUserId };
       if (decision.category === 'PENDING' || decision.category === 'ACCEPTED') { result.unchanged++; continue; }
@@ -178,12 +212,15 @@ export class EmsInvitationsService {
           update: { ...common, status: 'SKIPPED', skipReason: decision.reason, tokenHash: null, expiresAt: null, lastError: null } });
         continue;
       }
-      const kind = decision.category;
+      let kind = decision.category;
+      // The account may have joined another company since the selection was loaded.
+      if (kind === 'SETUP' && !await this.setupAccount(this.prisma, organizationId, e.userId!)) kind = 'ACCESS_NOTICE';
       const token = kind === 'SETUP' ? randomBytes(32).toString('base64url') : null;
       const link = kind === 'SETUP' ? `${base.origin}/invite?token=${token}` : kind === 'ACCESS_NOTICE' ? `${base.origin}/login` : null;
-      const message = inviteMessage(kind, e.firstName, org?.name ?? 'Your company', link);
+      const message = inviteMessage(kind, e.firstName, org?.name ?? 'Your company', link, !!e.user?.password);
       const status = kind === 'SETUP' ? (channel === 'EMAIL' ? 'SENT' : 'SHARED') : 'NOTICE_SENT';
-      const data = { ...common, kind, status, destination: decision.destination, skipReason: null, lastError: null,
+      const data = { ...common, kind, status, destination: decision.destination, skipReason: kind === 'ACCESS_NOTICE' && !e.user?.password
+        ? 'Account verification required; this import cannot create a password for the existing account' : null, lastError: null,
         tokenHash: token ? hashInviteToken(token) : null, expiresAt: token ? new Date(now.getTime() + INVITE_TTL_MS) : null,
         sentAt: now, acceptedAt: null, cancelledAt: null };
       await this.prisma.emsInvitation.upsert({ where: { employeeId: e.id },
@@ -196,7 +233,7 @@ export class EmsInvitationsService {
       }
       try {
         await this.email!.send({ to: decision.destination!, subject: message.subject, title: message.subject, message: message.text,
-          ...(link ? { actionUrl: link, actionLabel: message.label } : {}) }, { requireDelivery: true });
+          ...(link && message.label ? { actionUrl: link, actionLabel: message.label } : {}) }, { requireDelivery: true });
         if (kind === 'SETUP') result.sent++; else result.notices++;
       } catch (error) {
         result.failed++;
@@ -215,26 +252,41 @@ export class EmsInvitationsService {
     const invitation = await this.prisma.emsInvitation.findFirst({ where: { employeeId, organizationId },
       select: { kind: true, channel: true, status: true, destination: true, skipReason: true, lastError: true, expiresAt: true,
         sendCount: true, sentAt: true, acceptedAt: true, cancelledAt: true } });
-    return { invitation };
+    const accountLink = await this.prisma.emsAccountLink.findFirst({ where: { employeeId, organizationId },
+      select: { status: true, contactMatches: true, sentAt: true, verifiedAt: true, acceptedAt: true, declinedAt: true } });
+    return { invitation, accountLink };
   }
 
   /** Switch off a link that was sent: it stops working immediately. */
   async cancel(organizationId: string, employeeId: string) {
-    const changed = await this.prisma.emsInvitation.updateMany({
-      where: { employeeId, organizationId, status: { in: PENDING } },
-      data: { status: 'CANCELLED', tokenHash: null, cancelledAt: new Date() },
-    });
+    const changed = await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
+      const changed = await tx.emsInvitation.updateMany({
+        where: { employeeId, organizationId, status: { in: PENDING } },
+        data: { status: 'CANCELLED', tokenHash: null, cancelledAt: new Date() },
+      });
+      if (changed.count) await tx.emsAccountLink.updateMany({ where: { employeeId, organizationId, status: { in: ['SENT', 'VERIFIED'] } },
+        data: { status: 'CANCELLED', tokenHash: null, expiresAt: null } });
+      return changed;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
     if (!changed.count) throw new BadRequestException('There is no pending invitation to cancel.');
     return this.getForEmployee(organizationId, employeeId);
   }
 
-  private async usable(organizationId: string, token: unknown) {
+  private setupAccount(db: Pick<Prisma.TransactionClient, 'user'>, organizationId: string, userId: string) {
+    return db.user.findFirst({ where: { id: userId, organizations: {
+      some: { organizationId }, none: { organizationId: { not: organizationId } },
+    } }, select: { id: true } });
+  }
+
+  private async usable(organizationId: string, token: unknown, db: Pick<Prisma.TransactionClient, 'user' | 'emsInvitation'> = this.prisma) {
     if (typeof token !== 'string' || token.length < 20 || token.length > 200) return null;
-    const invitation = await this.prisma.emsInvitation.findUnique({ where: { tokenHash: hashInviteToken(token) },
+    const invitation = await db.emsInvitation.findUnique({ where: { tokenHash: hashInviteToken(token) },
       include: { employee: { select: { firstName: true, lastName: true, employeeCode: true, employmentStatus: true, organizationId: true, userId: true } } } });
     if (!invitation || invitation.organizationId !== organizationId || invitation.employee.organizationId !== organizationId) return null;
     if (invitation.kind !== 'SETUP' || !PENDING.includes(invitation.status) || !invitation.expiresAt || invitation.expiresAt <= new Date()) return null;
     if (!isActiveEmployment(invitation.employee.employmentStatus) || !invitation.employee.userId) return null;
+    if (invitation.userId !== invitation.employee.userId) return null;
+    if (!await this.setupAccount(db, organizationId, invitation.employee.userId)) return null;
     return invitation;
   }
 
@@ -253,16 +305,28 @@ export class EmsInvitationsService {
     const invitation = await this.usable(organizationId, token);
     if (!invitation) throw new BadRequestException(INVALID_LINK);
     const hashed = await bcrypt.hash(newPassword as string, 10);
-    return this.prisma.$transaction(async tx => {
+    return retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
+      // Re-read after hashing, inside the transaction: reject reassignment, cancellation,
+      // expiry or cross-company membership changes, including for pre-fix tokens.
+      const current = await this.usable(organizationId, token, tx);
+      if (!current || current.id !== invitation.id) throw new BadRequestException(INVALID_LINK);
       const consumed = await tx.emsInvitation.updateMany({
         where: { id: invitation.id, tokenHash: invitation.tokenHash, status: { in: PENDING } },
         data: { status: 'ACCEPTED', acceptedAt: new Date(), tokenHash: null },
       });
       if (consumed.count !== 1) throw new BadRequestException(INVALID_LINK);
       // Never replace a password set some other way in the meantime.
-      const set = await tx.user.updateMany({ where: { id: invitation.employee.userId!, password: null }, data: { password: hashed } });
+      const set = await tx.user.updateMany({ where: { id: current.employee.userId!, password: null, organizations: {
+        some: { organizationId }, none: { organizationId: { not: organizationId } },
+      } }, data: { password: hashed } });
+      if (set.count === 0) {
+        const existing = await tx.user.findFirst({ where: { id: current.employee.userId!, organizations: {
+          some: { organizationId }, none: { organizationId: { not: organizationId } },
+        } }, select: { password: true } });
+        if (!existing?.password) throw new BadRequestException(INVALID_LINK);
+      }
       return { alreadyHadPassword: set.count === 0 };
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
   }
 }
 
@@ -272,5 +336,7 @@ export async function endAccessForInactiveEmployee(prisma: PrismaService, organi
   if (!employee || isActiveEmployment(employee.employmentStatus)) return;
   await prisma.emsInvitation.updateMany({ where: { employeeId, organizationId, status: { in: PENDING } },
     data: { status: 'CANCELLED', tokenHash: null, cancelledAt: new Date(), lastError: 'Employee became inactive' } });
+  await prisma.emsAccountLink.updateMany({ where: { employeeId, organizationId, status: { in: ['PENDING', 'SENT', 'VERIFIED'] } },
+    data: { status: 'CANCELLED', tokenHash: null, expiresAt: null } });
   if (employee.userId) await prisma.refreshToken.deleteMany({ where: { userId: employee.userId, organizationId } });
 }

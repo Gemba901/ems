@@ -3,6 +3,7 @@ model Employee {
   importedExtraFields Json?
   // Current account invitation, if any (EMS onboarding).
   emsInvitation EmsInvitation?
+  emsAccountLink EmsAccountLink?
 
   id             String  @id @default(uuid())
   firstName      String

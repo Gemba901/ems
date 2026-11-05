@@ -571,18 +571,19 @@ export type EmployeeListFilters = {
 };
 /** Who to invite: explicit employees, or everyone matching employee-list filters. */
 export type InvitationSelection = { employeeIds?: string[]; filters?: EmployeeListFilters; resend?: boolean };
-export type InvitationCategory = 'SETUP' | 'ACCESS_NOTICE' | 'CONTACT_NOTICE' | 'PENDING' | 'ACCEPTED' | 'SKIPPED';
+export type InvitationCategory = 'ACCOUNT_LINK' | 'SETUP' | 'ACCESS_NOTICE' | 'CONTACT_NOTICE' | 'PENDING' | 'ACCEPTED' | 'SKIPPED';
 export interface InvitationPreview {
   channel: 'EMAIL' | 'WHATSAPP'; total: number; counts: Record<InvitationCategory, number>;
   skipped: { employeeId: string; name: string; reason: string }[];
 }
 export interface InvitationSendResult {
-  channel: 'EMAIL' | 'WHATSAPP'; sent: number; shared: number; notices: number; failed: number; skipped: number; unchanged: number;
+  channel: 'EMAIL' | 'WHATSAPP'; verificationSent: number; sent: number; shared: number; notices: number; failed: number; skipped: number; unchanged: number;
   share: { employeeId: string; name: string; number: string; kind: InvitationKind; message: string }[];
   inPerson: { employeeId: string; name: string }[];
   failures: { employeeId: string; name: string; error: string }[];
 }
 export interface EmployeeInvitationDetail {
+  accountLink?: null | { status: string; contactMatches: boolean | null; sentAt: string | null; verifiedAt: string | null; acceptedAt: string | null; declinedAt: string | null };
   invitation: null | { kind: InvitationKind; channel: 'EMAIL' | 'WHATSAPP'; status: InvitationStatus; destination: string | null;
     skipReason: string | null; lastError: string | null; expiresAt: string | null; sendCount: number;
     sentAt: string | null; acceptedAt: string | null; cancelledAt: string | null };

@@ -25,6 +25,7 @@ export default function EmployeeInvitationCard({ employeeId, employeeName, token
     },
   });
   const invitation = data?.invitation;
+  const accountLink = data?.accountLink;
   const expired = !!invitation?.expiresAt && new Date(invitation.expiresAt) <= new Date();
   const pending = !!invitation && (invitation.status === "SENT" || invitation.status === "SHARED") && !expired;
 
@@ -38,6 +39,11 @@ export default function EmployeeInvitationCard({ employeeId, employeeName, token
           : <div className="mt-1 space-y-0.5 text-xs text-slate-600">
               <p className="font-medium text-slate-800">{expired && (invitation.status === "SENT" || invitation.status === "SHARED") ? "Link expired" : INVITATION_STATUS_TEXT[invitation.status]}
                 {invitation.kind === "CONTACT_NOTICE" && " · shared contact, set up in person"}</p>
+              {accountLink && <div className="rounded border border-amber-200 bg-amber-50 p-2 text-amber-950">
+                <p>{accountLink.status === "ACCEPTED" ? "Employee accepted account linking." : accountLink.status === "DECLINED" ? "Employee declined. HR review is required." : accountLink.status === "CANCELLED" ? "Account link cancelled. New company access has not been granted." : expired ? "Verification link expired. Review the details before resending." : accountLink.verifiedAt ? "Existing email verified; company access still awaits acceptance." : "Existing-account verification required. This request has not granted new login access."}</p>
+                {accountLink.contactMatches !== null && <p>{accountLink.contactMatches ? "Imported email matches the existing contact; verification is still required." : "Imported email differs from the existing contact. Verification uses the existing contact only."}</p>}
+                <p>Verification is sent directly by email. HR cannot view the destination or copy the verification link.</p>
+              </div>}
               {invitation.skipReason && <p>Reason: {invitation.skipReason}</p>}
               {invitation.lastError && <p className="text-red-700">{invitation.lastError}</p>}
               {invitation.destination && <p>To {invitation.destination} by {invitation.channel === "EMAIL" ? "email" : "WhatsApp"}</p>}
@@ -46,7 +52,7 @@ export default function EmployeeInvitationCard({ employeeId, employeeName, token
               {invitation.acceptedAt && <p>Accepted {when(invitation.acceptedAt)}</p>}
             </div>}
       </div>
-      {!isLoading && !error && invitation?.status !== "ACCEPTED" && <div className="flex gap-2">
+      {!isLoading && !error && invitation?.status !== "ACCEPTED" && accountLink?.status !== "DECLINED" && <div className="flex gap-2">
         {pending && <button type="button" onClick={() => cancel.mutate()} disabled={cancel.isPending}
           className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
           {cancel.isPending && <Loader2 className="h-3 w-3 animate-spin" />} Cancel link</button>}

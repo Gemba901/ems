@@ -89,6 +89,7 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     actions: [
       // { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
       { label: "My Profile",             href: "/ems/my-profile", icon: UserCircle, roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
+      { label: "Onboarding Imports", href: "/ems/onboarding",  icon: ClipboardList,   roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
     ],
   },
   CALENDAR: {
@@ -304,6 +305,7 @@ export default function DashboardPage() {
   const activeModules: string[] = orgData?.modules ?? [];
 
   const enabledModules = activeModules
+    .filter((key) => key !== "EMS") // EMS card temporarily hidden from the dashboard; the module itself stays enabled
     .map((key) => MODULE_REGISTRY[key])
     .filter(Boolean);
 

@@ -18,6 +18,7 @@ describe('Verified account setup', () => {
   let service: AuthService;
   beforeEach(() => {
     db = {
+      emsAccountLink: { findFirst: jest.fn().mockResolvedValue(null) },
       user: {
         findFirst: jest.fn().mockResolvedValue(user),
         findUnique: jest.fn().mockResolvedValue(user),
@@ -58,9 +59,24 @@ describe('Verified account setup', () => {
       'new-password',
     );
     expect(db.user.updateMany).toHaveBeenCalledWith({
-      where: { id: user.id, password: null },
+      where: { id: user.id, password: null, emsAccountLinks: { none: {} } },
       data: { password: 'hashed' },
     });
+  });
+  it('identifier-only setup is refused for accounts in the verification flow', async () => {
+    db.emsAccountLink.findFirst.mockResolvedValue({ employeeId: 'pending-employee' });
+    await expect(service.verifyFirstTimeUser(user.email)).rejects.toMatchObject({ status: 401 });
+    expect(db.user.updateMany).not.toHaveBeenCalled();
+  });
+  it('an older first-time setup token cannot bypass a newly pending account link', async () => {
+    db.user.updateMany.mockImplementation(async ({ where }: any) => {
+      expect(where.emsAccountLinks).toEqual({ none: {} });
+      return { count: 0 };
+    });
+    await expect(service.createPassword(
+      jwt.sign({ userId: user.id, purpose: 'FIRST_TIME_SETUP' }), 'new-password',
+    )).rejects.toMatchObject({ status: 401 });
+    expect(db.user.update).not.toHaveBeenCalled();
   });
   it('reset replay losing atomic consumption cannot update a password', async () => {
     await expect(

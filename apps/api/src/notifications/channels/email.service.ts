@@ -99,7 +99,42 @@ export class EmailService {
             this.logger.log(`Email sent to ${to}: "${subject}"`);
         } catch (err) {
             // Verification links must never be logged or reported as delivered on failure.
-            if (options.requireDelivery) throw new Error("Email delivery failed");
+            if (options.requireDelivery) {
+                const error = err as {
+                    name?: string;
+                    code?: string;
+                    $metadata?: { httpStatusCode?: number };
+                };
+
+                const knownErrors = [
+                    "CredentialsProviderError",
+                    "InvalidClientTokenId",
+                    "SignatureDoesNotMatch",
+                    "AccessDenied",
+                    "AccessDeniedException",
+                    "MessageRejected",
+                    "MailFromDomainNotVerifiedException",
+                    "Throttling",
+                    "ThrottlingException",
+                    "TimeoutError",
+                    "NetworkingError",
+                    "ENOTFOUND",
+                    "ECONNREFUSED",
+                    "ETIMEDOUT",
+                ];
+
+                const errorType = [error?.name, error?.code]
+                    .find(value => value && knownErrors.includes(value))
+                    ?? "UnclassifiedEmailError";
+
+                this.logger.error(
+                    `Email delivery failed: type=${errorType}; httpStatus=${
+                        error?.$metadata?.httpStatusCode ?? "unavailable"
+                    }`,
+                );
+
+                throw new Error("Email delivery failed");
+            }
             this.logger.error(`Failed to send email to ${to}: ${(err as Error).message}`);
 
             // Outside production, surface the content (and any action link) directly in the

@@ -11,8 +11,8 @@ import { StrategicDirectionService } from './strategic-direction.service';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import { LEX_ALL, LEX_EDITORS } from '../common/lex-roles';
-import { SaveDraftDto } from './dto/strategic-direction.dto';
+import { LEX_ALL, LEX_APPROVERS, LEX_EDITORS } from '../common/lex-roles';
+import { ReasonDto, SaveDraftDto } from './dto/strategic-direction.dto';
 
 @TenantRequired()
 @Controller('leadership-excellence/strategic-direction')
@@ -33,10 +33,16 @@ export class StrategicDirectionController {
     return this.service.getDraft(user.organizationId);
   }
 
+  @Get('history')
+  @Roles(...LEX_EDITORS)
+  getHistory(@CurrentUser() user: AccessTokenPayload) {
+    return this.service.getHistory(user.organizationId);
+  }
+
   @Get('approved')
   @Roles(...LEX_ALL)
   getApprovedDirection(@CurrentUser() user: AccessTokenPayload) {
-    return this.service.getApproved(user.organizationId);
+    return this.service.getPublished(user.organizationId);
   }
 
   @Patch('draft')
@@ -52,5 +58,35 @@ export class StrategicDirectionController {
   @Roles(...LEX_EDITORS)
   submit(@CurrentUser() user: AccessTokenPayload) {
     return this.service.submit(user);
+  }
+
+  @Post('withdraw')
+  @Roles(...LEX_EDITORS)
+  withdraw(@CurrentUser() user: AccessTokenPayload) {
+    return this.service.withdraw(user);
+  }
+
+  @Post('return')
+  @Roles(...LEX_APPROVERS)
+  returnForChanges(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ReasonDto,
+  ) {
+    return this.service.returnForChanges(user, dto.reason);
+  }
+
+  @Post('approve')
+  @Roles(...LEX_APPROVERS)
+  approve(@CurrentUser() user: AccessTokenPayload) {
+    return this.service.approve(user);
+  }
+
+  @Post('revise')
+  @Roles(...LEX_EDITORS)
+  startRevision(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: ReasonDto,
+  ) {
+    return this.service.startRevision(user, dto.reason);
   }
 }

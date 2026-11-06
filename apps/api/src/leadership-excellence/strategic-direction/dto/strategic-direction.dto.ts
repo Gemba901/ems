@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -30,4 +31,9 @@ export class SaveDraftDto {
   @ValidateNested({ each: true })
   @Type(() => CoreValueDto)
   values?: CoreValueDto[];
+}
+
+/** Return for changes and start revision both record why. */
+export class ReasonDto {
+  @IsString() @IsNotEmpty() @MaxLength(1000) reason!: string;
 }

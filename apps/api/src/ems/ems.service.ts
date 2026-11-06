@@ -1,3 +1,4 @@
+import { RegistrationRunHooks, registrationErrorCode } from './ems-registration.types';
 import { createPendingAccountLink } from './ems-account-links';
 import { normaliseFiveSLocation, FIVE_S_LOCATION_ERROR } from './five-s-location';
 import { importedAccountRole, canRegisterOnboarding, registrationAccess } from './onboarding-access';
@@ -15,7 +16,7 @@ import { peopleLinkFindings } from './onboarding-people-links';
 import { buildExcludeRemainingPreview, isRemainingRecord } from './onboarding-exclude-remaining';
 import { columnHeadingKey, normaliseColumnChoices } from './onboarding-column-choices';
 import { cleanRecord, isBlankValue, isNotApplicable, matchEnumValue, normaliseKey, middleNameOrNull } from './onboarding-text';
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import { UpdateEmployeeEmsDto, QueryEmsEmployeesDto, ChangeEmploymentStatusDto } from './dto/ems.dto';
@@ -1599,7 +1600,24 @@ export class EmsService {
     return this.getOnboardingBatch(organizationId, batchId);
   }
 
+  /** Match the Ready view, including duplicate findings cleared since the last validation. */
+  async registrationReadyIds(db: Prisma.TransactionClient, organizationId: string,
+    records: Prisma.EmsOnboardingRecordGetPayload<{}>[], country: string | null, actorRole: Role) {
+    const index = await this.duplicateContext(db, organizationId);
+    return records.filter(record => {
+      if (!['READY', 'NEEDS_FIXING'].includes(record.status) || registrationAccess(actorRole, record.beesAccessLevel) === 'ADMIN_REQUIRED') return false;
+      return record.status === 'READY' || refreshedDuplicateRecord(record,
+        index.review(duplicateImportPerson(record, organizationId, country), record.duplicateReviewReceipt)).status === 'READY';
+    }).map(record => record.id);
+  }
+
+  /** Synchronous internal helper retained for existing integrations/tests. HTTP uses the durable worker. */
   async registerOnboardingBatch(organizationId: string, batchId: string, actorRole: Role) {
+    const result = await this.registerOnboardingRecords(organizationId, batchId, actorRole);
+    return { ...result, batch: await this.getOnboardingBatch(organizationId, batchId) };
+  }
+
+  async registerOnboardingRecords(organizationId: string, batchId: string, actorRole: Role, run?: RegistrationRunHooks) {
     if (!canRegisterOnboarding(actorRole)) throw new ForbiddenException('Only HR or an Admin can register imported employees.');
     const batch = await this.prisma.emsOnboardingBatch.findFirst({
       where: { id: batchId, organizationId }, include: { records: true },
@@ -1612,8 +1630,8 @@ export class EmsService {
       !['REGISTERED', 'EXCLUDED'].includes(record.status) ? initialDuplicates.review(
         duplicateImportPerson(record, organizationId, batch.defaultPhoneCountry), record.duplicateReviewReceipt) : null)]));
     const persistedReady = new Set(batch.records.filter(r => r.status === 'READY').map(r => r.id));
-    const ready = initialHierarchy.orderedIds.map(id => byId.get(id)!).filter(r => r.status === 'READY' || persistedReady.has(r.id));
-    if (!ready.length) throw new BadRequestException('No records are ready to register');
+    const ready = initialHierarchy.orderedIds.map(id => byId.get(id)!).filter(r => run ? run.recordIds.includes(r.id) : r.status === 'READY' || persistedReady.has(r.id));
+    if (!ready.length && !run) throw new BadRequestException('No records are ready to register');
 
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -1632,13 +1650,14 @@ export class EmsService {
     const awaitingAdmin = new Set<string>();
 
     for (const candidate of ready) {
-      if (registrationAccess(actorRole, candidate.beesAccessLevel) === 'ADMIN_REQUIRED') {
+      if (!run && registrationAccess(actorRole, candidate.beesAccessLevel) === 'ADMIN_REQUIRED') {
         awaitingAdmin.add(candidate.id);
         continue;
       }
       try {
         const employee = await retryOnboardingTransaction(() => this.prisma.$transaction(async (tx) => {
           await this.lockReporting(tx, organizationId);
+          const currentActorRole = run ? await run.authorize(tx) : actorRole;
           const lockedOrganization = await tx.organization.findUnique({
             where: { id: organizationId }, select: { communicationChannel: true },
           });
@@ -1658,15 +1677,21 @@ export class EmsService {
             throw new BadRequestException('This import is unavailable or cancelled');
           }
           const found = current.records.find((r) => r.id === candidate.id);
-          if (found && ['REGISTERED', 'EXCLUDED'].includes(found.status)) return null;
+          if (found && ['REGISTERED', 'EXCLUDED'].includes(found.status)) {
+            await run?.checkpoint(tx, candidate.id, 'skipped');
+            return null;
+          }
           if (!found || !['READY', 'NEEDS_FIXING'].includes(found.status)) {
             throw new BadRequestException('This record is no longer ready; validate the import again');
           }
           const record = cleanRecord(found);
           // Recheck the locked row: another reviewer may have changed its access
           // after the initial batch read. This happens before account/employee writes.
-          if (registrationAccess(actorRole, record.beesAccessLevel) === 'ADMIN_REQUIRED')
-            throw new OnboardingAdminRegistrationRequired();
+          if (registrationAccess(currentActorRole, record.beesAccessLevel) === 'ADMIN_REQUIRED') {
+            if (!run) throw new OnboardingAdminRegistrationRequired();
+            await run.checkpoint(tx, candidate.id, 'awaitingAdmin');
+            return null;
+          }
           const additional = extraProfileData(found.extraFields, value => normalisePhone(value, current.defaultPhoneCountry));
           // Warnings (unusable optional values) don't stop registration: those profile fields are left empty.
           const blocking = blockingFindings(additional.findings);
@@ -1679,13 +1704,16 @@ export class EmsService {
             if (problem) nameFindings.push({field, message: problem});
           }
           if (nameFindings.length) throw new OnboardingFieldConflict(nameFindings);
-          const duplicateIndex = await this.duplicateContext(tx, organizationId);
+          // Share reads only within this transaction, before writes. No cross-record cache.
+          const readContext = run ? onboardingReadContext(tx, organizationId) : undefined;
+          const employeeSnapshot = await readContext?.employees();
+          const duplicateIndex = await this.duplicateContext(tx, organizationId, employeeSnapshot);
           const duplicateReview = duplicateIndex.review(
             duplicateImportPerson(found, organizationId, current.defaultPhoneCountry), found.duplicateReviewReceipt);
           if (duplicateReview.blocked) throw new OnboardingDuplicateConflict(duplicateFindings(duplicateReview));
           if (refreshedDuplicateRecord(found, duplicateReview).status !== 'READY')
             throw new BadRequestException('This record is no longer ready; validate the import again');
-          const hierarchy = await this.reportingHierarchy(tx, organizationId, current.records);
+          const hierarchy = await this.reportingHierarchy(tx, organizationId, current.records, employeeSnapshot);
           const reporting = hierarchy.byRecord[record.id];
           if (!reporting || reporting.error || !reporting.target) throw new BadRequestException(reporting?.error ?? 'Choose a reporting person or top-level body');
           let reportingManagerId: string | null = null;
@@ -1698,7 +1726,7 @@ export class EmsService {
             else pendingReportingRecordId = manager.id; // The reporting graph was checked above; only the employee link is pending.
           }
 
-          const peopleContext = await loadPeopleLinks(tx, organizationId, current.records);
+          const peopleContext = await loadPeopleLinks(tx, organizationId, current.records, readContext && employeeSnapshot ? { employees: employeeSnapshot, departments: await readContext.departments() } : undefined);
           const currentDepartments = departmentIndex(peopleContext.departments);
           const departmentError = departmentIssue(record.currentDepartment, currentDepartments);
           if (departmentError) throw new OnboardingFieldConflict([{ field: 'currentDepartment', message: departmentError }]);
@@ -1718,7 +1746,7 @@ export class EmsService {
           if (!roleId) throw new BadRequestException('The selected access level is not configured');
           // N/A is a valid answer, but never an address to send to.
           const email = isNotApplicable(record.workEmail) ? null : record.workEmail?.toLowerCase() ?? null;
-          let user = await this.checkOnboardingIdentity(tx, organizationId, phone);
+          let user = await this.checkOnboardingIdentity(tx, organizationId, phone, employeeSnapshot);
           const reuseExistingAccount = !!user;
           if (!user) {
             user = await tx.user.create({
@@ -1784,6 +1812,7 @@ export class EmsService {
             },
           });
           await this.resolvePendingAssignments(tx, organizationId);
+          await run?.checkpoint(tx, candidate.id, 'registered');
           return employee;
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
         if (employee) results.push({ recordId: candidate.id, employeeId: employee.id });
@@ -1792,7 +1821,9 @@ export class EmsService {
           awaitingAdmin.add(candidate.id);
           continue;
         }
+        if (run && !(error instanceof BadRequestException)) throw error;
         if (!(error instanceof BadRequestException)) {
+          new Logger('EMSRegistration').error({ event: 'registration_interrupted', batchId, organizationId, code: registrationErrorCode(error) });
           // Database/connection/programming failures describe the operation, not the
           // person's data. Preserve already committed registrations and stop safely.
           interruption = error instanceof OnboardingChannelChangedError ? error.message
@@ -1803,27 +1834,39 @@ export class EmsService {
           ? error.message
           : 'Registration could not be completed. Validate and retry; contact an administrator if it persists.';
         // Do not downgrade a record another request has already registered/excluded.
-        await this.prisma.emsOnboardingRecord.updateMany({
+        const recordFailure = async (tx: Prisma.TransactionClient) => {
+          if (run) { await this.lockReporting(tx, organizationId); await run.authorize(tx); }
+        await tx.emsOnboardingRecord.updateMany({
           where: { id: candidate.id, organizationId, status: { in: ['READY', 'NEEDS_FIXING'] }, updatedAt: candidate.updatedAt },
           data: { status: 'NEEDS_FIXING', validationErrors: error instanceof OnboardingDuplicateConflict || error instanceof OnboardingFieldConflict ? error.findings : [{ field: 'registration', message }] },
         });
+          await run?.checkpoint(tx, candidate.id, 'failed');
+        };
+        if (run) await retryOnboardingTransaction(() => this.prisma.$transaction(recordFailure,
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
+        else await recordFailure(this.prisma);
         results.push({ recordId: candidate.id, error: message });
       }
     }
     // A permissions-only skip changes neither records nor the batch status.
-    if (awaitingAdmin.size === ready.length && !interruption) return {
+    if (ready.length > 0 && awaitingAdmin.size === ready.length && !interruption) return {
       registered: 0, failed: 0, awaitingAdmin: awaitingAdmin.size,
-      batch: await this.getOnboardingBatch(organizationId, batchId),
     };
     const after = await this.prisma.emsOnboardingRecord.findMany({
       where: { batchId, organizationId }, select: { status: true },
     });
     const outstanding = after.filter((r) => r.status !== 'REGISTERED' && r.status !== 'EXCLUDED').length;
     const registered = after.filter((r) => r.status === 'REGISTERED').length;
-    await this.prisma.emsOnboardingBatch.updateMany({
-      where: { id: batchId, organizationId, status: { not: 'CANCELLED' } },
-      data: { status: outstanding === 0 ? 'REGISTERED' : registered > 0 ? 'PARTIALLY_REGISTERED' : 'DRAFT' },
-    });
+    const reconcile = async (tx: Prisma.TransactionClient) => {
+      if (run) { await this.lockReporting(tx, organizationId); await run.authorize(tx); }
+      await tx.emsOnboardingBatch.updateMany({
+        where: { id: batchId, organizationId, status: { not: 'CANCELLED' } },
+        data: { status: outstanding === 0 ? 'REGISTERED' : registered > 0 ? 'PARTIALLY_REGISTERED' : 'DRAFT' },
+      });
+    };
+    if (run) await retryOnboardingTransaction(() => this.prisma.$transaction(reconcile,
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
+    else await reconcile(this.prisma);
     if (interruption) {
       const registeredNow = results.filter(r => r.employeeId).length;
       throw new ConflictException({
@@ -1839,7 +1882,6 @@ export class EmsService {
       registered: results.filter((r) => r.employeeId).length,
       failed: results.filter((r) => r.error).length,
       awaitingAdmin: awaitingAdmin.size,
-      batch: await this.getOnboardingBatch(organizationId, batchId),
     };
   }
 

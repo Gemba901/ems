@@ -1,11 +1,15 @@
+import type {RegistrationBatchTotals} from './registration-progress';
 import type {BatchProgress} from './onboarding-batch-progress';
 
-export default function OnboardingStickyProgress({progress, dirty, updating}: {progress: BatchProgress; dirty: boolean; updating: boolean}) {
-  const {counts, included, cancelled, total} = progress;
-  const segments: [number, string][] = [[counts.registered, '#059669'], [counts.ready, '#2563eb'],
+export default function OnboardingStickyProgress({progress, overall, dirty, updating}: {progress: BatchProgress; overall?: RegistrationBatchTotals; dirty: boolean; updating: boolean}) {
+  const {counts, cancelled} = progress;
+  const total = overall?.total ?? progress.total;
+  const included = overall ? overall.total - overall.excluded : progress.included;
+  const registered = overall?.registered ?? counts.registered;
+  const segments: [number, string][] = overall ? [[registered, '#059669']] : [[counts.registered, '#059669'], [counts.ready, '#2563eb'],
     [counts.needsReview + counts.waiting, '#d97706'], [counts.needsFixing, '#dc2626'], [counts.unchecked, '#94a3b8']];
   let offset = 0;
-  const summary = `${counts.registered} of ${included} included records registered. ${counts.ready} ready, ${counts.needsFixing} need fixing, ${counts.needsReview} need duplicate review, ${counts.waiting} waiting on reporting chain, ${counts.unchecked} not validated. ${counts.excluded} excluded. Counts include all pages; filters do not change them.`;
+  const summary = overall ? `${registered} of ${included} included records registered. ${overall.excluded} excluded. Whole-import saved counts; filters do not change them.` : `${counts.registered} of ${included} included records registered. ${counts.ready} ready, ${counts.needsFixing} need fixing, ${counts.needsReview} need duplicate review, ${counts.waiting} waiting on reporting chain, ${counts.unchecked} not validated. ${counts.excluded} excluded. Counts include all pages; filters do not change them.`;
   const state = updating ? 'Updating; showing saved counts. ' : dirty ? 'Unsaved edits are not counted yet. ' : cancelled ? 'Cancelled import; saved counts. ' : '';
   return <div data-sticky-progress title={state + summary} className="flex shrink-0 items-center gap-1.5 text-xs text-slate-700">
     <svg viewBox="0 0 36 36" aria-hidden="true" className="h-4 w-4 shrink-0 -rotate-90 max-sm:hidden">
@@ -17,7 +21,7 @@ export default function OnboardingStickyProgress({progress, dirty, updating}: {p
       })}
     </svg>
     <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">
-      {cancelled && 'Cancelled · '}{included ? <>{counts.registered}/{included}<span className="max-sm:hidden"> registered</span></> : total ? 'All excluded' : 'No records'}
+      {cancelled && 'Cancelled · '}{included ? <>{registered}/{included}<span className="max-sm:hidden"> registered</span></> : total ? 'All excluded' : 'No records'}
     </span>
     <span className="sr-only">{state}{summary}</span>
   </div>;
@@ -27,10 +31,11 @@ export default function OnboardingStickyProgress({progress, dirty, updating}: {p
  * Phones: the top bar's bottom edge shows the import's progress, left to right:
  * green registered, blue ready, amber needs review or waiting, red needs fixing, grey not validated.
  */
-export function OnboardingEdgeProgress({progress}: {progress: BatchProgress}) {
-  const {counts, included, cancelled} = progress;
+export function OnboardingEdgeProgress({progress, overall}: {progress: BatchProgress; overall?: RegistrationBatchTotals}) {
+  const {counts, cancelled} = progress;
+  const included = overall ? overall.total - overall.excluded : progress.included;
   if (!included) return null;
-  const segments: [number, string][] = [[counts.registered, 'bg-emerald-600'], [counts.ready, 'bg-blue-600'],
+  const segments: [number, string][] = overall ? [[overall.registered, 'bg-emerald-600']] : [[counts.registered, 'bg-emerald-600'], [counts.ready, 'bg-blue-600'],
     [counts.needsReview + counts.waiting, 'bg-amber-500'], [counts.needsFixing, 'bg-red-600'], [counts.unchecked, 'bg-slate-300']];
   return <div data-edge-progress aria-hidden="true" className="pointer-events-none absolute inset-x-2 bottom-1 flex h-1 overflow-hidden rounded-full bg-slate-100 sm:hidden">
     {segments.map(([count, colour], index) => count

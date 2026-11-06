@@ -1,3 +1,5 @@
+import { EmsRegistrationService } from './ems-registration.service';
+import { Optional } from '@nestjs/common';
 import { UpdateDepartmentHodDto, UpdateEmployeeRelieversDto, UpdateEmployeeHodDto } from './dto/onboarding.dto';
 import { UpdateEmployeeReportingDto } from './dto/onboarding.dto';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
@@ -29,7 +31,7 @@ import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationC
 @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, RolesGuard, ModuleGuard, EmsDemoToolsGuard)
 @RequiresModule(ModuleType.EMS)
 export class EmsController {
-  constructor(private ems: EmsService, private invitations: EmsInvitationsService) {}
+  constructor(private ems: EmsService, private invitations: EmsInvitationsService, @Optional() private registration?: EmsRegistrationService) {}
 
   /** GET /ems/me — employee's own profile + completion. Every user has a profile, so this isn't EMS-gated. */
   @Get('me')
@@ -336,14 +338,26 @@ export class EmsController {
     return this.ems.setOnboardingColumnDestination(user.organizationId, id, user.userId, dto);
   }
 
-  /** POST /ems/onboarding/batches/:id/register — turn ready records into employees */
+  /** POST /ems/onboarding/batches/:id/register — start or return a durable registration run */
   @Post('onboarding/batches/:id/register')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
   async registerOnboardingBatch(
     @Param('id') id: string,
-    @CurrentUser() user: { organizationId: string; roleLevel: Role },
+    @CurrentUser() user: { organizationId: string; roleLevel: Role; userId: string },
   ) {
-    return this.ems.registerOnboardingBatch(user.organizationId, id, user.roleLevel);
+    return this.registration!.start(user.organizationId, id, user.userId);
+  }
+
+  @Get('onboarding/batches/:id/registration')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async registrationStatus(@Param('id') id: string, @CurrentUser() user: { organizationId: string }) {
+    return this.registration!.status(user.organizationId, id);
+  }
+
+  @Post('onboarding/batches/:id/registration/stop')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async stopRegistration(@Param('id') id: string, @CurrentUser() user: { organizationId: string; userId: string }) {
+    return this.registration!.stop(user.organizationId, id, user.userId);
   }
 
   /** PATCH /ems/onboarding/batches/:id/cancel — abandon an import */

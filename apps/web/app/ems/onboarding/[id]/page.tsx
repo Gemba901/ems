@@ -1,7 +1,9 @@
 "use client";
+import { useEmsRegistration } from '@/hooks/useEmsRegistration';
+import RegistrationProgressPanel from '@/components/ems/RegistrationProgressPanel';
 import { personFullName } from '@/components/ems/person-name';
 import { FIVE_S_LOCATION_LABELS, normaliseFiveSLocation } from "@/components/ems/five-s-location";
-import { ADMIN_REGISTRATION_MESSAGE, canRegisterOnboarding, registrationAccess, registrationOutcomeMessage } from '@/components/ems/onboarding-access';
+import { ADMIN_REGISTRATION_MESSAGE, canRegisterOnboarding, registrationAccess } from '@/components/ems/onboarding-access';
 import ImportedExtraFields from "@/components/ems/ImportedExtraFields";
 import { REPORTING_BODIES, isReportingBody, reportingBodyLabel } from '@/components/ems/reporting-bodies';
 
@@ -30,7 +32,7 @@ import { suggestedHodConfirmations } from "@/components/ems/onboarding-hod-bulk"
 import ConfirmDialog from "@/components/ems/ConfirmDialog";
 import { OnboardingEdgeProgress } from "@/components/ems/OnboardingStickyProgress";
 import { pageWindow, recordPage } from "@/components/ems/onboarding-pagination";
-import { safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
+import { safeReviewReturn, reviewRecordHref } from "@/components/ems/onboarding-review-navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -178,7 +180,7 @@ const ISSUE_TYPES: {value: IssueType; label: string}[] = [
   {value: 'identity', label: 'Names & employee code'}, {value: 'work', label: 'Work details'},
 ];
 const RECORD_SORTS: {value: RecordSort; label: string}[] = [
-  {value: 'import', label: 'Import order'}, {value: 'fewest', label: 'Fewest issues first'}, {value: 'most', label: 'Most issues first'},
+  {value: 'import', label: 'Reporting order'}, {value: 'fewest', label: 'Fewest issues first'}, {value: 'most', label: 'Most issues first'},
   {value: 'name', label: 'Name A–Z'}, {value: 'recent', label: 'Recently changed'},
 ];
 /** Which kind of problem a finding is, for the Issue type filter. */
@@ -1042,7 +1044,7 @@ function RecordEditor({
       <div className="space-y-2" data-viewport-anchor={`manager:${record.id}`} data-record-id={record.id} data-editor-field="reportingTarget" tabIndex={-1}>
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-slate-800">Reporting to</h3>{reportingEdited && <span className="text-xs text-amber-800">Unsaved change</span>}</div>
         {isReportingBody(draft.reportingTarget) ? <p className="text-sm font-semibold text-slate-800">{reportingBodyLabel(draft.reportingTarget)}</p> : selectablePeople.find(person=>person.target===draft.reportingTarget)
-          ? <PersonSummary person={selectablePeople.find(person=>person.target===draft.reportingTarget)!} />
+          ? <PersonSummary person={selectablePeople.find(person=>person.target===draft.reportingTarget)!} returnTo={reviewRecordHref(batch.id, record.id, reviewReturnTo)} />
           : <p className="text-sm text-slate-700">{draft.reportingToName ? `Imported: ${draft.reportingToName} · ${draft.reportingToDesignation || 'Job title missing'}` : 'Choose a reporting person or top-level body.'}</p>}
         {!locked && <details data-reporting-chooser className="text-xs text-slate-700">
           <summary className="cursor-pointer font-semibold text-purple-800 underline underline-offset-2">{draft.reportingTarget ? 'Change reporting person' : 'Choose or correct reporting person'}</summary>
@@ -1078,7 +1080,7 @@ function RecordEditor({
         {locked && record.employeeId && <Link className="inline-block text-sm text-blue-600 underline" href={`/ems/employees/${record.employeeId}#reporting-manager`}>View or correct reporting assignment on employee profile</Link>}
       </div>
       {peopleLinks && <>
-        <DepartmentHodEditor recordId={record.id} hod={peopleLinks.hod} options={peopleOptions} directory={batch.peopleLinks?.hodDirectory} evidence={batch.peopleLinks?.hodEvidence?.[peopleLinks.hod.evidenceKey ?? '']}
+        <DepartmentHodEditor recordId={record.id} returnTo={reviewRecordHref(batch.id, record.id, reviewReturnTo)} hod={peopleLinks.hod} options={peopleOptions} directory={batch.peopleLinks?.hodDirectory} evidence={batch.peopleLinks?.hodEvidence?.[peopleLinks.hod.evidenceKey ?? '']}
           importedName={record.hodName} importedDesignation={record.hodDesignation}
           disabled={locked || record.status === 'EXCLUDED' || saving} recordDirty={dirty}
           onDirtyChange={setHodDirty} onSave={onSaveHod} onSaved={updated => {setHodDirty(false); onHodSaved(updated);}} />
@@ -1149,7 +1151,7 @@ function RecordEditor({
       {peopleLinks && <section aria-label="Relievers" className="space-y-3"><h3 className="text-sm font-semibold text-slate-800">Relievers</h3>
         <div className="grid gap-4 sm:grid-cols-2">
           {([1, 2] as const).map(slot => <div key={slot} data-editor-field={`reliever${slot}Name`} tabIndex={-1} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-            <RelieverEditor id={`reliever-${slot}-${record.id}`} label={slot === 1 ? 'First reliever' : 'Second reliever'}
+            <RelieverEditor returnTo={reviewRecordHref(batch.id, record.id, reviewReturnTo)} id={`reliever-${slot}-${record.id}`} label={slot === 1 ? 'First reliever' : 'Second reliever'}
               value={draft[`reliever${slot}Target`] ?? ''} options={relieverOptions} link={slot === 1 ? peopleLinks.first : peopleLinks.second}
               suggestionsCurrent={(draft[`reliever${slot}Name`] ?? '') === (record[`reliever${slot}Name`] ?? '') && (draft[`reliever${slot}Designation`] ?? '') === (record[`reliever${slot}Designation`] ?? '')}
               name={draft[`reliever${slot}Name`] ?? ''} designation={draft[`reliever${slot}Designation`] ?? ''} department={draft.currentDepartment}
@@ -1256,7 +1258,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     setViewportAction({kind: 'reveal', id: recordId, editor: false});
   };
   const toggleRow = (recordId: string) => {
-    if (busy || !mayLeaveEditor()) return;
+    if (foregroundBusy || !mayLeaveEditor()) return;
     const nextOpen = openRow === recordId ? null : recordId;
     // Opening a different record yourself starts a new task: earlier "Return to …" points no longer apply.
     if (nextOpen && returnPoints.length && returnPoints[returnPoints.length - 1]?.openId !== nextOpen) setReturnPoints([]);
@@ -1264,7 +1266,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     setViewportAction({kind: 'reveal', id: recordId, editor: !!nextOpen});
   };
   const visitRow = (targetId: string, fromId?: string, reviewOrigin = false) => {
-    if (busy || !batch?.records.some(r => r.id === targetId) || !mayLeaveEditor()) return;
+    if (foregroundBusy || !batch?.records.some(r => r.id === targetId) || !mayLeaveEditor()) return;
     if (fromId && fromId !== targetId) {
       const record = batch?.records.find(r => r.id === fromId);
       const point = returnPoint(`manager:${targetId}`, batch?.hierarchy.byRecord[fromId]?.chain?.[0]?.label || personFullName(record) || 'record');
@@ -1282,7 +1284,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     setViewportAction({kind: 'reveal', id: targetId, editor: true});
   };
   const visitChartRecord = (recordId: string) => {
-    if (busy || !batch?.records.some(record => record.id === recordId) || !mayLeaveEditor()) return;
+    if (foregroundBusy || !batch?.records.some(record => record.id === recordId) || !mayLeaveEditor()) return;
     const point = returnPoint('chart', 'hierarchy chart');
     point.viewport = {scroll: scrollSnapshot(pageRef.current), anchor: 'batch-hierarchy', offset: 0};
     setReturnPoints(points => [...points, point]);
@@ -1291,7 +1293,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   };
   const viewSavedRow = () => {
     const record = batch?.records.find(r => r.id === saveNotice?.id);
-    if (busy || !saveNotice || !record || !mayLeaveEditor()) return;
+    if (foregroundBusy || !saveNotice || !record || !mayLeaveEditor()) return;
     // Read the current status: a later validation may have changed the original notice's result.
     const nextOpen = record.status === 'NEEDS_FIXING' || record.status === 'DRAFT' ? record.id : null;
     const point = returnPoint(`notice:${saveNotice.sequence}`);
@@ -1303,7 +1305,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   };
   const returnToRecord = (index = returnPoints.length - 1) => {
     const point = returnPoints[index];
-    if (busy || !point || !mayLeaveEditor()) return;
+    if (foregroundBusy || !point || !mayLeaveEditor()) return;
     const record = batch?.records.find(r => r.id === point.openId);
     const becameClosed = record && record.status !== point.openStatus && ['READY', 'EXCLUDED', 'REGISTERED'].includes(record.status);
     setEditorDirty(false);
@@ -1374,7 +1376,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, '', next);
   }, [filters]);
   const changeFilters = (next: RecordFilters) => {
-    if (busy) return;
+    if (foregroundBusy) return;
     // Preserve the open draft. If it falls outside the filters, show it explicitly as an extra row.
     setFilters(next); setRevealedId(null); setPageNumber(1);
   };
@@ -1540,18 +1542,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     onError: (error: Error, recordId) => failedAction('include', error, recordId),
   });
 
-  const register = useMutation({
-    onMutate: beginAction,
-    mutationFn: () => EmsService.registerOnboardingBatch(id, accessToken!),
-    onSuccess: (result) => {
-      finishBatchAction(result.batch, registrationOutcomeMessage(result));
-      // Offer, never send: the invitation dialog shows who gets a link before anything goes out.
-      if (result.registered > 0) setSaveNotice(notice => notice ? {...notice, invite: result.registered} : notice);
-      queryClient.invalidateQueries({ queryKey: ["ems-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["ems-employee-import-batches"] });
-    },
-    onError: (error: Error) => { failedAction('register', error); queryClient.invalidateQueries({queryKey}); },
-  });
+  const registration = useEmsRegistration(id, accessToken, canRegisterOnboarding(user?.roleLevel));
+  const register = registration.start;
 
   // "Exclude remaining records" dialog for a partially registered import.
   const [excludeRemainingOpen, setExcludeRemainingOpen] = useState(false);
@@ -1576,7 +1568,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         className={compact ? link : `mx-2 mb-2 block py-1 text-left text-sm ${FEEDBACK_LINK}`}>Return to review: {reviewReturnPoint.name || 'record'}</button>}
       {externalReturn && <Link href={externalReturn}
         aria-disabled={busy || undefined}
-        onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }}
+        onClick={event => { if (foregroundBusy || !mayLeavePage()) event.preventDefault(); }}
         className={compact ? link : `mx-3 my-2 block py-1 text-sm ${FEEDBACK_LINK}`}>Return to review record</Link>}
     </>;
   };
@@ -1609,8 +1601,9 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const [hodBulkProgress, setHodBulkProgress] = useState<string | undefined>();
   const [hodBulkError, setHodBulkError] = useState<string | null>(null);
   const hodSuggestions = useMemo(() => suggestedHodConfirmations(batch), [batch]);
-  const busy = saveHod.isPending || undoDuplicate.isPending || confirmDuplicate.isPending || save.isPending || exclude.isPending || include.isPending ||
-    updateCountry.isPending || validate.isPending || register.isPending || hodBulkRunning;
+  const foregroundBusy = saveHod.isPending || undoDuplicate.isPending || confirmDuplicate.isPending || save.isPending || exclude.isPending || include.isPending ||
+    updateCountry.isPending || validate.isPending || hodBulkRunning;
+  const busy = foregroundBusy || registration.busy;
   async function confirmSuggestedHods(keys: string[]) {
     setHodBulkRunning(true); setHodBulkError(null);
     let latest = batch, done = 0;
@@ -1661,11 +1654,26 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const mutationError = actionError && !actionError.recordId && actionError.kind !== 'country' ? actionError.message : null;
 
   const progress = useMemo(() => summarizeBatchProgress(batch), [batch]);
+  // Never add per-run counts to a cached batch: a refresh/resume could count them twice.
+  const overallRegistration = registration.run?.batchTotals ?? {
+    total: progress.total, registered: progress.counts.registered, excluded: progress.counts.excluded,
+  };
+  // Restore the detailed status colours after the full batch catches up.
+  const liveRegistrationTotals = registration.run?.batchTotals && (registration.busy
+    || overallRegistration.total !== progress.total || overallRegistration.registered !== progress.counts.registered
+    || overallRegistration.excluded !== progress.counts.excluded) ? overallRegistration : undefined;
   const {ready: readyCount, registered: registeredCount} = progress.counts;
   const registerableReadyCount = records.filter(record => record.status === 'READY'
     && registrationAccess(user?.roleLevel, record.beesAccessLevel) === 'ALLOWED').length;
   const adminRequiredReadyCount = records.filter(record => record.status === 'READY'
     && registrationAccess(user?.roleLevel, record.beesAccessLevel) === 'ADMIN_REQUIRED').length;
+  const registrationStartDisabled = busy || registration.startBlocked || editorDirty
+    || !canRegisterOnboarding(user?.roleLevel) || registerableReadyCount === 0 || closed || countryUnsaved;
+  const resumeBlockedReason = editorDirty || countryUnsaved ? 'Save or discard your edits before resuming.'
+    : !canRegisterOnboarding(user?.roleLevel) ? 'An authorised HR user or Admin must resume registration.'
+    : closed ? 'This import is closed.'
+    : !registerableReadyCount ? 'Validate or review the remaining records before resuming.'
+    : 'Wait for the current action and saved status to be confirmed.';
   const displayedRecords = orderRecords(records.filter(r => matchingIds.has(r.id) || r.id === openRow || r.id === revealedId), filters);
   const extraCount = displayedRecords.length - matchingIds.size;
   const departments = [...new Map(records.map(r => [departmentKey(r.currentDepartment),
@@ -1678,7 +1686,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     ? records.find(r => r.id === openRow) : undefined;
   const pageRecords = pinnedRecord ? [pinnedRecord, ...pagination.rows] : pagination.rows;
   const changePage = (next: number, size = pageSize) => {
-    if (busy || !mayLeaveEditor()) return;
+    if (foregroundBusy || !mayLeaveEditor()) return;
     setEditorDirty(false); setOpenRow(null); setRevealedId(null);
     setPageSize(size); setPageNumber(next);
     setViewportAction({kind: 'context', snapshot: {scroll: scrollSnapshot(pageRef.current), anchor: 'batch-records', offset: 0}, focus: true});
@@ -1697,7 +1705,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   }, []);
   const pageControls = (location: string) => <OnboardingPageControls location={location}
     total={displayedRecords.length} page={pagination.page} pages={pagination.pages} start={pagination.start} end={pagination.end}
-    pageSize={pageSize} busy={busy} pinned={!!pinnedRecord} filtered={filterActive} onChange={changePage} />;
+    pageSize={pageSize} busy={foregroundBusy} pinned={!!pinnedRecord} filtered={filterActive} onChange={changePage} />;
   const recordPositions = new Map(records.map((record, index) => [record.id, index + 1]));
   const blockerLocation = (recordId?: string) => {
     if (!recordId) return undefined;
@@ -1742,7 +1750,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
 
         <div className="space-y-5">
         <div data-batch-toolbar role="navigation" aria-label="Batch actions" style={{top: 'var(--ems-batch-top, 0px)'}} className="sticky z-30 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm max-sm:flex-nowrap max-sm:gap-1.5 max-sm:px-2 max-sm:pb-2.5" data-viewport-anchor="batch-heading">
-          <Link href="/ems/onboarding" aria-label="Back to imports" onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 max-sm:p-1">
+          <Link href="/ems/onboarding" aria-label="Back to imports" onClick={event => { if (foregroundBusy || !mayLeavePage()) event.preventDefault(); }} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 max-sm:p-1">
             <span className="max-sm:hidden">Back to imports</span>
             <ArrowLeft className="h-5 w-5" />
           </Link>
@@ -1757,10 +1765,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             aria-label={progressOpen ? 'Hide progress details' : 'Show progress details'}
             onClick={() => setProgressOpen(open => !open)}
             className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700 max-sm:px-1">
-            <OnboardingStickyProgress progress={progress} dirty={editorDirty} updating={busy} />
+            <OnboardingStickyProgress overall={liveRegistrationTotals} progress={progress} dirty={editorDirty} updating={busy} />
             {progressOpen ? <ChevronDown aria-hidden="true" className="h-3 w-3 text-slate-500 max-sm:hidden" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 text-slate-500 max-sm:hidden" />}
           </button>}
-          {batch && <OnboardingEdgeProgress progress={progress} />}
+          {batch && <OnboardingEdgeProgress overall={liveRegistrationTotals} progress={progress} />}
           <button
             onClick={() => validate.mutate()}
             disabled={busy || editorDirty || !batch || closed || countryUnsaved}
@@ -1771,14 +1779,14 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
           </button>
 
           <button
-            onClick={() => register.mutate()}
-            disabled={busy || editorDirty || !canRegisterOnboarding(user?.roleLevel) || registerableReadyCount === 0 || closed || countryUnsaved}
+            onClick={() => { beginAction(); registration.stop.reset(); register.mutate(); }}
+            disabled={registrationStartDisabled}
             title={adminRequiredReadyCount && !registerableReadyCount ? "An Admin must register the remaining Ready records" : readyCount === 0 ? "No records are ready to register" : undefined}
-            className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed max-sm:px-2.5 ${registerableReadyCount === 0 && !register.isPending ? 'max-sm:hidden' : ''}`}
+            className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed max-sm:px-2.5 ${registerableReadyCount === 0 && !registration.buttonLabel ? 'max-sm:hidden' : ''}`}
           >
-            {register.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+            {registration.buttonLabel && !registration.disconnected ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
             {/* Phones: "Register 12", shown only when something is ready. */}
-            {adminRequiredReadyCount
+            {registration.buttonLabel ? <>{registration.buttonLabel}</> : adminRequiredReadyCount
               ? <>Register {registerableReadyCount}<span className="max-sm:hidden"> eligible</span></>
               : <>Register<span className="max-sm:hidden"> all</span> {registerableReadyCount}<span className="max-sm:hidden"> ready</span></>}
           </button>
@@ -1815,6 +1823,13 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
           {registerableReadyCount > 0 && <> You can register the other {registerableReadyCount}.</>}
           {' '}Their validation status stays Ready.
         </p>}
+        <RegistrationProgressPanel overall={overallRegistration} run={registration.run} disconnected={registration.disconnected}
+          checking={registration.checking} onRefresh={registration.refresh} onStop={() => registration.stop.mutate()}
+          stopping={registration.stop.isPending} starting={register.isPending}
+          onResume={() => { if (!registrationStartDisabled) { beginAction(); registration.stop.reset(); register.mutate(); } }}
+          resumeDisabled={registrationStartDisabled} resumeBlockedReason={resumeBlockedReason}
+          error={registration.stop.isError ? 'Could not confirm the pause. Check saved progress before trying again.'
+            : register.isError ? `The start request was not confirmed: ${register.error.message}. Check saved progress before retrying.` : undefined} />
         <div data-batch-settings className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
         {batch && <div data-channel-notice aria-live="polite" className={`min-w-0 rounded-md px-2 py-1 text-xs font-medium ${channelError || (!channelLoading && !channelData?.communicationChannel) ? 'bg-amber-100 text-amber-950' : 'bg-purple-50 text-purple-950'}`}>
           {channelLoading || (channelFetching && channelError) ? 'Checking communication channel…'
@@ -1877,7 +1892,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         <div className="space-y-2">
             {batch ? <div id="batch-progress-details" hidden={!progressOpen}>
               <p className="sm:hidden mb-2 break-words text-sm font-bold text-slate-900">{batch.label ?? "Import"}</p>
-              <OnboardingBatchProgress progress={progress} dirty={editorDirty} updating={busy} />
+              <OnboardingBatchProgress overall={liveRegistrationTotals} progress={progress} dirty={editorDirty} updating={busy} />
             </div> : <p className="text-sm text-slate-500">Loading…</p>}
             {register.isSuccess && (
               <p className="text-xs text-emerald-700">
@@ -1889,18 +1904,18 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
 
         {mutationError && <p role="alert" className="text-sm text-red-600">{mutationError}</p>}
 
-        {batch && <OnboardingHierarchyChart batch={batch} busy={busy} dirty={editorDirty} onViewRecord={visitChartRecord} />}
+        {batch && <OnboardingHierarchyChart batch={batch} busy={foregroundBusy} dirty={editorDirty} onViewRecord={visitChartRecord} />}
 
         {batch && <section aria-label="Filter records" data-viewport-anchor="batch-filters" className="rounded-xl border border-slate-200 bg-white px-3 py-2 space-y-2">
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1"><label htmlFor="onboarding-filter-name" className="sr-only">Name or employee code</label>
-              <input id="onboarding-filter-name" type="search" disabled={busy} value={filters.search} onChange={event => changeFilters({...filters, search: event.target.value})}
+              <input id="onboarding-filter-name" type="search" disabled={foregroundBusy} value={filters.search} onChange={event => changeFilters({...filters, search: event.target.value})}
                 placeholder="Search name or employee code" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800" />
             </div>
             {/* PC: with Filters open, Department and Status join the search row (the search box has room to spare). */}
             {filtersOpen && <div className="hidden shrink-0 items-center gap-2 lg:flex" data-filters-top>
             <div className="text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-department-top" className="sr-only">Department</label>
-              <select id="onboarding-filter-department-top" disabled={busy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
+              <select id="onboarding-filter-department-top" disabled={foregroundBusy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
                 className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All departments</option>
                 {filters.department && !departments.some(d => d.key === filters.department) && <option value={filters.department}>{filters.department === 'MISSING' ? 'Not provided' : filters.department.replace(/^department:/, '')} (no records)</option>}
@@ -1908,7 +1923,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               </select>
             </div>
             <div className="text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-status-top" className="sr-only">Status</label>
-              <select id="onboarding-filter-status-top" disabled={busy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
+              <select id="onboarding-filter-status-top" disabled={foregroundBusy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
                 className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All statuses</option>
                 <option value="READY">Ready</option><option value="NEEDS_FIXING">Needs fixing</option>
@@ -1919,12 +1934,12 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             </div>}
             {/* PC: Sort is always on the search row. */}
             <div className="hidden shrink-0 items-center gap-2 text-xs font-medium text-slate-600 lg:flex"><label htmlFor="onboarding-filter-sort-top">Sort</label>
-              <select id="onboarding-filter-sort-top" disabled={busy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
+              <select id="onboarding-filter-sort-top" disabled={foregroundBusy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
                 className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 {RECORD_SORTS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
-            <button type="button" disabled={busy} aria-expanded={filtersOpen} aria-controls="onboarding-filter-panel" data-filters-button
+            <button type="button" disabled={foregroundBusy} aria-expanded={filtersOpen} aria-controls="onboarding-filter-panel" data-filters-button
               onClick={() => setFiltersOpen(value => !value)}
               className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${activeFilterCount ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-300 text-slate-700'}`}>
               <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
@@ -1933,7 +1948,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
           </div>
           <div id="onboarding-filter-panel" hidden={!filtersOpen} className="grid min-w-0 grid-cols-1 items-end gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(8rem,1fr))_auto]">
             <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-department">Department</label>
-              <select id="onboarding-filter-department" disabled={busy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
+              <select id="onboarding-filter-department" disabled={foregroundBusy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All departments</option>
                 {filters.department && !departments.some(d => d.key === filters.department) && <option value={filters.department}>{filters.department === 'MISSING' ? 'Not provided' : filters.department.replace(/^department:/, '')} (no records)</option>}
@@ -1941,7 +1956,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               </select>
             </div>
             <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-status">Status</label>
-              <select id="onboarding-filter-status" disabled={busy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
+              <select id="onboarding-filter-status" disabled={foregroundBusy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 <option value="">All statuses</option>
                 <option value="READY">Ready</option><option value="NEEDS_FIXING">Needs fixing</option>
@@ -1950,25 +1965,25 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               </select>
             </div>
             <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-duplicates">Duplicate check</label>
-              <select id="onboarding-filter-duplicates" disabled={busy} value={filters.duplicate}
+              <select id="onboarding-filter-duplicates" disabled={foregroundBusy} value={filters.duplicate}
                 onChange={event => changeFilters({...filters, duplicate: event.target.value as DuplicateFilter})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 {DUPLICATE_FILTERS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
             <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-issue">Issue type</label>
-              <select id="onboarding-filter-issue" disabled={busy} value={filters.issue} onChange={event => changeFilters({...filters, issue: event.target.value as IssueType})}
+              <select id="onboarding-filter-issue" disabled={foregroundBusy} value={filters.issue} onChange={event => changeFilters({...filters, issue: event.target.value as IssueType})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 {ISSUE_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
             <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-sort">Sort</label>
-              <select id="onboarding-filter-sort" disabled={busy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
+              <select id="onboarding-filter-sort" disabled={foregroundBusy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
                 {RECORD_SORTS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
-            <button type="button" disabled={busy} aria-expanded={moreFiltersOpen} aria-controls="onboarding-more-filters"
+            <button type="button" disabled={foregroundBusy} aria-expanded={moreFiltersOpen} aria-controls="onboarding-more-filters"
               onClick={() => setMoreFiltersOpen(value => !value)}
               className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">
               {moreFiltersOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -1976,7 +1991,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             </button>
           </div>
           <div id="onboarding-more-filters" hidden={!filtersOpen || !moreFiltersOpen} className="space-y-2 border-t border-slate-100 pt-2">
-            <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 disabled:opacity-60">
+            <fieldset disabled={foregroundBusy} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 disabled:opacity-60">
             <div className="min-w-0 text-xs font-medium text-slate-600 lg:col-span-1"><label htmlFor="onboarding-filter-reporting">Reporting branch</label>
               <select id="onboarding-filter-reporting" value={selectedTarget} onChange={event => changeFilters({...filters, reportingTarget: event.target.value,
                 reportingLabel: event.target.selectedOptions[0]?.text ?? ''})}
@@ -1997,7 +2012,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             <p id="reporting-filter-help" className="text-xs text-slate-500">Full branch includes the selected person and their known descendants. Direct reports shows the next level. Only this import's records are listed.</p>
           </div>
           {advancedFilterCount > 0 && <div aria-label="Active additional filters" className="flex min-w-0 flex-wrap gap-1.5">
-            {filters.reportingTarget && <button type="button" disabled={busy} onClick={() => changeFilters({...filters, reportingTarget: '', reportingLabel: ''})}
+            {filters.reportingTarget && <button type="button" disabled={foregroundBusy} onClick={() => changeFilters({...filters, reportingTarget: '', reportingLabel: ''})}
               aria-label="Remove reporting branch filter" className="max-w-full break-words rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-left text-xs text-purple-900 disabled:opacity-50">
               Branch: {isReportingBody(selectedTarget) ? reportingBodyLabel(selectedTarget) : filterModel.people.find(person => person.target === selectedTarget)?.label || filters.reportingLabel || 'Selected person'} · {filters.scope === 'DIRECT' ? 'Direct reports' : 'Full branch'} <span aria-hidden="true">×</span>
             </button>}
@@ -2006,9 +2021,9 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             <p role="status" aria-live="polite" className="font-medium text-slate-700" data-filter-count>
               Showing {matchingIds.size} of {records.length} records{extraCount > 0 && ` · ${extraCount} extra shown outside filters`} · Page {pagination.page} of {pagination.pages}
             </p>
-            <button type="button" disabled={busy || !filterActive} onClick={() => changeFilters(EMPTY_FILTERS)}
+            <button type="button" disabled={foregroundBusy || !filterActive} onClick={() => changeFilters(EMPTY_FILTERS)}
               className="ml-auto rounded py-1 font-medium text-purple-800 underline disabled:opacity-40">Clear filters</button>
-            {extraCount > 0 && <button type="button" disabled={busy} onClick={hideExtraRecords}
+            {extraCount > 0 && <button type="button" disabled={foregroundBusy} onClick={hideExtraRecords}
               className="rounded py-1 text-purple-800 underline disabled:opacity-50">Hide extra {extraCount === 1 ? 'record' : 'records'}</button>}
           </div>
           {filters.duplicate === 'NO_MATCHES' && <p className="text-xs text-slate-500">No matches found by the latest check; this does not establish that a person is unique. Records without a duplicate check are not included.</p>}
@@ -2103,7 +2118,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                           )}
                           {rec.status === 'EXCLUDED' && (
                             <button type="button" data-row-put-back
-                              disabled={busy || editorDirty || countryUnsaved || (closed && batch?.status !== "REGISTERED")}
+                              disabled={foregroundBusy || editorDirty || countryUnsaved || (closed && batch?.status !== "REGISTERED")}
                               onClick={event => { event.stopPropagation(); include.mutate(rec.id); }}
                               onKeyDown={event => event.stopPropagation()}
                               className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 disabled:opacity-50 disabled:no-underline">
@@ -2147,7 +2162,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                                 return link ? <button type="button" disabled={busy} onClick={link.go} title={link.label} aria-label={link.label}
                                   className={`shrink-0 text-[11px] ${FEEDBACK_LINK}`}>Return</button>
                                   : externalReturn ? <Link href={externalReturn} title="Return to review record" aria-label="Return to review record"
-                                    onClick={event => { if (busy || !mayLeavePage()) event.preventDefault(); }} className={`shrink-0 text-[11px] ${FEEDBACK_LINK}`}>Return</Link> : null;
+                                    onClick={event => { if (foregroundBusy || !mayLeavePage()) event.preventDefault(); }} className={`shrink-0 text-[11px] ${FEEDBACK_LINK}`}>Return</Link> : null;
                               })() : null}
                               actorRole={user?.roleLevel}
                               toolbarHost={editorToolbarHost}

@@ -44,3 +44,16 @@ test('pending links require the actual source batch and focus its record',()=>{
  assert.equal(personViewLink({...pending,batchId:undefined}),null);
  assert.equal(personViewLink({...pending,target:'BOARD'}),null);
 });
+
+
+test('employee and pending HOD/person links preserve the originating review record',()=>{
+ const origin='/ems/onboarding/source?record=source-row';
+ for(const person of [registered,pending]){
+  const destination=new URL(personViewLink(person,origin)!.href,'https://example.invalid');
+  assert.equal(destination.searchParams.get('returnTo'),origin);
+ }
+});
+test('untrusted person return destinations are never carried into links',()=>{
+ for(const destination of ['https://evil.invalid','//evil.invalid','/ems/employees/unrelated'])
+  assert.equal(personViewLink(registered,destination)!.href,personViewLink(registered)!.href);
+});

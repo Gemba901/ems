@@ -150,11 +150,11 @@ describe('Onboarding access authority', () => {
     expect(db.emsAccountLink.create).toHaveBeenCalledWith(expect.objectContaining({data: expect.objectContaining({userId: 'existing', roleId: 14})}));
   });
 
-  it('passes the trusted caller role from the controller and keeps its existing route roles', async () => {
+  it('passes the trusted actor and company to the durable run and keeps its route roles', async () => {
     const register = jest.fn().mockResolvedValue({registered:0, failed:0, awaitingAdmin:1});
-    const controller = new EmsController({registerOnboardingBatch:register} as unknown as EmsService, {} as never);
-    await controller.registerOnboardingBatch('b1', {organizationId:'org1',roleLevel:Role.HR});
-    expect(register).toHaveBeenCalledWith('org1','b1',Role.HR);
+    const controller = new EmsController({} as EmsService, {} as never, {start: register} as never);
+    await controller.registerOnboardingBatch('b1', {organizationId:'org1',roleLevel:Role.HR,userId:'actor1'});
+    expect(register).toHaveBeenCalledWith('org1','b1','actor1');
     expect(Reflect.getMetadata('roles', controller.registerOnboardingBatch)).toEqual(expect.arrayContaining([Role.ADMIN,Role.SUPER_ADMIN,Role.HR]));
   });
 

@@ -7,8 +7,17 @@ export function isRetryableOnboardingConflict(error: unknown): boolean {
   if (error.code === 'P2034') return true;
   if (error.code !== 'P2010' || !('meta' in error)) return false;
   const meta = error.meta;
-  return !!meta && typeof meta === 'object' && 'code' in meta
-    && (meta.code === '40001' || meta.code === '40P01');
+  if (!meta || typeof meta !== 'object') return false;
+  const aborted = (code: unknown) => code === '40001' || code === '40P01';
+  // Older Prisma raw-query errors expose the PostgreSQL SQLSTATE directly.
+  if ('code' in meta && aborted(meta.code)) return true;
+  // Prisma 7 driver adapters preserve SQLSTATE on the adapter error's cause.
+  // Inspect structured fields only; never infer safe replay from message text.
+  const adapter = 'driverAdapterError' in meta ? meta.driverAdapterError : undefined;
+  if (!adapter || typeof adapter !== 'object' || !('cause' in adapter)) return false;
+  const cause = adapter.cause;
+  return !!cause && typeof cause === 'object' && 'originalCode' in cause
+    && aborted(cause.originalCode);
 }
 
 export async function retryOnboardingTransaction<T>(run: () => Promise<T>): Promise<T> {

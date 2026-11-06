@@ -1,5 +1,7 @@
 import type {HodDirectoryEntry, PersonSuggestion, ReportingOption} from '@/services/ems.service';
 
+import { reviewEmployeeHref, reviewRecordHref } from './onboarding-review-navigation';
+
 export type PersonChoiceNote = {badge?: string; detail?: string};
 
 /** Combine evidence by exact target ID. Never merge people by name, code or workplace. */
@@ -34,10 +36,10 @@ export function hodPickerModel(options: readonly ReportingOption[], directory: r
 }
 
 /** Pending records only receive a link when their actual source batch is supplied. */
-export function personViewLink(person: ReportingOption): {href: string; label: string} | null {
+export function personViewLink(person: ReportingOption, returnTo?: string | null): {href: string; label: string} | null {
   if (person.target.startsWith('employee:') && person.target.slice(9))
-    return {href:`/ems/employees/${encodeURIComponent(person.target.slice(9))}`, label:'Open employee profile'};
+    return {href:reviewEmployeeHref(person.target.slice(9), returnTo ?? ''), label:'Open employee profile'};
   if (person.target.startsWith('record:') && person.target.slice(7) && person.batchId)
-    return {href:`/ems/onboarding/${encodeURIComponent(person.batchId)}?${new URLSearchParams({record:person.target.slice(7)})}`,label:'Open import record'};
+    return {href:reviewRecordHref(person.batchId, person.target.slice(7), returnTo),label:'Open import record'};
   return null;
 }

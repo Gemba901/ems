@@ -1,3 +1,4 @@
+import { decodeRegistrationProgress, type RegistrationProgress } from '@/components/ems/registration-progress';
 import type { FiveSLocationCategory } from '@/components/ems/five-s-location';
 import type { ImportedExtraField } from '@/components/ems/onboarding-extra-fields';
 import type { InvitationKind, InvitationStatus, InvitationSummary } from "@/components/ems/ems-invitations";
@@ -897,12 +898,27 @@ export const EmsService = {
   async registerOnboardingBatch(
     id: string,
     token: string,
-  ): Promise<{ registered: number; failed: number; awaitingAdmin?: number; batch: OnboardingBatchDetail }> {
+  ): Promise<RegistrationProgress> {
     const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/register`, {
       method: "POST",
       headers: authHeaders(token),
     }, token);
     return handleResponse(res);
+  },
+
+  async getRegistrationProgress(id: string, token: string): Promise<RegistrationProgress | null> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/registration`, {
+      headers: authHeaders(token),
+    }, token);
+    if (!res.ok) return handleResponse(res);
+    return decodeRegistrationProgress(await res.text());
+  },
+  async stopRegistration(id: string, token: string): Promise<RegistrationProgress | null> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/registration/stop`, {
+      method: 'POST', headers: authHeaders(token),
+    }, token);
+    if (!res.ok) return handleResponse(res);
+    return decodeRegistrationProgress(await res.text());
   },
 
   /** What "Exclude remaining records" would exclude and keep; its token is required to confirm. */

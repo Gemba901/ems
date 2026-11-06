@@ -32,6 +32,7 @@ model EmsOnboardingBatch {
   uploadedById String?
   uploadedBy   User?   @relation("EmsBatchUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
 
+  registrationRun EmsRegistrationRun?
   records EmsOnboardingRecord[]
 
   createdAt DateTime @default(now())
@@ -232,4 +233,29 @@ model EmsAccountLink {
 
   @@index([userId, status])
   @@index([organizationId, status])
+}
+
+// Durable latest registration run. Counters and record promotion commit together.
+model EmsRegistrationRun {
+  id String @id
+  batchId String @unique
+  batch EmsOnboardingBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  organizationId String
+  actorId String
+  communicationChannel String
+  status String @default("QUEUED")
+  recordIds String[]
+  completedIds String[] @default([])
+  registered Int @default(0)
+  failed Int @default(0)
+  awaitingAdmin Int @default(0)
+  skipped Int @default(0)
+  leaseId String?
+  leaseUntil DateTime?
+  recoveries Int @default(0)
+  message String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  @@index([status, leaseUntil])
+  @@index([organizationId])
 }

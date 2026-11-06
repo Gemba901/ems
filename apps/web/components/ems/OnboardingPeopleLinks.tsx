@@ -12,8 +12,8 @@ import type { DepartmentHodResolution, HodDirectoryEntry, HodEvidence, Onboardin
 export const personOptionLabel = (person: ReportingOption) => [person.name, person.designation, person.department, person.branch, person.employeeCode,
   person.target.startsWith('record:') ? 'Pending registration' : 'Existing employee'].filter(Boolean).join(' · ');
 
-export function PersonSummary({person}: {person: ReportingOption}) {
-  const destination = personViewLink(person);
+export function PersonSummary({person, returnTo}: {person: ReportingOption; returnTo?: string | null}) {
+  const destination = personViewLink(person, returnTo);
   return <div className="min-w-0 text-sm text-slate-800 break-words">
     <p className="font-semibold">{destination ? <Link href={destination.href} target="_blank" rel="noopener noreferrer"
       aria-label={`${destination.label}: ${person.name} (new tab)`} className="text-purple-800 underline decoration-purple-300 underline-offset-2 hover:decoration-purple-800">
@@ -47,8 +47,8 @@ export function PersonSuggestions({label, candidates, importedName, importedDesi
 }
 
 /** One display for a resolved reliever; imported text remains editable when needed. */
-export function RelieverEditor({id, label, value, options, link, name, designation, department, disabled, suggestionsCurrent = true, onChange, onTextChange}: {
-  id: string; label: string; value: string; options: ReportingOption[]; link: PersonLinkResolution;
+export function RelieverEditor({id, label, returnTo, value, options, link, name, designation, department, disabled, suggestionsCurrent = true, onChange, onTextChange}: {
+  id: string; label: string; returnTo?: string | null; value: string; options: ReportingOption[]; link: PersonLinkResolution;
   name: string; designation: string; department?: string | null; disabled: boolean; suggestionsCurrent?: boolean;
   onChange: (target: string) => void; onTextChange: (field: 'Name' | 'Designation', value: string) => void;
 }) {
@@ -61,7 +61,8 @@ export function RelieverEditor({id, label, value, options, link, name, designati
   return <div className="space-y-2">
     <h4 className="text-xs font-semibold text-slate-700">{label}</h4>
     {summary && !changing ? <>
-      <p className="text-xs text-slate-700 break-words">{person ? `${imported ? 'Matched from imported fields' : 'Selected'}: ${personOptionLabel(person)}` : 'Not assigned'}</p>
+      <p className="text-xs text-slate-700 break-words">{person ? imported ? 'Matched from imported fields' : 'Selected' : 'Not assigned'}</p>
+      {person && <PersonSummary person={person} returnTo={returnTo} />}
       {person?.target.startsWith('record:') && <p className="text-xs text-amber-700">Assignment completes when this person registers.</p>}
       <button type="button" disabled={disabled} onClick={() => setChanging(true)} className="text-xs font-semibold text-purple-800 underline disabled:opacity-50">Change {label.toLowerCase()}</button>
     </> : <>
@@ -89,10 +90,10 @@ export function PersonLinkStatus({link, showError = true}: {link: PersonLinkReso
   </div>;
 }
 
-export function DepartmentHodEditor({recordId, hod, options, importedName, importedDesignation, disabled, recordDirty,
+export function DepartmentHodEditor({recordId, returnTo, hod, options, importedName, importedDesignation, disabled, recordDirty,
   onDirtyChange, onSave, onSaved, directory = [], evidence}: {
   evidence?: HodEvidence; directory?: HodDirectoryEntry[];
-  recordId: string; hod: DepartmentHodResolution; options: ReportingOption[];
+  recordId: string; returnTo?: string | null; hod: DepartmentHodResolution; options: ReportingOption[];
   importedName?: string | null; importedDesignation?: string | null; disabled: boolean; recordDirty: boolean;
   onDirtyChange: (dirty: boolean) => void;
   onSave: (target: string, version: string) => Promise<OnboardingBatchDetail>;
@@ -136,7 +137,7 @@ export function DepartmentHodEditor({recordId, hod, options, importedName, impor
         <p className="text-xs text-slate-600"><strong>HOD for:</strong> {scope}</p></div>
       <span className={`text-xs ${summaryState === 'Confirmed' ? 'text-emerald-700' : 'text-amber-800'}`}>{summaryState}</span>
     </div>
-    {selectedPerson ? <PersonSummary person={selectedPerson} /> : <p className="text-sm text-slate-700">{choice === 'NONE' ? 'Not assigned' : importedName ? `Imported: ${importedName} · ${importedDesignation || 'Job title missing'}` : 'No HOD selected'}</p>}
+    {selectedPerson ? <PersonSummary person={selectedPerson} returnTo={returnTo} /> : <p className="text-sm text-slate-700">{choice === 'NONE' ? 'Not assigned' : importedName ? `Imported: ${importedName} · ${importedDesignation || 'Job title missing'}` : 'No HOD selected'}</p>}
     {selectedPerson?.target.startsWith('record:') && <p className="text-xs text-amber-800">Link completes after registration.</p>}
     {hod.error && hod.error !== 'Review the imported HOD and save the department HOD choice.' && hod.departmentId && !dirty && <p className="text-xs text-amber-800">{hod.error}</p>}
     {evidence && <details className="text-xs text-slate-600" data-hod-evidence>

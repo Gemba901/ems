@@ -122,7 +122,7 @@ export default function EmsDashboardPage() {
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
       <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Link
             href="/ems/employees"
             className="bg-white border border-slate-100 rounded-2xl shadow-sm px-5 py-4 hover:border-blue-200 transition-colors"
@@ -137,6 +137,14 @@ export default function EmsDashboardPage() {
           >
             <p className="font-semibold text-slate-800">BEES Onboarding imports</p>
             <p className="text-sm text-slate-500">Bulk-load employee data for registration</p>
+          </Link>
+
+          <Link
+            href="/ems/organisation"
+            className="bg-white border border-slate-100 rounded-2xl shadow-sm px-5 py-4 hover:border-blue-200 transition-colors"
+          >
+            <p className="font-semibold text-slate-800">Organisation</p>
+            <p className="text-sm text-slate-500">Departments, branches and their HODs</p>
           </Link>
         </div>
 

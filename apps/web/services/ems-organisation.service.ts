@@ -9,11 +9,12 @@ async function read<T>(path: string, token: string): Promise<T> {
 }
 export const EmsOrganisationService = {
   departments: (token: string) => read<DepartmentDirectory>('', token),
-  people: (id: string, query: { page: number; search: string; branch: string | null; activity: string }, token: string) => {
+  people: (id: string, query: { page: number; search: string; branch: string | null; activity: string; noManager?: boolean }, token: string) => {
     const params = new URLSearchParams({ page: String(query.page) });
     if (query.search) params.set('search', query.search);
     if (query.branch !== null) params.set('branch', query.branch);
     if (query.activity) params.set('activity', query.activity);
+    if (query.noManager) params.set('noManager', 'true');
     return read<DepartmentPeople>(`/${encodeURIComponent(id)}/people?${params}`, token);
   },
 };

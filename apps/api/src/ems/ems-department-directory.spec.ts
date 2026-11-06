@@ -24,9 +24,36 @@ function fixture() {
 }
 
 describe('EMS department directory', () => {
+  it('counts probation within active, and working people without a manager per department and branch', async () => {
+    const f = fixture();
+    f.db.employee.groupBy = jest.fn(async (args: any) => args.by.includes('employmentStatus') ? f.groups
+      : [{ departmentId: 'production', plantBranch: 'North', _count: { _all: 2 } }, { departmentId: null, plantBranch: 'North', _count: { _all: 5 } }]);
+    const result = await departmentDirectory(f.db, 'one');
+    const production = result.departments[0];
+    expect(production).toMatchObject({ active: 5, probation: 1, withoutManager: 2 });
+    expect(production.branches.find(b => b.key === 'north')).toMatchObject({ probation: 1, withoutManager: 2 });
+    // Only active or probation staff count, and people who report to a body (Board, Committee…) are not "without a manager".
+    expect(f.db.employee.groupBy.mock.calls[1][0].where).toEqual({ organizationId: 'one', employmentStatus: { in: ['ACTIVE', 'PROBATION'] },
+      reportingManagerId: null, reportsToBoard: false, reportingBody: null });
+  });
+
+  it('"Show them": people without a manager use the same rule as the count, and the flag is validated', async () => {
+    const f = fixture();
+    await departmentPeople(f.db, 'one', 'production', { noManager: 'true' });
+    expect(f.db.employee.findMany.mock.calls[0][0].where).toMatchObject({ reportingManagerId: null, reportsToBoard: false, reportingBody: null,
+      employmentStatus: { in: ['ACTIVE', 'PROBATION'] } });
+    await expect(departmentPeople(f.db, 'one', 'production', { noManager: 'yes' })).rejects.toThrow('Invalid noManager');
+  });
+
+  it('filters the people list to probation only', async () => {
+    const f = fixture();
+    await departmentPeople(f.db, 'one', 'production', { activity: 'PROBATION' });
+    expect(f.db.employee.findMany.mock.calls[0][0].where).toMatchObject({ employmentStatus: { in: ['PROBATION'] } });
+  });
+
   it('counts active/probation together, preserves empty departments and includes unassigned employees separately', async () => {
     const f = fixture(); const result = await departmentDirectory(f.db, 'one');
-    expect(result.counts).toEqual({ total: 9, active: 7, inactive: 2, unassigned: 2 });
+    expect(result.counts).toEqual({ total: 9, active: 7, probation: 1, inactive: 2, unassigned: 2 });
     expect(result.departments[0]).toMatchObject({ total: 7, active: 5, inactive: 2 });
     expect(result.departments[0].branches.find(b => b.key === 'north')).toMatchObject({ total: 5, hod: { state: 'ASSIGNED', person: { id: 'hod' } } });
     expect(result.departments[1]).toMatchObject({ total: 0, branches: [] });

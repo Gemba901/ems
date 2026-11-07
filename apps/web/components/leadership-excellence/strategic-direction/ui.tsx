@@ -167,9 +167,7 @@ export function DirectionStatusBadge({ status, hasApproved }: { status: Directio
   return (
     <Badge
       variant={status === "APPROVED" ? "default" : "secondary"}
-      className={cn(
-        status === "IN_REVIEW" && "bg-[#fff1da] text-[#8d5d16] dark:bg-[#3d2e14] dark:text-[#f0c77d]",
-      )}
+      className={cn(status === "IN_REVIEW" && "bg-[#fff1da] text-[#8d5d16] dark:bg-[#3d2e14] dark:text-[#f0c77d]")}
     >
       {label}
     </Badge>
@@ -254,9 +252,7 @@ export function Modal({
         <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
           <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
             <div>
-              {eyebrow && (
-                <div className={EYEBROW}>{eyebrow}</div>
-              )}
+              {eyebrow && <div className={EYEBROW}>{eyebrow}</div>}
               <h2 id={titleId} className="text-base font-semibold">
                 {title}
               </h2>

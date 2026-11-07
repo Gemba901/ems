@@ -31,6 +31,7 @@ const COMPLETE = {
   // jsonb returns keys shortest-first, so stored values come back as id, why, name.
   values: [{ id: 'v-1', why: 'We own outcomes', name: 'Ownership' }],
   currentVersion: null,
+  updatedAt: new Date('2026-11-07T10:00:00.000Z'),
 };
 
 const ACTOR = { id: 'emp-1', firstName: 'Amina', lastName: 'Otieno' };
@@ -55,6 +56,15 @@ function setup(
     employee: {
       findFirst: jest.fn().mockResolvedValue(actor),
       findUnique: jest.fn().mockResolvedValue(actor),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    // By default the user is a chosen approver and someone else can review.
+    lexStrategicDirectionApprover: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'a-1' }),
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(1),
+      deleteMany: jest.fn().mockResolvedValue({}),
+      createMany: jest.fn().mockResolvedValue({}),
     },
     lexStrategicDirection: {
       findUnique: jest.fn().mockResolvedValue(draft),
@@ -198,6 +208,26 @@ describe('StrategicDirectionService', () => {
       },
     );
 
+    it('refuses a save made on an older copy', async () => {
+      const { prisma, service } = setup(COMPLETE);
+      await expect(
+        service.saveDraft(USER, {
+          company: 'Other',
+          expectedUpdatedAt: '2026-11-07T09:00:00.000Z',
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('saves when the loaded copy is current', async () => {
+      const { prisma, service } = setup(COMPLETE);
+      await service.saveDraft(USER, {
+        company: 'Other',
+        expectedUpdatedAt: COMPLETE.updatedAt.toISOString(),
+      });
+      expect(prisma.lexStrategicDirection.upsert).toHaveBeenCalled();
+    });
+
     it('logs a null actor when the user has no employee row', async () => {
       const { prisma, service } = setup(null, null);
       await service.saveDraft(USER, { company: 'Gemba' });
@@ -264,6 +294,18 @@ describe('StrategicDirectionService', () => {
           version: null,
         }),
       });
+    });
+
+    it('needs an approver other than the submitter', async () => {
+      const { prisma, service } = setup(COMPLETE);
+      prisma.lexStrategicDirectionApprover.count.mockResolvedValue(0);
+      await expect(service.submit(USER)).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(prisma.lexStrategicDirectionApprover.count).toHaveBeenCalledWith({
+        where: { organizationId: 'org-1', employeeId: { not: 'emp-1' } },
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('refuses to submit twice', async () => {
@@ -346,46 +388,80 @@ describe('StrategicDirectionService', () => {
         { status: 409 },
       );
     });
+
+    it('refuses someone who is not a chosen approver', async () => {
+      const { prisma, service } = setup({ ...COMPLETE, status: 'IN_REVIEW' });
+      prisma.lexStrategicDirectionApprover.findUnique.mockResolvedValue(null);
+      await expect(service.returnForChanges(USER, 'Fix')).rejects.toMatchObject(
+        { status: 403 },
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
   });
 
   describe('approve', () => {
-    it.each(['DRAFT', 'IN_REVIEW'])(
-      'publishes version 1 from %s',
-      async (status) => {
-        const { prisma, service } = setup({
-          ...COMPLETE,
-          status,
-          sectionMeta: {},
-        });
-        await expect(service.approve(USER)).resolves.toMatchObject({
-          status: 'APPROVED',
-          currentVersion: 1,
-        });
+    it('publishes a submission as version 1', async () => {
+      const { prisma, service } = setup({
+        ...COMPLETE,
+        status: 'IN_REVIEW',
+        submittedById: 'emp-2',
+        sectionMeta: {},
+      });
+      await expect(service.approve(USER)).resolves.toMatchObject({
+        status: 'APPROVED',
+        currentVersion: 1,
+      });
 
-        expect(prisma.lexStrategicDirectionVersion.create).toHaveBeenCalledWith(
-          {
-            data: expect.objectContaining({
-              version: 1,
-              approvedById: 'emp-1',
-              snapshot: expect.objectContaining({
-                company: 'Gemba',
-                values: COMPLETE.values,
-              }),
-            }),
-          },
-        );
-        // First approval: every field is new.
-        const [[{ data }]] = prisma.lexStrategicDirectionEvent.create.mock
-          .calls as [[{ data: { action: string; changes: object } }]];
-        expect(data.action).toBe('APPROVED');
-        expect(Object.keys(data.changes)).toHaveLength(8);
-      },
-    );
+      expect(prisma.lexStrategicDirectionVersion.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          version: 1,
+          approvedById: 'emp-1',
+          snapshot: expect.objectContaining({
+            company: 'Gemba',
+            values: COMPLETE.values,
+          }),
+        }),
+      });
+      // First approval: every field is new.
+      const [[{ data }]] = prisma.lexStrategicDirectionEvent.create.mock
+        .calls as [[{ data: { action: string; changes: object } }]];
+      expect(data.action).toBe('APPROVED');
+      expect(Object.keys(data.changes)).toHaveLength(8);
+    });
+
+    it('refuses a draft that was not sent for review', async () => {
+      const { prisma, service } = setup(COMPLETE);
+      await expect(service.approve(USER)).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('refuses someone who is not a chosen approver', async () => {
+      const { prisma, service } = setup({ ...COMPLETE, status: 'IN_REVIEW' });
+      prisma.lexStrategicDirectionApprover.findUnique.mockResolvedValue(null);
+      await expect(service.approve(USER)).rejects.toMatchObject({
+        status: 403,
+      });
+    });
+
+    it('refuses an approver approving their own submission', async () => {
+      const { prisma, service } = setup({
+        ...COMPLETE,
+        status: 'IN_REVIEW',
+        submittedById: 'emp-1',
+      });
+      await expect(service.approve(USER)).rejects.toMatchObject({
+        status: 403,
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
 
     it('increments the version and logs only what changed', async () => {
       const { prisma, service } = setup(
         {
           ...COMPLETE,
+          status: 'IN_REVIEW',
           currentVersion: 1,
           revisionReason: 'New vision',
           sectionMeta: {},
@@ -413,7 +489,11 @@ describe('StrategicDirectionService', () => {
     });
 
     it('rejects an incomplete direction', async () => {
-      const { prisma, service } = setup({ ...COMPLETE, purpose: null });
+      const { prisma, service } = setup({
+        ...COMPLETE,
+        status: 'IN_REVIEW',
+        purpose: null,
+      });
       await expect(service.approve(USER)).rejects.toMatchObject({
         status: 400,
       });
@@ -424,6 +504,88 @@ describe('StrategicDirectionService', () => {
       const { service } = setup({ ...COMPLETE, status: 'APPROVED' });
       await expect(service.approve(USER)).rejects.toMatchObject({
         status: 409,
+      });
+    });
+  });
+
+  describe('approvers', () => {
+    const MANAGER = {
+      id: 'emp-2',
+      firstName: 'Amitabh',
+      lastName: 'Shah',
+      jobTitle: 'GM',
+    };
+
+    it('tells the viewer whether they can review', async () => {
+      const { prisma, service } = setup({
+        ...COMPLETE,
+        status: 'IN_REVIEW',
+        submittedById: 'emp-1',
+      });
+      prisma.lexStrategicDirectionApprover.findMany.mockResolvedValue([
+        { employee: { ...ACTOR, jobTitle: null } },
+        { employee: MANAGER },
+      ]);
+      await expect(service.getDraftFor(USER)).resolves.toMatchObject({
+        approvers: [
+          { employeeId: 'emp-1', name: 'Amina Otieno' },
+          { employeeId: 'emp-2', name: 'Amitabh Shah', jobTitle: 'GM' },
+        ],
+        // An approver who submitted it waits for someone else.
+        viewer: { isApprover: true, isSubmitter: true, canReview: false },
+      });
+    });
+
+    it('offers only current management-level staff', async () => {
+      const { prisma, service } = setup();
+      await service.getApproverCandidates('org-1');
+      expect(prisma.employee.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: 'org-1',
+            employmentStatus: { in: ['ACTIVE', 'PROBATION'] },
+            user: {
+              organizations: {
+                some: {
+                  organizationId: 'org-1',
+                  role: {
+                    name: {
+                      in: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT],
+                    },
+                  },
+                },
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    it('rejects someone who is not a candidate', async () => {
+      const { prisma, service } = setup();
+      prisma.employee.findMany.mockResolvedValue([MANAGER]);
+      await expect(
+        service.setApprovers(USER, ['emp-2', 'emp-9']),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('replaces the list, keeping people already on it', async () => {
+      const { prisma, service } = setup();
+      prisma.employee.findMany.mockResolvedValue([MANAGER]);
+      await service.setApprovers(USER, ['emp-2']);
+      expect(
+        prisma.lexStrategicDirectionApprover.deleteMany,
+      ).toHaveBeenCalledWith({
+        where: { organizationId: 'org-1', employeeId: { notIn: ['emp-2'] } },
+      });
+      expect(
+        prisma.lexStrategicDirectionApprover.createMany,
+      ).toHaveBeenCalledWith({
+        data: [
+          { organizationId: 'org-1', employeeId: 'emp-2', addedById: 'emp-1' },
+        ],
+        skipDuplicates: true,
       });
     });
   });
@@ -504,16 +666,33 @@ describe('StrategicDirectionController roles', () => {
     expect(roles('getHistory')).not.toContain(Role.EMPLOYEE);
   });
 
-  it('lets only approvers return or approve', () => {
-    for (const method of ['returnForChanges', 'approve'] as const) {
+  it('limits writing and review to management-level roles', () => {
+    for (const method of [
+      'getDraft',
+      'getHistory',
+      'saveDraft',
+      'submit',
+      'withdraw',
+      'returnForChanges',
+      'approve',
+      'startRevision',
+      'getApprovers',
+    ] as const) {
       expect(roles(method)).toEqual(
         expect.arrayContaining([Role.ADMIN, Role.MANAGEMENT]),
       );
       expect(roles(method)).not.toContain(Role.HR);
       expect(roles(method)).not.toContain(Role.HOD);
     }
-    expect(roles('withdraw')).toContain(Role.HOD);
-    expect(roles('startRevision')).toContain(Role.HOD);
+    expect(roles('getApprovedDirection')).toEqual(
+      expect.arrayContaining([Role.HR, Role.HOD]),
+    );
+  });
+
+  it('lets only admins choose approvers', () => {
+    for (const method of ['getApproverCandidates', 'setApprovers'] as const) {
+      expect(roles(method)).toEqual([Role.SUPER_ADMIN, Role.ADMIN]);
+    }
   });
 
   it('includes SUPER_ADMIN on every route', () => {
@@ -527,6 +706,9 @@ describe('StrategicDirectionController roles', () => {
       'returnForChanges',
       'approve',
       'startRevision',
+      'getApprovers',
+      'getApproverCandidates',
+      'setApprovers',
     ] as const) {
       expect(roles(method)).toContain(Role.SUPER_ADMIN);
     }

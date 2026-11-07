@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
@@ -14,6 +15,7 @@ import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { SaveDraftDto } from './dto/strategic-direction.dto';
 import { randomUUID } from 'crypto';
 import { Prisma, type LexStrategicDirection } from 'db';
+import { DIRECTION_EDITORS } from './strategic-direction.roles';
 
 // the content stored in each approved version's snapshot column.
 
@@ -64,6 +66,19 @@ type Direction = LexStrategicDirection;
 const NAME = { firstName: true, lastName: true } as const;
 const fullName = (e: { firstName: string; lastName: string } | null) =>
   e ? `${e.firstName} ${e.lastName}` : null;
+
+// Approvers are chosen from current management-level staff.
+const CURRENT_STAFF = ['ACTIVE', 'PROBATION'] as const;
+const PERSON = { id: true, jobTitle: true, ...NAME } as const;
+type Person = { id: string; jobTitle: string | null } & {
+  firstName: string;
+  lastName: string;
+};
+const personOf = (e: Person) => ({
+  employeeId: e.id,
+  name: fullName(e)!,
+  jobTitle: e.jobTitle,
+});
 
 // jsonb reorders object keys, so compare values as tuples rather than JSON.stringify of objects.
 const valuesKey = (vs: CoreValue[]) =>
@@ -146,6 +161,25 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     const trimmed = reason.trim();
     if (!trimmed) throw new BadRequestException('Enter a reason.');
     return trimmed;
+  }
+
+  private async isApprover(organizationId: string, actor: Actor) {
+    if (!actor) return false;
+    const row = await this.prisma.lexStrategicDirectionApprover.findUnique({
+      where: {
+        organizationId_employeeId: { organizationId, employeeId: actor.id },
+      },
+      select: { id: true },
+    });
+    return !!row;
+  }
+
+  private async requireApprover(organizationId: string, actor: Actor) {
+    if (!(await this.isApprover(organizationId, actor))) {
+      throw new ForbiddenException(
+        'Only the people chosen to approve the company direction can do this.',
+      );
+    }
   }
 
   // Moves the direction to a new status and records the event in one transaction.
@@ -246,6 +280,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
         returnReason: null,
         revisionReason: null,
         submittedAt: null,
+        submittedById: null,
         submittedByName: null,
         currentVersion: null,
         approved: null,
@@ -279,6 +314,86 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
         approvedByName: fullName(published.approvedBy),
       },
     };
+  }
+
+  /** getDraft() plus the approvers and what this user may do in review. */
+  async getDraftFor(user: AccessTokenPayload) {
+    const [draft, approvers, actor] = await Promise.all([
+      this.getDraft(user.organizationId),
+      this.getApprovers(user.organizationId),
+      this.findActor(user),
+    ]);
+    const isApprover =
+      !!actor && approvers.some((a) => a.employeeId === actor.id);
+    const isSubmitter = !!actor && draft.submittedById === actor.id;
+    return {
+      ...draft,
+      approvers,
+      viewer: {
+        isApprover,
+        isSubmitter,
+        canReview: isApprover && !isSubmitter,
+      },
+    };
+  }
+
+  async getApprovers(organizationId: string) {
+    const rows = await this.prisma.lexStrategicDirectionApprover.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'asc' },
+      select: { employee: { select: PERSON } },
+    });
+    return rows.map((r) => personOf(r.employee));
+  }
+
+  /** Current staff whose login has a management-level role in this organisation. */
+  async getApproverCandidates(organizationId: string) {
+    const people = await this.prisma.employee.findMany({
+      where: {
+        organizationId,
+        employmentStatus: { in: [...CURRENT_STAFF] },
+        user: {
+          organizations: {
+            some: {
+              organizationId,
+              role: { name: { in: DIRECTION_EDITORS } },
+            },
+          },
+        },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      select: PERSON,
+    });
+    return people.map(personOf);
+  }
+
+  async setApprovers(user: AccessTokenPayload, employeeIds: string[]) {
+    const candidates = await this.getApproverCandidates(user.organizationId);
+    const allowed = new Set(candidates.map((c) => c.employeeId));
+    if (employeeIds.some((id) => !allowed.has(id))) {
+      throw new BadRequestException(
+        'Approvers must be current management, admin or super admin staff.',
+      );
+    }
+    const actor = await this.findActor(user);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.lexStrategicDirectionApprover.deleteMany({
+        where: {
+          organizationId: user.organizationId,
+          employeeId: { notIn: employeeIds },
+        },
+      });
+      await tx.lexStrategicDirectionApprover.createMany({
+        data: employeeIds.map((employeeId) => ({
+          organizationId: user.organizationId,
+          employeeId,
+          addedById: actor?.id ?? null,
+        })),
+        skipDuplicates: true,
+      });
+    });
+    return this.getApprovers(user.organizationId);
   }
 
   /** getApproved() plus the approver's name, for the employee view. */
@@ -322,6 +437,17 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
       throw new ConflictException('Withdraw the submission before editing.');
     } else if (draft?.status === 'APPROVED') {
       throw new ConflictException('Start a revision before editing');
+    }
+
+    // Refuse a save made on an older copy, so one editor can't overwrite another.
+    if (
+      draft &&
+      dto.expectedUpdatedAt !== undefined &&
+      new Date(dto.expectedUpdatedAt).getTime() !== draft.updatedAt.getTime()
+    ) {
+      throw new ConflictException(
+        'Someone else saved changes since you opened this page. Copy your text, reload the page, then make your changes again.',
+      );
     }
 
     // step 3: keep only the fields that actually changed.
@@ -418,6 +544,19 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
       });
     }
 
+    // Nobody approves their own submission, so someone else must be able to.
+    const reviewers = await this.prisma.lexStrategicDirectionApprover.count({
+      where: {
+        organizationId: user.organizationId,
+        ...(actor && { employeeId: { not: actor.id } }),
+      },
+    });
+    if (reviewers === 0) {
+      throw new BadRequestException(
+        'No one else can approve this yet. Ask an admin to choose approvers for the company direction.',
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const saved = await tx.lexStrategicDirection.update({
         where: { id: draft.id },
@@ -471,6 +610,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
         'Only a submission under review can be returned.',
       );
     }
+    await this.requireApprover(user.organizationId, actor);
 
     return this.transition(
       direction,
@@ -487,14 +627,23 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
   }
 
   /**
-   * Publishes the direction as the next version. Approvers may finalise a draft
-   * directly or approve a submission, as in the prototype's "Finalise & lock".
+   * Publishes a submission as the next version. Only a chosen approver may do it,
+   * and not on their own submission.
    */
   async approve(user: AccessTokenPayload) {
     const actor = await this.findActor(user);
     const direction = await this.findDirection(user.organizationId);
     if (direction.status === 'APPROVED') {
       throw new ConflictException('This direction is already approved.');
+    }
+    if (direction.status !== 'IN_REVIEW') {
+      throw new ConflictException('Send the direction for review first.');
+    }
+    await this.requireApprover(user.organizationId, actor);
+    if (actor && direction.submittedById === actor.id) {
+      throw new ForbiddenException(
+        'You sent this for review, so another approver must approve it.',
+      );
     }
 
     const problems = this.missingItems(direction);

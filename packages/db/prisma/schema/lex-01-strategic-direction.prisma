@@ -80,3 +80,19 @@ enum LexStrategicDirectionAction {
     @@index([directionId, createdAt])
     @@index([organizationId])
  }
+
+ // The people the company chooses to approve its direction. Kept per organisation
+ // so they can be chosen before the first draft exists.
+ model LexStrategicDirectionApprover {
+    id                String   @id @default(uuid())
+    organizationId    String
+    employeeId        String
+    addedById         String?
+    createdAt         DateTime @default(now())
+
+    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    employee     Employee     @relation("LexDirectionApprover", fields: [employeeId], references: [id], onDelete: Cascade)
+    addedBy      Employee?    @relation("LexDirectionApproverAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+    @@unique([organizationId, employeeId])
+ }

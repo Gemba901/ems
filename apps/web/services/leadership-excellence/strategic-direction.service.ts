@@ -22,6 +22,13 @@ export interface SectionStamp {
   byName: string | null;
 }
 
+/** Someone chosen to approve the direction. */
+export interface DirectionApprover {
+  employeeId: string;
+  name: string;
+  jobTitle: string | null;
+}
+
 /** GET /: the working draft (editors only). `id` is null until the first save. */
 export interface StrategicDirectionDraft extends Record<TextField, string | null> {
   id: string | null;
@@ -36,6 +43,10 @@ export interface StrategicDirectionDraft extends Record<TextField, string | null
   updatedAt?: string;
   /** The published version, still live while a revision is drafted. */
   approved: { version: number; approvedAt: string; approvedByName: string | null } | null;
+  submittedById?: string | null;
+  approvers: DirectionApprover[];
+  /** canReview: a chosen approver who did not send this submission. */
+  viewer: { isApprover: boolean; isSubmitter: boolean; canReview: boolean };
 }
 
 /** GET /approved: what every employee may read. */
@@ -59,6 +70,8 @@ export interface DirectionEvent {
 
 export type SaveDraftPayload = Partial<Record<TextField, string>> & {
   values?: { id?: string; name: string; why: string }[];
+  /** The updatedAt this form was loaded from; the API refuses a save on an older copy. */
+  expectedUpdatedAt?: string;
 };
 
 /** A missing item from submit/approve; `field` is the input id on the page. */
@@ -140,4 +153,7 @@ export const StrategicDirectionService = {
   returnForChanges: (token: string, reason: string) => request<unknown>("/return", token, "POST", { reason }),
   approve: (token: string) => request<unknown>("/approve", token, "POST"),
   startRevision: (token: string, reason: string) => request<unknown>("/revise", token, "POST", { reason }),
+  getApproverCandidates: (token: string) => request<DirectionApprover[]>("/approvers/candidates", token),
+  setApprovers: (token: string, employeeIds: string[]) =>
+    request<DirectionApprover[]>("/approvers", token, "PUT", { employeeIds }),
 };

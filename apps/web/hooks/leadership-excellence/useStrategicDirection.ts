@@ -52,6 +52,17 @@ export function useDirectionHistory(options: { enabled?: boolean } = {}) {
   });
 }
 
+/** Management-level staff an admin can choose as approvers (admins only). */
+export function useApproverCandidates(options: { enabled?: boolean } = {}) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "approver-candidates"],
+    queryFn: () => StrategicDirectionService.getApproverCandidates(token),
+    enabled: enabled && (options.enabled ?? true),
+    retry: retryTransient,
+  });
+}
+
 /** Every workflow action changes the draft, the approved version or the history, so refresh all three. */
 function useDirectionMutation<TArg>(fn: (token: string, arg: TArg) => Promise<unknown>) {
   const qc = useQueryClient();
@@ -64,13 +75,20 @@ function useDirectionMutation<TArg>(fn: (token: string, arg: TArg) => Promise<un
 
 export function useDirectionActions() {
   return {
-    save: useDirectionMutation((token, payload: SaveDraftPayload) => StrategicDirectionService.saveDraft(token, payload)),
+    save: useDirectionMutation((token, payload: SaveDraftPayload) =>
+      StrategicDirectionService.saveDraft(token, payload),
+    ),
     submit: useDirectionMutation<void>((token) => StrategicDirectionService.submit(token)),
     withdraw: useDirectionMutation<void>((token) => StrategicDirectionService.withdraw(token)),
     returnForChanges: useDirectionMutation((token, reason: string) =>
       StrategicDirectionService.returnForChanges(token, reason),
     ),
     approve: useDirectionMutation<void>((token) => StrategicDirectionService.approve(token)),
-    startRevision: useDirectionMutation((token, reason: string) => StrategicDirectionService.startRevision(token, reason)),
+    startRevision: useDirectionMutation((token, reason: string) =>
+      StrategicDirectionService.startRevision(token, reason),
+    ),
+    setApprovers: useDirectionMutation((token, employeeIds: string[]) =>
+      StrategicDirectionService.setApprovers(token, employeeIds),
+    ),
   };
 }

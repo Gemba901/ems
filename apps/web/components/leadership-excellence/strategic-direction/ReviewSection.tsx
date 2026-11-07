@@ -1,9 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, History } from "lucide-react";
+import { Eye, History, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useApprovedDirection, useDirectionHistory } from "@/hooks/leadership-excellence/useStrategicDirection";
+import { useToast } from "@/contexts/toast.context";
+import {
+  useApprovedDirection,
+  useApproverCandidates,
+  useDirectionHistory,
+  type useDirectionActions,
+} from "@/hooks/leadership-excellence/useStrategicDirection";
 import {
   FIELD_LABELS,
   type CoreValue,
@@ -12,25 +18,29 @@ import {
   type TextField,
 } from "@/services/leadership-excellence/strategic-direction.service";
 import { DirectionReadView, type DirectionContent } from "./DirectionReadView";
-import { Guide, Modal, SectionCard, formatDate } from "./ui";
+import { EYEBROW, Guide, Modal, SectionCard, formatDate } from "./ui";
 
-type Open = "preview" | "history" | "approved" | null;
+type Open = "preview" | "history" | "approved" | "approvers" | null;
 
 const approvalLine = (a: NonNullable<StrategicDirectionDraft["approved"]>) =>
-  `Approved by ${a.approvedByName ?? "management"} · ${formatDate(a.approvedAt)}.`;
+  `Approved by ${a.approvedByName ?? "an approver"} · ${formatDate(a.approvedAt)}.`;
 
-/** 01.03: preview the whole direction, read its history and the live approved version. */
+/** 01.03: approvers, preview of the whole direction, its history and the live approved version. */
 export function ReviewSection({
   draft,
   content,
   dirty,
   number,
+  canManageApprovers,
+  actions,
 }: {
   draft: StrategicDirectionDraft;
   /** The form as typed, including unsaved changes. */
   content: DirectionContent;
   dirty: boolean;
   number?: string;
+  canManageApprovers: boolean;
+  actions: ReturnType<typeof useDirectionActions>;
 }) {
   const [open, setOpen] = useState<Open>(null);
   const close = () => setOpen(null);
@@ -40,19 +50,45 @@ export function ReviewSection({
       id="review-section"
       number={number}
       label="01.03 · Preview & review"
-      title="Preview & finalise"
-      description="Read the whole direction together before making it the approved version."
+      title="Preview & send for review"
+      description="Read the whole direction together, then send it to the approvers."
     >
       <Guide title="How review and revisions work">
         <p>
-          Save draft keeps incomplete work. Preview shows the text as a reading page. Management can use Finalise &amp;
-          lock when the required information is complete; an editor sends the draft for one review.
+          Save draft keeps incomplete work. Preview shows the text as a reading page. When the required information is
+          complete, send it for review. One of the approvers the company has chosen approves it or returns it with a
+          note. Nobody approves their own submission.
         </p>
         <p>
           Approved wording cannot be changed in place. Create a revision to change it. Employees keep seeing the
           approved version until the revision is approved.
         </p>
       </Guide>
+
+      <div className="space-y-2 rounded-lg border border-border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className={EYEBROW}>Approvers</div>
+          {canManageApprovers && (
+            <Button type="button" size="sm" variant="outline" onClick={() => setOpen("approvers")}>
+              <UserCheck /> Choose approvers
+            </Button>
+          )}
+        </div>
+        {draft.approvers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No approvers chosen yet. {canManageApprovers ? "Choose at least one." : "An admin needs to choose them."}
+          </p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {draft.approvers.map((a) => (
+              <li key={a.employeeId} className="rounded-md bg-secondary px-2.5 py-1 text-sm text-secondary-foreground">
+                {a.name}
+                {a.jobTitle && <span className="text-muted-foreground"> · {a.jobTitle}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" onClick={() => setOpen("preview")}>
@@ -75,15 +111,17 @@ export function ReviewSection({
       </p>
 
       <details className="group rounded-lg border border-border px-4 py-3 text-sm">
-        <summary className="cursor-pointer font-medium">What comes after Area 01?</summary>
+        <summary className="cursor-pointer font-medium">What comes after Key Functional Area 1?</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
-            <strong className="text-foreground">Area 02 · Organisation &amp; Performance Framework:</strong> use EMS
-            records to show units, departments, positions and reporting relationships.
+            <strong className="text-foreground">
+              Key Functional Area 2 · Organisation &amp; Performance Framework:
+            </strong>{" "}
+            use EMS records to show units, departments, positions and reporting relationships.
           </li>
           <li>
-            <strong className="text-foreground">Area 03 · Performance Planning &amp; Alignment:</strong> create
-            objectives, linked goals and department plans.
+            <strong className="text-foreground">Key Functional Area 3 · Performance Planning &amp; Alignment:</strong>{" "}
+            create objectives, linked goals and department plans.
           </li>
         </ul>
         <p className="mt-2 text-muted-foreground">Your company direction is reused rather than entered again.</p>
@@ -98,10 +136,96 @@ export function ReviewSection({
         />
       </Modal>
       <HistoryDialog open={open === "history"} onClose={close} />
+      {canManageApprovers && (
+        <ApproversDialog
+          open={open === "approvers"}
+          onClose={close}
+          current={draft.approvers.map((a) => a.employeeId)}
+          save={actions.setApprovers}
+        />
+      )}
       {draft.approved && (
         <ApprovedDialog open={open === "approved"} onClose={close} line={approvalLine(draft.approved)} />
       )}
     </SectionCard>
+  );
+}
+
+function ApproversDialog({
+  open,
+  onClose,
+  current,
+  save,
+}: {
+  open: boolean;
+  onClose: () => void;
+  current: string[];
+  save: ReturnType<typeof useDirectionActions>["setApprovers"];
+}) {
+  const { toast } = useToast();
+  const candidates = useApproverCandidates({ enabled: open });
+  // Picked ids; null means "start from the saved list" so reopening resets it.
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const chosen = picked ?? current;
+  const toggle = (id: string) => setPicked(chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id]);
+  const closeAndReset = () => {
+    setPicked(null);
+    onClose();
+  };
+
+  async function submit() {
+    try {
+      await save.mutateAsync(chosen);
+      toast("Approvers saved.", "success");
+      closeAndReset();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not save the approvers.", "error");
+    }
+  }
+
+  return (
+    <Modal open={open} title="Choose approvers" eyebrow="Company direction" onClose={closeAndReset}>
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Every change sent for review goes to these people. Any one of them can approve it or return it, but not their
+          own submission, so choose at least two if approvers also write the direction.
+        </p>
+        {candidates.isPending ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : candidates.isError ? (
+          <p className="text-sm text-destructive">Could not load staff. {(candidates.error as Error).message}</p>
+        ) : candidates.data.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No current management, admin or super admin staff found.</p>
+        ) : (
+          <ul className="max-h-80 space-y-1 overflow-y-auto">
+            {candidates.data.map((c) => (
+              <li key={c.employeeId}>
+                <label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={chosen.includes(c.employeeId)}
+                    onChange={() => toggle(c.employeeId)}
+                  />
+                  <span>
+                    {c.name}
+                    {c.jobTitle && <span className="text-muted-foreground"> · {c.jobTitle}</span>}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={closeAndReset}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={save.isPending || candidates.isPending} onClick={submit}>
+            {save.isPending ? "Saving…" : "Save approvers"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

@@ -78,9 +78,7 @@ export function DirectionReadView({
         why={{ label: "Why this mission?", text: content.missionWhy }}
       />
       <section id={anchors?.values} className="scroll-mt-24 space-y-3">
-        <h3 className={EYEBROW}>
-          Core values: How we work
-        </h3>
+        <h3 className={EYEBROW}>Core values: How we work</h3>
         {values.length === 0 ? (
           <p className="text-sm text-muted-foreground">No values entered yet.</p>
         ) : (
@@ -96,9 +94,7 @@ export function DirectionReadView({
       </section>
       {showPillars && (
         <section className="space-y-3">
-          <h3 className={EYEBROW}>
-            Our six excellence pillars
-          </h3>
+          <h3 className={EYEBROW}>Our six excellence pillars</h3>
           <PillarGrid />
         </section>
       )}

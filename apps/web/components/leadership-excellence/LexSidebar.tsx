@@ -29,6 +29,8 @@ import {
   Wrench,
 } from "lucide-react";
 import { ModuleSidebar, type SidebarNavGroup } from "@/components/shell/ModuleSidebar";
+import { useAuthStore } from "@/store/auth.store";
+import { DIRECTION_EDITORS } from "@/components/leadership-excellence/strategic-direction/roles";
 
 interface LexSidebarProps {
   open?: boolean;
@@ -39,6 +41,8 @@ interface LexSidebarProps {
 
 const BASE = "/leadership-excellence";
 const DIRECTION = `${BASE}/strategic-direction/company-direction`;
+// Only editors have the review section, so readers don't get a link to it.
+const REVIEW = `${DIRECTION}#review-section`;
 
 // One group per area, one item per sub-component, in prototype order (01 → 07).
 // Every route already exists, so area owners never need to edit this file.
@@ -56,7 +60,7 @@ const GROUPS: SidebarNavGroup[] = [
       { label: "Mission", href: `${DIRECTION}#mission-section`, icon: Compass },
       { label: "Core values", shortLabel: "Values", href: `${DIRECTION}#values-section`, icon: Gem },
       { label: "Six excellence pillars", shortLabel: "Pillars", href: `${DIRECTION}#pillars-section`, icon: Landmark },
-      { label: "Preview & finalise", shortLabel: "Preview", href: `${DIRECTION}#review-section`, icon: Eye },
+      { label: "Preview & send", shortLabel: "Preview", href: REVIEW, icon: Eye },
     ],
   },
   {
@@ -110,7 +114,11 @@ const GROUPS: SidebarNavGroup[] = [
   },
 ];
 
+const READER_GROUPS = GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => i.href !== REVIEW) }));
+
 export function LexSidebar(props: LexSidebarProps) {
+  const role = useAuthStore((s) => s.user?.roleLevel);
+  const groups = role && DIRECTION_EDITORS.includes(role) ? GROUPS : READER_GROUPS;
   return (
     <ModuleSidebar
       {...props}
@@ -118,7 +126,7 @@ export function LexSidebar(props: LexSidebarProps) {
       title="Leadership Excellence"
       homeHref={BASE}
       ariaLabel="Leadership Excellence navigation"
-      groups={GROUPS}
+      groups={groups}
     />
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/contexts/toast.context";
@@ -40,8 +40,8 @@ function toForm(draft: StrategicDirectionDraft): FormState {
   return form;
 }
 
-function toPayload(form: FormState): SaveDraftPayload {
-  const payload: SaveDraftPayload = { values: form.values };
+function toPayload(form: FormState, expectedUpdatedAt?: string): SaveDraftPayload {
+  const payload: SaveDraftPayload = { values: form.values, ...(expectedUpdatedAt && { expectedUpdatedAt }) };
   for (const field of TEXT_FIELDS) payload[field] = form[field];
   return payload;
 }
@@ -49,18 +49,19 @@ function toPayload(form: FormState): SaveDraftPayload {
 const sameForm = (a: FormState, b: FormState) => JSON.stringify(toPayload(a)) === JSON.stringify(toPayload(b));
 
 /**
- * 01.01 for editors and approvers. The page remounts it (via `key`) whenever the
+ * 01.01 for management-level editors. The page remounts it (via `key`) whenever the
  * saved draft changes, so the form always starts from the server copy.
  */
 export function CompanyDirectionEditor({
   draft,
-  canApprove,
+  canManageApprovers,
   actions,
   problems,
   setProblems,
 }: {
   draft: StrategicDirectionDraft;
-  canApprove: boolean;
+  /** ADMIN and SUPER_ADMIN choose who approves. */
+  canManageApprovers: boolean;
   actions: ReturnType<typeof useDirectionActions>;
   /** Owned by the page: saving remounts this component, and the list must survive that. */
   problems: DirectionProblem[];
@@ -77,6 +78,16 @@ export function CompanyDirectionEditor({
   const dirty = !sameForm(form, initial);
   const invalid = new Set(problems.map((p) => p.field));
   const busy = Object.values(actions).some((m) => m.isPending);
+  const canReview = draft.viewer.canReview;
+  const noApprovers = draft.approvers.length === 0;
+
+  // Warn before leaving the page with unsaved typing.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   const setField = (field: Field) => (value: string) => setForm((f) => ({ ...f, [field]: value }));
   const setValue = (id: string, patch: Partial<ValueRow>) =>
@@ -102,9 +113,10 @@ export function CompanyDirectionEditor({
     }
   }
 
-  // Submitting or approving uses the saved draft, so save unsaved typing first.
+  const save = () => actions.save.mutateAsync(toPayload(form, draft.updatedAt));
+  // Submitting uses the saved draft, so save unsaved typing first.
   const saveIfDirty = async () => {
-    if (dirty) await actions.save.mutateAsync(toPayload(form));
+    if (dirty) await save();
   };
 
   const field = (
@@ -139,9 +151,18 @@ export function CompanyDirectionEditor({
         <Notice>
           Submitted{draft.submittedByName && ` by ${draft.submittedByName}`}
           {draft.submittedAt && ` on ${formatDate(draft.submittedAt)}`}.{" "}
-          {canApprove
+          {canReview
             ? "Review the direction, then approve or return it for changes."
-            : "This draft is read only. Management can approve it; you can withdraw it to make changes."}
+            : draft.viewer.isSubmitter && draft.viewer.isApprover
+              ? "You sent this for review, so another approver must approve it. You can withdraw it to make changes."
+              : "This draft is read only while the approvers review it. You can withdraw it to make changes."}
+        </Notice>
+      )}
+      {editable && noApprovers && (
+        <Notice tone="warning">
+          {canManageApprovers
+            ? "Choose who approves the company direction in Preview & send before sending it for review."
+            : "No approvers are chosen yet. Ask an admin to choose approvers before you send this for review."}
         </Notice>
       )}
       {!review && draft.returnReason && <Notice tone="warning">Changes requested: {draft.returnReason}</Notice>}
@@ -194,7 +215,7 @@ export function CompanyDirectionEditor({
         className="space-y-5"
         onSubmit={(e) => {
           e.preventDefault();
-          if (editable) void run(() => actions.save.mutateAsync(toPayload(form)), "Draft saved.");
+          if (editable) void run(save, "Draft saved.");
         }}
       >
         <SectionCard
@@ -329,7 +350,14 @@ export function CompanyDirectionEditor({
       </form>
 
       <PillarsSection number="05" />
-      <ReviewSection number="06" draft={draft} content={form} dirty={dirty} />
+      <ReviewSection
+        number="06"
+        draft={draft}
+        content={form}
+        dirty={dirty}
+        canManageApprovers={canManageApprovers}
+        actions={actions}
+      />
 
       {/* Sticky action bar, as the prototype footer. Outside the form so it stays put across the whole page. */}
       <div className="sticky bottom-2 z-20 rounded-lg border border-border bg-card/95 px-4 py-3 shadow-[0_-4px_14px_rgb(21_49_60/0.08)] backdrop-blur">
@@ -346,31 +374,25 @@ export function CompanyDirectionEditor({
           <div className="flex flex-wrap gap-2">
             {editable && (
               <>
-                {canApprove ? (
-                  <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog("approve")}>
-                    Finalise &amp; lock
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      run(async () => {
-                        await saveIfDirty();
-                        await actions.submit.mutateAsync();
-                      }, "Sent for review.")
-                    }
-                  >
-                    Send for review
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy || noApprovers}
+                  onClick={() =>
+                    run(async () => {
+                      await saveIfDirty();
+                      await actions.submit.mutateAsync();
+                    }, "Sent for review.")
+                  }
+                >
+                  Send for review
+                </Button>
                 <Button type="submit" form="direction-form" disabled={busy || !dirty}>
                   {actions.save.isPending ? "Saving…" : "Save draft"}
                 </Button>
               </>
             )}
-            {review && canApprove && (
+            {review && canReview && (
               <>
                 <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog("return")}>
                   Return for changes
@@ -380,7 +402,7 @@ export function CompanyDirectionEditor({
                 </Button>
               </>
             )}
-            {review && !canApprove && (
+            {review && !canReview && (
               <Button
                 type="button"
                 disabled={busy}
@@ -400,17 +422,12 @@ export function CompanyDirectionEditor({
 
       <ConfirmDialog
         open={dialog === "approve"}
-        title={review ? "Approve & lock" : "Finalise & lock"}
+        title="Approve & lock"
         message={`This publishes the direction as version ${(draft.currentVersion ?? 0) + 1}. Everyone in the organisation will see it, and it becomes read only.`}
-        confirmLabel={review ? "Approve & lock" : "Finalise & lock"}
+        confirmLabel="Approve & lock"
         pending={busy}
         onClose={() => setDialog(null)}
-        onConfirm={() =>
-          run(async () => {
-            await saveIfDirty();
-            await actions.approve.mutateAsync();
-          }, "Company direction approved and locked.")
-        }
+        onConfirm={() => run(() => actions.approve.mutateAsync(), "Company direction approved and locked.")}
       />
       <ConfirmDialog
         open={dialog === "return"}

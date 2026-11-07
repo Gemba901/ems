@@ -74,12 +74,12 @@ export function PillarsSection({ number }: { number?: string }) {
       number={number}
       label="01.02 · Fixed strategic perspectives"
       title="Our six excellence pillars"
-      description="Six fixed perspectives for objective planning in Area 03. Select Know more to understand each one."
+      description="Six fixed perspectives for objective planning in Key Functional Area 3. Select Know more to understand each one."
     >
       <Guide title="How to use the six pillars">
         Read what each pillar covers. These are strategic perspectives, not departments or a required number of
-        objectives. The six names and codes stay fixed. In Area 03, leadership will select the main pillar for each
-        objective.
+        objectives. The six names and codes stay fixed. In Key Functional Area 3, leadership will select the main pillar
+        for each objective.
       </Guide>
       <PillarGrid />
       <p className="border-t border-border pt-3 text-xs text-muted-foreground">

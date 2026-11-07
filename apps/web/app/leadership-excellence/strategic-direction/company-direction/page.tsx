@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { DirectionProblem } from "@/services/leadership-excellence/strategic-direction.service";
-import { useAuthStore, Role } from "@/store/auth.store";
+import { useAuthStore } from "@/store/auth.store";
+import { DIRECTION_ADMINS, DIRECTION_EDITORS } from "@/components/leadership-excellence/strategic-direction/roles";
 import {
   useApprovedDirection,
   useDirectionActions,
@@ -23,10 +24,6 @@ import {
   formatDate,
 } from "@/components/leadership-excellence/strategic-direction/ui";
 
-// Mirror apps/api/src/leadership-excellence/common/lex-roles.ts. The API enforces them again.
-const APPROVERS: Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
-const EDITORS: Role[] = [...APPROVERS, Role.HR, Role.HOD];
-
 // Element ids for the read view, matching the editor's section ids.
 const READ_ANCHORS = {
   organisation: "organisation",
@@ -39,7 +36,7 @@ function Heading({ title, intro, badge }: { title: string; intro: string; badge?
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="space-y-1">
-        <div className={EYEBROW}>Area 01 · Strategic Direction</div>
+        <div className={EYEBROW}>Key Functional Area 1 · Strategic Direction</div>
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         <p className="text-sm text-muted-foreground">{intro}</p>
       </div>
@@ -59,7 +56,7 @@ function EmployeeView() {
     <div className="space-y-6">
       <Heading
         title="Our company direction."
-        intro="Read the current approved wording. Drafts and revisions are not published until management approves them."
+        intro="Read the current approved wording. Drafts and revisions are not published until they are approved."
       />
       {approved.isPending ? (
         <Message>Loading…</Message>
@@ -76,7 +73,7 @@ function EmployeeView() {
         <div className="rounded-xl border border-border bg-card p-6">
           <h2 className="text-base font-semibold">No approved company direction yet</h2>
           <p className="text-sm text-muted-foreground">
-            Management is preparing the direction. Its approved version will appear here after finalisation.
+            Management is preparing the direction. Its approved version will appear here once it is approved.
           </p>
         </div>
       )}
@@ -85,7 +82,7 @@ function EmployeeView() {
   );
 }
 
-function EditorView({ canApprove }: { canApprove: boolean }) {
+function EditorView({ canManageApprovers }: { canManageApprovers: boolean }) {
   const draft = useDirectionDraft();
   const actions = useDirectionActions();
   const [problems, setProblems] = useState<DirectionProblem[]>([]);
@@ -106,7 +103,7 @@ function EditorView({ canApprove }: { canApprove: boolean }) {
         <CompanyDirectionEditor
           key={`${draft.data.id ?? "new"}-${draft.data.updatedAt ?? ""}-${draft.data.status}`}
           draft={draft.data}
-          canApprove={canApprove}
+          canManageApprovers={canManageApprovers}
           actions={actions}
           problems={problems}
           setProblems={setProblems}
@@ -116,13 +113,17 @@ function EditorView({ canApprove }: { canApprove: boolean }) {
   );
 }
 
-/** Area 01 · Strategic Direction: one scrollable page: 01.01 direction, 01.02 pillars, 01.03 review. */
+/** Key Functional Area 1 · Strategic Direction: one scrollable page: 01.01 direction, 01.02 pillars, 01.03 review. */
 export default function StrategicDirectionPage() {
   const role = useAuthStore((s) => s.user?.roleLevel);
   if (!role) return null;
   return (
     <div className={DIRECTION_THEME}>
-      {EDITORS.includes(role) ? <EditorView canApprove={APPROVERS.includes(role)} /> : <EmployeeView />}
+      {DIRECTION_EDITORS.includes(role) ? (
+        <EditorView canManageApprovers={DIRECTION_ADMINS.includes(role)} />
+      ) : (
+        <EmployeeView />
+      )}
     </div>
   );
 }

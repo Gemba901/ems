@@ -5,12 +5,14 @@ import {
   AlertTriangle,
   BarChart3,
   BookOpen,
+  Building2,
   CalendarCog,
   CheckCircle2,
   ClipboardCheck,
   Compass,
   Eye,
   FileBarChart,
+  Gem,
   Flag,
   HandHelping,
   Landmark,
@@ -21,6 +23,7 @@ import {
   Network,
   PenLine,
   Target,
+  Telescope,
   Users,
   UserSquare2,
   Wrench,
@@ -35,6 +38,7 @@ interface LexSidebarProps {
 }
 
 const BASE = "/leadership-excellence";
+const DIRECTION = `${BASE}/strategic-direction/company-direction`;
 
 // One group per area, one item per sub-component, in prototype order (01 → 07).
 // Every route already exists, so area owners never need to edit this file.
@@ -46,9 +50,13 @@ const GROUPS: SidebarNavGroup[] = [
   {
     name: "01 Strategic Direction",
     items: [
-      { label: "Company Direction", shortLabel: "Direction", href: `${BASE}/strategic-direction/company-direction`, icon: Compass },
-      { label: "Excellence Pillars", shortLabel: "Pillars", href: `${BASE}/strategic-direction/pillars`, icon: Landmark },
-      { label: "Preview & Finalise", shortLabel: "Preview", href: `${BASE}/strategic-direction/preview`, icon: Eye },
+      // One page; each link jumps to a section of it (ids in components/leadership-excellence/strategic-direction/useSectionSpy.ts).
+      { label: "Company & purpose", shortLabel: "Company", href: `${DIRECTION}#organisation`, icon: Building2 },
+      { label: "Vision", href: `${DIRECTION}#vision-section`, icon: Telescope },
+      { label: "Mission", href: `${DIRECTION}#mission-section`, icon: Compass },
+      { label: "Core values", shortLabel: "Values", href: `${DIRECTION}#values-section`, icon: Gem },
+      { label: "Six excellence pillars", shortLabel: "Pillars", href: `${DIRECTION}#pillars-section`, icon: Landmark },
+      { label: "Preview & finalise", shortLabel: "Preview", href: `${DIRECTION}#review-section`, icon: Eye },
     ],
   },
   {

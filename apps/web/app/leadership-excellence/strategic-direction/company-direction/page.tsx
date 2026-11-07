@@ -11,7 +11,17 @@ import {
 import { CompanyDirectionEditor } from "@/components/leadership-excellence/strategic-direction/CompanyDirectionEditor";
 import { DirectionReadView } from "@/components/leadership-excellence/strategic-direction/DirectionReadView";
 import { PillarsSection } from "@/components/leadership-excellence/strategic-direction/PillarsSection";
-import { DirectionStatusBadge, formatDate } from "@/components/leadership-excellence/strategic-direction/ui";
+import {
+  EDITOR_SECTIONS,
+  READER_SECTIONS,
+  useSectionSpy,
+} from "@/components/leadership-excellence/strategic-direction/useSectionSpy";
+import {
+  DIRECTION_THEME,
+  DirectionStatusBadge,
+  EYEBROW,
+  formatDate,
+} from "@/components/leadership-excellence/strategic-direction/ui";
 
 // Mirror apps/api/src/leadership-excellence/common/lex-roles.ts. The API enforces them again.
 const APPROVERS: Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
@@ -29,9 +39,7 @@ function Heading({ title, intro, badge }: { title: string; intro: string; badge?
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="space-y-1">
-        <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Area 01 · Strategic Direction
-        </div>
+        <div className={EYEBROW}>Area 01 · Strategic Direction</div>
         <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
         <p className="text-sm text-muted-foreground">{intro}</p>
       </div>
@@ -46,8 +54,9 @@ const Message = ({ children }: { children: React.ReactNode }) => (
 
 function EmployeeView() {
   const approved = useApprovedDirection();
+  useSectionSpy(READER_SECTIONS, approved.status);
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="space-y-6">
       <Heading
         title="Our company direction."
         intro="Read the current approved wording. Drafts and revisions are not published until management approves them."
@@ -80,8 +89,9 @@ function EditorView({ canApprove }: { canApprove: boolean }) {
   const draft = useDirectionDraft();
   const actions = useDirectionActions();
   const [problems, setProblems] = useState<DirectionProblem[]>([]);
+  useSectionSpy(EDITOR_SECTIONS, draft.status);
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="space-y-6">
       <Heading
         title="Write your company direction."
         intro="Enter your purpose, vision, mission and values below. You can save your work at any stage."
@@ -106,10 +116,13 @@ function EditorView({ canApprove }: { canApprove: boolean }) {
   );
 }
 
-/** Area 01 · Strategic Direction — one scrollable page: 01.01 direction, 01.02 pillars, 01.03 review. */
+/** Area 01 · Strategic Direction: one scrollable page: 01.01 direction, 01.02 pillars, 01.03 review. */
 export default function StrategicDirectionPage() {
   const role = useAuthStore((s) => s.user?.roleLevel);
   if (!role) return null;
-  if (!EDITORS.includes(role)) return <EmployeeView />;
-  return <EditorView canApprove={APPROVERS.includes(role)} />;
+  return (
+    <div className={DIRECTION_THEME}>
+      {EDITORS.includes(role) ? <EditorView canApprove={APPROVERS.includes(role)} /> : <EmployeeView />}
+    </div>
+  );
 }

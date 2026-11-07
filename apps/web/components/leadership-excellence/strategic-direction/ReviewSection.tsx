@@ -19,7 +19,7 @@ type Open = "preview" | "history" | "approved" | null;
 const approvalLine = (a: NonNullable<StrategicDirectionDraft["approved"]>) =>
   `Approved by ${a.approvedByName ?? "management"} · ${formatDate(a.approvedAt)}.`;
 
-/** 01.03 — preview the whole direction, read its history and the live approved version. */
+/** 01.03: preview the whole direction, read its history and the live approved version. */
 export function ReviewSection({
   draft,
   content,
@@ -49,7 +49,7 @@ export function ReviewSection({
           lock when the required information is complete; an editor sends the draft for one review.
         </p>
         <p>
-          Approved wording cannot be changed in place. Create a revision to change it — employees keep seeing the
+          Approved wording cannot be changed in place. Create a revision to change it. Employees keep seeing the
           approved version until the revision is approved.
         </p>
       </Guide>
@@ -78,11 +78,11 @@ export function ReviewSection({
         <summary className="cursor-pointer font-medium">What comes after Area 01?</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
-            <strong className="text-foreground">Area 02 — Organisation &amp; Performance Framework:</strong> use EMS
+            <strong className="text-foreground">Area 02 · Organisation &amp; Performance Framework:</strong> use EMS
             records to show units, departments, positions and reporting relationships.
           </li>
           <li>
-            <strong className="text-foreground">Area 03 — Performance Planning &amp; Alignment:</strong> create
+            <strong className="text-foreground">Area 03 · Performance Planning &amp; Alignment:</strong> create
             objectives, linked goals and department plans.
           </li>
         </ul>
@@ -188,11 +188,11 @@ function HistoryDialog({ open, onClose }: { open: boolean; onClose: () => void }
                           <dd className="grid gap-2 sm:grid-cols-2">
                             <div className="rounded-md bg-muted/50 p-2">
                               <div className="text-[11px] font-medium text-muted-foreground uppercase">Before</div>
-                              <p className="text-sm whitespace-pre-line">{changeText(change.from) || "—"}</p>
+                              <p className="text-sm whitespace-pre-line">{changeText(change.from) || "Not entered"}</p>
                             </div>
-                            <div className="rounded-md bg-gemba-lime/10 p-2">
+                            <div className="rounded-md bg-secondary p-2">
                               <div className="text-[11px] font-medium text-muted-foreground uppercase">After</div>
-                              <p className="text-sm whitespace-pre-line">{changeText(change.to) || "—"}</p>
+                              <p className="text-sm whitespace-pre-line">{changeText(change.to) || "Not entered"}</p>
                             </div>
                           </dd>
                         </div>

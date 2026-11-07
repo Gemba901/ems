@@ -3,7 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { Guide, SectionCard } from "./ui";
 
-/** 01.02 — the six fixed excellence pillars. Fixed reference data; Area 03 picks one per objective. */
+/** 01.02: the six fixed excellence pillars. Fixed reference data; Area 03 picks one per objective. */
 export const PILLARS = [
   {
     code: "LEX",
@@ -48,13 +48,13 @@ export function PillarGrid() {
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {PILLARS.map((p) => (
         <li key={p.code} className="rounded-lg border border-border bg-card p-4">
-          <span className="inline-flex rounded-md bg-gemba-navy px-2 py-0.5 text-xs font-semibold tracking-wide text-white">
+          <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-semibold tracking-wide text-secondary-foreground">
             {p.code}
           </span>
           <h3 className="mt-2 text-sm font-semibold text-foreground">{p.name}</h3>
           <p className="text-xs text-muted-foreground">{p.tag}</p>
           <details className="group mt-3">
-            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-gemba-navy dark:text-foreground [&::-webkit-details-marker]:hidden">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-semibold text-primary [&::-webkit-details-marker]:hidden">
               <span className="group-open:hidden">Know more</span>
               <span className="hidden group-open:inline">Show less</span>
               <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />

@@ -22,7 +22,7 @@ export interface SectionStamp {
   byName: string | null;
 }
 
-/** GET / — the working draft (editors only). `id` is null until the first save. */
+/** GET /: the working draft (editors only). `id` is null until the first save. */
 export interface StrategicDirectionDraft extends Record<TextField, string | null> {
   id: string | null;
   status: DirectionStatus;
@@ -38,7 +38,7 @@ export interface StrategicDirectionDraft extends Record<TextField, string | null
   approved: { version: number; approvedAt: string; approvedByName: string | null } | null;
 }
 
-/** GET /approved — what every employee may read. */
+/** GET /approved: what every employee may read. */
 export interface ApprovedDirection extends Record<TextField, string> {
   version: number;
   values: CoreValue[];

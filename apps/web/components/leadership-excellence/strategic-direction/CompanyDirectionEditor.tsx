@@ -214,7 +214,7 @@ export function CompanyDirectionEditor({
             {field("business", { placeholder: "For example: Furniture manufacturing" })}
           </div>
           {field("purpose", {
-            label: "Purpose — Why we exist",
+            label: "Purpose: Why we exist",
             multiline: true,
             placeholder: "Explain why your organisation exists, whom it serves and the value it creates.",
             hint: "Describe your reason for existing, beyond simply earning money.",
@@ -225,7 +225,7 @@ export function CompanyDirectionEditor({
         <SectionCard
           id="vision-section"
           number="02"
-          title="Vision — Our North Star"
+          title="Vision: Our North Star"
           description="What future do we want to create?"
         >
           {field("vision", {
@@ -245,7 +245,7 @@ export function CompanyDirectionEditor({
         <SectionCard
           id="mission-section"
           number="03"
-          title="Mission — Our Path"
+          title="Mission: Our Path"
           description="What do we do every day to move towards our vision?"
         >
           {field("mission", {
@@ -266,7 +266,7 @@ export function CompanyDirectionEditor({
         <SectionCard
           id="values-section"
           number="04"
-          title="Core values — How we work"
+          title="Core values: How we work"
           description="Give each value a short name, then explain what it means in daily work."
         >
           {form.values.length === 0 && <p className="text-sm text-muted-foreground">No values yet.</p>}
@@ -332,7 +332,7 @@ export function CompanyDirectionEditor({
       <ReviewSection number="06" draft={draft} content={form} dirty={dirty} />
 
       {/* Sticky action bar, as the prototype footer. Outside the form so it stays put across the whole page. */}
-      <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="sticky bottom-2 z-20 rounded-lg border border-border bg-card/95 px-4 py-3 shadow-[0_-4px_14px_rgb(21_49_60/0.08)] backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm text-muted-foreground" role="status" aria-live="polite">
             {actions.save.isPending

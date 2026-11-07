@@ -8,6 +8,25 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, X } from "lucide-react";
 import type { DirectionStatus, SectionStamp } from "@/services/leadership-excellence/strategic-direction.service";
 
+// Prototype palette (teal), scoped to Strategic Direction by overriding the kit's colour tokens.
+// globals.css uses @theme inline, so utilities read the raw tokens (--primary, …), not --color-*.
+// Kit components (Button, Badge, Input) pick it up without changing globals.css.
+export const DIRECTION_THEME = cn(
+  "[--primary:#12796f] [--primary-foreground:#fff] [--ring:#12796f]",
+  "[--foreground:#1c3440] [--card-foreground:#1c3440] [--muted-foreground:#627d87]",
+  "[--border:#d8e4e7] [--input:#b9cdd3] [--muted:#f4f8f8]",
+  "[--secondary:#e9f4f1] [--secondary-foreground:#167366]",
+  "[--accent:#edf6f3] [--accent-foreground:#0d665d]",
+  "dark:[--primary:#3fb5a6] dark:[--primary-foreground:#0b1f26] dark:[--ring:#3fb5a6]",
+  "dark:[--foreground:#e6f1f2] dark:[--card-foreground:#e6f1f2] dark:[--muted-foreground:#9bb6bd]",
+  "dark:[--border:#2a4650] dark:[--input:#36565f] dark:[--muted:#16313a]",
+  "dark:[--secondary:#173f3d] dark:[--secondary-foreground:#8fd9cd]",
+  "dark:[--accent:#173f3d] dark:[--accent-foreground:#8fd9cd]",
+);
+
+/** Teal uppercase label (prototype `.fw-label`). */
+export const EYEBROW = "text-xs font-semibold tracking-wider text-primary uppercase";
+
 // Dates follow the prototype: East Africa Time, day month year.
 const DATE = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -105,11 +124,11 @@ export function SectionCard({
       aria-labelledby={`${id}-title`}
       className="scroll-mt-24 rounded-xl border border-border bg-card p-5 sm:p-6"
     >
-      {label && <div className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</div>}
+      {label && <div className={cn("mb-3", EYEBROW)}>{label}</div>}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div className="flex gap-3">
           {number && (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {number}
             </span>
           )}
@@ -147,8 +166,10 @@ export function DirectionStatusBadge({ status, hasApproved }: { status: Directio
           : "Draft · editable";
   return (
     <Badge
-      variant={status === "APPROVED" ? "default" : status === "IN_REVIEW" ? "outline" : "secondary"}
-      className={cn(status === "APPROVED" && "bg-gemba-lime-ink text-white")}
+      variant={status === "APPROVED" ? "default" : "secondary"}
+      className={cn(
+        status === "IN_REVIEW" && "bg-[#fff1da] text-[#8d5d16] dark:bg-[#3d2e14] dark:text-[#f0c77d]",
+      )}
     >
       {label}
     </Badge>
@@ -169,9 +190,9 @@ export function Notice({
       role="status"
       className={cn(
         "flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm",
-        tone === "info" && "border-border bg-muted/50 text-foreground",
-        tone === "warning" && "border-destructive/30 bg-destructive/5 text-foreground",
-        tone === "success" && "border-gemba-lime/40 bg-gemba-lime/10 text-foreground",
+        tone === "info" && "border-primary/25 bg-accent text-foreground",
+        tone === "warning" && "border-[#ead8b4] bg-[#fff8eb] text-foreground dark:border-[#5c4a26] dark:bg-[#2e2615]",
+        tone === "success" && "border-[#c6e4d5] bg-[#edf8f3] text-foreground dark:border-[#2c5a47] dark:bg-[#15302a]",
       )}
     >
       <div>{children}</div>
@@ -183,8 +204,8 @@ export function Notice({
 /** Collapsible "how to" guide at the top of a section (prototype `.inline-guide`). */
 export function Guide({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <details className="group rounded-lg border border-border bg-muted/40 px-4 py-3">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+    <details className="group rounded-lg border border-border bg-muted px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold text-secondary-foreground [&::-webkit-details-marker]:hidden">
         {title}
         <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
       </summary>
@@ -225,7 +246,7 @@ export function Modal({
       aria-labelledby={titleId}
       onClose={onClose}
       className={cn(
-        "m-auto max-h-[calc(100dvh-2rem)] rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40",
+        "m-auto max-h-[calc(100dvh-2rem)] rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-[#102f3b]/50",
         size === "sm" ? "w-[min(32rem,calc(100vw-2rem))]" : "w-[min(56rem,calc(100vw-2rem))]",
       )}
     >
@@ -234,7 +255,7 @@ export function Modal({
           <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
             <div>
               {eyebrow && (
-                <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{eyebrow}</div>
+                <div className={EYEBROW}>{eyebrow}</div>
               )}
               <h2 id={titleId} className="text-base font-semibold">
                 {title}

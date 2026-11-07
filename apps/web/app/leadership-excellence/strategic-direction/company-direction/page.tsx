@@ -9,14 +9,21 @@ import {
   useDirectionDraft,
 } from "@/hooks/leadership-excellence/useStrategicDirection";
 import { CompanyDirectionEditor } from "@/components/leadership-excellence/strategic-direction/CompanyDirectionEditor";
-import {
-  DirectionReadView,
-  DirectionStatusBadge,
-} from "@/components/leadership-excellence/strategic-direction/ui";
+import { DirectionReadView } from "@/components/leadership-excellence/strategic-direction/DirectionReadView";
+import { PillarsSection } from "@/components/leadership-excellence/strategic-direction/PillarsSection";
+import { DirectionStatusBadge, formatDate } from "@/components/leadership-excellence/strategic-direction/ui";
 
 // Mirror apps/api/src/leadership-excellence/common/lex-roles.ts. The API enforces them again.
 const APPROVERS: Role[] = [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT];
 const EDITORS: Role[] = [...APPROVERS, Role.HR, Role.HOD];
+
+// Element ids for the read view, matching the editor's section ids.
+const READ_ANCHORS = {
+  organisation: "organisation",
+  vision: "vision-section",
+  mission: "mission-section",
+  values: "values-section",
+};
 
 function Heading({ title, intro, badge }: { title: string; intro: string; badge?: React.ReactNode }) {
   return (
@@ -50,7 +57,12 @@ function EmployeeView() {
       ) : approved.isError ? (
         <Message>Could not load the company direction. {(approved.error as Error).message}</Message>
       ) : approved.data ? (
-        <DirectionReadView direction={approved.data} />
+        <DirectionReadView
+          content={approved.data}
+          eyebrow={`Approved company direction · Version ${approved.data.version}`}
+          summary={`Approved${approved.data.approvedByName ? ` by ${approved.data.approvedByName}` : ""} · ${formatDate(approved.data.approvedAt)}.`}
+          anchors={READ_ANCHORS}
+        />
       ) : (
         <div className="rounded-xl border border-border bg-card p-6">
           <h2 className="text-base font-semibold">No approved company direction yet</h2>
@@ -59,6 +71,7 @@ function EmployeeView() {
           </p>
         </div>
       )}
+      <PillarsSection />
     </div>
   );
 }
@@ -93,7 +106,8 @@ function EditorView({ canApprove }: { canApprove: boolean }) {
   );
 }
 
-export default function CompanyDirectionPage() {
+/** Area 01 · Strategic Direction — one scrollable page: 01.01 direction, 01.02 pillars, 01.03 review. */
+export default function StrategicDirectionPage() {
   const role = useAuthStore((s) => s.user?.roleLevel);
   if (!role) return null;
   if (!EDITORS.includes(role)) return <EmployeeView />;

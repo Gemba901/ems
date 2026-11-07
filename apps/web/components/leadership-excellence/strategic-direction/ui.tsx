@@ -5,11 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type {
-  ApprovedDirection,
-  DirectionStatus,
-  SectionStamp,
-} from "@/services/leadership-excellence/strategic-direction.service";
+import { ChevronDown, X } from "lucide-react";
+import type { DirectionStatus, SectionStamp } from "@/services/leadership-excellence/strategic-direction.service";
 
 // Dates follow the prototype: East Africa Time, day month year.
 const DATE = new Intl.DateTimeFormat("en-GB", {
@@ -94,7 +91,8 @@ export function SectionCard({
   children,
 }: {
   id: string;
-  number: string;
+  /** Step number badge; omitted in the read-only employee view. */
+  number?: string;
   title: string;
   description: string;
   label?: string;
@@ -102,13 +100,19 @@ export function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-6 rounded-xl border border-border bg-card p-5 sm:p-6">
+    <section
+      id={id}
+      aria-labelledby={`${id}-title`}
+      className="scroll-mt-24 rounded-xl border border-border bg-card p-5 sm:p-6"
+    >
       {label && <div className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</div>}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div className="flex gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-            {number}
-          </span>
+          {number && (
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+              {number}
+            </span>
+          )}
           <div>
             <h2 id={`${id}-title`} className="text-base font-semibold text-foreground">
               {title}
@@ -176,10 +180,78 @@ export function Notice({
   );
 }
 
-/**
- * Confirmation dialog on the native <dialog> (focus trap and Escape for free).
- * With `reasonLabel`, the confirm button stays disabled until a reason is typed.
- */
+/** Collapsible "how to" guide at the top of a section (prototype `.inline-guide`). */
+export function Guide({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="group rounded-lg border border-border bg-muted/40 px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+        {title}
+        <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="mt-2 space-y-2 text-sm text-muted-foreground">{children}</div>
+    </details>
+  );
+}
+
+/** Modal on the native <dialog>: focus trap, Escape and the backdrop for free. */
+export function Modal({
+  open,
+  title,
+  eyebrow,
+  onClose,
+  size = "sm",
+  children,
+}: {
+  open: boolean;
+  title: string;
+  eyebrow?: string;
+  onClose: () => void;
+  size?: "sm" | "lg";
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    else if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      onClose={onClose}
+      className={cn(
+        "m-auto max-h-[calc(100dvh-2rem)] rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40",
+        size === "sm" ? "w-[min(32rem,calc(100vw-2rem))]" : "w-[min(56rem,calc(100vw-2rem))]",
+      )}
+    >
+      {open && (
+        <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
+          <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+            <div>
+              {eyebrow && (
+                <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{eyebrow}</div>
+              )}
+              <h2 id={titleId} className="text-base font-semibold">
+                {title}
+              </h2>
+            </div>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}>
+              <X />
+            </Button>
+          </header>
+          <div className="overflow-y-auto p-5">{children}</div>
+        </div>
+      )}
+    </dialog>
+  );
+}
+
+/** Confirmation dialog. With `reasonLabel`, the confirm button stays disabled until a reason is typed. */
 export function ConfirmDialog({
   open,
   title,
@@ -201,41 +273,23 @@ export function ConfirmDialog({
   onConfirm: (reason: string) => void;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const [reason, setReason] = useState("");
-  const titleId = useId();
   const reasonId = useId();
-
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    else if (!open && dialog.open) dialog.close();
-  }, [open]);
-
   const needsReason = !!reasonLabel;
+  const close = () => {
+    setReason("");
+    onClose();
+  };
   return (
-    <dialog
-      ref={ref}
-      aria-labelledby={titleId}
-      onClose={() => {
-        setReason("");
-        onClose();
-      }}
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40"
-    >
+    <Modal open={open} title={title} onClose={close}>
       <form
-        method="dialog"
-        className="space-y-4 p-5"
+        className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
           if (needsReason && !reason.trim()) return;
           onConfirm(reason.trim());
         }}
       >
-        <h2 id={titleId} className="text-base font-semibold">
-          {title}
-        </h2>
         <p className="text-sm text-muted-foreground">{message}</p>
         {needsReason && (
           <div className="space-y-1.5">
@@ -254,7 +308,7 @@ export function ConfirmDialog({
           </div>
         )}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={close}>
             Cancel
           </Button>
           <Button type="submit" disabled={pending || (needsReason && !reason.trim())}>
@@ -262,48 +316,6 @@ export function ConfirmDialog({
           </Button>
         </div>
       </form>
-    </dialog>
-  );
-}
-
-/** Read-only reading view of an approved direction (employee view; reused by 01.03 preview). */
-export function DirectionReadView({ direction }: { direction: ApprovedDirection }) {
-  const block = (heading: string, text: string, why?: { label: string; text: string }) => (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">{heading}</h3>
-      <p className="text-base whitespace-pre-line text-foreground">{text}</p>
-      {why && (
-        <div className="rounded-lg bg-muted/50 p-3">
-          <div className="text-xs font-medium text-muted-foreground">{why.label}</div>
-          <p className="text-sm whitespace-pre-line">{why.text}</p>
-        </div>
-      )}
-    </div>
-  );
-  return (
-    <article className="space-y-6 rounded-xl border border-border bg-card p-5 sm:p-6">
-      <header className="space-y-1">
-        <h2 className="text-xl font-semibold">{direction.company}</h2>
-        <p className="text-sm text-muted-foreground">{direction.business}</p>
-        <p className="text-xs text-muted-foreground">
-          Approved · version {direction.version} · {formatDate(direction.approvedAt)}
-          {direction.approvedByName && ` · ${direction.approvedByName}`}
-        </p>
-      </header>
-      {block("Purpose — Why we exist", direction.purpose)}
-      {block("Vision — Our North Star", direction.vision, { label: "Why this vision?", text: direction.visionWhy })}
-      {block("Mission — Our Path", direction.mission, { label: "Why this mission?", text: direction.missionWhy })}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">Core values — How we work</h3>
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {direction.values.map((v) => (
-            <li key={v.id} className="rounded-lg border border-border p-3">
-              <div className="font-medium">{v.name}</div>
-              <p className="text-sm whitespace-pre-line text-muted-foreground">{v.why}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </article>
+    </Modal>
   );
 }

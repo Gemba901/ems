@@ -16,7 +16,9 @@ import {
   type StrategicDirectionDraft,
   type TextField as Field,
 } from "@/services/leadership-excellence/strategic-direction.service";
-import { ConfirmDialog, Notice, SectionCard, SectionMeta, TextField, formatDate } from "./ui";
+import { PillarsSection } from "./PillarsSection";
+import { ReviewSection } from "./ReviewSection";
+import { ConfirmDialog, Guide, Notice, SectionCard, SectionMeta, TextField, formatDate } from "./ui";
 
 type ValueRow = { id: string; name: string; why: string };
 type FormState = Record<Field, string> & { values: ValueRow[] };
@@ -105,7 +107,10 @@ export function CompanyDirectionEditor({
     if (dirty) await actions.save.mutateAsync(toPayload(form));
   };
 
-  const field = (name: Field, props: { multiline?: boolean; hint?: string; placeholder?: string; label?: string; required?: boolean }) => (
+  const field = (
+    name: Field,
+    props: { multiline?: boolean; hint?: string; placeholder?: string; label?: string; required?: boolean },
+  ) => (
     <TextField
       id={name}
       label={props.label ?? FIELD_LABELS[name]}
@@ -171,7 +176,10 @@ export function CompanyDirectionEditor({
           <ul className="mt-2 list-disc space-y-1 pl-5">
             {problems.map((p) => (
               <li key={p.field}>
-                <a href={`#${p.field === "values" ? "values-section" : p.field}`} className="underline underline-offset-2">
+                <a
+                  href={`#${p.field === "values" ? "values-section" : p.field}`}
+                  className="underline underline-offset-2"
+                >
                   {p.label}
                 </a>
               </li>
@@ -181,6 +189,7 @@ export function CompanyDirectionEditor({
       )}
 
       <form
+        id="direction-form"
         noValidate
         className="space-y-5"
         onSubmit={(e) => {
@@ -195,6 +204,11 @@ export function CompanyDirectionEditor({
           title="Company & purpose"
           description="Tell us who you are and why your organisation exists."
         >
+          <Guide title="How to write your company direction">
+            Use the organisation&apos;s official name and describe its business. Purpose explains why the organisation
+            exists, whom it serves and the value it creates. Then describe the future in the Vision, daily work in the
+            Mission, and expected behaviour in the Values.
+          </Guide>
           <div className="grid gap-5 sm:grid-cols-2">
             {field("company", { placeholder: "Enter your organisation name" })}
             {field("business", { placeholder: "For example: Furniture manufacturing" })}
@@ -208,7 +222,12 @@ export function CompanyDirectionEditor({
           <SectionMeta stamp={draft.sectionMeta.organisation} />
         </SectionCard>
 
-        <SectionCard id="vision-section" number="02" title="Vision — Our North Star" description="What future do we want to create?">
+        <SectionCard
+          id="vision-section"
+          number="02"
+          title="Vision — Our North Star"
+          description="What future do we want to create?"
+        >
           {field("vision", {
             multiline: true,
             placeholder: "Write your vision here...",
@@ -292,7 +311,12 @@ export function CompanyDirectionEditor({
           ))}
           {editable && (
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" variant="outline" onClick={addValue} disabled={form.values.length >= VALUE_LIMITS.count}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addValue}
+                disabled={form.values.length >= VALUE_LIMITS.count}
+              >
                 <Plus /> Add value
               </Button>
               <span className="text-xs text-muted-foreground">
@@ -302,68 +326,77 @@ export function CompanyDirectionEditor({
           )}
           <SectionMeta stamp={draft.sectionMeta.values} />
         </SectionCard>
+      </form>
 
-        {/* Sticky action bar, as the prototype footer. */}
-        <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground" role="status" aria-live="polite">
-              {actions.save.isPending ? "Saving…" : dirty ? "Unsaved changes" : draft.id ? "All changes saved" : "Ready for you to write"}
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {editable && (
-                <>
-                  {canApprove ? (
-                    <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog("approve")}>
-                      Finalise &amp; lock
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        run(async () => {
-                          await saveIfDirty();
-                          await actions.submit.mutateAsync();
-                        }, "Sent for review.")
-                      }
-                    >
-                      Send for review
-                    </Button>
-                  )}
-                  <Button type="submit" disabled={busy || !dirty}>
-                    {actions.save.isPending ? "Saving…" : "Save draft"}
+      <PillarsSection number="05" />
+      <ReviewSection number="06" draft={draft} content={form} dirty={dirty} />
+
+      {/* Sticky action bar, as the prototype footer. Outside the form so it stays put across the whole page. */}
+      <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm text-muted-foreground" role="status" aria-live="polite">
+            {actions.save.isPending
+              ? "Saving…"
+              : dirty
+                ? "Unsaved changes"
+                : draft.id
+                  ? "All changes saved"
+                  : "Ready for you to write"}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {editable && (
+              <>
+                {canApprove ? (
+                  <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog("approve")}>
+                    Finalise &amp; lock
                   </Button>
-                </>
-              )}
-              {review && canApprove && (
-                <>
-                  <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog("return")}>
-                    Return for changes
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () => {
+                        await saveIfDirty();
+                        await actions.submit.mutateAsync();
+                      }, "Sent for review.")
+                    }
+                  >
+                    Send for review
                   </Button>
-                  <Button type="button" disabled={busy} onClick={() => setDialog("approve")}>
-                    Approve &amp; lock
-                  </Button>
-                </>
-              )}
-              {review && !canApprove && (
-                <Button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => run(() => actions.withdraw.mutateAsync(), "Submission withdrawn. You can edit again.")}
-                >
-                  Withdraw to edit
+                )}
+                <Button type="submit" form="direction-form" disabled={busy || !dirty}>
+                  {actions.save.isPending ? "Saving…" : "Save draft"}
                 </Button>
-              )}
-              {locked && (
-                <Button type="button" disabled={busy} onClick={() => setDialog("revise")}>
-                  Create revision
+              </>
+            )}
+            {review && canApprove && (
+              <>
+                <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog("return")}>
+                  Return for changes
                 </Button>
-              )}
-            </div>
+                <Button type="button" disabled={busy} onClick={() => setDialog("approve")}>
+                  Approve &amp; lock
+                </Button>
+              </>
+            )}
+            {review && !canApprove && (
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => run(() => actions.withdraw.mutateAsync(), "Submission withdrawn. You can edit again.")}
+              >
+                Withdraw to edit
+              </Button>
+            )}
+            {locked && (
+              <Button type="button" disabled={busy} onClick={() => setDialog("revise")}>
+                Create revision
+              </Button>
+            )}
           </div>
         </div>
-      </form>
+      </div>
 
       <ConfirmDialog
         open={dialog === "approve"}

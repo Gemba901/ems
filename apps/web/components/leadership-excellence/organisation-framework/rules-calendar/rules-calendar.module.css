@@ -1,0 +1,135 @@
+/* Area 02.03 only. Teal actions and navy text follow the supplied LEX prototype (Areas 01–07).
+   Map to semantic UI-kit tokens without changing the shared app theme. */
+.workspace {
+  --primary: #12796f;
+  --primary-foreground: #ffffff;
+  --foreground: #1c3440;
+  --card-foreground: var(--foreground);
+  --muted-foreground: #526c76;
+  --accent: #edf6f3;
+  --accent-foreground: #28645b;
+  --secondary: #e5f0ed;
+  --secondary-foreground: #28645b;
+  --border: #d8e4e7;
+  --input: #c6d8d2;
+  --ring: #12796f;
+  --calendar-draft-bg: #eef2f5;
+  --calendar-draft-text: #475569;
+  --calendar-review-bg: #fff3d6;
+  --calendar-review-text: #785310;
+  --calendar-approved-bg: #e4f3ed;
+  --calendar-approved-text: #25634f;
+}
+
+.workspace input[type="checkbox"] {
+  accent-color: var(--primary);
+}
+
+.workspace select:focus-visible,
+.workspace textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.workspace button[data-slot="button"]:not(:disabled):hover {
+  filter: brightness(0.97);
+}
+
+.sectionHeader {
+  border-inline-start: 3px solid var(--primary);
+  margin-inline: 1rem;
+  padding-inline-start: 0.875rem;
+  padding-inline-end: 0;
+}
+
+.sectionHeader [data-slot="card-title"] {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.stepTab {
+  min-height: 3rem;
+  height: auto;
+  justify-content: flex-start;
+  padding: 0.65rem 1rem;
+  gap: 0.65rem;
+  white-space: normal;
+  text-align: left;
+  color: var(--muted-foreground);
+}
+
+.stepTab.activeStep {
+  border-color: var(--primary);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.stepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.activeStep .stepNumber {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.dayChoice[data-selected="true"] {
+  border-color: var(--primary);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.draft {
+  background: var(--calendar-draft-bg);
+  color: var(--calendar-draft-text);
+}
+
+.review {
+  background: var(--calendar-review-bg);
+  color: var(--calendar-review-text);
+}
+
+.approved {
+  background: var(--calendar-approved-bg);
+  color: var(--calendar-approved-text);
+}
+
+:global(.dark) .workspace {
+  --primary: #8dd1be;
+  --primary-foreground: #14372e;
+  --foreground: #e4f0ed;
+  --muted-foreground: #adbfba;
+  --accent: #213b34;
+  --accent-foreground: #b6e7d9;
+  --secondary: #29463c;
+  --secondary-foreground: #b6e7d9;
+  --border: #3b554c;
+  --input: #526f64;
+  --ring: #8dd1be;
+  --calendar-draft-bg: #334155;
+  --calendar-draft-text: #e2e8f0;
+  --calendar-review-bg: #513c18;
+  --calendar-review-text: #fde5aa;
+  --calendar-approved-bg: #214c3b;
+  --calendar-approved-text: #b8edd5;
+}

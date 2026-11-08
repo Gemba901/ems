@@ -1,3 +1,4 @@
+import { RulesCalendarModule } from './rules-calendar/rules-calendar.module'; // LEX 02.03
 import { Module } from '@nestjs/common';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { PrismaModule } from 'src/prisma/prisma.module';
@@ -7,9 +8,13 @@ import { OrganisationFrameworkController } from './organisation-framework.contro
 import { OrganisationFrameworkService } from './organisation-framework.service';
 
 @Module({
-  imports: [TenancyModule, PrismaModule, AuthModule],
+  imports: [
+    RulesCalendarModule, // LEX 02.03
+TenancyModule, PrismaModule, AuthModule],
   controllers: [OrganisationFrameworkController],
   providers: [OrganisationFrameworkService, ModuleGuard],
-  exports: [OrganisationFrameworkService],
+  exports: [
+    RulesCalendarModule, // LEX 02.03
+OrganisationFrameworkService],
 })
 export class OrganisationFrameworkModule {}

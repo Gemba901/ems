@@ -10,10 +10,14 @@ import { OrganogramController } from "./organogram/organogram.controller";
 import { OrganogramService } from "./organogram/organogram.service";
 import { CoreRecordsStructureSource } from "./organogram/core-records-structure.source";
 import { ORGANISATION_STRUCTURE_SOURCE } from "./organogram/organisation-structure.contract";
+import { PositionChartController } from "./positions/position-chart.controller";
+import { PositionChartService } from "./positions/position-chart.service";
+import { CoreRecordsPositionsSource } from "./positions/core-records-positions.source";
+import { POSITION_CHART_SOURCE } from "./positions/position-chart.contract";
 
 @Module({
   imports: [RulesCalendarModule, TenancyModule, PrismaModule, AuthModule],
-  controllers: [OrganisationFrameworkController, OrganogramController],
+  controllers: [OrganisationFrameworkController, OrganogramController, PositionChartController],
   providers: [
     OrganisationFrameworkService,
     ModuleGuard,
@@ -23,11 +27,18 @@ import { ORGANISATION_STRUCTURE_SOURCE } from "./organogram/organisation-structu
       provide: ORGANISATION_STRUCTURE_SOURCE,
       useClass: CoreRecordsStructureSource,
     },
+    PositionChartService,
+    // 02.02's positions source. TEMPORARY: worked out from core people records until EMS's service is on this branch.
+    {
+      provide: POSITION_CHART_SOURCE,
+      useClass: CoreRecordsPositionsSource,
+    },
   ],
   exports: [
     RulesCalendarModule,
     OrganisationFrameworkService,
     OrganogramService,
+    PositionChartService,
   ],
 })
 export class OrganisationFrameworkModule {}

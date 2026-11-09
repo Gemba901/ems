@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   defaultOpen,
+  childUnitLabel,
+  highlightedUnits,
   indexUnits,
   initialScope,
   searchUnits,
@@ -245,4 +247,39 @@ test("Fit changes representation before turning a large organisation into a tiny
         );
       }
   }
+});
+
+test("mixed company children are units, not a false branch count", () => {
+  assert.equal(
+    childUnitLabel([
+      u("branch", "company", "BRANCH"),
+      u("empty-dept", "company", "DEPARTMENT"),
+    ]),
+    "units",
+  );
+  assert.equal(
+    childUnitLabel([u("dept", "branch", "DEPARTMENT")]),
+    "department",
+  );
+  assert.equal(
+    childUnitLabel([
+      u("d1", "branch", "DEPARTMENT"),
+      u("d2", "branch", "DEPARTMENT"),
+    ]),
+    "departments",
+  );
+});
+test("active path and team highlights keep the last two opens without closing older teams", () => {
+  const index = indexUnits(s);
+  const open = new Set(["company", "b1", "b2", "d1"]);
+  const h = highlightedUnits(index, "d1", ["b1", "b2", "d1"], open);
+  assert.deepEqual([...h.active], ["company", "b1", "d1"]);
+  assert.equal(h.activeEdges.has("s1"), true);
+  assert.deepEqual([...h.recentUnits], ["b2", "d1"]);
+  assert.equal(open.has("b1"), true);
+  open.delete("d1");
+  assert.deepEqual(
+    [...highlightedUnits(index, null, ["b2", "d1"], open).recentUnits],
+    ["b2"],
+  );
 });

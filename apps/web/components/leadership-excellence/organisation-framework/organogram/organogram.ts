@@ -28,6 +28,52 @@ export function indexUnits(structure: OrganisationStructure) {
 }
 export type UnitIndex = ReturnType<typeof indexUnits>;
 
+/** A company can have both branches and unassigned department records. */
+export function childUnitLabel(children: OrganisationUnit[]) {
+  const types = new Set(children.map((u) => u.type));
+  const singular =
+    types.size === 1
+      ? (
+          {
+            COMPANY: "company",
+            BRANCH: "branch / site / plant",
+            DEPARTMENT: "department",
+            SECTION: "section",
+          } as const
+        )[children[0].type]
+      : "unit";
+  if (children.length === 1) return singular;
+  if (singular === "branch / site / plant") return "branches / sites / plants";
+  if (singular === "company") return "companies";
+  return `${singular}s`;
+}
+
+export function highlightedUnits(
+  index: UnitIndex,
+  activeId: string | null,
+  recent: string[],
+  open: Set<string>,
+) {
+  const active = new Set(
+    activeId ? index.pathTo(activeId).map((u) => u.id) : [],
+  );
+  const activeEdges = new Set(
+    activeId
+      ? index
+          .pathTo(activeId)
+          .slice(1)
+          .map((u) => u.id)
+      : [],
+  );
+  if (activeId)
+    index.childrenOf(activeId).forEach((u) => activeEdges.add(u.id));
+  const recentUnits = new Set(recent.slice(-2).filter((id) => open.has(id)));
+  const recentEdges = new Set<string>();
+  for (const id of recentUnits)
+    index.childrenOf(id).forEach((u) => recentEdges.add(u.id));
+  return { active, activeEdges, recentUnits, recentEdges };
+}
+
 /** Every unit below `id` (inclusive). */
 export function within(index: UnitIndex, id: string) {
   const out = new Set<string>();
@@ -50,7 +96,7 @@ export function searchUnits(
   const q = term.trim().toLowerCase();
   if (!q) return null;
   const hits = units.filter((u) =>
-    `${u.name} ${u.type} ${u.branch ?? ""} ${u.lead?.name ?? ""}`
+    `${u.name} ${u.type} ${TYPE_LABEL[u.type]} ${u.branch ?? ""} ${u.lead?.name ?? ""}`
       .toLowerCase()
       .includes(q),
   );
@@ -65,7 +111,7 @@ export function defaultOpen(structure: OrganisationStructure, scope = "") {
 }
 export const TYPE_LABEL: Record<OrganisationUnit["type"], string> = {
   COMPANY: "Company",
-  BRANCH: "Branch / site",
+  BRANCH: "Branch / site / plant",
   DEPARTMENT: "Department",
   SECTION: "Section",
 };

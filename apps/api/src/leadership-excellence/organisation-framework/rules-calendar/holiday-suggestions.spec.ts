@@ -1,11 +1,16 @@
 import { holidaySuggestions } from "./holiday-suggestions";
 
 describe("holiday suggestions for calendar setup", () => {
-  it("uses Mazingira Day and explains the 2027 Sunday substitution without adding two closures", () => {
+  it("offers original Sunday as an optional closure alongside the observed public holiday", () => {
     const { suggestions } = holidaySuggestions("KE", 2027);
-    expect(suggestions.some((h) => h.date === "2027-10-10")).toBe(false);
+    expect(suggestions.find((h) => h.date === "2027-10-10")).toMatchObject({
+      category: "OPTIONAL_CLOSURE",
+      reason: expect.stringContaining("optional company closure"),
+      note: expect.stringContaining("not declare a second public holiday"),
+    });
     expect(suggestions.find((h) => h.date === "2027-10-11")).toMatchObject({
       originalDate: "2027-10-10",
+      category: "OBSERVED_PUBLIC_HOLIDAY",
       reason: expect.stringContaining("Mazingira Day"),
       note: expect.stringContaining("Sun"),
     });
@@ -17,6 +22,9 @@ describe("holiday suggestions for calendar setup", () => {
       "Mazingira Day",
     );
     expect(suggestions.some((h) => h.date === "2026-10-12")).toBe(false);
+    expect(suggestions.find((h) => h.date === "2026-10-10")?.category).toBe(
+      "PUBLIC_HOLIDAY",
+    );
   });
   it("skips another public holiday when finding the Sunday substitute", () => {
     const { suggestions } = holidaySuggestions("KE", 2033);

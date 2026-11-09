@@ -28,12 +28,20 @@ export function CalendarPreview({
           p.end.slice(0, 7) >= selectedMonth,
       )
     : preview.periods;
+  const reviews = selectedMonth
+    ? preview.reviews.filter(
+        (p) =>
+          p.start.slice(0, 7) <= selectedMonth &&
+          p.end.slice(0, 7) >= selectedMonth,
+      )
+    : preview.reviews;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm">
-          <strong>{preview.periods.filter((p) => p.scheduled).length}</strong>{" "}
-          scheduled of {preview.periods.length} periods
+          <strong>{rows.filter((p) => p.scheduled).length}</strong> scheduled of{" "}
+          {rows.length} periods{" "}
+          {selectedMonth ? "overlapping this month" : "in the cycle"}
         </p>
         <label className="text-sm">
           Show month{" "}
@@ -104,7 +112,7 @@ export function CalendarPreview({
                   </strong>
                   {p.reasons.length > 0 &&
                     (p.scheduled ? (
-                      <details className="mt-1 text-xs text-muted-foreground">
+                      <details className={`${styles.calendarNotes} mt-1`}>
                         <summary className="cursor-pointer">
                           Calendar notes ({p.reasons.length})
                         </summary>
@@ -132,14 +140,18 @@ export function CalendarPreview({
       </p>
       <details className="rounded-lg border border-border p-3 text-sm">
         <summary className="cursor-pointer font-medium">
-          Performance reviews ({preview.reviews.length})
+          Performance reviews ({reviews.length})
         </summary>
         <p className="my-2 text-muted-foreground">
-          These are review windows and completion dates, not meeting bookings. A
-          review may be written or include a meeting.
+          These dates come from “Default performance-review frequency” and
+          “Review allowance” in Periods & responsibilities. The same month
+          filter applies to reporting and reviews; periods crossing the month
+          retain their full boundaries. These are periods to review and
+          completion deadlines, not meeting bookings.
         </p>
+        {!reviews.length && <p>No review periods overlap this month.</p>}
         <ul className="grid gap-2 sm:grid-cols-2">
-          {preview.reviews.map((p) => (
+          {reviews.map((p) => (
             <li key={displayDate(p.start)}>
               {displayDate(p.start)} – {displayDate(p.end)}
               <br />

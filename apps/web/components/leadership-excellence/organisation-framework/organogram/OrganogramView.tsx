@@ -20,6 +20,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getOrganogram } from "@/services/leadership-excellence/organisation-framework.service";
 import {
   TYPE_LABEL,
+  childUnitLabel,
+  highlightedUnits,
   defaultOpen,
   indexUnits,
   initialScope,
@@ -106,12 +108,16 @@ export function Organogram({
   const [open, setOpen] = useState(() =>
     defaultOpen(structure, initialScope(structure, null)),
   );
+  const [recentOpened, setRecentOpened] = useState<string[]>([]);
+  const [fromNotes, setFromNotes] = useState(false);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const chartContainer = useRef<HTMLDivElement>(null);
   const [term, setTerm] = useState(""),
     [selected, setSelected] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1),
     [width, setWidth] = useState(1000),
     [height, setHeight] = useState(540),
-    [density, setDensity] = useState<ChartDensity>("cards"),
+    [density, setDensity] = useState<ChartDensity>("compact"),
     [layoutWidth, setLayoutWidth] = useState<number | null>(null),
     [fitTick, setFitTick] = useState(0),
     [mobile, setMobile] = useState(false);
@@ -197,17 +203,24 @@ export function Organogram({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 1099px)"),
-      update = () => setMobile(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+  useLayoutEffect(() => {
+    const container = chartContainer.current;
+    if (!container) return;
+    const measure = () => setMobile(container.clientWidth < 1200);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
   }, []);
   useEffect(() => {
-    if (mobile && selected && dialog.current && !dialog.current.open)
+    if (
+      (mobile || fromNotes) &&
+      selected &&
+      dialog.current &&
+      !dialog.current.open
+    )
       dialog.current.showModal();
-  }, [mobile, selected]);
+  }, [mobile, fromNotes, selected]);
 
   const found = useMemo(
     () => searchUnits(index, structure.units, term),
@@ -240,6 +253,7 @@ export function Organogram({
         visible,
         el.clientWidth || width,
         el.clientHeight || height,
+        "compact",
       );
       setDensity(next.density);
       setLayoutWidth(next.layoutWidth);
@@ -287,6 +301,11 @@ export function Organogram({
         x: (p.x + centre) * zoom - el.scrollLeft,
         y: p.y * zoom - el.scrollTop,
       };
+    setRecentOpened((current) =>
+      open.has(id)
+        ? current.filter((value) => value !== id)
+        : [...current.filter((value) => value !== id), id].slice(-2),
+    );
     setOpen((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -314,7 +333,8 @@ export function Organogram({
     const next = leaf ? index.byId.get(id)?.parentId || "" : id;
     setScope(next);
     setOpen(defaultOpen(structure, next));
-    setTerm("");
+    setRecentOpened([]);
+    setFromNotes(false);
     setSelected(leaf ? id : null);
     requestFit();
   };
@@ -326,11 +346,12 @@ export function Organogram({
     setHistory((h) => h.slice(0, -1));
     setScope(previous.scope);
     setOpen(previous.open);
-    setTerm(previous.term);
+    // Keep the current search when returning to another scope.
     setZoom(previous.zoom);
     setDensity(previous.density);
     setLayoutWidth(previous.layoutWidth);
     setSelected(null);
+    setFromNotes(false);
     requestAnimationFrame(() =>
       viewport.current?.scrollTo({ left: previous.left, top: previous.top }),
     );
@@ -362,12 +383,45 @@ export function Organogram({
     }
     setZoom(next);
   };
+  const highlights = highlightedUnits(
+    index,
+    selected || scope || null,
+    recentOpened,
+    open,
+  );
+  const showDetails = (id: string, note = false, origin?: HTMLElement) => {
+    returnFocus.current =
+      origin ??
+      (document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null);
+    // Docking narrows the viewport, but must not re-pack the map or change zoom.
+    autoFit.current = false;
+    fitPending.current = false;
+    setLayoutWidth(layoutWidth ?? width);
+    const at = tree.positions.get(id),
+      el = viewport.current;
+    if (at && el)
+      anchor.current = {
+        id,
+        x: (at.x + centre) * zoom - el.scrollLeft,
+        y: at.y * zoom - el.scrollTop,
+      };
+    setFromNotes(note);
+    setSelected(id);
+  };
   const selectedUnit = selected ? index.byId.get(selected) : null;
   const closeDetails = () => {
+    const origin = returnFocus.current;
     setSelected(null);
-    requestAnimationFrame(() =>
-      document.getElementById(`unit-${selected}`)?.focus(),
-    );
+    setFromNotes(false);
+    requestAnimationFrame(() => {
+      if (origin?.isConnected) origin.focus({ preventScroll: true });
+      else
+        document
+          .getElementById(`unit-${selected}`)
+          ?.focus({ preventScroll: true });
+    });
   };
   const details = selectedUnit && (
     <UnitDetails
@@ -528,6 +582,7 @@ export function Organogram({
               onClick={() => {
                 setTerm("");
                 setOpen(defaultOpen(structure, scope));
+                setRecentOpened([]);
                 setSelected(null);
                 requestFit();
               }}
@@ -584,6 +639,18 @@ export function Organogram({
             {hits
               ? `${hits} matching units in this view`
               : "No matching units in this view. Clear the search or choose Whole company."}
+            {!hits && (
+              <span className={styles.emptySearchActions}>
+                <Button variant="outline" size="sm" onClick={() => setTerm("")}>
+                  Clear search
+                </Button>
+                {scope && (
+                  <Button variant="outline" size="sm" onClick={() => focus("")}>
+                    Search whole company
+                  </Button>
+                )}
+              </span>
+            )}
           </p>
         )}
         <p className={styles.hint}>
@@ -614,7 +681,15 @@ export function Organogram({
             )}
           </div>
         )}
-        <div className={styles.chartAndDetails}>
+        <p className={styles.pathLegend}>
+          <span>Solid plum: active path</span>
+          <span>Dashed teal: last two opened units</span>
+        </p>
+        <div
+          ref={chartContainer}
+          className={styles.chartAndDetails}
+          data-docked={(!mobile && !fromNotes && !!selectedUnit) || undefined}
+        >
           <div
             ref={viewport}
             className={styles.viewport}
@@ -676,14 +751,26 @@ export function Organogram({
                   width={tree.width}
                   height={tree.height}
                 >
-                  {tree.edges.map((e) => (
-                    <path
-                      key={e.child}
-                      d={e.path}
-                      data-parent={e.parent}
-                      data-child={e.child}
-                    />
-                  ))}
+                  {[...tree.edges]
+                    .sort(
+                      (a, b) =>
+                        Number(highlights.activeEdges.has(a.child)) -
+                        Number(highlights.activeEdges.has(b.child)),
+                    )
+                    .map((e) => (
+                      <path
+                        key={e.child}
+                        d={e.path}
+                        data-parent={e.parent}
+                        data-child={e.child}
+                        data-active={
+                          highlights.activeEdges.has(e.child) || undefined
+                        }
+                        data-recent={
+                          highlights.recentEdges.has(e.child) || undefined
+                        }
+                      />
+                    ))}
                 </svg>
                 {visible.map((u) => {
                   const at = tree.positions.get(u.id)!;
@@ -695,19 +782,23 @@ export function Organogram({
                       x={at.x}
                       y={at.y}
                       childrenCount={index.childrenOf(u.id).length}
+                      childrenLabel={childUnitLabel(index.childrenOf(u.id))}
+                      active={highlights.active.has(u.id)}
+                      recent={highlights.recentUnits.has(u.id)}
+                      focused={!!scope && u.id === scope}
                       open={effectiveOpen.has(u.id)}
                       selected={u.id === selected}
                       hit={!!found?.hits.has(u.id)}
                       flagged={index.checksFor(u.id).length > 0}
                       onToggle={() => toggle(u.id)}
-                      onSelect={() => setSelected(u.id)}
+                      onSelect={() => showDetails(u.id)}
                     />
                   );
                 })}
               </div>
             </div>
           </div>
-          {!mobile && selectedUnit && (
+          {!mobile && !fromNotes && selectedUnit && (
             <aside
               aria-label="Selected unit details"
               className={styles.inspector}
@@ -716,7 +807,7 @@ export function Organogram({
             </aside>
           )}
         </div>
-        {mobile && selectedUnit && (
+        {(mobile || fromNotes) && selectedUnit && (
           <dialog
             ref={dialog}
             className={styles.mobileInspector}
@@ -724,7 +815,7 @@ export function Organogram({
               e.preventDefault();
               closeDetails();
             }}
-            onClose={() => setSelected(null)}
+            onClose={closeDetails}
             aria-label="Selected unit details"
           >
             {details}
@@ -757,8 +848,9 @@ export function Organogram({
                 {c.unitId && (
                   <button
                     className={styles.textAction}
-                    onClick={() => {
-                      setSelected(c.unitId);
+                    onClick={(event) => {
+                      if (c.unitId)
+                        showDetails(c.unitId, true, event.currentTarget);
                     }}
                   >
                     View details
@@ -789,6 +881,10 @@ function UnitCard({
   x,
   y,
   childrenCount,
+  childrenLabel,
+  active,
+  recent,
+  focused,
   open,
   selected,
   hit,
@@ -801,6 +897,10 @@ function UnitCard({
   x: number;
   y: number;
   childrenCount: number;
+  childrenLabel: string;
+  active: boolean;
+  recent: boolean;
+  focused: boolean;
   open: boolean;
   selected: boolean;
   hit: boolean;
@@ -809,12 +909,7 @@ function UnitCard({
   onToggle: () => void;
 }) {
   const size = SIZES[density];
-  const label =
-    u.type === "BRANCH"
-      ? "departments"
-      : u.type === "DEPARTMENT"
-        ? "sections"
-        : "branches";
+  const label = childrenLabel;
   return (
     <div
       className={styles.unitPosition}
@@ -832,10 +927,13 @@ function UnitCard({
         data-density={density}
         title={`${TYPE_LABEL[u.type]}: ${u.name} · ${u.people.active} active${u.lead ? ` · ${u.lead.name}` : ""}`}
         data-hit={hit || undefined}
+        data-active={active || undefined}
+        data-recent={recent || undefined}
+        data-focused={focused || undefined}
         className={styles.unitCard}
         style={{ height: size.height }}
       >
-        {density === "cards" && (
+        {density !== "map" && (
           <span className={styles.unitType}>
             {u.type === "COMPANY" && <Building2 size={14} />}{" "}
             {TYPE_LABEL[u.type]}
@@ -995,8 +1093,12 @@ function UnitDetails({
               <dd>{unit.branch ?? "Not recorded"}</dd>
               <dt>Type &amp; code</dt>
               <dd>Not provided by the current source</dd>
-              <dt>Country, city &amp; address</dt>
-              <dd>Not provided by the current source</dd>
+              <dt>Country</dt>
+              <dd>Not recorded for this branch</dd>
+              <dt>City / region</dt>
+              <dd>Not recorded for this branch</dd>
+              <dt>Street address / landmark</dt>
+              <dd>Not recorded for this branch</dd>
               <dt>Departments</dt>
               <dd>
                 {
@@ -1017,6 +1119,14 @@ function UnitDetails({
             </>
           )}
         </dl>
+        {unit.type === "BRANCH" && (
+          <p className={styles.hint}>
+            Location grouping needs recorded country and city/region for each
+            branch, site or plant. Several sites in the same city remain
+            separate units. The current source groups employee branch names; it
+            does not provide site addresses or unique site codes.
+          </p>
+        )}
         {siblings.length > 0 && (
           <div className={styles.hint}>
             The same department also appears at:

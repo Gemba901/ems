@@ -14,6 +14,8 @@ export interface CalendarIndex {
     name: string;
     status: string;
     currentVersion: number;
+    start?: string;
+    end?: string;
   }[];
   capabilities: { edit: boolean; approve: boolean; read: boolean };
   scope: "COMPANY";
@@ -36,6 +38,7 @@ export interface CalendarDetail {
   versions: { version: number; approvedAt: string }[];
 }
 export interface HolidaySuggestion extends CalendarException {
+  category?: "PUBLIC_HOLIDAY" | "OBSERVED_PUBLIC_HOLIDAY" | "OPTIONAL_CLOSURE";
   originalDate?: string;
   note?: string;
 }

@@ -133,3 +133,60 @@
   --calendar-approved-bg: #214c3b;
   --calendar-approved-text: #b8edd5;
 }
+.dateFeedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.calendarNotes {
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.calendarNotes summary {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.footer {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  pointer-events: none;
+}
+.saveStatus,
+.footerActions {
+  pointer-events: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  box-shadow: 0 2px 8px #00000012;
+  padding: 0.5rem 0.75rem;
+}
+.saveStatus {
+  font-size: 0.875rem;
+}
+.footerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+@media (max-width: 640px) {
+  .footer {
+    position: static;
+  }
+}

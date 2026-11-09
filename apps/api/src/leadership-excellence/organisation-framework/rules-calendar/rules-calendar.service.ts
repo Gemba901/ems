@@ -17,6 +17,7 @@ import {
   makePeriods,
 } from "./calendar-engine";
 import {
+  CalendarRules,
   ApprovedCalendarSnapshot,
   ApprovedPerformanceCalendar,
   Frequency,
@@ -82,9 +83,14 @@ export class RulesCalendarService {
             status: true,
             currentVersion: true,
             revision: true,
+            draft: true,
           },
         });
-        if (capabilities.edit) return rows;
+        if (capabilities.edit)
+          return rows.map(({ draft, ...row }) => {
+            const rules = draft as unknown as CalendarRules;
+            return { ...row, start: rules.start, end: rules.end };
+          });
         // Even the cycle name may have been edited in an unpublished revision.
         return Promise.all(
           rows.map(async (r) => {
@@ -100,6 +106,10 @@ export class RulesCalendarService {
               name:
                 (v?.snapshot as unknown as ApprovedCalendarSnapshot)?.rules
                   .name ?? "Approved cycle",
+              start: (v?.snapshot as unknown as ApprovedCalendarSnapshot)?.rules
+                .start,
+              end: (v?.snapshot as unknown as ApprovedCalendarSnapshot)?.rules
+                .end,
               status: "APPROVED",
               currentVersion: r.currentVersion,
             };

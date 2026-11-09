@@ -5,6 +5,7 @@ export interface HolidaySuggestion {
   reason: string;
   kind: "NON_WORKING";
   source: "HOLIDAY_SUGGESTION";
+  category: "PUBLIC_HOLIDAY" | "OBSERVED_PUBLIC_HOLIDAY" | "OPTIONAL_CLOSURE";
   originalDate?: string;
   note?: string;
 }
@@ -58,7 +59,7 @@ export function holidaySuggestions(country: string, year: number) {
         tentative: h.rule === "1 Shawwal",
       }));
     const occupied = new Set(base.map((h) => h.date));
-    suggestions = base.map((h) => {
+    suggestions = base.flatMap((h): HolidaySuggestion[] => {
       let date = h.date;
       if (sunday(date)) {
         do {
@@ -67,8 +68,9 @@ export function holidaySuggestions(country: string, year: number) {
         occupied.add(date);
       }
       const shifted = date !== h.date;
-      return {
+      const holiday: HolidaySuggestion = {
         date,
+        category: shifted ? "OBSERVED_PUBLIC_HOLIDAY" : "PUBLIC_HOLIDAY",
         reason:
           (shifted ? `${h.name} — observed for ${display(h.date)}` : h.name) +
           (h.tentative ? " (estimated date)" : ""),
@@ -77,7 +79,7 @@ export function holidaySuggestions(country: string, year: number) {
         ...(shifted ? { originalDate: h.date } : {}),
         note: [
           shifted
-            ? `The holiday falls on ${display(h.date)}. This is the next date that is not already a public holiday.`
+            ? `The holiday falls on ${display(h.date)}. This observed date replaces the Sunday public holiday. The original Sunday is offered separately as an optional company closure.`
             : "",
           h.tentative
             ? "Estimated lunar date. Confirm the official announcement before use."
@@ -86,6 +88,24 @@ export function holidaySuggestions(country: string, year: number) {
           .filter(Boolean)
           .join(" "),
       };
+      if (!shifted) return [holiday];
+      return [
+        {
+          date: h.date,
+          reason:
+            `${h.name} — optional company closure (original Sunday)` +
+            (h.tentative ? " (estimated date)" : ""),
+          kind: "NON_WORKING",
+          source: "HOLIDAY_SUGGESTION",
+          category: "OPTIONAL_CLOSURE",
+          note:
+            `The public holiday is observed on ${display(date)} instead. Keep this separate closure only if your company also does not schedule work on the original Sunday. This does not declare a second public holiday.` +
+            (h.tentative
+              ? " Estimated lunar date; confirm the official announcement."
+              : ""),
+        },
+        holiday,
+      ];
     });
   } else {
     // Keep other countries' own observation rules. Do not apply Kenya's Sunday
@@ -97,6 +117,7 @@ export function holidaySuggestions(country: string, year: number) {
       const originalDate = original?.date.slice(0, 10);
       return {
         date: h.date.slice(0, 10),
+        category: h.substitute ? "OBSERVED_PUBLIC_HOLIDAY" : "PUBLIC_HOLIDAY",
         reason: h.name,
         kind: "NON_WORKING" as const,
         source: "HOLIDAY_SUGGESTION" as const,
@@ -116,6 +137,11 @@ export function holidaySuggestions(country: string, year: number) {
     const existing = byDate.get(h.date);
     if (!existing) byDate.set(h.date, h);
     else if (!existing.reason.includes(h.reason)) {
+      if (
+        existing.category === "OPTIONAL_CLOSURE" &&
+        h.category !== "OPTIONAL_CLOSURE"
+      )
+        existing.category = h.category;
       existing.reason = `${existing.reason}; ${h.reason}`.slice(0, 200);
       existing.note = [existing.note, h.note].filter(Boolean).join(" ");
     }
@@ -129,7 +155,7 @@ export function holidaySuggestions(country: string, year: number) {
         : "Installed date-holidays dataset",
     notice:
       country === "KE" && year >= 2024
-        ? "National holiday suggestions. Observed dates replace Sunday holiday dates. Lunar dates are provisional; confirm official announcements. Add applicable faith-specific, regional or newly declared holidays manually."
+        ? "National holiday suggestions plus optional original-Sunday closures. Observed dates replace Sunday public holidays; the original Sunday is not a second public holiday. Saturday holidays stay on Saturday. Lunar dates are provisional; confirm official announcements. Add applicable faith-specific, regional or newly declared holidays manually."
         : "Suggestions from the installed holiday dataset. Confirm local applicability and official announcements; regional holidays, lunar dates and later government changes may need correction.",
     suggestions: [...byDate.values()].sort((a, b) =>
       a.date.localeCompare(b.date),

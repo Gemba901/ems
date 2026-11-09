@@ -552,3 +552,92 @@
   background: #1c3440;
   border-color: #1c3440;
 }
+
+/* Stable compact overview: zoom scales it; Full cards is an explicit choice. */
+.unitCard[data-density="compact"] .unitType {
+  font-size: 9px;
+  line-height: 1.15;
+  flex-shrink: 0;
+}
+.unitCard[data-density="compact"] .unitType svg {
+  width: 10px;
+  height: 10px;
+}
+.unitCard[data-kind="COMPANY"],
+.unitCard[data-density="compact"][data-kind="COMPANY"],
+.unitCard[data-density="map"][data-kind="COMPANY"] {
+  background: #12796f;
+  border-color: #12796f;
+  color: #fff;
+}
+.legendItem i[data-kind="COMPANY"] {
+  background: #12796f;
+}
+.unitCard[data-recent="true"] {
+  outline: 2px dashed #12796f;
+  outline-offset: 3px;
+}
+.unitCard[data-active="true"] {
+  outline: 2px solid #6f5a89;
+  outline-offset: 3px;
+}
+.unitCard[data-focused="true"]:not([data-kind="COMPANY"]) {
+  background: #6f5a89;
+  border-color: #6f5a89;
+  color: #fff;
+}
+.unitCard[data-focused="true"] .unitLead {
+  color: inherit;
+}
+.connectors path[data-recent="true"] {
+  stroke: #12796f;
+  stroke-width: 2.5;
+  stroke-dasharray: 5 4;
+  stroke-opacity: 1;
+}
+.connectors path[data-active="true"] {
+  stroke: #6f5a89;
+  stroke-width: 3;
+  stroke-dasharray: none;
+  stroke-opacity: 1;
+}
+.pathLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin: 0.5rem 0;
+}
+.pathLegend span::before {
+  content: "";
+  display: inline-block;
+  width: 22px;
+  border-top: 3px solid #6f5a89;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.pathLegend span + span::before {
+  border-top: 3px dashed #12796f;
+}
+.emptySearchActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+}
+.chartAndDetails[data-docked="true"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+.inspector {
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: min(68vh, 760px);
+  min-height: 420px;
+  max-height: none;
+  box-shadow: none;
+}

@@ -11,7 +11,7 @@ export const SIZES = {
     rowGap: 34,
     pad: 18,
   },
-  compact: { width: 148, height: 58, gapX: 14, gapY: 32, rowGap: 18, pad: 14 },
+  compact: { width: 148, height: 74, gapX: 14, gapY: 32, rowGap: 18, pad: 14 },
   map: { width: 24, height: 18, gapX: 6, gapY: 18, rowGap: 10, pad: 10 },
 } as const;
 

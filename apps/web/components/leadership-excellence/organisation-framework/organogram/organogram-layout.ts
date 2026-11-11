@@ -15,6 +15,37 @@ export const SIZES = {
   map: { width: 24, height: 18, gapX: 6, gapY: 18, rowGap: 10, pad: 10 },
 } as const;
 
+/** One comparable zoom value across representations. 100% = a 210px full card. */
+export function readableZoom(density: ChartDensity, scale: number) {
+  return (scale * SIZES[density].width) / CARD_WIDTH;
+}
+
+/** Distinct up/down thresholds prevent switching repeatedly at a boundary.
+ * Preserve rendered width when replacing a tile with a labelled/full card. */
+export function zoomPresentation(
+  density: ChartDensity,
+  requested: number,
+  full = false,
+) {
+  const level = Math.min(
+    1.5,
+    Math.max(0.04, Number.isFinite(requested) ? requested : 1),
+  );
+  let next: ChartDensity = density;
+  if (full) next = "cards";
+  else if (density === "map" && level >= 0.6)
+    next = level >= 0.85 ? "cards" : "compact";
+  else if (density === "compact")
+    next = level >= 0.85 ? "cards" : level <= 0.48 ? "map" : "compact";
+  else if (density === "cards" && level <= 0.7)
+    next = level <= 0.48 ? "map" : "compact";
+  return {
+    density: next,
+    level,
+    scale: (level * CARD_WIDTH) / SIZES[next].width,
+  };
+}
+
 /** Pack whole subtrees, never recursively divide a parent's width among its
  * descendants. Every open unit gets the same usable horizontal budget. This
  * lets departments spread sideways instead of degenerating into a column. */

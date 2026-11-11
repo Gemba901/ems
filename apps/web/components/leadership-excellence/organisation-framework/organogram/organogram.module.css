@@ -553,7 +553,7 @@
   border-color: #1c3440;
 }
 
-/* Stable compact overview: zoom scales it; Full cards is an explicit choice. */
+/* The initial compact overview gains detail as its rendered cards become readable. */
 .unitCard[data-density="compact"] .unitType {
   font-size: 9px;
   line-height: 1.15;
@@ -640,4 +640,52 @@
   min-height: 420px;
   max-height: none;
   box-shadow: none;
+}
+
+.personRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.35rem;
+  border-radius: 0.5rem;
+  text-align: left;
+  cursor: pointer;
+}
+.personRow > span:first-child {
+  flex-shrink: 0;
+}
+.personRow > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.personRow:hover {
+  background: var(--muted);
+}
+.personRow:focus-visible,
+.textAction:focus-visible {
+  outline: 2px solid #6f5a89;
+  outline-offset: 3px;
+}
+.personSummary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.personSummary > span {
+  flex-shrink: 0;
+}
+.textAction[data-visited="true"] {
+  color: #6f5a89;
+}
+.viewedNote {
+  color: #6f5a89;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+li[data-last-viewed="true"] {
+  border-left: 3px solid #6f5a89;
+  padding-left: 0.6rem;
+  background: color-mix(in srgb, #6f5a89 7%, transparent);
 }

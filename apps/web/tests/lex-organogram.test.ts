@@ -283,3 +283,47 @@ test("active path and team highlights keep the last two opens without closing ol
     ["b2"],
   );
 });
+
+test("zoom reveals readable detail without a width jump at a representation change", async () => {
+  const { zoomPresentation, readableZoom, SIZES } =
+    await import("../components/leadership-excellence/organisation-framework/organogram/organogram-layout");
+  for (const [density, level, expected] of [
+    ["map", 0.59, "map"],
+    ["map", 0.6, "compact"],
+    ["compact", 0.84, "compact"],
+    ["compact", 0.85, "cards"],
+    ["cards", 0.71, "cards"],
+    ["cards", 0.7, "compact"],
+    ["compact", 0.49, "compact"],
+    ["compact", 0.48, "map"],
+  ] as const) {
+    const next = zoomPresentation(density, level);
+    assert.equal(next.density, expected);
+    assert.ok(
+      Math.abs(SIZES[next.density].width * next.scale - 210 * level) < 0.0001,
+    );
+    assert.ok(
+      Math.abs(readableZoom(next.density, next.scale) - level) < 0.0001,
+    );
+  }
+  assert.equal(zoomPresentation("map", 1, true).density, "cards");
+});
+test("zoom can move from a fitted map to full cards and back with stable bounds", async () => {
+  const { zoomPresentation } =
+    await import("../components/leadership-excellence/organisation-framework/organogram/organogram-layout");
+  let view = zoomPresentation("map", 0.1);
+  const reached = new Set([view.density]);
+  for (let n = 0; n < 30; n++) {
+    const previous = view.level;
+    view = zoomPresentation(view.density, view.level * 1.2);
+    assert.ok(view.level >= previous);
+    reached.add(view.density);
+  }
+  assert.deepEqual([...reached], ["map", "compact", "cards"]);
+  assert.equal(view.level, 1.5);
+  for (let n = 0; n < 40; n++)
+    view = zoomPresentation(view.density, view.level / 1.2);
+  assert.equal(view.density, "map");
+  assert.equal(view.level, 0.04);
+  assert.ok(Number.isFinite(zoomPresentation("map", Number.NaN).scale));
+});

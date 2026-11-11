@@ -1,16 +1,27 @@
-import { displayDate } from "./calendar-editor";
+import type { Frequency } from "./calendar-model";
+import {
+  displayDate,
+  displayMonth,
+  calendarNoteGroups,
+  FREQUENCY_LABELS,
+} from "./calendar-editor";
 import styles from "./rules-calendar.module.css";
 import type { CalendarPreview as Preview } from "@/services/leadership-excellence/rules-calendar.service";
 
 export function CalendarPreview({
   preview,
+  reviewFrequency,
   month,
   onMonthChange,
 }: {
   preview: Preview;
+  reviewFrequency: Frequency;
   month: string;
   onMonthChange: (month: string) => void;
 }) {
+  const daily = preview.periods[0]?.frequency === "daily";
+  const noteDate = (note: string) =>
+    note.replace(/^(\d{4}-\d{2}-\d{2}):/, (_, date) => `${displayDate(date)}:`);
   const coveredMonths = new Set<string>();
   for (const period of preview.periods) {
     const date = new Date(`${period.start.slice(0, 7)}-01T00:00:00Z`);
@@ -37,22 +48,37 @@ export function CalendarPreview({
     : preview.reviews;
   return (
     <div className="space-y-4">
+      {!!preview.warnings?.length && (
+        <div
+          role="note"
+          className="rounded-lg border border-border bg-accent p-3 text-sm"
+        >
+          <strong>Check review timing</strong>
+          {preview.warnings.map((warning) => (
+            <p key={warning} className="mt-1">
+              {warning}
+            </p>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm">
           <strong>{rows.filter((p) => p.scheduled).length}</strong> scheduled of{" "}
           {rows.length} periods{" "}
           {selectedMonth ? "overlapping this month" : "in the cycle"}
         </p>
-        <label className="text-sm">
-          Show month{" "}
+        <label className={`${styles.formField} ${styles.monthFilter} text-sm`}>
+          <span>Show month</span>
           <select
-            className="ml-2 rounded-md border border-input bg-background p-2"
+            className="rounded-md border border-input bg-background p-2"
             value={selectedMonth}
             onChange={(e) => onMonthChange(e.target.value)}
           >
             <option value="">Full cycle</option>
             {months.map((m) => (
-              <option key={m}>{m}</option>
+              <option key={m} value={m}>
+                {displayMonth(m)}
+              </option>
             ))}
           </select>
         </label>
@@ -61,15 +87,23 @@ export function CalendarPreview({
         <table className="w-full min-w-[660px] text-left text-sm">
           <thead className="sticky top-0 bg-accent text-accent-foreground">
             <tr>
-              {[
-                "Period",
-                "Working days",
-                "Submit by",
-                "Verify by",
-                "Schedule",
-              ].map((x) => (
+              {(daily
+                ? [
+                    "Date",
+                    "Submit results by",
+                    "Verify results by",
+                    "Day status",
+                  ]
+                : [
+                    "Period",
+                    "Working days",
+                    "Submit results by",
+                    "Verify results by",
+                    "Schedule",
+                  ]
+              ).map((x) => (
                 <th key={x} className="p-3 font-medium">
-                  {x}
+                  {noteDate(x)}
                 </th>
               ))}
             </tr>
@@ -87,7 +121,7 @@ export function CalendarPreview({
                     </small>
                   )}
                 </td>
-                <td className="p-3">{p.workingDays}</td>
+                {!daily && <td className="p-3">{p.workingDays}</td>}
                 <td className="p-3 whitespace-nowrap">
                   {p.submitBy ? (
                     <>
@@ -102,31 +136,25 @@ export function CalendarPreview({
                   )}
                 </td>
                 <td className="p-3">
-                  {p.verifyBy ? displayDate(p.verifyBy) : "—"}
+                  {p.verifyBy
+                    ? displayDate(p.verifyBy)
+                    : p.verificationPendingSubmission
+                      ? "After actual submission · date pending"
+                      : "—"}
                 </td>
                 <td className="max-w-[300px] p-3">
                   <strong
                     className={`${styles.statusBadge} ${p.scheduled ? styles.approved : styles.draft}`}
                   >
-                    {p.scheduled ? "Scheduled" : "Not scheduled"}
+                    {p.scheduled
+                      ? daily
+                        ? "Working day"
+                        : "Scheduled"
+                      : "Not scheduled for work"}
                   </strong>
-                  {p.reasons.length > 0 &&
-                    (p.scheduled ? (
-                      <details className={`${styles.calendarNotes} mt-1`}>
-                        <summary className="cursor-pointer">
-                          Calendar notes ({p.reasons.length})
-                        </summary>
-                        {p.reasons.map((x) => (
-                          <p key={x} className="mt-1">
-                            {x}
-                          </p>
-                        ))}
-                      </details>
-                    ) : (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {p.reasons.join("; ")}
-                      </p>
-                    ))}
+                  {p.reasons.length > 0 && (
+                    <CalendarNotes notes={p.reasons} compact={daily} />
+                  )}
                 </td>
               </tr>
             ))}
@@ -140,14 +168,15 @@ export function CalendarPreview({
       </p>
       <details className="rounded-lg border border-border p-3 text-sm">
         <summary className="cursor-pointer font-medium">
-          Performance reviews ({reviews.length})
+          Performance reviews · {FREQUENCY_LABELS[reviewFrequency]} (
+          {reviews.length})
         </summary>
         <p className="my-2 text-muted-foreground">
-          These dates come from “Default performance-review frequency” and
-          “Review allowance” in Periods & responsibilities. The same month
-          filter applies to reporting and reviews; periods crossing the month
-          retain their full boundaries. These are periods to review and
-          completion deadlines, not meeting bookings.
+          These dates follow the performance-review frequency and review
+          allowance set in Periods & responsibilities. Changing the reporting
+          preview frequency does not change this review schedule. Show month
+          filters both lists; a period that crosses two months keeps its full
+          dates.
         </p>
         {!reviews.length && <p>No review periods overlap this month.</p>}
         <ul className="grid gap-2 sm:grid-cols-2">
@@ -163,6 +192,61 @@ export function CalendarPreview({
             </li>
           ))}
         </ul>
+      </details>
+    </div>
+  );
+}
+
+function CalendarNotes({
+  notes,
+  compact,
+}: {
+  notes: string[];
+  compact: boolean;
+}) {
+  const groups = calendarNoteGroups(notes);
+  if (compact)
+    return (
+      <p className="mt-1 text-xs text-muted-foreground">
+        {groups
+          .map((g) =>
+            g.reason === "Outside normal working week"
+              ? "Regular day off"
+              : g.reason,
+          )
+          .join("; ")}
+      </p>
+    );
+  const regular = groups.find(
+    (g) => g.reason === "Outside normal working week",
+  );
+  const other = groups
+    .filter((g) => g !== regular)
+    .reduce((n, g) => n + g.dates.length, 0);
+  return (
+    <div className={`${styles.calendarNotes} mt-1 text-xs`}>
+      <p>
+        {[
+          regular
+            ? `${regular.dates.length} regular ${regular.dates.length === 1 ? "day" : "days"} off`
+            : "",
+          other
+            ? `${other} other calendar ${other === 1 ? "entry" : "entries"}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
+      <details className="mt-1">
+        <summary className="cursor-pointer">View dates and reasons</summary>
+        {groups.map((g) => (
+          <p key={g.reason} className="mt-2">
+            <strong>{g === regular ? "Regular days off" : g.reason}</strong>
+            {g.dates.some(Boolean)
+              ? `: ${g.dates.filter(Boolean).map(displayDate).join("; ")}`
+              : ""}
+          </p>
+        ))}
       </details>
     </div>
   );

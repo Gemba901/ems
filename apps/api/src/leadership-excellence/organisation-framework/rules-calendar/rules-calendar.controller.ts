@@ -121,6 +121,40 @@ export class RulesCalendarController {
     return holidaySuggestions(country, Number(year));
   }
 
+  @Get("assignment-directory")
+  @Roles(...LEX_EDITORS)
+  directory(@Req() req: TenantRequest) {
+    const c = context(req);
+    return this.service.directory(c.organizationId, c.actor);
+  }
+
+  @Post("assignment-preview")
+  @Roles(...LEX_EDITORS)
+  assignmentPreview(@Req() req: TenantRequest, @Body() input: unknown) {
+    const c = context(req),
+      body = object(input);
+    if (
+      body.calendarId !== undefined &&
+      (typeof body.calendarId !== "string" ||
+        !body.calendarId ||
+        body.calendarId.length > 100)
+    )
+      throw new BadRequestException("Choose a valid calendar.");
+    return this.service.assignmentPreview(
+      c.organizationId,
+      c.actor,
+      body.rules,
+      body.calendarId as string | undefined,
+    );
+  }
+
+  @Get("comparison")
+  @Roles(...LEX_ALL)
+  comparison(@Req() req: TenantRequest, @Query("month") month: string) {
+    const c = context(req);
+    return this.service.comparison(c.organizationId, c.actor, month);
+  }
+
   @Get(":id")
   @Roles(...LEX_ALL)
   read(@Req() req: TenantRequest, @Param("id") id: string) {
@@ -165,9 +199,16 @@ export class RulesCalendarController {
   ) {
     const c = context(req);
     if (
-      !["save", "submit", "approve", "return", "withdraw", "revise"].includes(
-        action,
-      )
+      ![
+        "save",
+        "submit",
+        "approve",
+        "return",
+        "withdraw",
+        "revise",
+        "delete",
+        "discard-revision",
+      ].includes(action)
     )
       throw new BadRequestException("Unknown calendar action.");
     return this.service.mutate(

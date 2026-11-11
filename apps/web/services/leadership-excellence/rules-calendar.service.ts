@@ -1,3 +1,8 @@
+import type {
+  CalendarDirectory,
+  CalendarComparison,
+  AudiencePreview,
+} from "@/components/leadership-excellence/organisation-framework/rules-calendar/calendar-audience.types";
 import { apiClient } from "@/lib/api-client";
 import type {
   ApprovedCalendarSnapshot,
@@ -14,12 +19,16 @@ export interface CalendarIndex {
     name: string;
     status: string;
     currentVersion: number;
+    updatedAt?: string;
+    audienceLabel?: string;
+    audienceKind?: "UNASSIGNED" | "COMPANY" | "DEPARTMENTS" | "PEOPLE";
     start?: string;
     end?: string;
   }[];
   capabilities: { edit: boolean; approve: boolean; read: boolean };
   scope: "COMPANY";
   branchCalendarsAvailable: false;
+  assignmentModes?: string[];
 }
 export interface CalendarDetail {
   id: string;
@@ -43,6 +52,7 @@ export interface HolidaySuggestion extends CalendarException {
   note?: string;
 }
 export interface CalendarPreview {
+  warnings?: string[];
   periods: CalendarPeriod[];
   reviews: { start: string; end: string; completeBy: string | null }[];
 }
@@ -52,6 +62,15 @@ export interface CalendarHistory {
   reason: string | null;
   createdAt: string;
   snapshot: CalendarRules;
+}
+export class CalendarRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "CalendarRequestError";
+  }
 }
 const ROOT = "/api/leadership-excellence/organisation-framework/rules-calendar";
 async function request<T>(
@@ -76,19 +95,51 @@ async function request<T>(
   );
   const data = await response.json().catch(() => null);
   if (!response.ok)
-    throw new Error(
+    throw new CalendarRequestError(
       Array.isArray(data?.message)
         ? data.message.join("\n")
         : data?.message ||
             "The calendar request did not complete. Your changes have not been discarded.",
+      response.status,
     );
   return data as T;
 }
 export const calendarsApi = {
+  assignmentDirectory: (token: string, signal?: AbortSignal) =>
+    request<CalendarDirectory>(
+      token,
+      "/assignment-directory",
+      undefined,
+      signal,
+    ),
+  assignmentPreview: (
+    token: string,
+    rules: CalendarRules,
+    calendarId?: string,
+    signal?: AbortSignal,
+  ) =>
+    request<AudiencePreview>(
+      token,
+      "/assignment-preview",
+      { rules, ...(calendarId ? { calendarId } : {}) },
+      signal,
+    ),
+  comparison: (token: string, month: string, signal?: AbortSignal) =>
+    request<CalendarComparison>(
+      token,
+      `/comparison?month=${encodeURIComponent(month)}`,
+      undefined,
+      signal,
+    ),
   list: (token: string, signal?: AbortSignal) =>
     request<CalendarIndex>(token, "", undefined, signal),
-  read: (token: string, id: string) =>
-    request<CalendarDetail>(token, `/${encodeURIComponent(id)}`),
+  read: (token: string, id: string, signal?: AbortSignal) =>
+    request<CalendarDetail>(
+      token,
+      `/${encodeURIComponent(id)}`,
+      undefined,
+      signal,
+    ),
   create: (token: string, rules: CalendarRules) =>
     request<{ id: string; revision: number }>(token, "", { rules }),
   mutate: (
@@ -127,9 +178,11 @@ export const calendarsApi = {
     ),
   history: (token: string, id: string) =>
     request<CalendarHistory[]>(token, `/${encodeURIComponent(id)}/history`),
-  version: (token: string, id: string, version: number) =>
+  version: (token: string, id: string, version: number, signal?: AbortSignal) =>
     request<ApprovedPerformanceCalendar>(
       token,
       `/${encodeURIComponent(id)}/versions/${version}`,
+      undefined,
+      signal,
     ),
 };

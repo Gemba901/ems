@@ -1,3 +1,4 @@
+import { parseAudience } from "./calendar-audience";
 import { BadRequestException } from "@nestjs/common";
 import {
   CalendarRules,
@@ -50,6 +51,19 @@ export function parseRules(value: unknown): CalendarRules {
     throw new BadRequestException("Choose measurement types.");
   const responsibilities = object(r.responsibilities);
   return {
+    ...(r.audience !== undefined
+      ? {
+          audience: (() => {
+            try {
+              return parseAudience(r.audience);
+            } catch (e) {
+              throw new BadRequestException(
+                e instanceof Error ? e.message : "Invalid calendar assignment.",
+              );
+            }
+          })(),
+        }
+      : {}),
     name: text(r.name, 120),
     start: text(r.start, 10),
     end: text(r.end, 10),
@@ -61,16 +75,110 @@ export function parseRules(value: unknown): CalendarRules {
       return {
         date: text(e.date, 10),
         reason: text(e.reason, 200),
-        kind: choice(e.kind, ["WORKING", "NON_WORKING"]),
-        source: choice(e.source, ["MANUAL", "HOLIDAY_SUGGESTION"]),
+        kind: choice(e.kind, ["WORKING", "NON_WORKING"] as const),
+        source: choice(e.source, ["MANUAL", "HOLIDAY_SUGGESTION"] as const),
       };
     }),
+    ...(r.enabledFrequencies !== undefined
+      ? {
+          enabledFrequencies: (() => {
+            if (
+              !Array.isArray(r.enabledFrequencies) ||
+              !r.enabledFrequencies.length ||
+              r.enabledFrequencies.length > FREQUENCIES.length
+            )
+              throw new BadRequestException(
+                "Choose at least one available reporting frequency.",
+              );
+            return [
+              ...new Set(
+                r.enabledFrequencies.map((v) => choice(v, FREQUENCIES)),
+              ),
+            ];
+          })(),
+        }
+      : {}),
+    ...(r.customInterval !== undefined
+      ? {
+          customInterval: (() => {
+            const c = object(r.customInterval);
+            return {
+              every: number(c.every, 1, 365),
+              unit: choice(c.unit, ["DAYS", "WEEKS", "MONTHS"] as const),
+              anchor: text(c.anchor, 10),
+            };
+          })(),
+        }
+      : {}),
+    ...(r.twoMonthAnchor !== undefined
+      ? { twoMonthAnchor: text(r.twoMonthAnchor, 10) }
+      : {}),
+    ...(r.verificationBasis !== undefined
+      ? {
+          verificationBasis: choice(r.verificationBasis, [
+            "SUBMISSION_DEADLINE",
+            "ACTUAL_SUBMISSION",
+          ] as const),
+        }
+      : {}),
+    ...(r.verificationDayType !== undefined
+      ? {
+          verificationDayType: choice(r.verificationDayType, [
+            "CALENDAR",
+            "WORKING",
+          ] as const),
+        }
+      : {}),
+    ...(r.verificationRoll !== undefined
+      ? {
+          verificationRoll: choice(r.verificationRoll, [
+            "NONE",
+            "NEXT_WORKING",
+          ] as const),
+        }
+      : {}),
+    ...(r.reviewDayType !== undefined
+      ? {
+          reviewDayType: choice(r.reviewDayType, [
+            "CALENDAR",
+            "WORKING",
+          ] as const),
+        }
+      : {}),
+    ...(r.reviewRoll !== undefined
+      ? { reviewRoll: choice(r.reviewRoll, ["NONE", "NEXT_WORKING"] as const) }
+      : {}),
+    ...(r.holidayOmissions !== undefined
+      ? {
+          holidayOmissions: (() => {
+            if (
+              !Array.isArray(r.holidayOmissions) ||
+              r.holidayOmissions.length > 1500
+            )
+              throw new BadRequestException(
+                "Use at most 1,500 holiday decisions.",
+              );
+            return r.holidayOmissions.map((v) => {
+              const h = object(v);
+              return {
+                date: text(h.date, 10),
+                name: text(h.name, 200),
+                country: text(h.country, 2),
+                reason: text(h.reason, 300),
+              };
+            });
+          })(),
+        }
+      : {}),
     weekStart: number(r.weekStart, 0, 6),
     fortnightAnchor: text(r.fortnightAnchor, 10),
     splitDay: number(r.splitDay, 1, 27),
     submissionDays: number(r.submissionDays, 0, 60),
-    submissionDayType: choice(r.submissionDayType, ["CALENDAR", "WORKING"]),
-    submissionRoll: choice(r.submissionRoll, ["NONE", "NEXT_WORKING"]),
+    submissionDayType: choice(r.submissionDayType, [
+      "CALENDAR",
+      "WORKING",
+    ] as const),
+    submissionRoll: choice(r.submissionRoll, ["NONE", "NEXT_WORKING"] as const),
     submissionTime: text(r.submissionTime, 5),
     verificationDays: number(r.verificationDays, 0, 60),
     reviewFrequency: choice(r.reviewFrequency, FREQUENCIES),

@@ -4,12 +4,13 @@ import {
   calendarsApi,
   type CalendarPreview,
 } from "@/services/leadership-excellence/rules-calendar.service";
+import { calendarIssues } from "./calendar-issues";
 import type {
   CalendarRules,
   Frequency,
   ApprovedCalendarSnapshot,
 } from "./calendar-model";
-import { previewIssue } from "./calendar-editor";
+import { displayDate } from "./calendar-editor";
 
 /** Each response belongs to exactly one input. Older requests cannot replace it. */
 export function useCalendarPreview(
@@ -26,6 +27,8 @@ export function useCalendarPreview(
     value: CalendarPreview | null;
     error: string;
     busy: boolean;
+    retryable?: boolean;
+    accessError?: boolean;
   }>({ key: "", value: null, error: "", busy: false });
   const key = JSON.stringify([
     rules,
@@ -34,7 +37,9 @@ export function useCalendarPreview(
     snapshot?.reviews,
     retry,
   ]);
-  const validation = snapshot ? "" : previewIssue(rules);
+  const validation = snapshot
+    ? ""
+    : (calendarIssues(rules, false)[0]?.message ?? "");
   useEffect(() => {
     const id = ++sequence.current;
     if (!enabled) return;
@@ -46,8 +51,9 @@ export function useCalendarPreview(
       setState({
         key,
         value: {
-          periods: snapshot.periods[frequency],
+          periods: snapshot.periods[frequency] ?? [],
           reviews: snapshot.reviews,
+          warnings: snapshot.warnings,
         },
         error: "",
         busy: false,
@@ -70,9 +76,19 @@ export function useCalendarPreview(
               value: null,
               error:
                 error instanceof Error
-                  ? error.message
+                  ? error.message.replace(/\b\d{4}-\d{2}-\d{2}\b/g, displayDate)
                   : "Could not update the preview. Try again.",
               busy: false,
+              accessError:
+                !!error &&
+                typeof error === "object" &&
+                "status" in error &&
+                [401, 403].includes(Number(error.status)),
+              retryable:
+                !(error && typeof error === "object" && "status" in error) ||
+                Number((error as { status?: number }).status) >= 500 ||
+                Number((error as { status?: number }).status) === 429 ||
+                Number((error as { status?: number }).status) === 404,
             });
         });
     }, 250);
@@ -85,5 +101,12 @@ export function useCalendarPreview(
   }, [key, enabled, token]);
   return state.key === key
     ? state
-    : { key, value: null, error: validation, busy: enabled && !validation };
+    : {
+        key,
+        value: null,
+        error: validation,
+        busy: enabled && !validation,
+        retryable: false,
+        accessError: false,
+      };
 }

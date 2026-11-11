@@ -10,18 +10,17 @@ describe("calendar overview summaries", () => {
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(1),
       lexPerformanceCalendar: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([
-            {
-              id: "cycle",
-              name: draft.name,
-              status: "DRAFT",
-              currentVersion: 1,
-              revision: 4,
-              draft,
-            },
-          ]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: "cycle",
+            name: draft.name,
+            status: "DRAFT",
+            currentVersion: 1,
+            revision: 4,
+            updatedAt: new Date("2027-02-03T04:05:00Z"),
+            draft,
+          },
+        ]),
       },
       lexPerformanceCalendarVersion: {
         findFirst: jest
@@ -45,6 +44,7 @@ describe("calendar overview summaries", () => {
       start: draft.start,
       end: draft.end,
       status: "DRAFT",
+      updatedAt: new Date("2027-02-03T04:05:00Z"),
     });
     expect(result.calendars[0]).not.toHaveProperty("draft");
     expect(tx.lexPerformanceCalendar.findMany.mock.calls[0][0].where).toEqual({
@@ -58,6 +58,8 @@ describe("calendar overview summaries", () => {
       const result = await service.list("org-a", { userId: "reader", role });
       expect(result.calendars[0]).toEqual({
         id: "cycle",
+        audienceKind: "UNASSIGNED",
+        audienceLabel: "Not assigned automatically",
         name: published.name,
         start: published.start,
         end: published.end,

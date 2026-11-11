@@ -15,6 +15,10 @@ import { RulesCalendarService } from "./rules-calendar.service";
 describe("02.03 HTTP company boundary", () => {
   let app: INestApplication;
   const service = {
+    mutate: jest.fn(async () => ({})),
+    directory: jest.fn(async () => ({ people: [] })),
+    comparison: jest.fn(async () => ({ rows: [] })),
+    assignmentPreview: jest.fn(async () => ({ conflicts: [] })),
     list: jest.fn(async () => ({ calendars: [] })),
     create: jest.fn(async () => ({ id: "new" })),
     read: jest.fn(async () => ({ id: "saved" })),
@@ -158,4 +162,83 @@ describe("02.03 HTTP company boundary", () => {
       .set("x-test-company", "org-b")
       .expect(403);
   });
+  it("routes comparison and directory explicitly before dynamic calendar IDs", async () => {
+    await request(app.getHttpServer())
+      .get(`${path}/comparison?month=2027-01&organizationId=org-b`)
+      .set("Authorization", "test")
+      .expect(200);
+    expect(service.comparison).toHaveBeenCalledWith(
+      "org-a",
+      expect.anything(),
+      "2027-01",
+    );
+    await request(app.getHttpServer())
+      .get(`${path}/assignment-directory`)
+      .set("Authorization", "test")
+      .expect(200);
+    expect(service.directory).toHaveBeenCalledWith("org-a", expect.anything());
+    expect(service.read).not.toHaveBeenCalled();
+  });
+  it("allows employee aggregate comparison but denies the people selector and assignment preview", async () => {
+    await request(app.getHttpServer())
+      .get(`${path}/comparison?month=2027-01`)
+      .set("Authorization", "test")
+      .set("x-test-user", "employee")
+      .expect(200);
+    await request(app.getHttpServer())
+      .get(`${path}/assignment-directory`)
+      .set("Authorization", "test")
+      .set("x-test-user", "employee")
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`${path}/assignment-preview`)
+      .set("Authorization", "test")
+      .set("x-test-user", "employee")
+      .send({ rules: {} })
+      .expect(403);
+    expect(service.directory).not.toHaveBeenCalled();
+    expect(service.assignmentPreview).not.toHaveBeenCalled();
+  });
+  it("keeps wrong-company tokens out of all new endpoints", async () => {
+    for (const suffix of ["comparison?month=2027-01", "assignment-directory"])
+      await request(app.getHttpServer())
+        .get(`${path}/${suffix}`)
+        .set("Authorization", "test")
+        .set("x-test-company", "org-b")
+        .expect(403);
+    await request(app.getHttpServer())
+      .post(`${path}/assignment-preview`)
+      .set("Authorization", "test")
+      .set("x-test-company", "org-b")
+      .send({ rules: {} })
+      .expect(403);
+    expect(service.directory).not.toHaveBeenCalled();
+    expect(service.comparison).not.toHaveBeenCalled();
+    expect(service.assignmentPreview).not.toHaveBeenCalled();
+  });
+  it.each(["delete", "discard-revision"])(
+    "guards %s and passes the trusted company",
+    async (action) => {
+      await request(app.getHttpServer())
+        .post(`${path}/saved/${action}`)
+        .set("Authorization", "test")
+        .send({ expectedRevision: 0, organizationId: "org-b" })
+        .expect(201);
+      expect(service.mutate).toHaveBeenCalledWith(
+        "org-a",
+        "saved",
+        expect.any(Object),
+        action,
+        expect.any(Object),
+      );
+      service.mutate.mockClear();
+      await request(app.getHttpServer())
+        .post(`${path}/saved/${action}`)
+        .set("Authorization", "test")
+        .set("x-test-user", "employee")
+        .send({ expectedRevision: 0 })
+        .expect(403);
+      expect(service.mutate).not.toHaveBeenCalled();
+    },
+  );
 });

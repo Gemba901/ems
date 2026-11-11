@@ -684,7 +684,7 @@
   font-weight: 600;
   margin-left: 0.5rem;
 }
-li[data-last-viewed="true"] {
+.sourceNotes li[data-last-viewed="true"] {
   border-left: 3px solid #6f5a89;
   padding-left: 0.6rem;
   background: color-mix(in srgb, #6f5a89 7%, transparent);

@@ -6,6 +6,8 @@ import { PrismaClient } from "db";
 import { PrismaService } from "src/prisma/prisma.service";
 import { Role } from "src/common/enum/role.enum";
 import { RulesCalendarService } from "./rules-calendar.service";
+import { emptyAudience } from "./calendar-audience";
+import type { CalendarAudience } from "./calendar-audience.types";
 import { initialRules } from "./calendar-model";
 
 // Opt-in, disposable database only. Never reads the app DATABASE_URL.
@@ -48,6 +50,12 @@ suite("02.03 persisted calendar workflow on PostgreSQL", () => {
       .filter(Boolean))
       await db.$executeRawUnsafe(statement);
     await db.$executeRaw`INSERT INTO "Organization" VALUES ('org-a'), ('org-b')`;
+    await db.$executeRawUnsafe(
+      'CREATE TABLE "Department" (id TEXT PRIMARY KEY, name TEXT NOT NULL, "organizationId" TEXT NOT NULL)',
+    );
+    await db.$executeRawUnsafe(
+      'CREATE TABLE "Employee" (id TEXT PRIMARY KEY, "firstName" TEXT NOT NULL, "middleName" TEXT, "lastName" TEXT NOT NULL, "employeeCode" TEXT, "jobTitle" TEXT, "departmentId" TEXT, "plantBranch" TEXT, "employmentStatus" TEXT NOT NULL, "organizationId" TEXT NOT NULL)',
+    );
     service = new RulesCalendarService(db as unknown as PrismaService);
   });
   afterAll(async () => {
@@ -64,6 +72,10 @@ suite("02.03 persisted calendar workflow on PostgreSQL", () => {
   });
   beforeEach(async () => {
     await db.lexPerformanceCalendar.deleteMany();
+    await db.$executeRawUnsafe('DELETE FROM "Employee"');
+    await db.$executeRawUnsafe('DELETE FROM "Department"');
+    await db.$executeRaw`INSERT INTO "Department" (id,name,"organizationId") VALUES ('office','Office','org-a'),('ops','Operations','org-a'),('foreign-dept','Other company','org-b')`;
+    await db.$executeRaw`INSERT INTO "Employee" (id,"firstName","lastName","employeeCode","jobTitle","departmentId","plantBranch","employmentStatus","organizationId") VALUES ('p-a','Amina','Office','A1','Coordinator','office','HQ','ACTIVE','org-a'),('p-b','Brian','Operations','B1','Operator','ops','Plant','PROBATION','org-a'),('p-foreign','Foreign','Person','X1','Operator','foreign-dept','Elsewhere','ACTIVE','org-b')`;
   });
 
   it("rejects a reversed-date create without persisting a calendar or audit event", async () => {
@@ -280,5 +292,401 @@ suite("02.03 persisted calendar workflow on PostgreSQL", () => {
     await expect(
       service.create("org-a", { userId: "hod", role: Role.HOD }, rules()),
     ).rejects.toThrow("permission");
+  });
+  const assignmentRules = (
+    name: string,
+    kind: CalendarAudience["kind"],
+    ids: string[] = [],
+  ) => ({
+    ...rules(),
+    name,
+    audience: {
+      ...emptyAudience(),
+      kind,
+      label: name,
+      employeeIds: kind === "PEOPLE" ? ids : [],
+      departmentIds: kind === "DEPARTMENTS" ? ids : [],
+    },
+  });
+  it("serializes concurrent publication of overlapping calendars on different rows", async () => {
+    const [a, b] = await Promise.all([
+      service.create(
+        "org-a",
+        hr,
+        assignmentRules("Office A", "PEOPLE", ["p-a"]),
+      ),
+      service.create(
+        "org-a",
+        hr,
+        assignmentRules("Office B", "PEOPLE", ["p-a"]),
+      ),
+    ]);
+    const outcomes = await Promise.allSettled(
+      [a, b].map((row) =>
+        service.mutate("org-a", row.id, management, "approve", {
+          expectedRevision: 0,
+        }),
+      ),
+    );
+    expect(outcomes.filter((x) => x.status === "fulfilled")).toHaveLength(1);
+    const rejected = outcomes.find(
+      (x) => x.status === "rejected",
+    ) as PromiseRejectedResult;
+    expect(rejected.reason.message).toMatch(/overlaps/);
+    expect(await db.lexPerformanceCalendarVersion.count()).toBe(1);
+    expect(
+      await db.lexPerformanceCalendarEvent.count({
+        where: { action: "APPROVE" },
+      }),
+    ).toBe(1);
+  });
+  it("uses only approved assignments in comparison, with no draft names or person directory leak", async () => {
+    const saved = await service.create(
+      "org-a",
+      hr,
+      assignmentRules("Approved office", "COMPANY"),
+    );
+    await service.mutate("org-a", saved.id, management, "approve", {
+      expectedRevision: 0,
+    });
+    await service.mutate("org-a", saved.id, hr, "revise", {
+      expectedRevision: 1,
+      reason: "New policy",
+    });
+    await service.mutate("org-a", saved.id, hr, "save", {
+      expectedRevision: 2,
+      rules: assignmentRules("Private new label", "PEOPLE", ["p-a"]),
+    });
+    const result = await service.comparison("org-a", employee, "2028-01");
+    expect(result.activePeople).toBe(2);
+    expect(result.rows[0]).toMatchObject({
+      name: "Approved office",
+      kind: "COMPANY",
+      version: 1,
+    });
+    expect(result.days[0]).toMatchObject({
+      assigned: 2,
+      conflicts: 0,
+      unassigned: 0,
+    });
+    expect(JSON.stringify(result)).not.toMatch(
+      /Private new label|p-a|Amina|Foreign/,
+    );
+  });
+  it("uses stable group identities while preserving an old pinned version after revision", async () => {
+    const saved = await service.create(
+      "org-a",
+      hr,
+      assignmentRules("Office", "PEOPLE", ["p-a"]),
+    );
+    await service.mutate("org-a", saved.id, management, "approve", {
+      expectedRevision: 0,
+    });
+    expect(
+      await service.getCurrentAssignment("org-a", "p-a", "2028-01-01"),
+    ).toMatchObject({ status: "ASSIGNED", version: 1, calendarId: saved.id });
+    await service.mutate("org-a", saved.id, hr, "revise", {
+      expectedRevision: 1,
+      reason: "Change membership",
+    });
+    await service.mutate("org-a", saved.id, hr, "save", {
+      expectedRevision: 2,
+      rules: assignmentRules("Office", "PEOPLE", ["p-b"]),
+    });
+    await service.mutate("org-a", saved.id, management, "approve", {
+      expectedRevision: 3,
+    });
+    expect(
+      (await service.getApproved("org-a", saved.id, 1))?.rules.audience
+        ?.employeeIds,
+    ).toEqual(["p-a"]);
+    expect(
+      (await service.getCurrentAssignment("org-a", "p-a", "2028-01-01")).status,
+    ).toBe("UNASSIGNED");
+    expect(
+      await service.getCurrentAssignment("org-a", "p-b", "2028-01-01"),
+    ).toMatchObject({ status: "ASSIGNED", version: 2 });
+  });
+  it("rejects foreign department/person assignments and unauthorized directory access before mutation", async () => {
+    await expect(
+      service.create(
+        "org-a",
+        hr,
+        assignmentRules("Bad", "PEOPLE", ["p-foreign"]),
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        statusCode: 400,
+        message: expect.arrayContaining([expect.stringMatching(/company/)]),
+      },
+    });
+    await expect(
+      service.create(
+        "org-a",
+        hr,
+        assignmentRules("Bad", "DEPARTMENTS", ["foreign-dept"]),
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        statusCode: 400,
+        message: expect.arrayContaining([expect.stringMatching(/company/)]),
+      },
+    });
+    expect(await db.lexPerformanceCalendar.count()).toBe(0);
+    await expect(service.directory("org-a", employee)).rejects.toThrow(
+      /permission/,
+    );
+    await expect(
+      service.directory("org-a", { userId: "hod", role: Role.HOD }),
+    ).rejects.toThrow(/permission/);
+    await expect(
+      service.getCurrentAssignment("org-a", "p-foreign", "2028-01-01"),
+    ).rejects.toThrow(/not found/);
+    const d = await service.directory("org-a", hr);
+    expect(d.people.map((p) => p.id).sort()).toEqual(["p-a", "p-b"]);
+  });
+  it("accepts company, department and named-group overrides without double counting people", async () => {
+    const selections = [
+      assignmentRules("Default", "COMPANY"),
+      assignmentRules("Office", "DEPARTMENTS", ["office"]),
+      {
+        ...assignmentRules("Operations Saturdays", "PEOPLE", ["p-b"]),
+        workdays: [1, 2, 3, 4, 5, 6],
+      },
+    ];
+    for (const r of selections) {
+      const saved = await service.create("org-a", hr, r);
+      await service.mutate("org-a", saved.id, management, "approve", {
+        expectedRevision: 0,
+      });
+    }
+    const result = await service.comparison("org-a", employee, "2028-01");
+    expect(result.days[0]).toMatchObject({
+      assigned: 2,
+      conflicts: 0,
+      unassigned: 0,
+    });
+    expect(
+      result.rows.find((r) => r.name === "Default")!.cells[0].effectivePeople,
+    ).toBe(0);
+    expect(
+      result.rows.find((r) => r.name === "Office")!.cells[0],
+    ).toMatchObject({ working: false, effectivePeople: 1 });
+    expect(
+      result.rows.find((r) => r.name === "Operations Saturdays")!.cells[0],
+    ).toMatchObject({ working: true, effectivePeople: 1 });
+  });
+  it("rejects deleted membership at approval and leaves the saved draft intact", async () => {
+    const saved = await service.create(
+      "org-a",
+      hr,
+      assignmentRules("Office", "PEOPLE", ["p-a"]),
+    );
+    await db.$executeRaw`DELETE FROM "Employee" WHERE id='p-a'`;
+    await expect(
+      service.mutate("org-a", saved.id, management, "approve", {
+        expectedRevision: 0,
+      }),
+    ).rejects.toMatchObject({
+      response: {
+        statusCode: 400,
+        message: expect.arrayContaining([expect.stringMatching(/no longer/)]),
+      },
+    });
+    const current = await service.read("org-a", saved.id, hr);
+    expect(current).toMatchObject({ status: "DRAFT", revision: 0 });
+    expect(await db.lexPerformanceCalendarVersion.count()).toBe(0);
+  });
+  it("reports overlap in preview without excluding another company's calendar ID", async () => {
+    const saved = await service.create(
+      "org-a",
+      hr,
+      assignmentRules("Original", "COMPANY"),
+    );
+    await service.mutate("org-a", saved.id, management, "approve", {
+      expectedRevision: 0,
+    });
+    const result = await service.assignmentPreview(
+      "org-a",
+      hr,
+      assignmentRules("Second", "COMPANY"),
+    );
+    expect(result.conflicts[0]).toMatchObject({
+      calendarId: saved.id,
+      name: "Original",
+    });
+    const other = await service.create(
+      "org-b",
+      hr,
+      assignmentRules("Other", "COMPANY"),
+    );
+    await expect(
+      service.assignmentPreview(
+        "org-a",
+        hr,
+        assignmentRules("Second", "COMPANY"),
+        other.id,
+      ),
+    ).rejects.toThrow(/not found/);
+  });
+  it("deletes only an unapproved draft and its draft-only history", async () => {
+    const row = await create();
+    await service.mutate("org-a", row.id, hr, "delete", {
+      expectedRevision: 0,
+    });
+    expect(await db.lexPerformanceCalendar.count()).toBe(0);
+    expect(await db.lexPerformanceCalendarEvent.count()).toBe(0);
+    await expect(service.read("org-a", row.id, hr)).rejects.toThrow(
+      /not found/,
+    );
+  });
+  it("rejects stale, foreign-company and unauthorized deletion", async () => {
+    const row = await create();
+    await service.mutate("org-a", row.id, hr, "save", {
+      expectedRevision: 0,
+      rules: rules(),
+    });
+    await expect(
+      service.mutate("org-a", row.id, hr, "delete", { expectedRevision: 0 }),
+    ).rejects.toThrow(/changed/);
+    await expect(
+      service.mutate("org-b", row.id, hr, "delete", { expectedRevision: 1 }),
+    ).rejects.toThrow(/not found/);
+    await expect(
+      service.mutate("org-a", row.id, employee, "delete", {
+        expectedRevision: 1,
+      }),
+    ).rejects.toThrow(/permission/);
+    expect(await db.lexPerformanceCalendar.count()).toBe(1);
+  });
+  it("does not delete submitted drafts or calendars with approved versions", async () => {
+    const row = await create();
+    await service.mutate("org-a", row.id, hr, "submit", {
+      expectedRevision: 0,
+    });
+    await expect(
+      service.mutate("org-a", row.id, hr, "delete", { expectedRevision: 1 }),
+    ).rejects.toThrow();
+    await service.mutate("org-a", row.id, management, "approve", {
+      expectedRevision: 1,
+    });
+    await service.mutate("org-a", row.id, hr, "revise", {
+      expectedRevision: 2,
+      reason: "New revision",
+    });
+    await expect(
+      service.mutate("org-a", row.id, hr, "delete", { expectedRevision: 3 }),
+    ).rejects.toThrow(/approved/);
+    expect(await db.lexPerformanceCalendarVersion.count()).toBe(1);
+  });
+  it("discards a revision without changing approved rules, dates, memberships or version history", async () => {
+    const row = await service.create(
+      "org-a",
+      hr,
+      assignmentRules("Approved", "PEOPLE", ["p-a"]),
+    );
+    await service.mutate("org-a", row.id, management, "approve", {
+      expectedRevision: 0,
+    });
+    const before = await service.getApproved("org-a", row.id, 1);
+    await service.mutate("org-a", row.id, hr, "revise", {
+      expectedRevision: 1,
+      reason: "Change coverage",
+    });
+    await service.mutate("org-a", row.id, hr, "save", {
+      expectedRevision: 2,
+      rules: assignmentRules("Private new name", "PEOPLE", ["p-b"]),
+    });
+    await service.mutate("org-a", row.id, hr, "discard-revision", {
+      expectedRevision: 3,
+    });
+    expect(await service.getApproved("org-a", row.id, 1)).toEqual(before);
+    const restored = await service.read("org-a", row.id, hr);
+    expect(restored).toMatchObject({
+      status: "APPROVED",
+      revision: 4,
+      draft: { name: "Approved", audience: { employeeIds: ["p-a"] } },
+    });
+    expect(await db.lexPerformanceCalendarVersion.count()).toBe(1);
+    expect(
+      await db.lexPerformanceCalendarEvent.count({
+        where: { action: "DISCARD-REVISION" },
+      }),
+    ).toBe(1);
+    await expect(
+      service.mutate("org-a", row.id, hr, "discard-revision", {
+        expectedRevision: 4,
+      }),
+    ).rejects.toThrow();
+  });
+  it("rejects discard without an approved version, stale revision or foreign company", async () => {
+    const row = await create();
+    await expect(
+      service.mutate("org-a", row.id, hr, "discard-revision", {
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow(/no approved/);
+    await service.mutate("org-a", row.id, management, "approve", {
+      expectedRevision: 0,
+    });
+    await service.mutate("org-a", row.id, hr, "revise", {
+      expectedRevision: 1,
+      reason: "Revision",
+    });
+    await expect(
+      service.mutate("org-a", row.id, hr, "discard-revision", {
+        expectedRevision: 1,
+      }),
+    ).rejects.toThrow(/changed/);
+    await expect(
+      service.mutate("org-b", row.id, hr, "discard-revision", {
+        expectedRevision: 2,
+      }),
+    ).rejects.toThrow(/not found/);
+    await expect(
+      service.mutate("org-a", row.id, employee, "discard-revision", {
+        expectedRevision: 2,
+      }),
+    ).rejects.toThrow(/permission/);
+    expect((await service.read("org-a", row.id, hr)).status).toBe("DRAFT");
+  });
+  it("allows only one winner when deleting a draft races approval", async () => {
+    const row = await create();
+    const results = await Promise.allSettled([
+      service.mutate("org-a", row.id, management, "approve", {
+        expectedRevision: 0,
+      }),
+      service.mutate("org-a", row.id, hr, "delete", { expectedRevision: 0 }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const current = await db.lexPerformanceCalendar.findUnique({
+      where: { id: row.id },
+    });
+    if (current) {
+      expect(current.status).toBe("APPROVED");
+      expect(await db.lexPerformanceCalendarVersion.count()).toBe(1);
+    } else expect(await db.lexPerformanceCalendarVersion.count()).toBe(0);
+  });
+  it("allows only one winner when discarding a revision races a new approval", async () => {
+    const row = await create();
+    await service.mutate("org-a", row.id, management, "approve", {
+      expectedRevision: 0,
+    });
+    const original = await service.getApproved("org-a", row.id, 1);
+    await service.mutate("org-a", row.id, hr, "revise", {
+      expectedRevision: 1,
+      reason: "Revision",
+    });
+    const results = await Promise.allSettled([
+      service.mutate("org-a", row.id, management, "approve", {
+        expectedRevision: 2,
+      }),
+      service.mutate("org-a", row.id, hr, "discard-revision", {
+        expectedRevision: 2,
+      }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(await service.getApproved("org-a", row.id, 1)).toEqual(original);
+    expect((await service.read("org-a", row.id, hr)).status).toBe("APPROVED");
   });
 });

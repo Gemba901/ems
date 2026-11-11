@@ -11,6 +11,7 @@ import { cycleDateIssue } from "./cycle-dates";
 const rules = () => ({
   ...initialRules(2028, "Africa/Nairobi"),
   name: "2028 plan",
+  enabledFrequencies: [...FREQUENCIES],
   workdays: [0, 1, 2, 3, 4, 5, 6],
 });
 describe("02.03 calendar semantics", () => {
@@ -155,7 +156,7 @@ describe("02.03 calendar semantics", () => {
       { date: "2028-02-30", kind: "NON_WORKING", reason: "", source: "MANUAL" },
       { date: "2028-02-30", kind: "WORKING", reason: "Test", source: "MANUAL" },
     ];
-    expect(calendarErrors(r).join(" ")).toMatch(/invalid date/);
+    expect(calendarErrors(r).join(" ")).toMatch(/date is invalid/);
     expect(calendarErrors(r).join(" ")).toMatch(/only one/);
     expect(() => approvalSnapshot(r)).toThrow();
   });
@@ -187,7 +188,7 @@ describe("02.03 calendar semantics", () => {
       source: "MANUAL",
     });
     expect(s.rules.name).toBe("2028 plan");
-    expect(s.periods.daily[0].scheduled).toBe(true);
+    expect(s.periods.daily![0].scheduled).toBe(true);
     expect(s.reviews[0]).toEqual({
       start: "2028-01-01",
       end: "2028-01-31",

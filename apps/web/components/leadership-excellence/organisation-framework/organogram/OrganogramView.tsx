@@ -33,6 +33,8 @@ import {
 } from "./organogram";
 import {
   SIZES,
+  readableZoom,
+  zoomPresentation,
   type ChartDensity,
   fitPresentation,
   layoutChart,
@@ -110,6 +112,11 @@ export function Organogram({
   );
   const [recentOpened, setRecentOpened] = useState<string[]>([]);
   const [fromNotes, setFromNotes] = useState(false);
+  const [visitedNotes, setVisitedNotes] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [lastNote, setLastNote] = useState<string | null>(null);
+  const [personId, setPersonId] = useState<string | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const chartContainer = useRef<HTMLDivElement>(null);
   const [term, setTerm] = useState(""),
@@ -184,7 +191,9 @@ export function Organogram({
       setOpen(defaultOpen(structure, next));
     }
     if (selected && !index.byId.has(selected)) setSelected(null);
-  }, [index, scope, selected, structure]);
+    if (personId && !structure.members.some((p) => p.id === personId))
+      setPersonId(null);
+  }, [index, scope, selected, personId, structure]);
   useLayoutEffect(() => {
     const el = viewport.current;
     if (!el) return;
@@ -206,7 +215,7 @@ export function Organogram({
   useLayoutEffect(() => {
     const container = chartContainer.current;
     if (!container) return;
-    const measure = () => setMobile(container.clientWidth < 1200);
+    const measure = () => setMobile(container.clientWidth < 1024);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(container);
@@ -335,6 +344,7 @@ export function Organogram({
     setOpen(defaultOpen(structure, next));
     setRecentOpened([]);
     setFromNotes(false);
+    setPersonId(null);
     setSelected(leaf ? id : null);
     requestFit();
   };
@@ -352,28 +362,49 @@ export function Organogram({
     setLayoutWidth(previous.layoutWidth);
     setSelected(null);
     setFromNotes(false);
+    setPersonId(null);
     requestAnimationFrame(() =>
       viewport.current?.scrollTo({ left: previous.left, top: previous.top }),
     );
   };
   const fit = () => requestFit();
-  const fullCards = () => {
+  const displayZoom = readableZoom(density, zoom);
+  const fullCards = () => zoomTo(1, true);
+  const zoomTo = (value: number, full = false) => {
     autoFit.current = false;
     fitPending.current = false;
-    setDensity("cards");
-    setLayoutWidth(null);
-    setZoom(1);
-    viewport.current?.scrollTo({ left: 0, top: 0 });
-  };
-  const zoomTo = (value: number) => {
-    autoFit.current = false;
-    fitPending.current = false;
-    const next = Math.min(1.5, Math.max(0.5, value)),
+    const next = zoomPresentation(density, value, full),
       el = viewport.current;
     if (el) {
+      const points = [...tree.positions.values()];
+      const screen = (p: (typeof points)[number]) => ({
+        x: (p.x + SIZES[density].width / 2 + centre) * zoom - el.scrollLeft,
+        y: (p.y + SIZES[density].height / 2) * zoom - el.scrollTop,
+      });
+      const selectedPoint = selected ? tree.positions.get(selected) : undefined;
+      const visiblePoint = selectedPoint && screen(selectedPoint);
       const p =
-        tree.positions.get(scope || "company") ??
-        tree.positions.values().next().value;
+        visiblePoint &&
+        visiblePoint.x >= 0 &&
+        visiblePoint.x <= el.clientWidth &&
+        visiblePoint.y >= 0 &&
+        visiblePoint.y <= el.clientHeight
+          ? selectedPoint
+          : points.reduce<(typeof points)[number] | undefined>(
+              (best, candidate) => {
+                const distance = (point: (typeof points)[number]) => {
+                  const position = screen(point);
+                  return (
+                    (position.x - el.clientWidth / 2) ** 2 +
+                    (position.y - el.clientHeight / 2) ** 2
+                  );
+                };
+                return !best || distance(candidate) < distance(best)
+                  ? candidate
+                  : best;
+              },
+              undefined,
+            );
       if (p)
         anchor.current = {
           id: p.id,
@@ -381,7 +412,15 @@ export function Organogram({
           y: p.y * zoom - el.scrollTop,
         };
     }
-    setZoom(next);
+    if (next.density !== density) {
+      // Keep approximately the same columns; do not Fit again during manual zoom.
+      setLayoutWidth(
+        ((layoutWidth ?? width) * SIZES[next.density].width) /
+          SIZES[density].width,
+      );
+      setDensity(next.density);
+    }
+    setZoom(next.scale);
   };
   const highlights = highlightedUnits(
     index,
@@ -408,6 +447,7 @@ export function Organogram({
         y: at.y * zoom - el.scrollTop,
       };
     setFromNotes(note);
+    setPersonId(null);
     setSelected(id);
   };
   const selectedUnit = selected ? index.byId.get(selected) : null;
@@ -415,6 +455,7 @@ export function Organogram({
     const origin = returnFocus.current;
     setSelected(null);
     setFromNotes(false);
+    setPersonId(null);
     requestAnimationFrame(() => {
       if (origin?.isConnected) origin.focus({ preventScroll: true });
       else
@@ -423,12 +464,19 @@ export function Organogram({
           ?.focus({ preventScroll: true });
     });
   };
+  const selectedPerson =
+    structure.members.find((p) => p.id === personId) ?? null;
+  const detailsLabel = selectedPerson
+    ? "Selected person details"
+    : "Selected unit details";
   const details = selectedUnit && (
     <UnitDetails
       key={selectedUnit.id}
       unit={selectedUnit}
       structure={structure}
       currentScope={scope}
+      person={selectedPerson}
+      onPerson={(person) => setPersonId(person?.id ?? null)}
       onFocus={focus}
       onClose={closeDetails}
     />
@@ -608,7 +656,7 @@ export function Organogram({
               variant="outline"
               size="icon-sm"
               aria-label="Zoom out"
-              onClick={() => zoomTo(zoom / 1.2)}
+              onClick={() => zoomTo(displayZoom / 1.2)}
             >
               <Minus />
             </Button>
@@ -618,13 +666,13 @@ export function Organogram({
               aria-label="Reset zoom to 100%"
               onClick={fullCards}
             >
-              {Math.round(zoom * 100)}%
+              {Math.round(displayZoom * 100)}%
             </Button>
             <Button
               variant="outline"
               size="icon-sm"
               aria-label="Zoom in"
-              onClick={() => zoomTo(zoom * 1.2)}
+              onClick={() => zoomTo(displayZoom * 1.2)}
             >
               <Plus />
             </Button>
@@ -668,8 +716,8 @@ export function Organogram({
             <span>
               {visible.length} units ·{" "}
               {density === "map"
-                ? "Each tile is one unit. Hover for its name; select for details."
-                : "Names and counts stay visible. Select a unit for its lead and people."}
+                ? "Each tile is one unit. Zoom in for names, then full details; select any tile to inspect it."
+                : "Types, names and counts are visible. Zoom in further for leads and photos, or select a unit."}
             </span>
             {(["COMPANY", "BRANCH", "DEPARTMENT", "SECTION"] as const).map(
               (kind) => (
@@ -799,10 +847,7 @@ export function Organogram({
             </div>
           </div>
           {!mobile && !fromNotes && selectedUnit && (
-            <aside
-              aria-label="Selected unit details"
-              className={styles.inspector}
-            >
+            <aside aria-label={detailsLabel} className={styles.inspector}>
               {details}
             </aside>
           )}
@@ -816,7 +861,7 @@ export function Organogram({
               closeDetails();
             }}
             onClose={closeDetails}
-            aria-label="Selected unit details"
+            aria-label={detailsLabel}
           >
             {details}
           </dialog>
@@ -840,24 +885,55 @@ export function Organogram({
           Inferred leads are suggestions from reporting lines. They do not grant
           authority or assign responsibilities to plans.
         </p>
+        <p>
+          Viewed links mark where you have looked during this visit; the notes
+          remain until their source issues are resolved.
+        </p>
         {structure.checks.length ? (
           <ul>
-            {structure.checks.map((c, i) => (
-              <li key={i}>
-                {c.message}
-                {c.unitId && (
-                  <button
-                    className={styles.textAction}
-                    onClick={(event) => {
-                      if (c.unitId)
-                        showDetails(c.unitId, true, event.currentTarget);
-                    }}
-                  >
-                    View details
-                  </button>
-                )}
-              </li>
-            ))}
+            {structure.checks.map((c) => {
+              const noteKey = JSON.stringify([
+                c.kind,
+                c.unitId,
+                c.message,
+                c.count,
+                c.severity,
+              ]);
+              const visited = visitedNotes.has(noteKey);
+              return (
+                <li
+                  key={noteKey}
+                  data-last-viewed={lastNote === noteKey || undefined}
+                >
+                  {c.message}
+                  {c.unitId && (
+                    <button
+                      className={styles.textAction}
+                      data-visited={visited || undefined}
+                      title={
+                        visited
+                          ? "Previously viewed; this does not resolve the note"
+                          : "Open this note's unit details"
+                      }
+                      onClick={(event) => {
+                        if (c.unitId) {
+                          setVisitedNotes(
+                            (current) => new Set([...current, noteKey]),
+                          );
+                          setLastNote(noteKey);
+                          showDetails(c.unitId, true, event.currentTarget);
+                        }
+                      }}
+                    >
+                      View details
+                    </button>
+                  )}
+                  {visited && (
+                    <small className={styles.viewedNote}>Viewed</small>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p>No source gaps found by these checks.</p>
@@ -992,12 +1068,16 @@ function UnitDetails({
   unit,
   structure,
   currentScope,
+  person,
+  onPerson,
   onFocus,
   onClose,
 }: {
   unit: OrganisationUnit;
   structure: OrganogramViewData;
   currentScope: string;
+  person: StructurePerson | null;
+  onPerson: (person: StructurePerson | null) => void;
   onFocus: (id: string) => void;
   onClose: () => void;
 }) {
@@ -1006,6 +1086,11 @@ function UnitDetails({
   const [term, setTerm] = useState(""),
     [page, setPage] = useState(0),
     [status, setStatus] = useState("active");
+  const personOrigin = useRef<string | null>(null);
+  const selectPerson = (value: StructurePerson, origin: string) => {
+    personOrigin.current = origin;
+    onPerson(value);
+  };
   const people = structure.members.filter(
     (p) =>
       included.has(p.unitId) &&
@@ -1027,6 +1112,24 @@ function UnitDetails({
     page,
     Math.max(0, Math.ceil(people.length / 15) - 1),
   );
+  if (person)
+    return (
+      <PersonDetails
+        person={person}
+        structure={structure}
+        unitName={unit.name}
+        onClose={onClose}
+        onBack={() => {
+          const id = person.id;
+          onPerson(null);
+          requestAnimationFrame(() =>
+            document
+              .getElementById(personOrigin.current || `person-${id}`)
+              ?.focus({ preventScroll: true }),
+          );
+        }}
+      />
+    );
   return (
     <>
       <header className={styles.inspectorHeading}>
@@ -1075,7 +1178,26 @@ function UnitDetails({
           <dd>
             {unit.lead ? (
               <>
-                {unit.lead.name}
+                {structure.members.some(
+                  (p) => p.id === unit.lead?.employeeId,
+                ) ? (
+                  <button
+                    id={`lead-${unit.id}`}
+                    className={styles.textAction}
+                    onClick={() =>
+                      selectPerson(
+                        structure.members.find(
+                          (p) => p.id === unit.lead?.employeeId,
+                        )!,
+                        `lead-${unit.id}`,
+                      )
+                    }
+                  >
+                    {unit.lead.name}
+                  </button>
+                ) : (
+                  unit.lead.name
+                )}
                 {unit.lead.jobTitle && ` · ${unit.lead.jobTitle}`}
                 <small>
                   {unit.lead.basis === "RECORDED_HOD"
@@ -1176,7 +1298,11 @@ function UnitDetails({
           </p>
           <ul>
             {people.slice(shownPage * 15, (shownPage + 1) * 15).map((p) => (
-              <PersonRow key={p.id} person={p} />
+              <PersonRow
+                key={p.id}
+                person={p}
+                onSelect={() => selectPerson(p, `person-${p.id}`)}
+              />
             ))}
           </ul>
           {people.length > 15 && (
@@ -1207,17 +1333,101 @@ function UnitDetails({
     </>
   );
 }
-function PersonRow({ person: p }: { person: StructurePerson }) {
+function PersonRow({
+  person: p,
+  onSelect,
+}: {
+  person: StructurePerson;
+  onSelect: () => void;
+}) {
   return (
     <li>
-      <PersonAvatar name={p.name} url={p.avatarUrl} />
-      <span>
-        <b>{p.name}</b>
-        <small>
-          {p.jobTitle || "Position not recorded"} ·{" "}
-          {p.probation ? "Probation" : p.active ? "Active" : "Inactive"}
-        </small>
-      </span>
+      <button
+        type="button"
+        id={`person-${p.id}`}
+        className={styles.personRow}
+        onClick={onSelect}
+        aria-label={`View person: ${p.name}`}
+      >
+        <PersonAvatar name={p.name} url={p.avatarUrl} />
+        <span>
+          <b>{p.name}</b>
+          <small>
+            {p.jobTitle || "Position not recorded"} ·{" "}
+            {p.probation ? "Probation" : p.active ? "Active" : "Inactive"}
+          </small>
+        </span>
+      </button>
     </li>
+  );
+}
+
+function PersonDetails({
+  person,
+  structure,
+  unitName,
+  onBack,
+  onClose,
+}: {
+  person: StructurePerson;
+  structure: OrganogramViewData;
+  unitName: string;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+  }, [person.id]);
+  const path = indexUnits(structure).pathTo(person.unitId);
+  const branch = path.find((u) => u.type === "BRANCH");
+  const department = path.find((u) => u.type === "DEPARTMENT");
+  const section = path.find((u) => u.type === "SECTION");
+  return (
+    <>
+      <header className={styles.inspectorHeading}>
+        <div>
+          <Badge variant="secondary">Person</Badge>
+          <h2 ref={heading} tabIndex={-1}>
+            {person.name}
+          </h2>
+        </div>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Close details"
+          onClick={onClose}
+        >
+          <X />
+        </Button>
+      </header>
+      <div className={styles.inspectorBody}>
+        <Button variant="outline" size="sm" onClick={onBack}>
+          Back to {unitName}
+        </Button>
+        <div className={styles.personSummary}>
+          <PersonAvatar name={person.name} url={person.avatarUrl} />
+          <strong>{person.jobTitle || "Position not recorded"}</strong>
+        </div>
+        <dl className={styles.facts}>
+          <dt>Employment status</dt>
+          <dd>
+            {person.probation
+              ? "Probation (active)"
+              : person.active
+                ? "Active"
+                : "Inactive"}
+          </dd>
+          <dt>Company</dt>
+          <dd>{structure.company.name}</dd>
+          <dt>Branch / site / plant</dt>
+          <dd>{branch?.branch || "Not recorded"}</dd>
+          <dt>Department</dt>
+          <dd>{department?.name || "Not recorded"}</dd>
+          <dt>Section</dt>
+          <dd>{section?.name || "Not recorded"}</dd>
+        </dl>
+      </div>
+    </>
   );
 }

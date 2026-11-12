@@ -192,6 +192,7 @@ model Organization {
   steelMaterialMasters        SteelMaterialMaster[]
   steelFinishedGoodsStocks    SteelFinishedGoodsStock[]
   lexStrategicDirection       LexStrategicDirection?
+  lexDirectionApprovers       LexStrategicDirectionApprover[]
 
 
 }

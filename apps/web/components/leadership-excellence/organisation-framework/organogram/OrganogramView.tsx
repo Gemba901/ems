@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -33,6 +40,7 @@ import {
 } from "./organogram";
 import {
   SIZES,
+  cardDetail,
   readableZoom,
   zoomPresentation,
   type ChartDensity,
@@ -135,6 +143,7 @@ export function Organogram({
     x: number;
     y: number;
     reveal?: boolean;
+    keepVisible?: boolean;
   } | null>(null);
   const pan = useRef<{
     x: number;
@@ -158,6 +167,7 @@ export function Organogram({
   const [history, setHistory] = useState<SavedView[]>([]);
   const [reloadRequested, setReloadRequested] = useState(false);
   const requestFit = () => {
+    anchor.current = null;
     fitPending.current = true;
     autoFit.current = true;
     setFitTick((n) => n + 1);
@@ -215,7 +225,9 @@ export function Organogram({
   useLayoutEffect(() => {
     const container = chartContainer.current;
     if (!container) return;
-    const measure = () => setMobile(container.clientWidth < 1024);
+    // Leave room for a usable chart beside a 280px details panel, including
+    // desktop layouts whose app sidebar reduces the available content width.
+    const measure = () => setMobile(container.clientWidth < 760);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(container);
@@ -256,8 +268,18 @@ export function Organogram({
   useLayoutEffect(() => {
     const el = viewport.current;
     if (!el) return;
+    // Docking changes the viewport before ResizeObserver delivers its callback.
+    // Wait for matching dimensions before consuming the scroll anchor.
+    const measuredWidth = el.clientWidth || width;
+    const measuredHeight = el.clientHeight || height;
+    if (measuredWidth !== width || measuredHeight !== height) {
+      setWidth(measuredWidth);
+      setHeight(measuredHeight);
+      return;
+    }
     if (fitPending.current) {
       fitPending.current = false;
+      anchor.current = null;
       const next = fitPresentation(
         visible,
         el.clientWidth || width,
@@ -273,7 +295,19 @@ export function Organogram({
         p = tree.positions.get(a.id);
       anchor.current = null;
       if (p) {
-        let left = Math.max(0, (p.x + centre) * zoom - a.x);
+        const x = a.keepVisible
+          ? Math.max(
+              12,
+              Math.min(a.x, el.clientWidth - tree.cardWidth * zoom - 12),
+            )
+          : a.x;
+        const y = a.keepVisible
+          ? Math.max(
+              12,
+              Math.min(a.y, el.clientHeight - tree.cardHeight * zoom - 12),
+            )
+          : a.y;
+        let left = Math.max(0, (p.x + centre) * zoom - x);
         const bounds = tree.bounds.get(a.id);
         if (a.reveal && bounds && bounds.width * zoom <= el.clientWidth - 24) {
           const edge = (bounds.left + centre) * zoom - left;
@@ -284,7 +318,7 @@ export function Organogram({
                 (el.clientWidth - bounds.width * zoom) / 2,
             );
         }
-        let top = Math.max(0, p.y * zoom - a.y);
+        let top = Math.max(0, p.y * zoom - y);
         if (
           a.reveal &&
           bounds &&
@@ -297,7 +331,18 @@ export function Organogram({
         el.scrollTo({ left, top });
       }
     }
-  }, [tree, zoom, centre, fitTick, visible, width, height]);
+  }, [
+    tree,
+    zoom,
+    centre,
+    fitTick,
+    visible,
+    width,
+    height,
+    selected,
+    mobile,
+    fromNotes,
+  ]);
   const toggle = (id: string) => {
     autoFit.current = false;
     setLayoutWidth(null);
@@ -369,6 +414,12 @@ export function Organogram({
   };
   const fit = () => requestFit();
   const displayZoom = readableZoom(density, zoom);
+  const detail =
+    density === "cards"
+      ? "full"
+      : density === "map"
+        ? "tiles"
+        : cardDetail(displayZoom);
   const fullCards = () => zoomTo(1, true);
   const zoomTo = (value: number, full = false) => {
     autoFit.current = false;
@@ -440,9 +491,10 @@ export function Organogram({
     setLayoutWidth(layoutWidth ?? width);
     const at = tree.positions.get(id),
       el = viewport.current;
-    if (at && el)
+    if (at && el && !note)
       anchor.current = {
         id,
+        keepVisible: true,
         x: (at.x + centre) * zoom - el.scrollLeft,
         y: at.y * zoom - el.scrollTop,
       };
@@ -453,6 +505,14 @@ export function Organogram({
   const selectedUnit = selected ? index.byId.get(selected) : null;
   const closeDetails = () => {
     const origin = returnFocus.current;
+    const el = viewport.current,
+      at = selected ? tree.positions.get(selected) : null;
+    if (el && at && selected && !mobile && !fromNotes)
+      anchor.current = {
+        id: selected,
+        x: (at.x + centre) * zoom - el.scrollLeft,
+        y: at.y * zoom - el.scrollTop,
+      };
     setSelected(null);
     setFromNotes(false);
     setPersonId(null);
@@ -717,7 +777,9 @@ export function Organogram({
               {visible.length} units ·{" "}
               {density === "map"
                 ? "Each tile is one unit. Zoom in for names, then full details; select any tile to inspect it."
-                : "Types, names and counts are visible. Zoom in further for leads and photos, or select a unit."}
+                : detail === "names"
+                  ? "Unit names are visible. Zoom in for types and counts, or select a unit for its details."
+                  : "Types, names and counts are visible. Zoom in further for leads and photos, or select a unit."}
             </span>
             {(["COMPANY", "BRANCH", "DEPARTMENT", "SECTION"] as const).map(
               (kind) => (
@@ -787,11 +849,14 @@ export function Organogram({
             >
               <div
                 className={styles.drawing}
-                style={{
-                  width: tree.width,
-                  height: tree.height,
-                  transform: `translateX(${centre * zoom}px) scale(${zoom})`,
-                }}
+                style={
+                  {
+                    "--chart-scale": zoom,
+                    width: tree.width,
+                    height: tree.height,
+                    transform: `translateX(${centre * zoom}px) scale(${zoom})`,
+                  } as CSSProperties
+                }
               >
                 <svg
                   aria-hidden="true"
@@ -827,6 +892,7 @@ export function Organogram({
                       key={u.id}
                       unit={u}
                       density={density}
+                      detail={detail}
                       x={at.x}
                       y={at.y}
                       childrenCount={index.childrenOf(u.id).length}
@@ -954,6 +1020,7 @@ function PersonAvatar({ name, url }: { name: string; url: string | null }) {
 function UnitCard({
   unit: u,
   density,
+  detail,
   x,
   y,
   childrenCount,
@@ -970,6 +1037,7 @@ function UnitCard({
 }: {
   unit: OrganisationUnit;
   density: ChartDensity;
+  detail: ReturnType<typeof cardDetail>;
   x: number;
   y: number;
   childrenCount: number;
@@ -992,6 +1060,7 @@ function UnitCard({
       style={{ left: x, top: y, width: size.width }}
       data-unit-position={u.id}
       data-density={density}
+      data-detail={detail}
     >
       <button
         id={`unit-${u.id}`}
@@ -1001,6 +1070,7 @@ function UnitCard({
         aria-pressed={selected}
         data-kind={u.type}
         data-density={density}
+        data-detail={detail}
         title={`${TYPE_LABEL[u.type]}: ${u.name} · ${u.people.active} active${u.lead ? ` · ${u.lead.name}` : ""}`}
         data-hit={hit || undefined}
         data-active={active || undefined}
@@ -1009,7 +1079,7 @@ function UnitCard({
         className={styles.unitCard}
         style={{ height: size.height }}
       >
-        {density !== "map" && (
+        {(detail === "summary" || detail === "full") && (
           <span className={styles.unitType}>
             {u.type === "COMPANY" && <Building2 size={14} />}{" "}
             {TYPE_LABEL[u.type]}
@@ -1021,7 +1091,7 @@ function UnitCard({
             {u.name}
           </strong>
         )}
-        {density !== "map" && (
+        {(detail === "summary" || detail === "full") && (
           <span className={styles.unitCount}>
             {u.people.active} active
             {u.people.inactive ? ` · ${u.people.inactive} inactive` : ""}
@@ -1049,7 +1119,7 @@ function UnitCard({
           </span>
         )}
       </button>
-      {childrenCount > 0 && density !== "map" && (
+      {childrenCount > 0 && (detail === "summary" || detail === "full") && (
         <button
           className={styles.expand}
           type="button"

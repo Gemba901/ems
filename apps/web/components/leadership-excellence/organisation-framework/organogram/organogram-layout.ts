@@ -20,10 +20,27 @@ export function readableZoom(density: ChartDensity, scale: number) {
   return (scale * SIZES[density].width) / CARD_WIDTH;
 }
 
-/** Distinct up/down thresholds prevent switching repeatedly at a boundary.
- * Preserve rendered width when replacing a tile with a labelled/full card. */
+// Screen pixels, independent of the dimensions used to lay out each density.
+export const NAME_CARD_WIDTH = 80;
+export const SUMMARY_CARD_WIDTH = 130;
+export const FULL_CARD_WIDTH = 178.5;
+
+/** The same rendered size must show the same content in either zoom direction. */
+export function cardDetail(level: number) {
+  const width = level * CARD_WIDTH;
+  return width >= FULL_CARD_WIDTH
+    ? "full"
+    : width >= SUMMARY_CARD_WIDTH
+      ? "summary"
+      : width >= NAME_CARD_WIDTH
+        ? "names"
+        : "tiles";
+}
+
+/** Preserve rendered width when replacing a tile with a labelled/full card.
+ * Previous density is accepted for existing callers, but never delays detail. */
 export function zoomPresentation(
-  density: ChartDensity,
+  _density: ChartDensity,
   requested: number,
   full = false,
 ) {
@@ -31,14 +48,13 @@ export function zoomPresentation(
     1.5,
     Math.max(0.04, Number.isFinite(requested) ? requested : 1),
   );
-  let next: ChartDensity = density;
-  if (full) next = "cards";
-  else if (density === "map" && level >= 0.6)
-    next = level >= 0.85 ? "cards" : "compact";
-  else if (density === "compact")
-    next = level >= 0.85 ? "cards" : level <= 0.48 ? "map" : "compact";
-  else if (density === "cards" && level <= 0.7)
-    next = level <= 0.48 ? "map" : "compact";
+  const detail = cardDetail(level);
+  const next: ChartDensity =
+    full || detail === "full"
+      ? "cards"
+      : detail === "tiles"
+        ? "map"
+        : "compact";
   return {
     density: next,
     level,
@@ -273,7 +289,11 @@ export function fitPresentation(
       width,
       height,
     );
-    if (screenZoom >= 0.8)
+    const readable = (scale: number) =>
+      scale * s.width >=
+      (density === "cards" ? FULL_CARD_WIDTH : NAME_CARD_WIDTH);
+    // Keep the familiar compact overview when its types and counts fit.
+    if (readable(screenZoom) && screenZoom >= 0.8)
       return {
         density,
         tree: screenTree,
@@ -314,7 +334,7 @@ export function fitPresentation(
         : -Infinity;
       if (score > old) best = { tree, layoutWidth: budget, zoom };
     }
-    if (best && (best.zoom >= 0.8 || density === "map"))
+    if (best && (readable(best.zoom) || density === "map"))
       return { density, ...best };
   }
   throw new Error("No chart presentation");

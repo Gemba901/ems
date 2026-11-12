@@ -1,4 +1,8 @@
 import {
+  holidayDecisionIssue,
+  preserveHolidayOrigins,
+} from "./calendar-holiday-decisions";
+import {
   CALENDAR_PEOPLE_SOURCE,
   CoreCalendarPeopleSource,
   type CalendarPeopleSource,
@@ -120,6 +124,7 @@ export class RulesCalendarService {
             const rules = draft as unknown as CalendarRules;
             return {
               ...row,
+              name: rules.name || "Untitled calendar",
               start: rules.start,
               end: rules.end,
               audienceLabel: audienceLabel(rules.audience),
@@ -140,7 +145,7 @@ export class RulesCalendarService {
               id: r.id,
               name:
                 (v?.snapshot as unknown as ApprovedCalendarSnapshot)?.rules
-                  .name ?? "Approved cycle",
+                  .name ?? "Approved calendar",
               start: (v?.snapshot as unknown as ApprovedCalendarSnapshot)?.rules
                 .start,
               end: (v?.snapshot as unknown as ApprovedCalendarSnapshot)?.rules
@@ -226,7 +231,7 @@ export class RulesCalendarService {
       const row = await tx.lexPerformanceCalendar.create({
         data: {
           organizationId,
-          name: draft.name || "Untitled cycle",
+          name: draft.name || "Untitled calendar",
           draft: json(draft),
           createdByUserId: actor.userId,
           updatedByUserId: actor.userId,
@@ -334,12 +339,15 @@ export class RulesCalendarService {
         data.submittedByUserId = null;
       } else if (action === "save") {
         this.state(row, "DRAFT");
-        draft = parseRules(body.rules);
+        const proposed = parseRules(body.rules);
+        const holidayIssue = holidayDecisionIssue(draft, proposed);
+        if (holidayIssue) throw new BadRequestException(holidayIssue);
+        draft = preserveHolidayOrigins(draft, proposed);
         const dateIssue = cycleDateIssue(draft.start, draft.end, true);
         if (dateIssue) throw new BadRequestException(dateIssue);
         await this.checkAudienceReferences(tx, organizationId, draft);
         data.draft = json(draft);
-        data.name = draft.name || "Untitled cycle";
+        data.name = draft.name || "Untitled calendar";
       } else if (action === "submit" || action === "approve") {
         if (action === "submit") this.state(row, "DRAFT");
         else if (!["DRAFT", "IN_REVIEW"].includes(row.status))

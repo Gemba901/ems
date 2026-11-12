@@ -77,6 +77,21 @@ export function parseRules(value: unknown): CalendarRules {
         reason: text(e.reason, 200),
         kind: choice(e.kind, ["WORKING", "NON_WORKING"] as const),
         source: choice(e.source, ["MANUAL", "HOLIDAY_SUGGESTION"] as const),
+        ...(e.category !== undefined
+          ? {
+              category: choice(e.category, [
+                "PUBLIC_HOLIDAY",
+                "OBSERVED_PUBLIC_HOLIDAY",
+                "OPTIONAL_CLOSURE",
+              ] as const),
+            }
+          : {}),
+        ...(e.originalDate !== undefined
+          ? { originalDate: text(e.originalDate, 10) }
+          : {}),
+        ...(e.holidayCountry !== undefined
+          ? { holidayCountry: text(e.holidayCountry, 2).toUpperCase() }
+          : {}),
       };
     }),
     ...(r.enabledFrequencies !== undefined

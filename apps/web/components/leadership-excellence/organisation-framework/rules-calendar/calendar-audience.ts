@@ -46,21 +46,21 @@ export function audienceLabel(value?: CalendarAudience) {
   return (
     a.label ||
     {
-      UNASSIGNED: "Not assigned automatically",
-      COMPANY: "Company default",
+      UNASSIGNED: "Choose separately for each plan",
+      COMPANY: "Whole company",
       DEPARTMENTS: "Selected departments",
-      PEOPLE: "Named group",
+      PEOPLE: "Selected people",
     }[a.kind]
   );
 }
 export function audienceIssue(value?: CalendarAudience): string {
   const a = value ?? emptyAudience();
   if (a.kind === "DEPARTMENTS" && !a.departmentIds.length)
-    return "Select at least one department for this calendar, or leave it unassigned.";
+    return "Select at least one department for this calendar, or choose it separately during planning.";
   if (a.kind === "PEOPLE" && !a.label.trim())
-    return "Give this calendar group a name, such as Office or Operations.";
+    return "Give this calendar group a name, such as Nairobi site team or Leadership.";
   if (a.kind === "PEOPLE" && !a.employeeIds.length)
-    return "Select at least one person for this calendar group, or leave it unassigned.";
+    return "Select at least one person for this calendar group, or choose it separately during planning.";
   return "";
 }
 export function audiencePriority(a?: CalendarAudience) {

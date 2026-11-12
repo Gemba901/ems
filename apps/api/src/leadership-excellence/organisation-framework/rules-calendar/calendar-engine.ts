@@ -33,14 +33,13 @@ export function calendarErrors(r: CalendarRules, requireName = true): string[] {
   const errors: string[] = [];
   if (requireName && audienceIssue(r.audience))
     errors.push(audienceIssue(r.audience));
-  if (requireName && !r.name.trim())
-    errors.push("Give this performance cycle a name.");
+  if (requireName && !r.name.trim()) errors.push("Give this calendar a name.");
   const dateIssue = cycleDateIssue(r.start, r.end);
   if (dateIssue) errors.push(dateIssue);
   try {
     new Intl.DateTimeFormat("en", { timeZone: r.timeZone }).format();
   } catch {
-    errors.push("Choose a valid IANA time zone.");
+    errors.push("Choose a valid time zone from the list.");
   }
   if (!r.timeZone.trim())
     errors.push("Choose the time zone used for deadlines.");

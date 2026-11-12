@@ -83,11 +83,33 @@ export const addDays = (date: string, n: number) =>
     .slice(0, 10);
 export function suggestedCycleEnd(start: string) {
   if (!validCycleDate(start)) return "";
-  const [year, month, day] = start.split("-").map(Number);
-  // The anniversary of 29 February is 1 March in a non-leap year.
-  const anniversary = new Date(Date.UTC(year + 1, month - 1, day));
-  return new Date(anniversary.getTime() - 86400000).toISOString().slice(0, 10);
+  return `${start.slice(0, 4)}-12-31`;
 }
+
+/** Only a year-only edit shifts an existing range; month/day edits retain its end. */
+export function shiftCycleEndYear(
+  previousStart: string,
+  end: string,
+  nextStart: string,
+) {
+  if (
+    ![previousStart, end, nextStart].every(validCycleDate) ||
+    previousStart.slice(5) !== nextStart.slice(5)
+  )
+    return null;
+  const delta =
+    Number(nextStart.slice(0, 4)) - Number(previousStart.slice(0, 4));
+  if (!delta) return null;
+  const year = Number(end.slice(0, 4)) + delta;
+  if (year < 1900 || year > 2199) return null;
+  const month = Number(end.slice(5, 7));
+  const day = Math.min(
+    Number(end.slice(8)),
+    new Date(Date.UTC(year, month, 0)).getUTCDate(),
+  );
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 export function exceptionIssue(rules: CalendarRules, date: string) {
   if (!validCycleDate(date)) return "Choose a valid date.";
   if (validCycleDate(rules.start) && date < rules.start)
@@ -171,6 +193,7 @@ export function acceptedExceptions(
   existing: CalendarException[],
   suggestions: HolidaySuggestion[],
   selected: string[],
+  country?: string,
 ) {
   const result = [...existing];
   for (const h of suggestions)
@@ -180,6 +203,9 @@ export function acceptedExceptions(
         reason: h.reason,
         kind: "NON_WORKING",
         source: "HOLIDAY_SUGGESTION",
+        ...(h.category ? { category: h.category } : {}),
+        ...(h.originalDate ? { originalDate: h.originalDate } : {}),
+        ...(country ? { holidayCountry: country } : {}),
       });
   return result.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -277,7 +303,7 @@ export function previewCorrection(
       label: "Review periods & responsibilities",
     };
   if (/name/i.test(message))
-    return { step: 0, field: "Cycle name", label: "Enter cycle name" };
+    return { step: 0, field: "Calendar name", label: "Enter calendar name" };
   return {
     step: 0,
     field: /special|exception|holiday|calendar entry/i.test(message)

@@ -38,6 +38,9 @@ import {
 import { readCalendarLocation, calendarLocationUrl } from "./calendar-location";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { CalendarCycleCard } from "./CalendarCycleCard";
+import { CalendarDialog } from "./CalendarDialog";
+import { CalendarAudienceSummary } from "./CalendarAudienceSummary";
+import { needsHolidayReason } from "./calendar-holiday-decisions";
 import { CalendarAudienceEditor } from "./CalendarAudienceEditor";
 import { CalendarComparisonPanel } from "./CalendarComparisonPanel";
 import { audienceLabel, emptyAudience } from "./calendar-audience";
@@ -74,6 +77,7 @@ import {
   responsibilityChoices,
   displayDate,
   suggestedCycleEnd,
+  shiftCycleEndYear,
   exceptionIssue,
   cycleYears,
   mergeSuggestions,
@@ -217,6 +221,18 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
   const [dateNotice, setDateNotice] = useState("");
   const [saveFailed, setSaveFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedNotice, setSavedNotice] = useState("");
+  const [endAdjustment, setEndAdjustment] = useState<{
+    before: string;
+    after: string;
+  } | null>(null);
+  const [holidayDecision, setHolidayDecision] = useState<{
+    entry: CalendarException;
+    next: CalendarException[];
+    label: string;
+  } | null>(null);
+  const [holidayDecisionReason, setHolidayDecisionReason] = useState("");
+  const [holidayDecisionError, setHolidayDecisionError] = useState("");
   const leaving = useRef(false);
   const [step, setStep] = useState(0);
   const [frequency, setFrequency] = useState<Frequency>("monthly");
@@ -293,7 +309,6 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
   const overviewRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLDivElement>(null);
   const confirmationRef = useRef<HTMLDivElement>(null);
-  const navigationRef = useRef<HTMLDivElement>(null);
   const exceptionRef = useRef<HTMLDivElement>(null);
   const canEdit = !!index?.capabilities.edit;
   const canApprove = !!index?.capabilities.approve;
@@ -452,6 +467,8 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
     setSaveFailed(false);
     if (!keepContext) {
       setDateNotice("");
+      setEndAdjustment(null);
+      setSavedNotice("");
       setUndo([]);
       setStep(published ? 2 : 0);
     }
@@ -490,7 +507,6 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
   function navigate(run: () => void) {
     if (dirty) {
       setPendingNavigation({ run });
-      focus(navigationRef);
     } else run();
   }
   function backToCycles() {
@@ -534,7 +550,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
         );
       setDraftAction({
         id,
-        name: d.draft?.name || "Untitled cycle",
+        name: d.draft?.name || "Untitled calendar",
         revision: d.revision,
         kind: d.approved ? "discard-revision" : "delete",
       });
@@ -603,6 +619,9 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
     });
   }
   function newCycle() {
+    setSavedNotice("");
+    setEndAdjustment(null);
+    setHolidayDecision(null);
     setShowIssues(false);
     setActiveField("");
     setExternalIssue(null);
@@ -773,7 +792,15 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
         anchor.getAttribute("href")?.startsWith("#")
       )
         return;
-      if (new URL(anchor.href).origin !== window.location.origin) return;
+      const destination = new URL(anchor.href),
+        current = new URL(window.location.href);
+      if (!["http:", "https:"].includes(destination.protocol)) return;
+      if (
+        destination.origin === current.origin &&
+        destination.pathname === current.pathname &&
+        destination.search === current.search
+      )
+        return;
       e.preventDefault();
       e.stopPropagation();
       setPendingNavigation({
@@ -782,7 +809,6 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
           window.location.assign(anchor.href);
         },
       });
-      focus(navigationRef);
     };
     window.addEventListener("beforeunload", before);
     window.addEventListener("click", followLink, true);
@@ -820,7 +846,22 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
     setExternalIssue(null);
     setActiveField("");
     setApprovalNotice(null);
-    if (key === "end") defaults.current.end = false;
+    setError("");
+    if (key === "end") {
+      defaults.current.end = false;
+      setEndAdjustment(null);
+    }
+    if (key === "start" && typeof value === "string" && validCycleDate(value)) {
+      const end = defaults.current.end
+        ? suggestedCycleEnd(value)
+        : shiftCycleEndYear(draftRules.start, draftRules.end, value);
+      setEndAdjustment(
+        end && end !== draftRules.end
+          ? { before: draftRules.end, after: end }
+          : null,
+      );
+    }
+    setSavedNotice("");
     if (key === "fortnightAnchor") defaults.current.anchor = false;
     setRules((r) => {
       const next = { ...r, [key]: value };
@@ -830,6 +871,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
         validCycleDate(value)
       ) {
         if (defaults.current.end) next.end = suggestedCycleEnd(value);
+        else next.end = shiftCycleEndYear(r.start, r.end, value) ?? r.end;
         if (defaults.current.anchor) next.fortnightAnchor = value;
       }
       return next;
@@ -860,40 +902,92 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
     );
   }
   async function save(): Promise<boolean> {
-    if (cycleDateIssue(draftRules.start, draftRules.end, true)) {
-      setError(cycleDateIssue(draftRules.start, draftRules.end, true));
-      moveTo(0);
+    const problem = cycleDateIssue(draftRules.start, draftRules.end, true);
+    if (problem) {
+      const issue = calendarIssues(draftRules, false).find(
+        (i) => i.field === "start" || i.field === "end",
+      ) ?? { field: "end", step: 0 as const, message: problem };
+      setSaveFailed(true);
+      setError(problem);
+      goToIssue(issue);
       return false;
     }
     setSaving(true);
-    const ok = await task(async () => {
-      let id = detail?.id;
-      if (!id) id = (await calendarsApi.create(getToken(), draftRules)).id;
-      else
-        await calendarsApi.mutate(
-          getToken(),
+    setSavedNotice("");
+    const submitted = structuredClone(draftRules);
+    const ok = await task(
+      async () => {
+        const result = detail
+          ? await calendarsApi.mutate(
+              getToken(),
+              detail.id,
+              "save",
+              detail.revision ?? 0,
+              submitted,
+            )
+          : await calendarsApi.create(getToken(), submitted);
+        const id = result.id ?? detail!.id;
+        // The write succeeded. Keep its identity even if the following read fails.
+        setDetail({
+          ...(detail ?? { approved: null, versions: [] }),
           id,
-          "save",
-          detail?.revision ?? 0,
-          draftRules,
-        );
-      await reload(id, true);
-      setNotice("");
-      // Saving has succeeded even if refreshing the selector subsequently fails.
-      try {
-        await refreshIndex();
-      } catch {
-        setNotice(
-          "Draft saved. The cycle list could not refresh; reopen the page to refresh it.",
-        );
-      }
-    });
+          status: "DRAFT",
+          draft: submitted,
+          revision: result.revision ?? (detail?.revision ?? -1) + 1,
+        });
+        setCreating(false);
+        setSaved(JSON.stringify(submitted));
+        let message = "Draft saved.";
+        try {
+          await reload(id, true);
+        } catch {
+          message =
+            "Draft saved. Its latest details could not reload. You can reopen this calendar to try again.";
+        }
+        try {
+          await refreshIndex();
+        } catch {
+          message += " The calendar list could not refresh.";
+        }
+        setNotice(message);
+        setSavedNotice(message);
+      },
+      (message) => {
+        setError(message);
+        const local = calendarIssues(draftRules, false);
+        const mapped = serverIssue(message);
+        const issue = mapped.field !== "approval" ? mapped : local[0];
+        if (issue) {
+          setExternalIssue(issue);
+          goToIssue(issue);
+        } else
+          requestAnimationFrame(() => {
+            const target = document.getElementById("calendar-save-error");
+            target?.scrollIntoView({ block: "center" });
+            target?.focus({ preventScroll: true });
+          });
+      },
+    );
     setSaving(false);
     setSaveFailed(!ok);
     return ok;
   }
   async function act(action: string) {
     if (!detail) return;
+    if (action === "submit") {
+      const issue = calendarIssues(draftRules, true)[0];
+      if (issue) {
+        goToIssue(issue);
+        return;
+      }
+      if (dirty) {
+        approvalMessage(
+          "Save your changes before sending this calendar for approval.",
+          "SAVE",
+        );
+        return;
+      }
+    }
     if (action === "approve") {
       const issue = calendarIssues(draftRules, true)[0];
       if (issue) {
@@ -947,7 +1041,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
             {
               approve:
                 "Calendar approved. Its exact dates and rules are preserved in this version.",
-              submit: "Sent for management review.",
+              submit: "Calendar sent for approval.",
               revise:
                 "Draft revision opened. The previous approved version is unchanged.",
               return: "Returned for changes.",
@@ -993,6 +1087,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
     ]);
     setRules((r) => ({ ...r, exceptions: next, holidayOmissions: omissions }));
     setAgreed(false);
+    setSavedNotice("");
     setDateNotice(label);
     setExceptionError("");
     setDuplicateDate(null);
@@ -1027,6 +1122,28 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
       focus(exceptionRef);
     }
   }
+  function changeHoliday(
+    entry: CalendarException,
+    next: CalendarException[],
+    label: string,
+  ) {
+    if (needsHolidayReason(entry)) {
+      setHolidayDecision({ entry, next, label });
+      setHolidayDecisionReason("");
+      setHolidayDecisionError("");
+    } else updateExceptions(next, label);
+  }
+  function removeException(entry: CalendarException) {
+    changeHoliday(
+      entry,
+      rules.exceptions.filter((e) => e.date !== entry.date),
+      `Removed ${displayDate(entry.date)}.`,
+    );
+    if (editingDate === entry.date && !needsHolidayReason(entry)) {
+      setEditingDate(null);
+      setException(emptyException());
+    }
+  }
   function addException() {
     const date = exception.date || rules.start;
     const problem = exceptionIssue(rules, date);
@@ -1054,13 +1171,21 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
         ...exception,
         date,
         reason: exception.reason.trim(),
-        source: "MANUAL" as const,
+        source: exception.source,
       },
     ].sort((a, b) => a.date.localeCompare(b.date));
-    updateExceptions(
-      next,
-      editingDate ? "Date exception updated." : "Date exception added.",
-    );
+    const original = rules.exceptions.find((e) => e.date === editingDate);
+    const label = editingDate
+      ? "Calendar date updated."
+      : "Calendar date added.";
+    if (
+      original &&
+      needsHolidayReason(original) &&
+      (date !== original.date || exception.kind === "WORKING")
+    ) {
+      changeHoliday(original, next, label);
+      return;
+    } else updateExceptions(next, label);
     setException(emptyException());
     setEditingDate(null);
   }
@@ -1129,7 +1254,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                   setNavigationReady(true);
                 }}
               >
-                Back to cycles
+                Back to calendars
               </Button>
             </div>
           </div>
@@ -1168,13 +1293,15 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
               variant="outline"
               onClick={() => navigate(newCycle)}
             >
-              <Plus /> New cycle
+              <Plus /> New calendar
             </Button>
           )}
         </header>
 
         {error && (
           <div
+            id="calendar-save-error"
+            tabIndex={-1}
             role="alert"
             className="whitespace-pre-line rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
           >
@@ -1219,32 +1346,23 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
           </p>
         )}
         {pendingNavigation && (
-          <div
-            ref={navigationRef}
-            tabIndex={-1}
-            className="scroll-mt-24 rounded-lg border border-primary/30 bg-accent p-4 outline-none"
-            role="region"
-            aria-label="Unsaved changes"
+          <CalendarDialog
+            title="You have unsaved calendar changes"
+            busy={busy}
+            onCancel={() => setPendingNavigation(null)}
           >
-            <p className="font-medium">Save your changes before continuing?</p>
-            <p className="mt-1 text-sm">
-              Your draft has changes that have not been saved.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <p>Save your changes before leaving this calendar?</p>
+            <div className={styles.dialogActions}>
               <Button
-                disabled={
-                  busy ||
-                  !!cycleDateIssue(draftRules.start, draftRules.end, true)
-                }
+                disabled={busy}
                 onClick={async () => {
                   const next = pendingNavigation;
-                  if (await save()) {
-                    setPendingNavigation(null);
-                    next.run();
-                  }
+                  const ok = await save();
+                  setPendingNavigation(null);
+                  if (ok) next.run();
                 }}
               >
-                <Save /> Save and continue
+                Save and leave
               </Button>
               <Button
                 variant="outline"
@@ -1255,20 +1373,115 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                   next.run();
                 }}
               >
-                Discard changes and continue
+                Leave without saving
               </Button>
               <Button
                 variant="ghost"
                 disabled={busy}
-                onClick={() => {
-                  setPendingNavigation(null);
-                  focus(sectionRef);
-                }}
+                onClick={() => setPendingNavigation(null)}
               >
                 Stay here
               </Button>
             </div>
-          </div>
+          </CalendarDialog>
+        )}
+        {holidayDecision && (
+          <CalendarDialog
+            title="Give a reason for this holiday change"
+            busy={busy}
+            onCancel={() => setHolidayDecision(null)}
+          >
+            <p>
+              <strong>{holidayDecision.entry.reason}</strong> ·{" "}
+              {displayDate(holidayDecision.entry.date)}
+            </p>
+            <p>
+              {holidayDecision.next.some(
+                (e) =>
+                  e.date === holidayDecision.entry.date && e.kind === "WORKING",
+              )
+                ? "This date will be a working day."
+                : `The original date will follow the regular working week: ${rules.workdays.includes(new Date(`${holidayDecision.entry.date}T00:00:00Z`).getUTCDay()) ? "working day" : "non-working day"}.`}
+            </p>
+            <label className={styles.formField}>
+              <span>Reason for changing this holiday</span>
+              <Input
+                id="calendar-holiday-change-reason"
+                name="calendar-holiday-change-reason"
+                autoComplete="off"
+                autoFocus
+                maxLength={300}
+                value={holidayDecisionReason}
+                aria-invalid={!!holidayDecisionError}
+                aria-describedby={
+                  holidayDecisionError
+                    ? "calendar-holiday-change-error"
+                    : undefined
+                }
+                onChange={(e) => {
+                  setHolidayDecisionReason(e.target.value);
+                  setHolidayDecisionError("");
+                }}
+              />
+            </label>
+            {holidayDecisionError && (
+              <p
+                id="calendar-holiday-change-error"
+                role="alert"
+                className="text-destructive"
+              >
+                {holidayDecisionError}
+              </p>
+            )}
+            <div className={styles.dialogActions}>
+              <Button
+                variant="outline"
+                onClick={() => setHolidayDecision(null)}
+              >
+                Cancel holiday change
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!holidayDecisionReason.trim()) {
+                    setHolidayDecisionError(
+                      "Enter a reason before changing this holiday.",
+                    );
+                    document
+                      .getElementById("calendar-holiday-change-reason")
+                      ?.focus();
+                    return;
+                  }
+                  const country =
+                    holidayDecision.entry.holidayCountry ?? rules.country;
+                  const decisions = [
+                    ...(rules.holidayOmissions ?? []).filter(
+                      (h) =>
+                        h.date !== holidayDecision.entry.date ||
+                        h.country !== country,
+                    ),
+                    {
+                      date: holidayDecision.entry.date,
+                      name: holidayDecision.entry.reason,
+                      country,
+                      reason: holidayDecisionReason.trim(),
+                    },
+                  ];
+                  updateExceptions(
+                    holidayDecision.next,
+                    holidayDecision.label,
+                    decisions,
+                  );
+                  if (editingDate === holidayDecision.entry.date) {
+                    setEditingDate(null);
+                    setException(emptyException());
+                  }
+                  setHolidayDecision(null);
+                }}
+              >
+                Confirm holiday change
+              </Button>
+            </div>
+          </CalendarDialog>
         )}
         {draftAction && (
           <div
@@ -1316,7 +1529,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
         {index && hasDocument && (
           <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-border bg-card p-4">
             <div>
-              <strong>{rules.name.trim() || "New performance cycle"}</strong>
+              <strong>{rules.name.trim() || "Untitled calendar"}</strong>
               <p className="mt-1 text-sm text-muted-foreground">
                 {displayDate(rules.start)} – {displayDate(rules.end)}
               </p>
@@ -1333,7 +1546,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                     {snapshot
                       ? `Approved v${viewVersion}`
                       : detail.status === "IN_REVIEW"
-                        ? "Under review"
+                        ? "Waiting for approval"
                         : "Draft"}
                   </strong>
                 </>
@@ -1347,15 +1560,16 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
               How cycles, calendars and plans fit together
             </summary>
             <p className="mt-3">
-              A cycle is the planning date range. Its calendar defines working
-              days and reporting defaults. Plans can use different reporting
-              frequencies within the same cycle.
+              A cycle is the date range, such as 1 January–31 December 2027.
+              Office and Production can have separate calendars for those same
+              dates, with different working days and holidays. Plans choose a
+              reporting frequency from the options enabled in their calendar.
             </p>
             <p className="mt-2">
               Each calendar uses one holiday country and time zone. Assign a
-              company default, selected departments, or a named group of people.
-              A branch name alone does not assign anyone; explicitly select the
-              people who share that calendar.
+              calendar to the whole company, selected departments, or selected
+              people. A branch filter helps you select its current employees;
+              new starters must be added to a selected-people calendar.
             </p>
             <p className="mt-2">
               Drafts can be edited by authorised calendar editors. Approval
@@ -1432,11 +1646,11 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
           <section
             ref={overviewRef}
             tabIndex={-1}
-            aria-label="Saved performance cycles"
+            aria-label="Saved calendars"
             className="space-y-4 outline-none"
           >
             <div>
-              <h2 className="text-lg font-semibold">Performance cycles</h2>
+              <h2 className="text-lg font-semibold">Calendars</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Open a calendar to continue its draft or view an approved
                 version.
@@ -1457,22 +1671,53 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
               </details>
             )}
             {index.calendars.length ? (
-              <ul className="grid gap-4 md:grid-cols-2">
-                {index.calendars.map((c) => (
-                  <li key={c.id}>
-                    <CalendarCycleCard
-                      calendar={c}
-                      editable={canEdit}
-                      busy={busy}
-                      timeZone={timeZone}
-                      onOpen={() => openCycle(c.id)}
-                      onApproved={() => openCycle(c.id, true)}
-                      onCopy={() => copyCycle(c.id)}
-                      onRemove={() => prepareDraftAction(c.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-6">
+                {[
+                  ...new Set(
+                    index.calendars.map(
+                      (c) => `${c.start ?? ""}|${c.end ?? ""}`,
+                    ),
+                  ),
+                ].map((range) => {
+                  const [start, end] = range.split("|");
+                  return (
+                    <section
+                      key={range}
+                      aria-label={
+                        start && end
+                          ? `Calendars for ${displayDate(start)} to ${displayDate(end)}`
+                          : "Calendars with dates to complete"
+                      }
+                    >
+                      <h3 className="mb-3 text-sm font-semibold text-primary">
+                        {start && end
+                          ? `Cycle dates: ${displayDate(start)} – ${displayDate(end)}`
+                          : "Cycle dates to complete"}
+                      </h3>
+                      <ul className="grid gap-4 md:grid-cols-2">
+                        {index.calendars
+                          .filter(
+                            (c) => `${c.start ?? ""}|${c.end ?? ""}` === range,
+                          )
+                          .map((c) => (
+                            <li key={c.id}>
+                              <CalendarCycleCard
+                                calendar={c}
+                                editable={canEdit}
+                                busy={busy}
+                                timeZone={timeZone}
+                                onOpen={() => openCycle(c.id)}
+                                onApproved={() => openCycle(c.id, true)}
+                                onCopy={() => copyCycle(c.id)}
+                                onRemove={() => prepareDraftAction(c.id)}
+                              />
+                            </li>
+                          ))}
+                      </ul>
+                    </section>
+                  );
+                })}
+              </div>
             ) : (
               <Card className={styles.settingsCard}>
                 <CardContent className="py-8">
@@ -1484,7 +1729,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                   </h3>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {canEdit
-                      ? "Choose New cycle above. Set dates and working days, agree the defaults, then preview and approve. Create a cycle for a planning date range—not for every plan or reporting frequency."
+                      ? "Choose New calendar above. Set its cycle dates and working days, choose who uses it, then preview it before approval."
                       : "Management publishes approved calendars here when they are ready."}
                   </p>
                 </CardContent>
@@ -1507,7 +1752,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
               disabled={busy}
               onClick={backToCycles}
             >
-              <ChevronLeft /> Back to cycles
+              <ChevronLeft /> Back to calendars
             </Button>
             {canEdit && detail?.status === "DRAFT" && !snapshot && (
               <Button
@@ -1521,7 +1766,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
             )}
             <nav
               aria-label="Calendar setup sections"
-              className="flex flex-wrap gap-2"
+              className={styles.stepNavigation}
             >
               {[
                 "Cycle & working days",
@@ -1539,7 +1784,10 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                   <span aria-hidden="true" className={styles.stepNumber}>
                     {String(i + 1).padStart(2, "0")}
                   </span>
-                  <span>{label}</span>
+                  <span className={styles.stepLongLabel}>{label}</span>
+                  <span className={styles.stepShortLabel} aria-hidden="true">
+                    {["Calendar", "Rules", "Preview"][i]}
+                  </span>
                 </Button>
               ))}
             </nav>
@@ -1616,6 +1864,15 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
               </div>
             )}
 
+            <p className={styles.mobileStepTitle}>
+              {
+                [
+                  "Cycle & working days",
+                  "Periods & responsibilities",
+                  "Preview & approval",
+                ][step]
+              }
+            </p>
             <div
               ref={sectionRef}
               tabIndex={-1}
@@ -1632,15 +1889,18 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                   onChange={(value) => change("audience", value)}
                 />
                 <Section
-                  title="Performance cycle"
-                  description="A calendar year or financial year. These dates contain the reporting periods used by plans."
+                  title="Calendar name & cycle dates"
+                  description="Name the calendar for the team using it. Cycle dates are the period it covers, such as a calendar year or financial year."
                 >
                   <div className={styles.twoFields}>
-                    <Field label="Cycle name" field="name">
+                    <Field label="Calendar name" field="name">
                       <Input
+                        id="calendar-name"
+                        name="calendar-name"
+                        autoComplete="off"
                         value={rules.name}
                         maxLength={120}
-                        placeholder="e.g. Financial year 2027–2028"
+                        placeholder="e.g. Office calendar 2027"
                         disabled={readonly || busy}
                         onChange={(e) => change("name", e.target.value)}
                       />
@@ -1699,13 +1959,35 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                         {dateIssue} Correct the dates to save this draft.
                       </p>
                     )}
+                    {endAdjustment && rules.end === endAdjustment.after && (
+                      <div className={`${styles.dateFeedback} sm:col-span-2`}>
+                        <p role="status">
+                          End date moved to {displayDate(endAdjustment.after)}{" "}
+                          to match the new cycle year.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy || readonly}
+                          onClick={() => {
+                            const previous = endAdjustment.before;
+                            setEndAdjustment(null);
+                            defaults.current.end = false;
+                            change("end", previous);
+                          }}
+                        >
+                          Undo end-date change
+                        </Button>
+                      </div>
+                    )}
                     <p
                       id="cycle-date-help"
                       className="sm:col-span-2 text-xs text-muted-foreground"
                     >
-                      For a new cycle, changing the start date updates the
-                      suggested end date until you edit it. Saved dates and
-                      existing calendar entries are never shifted automatically.
+                      A cycle includes its start and end dates; one day is
+                      allowed. Changing only the start year moves the end to the
+                      same date in the corresponding year. Other changes keep
+                      your chosen end date. Holidays are reviewed separately.
                     </p>
                   </div>
                 </Section>
@@ -1968,18 +2250,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                                 size="sm"
                                 disabled={busy}
                                 aria-label={`Remove exception ${e.date}`}
-                                onClick={() => {
-                                  updateExceptions(
-                                    rules.exceptions.filter(
-                                      (x) => x.date !== e.date,
-                                    ),
-                                    `Removed ${displayDate(e.date)}.`,
-                                  );
-                                  if (editingDate === e.date) {
-                                    setEditingDate(null);
-                                    setException(emptyException());
-                                  }
-                                }}
+                                onClick={() => removeException(e)}
                               >
                                 Remove
                               </Button>
@@ -1996,8 +2267,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                   {!!rules.holidayOmissions?.length && (
                     <details className="text-sm">
                       <summary className="cursor-pointer font-medium">
-                        Omitted holiday decisions (
-                        {rules.holidayOmissions.length})
+                        Holiday decisions ({rules.holidayOmissions.length})
                       </summary>
                       <ul className="mt-2 space-y-2">
                         {rules.holidayOmissions.map((h, i) => (
@@ -2011,8 +2281,8 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                       </ul>
                       {!readonly && (
                         <p className="mt-2 text-muted-foreground">
-                          Find suggestions again to revise these choices;
-                          selecting a date removes its omission decision.
+                          Find suggestions again to revise these choices; adding
+                          a holiday again removes its earlier omission decision.
                         </p>
                       )}
                     </details>
@@ -2185,6 +2455,8 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                                         disabled={busy}
                                         maxLength={300}
                                         id={`holiday-omission-${h.date}`}
+                                        name={`calendar-holiday-omission-${h.date}`}
+                                        autoComplete="off"
                                         aria-invalid={
                                           !!holidayError &&
                                           !omittedReason(h.date).trim()
@@ -2258,7 +2530,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                                     ...(rules.holidayOmissions ?? []).filter(
                                       (h) =>
                                         h.country !== rules.country ||
-                                        !suggestions.some(
+                                        !eligibleSuggestions.some(
                                           (s) => s.date === h.date,
                                         ),
                                     ),
@@ -2273,6 +2545,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                                     rules.exceptions,
                                     suggestions,
                                     checked,
+                                    rules.country,
                                   );
                                   updateExceptions(
                                     next,
@@ -2331,32 +2604,17 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                 title="Preview & approval"
                 description="Check the dates before publishing. Selecting a frequency here only changes the preview, not every plan’s schedule."
               >
-                <div className="rounded-lg border border-border p-3 text-sm">
-                  <strong>
-                    Calendar assignment: {audienceLabel(rules.audience)}
-                  </strong>
-                  <p className="mt-1 text-muted-foreground">
-                    {rules.audience?.kind === "PEOPLE"
-                      ? `${rules.audience.employeeIds.length} selected people.`
-                      : rules.audience?.kind === "DEPARTMENTS"
-                        ? `${rules.audience.departmentIds.length} selected departments.`
-                        : rules.audience?.kind === "COMPANY"
-                          ? "Company default where no more specific approved assignment applies."
-                          : "No automatic people assignment; available for explicit plan selection."}{" "}
-                    Existing plans retain their selected version.
-                  </p>
-                  {!readonly && (
-                    <Button
-                      variant="link"
-                      size="sm"
-                      onClick={() =>
-                        goToIssue({ field: "audience", step: 0, message: "" })
-                      }
-                    >
-                      Review who uses this calendar
-                    </Button>
-                  )}
-                </div>
+                <CalendarAudienceSummary
+                  rules={rules}
+                  token={token}
+                  allowDirectory={canEdit}
+                  onChange={
+                    !readonly
+                      ? () =>
+                          goToIssue({ field: "audience", step: 0, message: "" })
+                      : undefined
+                  }
+                />
                 <div className={styles.previewControls}>
                   <div>
                     <Field label="Preview reporting frequency">
@@ -2395,7 +2653,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                 )}
                 {!rules.name.trim() && !snapshot && (
                   <p className="text-sm text-muted-foreground">
-                    You can preview dates now. Give the cycle a name before
+                    You can preview dates now. Give the calendar a name before
                     sending it for review or approval.{" "}
                     <Button
                       size="sm"
@@ -2404,7 +2662,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                         goToIssue({ field: "name", step: 0, message: "" })
                       }
                     >
-                      Enter cycle name
+                      Enter calendar name
                     </Button>
                   </p>
                 )}
@@ -2666,6 +2924,12 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                 )}
               </div>
             )}
+            {step === 2 && !readonly && (dirty || !detail) && (
+              <p className="text-sm text-muted-foreground">
+                Save this draft before{" "}
+                {canApprove ? "approving it" : "sending it for approval"}.
+              </p>
+            )}
             <div
               className={styles.footerClearance}
               style={{ height: footerHeight }}
@@ -2684,7 +2948,11 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                 ) : snapshot ? (
                   `Approved v${viewVersion} · read only`
                 ) : detail?.status === "IN_REVIEW" ? (
-                  "Waiting for one management review"
+                  "Waiting for approval"
+                ) : savedNotice && !dirty ? (
+                  <span className={styles.savedConfirmation}>
+                    <CheckCircle2 aria-hidden="true" /> {savedNotice}
+                  </span>
                 ) : dirty ? (
                   saveFailed ? (
                     "Not saved — your changes are retained"
@@ -2692,7 +2960,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                     "Unsaved changes"
                   )
                 ) : creating ? (
-                  "New cycle — not saved yet"
+                  "New calendar — not saved yet"
                 ) : (
                   <>
                     <CheckCircle2
@@ -2704,8 +2972,13 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                 )}
               </p>
               <div className={styles.footerActions}>
-                <Button variant="ghost" disabled={busy} onClick={backToCycles}>
-                  Back to cycles
+                <Button
+                  className={styles.footerBack}
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={backToCycles}
+                >
+                  Back to calendars
                 </Button>
                 {step > 0 && (
                   <Button
@@ -2723,7 +2996,7 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                 )}
                 {!readonly && (
                   <Button
-                    disabled={busy || !!dateIssue || (!dirty && !!detail)}
+                    disabled={busy || (!dirty && !!detail)}
                     onClick={() => {
                       void save();
                     }}
@@ -2731,28 +3004,26 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                     <Save /> Save draft
                   </Button>
                 )}
-                {!snapshot &&
+                {step === 2 &&
+                  !dirty &&
+                  !snapshot &&
                   detail &&
                   detail.status === "DRAFT" &&
                   !canApprove &&
                   canEdit && (
                     <Button
                       variant="outline"
-                      disabled={
-                        busy ||
-                        dirty ||
-                        !!completeDateIssue ||
-                        !rules.name.trim()
-                      }
+                      disabled={busy}
                       onClick={() => act("submit")}
                     >
-                      Send for review
+                      Send for approval
                     </Button>
                   )}
-                {!snapshot &&
-                  (creating ||
-                    (detail &&
-                      ["DRAFT", "IN_REVIEW"].includes(detail.status))) &&
+                {step === 2 &&
+                  !dirty &&
+                  !snapshot &&
+                  detail &&
+                  ["DRAFT", "IN_REVIEW"].includes(detail.status) &&
                   canApprove && (
                     <Button disabled={busy} onClick={startApproval}>
                       <CheckCircle2 /> Approve…

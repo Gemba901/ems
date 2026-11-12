@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { countryOptions } from "./calendar-selection";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -20,11 +21,7 @@ export function CountryPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const options = Object.entries(countries)
-    .sort((a, b) => a[1].localeCompare(b[1]))
-    .filter(([code, name]) =>
-      `${name} ${code}`.toLowerCase().includes(query.trim().toLowerCase()),
-    );
+  const options = countryOptions(countries, query);
   useEffect(() => {
     if (open && options[active])
       document
@@ -65,6 +62,7 @@ export function CountryPicker({
       </div>
       <Input
         id={id}
+        name="calendar-holiday-country-search"
         role="combobox"
         autoComplete="off"
         disabled={disabled}

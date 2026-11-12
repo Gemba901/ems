@@ -288,14 +288,17 @@ test("zoom reveals readable detail without a width jump at a representation chan
   const { zoomPresentation, readableZoom, SIZES } =
     await import("../components/leadership-excellence/organisation-framework/organogram/organogram-layout");
   for (const [density, level, expected] of [
-    ["map", 0.59, "map"],
-    ["map", 0.6, "compact"],
+    ["map", 0.37, "map"],
+    ["map", 0.41, "compact"],
+    ["map", 0.49, "compact"],
+    ["map", 0.59, "compact"],
     ["compact", 0.84, "compact"],
     ["compact", 0.85, "cards"],
-    ["cards", 0.71, "cards"],
+    ["cards", 0.71, "compact"],
     ["cards", 0.7, "compact"],
     ["compact", 0.49, "compact"],
-    ["compact", 0.48, "map"],
+    ["compact", 0.41, "compact"],
+    ["cards", 0.37, "map"],
   ] as const) {
     const next = zoomPresentation(density, level);
     assert.equal(next.density, expected);
@@ -307,6 +310,49 @@ test("zoom reveals readable detail without a width jump at a representation chan
     );
   }
   assert.equal(zoomPresentation("map", 1, true).density, "cards");
+});
+test("the reported 41%, 49% and 59% zooms show names in either direction", async () => {
+  const { zoomPresentation, cardDetail, NAME_CARD_WIDTH, SUMMARY_CARD_WIDTH } =
+    await import("../components/leadership-excellence/organisation-framework/organogram/organogram-layout");
+  for (const level of [0.2, 0.37, 0.41, 0.49, 0.59, 0.71, 0.85, 1]) {
+    const up = zoomPresentation("map", level);
+    const down = zoomPresentation("cards", level);
+    assert.deepEqual(up, down);
+    if (level >= 0.41) assert.notEqual(cardDetail(level), "tiles");
+  }
+  assert.equal(cardDetail(NAME_CARD_WIDTH / 210), "names");
+  assert.equal(cardDetail(SUMMARY_CARD_WIDTH / 210), "summary");
+  assert.equal(cardDetail(0.85), "full");
+});
+test("Fit includes all opened units with the same readability rules as zoom", async () => {
+  const { fitPresentation, readableZoom, zoomPresentation } =
+    await import("../components/leadership-excellence/organisation-framework/organogram/organogram-layout");
+  const items = [{ id: "company", parentId: null as string | null }];
+  for (let branch = 0; branch < 13; branch++) {
+    items.push({ id: `b${branch}`, parentId: "company" });
+    for (let dept = 0; dept < 18; dept++)
+      items.push({ id: `b${branch}-d${dept}`, parentId: `b${branch}` });
+  }
+  for (const [width, height] of [
+    [370, 400],
+    [464, 540],
+    [950, 430],
+    [1450, 660],
+  ]) {
+    const fit = fitPresentation(items, width, height, "compact");
+    assert.equal(fit.tree.positions.size, items.length);
+    assert.ok(fit.tree.width * fit.zoom <= width - 15);
+    assert.ok(fit.tree.height * fit.zoom <= height - 15);
+    assert.equal(
+      zoomPresentation(fit.density, readableZoom(fit.density, fit.zoom))
+        .density,
+      fit.density,
+    );
+    for (const p of fit.tree.positions.values()) {
+      assert.ok((p.x + fit.tree.cardWidth) * fit.zoom <= width);
+      assert.ok((p.y + fit.tree.cardHeight) * fit.zoom <= height);
+    }
+  }
 });
 test("zoom can move from a fitted map to full cards and back with stable bounds", async () => {
   const { zoomPresentation } =

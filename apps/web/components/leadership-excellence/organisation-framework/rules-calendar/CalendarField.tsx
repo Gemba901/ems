@@ -2,12 +2,14 @@
 import {
   createContext,
   useContext,
+  useId,
   cloneElement,
   isValidElement,
   type ReactNode,
   type ReactElement,
   type HTMLAttributes,
 } from "react";
+import { Input } from "@/components/ui/input";
 import { fieldId, type CalendarIssue } from "./calendar-issues";
 import styles from "./rules-calendar.module.css";
 
@@ -63,26 +65,38 @@ export function CalendarField({
   children: ReactNode;
 }) {
   const { issues, shown } = useContext(CalendarFeedback);
+  const generatedId = useId();
+  const controlId =
+    (isValidElement(children)
+      ? (children.props as HTMLAttributes<HTMLElement>).id
+      : undefined) ??
+    (field ? `${fieldId(field)}-input` : `calendar-control-${generatedId}`);
   const invalid = !!field && shown && issues.some((i) => i.field === field);
-  const control =
-    field && isValidElement(children)
-      ? cloneElement(children as ReactElement<HTMLAttributes<HTMLElement>>, {
-          "aria-invalid": invalid
-            ? true
-            : (children.props as HTMLAttributes<HTMLElement>)["aria-invalid"],
-          "aria-describedby": invalid
-            ? `${fieldId(field)}-error`
-            : (children.props as HTMLAttributes<HTMLElement>)[
-                "aria-describedby"
-              ],
-        })
-      : children;
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<HTMLAttributes<HTMLElement>>, {
+        id: controlId,
+        ...(children.type === Input
+          ? {
+              name: (children.props as { name?: string }).name ?? controlId,
+              autoComplete: "off",
+            }
+          : {}),
+        "aria-invalid": invalid
+          ? true
+          : (children.props as HTMLAttributes<HTMLElement>)["aria-invalid"],
+        "aria-describedby": invalid
+          ? `${fieldId(field!)}-error`
+          : (children.props as HTMLAttributes<HTMLElement>)["aria-describedby"],
+      })
+    : children;
   return (
     <FieldFrame field={field}>
-      <label className={`${styles.formField} text-sm`}>
-        <span>{label}</span>
+      <div className={`${styles.formField} text-sm`}>
+        <label htmlFor={controlId} className={styles.fieldLabel}>
+          {label}
+        </label>
         {control}
-      </label>
+      </div>
     </FieldFrame>
   );
 }

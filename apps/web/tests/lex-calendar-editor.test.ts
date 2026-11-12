@@ -19,10 +19,10 @@ const h = (date: string, reason = "Holiday"): HolidaySuggestion => ({
   source: "HOLIDAY_SUGGESTION",
 });
 
-test("new cycle suggestions follow calendar/financial years, including a leap-day start", () => {
+test("untouched new cycle ends default to 31 December, including a leap-day start", () => {
   assert.equal(suggestedCycleEnd("2027-01-01"), "2027-12-31");
-  assert.equal(suggestedCycleEnd("2027-04-01"), "2028-03-31");
-  assert.equal(suggestedCycleEnd("2028-02-29"), "2029-02-28");
+  assert.equal(suggestedCycleEnd("2027-04-01"), "2027-12-31");
+  assert.equal(suggestedCycleEnd("2028-02-29"), "2028-12-31");
 });
 test("holiday lookup covers every cycle year and stops for invalid dates", () => {
   assert.deepEqual(cycleYears("2027-04-01", "2028-03-31"), [2027, 2028]);

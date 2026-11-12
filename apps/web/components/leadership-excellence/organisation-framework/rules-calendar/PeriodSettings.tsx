@@ -711,7 +711,7 @@ export function PeriodSettings({
             supervisor during planning. Line manager uses the relevant
             assignee’s reporting line. “Plan owner” reuses the person already
             confirmed for the plan. “Choose a person during planning” leaves an
-            explicit selection for later.
+            the choice to the person setting up the plan.
           </p>
           <p>
             These defaults suggest who should take responsibility. Confirm the
@@ -755,10 +755,9 @@ export function PeriodSettings({
             Zero-target: avoid incidents without dividing by a zero target.
           </p>
           <p>
-            Area 03 sets each KPI’s targets, weights, formulas and warning
-            thresholds. Missing results are not zero. New custom formulas need
-            explicit calculation and validation rules; this selection does not
-            add untested scoring formulas.
+            Choose the measurement types your planners can use. Set each KPI’s
+            target, weight and scoring method when creating the plan. Missing
+            results stay missing; they are not treated as zero.
           </p>
         </Help>
       </Group>

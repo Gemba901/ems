@@ -26,7 +26,7 @@ export function calendarIssues(
   const add = (field: string, step: 0 | 1, message: string, date?: string) =>
     issues.push({ field, step, message, ...(date ? { date } : {}) });
   if (requireName && !r.name.trim())
-    add("name", 0, "Enter a cycle name before approval.");
+    add("name", 0, "Enter a calendar name before approval.");
   if (!validCycleDate(r.start))
     add("start", 0, "Enter a valid cycle start date.");
   else if (!validCycleDate(r.end))
@@ -36,20 +36,12 @@ export function calendarIssues(
     if (message) add("end", 0, message);
   }
   if (!r.timeZone.trim())
-    add(
-      "timeZone",
-      0,
-      "Choose the time zone used for deadlines, for example Africa/Nairobi.",
-    );
+    add("timeZone", 0, "Choose the time zone used for deadlines.");
   else {
     try {
       new Intl.DateTimeFormat("en", { timeZone: r.timeZone }).format();
     } catch {
-      add(
-        "timeZone",
-        0,
-        "Choose a valid time zone, for example Africa/Nairobi.",
-      );
+      add("timeZone", 0, "Choose a valid time zone from the list.");
     }
   }
   if (!r.workdays.length)
@@ -171,7 +163,7 @@ export function serverIssue(message: string): CalendarIssue {
     return {
       field: "timeZone",
       step: 0,
-      message: "Choose a valid time zone, for example Africa/Nairobi.",
+      message: "Choose a valid time zone from the list.",
     };
   if (/assignment|department|employee|membership|overlap/i.test(message))
     return { field: "audience", step: 0, message };

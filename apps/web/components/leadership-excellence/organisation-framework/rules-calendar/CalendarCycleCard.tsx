@@ -26,7 +26,7 @@ export function CalendarCycleCard({
 }) {
   const published = c.status === "APPROVED";
   const revision = !published && c.currentVersion > 0;
-  const title = c.name || "Untitled cycle";
+  const title = c.name || "Untitled calendar";
   let updated = "";
   if (c.updatedAt && !Number.isNaN(Date.parse(c.updatedAt))) {
     try {
@@ -76,7 +76,7 @@ export function CalendarCycleCard({
             {published
               ? `Approved v${c.currentVersion}`
               : c.status === "IN_REVIEW"
-                ? "Under review"
+                ? "Waiting for approval"
                 : revision
                   ? "Draft revision"
                   : "Draft"}
@@ -100,7 +100,7 @@ export function CalendarCycleCard({
             <dt>{published ? "Calendar assignment" : "Draft assignment"}</dt>
             <dd>
               {!c.audienceKind || c.audienceKind === "UNASSIGNED"
-                ? "No company or group assigned"
+                ? "Choose separately for each plan"
                 : c.audienceLabel}
             </dd>
           </div>

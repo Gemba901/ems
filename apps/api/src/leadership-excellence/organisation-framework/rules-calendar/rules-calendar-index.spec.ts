@@ -59,7 +59,7 @@ describe("calendar overview summaries", () => {
       expect(result.calendars[0]).toEqual({
         id: "cycle",
         audienceKind: "UNASSIGNED",
-        audienceLabel: "Not assigned automatically",
+        audienceLabel: "Choose separately for each plan",
         name: published.name,
         start: published.start,
         end: published.end,

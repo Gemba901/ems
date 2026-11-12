@@ -8,11 +8,18 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import {
   ApprovedStrategicDirection,
   CoreValue,
+  DEFAULT_PILLAR_WEIGHTS,
+  LEX_PILLARS,
+  type PillarWeights,
   StrategicDirectionProvider,
   StrategicDirectionSummary,
 } from '../common/contracts';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
-import { SaveDraftDto } from './dto/strategic-direction.dto';
+import {
+  SaveDraftDto,
+  TEXT_LIMITS,
+  VALUE_LIMITS,
+} from './dto/strategic-direction.dto';
 import { randomUUID } from 'crypto';
 import { Prisma, type LexStrategicDirection } from 'db';
 import { DIRECTION_EDITORS } from './strategic-direction.roles';
@@ -47,7 +54,7 @@ const FIELD_LABELS: Record<TextField, string> = {
 };
 
 // The form's four sections; each shows "Last updated <date> · <name>".
-type Section = 'organisation' | 'vision' | 'mission' | 'values';
+type Section = 'organisation' | 'vision' | 'mission' | 'values' | 'pillars';
 const SECTION_OF: Record<TextField, Section> = {
   company: 'organisation',
   business: 'organisation',
@@ -84,6 +91,20 @@ const personOf = (e: Person) => ({
 const valuesKey = (vs: CoreValue[]) =>
   JSON.stringify(vs.map((v) => [v.id, v.name, v.why]));
 
+// Stored weights with the defaults filled in; versions approved before weights existed have none.
+function weightsOf(stored: unknown): PillarWeights {
+  const raw = (stored ?? {}) as Partial<Record<string, unknown>>;
+  const weights = { ...DEFAULT_PILLAR_WEIGHTS };
+  for (const { code } of LEX_PILLARS) {
+    if (typeof raw[code] === 'number') weights[code] = raw[code];
+  }
+  return weights;
+}
+const weightsKey = (w: PillarWeights) =>
+  JSON.stringify(LEX_PILLARS.map(({ code }) => w[code]));
+const weightsTotal = (w: PillarWeights) =>
+  LEX_PILLARS.reduce((sum, { code }) => sum + w[code], 0);
+
 // Field-by-field difference between two versions, in the same shape as DRAFT_SAVED events.
 function changesBetween(
   before: DirectionContent | null,
@@ -97,6 +118,13 @@ function changesBetween(
   const from = before?.values ?? [];
   if (valuesKey(from) !== valuesKey(after.values))
     changes.values = { from, to: after.values };
+  // On the first approval the weights are new even when they are the defaults.
+  const weightsBefore = before && weightsOf(before.pillarWeights);
+  if (
+    !weightsBefore ||
+    weightsKey(weightsBefore) !== weightsKey(after.pillarWeights)
+  )
+    changes.pillarWeights = { from: weightsBefore, to: after.pillarWeights };
   return changes;
 }
 
@@ -121,26 +149,46 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     return direction;
   }
 
-  // Same rules as validateRequired() in the prototype.
+  // Same rules as validateRequired() in the prototype, plus the length and weight limits.
   private missingItems(direction: Direction) {
     const problems: { field: string; label: string }[] = [];
+    const tooLong = (field: string, label: string, max: number) =>
+      problems.push({ field, label: `${label}: keep it to ${max} characters` });
     for (const field of TEXT_FIELDS) {
-      if (!direction[field]?.trim())
-        problems.push({ field, label: FIELD_LABELS[field] });
+      const text = direction[field]?.trim();
+      if (!text) problems.push({ field, label: FIELD_LABELS[field] });
+      else if (text.length > TEXT_LIMITS[field])
+        tooLong(field, FIELD_LABELS[field], TEXT_LIMITS[field]);
     }
 
     const values = direction.values as unknown as CoreValue[];
     if (values.length === 0)
       problems.push({ field: 'values', label: 'At least one core value' });
+    if (values.length > VALUE_LIMITS.count)
+      problems.push({
+        field: 'values',
+        label: `No more than ${VALUE_LIMITS.count} core values`,
+      });
     values.forEach((v, i) => {
       if (!v.name?.trim())
         problems.push({ field: `${v.id}-name`, label: `Value ${i + 1} name` });
+      else if (v.name.length > VALUE_LIMITS.name)
+        tooLong(`${v.id}-name`, `Value ${i + 1} name`, VALUE_LIMITS.name);
       if (!v.why?.trim())
         problems.push({
           field: `${v.id}-why`,
           label: `Value ${i + 1} explanation`,
         });
+      else if (v.why.length > VALUE_LIMITS.why)
+        tooLong(`${v.id}-why`, `Value ${i + 1} explanation`, VALUE_LIMITS.why);
     });
+
+    const total = weightsTotal(weightsOf(direction.pillarWeights));
+    if (total !== 100)
+      problems.push({
+        field: 'pillarWeights',
+        label: `Pillar weights must add up to 100% (now ${total}%)`,
+      });
     return problems;
   }
 
@@ -154,6 +202,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
       mission: direction.mission ?? '',
       missionWhy: direction.missionWhy ?? '',
       values: direction.values as unknown as CoreValue[],
+      pillarWeights: weightsOf(direction.pillarWeights),
     };
   }
 
@@ -230,8 +279,10 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     });
     if (!row) return null;
 
+    const snapshot = row.snapshot as unknown as DirectionContent;
     return {
-      ...(row.snapshot as unknown as DirectionContent),
+      ...snapshot,
+      pillarWeights: weightsOf(snapshot.pillarWeights),
       version: row.version,
       approvedAt: row.approvedAt,
       approvedById: row.approvedById,
@@ -276,6 +327,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
         mission: null,
         missionWhy: null,
         values: [],
+        pillarWeights: { ...DEFAULT_PILLAR_WEIGHTS },
         sectionMeta: {},
         returnReason: null,
         revisionReason: null,
@@ -307,6 +359,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     const { submittedBy, ...rest } = draft;
     return {
       ...rest,
+      pillarWeights: weightsOf(rest.pillarWeights),
       submittedByName: fullName(submittedBy),
       approved: published && {
         version: published.version,
@@ -454,6 +507,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     const changes: FieldChanges = {};
     const data: Partial<Record<TextField, string | null>> & {
       values?: Prisma.InputJsonValue;
+      pillarWeights?: Prisma.InputJsonValue;
       sectionMeta?: Prisma.InputJsonValue;
     } = {};
 
@@ -486,6 +540,15 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
       }
     }
 
+    if (dto.pillarWeights) {
+      const next = weightsOf(dto.pillarWeights);
+      const prev = weightsOf(draft?.pillarWeights);
+      if (weightsKey(next) !== weightsKey(prev)) {
+        changes.pillarWeights = { from: prev, to: next };
+        data.pillarWeights = next;
+      }
+    }
+
     if (Object.keys(changes).length === 0)
       return draft ?? this.getDraft(user.organizationId);
 
@@ -502,9 +565,13 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
       byName: actor?.name ?? null,
     };
     for (const field of Object.keys(changes)) {
-      sectionMeta[
-        field === 'values' ? 'values' : SECTION_OF[field as TextField]
-      ] = stamp;
+      const section: Section =
+        field === 'values'
+          ? 'values'
+          : field === 'pillarWeights'
+            ? 'pillars'
+            : SECTION_OF[field as TextField];
+      sectionMeta[section] = stamp;
     }
     data.sectionMeta = sectionMeta;
 
@@ -734,6 +801,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
         status: 'DRAFT',
         ...snapshot,
         values: snapshot.values as unknown as Prisma.InputJsonArray,
+        pillarWeights: weightsOf(snapshot.pillarWeights),
         sectionMeta: published.sectionMeta as Prisma.InputJsonValue,
         revisionReason: text,
         returnReason: null,

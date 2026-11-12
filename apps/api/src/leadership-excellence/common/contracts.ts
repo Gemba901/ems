@@ -31,6 +31,8 @@ export interface ApprovedStrategicDirection {
   mission: string;
   missionWhy: string;
   values: CoreValue[];
+  /** Percentage weight of each pillar (01.02); the six add up to 100. */
+  pillarWeights: PillarWeights;
   approvedAt: Date;
   approvedById: string | null;
 }
@@ -45,6 +47,19 @@ export const LEX_PILLARS = [
   { code: 'FPEX', name: 'Financial Performance Excellence' },
 ] as const;
 export type LexPillarCode = (typeof LEX_PILLARS)[number]['code'];
+
+/** Whole-number percentages per pillar. Later areas use them in weighted scores. */
+export type PillarWeights = Record<LexPillarCode, number>;
+
+/** Weights a company starts with; it may change them, but they must total 100. */
+export const DEFAULT_PILLAR_WEIGHTS: PillarWeights = {
+  LEX: 10,
+  PEX: 20,
+  OPX: 30,
+  CMX: 20,
+  SGEX: 10,
+  FPEX: 10,
+};
 
 /**
  * What StrategicDirectionService exports to other areas. Later areas inject the

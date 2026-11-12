@@ -77,7 +77,7 @@ function EmployeeView() {
           </p>
         </div>
       )}
-      <PillarsSection />
+      <PillarsSection weights={approved.data?.pillarWeights} />
     </div>
   );
 }

@@ -103,6 +103,14 @@ describe('StrategicDirectionService', () => {
         id: null,
         status: 'DRAFT',
         values: [],
+        pillarWeights: {
+          LEX: 10,
+          PEX: 20,
+          OPX: 30,
+          CMX: 20,
+          SGEX: 10,
+          FPEX: 10,
+        },
       });
       expect(prisma.lexStrategicDirection.upsert).not.toHaveBeenCalled();
     });
@@ -176,6 +184,40 @@ describe('StrategicDirectionService', () => {
           byName: 'Amina Otieno',
         }),
       });
+    });
+
+    it('saves changed pillar weights and stamps the pillars section', async () => {
+      const { prisma, service } = setup(COMPLETE);
+      const weights = {
+        LEX: 15,
+        PEX: 15,
+        OPX: 30,
+        CMX: 20,
+        SGEX: 10,
+        FPEX: 10,
+      };
+      await service.saveDraft(USER, { pillarWeights: weights });
+
+      const [[{ update }]] = prisma.lexStrategicDirection.upsert.mock.calls as [
+        [{ update: { pillarWeights: unknown; sectionMeta: object } }],
+      ];
+      expect(update.pillarWeights).toEqual(weights);
+      expect(Object.keys(update.sectionMeta)).toEqual(['pillars']);
+    });
+
+    it('treats the default weights as unchanged on an older row', async () => {
+      const { prisma, service } = setup(COMPLETE);
+      await service.saveDraft(USER, {
+        pillarWeights: {
+          LEX: 10,
+          PEX: 20,
+          OPX: 30,
+          CMX: 20,
+          SGEX: 10,
+          FPEX: 10,
+        },
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('gives new values an id and rejects duplicate ids', async () => {
@@ -264,6 +306,66 @@ describe('StrategicDirectionService', () => {
         { field: 'v-1-why', label: 'Value 1 explanation' },
       ]);
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('refuses text saved under the older, longer limits', async () => {
+      const { service } = setup({
+        ...COMPLETE,
+        vision: 'x'.repeat(201),
+        values: [{ id: 'v-1', name: 'Ownership', why: 'x'.repeat(251) }],
+      });
+      const error = await service.submit(USER).catch((e: unknown) => e);
+      expect(
+        (error as { getResponse(): { problems: unknown } }).getResponse()
+          .problems,
+      ).toEqual([
+        {
+          field: 'vision',
+          label: 'Vision statement: keep it to 200 characters',
+        },
+        {
+          field: 'v-1-why',
+          label: 'Value 1 explanation: keep it to 250 characters',
+        },
+      ]);
+    });
+
+    it('refuses more than eight core values', async () => {
+      const values = Array.from({ length: 9 }, (_, i) => ({
+        id: `v-${i}`,
+        name: 'Value',
+        why: 'Why',
+      }));
+      const { service } = setup({ ...COMPLETE, values });
+      const error = await service.submit(USER).catch((e: unknown) => e);
+      expect(
+        (error as { getResponse(): { problems: unknown } }).getResponse()
+          .problems,
+      ).toEqual([{ field: 'values', label: 'No more than 8 core values' }]);
+    });
+
+    it('requires the pillar weights to total 100%', async () => {
+      const { service } = setup({
+        ...COMPLETE,
+        pillarWeights: {
+          LEX: 10,
+          PEX: 20,
+          OPX: 40,
+          CMX: 20,
+          SGEX: 10,
+          FPEX: 10,
+        },
+      });
+      const error = await service.submit(USER).catch((e: unknown) => e);
+      expect(
+        (error as { getResponse(): { problems: unknown } }).getResponse()
+          .problems,
+      ).toEqual([
+        {
+          field: 'pillarWeights',
+          label: 'Pillar weights must add up to 100% (now 110%)',
+        },
+      ]);
     });
 
     it('requires at least one core value', async () => {
@@ -426,7 +528,7 @@ describe('StrategicDirectionService', () => {
       const [[{ data }]] = prisma.lexStrategicDirectionEvent.create.mock
         .calls as [[{ data: { action: string; changes: object } }]];
       expect(data.action).toBe('APPROVED');
-      expect(Object.keys(data.changes)).toHaveLength(8);
+      expect(Object.keys(data.changes)).toHaveLength(9);
     });
 
     it('refuses a draft that was not sent for review', async () => {
@@ -591,6 +693,26 @@ describe('StrategicDirectionService', () => {
   });
 
   describe('startRevision', () => {
+    it('gives a version approved before weights existed the default weights', async () => {
+      const { prisma, service } = setup(
+        { ...COMPLETE, status: 'APPROVED', currentVersion: 1 },
+        ACTOR,
+        { version: 1, snapshot: SNAPSHOT, sectionMeta: {} },
+      );
+      await service.startRevision(USER, 'Update');
+      const [[{ data }]] = prisma.lexStrategicDirection.update.mock.calls as [
+        [{ data: { pillarWeights: unknown } }],
+      ];
+      expect(data.pillarWeights).toEqual({
+        LEX: 10,
+        PEX: 20,
+        OPX: 30,
+        CMX: 20,
+        SGEX: 10,
+        FPEX: 10,
+      });
+    });
+
     it('reopens a draft from the approved snapshot', async () => {
       const meta = { vision: { at: 'x', byId: 'emp-1', byName: 'A' } };
       const { prisma, service } = setup(
@@ -640,8 +762,28 @@ describe('SaveDraftDto', () => {
     validate(plainToInstance(SaveDraftDto, body));
 
   it('rejects text over the prototype limits', async () => {
-    expect(await errors({ company: 'x'.repeat(151) })).toHaveLength(1);
-    expect(await errors({ company: 'x'.repeat(150) })).toHaveLength(0);
+    expect(await errors({ company: 'x'.repeat(51) })).toHaveLength(1);
+    expect(await errors({ company: 'x'.repeat(50) })).toHaveLength(0);
+  });
+
+  it('rejects more than eight core values', async () => {
+    const value = { name: 'Value', why: 'Why' };
+    expect(await errors({ values: Array(9).fill(value) })).toHaveLength(1);
+    expect(await errors({ values: Array(8).fill(value) })).toHaveLength(0);
+  });
+
+  it('accepts whole-number weights from 0 to 100 only', async () => {
+    const ok = { LEX: 0, PEX: 20, OPX: 30, CMX: 20, SGEX: 10, FPEX: 20 };
+    expect(await errors({ pillarWeights: ok })).toHaveLength(0);
+    expect(await errors({ pillarWeights: { ...ok, LEX: 101 } })).toHaveLength(
+      1,
+    );
+    expect(await errors({ pillarWeights: { ...ok, LEX: 2.5 } })).toHaveLength(
+      1,
+    );
+    expect(
+      await errors({ pillarWeights: { ...ok, LEX: undefined } }),
+    ).toHaveLength(1);
   });
 
   it('validates each core value', async () => {

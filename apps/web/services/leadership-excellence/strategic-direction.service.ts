@@ -5,10 +5,15 @@ const API_URL = "/api/leadership-excellence/strategic-direction";
 // ── Types (mirror the API in apps/api/src/leadership-excellence/strategic-direction) ──
 
 export type DirectionStatus = "DRAFT" | "IN_REVIEW" | "APPROVED";
-export type DirectionSection = "organisation" | "vision" | "mission" | "values";
+export type DirectionSection = "organisation" | "vision" | "mission" | "values" | "pillars";
 
 export const TEXT_FIELDS = ["company", "business", "purpose", "vision", "visionWhy", "mission", "missionWhy"] as const;
 export type TextField = (typeof TEXT_FIELDS)[number];
+
+export const PILLAR_CODES = ["LEX", "PEX", "OPX", "CMX", "SGEX", "FPEX"] as const;
+export type PillarCode = (typeof PILLAR_CODES)[number];
+/** Whole-number percentage per pillar; the six must total 100 before review. */
+export type PillarWeights = Record<PillarCode, number>;
 
 export interface CoreValue {
   id: string;
@@ -34,6 +39,7 @@ export interface StrategicDirectionDraft extends Record<TextField, string | null
   id: string | null;
   status: DirectionStatus;
   values: CoreValue[];
+  pillarWeights: PillarWeights;
   sectionMeta: Partial<Record<DirectionSection, SectionStamp>>;
   returnReason: string | null;
   revisionReason: string | null;
@@ -42,7 +48,11 @@ export interface StrategicDirectionDraft extends Record<TextField, string | null
   currentVersion: number | null;
   updatedAt?: string;
   /** The published version, still live while a revision is drafted. */
-  approved: { version: number; approvedAt: string; approvedByName: string | null } | null;
+  approved: {
+    version: number;
+    approvedAt: string;
+    approvedByName: string | null;
+  } | null;
   submittedById?: string | null;
   approvers: DirectionApprover[];
   /** canReview: a chosen approver who did not send this submission. */
@@ -53,6 +63,7 @@ export interface StrategicDirectionDraft extends Record<TextField, string | null
 export interface ApprovedDirection extends Record<TextField, string> {
   version: number;
   values: CoreValue[];
+  pillarWeights: PillarWeights;
   approvedAt: string;
   approvedById: string | null;
   approvedByName: string | null;
@@ -70,6 +81,7 @@ export interface DirectionEvent {
 
 export type SaveDraftPayload = Partial<Record<TextField, string>> & {
   values?: { id?: string; name: string; why: string }[];
+  pillarWeights?: PillarWeights;
   /** The updatedAt this form was loaded from; the API refuses a save on an older copy. */
   expectedUpdatedAt?: string;
 };
@@ -93,16 +105,28 @@ export const FIELD_LABELS: Record<TextField, string> = {
 };
 
 export const FIELD_LIMITS: Record<TextField, number> = {
-  company: 150,
+  company: 50,
   business: 150,
   purpose: 500,
-  vision: 250,
-  visionWhy: 1000,
-  mission: 350,
-  missionWhy: 1000,
+  vision: 200,
+  visionWhy: 500,
+  mission: 200,
+  missionWhy: 500,
 };
 
-export const VALUE_LIMITS = { name: 50, why: 600, count: 10 } as const;
+export const VALUE_LIMITS = { name: 50, why: 250, count: 8 } as const;
+
+/** Matches DEFAULT_PILLAR_WEIGHTS in the API contract. */
+export const DEFAULT_PILLAR_WEIGHTS: PillarWeights = {
+  LEX: 10,
+  PEX: 20,
+  OPX: 30,
+  CMX: 20,
+  SGEX: 10,
+  FPEX: 10,
+};
+export const PILLAR_TOTAL = 100;
+export const weightsTotal = (w: PillarWeights) => PILLAR_CODES.reduce((sum, code) => sum + (w[code] ?? 0), 0);
 
 // ── Requests ──
 

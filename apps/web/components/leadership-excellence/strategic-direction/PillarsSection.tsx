@@ -1,9 +1,23 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
-import { Guide, SectionCard } from "./ui";
+import { ChevronDown, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import {
+  DEFAULT_PILLAR_WEIGHTS,
+  PILLAR_TOTAL,
+  weightsTotal,
+  type PillarCode,
+  type PillarWeights,
+  type SectionStamp,
+} from "@/services/leadership-excellence/strategic-direction.service";
+import { Guide, SectionCard, SectionMeta } from "./ui";
 
-/** 01.02: the six fixed excellence pillars. Fixed reference data; Area 03 picks one per objective. */
+/**
+ * 01.02: the six fixed excellence pillars. Names and codes are fixed; each company sets
+ * the weight of each pillar, which later areas use in weighted calculations.
+ */
 export const PILLARS = [
   {
     code: "LEX",
@@ -43,14 +57,34 @@ export const PILLARS = [
   },
 ] as const;
 
-export function PillarGrid() {
+/** Weight as typed: whole numbers from 0 to 100; anything else is clamped. */
+function parseWeight(raw: string): number {
+  const n = Math.round(Number(raw));
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
+}
+
+export function PillarGrid({
+  weights,
+  onChange,
+  invalid,
+}: {
+  /** Shown as a badge; editable when onChange is given. */
+  weights?: PillarWeights;
+  onChange?: (code: PillarCode, weight: number) => void;
+  invalid?: boolean;
+}) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {PILLARS.map((p) => (
-        <li key={p.code} className="rounded-lg border border-border bg-card p-4">
-          <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-semibold tracking-wide text-secondary-foreground">
-            {p.code}
-          </span>
+        <li key={p.code} className="flex flex-col rounded-lg border border-border bg-card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-semibold tracking-wide text-secondary-foreground">
+              {p.code}
+            </span>
+            {weights && !onChange && (
+              <span className="text-sm font-semibold text-primary tabular-nums">{weights[p.code]}%</span>
+            )}
+          </div>
           <h3 className="mt-2 text-sm font-semibold text-foreground">{p.name}</h3>
           <p className="text-xs text-muted-foreground">{p.tag}</p>
           <details className="group mt-3">
@@ -61,30 +95,98 @@ export function PillarGrid() {
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">{p.text}</p>
           </details>
+          {weights && onChange && (
+            <label className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-3 text-sm font-medium">
+              Weight
+              <span className="flex items-center gap-1.5">
+                <Input
+                  id={`weight-${p.code}`}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={weights[p.code]}
+                  aria-invalid={invalid || undefined}
+                  onChange={(e) => onChange(p.code, parseWeight(e.target.value))}
+                  className="w-20 text-right tabular-nums"
+                />
+                <span className="text-muted-foreground">%</span>
+              </span>
+            </label>
+          )}
         </li>
       ))}
     </ul>
   );
 }
 
-export function PillarsSection({ number }: { number?: string }) {
+export function PillarsSection({
+  number,
+  weights,
+  onChange,
+  editable,
+  invalid,
+  stamp,
+}: {
+  number?: string;
+  /** Omitted on the employee page before anything is approved: the grid shows without weights. */
+  weights?: PillarWeights;
+  onChange?: (weights: PillarWeights) => void;
+  editable?: boolean;
+  invalid?: boolean;
+  stamp?: SectionStamp;
+}) {
+  const total = weights ? weightsTotal(weights) : PILLAR_TOTAL;
+  const balanced = total === PILLAR_TOTAL;
+  const isDefault = (Object.keys(DEFAULT_PILLAR_WEIGHTS) as PillarCode[]).every(
+    (c) => weights?.[c] === DEFAULT_PILLAR_WEIGHTS[c],
+  );
+  const edit = editable && weights && onChange ? onChange : undefined;
   return (
     <SectionCard
       id="pillars-section"
       number={number}
-      label="01.02 · Fixed strategic perspectives"
+      label="01.02 · Strategic perspectives"
       title="Our six excellence pillars"
-      description="Six fixed perspectives for objective planning in Key Functional Area 3. Select Know more to understand each one."
+      description="Six fixed perspectives for objective planning in Key Functional Area 3. Set how much each one weighs."
     >
       <Guide title="How to use the six pillars">
         Read what each pillar covers. These are strategic perspectives, not departments or a required number of
-        objectives. The six names and codes stay fixed. In Key Functional Area 3, leadership will select the main pillar
-        for each objective.
+        objectives. The six names and codes stay fixed. Give each pillar a weight that reflects how much it matters to
+        the organisation; the weights must add up to 100%. Later areas use these weights to calculate performance, and
+        in Key Functional Area 3 leadership will select the main pillar for each objective.
       </Guide>
-      <PillarGrid />
-      <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-        Reference only. No additional pillars need to be entered here.
-      </p>
+      <PillarGrid
+        weights={weights}
+        onChange={edit && weights ? (code, w) => edit({ ...weights, [code]: w }) : undefined}
+        invalid={invalid || !balanced}
+      />
+      {weights && (
+        <div
+          id="pillarWeights"
+          tabIndex={-1}
+          className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3 text-sm outline-none"
+        >
+          <span
+            role="status"
+            aria-live="polite"
+            className={cn("font-medium", balanced ? "text-primary" : "text-destructive")}
+          >
+            Total {total}% of {PILLAR_TOTAL}%
+            {!balanced &&
+              (total > PILLAR_TOTAL
+                ? ` · remove ${total - PILLAR_TOTAL}% before sending for review`
+                : ` · add ${PILLAR_TOTAL - total}% before sending for review`)}
+          </span>
+          {edit && !isDefault && (
+            <Button type="button" size="sm" variant="ghost" onClick={() => edit({ ...DEFAULT_PILLAR_WEIGHTS })}>
+              <RotateCcw /> Reset to default weights
+            </Button>
+          )}
+        </div>
+      )}
+      <SectionMeta stamp={stamp} />
     </SectionCard>
   );
 }

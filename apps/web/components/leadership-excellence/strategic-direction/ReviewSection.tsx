@@ -262,6 +262,7 @@ const ACTION_LABELS: Record<DirectionEvent["action"], string> = {
 
 function changeLabel(field: string) {
   if (field === "values") return "Core values";
+  if (field === "pillarWeights") return "Pillar weights";
   return FIELD_LABELS[field as TextField] ?? field;
 }
 
@@ -269,6 +270,11 @@ function changeText(value: unknown): string {
   if (Array.isArray(value)) {
     const names = (value as CoreValue[]).map((v) => v.name).filter(Boolean);
     return names.length ? names.join(", ") : "";
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, number>)
+      .map(([code, weight]) => `${code} ${weight}%`)
+      .join(" · ");
   }
   return typeof value === "string" ? value : "";
 }

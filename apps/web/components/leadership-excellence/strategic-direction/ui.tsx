@@ -70,13 +70,15 @@ export function TextField({
   required?: boolean;
 }) {
   const hintId = `${id}-hint`;
+  // Text saved under older, longer limits can still arrive over the limit; flag it instead of cutting it.
+  const over = value.length > maxLength;
   const common = {
     id,
     value,
     maxLength,
     readOnly,
     placeholder,
-    "aria-invalid": invalid || undefined,
+    "aria-invalid": invalid || over || undefined,
     "aria-describedby": hintId,
   };
   return (
@@ -91,8 +93,12 @@ export function TextField({
         <Input {...common} className="read-only:bg-muted/40" onChange={(e) => onChange(e.target.value)} />
       )}
       <div id={hintId} className="flex justify-between gap-4 text-xs text-muted-foreground">
-        <span>{hint}</span>
-        <span className="shrink-0 tabular-nums">
+        <span className={cn(over && "font-medium text-destructive")}>
+          {over
+            ? `${(value.length - maxLength).toLocaleString()} characters over the limit. Shorten it to save.`
+            : hint}
+        </span>
+        <span className={cn("shrink-0 tabular-nums", over && "font-semibold text-destructive")}>
           {value.length.toLocaleString()} / {maxLength.toLocaleString()}
         </span>
       </div>

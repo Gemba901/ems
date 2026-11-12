@@ -1,10 +1,13 @@
 "use client";
 
-import type { CoreValue, TextField } from "@/services/leadership-excellence/strategic-direction.service";
+import type { CoreValue, PillarWeights, TextField } from "@/services/leadership-excellence/strategic-direction.service";
 import { PillarGrid } from "./PillarsSection";
 import { EYEBROW } from "./ui";
 
-export type DirectionContent = Record<TextField, string> & { values: CoreValue[] };
+export type DirectionContent = Record<TextField, string> & {
+  values: CoreValue[];
+  pillarWeights: PillarWeights;
+};
 
 /** Element ids for the employee page, so the sidebar's "On this page" links land on each block. */
 export interface ReadAnchors {
@@ -95,7 +98,7 @@ export function DirectionReadView({
       {showPillars && (
         <section className="space-y-3">
           <h3 className={EYEBROW}>Our six excellence pillars</h3>
-          <PillarGrid />
+          <PillarGrid weights={content.pillarWeights} />
         </section>
       )}
     </article>

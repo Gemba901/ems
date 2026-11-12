@@ -8,10 +8,13 @@ import type { useDirectionActions } from "@/hooks/leadership-excellence/useStrat
 import {
   FIELD_LABELS,
   FIELD_LIMITS,
+  PILLAR_TOTAL,
   StrategicDirectionApiError,
   TEXT_FIELDS,
   VALUE_LIMITS,
+  weightsTotal,
   type DirectionProblem,
+  type PillarWeights,
   type SaveDraftPayload,
   type StrategicDirectionDraft,
   type TextField as Field,
@@ -21,7 +24,10 @@ import { ReviewSection } from "./ReviewSection";
 import { ConfirmDialog, Guide, Notice, SectionCard, SectionMeta, TextField, formatDate } from "./ui";
 
 type ValueRow = { id: string; name: string; why: string };
-type FormState = Record<Field, string> & { values: ValueRow[] };
+type FormState = Record<Field, string> & {
+  values: ValueRow[];
+  pillarWeights: PillarWeights;
+};
 type Dialog = "approve" | "return" | "revise" | null;
 
 // The API accepts client-made v4 ids, so new values keep the same id (and field anchors) after saving.
@@ -35,15 +41,33 @@ function newId(): string {
 }
 
 function toForm(draft: StrategicDirectionDraft): FormState {
-  const form = { values: draft.values.map((v) => ({ ...v })) } as FormState;
+  const form = {
+    values: draft.values.map((v) => ({ ...v })),
+    pillarWeights: { ...draft.pillarWeights },
+  } as FormState;
   for (const field of TEXT_FIELDS) form[field] = draft[field] ?? "";
   return form;
 }
 
 function toPayload(form: FormState, expectedUpdatedAt?: string): SaveDraftPayload {
-  const payload: SaveDraftPayload = { values: form.values, ...(expectedUpdatedAt && { expectedUpdatedAt }) };
+  const payload: SaveDraftPayload = {
+    values: form.values,
+    pillarWeights: form.pillarWeights,
+    ...(expectedUpdatedAt && { expectedUpdatedAt }),
+  };
   for (const field of TEXT_FIELDS) payload[field] = form[field];
   return payload;
+}
+
+/** Labels of every field over its character limit; nothing over the limit can be saved. */
+function overLimit(form: FormState): string[] {
+  const over = TEXT_FIELDS.filter((f) => form[f].length > FIELD_LIMITS[f]).map((f) => FIELD_LABELS[f]);
+  if (form.values.length > VALUE_LIMITS.count) over.push(`More than ${VALUE_LIMITS.count} core values`);
+  form.values.forEach((v, i) => {
+    if (v.name.length > VALUE_LIMITS.name) over.push(`Value ${i + 1} name`);
+    if (v.why.length > VALUE_LIMITS.why) over.push(`Value ${i + 1} explanation`);
+  });
+  return over;
 }
 
 const sameForm = (a: FormState, b: FormState) => JSON.stringify(toPayload(a)) === JSON.stringify(toPayload(b));
@@ -80,6 +104,9 @@ export function CompanyDirectionEditor({
   const busy = Object.values(actions).some((m) => m.isPending);
   const canReview = draft.viewer.canReview;
   const noApprovers = draft.approvers.length === 0;
+  const tooLong = overLimit(form);
+  const weightTotal = weightsTotal(form.pillarWeights);
+  const weightsOff = weightTotal !== PILLAR_TOTAL;
 
   // Warn before leaving the page with unsaved typing.
   useEffect(() => {
@@ -91,8 +118,15 @@ export function CompanyDirectionEditor({
 
   const setField = (field: Field) => (value: string) => setForm((f) => ({ ...f, [field]: value }));
   const setValue = (id: string, patch: Partial<ValueRow>) =>
-    setForm((f) => ({ ...f, values: f.values.map((v) => (v.id === id ? { ...v, ...patch } : v)) }));
-  const addValue = () => setForm((f) => ({ ...f, values: [...f.values, { id: newId(), name: "", why: "" }] }));
+    setForm((f) => ({
+      ...f,
+      values: f.values.map((v) => (v.id === id ? { ...v, ...patch } : v)),
+    }));
+  const addValue = () =>
+    setForm((f) => ({
+      ...f,
+      values: [...f.values, { id: newId(), name: "", why: "" }],
+    }));
   const removeValue = (id: string) => setForm((f) => ({ ...f, values: f.values.filter((v) => v.id !== id) }));
 
   // Shows the API's missing-field list as the error summary; other failures as a toast.
@@ -121,7 +155,13 @@ export function CompanyDirectionEditor({
 
   const field = (
     name: Field,
-    props: { multiline?: boolean; hint?: string; placeholder?: string; label?: string; required?: boolean },
+    props: {
+      multiline?: boolean;
+      hint?: string;
+      placeholder?: string;
+      label?: string;
+      required?: boolean;
+    },
   ) => (
     <TextField
       id={name}
@@ -181,9 +221,14 @@ export function CompanyDirectionEditor({
       )}
       {editable && draft.approved && (
         <Notice>
-          You are editing a revision{draft.revisionReason && ` (${draft.revisionReason})`}. Employees still see the
-          current approved version until this revision is approved.
+          You are editing a revision
+          {draft.revisionReason && ` (${draft.revisionReason})`}. Employees still see the current approved version until
+          this revision is approved.
         </Notice>
+      )}
+
+      {editable && tooLong.length > 0 && (
+        <Notice tone="warning">Shorten these before saving: {tooLong.join(", ")}.</Notice>
       )}
 
       {problems.length > 0 && (
@@ -198,7 +243,7 @@ export function CompanyDirectionEditor({
             {problems.map((p) => (
               <li key={p.field}>
                 <a
-                  href={`#${p.field === "values" ? "values-section" : p.field}`}
+                  href={`#${p.field === "values" ? "values-section" : p.field === "pillarWeights" ? "pillars-section" : p.field}`}
                   className="underline underline-offset-2"
                 >
                   {p.label}
@@ -215,7 +260,7 @@ export function CompanyDirectionEditor({
         className="space-y-5"
         onSubmit={(e) => {
           e.preventDefault();
-          if (editable) void run(save, "Draft saved.");
+          if (editable && tooLong.length === 0) void run(save, "Draft saved.");
         }}
       >
         <SectionCard
@@ -232,7 +277,9 @@ export function CompanyDirectionEditor({
           </Guide>
           <div className="grid gap-5 sm:grid-cols-2">
             {field("company", { placeholder: "Enter your organisation name" })}
-            {field("business", { placeholder: "For example: Furniture manufacturing" })}
+            {field("business", {
+              placeholder: "For example: Furniture manufacturing",
+            })}
           </div>
           {field("purpose", {
             label: "Purpose: Why we exist",
@@ -349,7 +396,14 @@ export function CompanyDirectionEditor({
         </SectionCard>
       </form>
 
-      <PillarsSection number="05" />
+      <PillarsSection
+        number="05"
+        weights={form.pillarWeights}
+        onChange={(pillarWeights) => setForm((f) => ({ ...f, pillarWeights }))}
+        editable={editable}
+        invalid={invalid.has("pillarWeights")}
+        stamp={draft.sectionMeta.pillars}
+      />
       <ReviewSection
         number="06"
         draft={draft}
@@ -377,7 +431,14 @@ export function CompanyDirectionEditor({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={busy || noApprovers}
+                  disabled={busy || noApprovers || tooLong.length > 0 || weightsOff}
+                  title={
+                    tooLong.length > 0
+                      ? "Shorten the fields over their limit first."
+                      : weightsOff
+                        ? `Pillar weights add up to ${weightTotal}%; they must total ${PILLAR_TOTAL}%.`
+                        : undefined
+                  }
                   onClick={() =>
                     run(async () => {
                       await saveIfDirty();
@@ -387,7 +448,7 @@ export function CompanyDirectionEditor({
                 >
                   Send for review
                 </Button>
-                <Button type="submit" form="direction-form" disabled={busy || !dirty}>
+                <Button type="submit" form="direction-form" disabled={busy || !dirty || tooLong.length > 0}>
                   {actions.save.isPending ? "Saving…" : "Save draft"}
                 </Button>
               </>

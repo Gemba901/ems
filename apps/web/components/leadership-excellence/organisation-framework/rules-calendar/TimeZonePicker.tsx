@@ -86,6 +86,8 @@ export function TimeZonePicker({
           >
             <Combobox.Input
               ref={search}
+              name="calendar-time-zone-search"
+              autoComplete="off"
               aria-label="Search time zones"
               placeholder="Search city or time zone…"
               className={styles.timeZoneSearch}

@@ -168,15 +168,18 @@ export function CalendarPreview({
       </p>
       <details className="rounded-lg border border-border p-3 text-sm">
         <summary className="cursor-pointer font-medium">
-          Performance reviews · {FREQUENCY_LABELS[reviewFrequency]} (
-          {reviews.length})
+          Performance reviews · {FREQUENCY_LABELS[reviewFrequency]} · Showing{" "}
+          {reviews.length} of {preview.reviews.length}
+          {selectedMonth
+            ? ` for ${displayMonth(selectedMonth)}`
+            : " in the full cycle"}
         </summary>
         <p className="my-2 text-muted-foreground">
-          These dates follow the performance-review frequency and review
-          allowance set in Periods & responsibilities. Changing the reporting
-          preview frequency does not change this review schedule. Show month
-          filters both lists; a period that crosses two months keeps its full
-          dates.
+          {selectedMonth
+            ? `Showing review periods that include dates in ${displayMonth(selectedMonth)}. A review covering more than one month keeps its full start and end dates.`
+            : "Showing all review periods in this cycle."}{" "}
+          The review frequency is set in Periods & responsibilities; the
+          reporting preview above has its own frequency.
         </p>
         {!reviews.length && <p>No review periods overlap this month.</p>}
         <ul className="grid gap-2 sm:grid-cols-2">

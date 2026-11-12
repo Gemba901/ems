@@ -36,6 +36,9 @@ export interface CalendarException {
   kind: "NON_WORKING" | "WORKING";
   reason: string;
   source: "MANUAL" | "HOLIDAY_SUGGESTION";
+  category?: "PUBLIC_HOLIDAY" | "OBSERVED_PUBLIC_HOLIDAY" | "OPTIONAL_CLOSURE";
+  originalDate?: string;
+  holidayCountry?: string;
 }
 export interface CalendarRules {
   audience?: CalendarAudience;

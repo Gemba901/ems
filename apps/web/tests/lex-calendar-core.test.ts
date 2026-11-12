@@ -28,7 +28,7 @@ test("unnamed drafts preview dates and corrections route to the relevant tab", (
   assert.equal(previewCorrection("Choose valid cycle dates").step, 0);
   assert.equal(
     previewCorrection("Give the cycle a name").label,
-    "Enter cycle name",
+    "Enter calendar name",
   );
 });
 test("legacy rules retain frequencies while new drafts choose monthly and quarterly", () => {

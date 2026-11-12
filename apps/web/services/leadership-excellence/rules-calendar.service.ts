@@ -150,11 +150,15 @@ export const calendarsApi = {
     rules?: CalendarRules,
     reason?: string,
   ) =>
-    request(token, `/${encodeURIComponent(id)}/${action}`, {
-      expectedRevision: revision,
-      rules,
-      reason,
-    }),
+    request<{ id?: string; revision?: number; deleted?: boolean }>(
+      token,
+      `/${encodeURIComponent(id)}/${action}`,
+      {
+        expectedRevision: revision,
+        rules,
+        reason,
+      },
+    ),
   preview: (
     token: string,
     rules: CalendarRules,

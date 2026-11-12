@@ -27,6 +27,8 @@ export function DateInput({
     <span className="relative flex items-center gap-1">
       <Input
         {...props}
+        autoComplete="off"
+        name={props.name ?? `calendar-date-${props["aria-label"] ?? "entry"}`}
         disabled={disabled}
         value={text}
         placeholder="1 Jan 2027"
@@ -60,8 +62,16 @@ export function DateInput({
       <input
         ref={picker}
         type="date"
-        min={props.min}
-        max={props.max}
+        min={
+          validCycleDate(value) && props.min && value < String(props.min)
+            ? value
+            : props.min
+        }
+        max={
+          validCycleDate(value) && props.max && value > String(props.max)
+            ? value
+            : props.max
+        }
         aria-hidden="true"
         tabIndex={-1}
         disabled={disabled}

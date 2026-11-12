@@ -395,26 +395,30 @@ export function CalendarComparisonPanel({
                   </p>
                   <p>
                     Each active person is counted once as assigned, unassigned
-                    or conflicting on the chosen date. A named group overrides a
-                    department calendar, which overrides the company default. A
-                    non-working day still has a calendar assignment.
+                    or conflicting on the chosen date. A calendar for selected
+                    people takes priority over their department calendar, which
+                    takes priority over Whole company. A non-working day still
+                    has a calendar assignment.
                   </p>
                   <p>
-                    “Match the selection” counts everyone within that calendar’s
-                    scope. “People covered” excludes people whose more specific
-                    calendar applies. Conflicting people are not treated as
-                    safely assigned.
+                    “Match the selection” counts all active people in the
+                    selected departments or people list. “People covered”
+                    excludes people whose more specific calendar applies. If two
+                    calendars have equal priority for someone, the comparison
+                    flags the conflict instead of choosing one.
                   </p>
                   <p>
-                    Legacy calendars are not automatically made company
-                    defaults. Revise and explicitly assign them when
-                    appropriate. New approvals update future lookups; existing
-                    plans retain their chosen calendar version.
+                    Older calendars may have no employees assigned. To use one
+                    for everyone, create a revision, choose Whole company and
+                    approve it. Existing plans keep their selected calendar
+                    version.
                   </p>
                   <p>
-                    This comparison uses current department records and approved
-                    group membership. It does not reconstruct historical
-                    transfers or show unpublished draft changes.
+                    Only approved calendars appear here. People are counted
+                    using their current departments and the approved people
+                    lists, even when you view a past month. For example, someone
+                    who moved from Production to Maintenance is counted in
+                    Maintenance.
                   </p>
                 </div>
               </details>

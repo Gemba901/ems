@@ -722,3 +722,216 @@
     gap: 0.3rem;
   }
 }
+
+/* Selection and decisions stay readable at the same sizes as the calendar fields. */
+.assignmentSelect {
+  min-height: 2.25rem;
+  width: 100%;
+  border: 1px solid var(--input);
+  border-radius: 0.5rem;
+  background: var(--background);
+  padding: 0.4rem 0.6rem;
+  color: inherit;
+}
+.assignmentSummary,
+.selectionSuggestions {
+  border: 1px solid var(--calendar-outline);
+  border-radius: 0.65rem;
+  padding: 0.85rem;
+}
+.selectionSuggestions > summary,
+.assignmentSummary summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.selectionList {
+  max-height: 20rem;
+  overflow: auto;
+  border: 1px solid var(--calendar-outline);
+  border-radius: 0.6rem;
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+  list-style: none;
+}
+.selectionList > li {
+  min-width: 0;
+}
+.selectionChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem;
+  border-radius: 0.35rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.selectionChoice:hover {
+  background: var(--accent);
+}
+.selectionChoice > input {
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+.selectionChoice > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.selectedSummary {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.selectedSummary ul {
+  list-style: none;
+  padding: 0;
+}
+.selectedSummary details {
+  margin-top: 0.5rem;
+}
+.selectedSummary details > ul {
+  max-height: 14rem;
+  overflow: auto;
+}
+.departmentChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+.decisionDialog {
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  margin: auto;
+  padding: 1.25rem;
+  border: 1px solid var(--calendar-outline);
+  border-radius: 0.8rem;
+  color: var(--foreground);
+  background: var(--card, #fff);
+  box-shadow: 0 12px 40px #0003;
+}
+.decisionDialog::backdrop {
+  background: #142e3766;
+}
+.decisionDialog h2 {
+  font-size: 1.1rem;
+  font-weight: 650;
+  margin-bottom: 0.75rem;
+}
+.decisionDialog p,
+.decisionDialog label {
+  margin-block: 0.75rem;
+}
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.savedConfirmation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+.savedConfirmation svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+.stepNavigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.stepShortLabel,
+.mobileStepTitle {
+  display: none;
+}
+.formField {
+  cursor: default;
+}
+.formField > span:first-child {
+  align-self: flex-start;
+}
+@media (max-width: 48rem) {
+  .departmentChoices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stepNavigation {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.3rem;
+  }
+  .stepTab {
+    min-width: 0;
+    min-height: 2.75rem;
+    justify-content: center;
+    padding: 0.45rem 0.3rem;
+    gap: 0.3rem;
+    text-align: center;
+  }
+  .stepNumber {
+    width: 1.35rem;
+    height: 1.35rem;
+    font-size: 0.65rem;
+  }
+  .stepLongLabel {
+    display: none;
+  }
+  .stepShortLabel {
+    display: inline;
+    font-size: 0.8rem;
+  }
+  .mobileStepTitle {
+    display: block;
+    font-weight: 600;
+    margin-top: 0.5rem;
+  }
+  .footer {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3rem;
+    background: var(--card, #fff);
+    border: 1px solid var(--calendar-outline);
+    border-radius: 0.65rem 0.65rem 0 0;
+    padding: 0.5rem 0.5rem max(0.5rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -3px 10px #0001;
+  }
+  .footer .saveStatus,
+  .footer .footerActions {
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+  }
+  .footer .saveStatus {
+    font-size: 0.75rem;
+    min-height: 1.1rem;
+  }
+  .footer .footerActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .footer .footerActions > button {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-inline: 0.5rem;
+    font-size: 0.8rem;
+    min-height: 2.5rem;
+  }
+  .footer .footerActions > .footerBack {
+    display: none;
+  }
+  .footerActions svg {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+  .footerClearance {
+    display: none;
+  }
+}

@@ -25,7 +25,7 @@ jobs:
       - name: Lint (non-blocking)
         run: pnpm --filter api exec eslint "src/**/*.ts"
         continue-on-error: true
-      - run: pnpm --filter api exec tsc --noEmit -p tsconfig.json
+      - run: pnpm --filter api exec tsc --noEmit -p tsconfig.build.json
       - run: pnpm --filter api build
 
   web:

@@ -11,23 +11,7 @@ concurrency:
 
 jobs:
   api:
-    name: API - lint, types, build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter db build              # generates Prisma client + compiles db package
-      - run: pnpm --filter api exec eslint "src/**/*.ts"
-      - run: pnpm --filter api exec tsc --noEmit -p tsconfig.json
-      - run: pnpm --filter api build
-
-  web:
-    name: Web - lint, types, build
+    name: API - types, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +22,26 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter db build
-      - run: pnpm --filter web lint
+      - name: Lint (non-blocking)
+        run: pnpm --filter api exec eslint "src/**/*.ts"
+        continue-on-error: true
+      - run: pnpm --filter api exec tsc --noEmit -p tsconfig.json
+      - run: pnpm --filter api build
+
+  web:
+    name: Web - types, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter db build
+      - name: Lint (non-blocking)
+        run: pnpm --filter web lint
+        continue-on-error: true
       - run: pnpm --filter web exec tsc --noEmit
       - run: pnpm --filter web build

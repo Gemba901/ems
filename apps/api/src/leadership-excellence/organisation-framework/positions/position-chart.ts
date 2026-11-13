@@ -107,15 +107,16 @@ export function buildPositionChart(input: PositionInput): PositionChart {
   const noManager = active.filter(e => !e.reportingManagerId && !leads(e));
   const looped = active.filter(e => inLoop.has(e.id));
   const untitled = active.filter(e => onChart.has(e.id) && !clean(e.jobTitle));
-  if (missing.length) checks.push({ kind: 'MANAGER_MISSING', severity: 'ERROR', count: missing.length, people: names(missing),
+  const ids = (list: PositionEmployee[]) => [...list].sort((a, b) => naturally(personName(a), personName(b))).map(e => e.id);
+  if (missing.length) checks.push({ kind: 'MANAGER_MISSING', severity: 'ERROR', count: missing.length, people: names(missing), employeeIds: ids(missing),
     message: `${plural(missing.length, 'person reports', 'people report')} to someone who isn't in the records (or to themselves)` });
-  if (looped.length) checks.push({ kind: 'REPORTING_LOOP', severity: 'ERROR', count: looped.length, people: names(looped),
+  if (looped.length) checks.push({ kind: 'REPORTING_LOOP', severity: 'ERROR', count: looped.length, people: names(looped), employeeIds: ids(looped),
     message: `${plural(looped.length, 'person is', 'people are')} in a reporting loop` });
-  if (left.length) checks.push({ kind: 'MANAGER_INACTIVE', severity: 'WARNING', count: left.length, people: names(left),
+  if (left.length) checks.push({ kind: 'MANAGER_INACTIVE', severity: 'WARNING', count: left.length, people: names(left), employeeIds: ids(left),
     message: `${plural(left.length, 'person reports', 'people report')} to someone who has left` });
-  if (noManager.length) checks.push({ kind: 'NO_MANAGER', severity: 'WARNING', count: noManager.length, people: names(noManager),
+  if (noManager.length) checks.push({ kind: 'NO_MANAGER', severity: 'WARNING', count: noManager.length, people: names(noManager), employeeIds: ids(noManager),
     message: `${plural(noManager.length, 'person has', 'people have')} no manager recorded` });
-  if (untitled.length) checks.push({ kind: 'NO_JOB_TITLE', severity: 'WARNING', count: untitled.length, people: names(untitled),
+  if (untitled.length) checks.push({ kind: 'NO_JOB_TITLE', severity: 'WARNING', count: untitled.length, people: names(untitled), employeeIds: ids(untitled),
     message: `${plural(untitled.length, 'person has', 'people have')} no job title` });
 
   const connected = active.filter(e => onChart.has(e.id));
@@ -123,4 +124,27 @@ export function buildPositionChart(input: PositionInput): PositionChart {
     source: input.source, company, multiBranch, positions, checks,
     people: { onChart: connected.length, probation: connected.filter(e => e.employmentStatus === 'PROBATION').length, notConnected: active.length - connected.length },
   };
+}
+
+// ---------- Who may see how much (the rule; the source supplies the facts) ----------
+
+/** Roles that see full work details for everyone, and roles that see work details for everyone. */
+const FULL_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'HR']);
+const WORK_ROLES = new Set(['MANAGEMENT']);
+
+/**
+ * The tier for one viewer and one person: by role first (FULL, or MANAGER for MANAGEMENT); otherwise MANAGER for the
+ * viewer themself and for anyone below them in the reporting lines; otherwise BASIC. Loops never hang.
+ */
+export function tierOf(input: { role: string | null; viewerEmployeeId: string | null; targetId: string; managerOf: Map<string, string | null> }): 'BASIC' | 'MANAGER' | 'FULL' {
+  const { role, viewerEmployeeId, targetId, managerOf } = input;
+  if (role && FULL_ROLES.has(role)) return 'FULL';
+  if (role && WORK_ROLES.has(role)) return 'MANAGER';
+  if (!viewerEmployeeId) return 'BASIC';
+  const seen = new Set<string>();
+  for (let id: string | null | undefined = targetId; id && !seen.has(id); id = managerOf.get(id)) {
+    if (id === viewerEmployeeId) return 'MANAGER';
+    seen.add(id);
+  }
+  return 'BASIC';
 }

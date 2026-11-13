@@ -68,7 +68,7 @@ export type Line = { x1: number; y1: number; x2: number; y2: number };
  * sideways. Rows after the first are joined by a trunk on the left. `routes` gives each position's line from its
  * manager, for colouring the path to the selected position.
  */
-export function layoutPositions(index: PositionIndex, roots: Position[], open: Set<string>, maxPerRow: number, shown?: Set<string>) {
+export function layoutPositions(index: PositionIndex, roots: Position[], open: Set<string>, maxPerRow: number, shown?: Set<string>, maxRowWidth = Infinity) {
   const { width: W, height: H, gap, levelGap, rowGap, chipClear } = BOX;
   type Box = { position: Position; width: number; height: number; rows: Box[][]; open: boolean };
   const seen = new Set<string>();
@@ -111,9 +111,15 @@ export function layoutPositions(index: PositionIndex, roots: Position[], open: S
     lines.push({ x1: parentX, y1: stemTop, x2: parentX, y2: firstBus });
     if (wrapped) lines.push({ x1: trunkX, y1: firstBus, x2: trunkX, y2: rowTop - rowGap - Math.max(...box.rows[box.rows.length - 1].map(b => b.height)) - rowGap / 2 });
   };
-  let left = 0, height = 0;
-  for (const root of roots) { if (seen.has(root.id) || (shown && !shown.has(root.id))) continue; const box = measure(root); place(box, left, 0); left += box.width + gap * 2; height = Math.max(height, box.height); }
-  return { placed, lines, routes, width: Math.max(0, left - gap * 2), height };
+  // Top positions side by side; several separate structures wrap into rows (no wider than maxRowWidth) instead of one long row.
+  let left = 0, top = 0, rowHeight = 0, width = 0;
+  for (const root of roots) {
+    if (seen.has(root.id) || (shown && !shown.has(root.id))) continue;
+    const box = measure(root);
+    if (left > 0 && left + box.width > maxRowWidth) { top += rowHeight + levelGap; left = 0; rowHeight = 0; }
+    place(box, left, top); left += box.width + gap * 2; rowHeight = Math.max(rowHeight, box.height); width = Math.max(width, left - gap * 2);
+  }
+  return { placed, lines, routes, width: Math.max(0, width), height: top + rowHeight };
 }
 
 /** Zoom that fits the drawing in the area (never above 100%), rounded down so it never overflows. */

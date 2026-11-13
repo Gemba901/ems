@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, RefreshCw, RotateCcw, Search, Users, X, ZoomIn } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, RefreshCw, RotateCcw, Search, Users, X, ZoomIn } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getPositionChart } from "@/services/leadership-excellence/organisation-framework.service";
+import { getPersonDetails } from "@/services/leadership-excellence/positions.service";
 import {
   BOX, ZOOM, boundsOf, cardMode, chartColours, defaultOpen, indexPositions, layoutPositions, perRowFor, scopeChoices, scopeOf, searchPositions,
-  teamSummary, withPeople, type CardMode, type ChartScope, type ColourBy, type Placed, type PositionIndex,
+  subtree, teamSummary, withPeople, type CardMode, type ChartScope, type ColourBy, type Placed, type PositionIndex,
 } from "./layout";
 import styles from "./positions.module.css";
-import type { Position, PositionChart, PositionCheck } from "./types";
+import type { PersonDetails, Position, PositionChart, PositionCheck } from "./types";
 
 const PAD = 28;
 
@@ -114,7 +115,7 @@ function Figure({ label, value, note, className, sub = "text-muted-foreground" }
   </div>;
 }
 
-type Pending = { kind: "fit" } | { kind: "fitIds"; ids: Set<string> } | { kind: "team"; id: string; readable?: boolean } | { kind: "centre"; id: string };
+type Pending = { kind: "restore"; zoom: number; left: number; top: number } | { kind: "fit" } | { kind: "fitIds"; ids: Set<string> } | { kind: "team"; id: string; readable?: boolean } | { kind: "centre"; id: string } | { kind: "stepOut"; id: string };
 
 /**
  * The chart. What each action does:
@@ -127,15 +128,36 @@ type Pending = { kind: "fit" } | { kind: "fitIds"; ids: Set<string> } | { kind: 
  * - View: whole company, the connected structure only, the not-connected part (to fix), one branch or one department.
  * - The branch below the chart shows the selected position's line, the position, its peers and its team, readable.
  */
+/** What the In focus team looked like for one person in focus (kept per person, so going back restores it). */
+type PanelView = { details: string[]; teams: string[]; all: string[]; counts?: Record<string, number>; touched: { id: string; kind: "opened" | "closed" | "returned" } | null };
+const EMPTY_VIEW: PanelView = { details: [], teams: [], all: [], counts: {}, touched: null };
+const scopeFrom = (value: string | null): ChartScope => !value ? { kind: "COMPANY" }
+  : value.startsWith("branch:") ? { kind: "BRANCH", branch: value.slice(7) } : value.startsWith("dept:") ? { kind: "DEPARTMENT", departmentId: value.slice(5) }
+  : value === "connected" ? { kind: "CONNECTED" } : value === "not-connected" ? { kind: "NOT_CONNECTED" } : { kind: "COMPANY" };
+const scopeKey = (scope: ChartScope) => scope.kind === "BRANCH" ? `branch:${scope.branch}` : scope.kind === "DEPARTMENT" ? `dept:${scope.departmentId}`
+  : scope.kind === "CONNECTED" ? "connected" : scope.kind === "NOT_CONNECTED" ? "not-connected" : "company";
+type Saved = { open: string[]; panelViews: Record<string, PanelView>; history: string[]; showDetails: boolean; zoom: number; left: number; top: number };
+
 function Chart({ chart, full, index }: { chart: PositionChart; full: PositionChart; index: PositionIndex }) {
-  const [open, setOpen] = useState(() => defaultOpen(index));
-  const [selected, setSelected] = useState<string | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
+  // The page keeps its place after a reload: the selection, view, search and colours in the address (so it can be
+  // bookmarked or sent), the rest (open teams, In focus views, zoom, scroll) in this tab's session storage.
+  // Ids that no longer exist (someone moved in EMS) are dropped quietly.
+  const storageKey = `lex-positions:${chart.company.id}`;
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const saved = useMemo<Saved | null>(() => { try { return JSON.parse(sessionStorage.getItem(storageKey) ?? "null"); } catch { return null; } }, [storageKey]);
+  const known = (ids: unknown) => Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string" && index.byId.has(id)) : [];
+  const [open, setOpen] = useState(() => saved ? new Set([...defaultOpen(index), ...known(saved.open)]) : defaultOpen(index));
+  const [selected, setSelected] = useState<string | null>(() => { const f = params.get("focus"); return f && index.byId.has(f) ? f : null; });
+  // Where In focus has been, for "← Back to …" (most recent last).
+  const [history, setHistory] = useState<string[]>(() => known(saved?.history));
+  const [showDetails, setShowDetails] = useState(() => !!saved?.showDetails && !!params.get("focus"));
+  const [panelViews, setPanelViews] = useState<Record<string, PanelView>>(() => saved?.panelViews && typeof saved.panelViews === "object" ? saved.panelViews : {});
+  const updatePanel = (focusId: string, change: (v: PanelView) => PanelView) => setPanelViews(all => ({ ...all, [focusId]: change(all[focusId] ?? EMPTY_VIEW) }));
   const [recent, setRecent] = useState<string[]>([]);
-  const [scope, setScope] = useState<ChartScope>({ kind: "COMPANY" });
-  const [colourBy, setColourBy] = useState<ColourBy>("DEPARTMENT");
+  const [scope, setScope] = useState<ChartScope>(() => scopeFrom(params.get("view")));
+  const [colourBy, setColourBy] = useState<ColourBy>(() => params.get("colour") === "BRANCH" ? "BRANCH" : "DEPARTMENT");
   const [showLine, setShowLine] = useState(true);
-  const [term, setTerm] = useState(""), [query, setQuery] = useState(""), [matchAt, setMatchAt] = useState(0);
+  const [term, setTerm] = useState(() => params.get("q") ?? ""), [query, setQuery] = useState(() => (params.get("q") ?? "").trim()), [matchAt, setMatchAt] = useState(0);
   useEffect(() => { const t = setTimeout(() => setQuery(term.trim()), 300); return () => clearTimeout(t); }, [term]);
 
   // The chart area's size (measured at 100%, so zoom never re-arranges), and whether the details card floats (wide).
@@ -161,7 +183,8 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
     return { hits: new Set([...result.hits].filter(id => view.shown.has(id))), above: new Set([...result.above].filter(id => view.shown.has(id))) };
   }, [index, full.positions, query, view]);
   const effectiveOpen = useMemo(() => found ? new Set([...open, ...found.above]) : open, [found, open]);
-  const tree = useMemo(() => layoutPositions(index, index.roots, effectiveOpen, perRowFor(area.width || 1100), view?.shown), [index, effectiveOpen, area.width, view]);
+  const tree = useMemo(() => layoutPositions(index, index.roots, effectiveOpen, perRowFor(area.width || 1100), view?.shown, Math.max(area.width || 1100, 900) - 56),
+    [index, effectiveOpen, area.width, view]);
   const matches = useMemo(() => found ? tree.placed.filter(p => found.hits.has(p.position.id)).sort((a, b) => a.y - b.y || a.x - b.x).map(p => p.position.id) : [], [found, tree]);
 
   // Margins of half the area at the sides and most of it below, so any position can be brought to the middle.
@@ -196,14 +219,22 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
   }, [OX, OY, setView]);
 
   // Actions that need the new layout first run right after it's drawn. `run` queues one and asks for a redraw.
-  const pending = useRef<Pending | null>({ kind: "fit" });
+  const pending = useRef<Pending | null>(saved && typeof saved.zoom === "number" ? { kind: "restore", zoom: saved.zoom, left: saved.left ?? 0, top: saved.top ?? 0 } : { kind: "fit" });
   const [, redraw] = useState(0);
   const run = useCallback((action: Pending) => { pending.current = action; redraw(n => n + 1); }, []);
   useEffect(() => {
     const action = pending.current; if (!action || !area.width) return;
     pending.current = null;
+    if (action.kind === "restore") { setView(action.zoom, { left: action.left, top: action.top }); return; }
     if (action.kind === "fit") { const r = boundsOf(tree.placed, new Set(tree.placed.map(p => p.position.id))); if (r) fitRect(r, ZOOM.min, 1); return; }
     if (action.kind === "fitIds") { const r = boundsOf(tree.placed, action.ids); if (r) fitRect(r, ZOOM.min, 1); return; }
+    if (action.kind === "stepOut") {
+      // After closing a team: the manager and its team (the closed position and its peers), never zooming in.
+      const r = boundsOf(tree.placed, new Set([action.id, ...index.childrenOf(action.id).map(p => p.id)]));
+      const z = zoomRef.current;
+      if (r) fitRect(r, Math.min(ZOOM.readable, z), z, true);
+      return;
+    }
     const node = tree.placed.find(p => p.position.id === action.id), el = box.current;
     if (!node || !el) return;
     if (action.kind === "centre") {
@@ -219,8 +250,10 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
   });
 
   // Search: fit all matches when the search changes; Previous / Next step through them.
+  const restoring = useRef(!!saved);
   useEffect(() => {
     setMatchAt(0);
+    if (restoring.current) { restoring.current = false; return; } // after a reload, keep the restored place
     if (found?.hits.size) run({ kind: "fitIds", ids: found.hits });
   }, [found, run]);
   const goToMatch = (step: number) => {
@@ -235,33 +268,75 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
   const select = (id: string) => {
     // Clicking the selected position again closes its team (or its people); once more opens it again.
     if (id === selected && index.childrenOf(id).length) { toggle(id); setShowDetails(true); return; }
+    if (selected && selected !== id) setHistory(h => [...h.filter(x => x !== selected), selected].slice(-20));
     setSelected(id); setShowDetails(true);
+    // Whoever is chosen (from the chart, the reporting line, a list or the In focus panel) must be drawn: open the line
+    // down to them, so zooming or gliding to them always has a box to go to.
+    const above = index.pathTo(id).slice(0, -1).map(p => p.id);
+    if (above.some(a => !open.has(a))) setOpen(o => new Set([...o, ...above]));
     if (mode !== "FULL") return; // zoomed out: details only; the user decides when to zoom in
     const target = index.byId.get(id);
     if (target && !target.person && index.childrenOf(id).length && !open.has(id) && target.holders.length <= 1) { setOpen(o => new Set([...o, id])); remember(id); }
     run({ kind: "team", id });
   };
-  const zoomToSelected = () => {
-    if (!selected) return;
-    const target = index.byId.get(selected);
-    if (target && !target.person && target.holders.length <= 1 && index.childrenOf(selected).length && !open.has(selected)) { setOpen(o => new Set([...o, selected])); remember(selected); }
-    run({ kind: "team", id: selected, readable: true });
+  const zoomToSelected = (id = selected) => {
+    if (!id) return;
+    const selectedId = id;
+    if (id !== selected) { setSelected(id); setShowDetails(true); }
+    const above = index.pathTo(selectedId).slice(0, -1).map(p => p.id);
+    if (above.some(a => !open.has(a))) setOpen(o => new Set([...o, ...above]));
+    const target = index.byId.get(selectedId);
+    if (target && !target.person && target.holders.length <= 1 && index.childrenOf(selectedId).length && !open.has(selectedId)) { setOpen(o => new Set([...o, selectedId])); remember(selectedId); }
+    run({ kind: "team", id: selectedId, readable: true });
   };
-  const toggle = (id: string) => setOpen(o => { const next = new Set(o); if (next.has(id)) next.delete(id); else { next.add(id); remember(id); } return next; });
+  // Opening adds the team; closing it steps back out to the level above (the manager and its team).
+  const toggle = (id: string) => {
+    const closing = effectiveOpen.has(id);
+    setOpen(o => { const next = new Set(o); if (next.has(id)) next.delete(id); else { next.add(id); remember(id); } return next; });
+    if (closing) { const parent = index.byId.get(id)?.parentId; run(parent ? { kind: "stepOut", id: parent } : { kind: "fit" }); }
+  };
   // Expand all opens every position, but leaves shared roles closed (their people would swamp the overview).
   const expandAll = () => { setOpen(new Set(full.positions.filter(p => !p.person && p.holders.length <= 1).map(p => p.id))); setRecent([]); run({ kind: "fit" }); };
   const collapseAll = () => { setOpen(defaultOpen(index)); setRecent([]); run({ kind: "fit" }); };
-  const startAgain = () => { setSelected(null); setShowDetails(false); setTerm(""); setQuery(""); setScope({ kind: "COMPANY" }); collapseAll(); };
+  const goBack = () => {
+    const previous = history[history.length - 1]; if (!previous) return;
+    setHistory(h => h.slice(0, -1)); setSelected(previous); setShowDetails(true);
+    const above = index.pathTo(previous).slice(0, -1).map(p => p.id);
+    if (above.some(a => !open.has(a))) setOpen(o => new Set([...o, ...above]));
+  };
+  const startAgain = () => {
+    try { sessionStorage.removeItem(storageKey); } catch { /* nothing to clear */ }
+    setPanelViews({}); setHistory([]); setSelected(null); setShowDetails(false); setTerm(""); setQuery(""); setScope({ kind: "COMPANY" }); collapseAll(); };
   const chooseScope = (value: string) => {
-    const next: ChartScope = value.startsWith("branch:") ? { kind: "BRANCH", branch: value.slice(7) } : value.startsWith("dept:") ? { kind: "DEPARTMENT", departmentId: value.slice(5) }
-      : value === "connected" ? { kind: "CONNECTED" } : value === "not-connected" ? { kind: "NOT_CONNECTED" } : { kind: "COMPANY" };
+    const next = scopeFrom(value);
     setScope(next); setRecent([]);
     const info = scopeOf(index, full, next);
     setOpen(info ? new Set([...info.context, ...info.tops.map(p => p.id)]) : defaultOpen(index));
     run(info && info.shown.size ? { kind: "fitIds", ids: info.shown } : { kind: "fit" });
   };
-  const scopeValue = scope.kind === "BRANCH" ? `branch:${scope.branch}` : scope.kind === "DEPARTMENT" ? `dept:${scope.departmentId}`
-    : scope.kind === "CONNECTED" ? "connected" : scope.kind === "NOT_CONNECTED" ? "not-connected" : "company";
+  const scopeValue = scopeKey(scope);
+
+  // Keep the address and this tab's storage up to date.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const set = (key: string, value: string | null) => { if (value) url.searchParams.set(key, value); else url.searchParams.delete(key); };
+    set("focus", selected); set("view", scope.kind === "COMPANY" ? null : scopeKey(scope)); set("q", query || null); set("colour", colourBy === "BRANCH" ? "BRANCH" : null);
+    if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url.href);
+  }, [selected, scope, query, colourBy]);
+  const scrollAt = useRef({ left: saved?.left ?? 0, top: saved?.top ?? 0 });
+  const save = useCallback(() => {
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify({ open: [...open], panelViews, history, showDetails, zoom: zoomRef.current, ...scrollAt.current } satisfies Saved));
+    } catch { /* storage full or blocked: the page still works, it just won't remember */ }
+  }, [storageKey, open, panelViews, history, showDetails]);
+  useEffect(() => { save(); }, [save, zoom]);
+  useEffect(() => {
+    const el = box.current; if (!el) return;
+    let timer = 0;
+    const onScroll = () => { scrollAt.current = { left: el.scrollLeft, top: el.scrollTop }; window.clearTimeout(timer); timer = window.setTimeout(save, 300); };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => { el.removeEventListener("scroll", onScroll); window.clearTimeout(timer); };
+  }, [save]);
 
   // The In focus panel below the chart: "In focus below ↓" whenever it's out of sight.
   const [focusOutOfSight, setFocusOutOfSight] = useState(false);
@@ -294,7 +369,7 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
   return <Card>
     <CardHeader>
       <CardTitle>Position reporting organogram</CardTitle>
-      <CardDescription>Select a position to open its team and see who holds it.</CardDescription>
+      <CardDescription>Select a position to see who holds it and open their team.</CardDescription>
     </CardHeader>
     {/* styles.chart carries the colour palette for everything below: chart, legend and the In focus panel. */}
     <CardContent className={cn("space-y-3", styles.chart)}>
@@ -361,7 +436,7 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
         {/* The details card floats over the chart on wide screens; on narrow ones it's in the branch panel below. */}
         {!narrow && position && (showDetails
           ? <div className="absolute right-3 top-3 z-20"><PositionDetails position={position} index={index} slot={colours.slotOf(position)} onSelect={select}
-              onClose={() => setShowDetails(false)} onZoom={mode !== "FULL" ? zoomToSelected : undefined} floating
+              onClose={() => setShowDetails(false)} onZoom={mode !== "FULL" ? () => zoomToSelected() : undefined} floating
               teamOpen={effectiveOpen.has(position.id)} onToggleTeam={() => toggle(position.id)} /></div>
           : <div className="absolute right-3 top-3 z-20"><Button variant="outline" size="sm" className="bg-card shadow-md" onClick={() => setShowDetails(true)}>Details</Button></div>)}
         {position && focusOutOfSight && <Button size="sm" className="absolute bottom-3 right-3 z-20 border-2 border-gemba-navy bg-gemba-navy font-semibold text-white shadow-lg hover:bg-gemba-navy-deep"
@@ -370,17 +445,18 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
       </div>
       <Legend mode={mode} colours={colours} onColourBy={setColourBy} branches={chart.multiBranch} showLine={showLine} onShowLine={setShowLine} />
 
-      {scope.kind === "NOT_CONNECTED" && <div className="rounded-lg border-2 border-gemba-red/40 bg-gemba-red/5 p-4">
-        <p className="text-sm font-semibold text-foreground">People left off the chart (to correct in EMS)</p>
-        <CheckList checks={chart.checks.filter(c => c.kind !== "NO_JOB_TITLE")} className="mt-2" />
-      </div>}
+      {scope.kind === "NOT_CONNECTED" && <LeftOffPeople checks={chart.checks.filter(c => c.kind !== "NO_JOB_TITLE")} />}
 
       {/* In focus: the selected position, readable — the line above it, the position, its peers and its team. */}
       {position && <div ref={focusPanel} className="scroll-mt-4">
         <InFocusPanel position={position} index={index} slot={colours.slotOf(position)} slotOf={colours.slotOf} onSelect={select}
+          onShow={() => { zoomToSelected(position.id); chartTop.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+          back={history.length ? index.byId.get(history[history.length - 1]) : undefined} onBack2={goBack}
+          view={panelViews[position.id] ?? EMPTY_VIEW} onView={change => updatePanel(position.id, change)}
+          onFocusRow={id => { updatePanel(position.id, v => ({ ...v, touched: { id, kind: "returned" } })); select(id); }}
           onBack={() => chartTop.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
           details={narrow ? <PositionDetails position={position} index={index} slot={colours.slotOf(position)} onSelect={select}
-            onClose={() => setSelected(null)} onZoom={mode !== "FULL" ? zoomToSelected : undefined} floating={false}
+            onClose={() => setSelected(null)} onZoom={mode !== "FULL" ? () => zoomToSelected() : undefined} floating={false}
             teamOpen={effectiveOpen.has(position.id)} onToggleTeam={() => toggle(position.id)} /> : null} />
       </div>}
     </CardContent>
@@ -492,6 +568,7 @@ function PositionDetails({ position: p, index, slot, onSelect, onClose, onZoom, 
   const team = teamSummary(index, p.id);
   const below = index.childrenOf(p.id).length, shared = p.holders.length > 1 && !p.person;
   const teammates = p.person && role ? index.childrenOf(role.id).filter(x => x.id !== p.id) : [];
+  const [allMates, setAllMates] = useState(false);
   return <Card size="sm" className={cn("border-[3px] shadow-xl", floating && "max-h-[calc(64vh-1.5rem)] w-80 max-w-[calc(100vw-4rem)] overflow-y-auto")} style={{ borderColor: `var(--dept-${slot})` }}>
     <CardHeader>
       <div className="flex items-center justify-between gap-2">
@@ -503,9 +580,9 @@ function PositionDetails({ position: p, index, slot, onSelect, onClose, onZoom, 
     </CardHeader>
     <CardContent className="space-y-3 text-sm">
       {onZoom && <Button size="sm" className="w-full" onClick={onZoom}><ZoomIn /> Zoom to this position</Button>}
-      {/* Open or close the team from here too (handy when zoomed out, where boxes have no + / −). */}
+      {/* Open or close their team from here too (handy when zoomed out, where boxes have no + / −). */}
       {below > 0 && <Button variant="outline" size="sm" className="w-full" onClick={onToggleTeam} aria-expanded={teamOpen}>
-        {teamOpen ? (shared ? "Hide its people" : "Close its team") : shared ? `Show its ${below} people` : `Open its team (${below})`}</Button>}
+        {teamOpen ? (shared ? "Hide the people in this role" : "Close their team") : shared ? `Show the ${below} people in this role` : `Open their team (${below})`}</Button>}
       {!p.person && <div>
         <p className="text-xs font-medium text-muted-foreground">{p.holders.length > 1 ? `Held by ${p.holders.length} people` : "Held by"}</p>
         <ul className="mt-1 space-y-0.5">{holders.map(h => <li key={h.employeeId} className="flex items-center justify-between gap-2">
@@ -531,9 +608,10 @@ function PositionDetails({ position: p, index, slot, onSelect, onClose, onZoom, 
       </ul>}
       {teammates.length > 0 && <div className="border-t border-border pt-2">
         <p className="text-xs font-medium text-muted-foreground">Also in this role ({teammates.length})</p>
-        <ul className="mt-1 flex flex-wrap gap-1.5">{teammates.map(t => <li key={t.id}>
+        <ul className="mt-1 flex flex-wrap gap-1.5">{(allMates ? teammates : teammates.slice(0, 8)).map(t => <li key={t.id}>
           <button type="button" onClick={() => onSelect(t.id)} className="rounded-full border border-border px-2.5 py-0.5 text-xs hover:bg-muted">
             {t.person!.name}{t.person!.status === "PROBATION" && " · prob."}</button></li>)}</ul>
+        {teammates.length > 8 && <button type="button" onClick={() => setAllMates(v => !v)} className="mt-1 text-xs text-primary hover:underline">{allMates ? "Show fewer" : `Show all ${teammates.length}`}</button>}
       </div>}
       <p className="text-xs text-muted-foreground">Worked out from job titles and reporting lines. Vacancies and acting cover come with position records in EMS.</p>
     </CardContent>
@@ -541,40 +619,251 @@ function PositionDetails({ position: p, index, slot, onSelect, onClose, onZoom, 
 }
 
 /**
- * In focus, below the chart: the selected position's reporting line, the position itself, its peers (for a person in a
- * shared role: the others in that role) and its team, as readable cards that wrap to the width. It updates in place;
- * "In focus below ↓" in the chart glides here. ("In focus" rather than "branch": in BEES a branch is a site.)
+ * In focus, below the chart, in this order: the name, "← Back to …" (where focus has been), the reporting line,
+ * Show on chart, the employee's details (as much as the viewer may see), their team, then — last, collapsed after 8 —
+ * the peers (or, for a person in a shared role, the others in that role). It updates in place; "In focus below ↓" in the
+ * chart glides here. The team opens here, not on the chart: the immediate team is listed (up to 10, then "Show all"),
+ * each row opens that person's details in place, and anyone with people under them has "Their team" folded under
+ * their row. "Focus" moves In focus to someone. ("In focus" rather than "branch": in BEES a branch is a site.)
  */
-function InFocusPanel({ position: p, index, slot, slotOf, onSelect, onBack, details }: {
-  position: Position; index: PositionIndex; slot: number; slotOf: (p: Position) => number; onSelect: (id: string) => void; onBack: () => void; details: ReactNode;
+function InFocusPanel({ position: p, index, slot, slotOf, onSelect, onShow, back, onBack2, onBack, details, view, onView, onFocusRow }: {
+  position: Position; index: PositionIndex; slot: number; slotOf: (p: Position) => number; onSelect: (id: string) => void;
+  onShow: () => void; back: Position | undefined; onBack2: () => void; onBack: () => void; details: ReactNode;
+  view: PanelView; onView: (change: (v: PanelView) => PanelView) => void; onFocusRow: (id: string) => void;
 }) {
   const path = index.pathTo(p.id);
   const parent = p.parentId ? index.byId.get(p.parentId) : undefined;
   const peers = parent ? index.childrenOf(parent.id).filter(x => x.id !== p.id && !!x.person === !!p.person) : [];
-  const team = p.person ? [] : index.childrenOf(p.id);
-  const card = (x: Position) => <button key={x.id} type="button" onClick={() => onSelect(x.id)}
-    className="flex min-h-20 w-full flex-col items-start rounded-lg border border-border bg-card px-3 py-2 text-left text-sm hover:bg-muted"
-    style={{ borderLeft: `6px solid var(--dept-${slotOf(x)})` }}>
-    <span className="font-semibold text-foreground">{x.person ? x.person.name : x.title}</span>
-    <span className="text-xs text-muted-foreground">{x.person ? x.title : x.holders.length > 1 ? `${x.holders.length} people hold this role` : x.holders[0]?.name}</span>
-    {!x.person && index.childrenOf(x.id).length > 0 && <span className="mt-auto text-xs text-muted-foreground">Team of {teamSummary(index, x.id).below}</span>}
-  </button>;
-  return <section aria-label="In focus" className="space-y-3 rounded-lg border border-border bg-card p-4" style={{ borderTop: `4px solid var(--dept-${slot})` }}>
+  const employeeId = p.person ? p.person.employeeId : p.holders.length === 1 ? p.holders[0].employeeId : null;
+  const [allPeers, setAllPeers] = useState(false);
+  useEffect(() => setAllPeers(false), [p.id]);
+  const shownPeers = allPeers ? peers : peers.slice(0, 8);
+  const label = (x: Position) => x.person ? x.person.name : x.title;
+  return <section aria-label="In focus" className="space-y-4 rounded-lg border border-border bg-card p-4" style={{ borderTop: `4px solid var(--dept-${slot})` }}>
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h3 className="text-base font-bold text-gemba-navy dark:text-foreground">In focus · {p.person ? p.person.name : p.title}</h3>
-      <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-primary hover:underline"><ArrowUp className="size-4" /> Back to chart</button>
+      <h3 className="text-base font-bold text-gemba-navy dark:text-foreground">In focus · {label(p)}</h3>
+      <div className="flex flex-wrap items-center gap-3">
+        {back && <button type="button" onClick={onBack2} className="inline-flex items-center gap-1 text-sm text-primary hover:underline"><ChevronLeft className="size-4" /> Back to {label(back)}</button>}
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-primary hover:underline"><ArrowUp className="size-4" /> Back to chart</button>
+      </div>
     </div>
     {path.length > 1 && <ReportingLine path={path} current={p.id} onSelect={onSelect} />}
+    <div className="flex flex-wrap gap-2"><Button size="sm" onClick={onShow}><Crosshair /> Show on chart</Button></div>
+    {employeeId ? <EmployeeDetails employeeId={employeeId} /> : <p className="text-sm text-muted-foreground">
+      {p.holders.length > 1 ? `A shared role held by ${p.holders.length} people: open one below for their details.` : "No holder recorded."}</p>}
     {details}
-    {peers.length > 0 && <div className="text-sm">
-      <p className="text-xs font-medium text-muted-foreground">{p.person ? `Also in this role (${peers.length})` : `Also reporting to ${parent!.title}`}</p>
-      {p.person ? <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{peers.map(card)}</div>
-        : <div className="mt-1 flex flex-wrap gap-1.5">{peers.map(x => <button key={x.id} type="button" onClick={() => onSelect(x.id)}
-          className="rounded-full border border-border px-2.5 py-0.5 text-xs hover:bg-muted">{x.title}{x.holders.length === 1 ? ` · ${x.holders[0].name}` : ` · ${x.holders.length} people`}</button>)}</div>}
+    {!p.person && <div>
+      {index.childrenOf(p.id).length > 0
+        ? <TeamList parentId={p.id} label={p.holders.length > 1 ? `The ${index.childrenOf(p.id).length} people in this role` : "Their team"}
+            index={index} slotOf={slotOf} onFocus={onFocusRow} depth={0} view={view} onView={onView} />
+        : <p className="text-xs font-medium text-muted-foreground">No team</p>}
     </div>}
-    <div>
-      <p className="text-xs font-medium text-muted-foreground">{p.holders.length > 1 && !p.person ? `The ${team.length} people in this role` : team.length ? `Team · ${team.length} ${team.length === 1 ? "position" : "positions"}` : "No team"}</p>
-      {team.length > 0 && <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{team.map(card)}</div>}
+    {peers.length > 0 && <div className="border-t border-border pt-3 text-sm">
+      <p className="text-xs font-medium text-muted-foreground">{p.person ? `Also in this role (${peers.length})` : `Also reporting to ${parent!.title} (${peers.length})`}</p>
+      <div className="mt-1 flex flex-wrap gap-1.5">{shownPeers.map(x => <button key={x.id} type="button" onClick={() => onSelect(x.id)}
+        className="rounded-full border border-border px-2.5 py-0.5 text-xs hover:bg-muted">{x.person ? x.person.name : `${x.title}${x.holders.length === 1 ? ` · ${x.holders[0].name}` : ` · ${x.holders.length} people`}`}</button>)}</div>
+      {peers.length > 8 && <button type="button" onClick={() => setAllPeers(v => !v)} className="mt-2 text-xs text-primary hover:underline">{allPeers ? "Show fewer" : `Show all ${peers.length}`}</button>}
+    </div>}
+  </section>;
+}
+
+type ListProps = {
+  index: PositionIndex; slotOf: (p: Position) => number; onFocus: (id: string) => void; depth: number;
+  view: PanelView; onView: (change: (v: PanelView) => PanelView) => void;
+};
+const without = (list: string[], remove: Set<string>) => list.filter(id => !remove.has(id));
+
+/**
+ * A team, as rows: up to 10 shown, then "Show all". "Open all / Close all" open or close the details of the rows shown
+ * (details only; teams stay as they are, except that Close all also folds their teams). These sit on one line ABOVE the
+ * rows, with the list's heading. Indented when nested.
+ */
+function TeamList({ parentId, label, ...props }: ListProps & { parentId: string; label?: string }) {
+  const { index, depth, view, onView } = props;
+  const members = index.childrenOf(parentId);
+  const showAll = view.all.includes(parentId);
+  // "Next 10" (teams over 20) adds 10 more rows; "Show all" shows them all. Both are remembered when you go back.
+  const count = view.counts?.[parentId] ?? 10;
+  const shown = showAll ? members : members.slice(0, count);
+  const openAll = () => onView(v => ({ ...v, details: [...new Set([...v.details, ...shown.map(m => m.id)])], touched: null }));
+  const closeAll = () => {
+    const gone = new Set(members.flatMap(m => [...subtree(index, m.id)]));
+    // Also back to the first 10: this list's "Show all" and "Next" count are reset. (parentId isn't added to `gone`:
+    // for a nested list it's the person whose team this is, and their own row must stay as it is.)
+    onView(v => ({ ...v, details: without(v.details, gone), teams: without(v.teams, gone),
+      all: without(v.all, gone).filter(id => id !== parentId),
+      counts: Object.fromEntries(Object.entries(v.counts ?? {}).filter(([id]) => !gone.has(id) && id !== parentId)), touched: null }));
+  };
+  // New rows follow the list: if every row shown is open, rows revealed by "Next 10" open too, and so do those revealed
+  // by "Show all" when 10 or fewer remain (more than that come in closed; "Open all" at the bottom opens them).
+  const allOpen = shown.length > 0 && shown.every(m => view.details.includes(m.id));
+  const reveal = (upTo: number) => {
+    const added = members.slice(shown.length, upTo);
+    return allOpen && added.length <= 10 ? added.map(m => m.id) : [];
+  };
+  const next = () => {
+    const opened = reveal(count + 10);
+    onView(v => ({ ...v, counts: { ...v.counts, [parentId]: count + 10 }, details: [...new Set([...v.details, ...opened])] }));
+  };
+  const toggleAll = () => {
+    if (showAll) { onView(v => ({ ...v, all: v.all.filter(id => id !== parentId), counts: { ...v.counts, [parentId]: 10 } })); return; }
+    const opened = reveal(members.length);
+    onView(v => ({ ...v, all: [...v.all, parentId], details: [...new Set([...v.details, ...opened])] }));
+  };
+  // The bottom line appears only when the list is long: more rows to show, or 3+ rows open.
+  const opened = shown.filter(m => view.details.includes(m.id) || view.teams.includes(m.id)).length;
+  const long = shown.length < members.length || shown.length > 10 || opened >= 3;  const link = (key: string, text: string, onClick: () => void) =>
+    <button key={key} type="button" onClick={onClick} className="text-primary hover:underline">{text}</button>;
+  // Top: what you decide before reading. Bottom: what you need when you reach the end.
+  const line = (where: "top" | "bottom") => {
+    const items = [
+      where === "top" && label ? <span key="label" className="font-medium">{label}</span> : null,
+      members.length > 10 ? <span key="count">Showing {shown.length} of {members.length}</span> : null,
+      where === "bottom" && members.length > 20 && shown.length < members.length
+        ? link("next", `Next ${Math.min(10, members.length - shown.length)}`, next) : null,
+      members.length > 10 ? link("all", showAll ? "Show fewer" : `Show all ${members.length}`, toggleAll) : null,
+      // Open all: always at the top; at the bottom too when some of the rows shown are closed.
+      members.length > 1 && (where === "top" || !allOpen) ? link("open", "Open all", openAll) : null,
+      members.length > 1 ? link("close", "Close all", closeAll) : null,
+    ].filter(Boolean);
+    if (!items.length) return null;
+    return <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+      {items.flatMap((item, i) => i ? [<span key={`dot${i}`} aria-hidden="true">·</span>, item] : [item])}
+    </p>;
+  };
+  return <div className={cn("space-y-1.5", depth > 0 ? "mt-2 ml-4 border-l-2 border-border pl-3" : "mt-0")}>
+    {line("top")}
+    {shown.map(m => <TeamRow key={m.id} member={m} {...props} />)}
+    {long && line("bottom")}
+  </div>;
+}
+
+/**
+ * One team member. Clicking the row opens their details here (a shared role: its people). Someone with people under
+ * them also has "Their team (n)", folded. "Focus" moves In focus to them. The last row opened has a light border, the
+ * last one closed a soft tint, and after "Back" the row you'd moved focus from has the light border (scrolled to).
+ */
+function TeamRow({ member: m, ...props }: ListProps & { member: Position }) {
+  const { index, slotOf, onFocus, depth, view, onView } = props;
+  const details = view.details.includes(m.id), team = view.teams.includes(m.id);
+  const shared = m.holders.length > 1 && !m.person;
+  const below = shared ? 0 : index.childrenOf(m.id).length;
+  const employeeId = m.person ? m.person.employeeId : m.holders.length === 1 ? m.holders[0].employeeId : null;
+  const probation = m.holders.filter(h => h.status === "PROBATION").length;
+  const touched = view.touched?.id === m.id ? view.touched.kind : null;
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (touched === "returned") row.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [touched]);
+  const flip = (key: "details" | "teams", on: boolean) => onView(v => ({
+    ...v, [key]: on ? [...v[key], m.id] : v[key].filter(id => id !== m.id), touched: { id: m.id, kind: on ? "opened" : "closed" },
+  }));
+  return <div ref={row} className={cn("rounded-lg border border-border bg-card transition-shadow",
+    (touched === "opened" || touched === "returned") && "ring-2 ring-gemba-navy/30", touched === "closed" && "bg-muted/70")}
+    style={{ borderLeft: `5px solid var(--dept-${slotOf(m)})` }}>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+      <button type="button" onClick={() => flip("details", !details)} aria-expanded={details} className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm">
+        {details ? <ChevronDown className="size-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
+        <span className="min-w-0">
+          <span className="font-semibold text-foreground">{m.person ? m.person.name : m.title}</span>
+          <span className="text-muted-foreground"> · {m.person ? m.title : shared ? `${m.holders.length} people` : m.holders[0]?.name ?? "vacant"}</span>
+          {probation > 0 && <span className="ml-2 rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground">{shared ? `${probation} prob.` : "Prob."}</span>}
+        </span>
+      </button>
+      {below > 0 && <button type="button" onClick={() => flip("teams", !team)} aria-expanded={team} className="text-xs text-primary hover:underline">
+        Their team ({below}) {team ? "▾" : "▸"}</button>}
+      <button type="button" onClick={() => onFocus(m.id)} className="text-xs text-primary hover:underline">Focus</button>
     </div>
+    {details && <div className="px-3 pb-3">
+      {employeeId ? <EmployeeDetails employeeId={employeeId} /> : shared ? <TeamList parentId={m.id} {...props} depth={depth + 1} />
+        : <p className="text-sm text-muted-foreground">No holder recorded.</p>}
+    </div>}
+    {team && below > 0 && <div className="px-3 pb-3"><TeamList parentId={m.id} {...props} depth={depth + 1} /></div>}
+  </div>;
+}
+
+const TIER_NOTE: Record<PersonDetails["tier"], string> = {
+  BASIC: "Basic details (your access).",
+  MANAGER: "Work details (your access as their manager, or by your role).",
+  FULL: "Full work details (HR / admin access).",
+};
+const words = (value: string | null | undefined) => value ? value.toLowerCase().replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase()) : null;
+function serviceLength(from: string | null) {
+  if (!from) return null;
+  const start = new Date(from), now = new Date();
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth();
+  if (now.getDate() < start.getDate()) months -= 1;
+  if (months < 0) return null;
+  const y = Math.floor(months / 12), m = months % 12;
+  return [y && `${y} ${y === 1 ? "year" : "years"}`, m && `${m} ${m === 1 ? "month" : "months"}`].filter(Boolean).join(", ") || "less than a month";
+}
+
+/**
+ * One employee's details, fetched when they're in focus and limited by the API to what this viewer may see.
+ * Personal and sensitive details never reach LEX; their full record is in EMS ("View in EMS" once EMS is connected).
+ */
+function EmployeeDetails({ employeeId }: { employeeId: string }) {
+  const { accessToken, user } = useAuthStore();
+  const query = useQuery({
+    queryKey: ["lex-person", user?.organizationId, employeeId],
+    queryFn: ({ signal }) => getPersonDetails(accessToken!, employeeId, signal),
+    enabled: !!accessToken, staleTime: 60_000,
+  });
+  if (query.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading details…</p>;
+  if (query.error) return <p role="alert" className="text-sm text-destructive">{(query.error as Error).message}</p>;
+  const d = query.data;
+  const row = (label: string, value: ReactNode) => value === null || value === undefined || value === "" ? null
+    : <div key={label} className="contents"><dt className="text-muted-foreground">{label}</dt><dd className="text-foreground">{value}</dd></div>;
+  return <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <p className="text-sm"><span className="font-semibold text-foreground">{d.name}</span>{d.employeeCode && <span className="text-muted-foreground"> · {d.employeeCode}</span>}</p>
+      {d.emsProfileUrl && <a href={`${d.emsProfileUrl}${d.emsProfileUrl.includes("?") ? "&" : "?"}from=lex-positions`} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">View in EMS <ExternalLink className="size-3.5" /></a>}
+    </div>
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
+      {row("Job title", d.jobTitle)}
+      {row("Department", d.department?.name)}
+      {row("Branch", d.branch)}
+      {row("Section", [d.section, d.subSection].filter(Boolean).join(" · ") || null)}
+      {row("Manager", d.manager?.name)}
+      {d.work && <>
+        {row("Status", words(d.work.status))}
+        {row("Employment", words(d.work.employmentType))}
+        {row("Started", d.work.dateJoined && `${new Date(d.work.dateJoined).toLocaleDateString()} (${serviceLength(d.work.dateJoined)})`)}
+        {row("Shift", d.work.shift)}
+        {row("Work station", d.work.workStation)}
+        {row("Level / grade", [d.work.level, d.work.grade].filter(Boolean).join(" / ") || null)}
+        {row("Skill", words(d.work.skillLevel))}
+        {row("Training needed", d.work.trainingNeeded === null ? null : d.work.trainingNeeded ? "Yes" : "No")}
+      </>}
+      {d.role && <>
+        {row("Job category", d.role.jobCategory)}
+        {row("Primary work role", d.role.primaryWorkRole)}
+        {row("Machine / process", d.role.machineProcess)}
+        {row("HR record owner", d.role.hrRecordOwner?.name)}
+        {row("Can lead / be a member / take tasks", [d.role.canBeLeader, d.role.canBeMember, d.role.canBeAssignedTasks].map(v => v ? "Yes" : "No").join(" / "))}
+      </>}
+    </dl>
+    <p className="text-xs text-muted-foreground">{TIER_NOTE[d.tier]}{d.tier !== "BASIC" && " History (positions held, moves, manager changes) comes from EMS once it's connected."}</p>
+  </div>;
+}
+
+/** The "Not connected" view's list: people left off the chart, as readable cards wrapping into rows, by reason. */
+function LeftOffPeople({ checks }: { checks: PositionCheck[] }) {
+  const [focus, setFocus] = useState<string | null>(null);
+  const REASON: Record<PositionCheck["kind"], string> = {
+    NO_MANAGER: "No manager recorded", MANAGER_MISSING: "Manager not in the records", MANAGER_INACTIVE: "Manager has left",
+    REPORTING_LOOP: "In a reporting loop", NO_JOB_TITLE: "No job title",
+  };
+  const people = checks.flatMap(c => (c.employeeIds ?? []).map((id, i) => ({ id, name: c.people[i], reason: REASON[c.kind], severity: c.severity })));
+  return <section aria-label="People left off the chart" className="space-y-3 rounded-lg border-2 border-gemba-red/40 bg-gemba-red/5 p-4">
+    <p className="text-sm font-semibold text-foreground">People left off the chart ({people.length}) — to correct in EMS</p>
+    {!people.length && <p className="text-sm text-muted-foreground">Nobody: everyone is connected.</p>}
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+      {people.map(person => <button key={person.id} type="button" onClick={() => setFocus(f => f === person.id ? null : person.id)} aria-pressed={focus === person.id}
+        className={cn("flex min-h-16 flex-col items-start rounded-lg border bg-card px-3 py-2 text-left text-sm hover:bg-muted",
+          person.severity === "ERROR" ? "border-gemba-red" : "border-border", focus === person.id && "ring-3 ring-gemba-navy/40")}>
+        <span className="font-semibold text-foreground">{person.name}</span>
+        <span className="text-xs text-muted-foreground">{person.reason}</span>
+      </button>)}
+    </div>
+    {focus && <EmployeeDetails employeeId={focus} />}
   </section>;
 }

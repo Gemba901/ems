@@ -85,3 +85,15 @@ test('views: connected only keeps the main structure; not connected keeps the se
   assert.deepEqual([...scopeOf(index, c, { kind: 'CONNECTED' })!.shown].sort(), ['a', 'b', 'ceo']);
   assert.deepEqual([...scopeOf(index, c, { kind: 'NOT_CONNECTED' })!.shown].sort(), ['f1', 'float']);
 });
+
+test('several separate structures wrap into rows instead of one long row', () => {
+  const tops = Array.from({ length: 10 }, (_, i) => pos(`top${i}`, null));
+  const c = chart(tops); const index = indexPositions(c);
+  const one = layoutPositions(index, index.roots, new Set(), 7);
+  assert.equal(new Set(one.placed.map(p => p.y)).size, 1, 'without a width limit: one row');
+  const wrapped = layoutPositions(index, index.roots, new Set(), 7, undefined, 1000);
+  assert.ok(new Set(wrapped.placed.map(p => p.y)).size >= 3, 'within 1000 px: several rows');
+  assert.ok(wrapped.width <= 1000);
+  for (const a of wrapped.placed) for (const b of wrapped.placed) if (a !== b)
+    assert.ok(Math.abs(a.x - b.x) >= BOX.width || Math.abs(a.y - b.y) >= BOX.height);
+});

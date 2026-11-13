@@ -1,0 +1,937 @@
+/* Area 02.03 only. Teal actions and navy text follow the supplied LEX prototype (Areas 01–07).
+   Map to semantic UI-kit tokens without changing the shared app theme. */
+.workspace {
+  --primary: #12796f;
+  --calendar-outline: #9fc8bf;
+  --primary-foreground: #ffffff;
+  --foreground: #1c3440;
+  --card-foreground: var(--foreground);
+  --muted-foreground: #526c76;
+  --accent: #edf6f3;
+  --accent-foreground: #28645b;
+  --secondary: #e5f0ed;
+  --secondary-foreground: #28645b;
+  --border: #d8e4e7;
+  --input: #c6d8d2;
+  --ring: #12796f;
+  --calendar-draft-bg: #eef2f5;
+  --calendar-draft-text: #475569;
+  --calendar-review-bg: #fff3d6;
+  --calendar-review-text: #785310;
+  --calendar-approved-bg: #e4f3ed;
+  --calendar-approved-text: #25634f;
+}
+
+.workspace input[type="checkbox"] {
+  accent-color: var(--primary);
+}
+
+.workspace select:focus-visible,
+.workspace textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.workspace button[data-slot="button"]:not(:disabled):hover {
+  filter: brightness(0.97);
+}
+
+.sectionHeader {
+  border: 0;
+  margin-inline: 0;
+  padding-inline: 1rem;
+}
+
+.sectionHeader [data-slot="card-title"] {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.stepTab {
+  min-height: 3rem;
+  height: auto;
+  justify-content: flex-start;
+  padding: 0.65rem 1rem;
+  gap: 0.65rem;
+  white-space: normal;
+  text-align: left;
+  color: var(--muted-foreground);
+}
+
+.stepTab.activeStep {
+  border-color: var(--primary);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.stepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.activeStep .stepNumber {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.dayChoice[data-selected="true"] {
+  border-color: var(--primary);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.draft {
+  background: var(--calendar-draft-bg);
+  color: var(--calendar-draft-text);
+}
+
+.review {
+  background: var(--calendar-review-bg);
+  color: var(--calendar-review-text);
+}
+
+.approved {
+  background: var(--calendar-approved-bg);
+  color: var(--calendar-approved-text);
+}
+
+:global(.dark) .workspace {
+  --primary: #8dd1be;
+  --calendar-outline: #588e7d;
+  --primary-foreground: #14372e;
+  --foreground: #e4f0ed;
+  --muted-foreground: #adbfba;
+  --accent: #213b34;
+  --accent-foreground: #b6e7d9;
+  --secondary: #29463c;
+  --secondary-foreground: #b6e7d9;
+  --border: #3b554c;
+  --input: #526f64;
+  --ring: #8dd1be;
+  --calendar-draft-bg: #334155;
+  --calendar-draft-text: #e2e8f0;
+  --calendar-review-bg: #513c18;
+  --calendar-review-text: #fde5aa;
+  --calendar-approved-bg: #214c3b;
+  --calendar-approved-text: #b8edd5;
+}
+.dateFeedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.calendarNotes {
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.calendarNotes summary {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.footer {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  pointer-events: none;
+}
+.saveStatus,
+.footerActions {
+  pointer-events: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  box-shadow: 0 2px 8px #00000012;
+  padding: 0.5rem 0.75rem;
+}
+.saveStatus {
+  font-size: 0.875rem;
+}
+.footerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Wide month grid keeps labels visible; symbols convey state without relying on colour. */
+.comparisonGrid {
+  overflow: auto;
+  max-height: 34rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+}
+.comparisonGrid table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.75rem;
+}
+.comparisonGrid th,
+.comparisonGrid td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.2rem;
+  text-align: center;
+}
+.comparisonGrid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--accent);
+  min-width: 2.4rem;
+  height: 2.8rem;
+}
+.comparisonGrid th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 12rem;
+  max-width: 17rem;
+  text-align: left;
+  padding: 0.65rem;
+  background: var(--card, #fff);
+}
+.comparisonGrid thead th:first-child {
+  z-index: 3;
+  background: var(--accent);
+}
+.dayCell {
+  width: 100%;
+  min-width: 2rem;
+  min-height: 2.6rem;
+  border: 2px solid transparent;
+  border-radius: 0.35rem;
+  font-size: 1rem;
+}
+.dayWorking {
+  background: var(--calendar-approved-bg);
+  color: var(--calendar-approved-text);
+}
+.dayOff {
+  background: var(--calendar-draft-bg);
+  color: var(--calendar-draft-text);
+}
+.daySelected,
+.dayCell:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+/* Ordinary labels are always above their own controls. Checkbox rows keep their own layout. */
+.formField {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.formField > span:first-child,
+.fieldLabel {
+  display: block;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.formField > input,
+.formField > select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.25rem;
+  margin: 0;
+}
+.frequencyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+.frequencyPanel {
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: 0.75rem;
+  padding: 1rem;
+  min-width: 0;
+  margin: 0;
+  scroll-margin-top: 6rem;
+}
+.frequencyTitle {
+  color: var(--primary);
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 600;
+  margin: 0 0 0.9rem;
+}
+.frequencyPanel:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.customFields {
+  display: grid;
+  grid-template-columns: minmax(5rem, 7rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 0.85rem 1rem;
+}
+.customFields > :nth-child(3) {
+  grid-column: 1 / -1;
+}
+.monthField {
+  border: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+.monthField > .fieldLabel {
+  margin: 0 0 0.5rem;
+}
+.monthFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.5rem;
+  gap: 0.75rem;
+  max-width: 25rem;
+}
+.intervalCount {
+  max-width: 7rem;
+}
+.intervalSummary {
+  margin-top: 0.85rem;
+  color: var(--foreground);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+.intervalSummary p {
+  margin: 0;
+}
+.intervalSummary p + p {
+  margin-top: 0.25rem;
+}
+.comparisonToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem 1.5rem;
+}
+.comparisonPeriod {
+  display: grid;
+  grid-template-columns: minmax(9rem, 12rem) 7rem;
+  gap: 0.75rem;
+}
+.comparisonModes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.comparisonSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem 1.5rem;
+  border: 1px solid var(--border);
+  background: var(--accent);
+  padding: 1rem;
+  border-radius: 0.75rem;
+}
+.comparisonDay {
+  width: min(100%, 18rem);
+}
+.comparisonCounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.comparisonCounts > div {
+  min-width: 8rem;
+}
+.comparisonCounts dt {
+  color: var(--muted-foreground);
+}
+.comparisonCounts dd {
+  margin: 0.25rem 0 0;
+  font-weight: 600;
+}
+.comparisonEmpty {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+.comparisonEmpty > p {
+  margin: 0 0 0.5rem;
+}
+.comparisonEmpty > button {
+  margin-top: 0.5rem;
+}
+@media (max-width: 48rem) {
+  .frequencyGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 25rem) {
+  .customFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .customFields > :nth-child(3) {
+    grid-column: auto;
+  }
+  .monthFields,
+  .comparisonPeriod {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A continuous light-teal outline, with headings inside, throughout calendar settings. */
+.workspace .settingsCard,
+.workspace .cycleCard,
+.workspace .frequencyPanel {
+  border: 1px solid var(--calendar-outline);
+  background: var(--card, #fff);
+}
+.fieldFrame {
+  min-width: 0;
+  scroll-margin-block: 6rem;
+  outline: none;
+}
+.fieldFrame[data-highlighted="true"] {
+  outline: 2px solid var(--primary);
+  outline-offset: 5px;
+  border-radius: 0.35rem;
+}
+.fieldFrame[data-invalid="true"] {
+  outline: 2px solid var(--destructive, #b91c1c);
+  outline-offset: 5px;
+  border-radius: 0.35rem;
+}
+.fieldError {
+  color: var(--destructive, #b91c1c);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin: 0.5rem 0 0;
+}
+.twoFields,
+.assignmentFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1.25rem;
+}
+.assignmentFields > :only-child {
+  max-width: 32rem;
+}
+.frequencyPanel select {
+  max-width: none;
+}
+.previewControls {
+  display: grid;
+  grid-template-columns: minmax(0, 22rem);
+  align-items: start;
+  gap: 0.75rem;
+}
+.monthFilter {
+  width: 13rem;
+  max-width: 100%;
+}
+.holidaySearch {
+  display: grid;
+  grid-template-columns: minmax(0, 28rem) max-content;
+  align-items: start;
+  gap: 1rem;
+}
+.findHolidays {
+  margin-top: 2rem;
+}
+.cycleCard {
+  padding: 0;
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  cursor: pointer;
+}
+.cycleCard:hover,
+.cycleCard:focus-within {
+  box-shadow: 0 0 0 1px var(--calendar-outline);
+}
+.cycleCardBody {
+  padding: 1.1rem 1.25rem 0.8rem;
+  flex: 1;
+}
+.cycleCardHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+}
+.cycleCardHeading h3 {
+  margin: 0;
+  min-width: 0;
+}
+.cycleTitle {
+  text-align: left;
+  color: var(--foreground);
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.cycleTitle:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cycleTitle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  border-radius: 0.2rem;
+}
+.approvedAvailable {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+.cycleFacts {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+}
+.cycleFacts dt {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.cycleFacts dd {
+  margin: 0.15rem 0 0;
+  line-height: 1.5;
+}
+.updatedAt {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  margin: 0.7rem 0 0;
+}
+.cycleActions {
+  border-top: 1px solid var(--border);
+  padding: 0.75rem 1.25rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.cyclePrimaryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.cycleOtherActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.workspace .removeDraft {
+  color: var(--destructive, #b91c1c);
+}
+.actionFeedback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid var(--calendar-outline);
+  background: var(--card, #fff);
+  border-radius: 0.75rem;
+  scroll-margin-block: 6rem;
+}
+.actionFeedback p {
+  margin: 0;
+  flex: 1 1 20rem;
+}
+.footerClearance {
+  flex: none;
+}
+@media (max-width: 48rem) {
+  .twoFields,
+  .assignmentFields,
+  .holidaySearch {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .findHolidays {
+    margin-top: 0;
+    justify-self: start;
+  }
+}
+
+.formField > input.dayCount {
+  width: 8rem;
+  max-width: 100%;
+}
+
+.timeZoneTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--input);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.timeZoneTrigger > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.timeZoneTrigger > svg {
+  flex-shrink: 0;
+}
+.timeZoneTrigger:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.timeZoneTrigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.timeZoneTrigger[aria-invalid="true"] {
+  border-color: var(--destructive, #b91c1c);
+}
+.timeZonePositioner {
+  z-index: 60;
+}
+.timeZonePopup {
+  width: var(--anchor-width);
+  max-width: var(--available-width);
+  max-height: var(--available-height);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #9fc8bf;
+  border-radius: 0.65rem;
+  background: var(--card, #fff);
+  color: var(--foreground, #1c3440);
+  box-shadow: 0 6px 20px #00000018;
+  font-size: 0.875rem;
+}
+.timeZoneSearch {
+  flex-shrink: 0;
+  margin: 0.5rem;
+  min-height: 2.25rem;
+  min-width: 0;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #9fc8bf;
+  border-radius: 0.4rem;
+  background: var(--background);
+  color: inherit;
+  font: inherit;
+}
+.timeZoneSearch:focus {
+  outline: 2px solid #12796f;
+  outline-offset: 1px;
+}
+.timeZoneList {
+  min-height: 0;
+  max-height: 18rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem;
+}
+.timeZoneOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  outline: none;
+}
+.timeZoneOption small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.timeZoneOption[data-highlighted] {
+  background: #edf6f3;
+  color: #28645b;
+}
+.timeZoneOption[data-selected] {
+  font-weight: 600;
+}
+.timeZoneEmpty {
+  padding: 0.75rem;
+}
+:global(.dark) .timeZoneOption[data-highlighted] {
+  background: #213b34;
+  color: #b6e7d9;
+}
+
+.timeZoneHint {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border, #d8e4e7);
+  color: var(--muted-foreground, #526c76);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+@media (max-width: 40rem), (max-height: 40rem) {
+  .footer {
+    position: sticky;
+    bottom: 0.4rem;
+    gap: 0.3rem 0.6rem;
+  }
+  .saveStatus,
+  .footerActions {
+    padding: 0.35rem 0.5rem;
+  }
+  .footerActions {
+    gap: 0.3rem;
+  }
+}
+
+/* Selection and decisions stay readable at the same sizes as the calendar fields. */
+.assignmentSelect {
+  min-height: 2.25rem;
+  width: 100%;
+  border: 1px solid var(--input);
+  border-radius: 0.5rem;
+  background: var(--background);
+  padding: 0.4rem 0.6rem;
+  color: inherit;
+}
+.assignmentSummary,
+.selectionSuggestions {
+  border: 1px solid var(--calendar-outline);
+  border-radius: 0.65rem;
+  padding: 0.85rem;
+}
+.selectionSuggestions > summary,
+.assignmentSummary summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.selectionList {
+  max-height: 20rem;
+  overflow: auto;
+  border: 1px solid var(--calendar-outline);
+  border-radius: 0.6rem;
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+  list-style: none;
+}
+.selectionList > li {
+  min-width: 0;
+}
+.selectionChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem;
+  border-radius: 0.35rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.selectionChoice:hover {
+  background: var(--accent);
+}
+.selectionChoice > input {
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+.selectionChoice > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.selectedSummary {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.selectedSummary ul {
+  list-style: none;
+  padding: 0;
+}
+.selectedSummary details {
+  margin-top: 0.5rem;
+}
+.selectedSummary details > ul {
+  max-height: 14rem;
+  overflow: auto;
+}
+.departmentChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+.decisionDialog {
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  margin: auto;
+  padding: 1.25rem;
+  border: 1px solid var(--calendar-outline);
+  border-radius: 0.8rem;
+  color: var(--foreground);
+  background: var(--card, #fff);
+  box-shadow: 0 12px 40px #0003;
+}
+.decisionDialog::backdrop {
+  background: #142e3766;
+}
+.decisionDialog h2 {
+  font-size: 1.1rem;
+  font-weight: 650;
+  margin-bottom: 0.75rem;
+}
+.decisionDialog p,
+.decisionDialog label {
+  margin-block: 0.75rem;
+}
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.savedConfirmation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+.savedConfirmation svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+.stepNavigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.stepShortLabel,
+.mobileStepTitle {
+  display: none;
+}
+.formField {
+  cursor: default;
+}
+.formField > span:first-child {
+  align-self: flex-start;
+}
+@media (max-width: 48rem) {
+  .departmentChoices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stepNavigation {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.3rem;
+  }
+  .stepTab {
+    min-width: 0;
+    min-height: 2.75rem;
+    justify-content: center;
+    padding: 0.45rem 0.3rem;
+    gap: 0.3rem;
+    text-align: center;
+  }
+  .stepNumber {
+    width: 1.35rem;
+    height: 1.35rem;
+    font-size: 0.65rem;
+  }
+  .stepLongLabel {
+    display: none;
+  }
+  .stepShortLabel {
+    display: inline;
+    font-size: 0.8rem;
+  }
+  .mobileStepTitle {
+    display: block;
+    font-weight: 600;
+    margin-top: 0.5rem;
+  }
+  .footer {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3rem;
+    background: var(--card, #fff);
+    border: 1px solid var(--calendar-outline);
+    border-radius: 0.65rem 0.65rem 0 0;
+    padding: 0.5rem 0.5rem max(0.5rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -3px 10px #0001;
+  }
+  .footer .saveStatus,
+  .footer .footerActions {
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+  }
+  .footer .saveStatus {
+    font-size: 0.75rem;
+    min-height: 1.1rem;
+  }
+  .footer .footerActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .footer .footerActions > button {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-inline: 0.5rem;
+    font-size: 0.8rem;
+    min-height: 2.5rem;
+  }
+  .footer .footerActions > .footerBack {
+    display: none;
+  }
+  .footerActions svg {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+  .footerClearance {
+    display: none;
+  }
+}

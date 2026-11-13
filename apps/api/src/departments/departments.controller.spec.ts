@@ -48,7 +48,7 @@ describe('Department controller guard wiring', () => {
       headers: { 'x-gemba-proxy-secret': secret, 'x-gemba-tenant-hostname': 'acme.gembapms.co.in' },
       user: { tokenType: 'ACCESS', userId: 'user-one', organizationId: 'org-one', roleId: 2, roleLevel: Role.ADMIN, email: null, isAdminOrg: false },
       body: { organizationId: 'org-two' },
-    } as TenantRequest;
+    } as unknown as TenantRequest;
   }
   function context(req: TenantRequest, action: typeof actions[number]) {
     return { getClass: () => DepartmentsController, getHandler: () => controller[action], switchToHttp: () => ({ getRequest: () => req }) } as unknown as ExecutionContext;

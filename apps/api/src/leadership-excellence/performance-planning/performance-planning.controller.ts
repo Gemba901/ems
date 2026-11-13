@@ -22,17 +22,17 @@ import {
 } from './planning-evidence.service';
 import { PlanningBackupService } from './planning-backup.service';
 import { ModuleType } from 'db';
-import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
-import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
-import { TenantGuard } from 'src/tenancy/tenant.guard';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { ModuleGuard } from 'src/auth/guards/module.guard';
-import { RequiresModule } from 'src/auth/decorators/module.decorator';
+import { TenantRequired } from '../../tenancy/tenant-route.decorator';
+import { TrustedTenantContextGuard } from '../../tenancy/trusted-tenant-context.guard';
+import { TenantGuard } from '../../tenancy/tenant.guard';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { ModuleGuard } from '../../auth/guards/module.guard';
+import { RequiresModule } from '../../auth/decorators/module.decorator';
 import { PerformancePlanningService } from './performance-planning.service';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import type { AccessTokenPayload } from 'src/auth/access-token-payload';
-import { Roles } from 'src/auth/decorators/roles.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import type { AccessTokenPayload } from '../../auth/access-token-payload';
+import { Roles } from '../../auth/decorators/roles.decorator';
 import { LEX_ALL } from '../common/lex-roles';
 import { PlanningCommandDto } from './dto/performance-planning.dto';
 import {

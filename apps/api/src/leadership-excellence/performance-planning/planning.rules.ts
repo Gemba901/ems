@@ -1,11 +1,14 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
   calendarPeriods,
+  MAX_TARGET_PERIODS,
   resolveAssignmentCalendar,
+  TARGET_PERIOD_LIMIT_MESSAGE,
 } from './planning-calendar';
 import type {
   ActionLink,
   ApprovedParentGoal,
+  ApprovedVersion,
   Assignment,
   DocumentPermissions,
   Finding,
@@ -14,6 +17,7 @@ import type {
   ItemKind,
   KpiDefinition,
   Objective,
+  ParentGoal,
   PlanData,
   PlanningActor,
   PlanningDocument,
@@ -31,6 +35,104 @@ export const PILLAR_CODES = [
   'SGEX',
   'FPEX',
 ] as const;
+export const OBJECTIVE_PILLAR_BUDGETS = Object.freeze({
+  LEX: 10,
+  PEX: 20,
+  OPX: 30,
+  CMX: 20,
+  SGEX: 10,
+  FPEX: 10,
+});
+export const validObjectivePriority = (value: unknown): value is number =>
+  typeof value === 'number' &&
+  Number.isInteger(value) &&
+  value >= 1 &&
+  value <= 10;
+export const validObjectiveWeightage = (
+  value: unknown,
+  pillar: string,
+): value is number =>
+  typeof value === 'number' &&
+  Number.isFinite(value) &&
+  value >= 1 &&
+  value <=
+    OBJECTIVE_PILLAR_BUDGETS[pillar as keyof typeof OBJECTIVE_PILLAR_BUDGETS] &&
+  Math.abs(value * 100 - Math.round(value * 100)) < 0.000001;
+export function objectiveAllocations(objectives: Objective[]) {
+  return PILLAR_CODES.map((pillar) => {
+    const rows = objectives.filter((o) => o.pillar === pillar);
+    const target = OBJECTIVE_PILLAR_BUDGETS[pillar];
+    const total =
+      rows.reduce(
+        (sum, o) =>
+          sum +
+          (typeof o.weightage === 'number' && Number.isFinite(o.weightage)
+            ? Math.round(o.weightage * 100)
+            : 0),
+        0,
+      ) / 100;
+    const missing = rows.filter((o) => o.weightage == null).length;
+    const invalid = rows.filter(
+      (o) =>
+        o.weightage != null && !validObjectiveWeightage(o.weightage, pillar),
+    ).length;
+    return {
+      pillar,
+      target,
+      total,
+      count: rows.length,
+      missing,
+      invalid,
+      balanced:
+        rows.length > 0 &&
+        !missing &&
+        !invalid &&
+        Math.round(total * 100) === target * 100,
+    };
+  });
+}
+export function findingReviewIssues(
+  finding: Finding,
+  references: PlanningReferences,
+): string[] {
+  const issues: string[] = [];
+  if (!finding.title?.trim()) issues.push('Describe what was found.');
+  if (!finding.explanation?.trim())
+    issues.push('Add the supporting facts and context.');
+  if (!finding.impact?.trim()) issues.push('Explain the business impact.');
+  issues.push(...findingAlignmentIssues(finding));
+  if (!finding.evidence?.trim() && !finding.sourceUrl?.trim())
+    issues.push('Identify the source or evidence and the period covered.');
+  if (!validFindingWeightage(finding.weightage))
+    issues.push('Enter finding weightage from 1 to 10.');
+  if (finding.basis === 'NEEDS_CHECKING' || finding.response === 'VERIFY')
+    issues.push(
+      'Resolve the missing evidence before marking this finding reviewed.',
+    );
+  if (!finding.response) issues.push('Choose a management response.');
+  if (!finding.decisionNote?.trim())
+    issues.push('Explain the review decision.');
+  if (['MONITOR', 'MAINTAIN', 'USE', 'DEFER'].includes(finding.response)) {
+    if (!references.people.some((p) => p.id === finding.followupOwnerId))
+      issues.push('Select the follow-up owner.');
+    if (!validDate(finding.reviewDate))
+      issues.push('Choose the next review date.');
+  }
+  return issues;
+}
+function findingAlignmentIssues(finding: Finding): string[] {
+  const alignments = planningAlignmentValues(finding);
+  if (
+    !alignments.length ||
+    !alignments.every((value) =>
+      ['Q', 'C', 'D', 'S', 'M', 'T', 'OTHER'].includes(value),
+    )
+  )
+    return ['Select one or more QCDSMT alignments or Business focus.'];
+  if (alignments.includes('OTHER') && !finding.otherBusinessFocus?.trim())
+    return ['Describe the Business focus.'];
+  return [];
+}
 export const FREQUENCIES: Frequency[] = [
   'DAILY',
   'WEEKLY',
@@ -65,6 +167,52 @@ export const validDate = (value: string) =>
   /^\d{4}-\d{2}-\d{2}$/.test(value) &&
   Number.isFinite(Date.parse(value + 'T00:00:00Z')) &&
   new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
+/** Stable scope key: preserve annual keys; custom periods carry both boundaries. */
+export function resolvePlanningPeriod(input: Record<string, unknown>): {
+  cycle: string;
+  startDate: string;
+  endDate: string;
+} {
+  const suppliedCycle = cleanText(input.cycle, 30);
+  let startDate = cleanText(input.startDate, 10);
+  let endDate = cleanText(input.endDate, 10);
+  const suppliedDates = !!startDate || !!endDate;
+  if (suppliedDates && (!startDate || !endDate))
+    throw new BadRequestException('Choose both the From and To dates.');
+  if (!suppliedDates) {
+    if (/^\d{4}$/.test(suppliedCycle)) {
+      startDate = `${suppliedCycle}-01-01`;
+      endDate = `${suppliedCycle}-12-31`;
+    } else {
+      const match = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(
+        suppliedCycle,
+      );
+      if (match) [, startDate, endDate] = match;
+    }
+  }
+  if (!validDate(startDate) || !validDate(endDate))
+    throw new BadRequestException(
+      'Choose valid From and To calendar dates for the planning period.',
+    );
+  if (startDate > endDate)
+    throw new BadRequestException(
+      'The To date must be on or after the From date.',
+    );
+  if (startDate < '2000-01-01' || endDate > '2200-12-31')
+    throw new BadRequestException(
+      'Planning dates must be between 2000 and 2200.',
+    );
+  const year = startDate.slice(0, 4);
+  const cycle =
+    startDate === `${year}-01-01` && endDate === `${year}-12-31`
+      ? year
+      : `${startDate}..${endDate}`;
+  if (suppliedDates && suppliedCycle && suppliedCycle !== cycle)
+    throw new BadRequestException(
+      'The selected planning period does not match the From and To dates.',
+    );
+  return { cycle, startDate, endDate };
+}
 const day = (value: string, amount: number) => {
   const date = new Date(value + 'T00:00:00Z');
   date.setUTCDate(date.getUTCDate() + amount);
@@ -84,11 +232,11 @@ export function periods(
     !FREQUENCIES.includes(frequency)
   )
     return [];
-  if ((Date.parse(end) - Date.parse(start)) / 86400000 > 731)
-    throw new BadRequestException('Plan dates may span at most two years.');
   const rows: TargetPeriod[] = [];
   let current = start;
   while (current <= end) {
+    if (rows.length >= MAX_TARGET_PERIODS)
+      throw new BadRequestException(TARGET_PERIOD_LIMIT_MESSAGE);
     const date = new Date(current + 'T00:00:00Z'),
       year = date.getUTCFullYear(),
       month = date.getUTCMonth();
@@ -119,10 +267,50 @@ export function periods(
   }
   return rows;
 }
-export const published = (document: PlanningDocument, today: string) =>
-  document.versions
+export const published = (document: PlanningDocument, today: string) => {
+  const eligible = document.versions
     .filter((v) => v.effectiveDate <= today)
-    .sort((a, b) => b.version - a.version)[0];
+    .sort((a, b) => a.version - b.version);
+  const last = eligible.at(-1);
+  if (!last || !document.versions.some((v) => v.approvedItem)) return last;
+  // Per-item snapshots carry only their own approval authority. A later unrelated
+  // approval cannot prematurely publish a future-dated revision copied in its data.
+  const result = structuredClone(last),
+    objectives = new Map<string, Objective>(),
+    goals = new Map<string, Goal>(),
+    itemVersions: Record<string, number> = {};
+  for (const version of eligible) {
+    if (!version.approvedItem) {
+      for (const item of version.data.objectives) {
+        objectives.set(item.id, item);
+        itemVersions[item.id] = version.version;
+      }
+      for (const item of version.data.goals) {
+        goals.set(item.id, item);
+        itemVersions[item.id] = version.version;
+      }
+    } else {
+      const { kind, itemId } = version.approvedItem;
+      if (kind === 'objective') {
+        const row = version.data.objectives.find((i) => i.id === itemId);
+        if (row) {
+          objectives.set(row.id, row);
+          itemVersions[row.id] = version.version;
+        }
+      } else {
+        const row = version.data.goals.find((i) => i.id === itemId);
+        if (row) {
+          goals.set(row.id, row);
+          itemVersions[row.id] = version.version;
+        }
+      }
+    }
+  }
+  result.data.objectives = structuredClone([...objectives.values()]);
+  result.data.goals = structuredClone([...goals.values()]);
+  result.itemVersions = itemVersions;
+  return result;
+};
 export function permissions(
   document: PlanningDocument,
   actor: PlanningActor,
@@ -188,38 +376,215 @@ export function assertEdit(document: PlanningDocument, actor: PlanningActor) {
       'This plan is locked or you do not have permission to edit it.',
     );
 }
+/** A read projection only: an objective is never copied into the goal register. */
+export function objectiveAsGoal(objective: Objective): Goal {
+  return {
+    ...objective,
+    objectiveId: objective.id,
+    parent: null,
+    ongoingReason: '',
+    definitionId: '',
+    measure: objective.measure || '',
+    baseline: objective.baseline ?? null,
+    baselineReason: objective.baselineReason || '',
+    target: objective.target ?? null,
+    unit: objective.unit || '',
+    approach: objective.approach || '',
+    departmentIds: [...(objective.departmentIds || [])],
+  };
+}
+export function approvedPlanningItems(
+  document: PlanningDocument,
+  version: ApprovedVersion,
+): {
+  itemKind: 'OBJECTIVE' | 'GOAL';
+  goal: Goal;
+}[] {
+  if (
+    document.kind === 'COMPANY' &&
+    version.companyPlanningModel === 'MEASURABLE_OBJECTIVES'
+  )
+    return version.data.objectives
+      .filter(
+        (objective) =>
+          !version.approvedItem ||
+          (version.approvedItem.kind === 'objective' &&
+            version.approvedItem.itemId === objective.id),
+      )
+      .map((objective) => ({
+        itemKind: 'OBJECTIVE',
+        goal: objectiveAsGoal(objective),
+      }));
+  return version.data.goals
+    .filter(
+      (goal) =>
+        !version.approvedItem ||
+        (version.approvedItem.kind === 'goal' &&
+          version.approvedItem.itemId === goal.id),
+    )
+    .map((goal) => ({ itemKind: 'GOAL', goal }));
+}
+/** Resolves exactly one immutable approved row, including legacy goal versions. */
+export function resolveApprovedParent(
+  state: PlanningState,
+  reference: ParentGoal,
+) {
+  const document = state.documents.find(
+    (d) =>
+      d.id === reference.documentId &&
+      ['COMPANY', 'DEPARTMENT'].includes(d.kind),
+  );
+  const version = document?.versions.find(
+    (v) => v.version === reference.version,
+  );
+  if (!document || !version) return null;
+  const item = approvedPlanningItems(document, version).find(
+    (row) =>
+      row.itemKind === (reference.itemKind || 'GOAL') &&
+      row.goal.id === reference.goalId,
+  );
+  return item ? { document, version, ...item } : null;
+}
+export function parentReferenceIssues(
+  child: PlanningDocument,
+  reference: ParentGoal,
+  state: PlanningState,
+  actor?: PlanningActor,
+  previous?: ParentGoal | null,
+): string[] {
+  const resolved = resolveApprovedParent(state, reference);
+  if (!resolved || resolved.document.cycle !== child.cycle)
+    return [
+      'Choose an authorised approved parent objective or goal for this plan and planning period.',
+    ];
+  const { document: parent, goal } = resolved;
+  const matchingScope =
+    child.kind === 'DEPARTMENT'
+      ? parent.kind === 'COMPANY' &&
+        ((reference.itemKind === 'OBJECTIVE' &&
+          !!parent.versions
+            .find((v) => v.version === reference.version)
+            ?.data.objectives.find((o) => o.id === reference.goalId)
+            ?.result?.trim()) ||
+          goal.departmentIds.includes(child.scopeId))
+      : child.kind === 'INDIVIDUAL' && parent.kind === 'COMPANY'
+        ? true
+        : ['TEAM', 'POSITION', 'INDIVIDUAL'].includes(child.kind) &&
+          parent.kind === 'DEPARTMENT' &&
+          (child.kind === 'INDIVIDUAL' ||
+            parent.scopeId === child.departmentId);
+  const retaining =
+    child.kind === 'INDIVIDUAL' &&
+    previous?.documentId === reference.documentId &&
+    previous.goalId === reference.goalId &&
+    previous.version === reference.version &&
+    (previous.itemKind || 'GOAL') === (reference.itemKind || 'GOAL');
+  if (
+    !matchingScope ||
+    (actor && !permissions(parent, actor).canRead && !retaining)
+  )
+    return [
+      'Choose an authorised approved parent objective or goal for this plan and planning period.',
+    ];
+  return [];
+}
 /** Planning may link an approved snapshot before it becomes operational. */
 export function approvedParentGoals(
   state: PlanningState,
   actor: PlanningActor,
+  today = new Date().toISOString().slice(0, 10),
 ): ApprovedParentGoal[] {
+  // An agreed individual contribution grants a summary of its exact approved
+  // parent, never access to the department's other goals or private draft.
+  const retained = state.documents.flatMap((document) => {
+    if (document.kind !== 'INDIVIDUAL') return [];
+    const visible = sanitizeForReader(document, actor, today);
+    return visible
+      ? [visible.data, ...visible.versions.map((v) => v.data)].flatMap((data) =>
+          data.goals.flatMap((goal) =>
+            goal.parent
+              ? [
+                  {
+                    ...goal.parent,
+                    cycle: visible.cycle,
+                    contribution: { documentId: visible.id, goalId: goal.id },
+                    current: document.data.goals.some(
+                      (saved) =>
+                        saved.id === goal.id &&
+                        saved.parent?.documentId === goal.parent!.documentId &&
+                        saved.parent?.goalId === goal.parent!.goalId &&
+                        saved.parent?.version === goal.parent!.version &&
+                        (saved.parent?.itemKind || 'GOAL') ===
+                          (goal.parent!.itemKind || 'GOAL'),
+                    ),
+                  },
+                ]
+              : [],
+          ),
+        )
+      : [];
+  });
   return state.documents.flatMap((document) => {
     const kind = document.kind;
-    if (
-      (kind !== 'COMPANY' && kind !== 'DEPARTMENT') ||
-      !permissions(document, actor).canRead
-    )
-      return [];
+    if (kind !== 'COMPANY' && kind !== 'DEPARTMENT') return [];
+    const canRead = permissions(document, actor).canRead;
     return [...document.versions]
       .sort((a, b) => b.version - a.version)
       .flatMap((version) =>
-        version.data.goals.map((goal) => ({
-          documentId: document.id,
-          kind,
-          cycle: document.cycle,
-          scopeId: document.scopeId,
-          departmentId: document.departmentId,
-          version: version.version,
-          effectiveDate: version.effectiveDate,
-          goal: {
-            id: goal.id,
-            code: goal.code,
-            title: goal.title,
-            departmentIds: [...goal.departmentIds],
-            startDate: goal.startDate,
-            endDate: goal.endDate,
+        approvedPlanningItems(document, version).flatMap(
+          ({ goal, itemKind }) => {
+            // Cumulative snapshots keep earlier rows for reading, but only the
+            // item actually approved in this version creates a new parent choice.
+            if (version.approvedItem && version.approvedItem.itemId !== goal.id)
+              return [];
+            const links =
+              kind === 'DEPARTMENT'
+                ? retained.filter(
+                    (parent) =>
+                      parent.documentId === document.id &&
+                      parent.cycle === document.cycle &&
+                      parent.version === version.version &&
+                      parent.goalId === goal.id &&
+                      (parent.itemKind || 'GOAL') === itemKind,
+                  )
+                : [];
+            if (!canRead && !links.length) return [];
+            return [
+              {
+                documentId: document.id,
+                kind,
+                cycle: document.cycle,
+                scopeId: document.scopeId,
+                departmentId: document.departmentId,
+                version: version.version,
+                effectiveDate: version.effectiveDate,
+                ...(itemKind === 'OBJECTIVE' ? { itemKind } : {}),
+                ...(!canRead
+                  ? {
+                      retainedFor: [
+                        ...new Map(
+                          links
+                            .filter((parent) => parent.current)
+                            .map(({ contribution }) => [
+                              `${contribution.documentId}/${contribution.goalId}`,
+                              contribution,
+                            ]),
+                        ).values(),
+                      ],
+                    }
+                  : {}),
+                goal: {
+                  id: goal.id,
+                  code: goal.code,
+                  title: goal.title,
+                  departmentIds: [...goal.departmentIds],
+                  startDate: goal.startDate,
+                  endDate: goal.endDate,
+                },
+              },
+            ];
           },
-        })),
+        ),
       );
   });
 }
@@ -231,6 +596,20 @@ export function cleanText(value: unknown, max = 4000): string {
     );
   return value.trim();
 }
+/** Canonical finding/objective selections. An explicitly empty list is a real edit;
+ * only records/clients that omit the list can fall back to a legacy single tag. */
+export function planningAlignmentValues(input: {
+  alignments?: unknown;
+  alignment?: unknown;
+}): string[] {
+  if (Object.prototype.hasOwnProperty.call(input, 'alignments'))
+    return Array.isArray(input.alignments) ? input.alignments : [];
+  return typeof input.alignment === 'string' &&
+    ['Q', 'C', 'D', 'S', 'M', 'T', 'OTHER'].includes(input.alignment)
+    ? [input.alignment]
+    : [];
+}
+export const objectiveAlignmentValues = planningAlignmentValues;
 export function cleanNumber(value: unknown): number | null {
   if (value === undefined || value === null || value === '') return null;
   if (typeof value !== 'number' || !Number.isFinite(value))
@@ -254,7 +633,7 @@ export function cleanFindingWeightage(value: unknown): number | null {
 }
 export function findingPriority(value: unknown): Finding['priority'] {
   if (!validFindingWeightage(value)) return '';
-  return value <= 3 ? 'LOW' : value <= 6 ? 'MEDIUM' : 'HIGH';
+  return value <= 3 ? 'LOW' : value <= 7 ? 'MEDIUM' : 'HIGH';
 }
 export function strings(value: unknown): string[] {
   if (value === undefined) return [];
@@ -298,18 +677,43 @@ export function sourceLinks(value: unknown): SourceLink[] {
   return output;
 }
 export function sourceFinding(state: PlanningState, source: SourceLink) {
-  return state.documents
-    .find((d) => d.kind === 'SWOT' && d.id === source.documentId)
-    ?.versions.find((v) => v.version === source.version)
-    ?.data.findings.find((f) => f.id === source.findingId);
+  const document = state.documents.find(
+    (d) => d.kind === 'SWOT' && d.id === source.documentId,
+  );
+  return (
+    document?.findingReviews?.find(
+      (review) =>
+        review.version === source.version &&
+        review.finding.id === source.findingId,
+    )?.finding ||
+    document?.versions
+      .find((v) => v.version === source.version)
+      ?.data.findings.find((f) => f.id === source.findingId)
+  );
 }
 export function eligibleSources(state: PlanningState) {
   return state.documents
     .filter((d) => d.kind === 'SWOT')
-    .flatMap((d) =>
-      d.versions.flatMap((v) =>
+    .flatMap((d) => [
+      ...(d.findingReviews || [])
+        .filter(
+          (review) =>
+            review.finding.reviewStatus === 'REVIEWED' &&
+            review.finding.basis !== 'NEEDS_CHECKING',
+        )
+        .map((review) => ({
+          documentId: d.id,
+          findingId: review.finding.id,
+          version: review.version,
+          finding: review.finding,
+        })),
+      ...d.versions.flatMap((v) =>
         v.data.findings
-          .filter((f) => f.basis !== 'NEEDS_CHECKING')
+          .filter(
+            (f) =>
+              f.basis !== 'NEEDS_CHECKING' &&
+              (!f.reviewStatus || f.reviewStatus === 'REVIEWED'),
+          )
           .map((f) => ({
             documentId: d.id,
             findingId: f.id,
@@ -317,7 +721,7 @@ export function eligibleSources(state: PlanningState) {
             finding: f,
           })),
       ),
-    );
+    ]);
 }
 export const itemList = (kind: ItemKind) =>
   (
@@ -336,6 +740,9 @@ export function itemDefaults(kind: ItemKind): Record<string, unknown> {
       category: 'W',
       title: '',
       relatedPillars: [],
+      alignment: '',
+      alignments: [],
+      otherBusinessFocus: '',
       explanation: '',
       impact: '',
       evidence: '',
@@ -351,6 +758,15 @@ export function itemDefaults(kind: ItemKind): Record<string, unknown> {
   if (kind === 'objective')
     return {
       title: '',
+      result: '',
+      alignment: '',
+      otherBusinessFocus: '',
+      direction: '',
+      baselinePeriod: '',
+      definition: '',
+      dataSource: '',
+      reviewFrequency: '',
+      guardrails: '',
       meaning: '',
       pillar: '',
       alignments: [],
@@ -360,11 +776,28 @@ export function itemDefaults(kind: ItemKind): Record<string, unknown> {
       endDate: '',
       sources: [],
       sourceRationale: '',
+      priority: null,
+      weightage: null,
+      measure: '',
+      baseline: null,
+      baselineReason: '',
+      target: null,
+      unit: '',
+      departmentIds: [],
+      approach: '',
+      selectionReason: '',
     };
   if (kind === 'goal')
     return {
       title: '',
       objectiveId: '',
+      goalNo: null,
+      departmentCode: '',
+      definition: '',
+      direction: '',
+      baselinePeriod: '',
+      source: '',
+      frequency: '',
       parent: null,
       ongoingReason: '',
       measure: '',
@@ -403,6 +836,7 @@ export function itemDefaults(kind: ItemKind): Record<string, unknown> {
     title: '',
     goalId: '',
     parentActionId: '',
+    parent: null,
     ownerId: '',
     dueDate: '',
     expectedResult: '',
@@ -422,8 +856,12 @@ export function cleanItem(
     // Priority is a server-derived result; client values are never authoritative.
     if (kind === 'finding' && key === 'priority') continue;
     const value = input[key] ?? fallback;
-    if (key === 'weightage') data[key] = cleanFindingWeightage(value);
-    else if (['baseline', 'target', 'upper'].includes(key))
+    if (key === 'weightage')
+      data[key] =
+        kind === 'finding' ? cleanFindingWeightage(value) : cleanNumber(value);
+    else if (kind === 'objective' && key === 'priority')
+      data[key] = cleanNumber(value);
+    else if (['baseline', 'target', 'upper', 'goalNo'].includes(key))
       data[key] = cleanNumber(value);
     else if (key === 'sources') data[key] = sourceLinks(value);
     else if (key === 'parent') {
@@ -440,10 +878,20 @@ export function cleanItem(
           documentId: cleanText(parent.documentId, 100),
           goalId: cleanText(parent.goalId, 100),
           version: parent.version,
+          ...(parent.itemKind !== undefined
+            ? { itemKind: parent.itemKind }
+            : {}),
         };
+        if (
+          parent.itemKind !== undefined &&
+          !['OBJECTIVE', 'GOAL'].includes(String(parent.itemKind))
+        )
+          throw new BadRequestException(
+            'Select a valid approved objective or goal reference.',
+          );
       }
     } else if (key === 'targets') {
-      if (!Array.isArray(value) || value.length > 732)
+      if (!Array.isArray(value) || value.length > MAX_TARGET_PERIODS)
         throw new BadRequestException('Invalid target periods.');
       data.targets = value.map((v) => {
         if (!v || typeof v !== 'object' || Array.isArray(v))
@@ -474,6 +922,14 @@ export function cleanItem(
   if (kind === 'finding') {
     data.priority = findingPriority(data.weightage);
     if (
+      !['', 'Q', 'C', 'D', 'S', 'M', 'T', 'OTHER'].includes(
+        String(data.alignment),
+      )
+    )
+      throw new BadRequestException(
+        'Select valid QCDSMT alignments or Business focus.',
+      );
+    if (
       !data.title ||
       !data.pillar ||
       !['S', 'W', 'O', 'T'].includes(String(data.category))
@@ -494,9 +950,17 @@ export function cleanItem(
       !['MANAGEMENT', 'EVIDENCED', 'NEEDS_CHECKING'].includes(
         String(data.basis),
       ) ||
-      !['', 'OBJECTIVE', 'ACTION', 'MONITOR', 'NONE'].includes(
-        String(data.response),
-      )
+      ![
+        '',
+        'OBJECTIVE',
+        'ACTION',
+        'MONITOR',
+        'NONE',
+        'MAINTAIN',
+        'USE',
+        'DEFER',
+        'VERIFY',
+      ].includes(String(data.response))
     )
       throw new BadRequestException('Invalid SWOT decision.');
     if (data.sourceUrl) {
@@ -515,19 +979,63 @@ export function cleanItem(
     }
   }
   if (
-    kind === 'objective' &&
+    ['objective', 'finding'].includes(kind) &&
+    !Object.prototype.hasOwnProperty.call(input, 'alignments')
+  )
+    data.alignments = objectiveAlignmentValues(input);
+  if (
+    ['objective', 'finding'].includes(kind) &&
     (data.alignments as string[]).some(
-      (v) => !['Q', 'C', 'D', 'S', 'M', 'T'].includes(v),
+      (v) => !['Q', 'C', 'D', 'S', 'M', 'T', 'OTHER'].includes(v),
     )
   )
-    throw new BadRequestException('Select valid QCDSMT tags.');
+    throw new BadRequestException(
+      'Select valid QCDSMT alignments or Business focus.',
+    );
+  if (kind === 'objective') {
+    if (data.priority != null && !validObjectivePriority(data.priority))
+      throw new BadRequestException(
+        'Objective priority must be a whole number from 1 to 10.',
+      );
+    if (
+      data.weightage != null &&
+      !validObjectiveWeightage(data.weightage, String(data.pillar))
+    )
+      throw new BadRequestException(
+        `Objective weightage must be from 1 to ${OBJECTIVE_PILLAR_BUDGETS[String(data.pillar) as keyof typeof OBJECTIVE_PILLAR_BUDGETS] || 'the selected pillar limit'}%, with up to two decimal places. Select its pillar first.`,
+      );
+  }
   if (
-    kind === 'goal' &&
+    ['goal', 'objective'].includes(kind) &&
     (data.departmentIds as string[]).some(
       (id) => !refs.departments.some((d) => d.id === id),
     )
   )
     throw new BadRequestException('Select departments from this organisation.');
+  if (['objective', 'goal'].includes(kind)) {
+    if (
+      data.direction &&
+      !['HIGHER', 'LOWER', 'MAINTAIN_MIN', 'MAINTAIN_MAX'].includes(
+        String(data.direction),
+      )
+    )
+      throw new BadRequestException('Choose a valid measurement direction.');
+    if (
+      data.alignment &&
+      !['Q', 'C', 'D', 'S', 'M', 'T', 'OTHER'].includes(String(data.alignment))
+    )
+      throw new BadRequestException('Choose one main business alignment.');
+    for (const key of ['frequency'])
+      if (data[key] && !FREQUENCIES.includes(data[key] as Frequency))
+        throw new BadRequestException('Choose a valid review frequency.');
+    if (
+      data.goalNo != null &&
+      (!Number.isSafeInteger(data.goalNo) || Number(data.goalNo) < 1)
+    )
+      throw new BadRequestException(
+        'Goal number must be a positive safe integer.',
+      );
+  }
   if (kind === 'assignment') {
     if (
       !FREQUENCIES.includes(data.updateFrequency as Frequency) ||
@@ -582,7 +1090,10 @@ export function sourceIssues(
     const finding = sourceFinding(state, ref);
     if (!finding)
       issues.push('The selected reviewed SWOT version does not exist.');
-    else if (finding.basis === 'NEEDS_CHECKING')
+    else if (
+      finding.basis === 'NEEDS_CHECKING' ||
+      (finding.reviewStatus && finding.reviewStatus !== 'REVIEWED')
+    )
       issues.push('A finding marked Needs checking cannot justify approval.');
     else if (
       finding.pillar === objective.pillar ||
@@ -614,13 +1125,15 @@ export function actionLinkIssues(
     !['TEAM', 'POSITION', 'INDIVIDUAL'].includes(document.kind) ||
     !goal ||
     source?.kind !== 'DEPARTMENT' ||
-    source.departmentId !== document.departmentId ||
+    (document.kind !== 'INDIVIDUAL' &&
+      source.departmentId !== document.departmentId) ||
     source.cycle !== document.cycle ||
     !action ||
     !goal.parent ||
     goal.parent.documentId !== source.id ||
     goal.parent.version !== link.version ||
-    goal.parent.goalId !== action.goalId
+    goal.parent.goalId !== action.goalId ||
+    !version?.data.goals.some((parent) => parent.id === goal.parent!.goalId)
   ) {
     return [
       "Select an approved action belonging to this contribution's linked department goal and version.",
@@ -647,28 +1160,16 @@ export function actionLinkIssues(
     );
   return errors;
 }
-export function validatePlan(
+export function planSetupIssues(
   document: PlanningDocument,
   state: PlanningState,
   refs: PlanningReferences,
-  today: string,
 ): string[] {
   const data = document.data,
     errors: string[] = [];
   const person = (id: string) => refs.people.find((p) => p.id === id);
   const need = (ok: unknown, message: string) => {
     if (!ok) errors.push(message);
-  };
-  const dates = (start: string, end: string, label: string) => {
-    need(
-      validDate(start) && validDate(end) && start <= end,
-      `${label}: enter valid start and end dates.`,
-    );
-    if (validDate(start) && validDate(end))
-      need(
-        start >= data.startDate && end <= data.endDate,
-        `${label}: dates must stay within the plan period.`,
-      );
   };
   need(data.title, 'Give the plan a name.');
   need(person(data.ownerId), 'Select the plan owner from EMS.');
@@ -680,24 +1181,36 @@ export function validatePlan(
   );
   if (validDate(data.startDate) && validDate(data.endDate))
     need(
-      (Date.parse(data.endDate) - Date.parse(data.startDate)) / 86400000 <= 731,
-      'Planning periods may span at most two years.',
+      data.startDate >= '2000-01-01' && data.endDate <= '2200-12-31',
+      'Planning dates must be between 2000 and 2200.',
     );
+  if (document.cycle.includes('..')) {
+    try {
+      const period = resolvePlanningPeriod({ cycle: document.cycle });
+      need(
+        data.startDate >= period.startDate && data.endDate <= period.endDate,
+        'Plan dates must stay within the selected planning period.',
+      );
+    } catch {
+      need(false, 'Select a valid planning period.');
+    }
+  }
   const approver = person(data.approverId);
   if (['TEAM', 'POSITION', 'INDIVIDUAL'].includes(document.kind)) {
     const department = refs.departments.find(
       (item) => item.id === document.departmentId,
     );
     need(department, "Confirm the plan's department assignment in EMS.");
-    need(
-      state.documents.some(
-        (item) =>
-          item.kind === 'DEPARTMENT' &&
-          item.scopeId === document.departmentId &&
-          item.cycle === document.cycle,
-      ),
-      `Create the ${department?.name || 'related department'} plan for ${document.cycle} before submitting. Your draft can be saved now.`,
-    );
+    if (document.kind !== 'INDIVIDUAL')
+      need(
+        state.documents.some(
+          (item) =>
+            item.kind === 'DEPARTMENT' &&
+            item.scopeId === document.departmentId &&
+            item.cycle === document.cycle,
+        ),
+        `Create the ${department?.name || 'related department'} plan for ${document.cycle} before submitting. Your draft can be saved now.`,
+      );
   }
   if (document.kind === 'POSITION') {
     need(
@@ -724,171 +1237,34 @@ export function validatePlan(
             approver.departmentId === document.departmentId)),
     'Select one authorised approver for this plan.',
   );
-  if (document.kind === 'SWOT') {
-    for (const pillar of PILLAR_CODES)
+  return errors;
+}
+
+export function assignmentReadinessIssues(
+  document: PlanningDocument,
+  state: PlanningState,
+  refs: PlanningReferences,
+  goalId?: string,
+): string[] {
+  const data = document.data,
+    errors: string[] = [];
+  const person = (id: string) => refs.people.find((p) => p.id === id);
+  const need = (ok: unknown, message: string) => {
+    if (!ok) errors.push(message);
+  };
+  const dates = (start: string, end: string, label: string) => {
+    need(
+      validDate(start) && validDate(end) && start <= end,
+      `${label}: enter valid start and end dates.`,
+    );
+    if (validDate(start) && validDate(end))
       need(
-        data.consideredPillars.includes(pillar),
-        `Consider ${pillar}, even when there are no findings.`,
+        start >= data.startDate && end <= data.endDate,
+        `${label}: dates must stay within the plan period.`,
       );
-    for (const finding of data.findings) {
-      need(
-        finding.title && finding.title.length <= 350,
-        `${finding.code}: enter a short finding.`,
-      );
-      need(
-        validFindingWeightage(finding.weightage),
-        `${finding.code}: enter weightage as a whole number from 1 to 10.`,
-      );
-      if (validFindingWeightage(finding.weightage))
-        need(
-          finding.priority === findingPriority(finding.weightage),
-          `${finding.code}: save the finding to recalculate its priority from weightage.`,
-        );
-      need(finding.response, `${finding.code}: choose a management response.`);
-      if (finding.response === 'MONITOR') {
-        need(
-          person(finding.followupOwnerId),
-          `${finding.code}: choose a follow-up owner.`,
-        );
-        need(
-          validDate(finding.reviewDate),
-          `${finding.code}: choose a review date.`,
-        );
-      }
-    }
-    return errors;
-  }
-  if (document.kind === 'COMPANY') {
-    need(data.objectives.length, 'Create at least one objective.');
-    for (const objective of data.objectives) {
-      need(
-        objective.title && objective.meaning,
-        `${objective.code}: explain the objective's direction and meaning.`,
-      );
-      need(
-        PILLAR_CODES.includes(objective.pillar as never),
-        `${objective.code}: select the primary pillar.`,
-      );
-      need(
-        objective.alignments.length || objective.alignmentReason,
-        `${objective.code}: assess QCDSMT or explain why none applies.`,
-      );
-      need(person(objective.ownerId), `${objective.code}: select an owner.`);
-      dates(objective.startDate, objective.endDate, objective.code);
-      errors.push(
-        ...sourceIssues(objective, state).map(
-          (issue) => `${objective.code}: ${issue}`,
-        ),
-      );
-      need(
-        data.goals.some((g) => g.objectiveId === objective.id),
-        `${objective.code}: add a measurable linked goal.`,
-      );
-    }
-  }
-  need(data.goals.length, 'Add at least one goal or role contribution.');
-  for (const goal of data.goals) {
-    need(goal.title, `${goal.code}: describe the result.`);
-    need(person(goal.ownerId), `${goal.code}: select the responsible person.`);
-    dates(goal.startDate, goal.endDate, goal.code);
-    if (['COMPANY', 'DEPARTMENT'].includes(document.kind)) {
-      need(
-        goal.measure && goal.unit,
-        `${goal.code}: enter the measure and unit.`,
-      );
-      need(
-        typeof goal.target === 'number' && Number.isFinite(goal.target),
-        `${goal.code}: enter a target (zero is valid).`,
-      );
-      need(
-        (typeof goal.baseline === 'number' && Number.isFinite(goal.baseline)) ||
-          goal.baselineReason,
-        `${goal.code}: enter a baseline or explain why it is unavailable.`,
-      );
-    }
-    if (document.kind === 'DEPARTMENT') {
-      const owner = person(goal.ownerId);
-      need(
-        owner &&
-          (MANAGEMENT.includes(owner.role) ||
-            (owner.role === 'HOD' &&
-              owner.departmentId === document.departmentId)),
-        `${goal.code}: choose the accountable HOD or an authorised management owner.`,
-      );
-    }
-    if (document.kind === 'COMPANY') {
-      const objective = data.objectives.find((o) => o.id === goal.objectiveId);
-      need(objective, `${goal.code}: link exactly one objective.`);
-      if (objective && validDate(goal.startDate) && validDate(goal.endDate))
-        need(
-          goal.startDate >= objective.startDate &&
-            goal.endDate <= objective.endDate,
-          `${goal.code}: dates must stay within the objective period.`,
-        );
-      need(goal.approach, `${goal.code}: explain the achievable approach.`);
-      need(
-        goal.departmentIds.length,
-        `${goal.code}: choose contributing departments.`,
-      );
-      need(
-        goal.noActionReason?.trim(),
-        `${goal.code}: explain how delivery actions are covered by contributing department plans, or why no separate action plan is needed.`,
-      );
-    } else {
-      const parent =
-        goal.parent &&
-        state.documents.find((d) => d.id === goal.parent!.documentId);
-      const parentVersion =
-        parent &&
-        parent.versions.find((v) => v.version === goal.parent!.version);
-      const linked = parentVersion?.data.goals.find(
-        (g) => g.id === goal.parent!.goalId,
-      );
-      if (document.kind === 'DEPARTMENT') {
-        if (goal.parent || !goal.ongoingReason)
-          need(
-            parent?.kind === 'COMPANY' &&
-              parent.cycle === document.cycle &&
-              linked,
-            `${goal.code}: select an approved company goal, or explain the essential department responsibility.`,
-          );
-        if (linked)
-          need(
-            linked.departmentIds.includes(document.scopeId),
-            `${goal.code}: this department must be identified as a contributor to the company goal.`,
-          );
-      } else if (goal.parent || !goal.ongoingReason)
-        need(
-          parent?.kind === 'DEPARTMENT' &&
-            parent.cycle === document.cycle &&
-            parent.scopeId === document.departmentId &&
-            linked,
-          `${goal.code}: link an approved department goal, or identify an ongoing role responsibility.`,
-        );
-      if (
-        linked &&
-        validDate(linked.startDate) &&
-        validDate(linked.endDate) &&
-        validDate(goal.startDate) &&
-        validDate(goal.endDate)
-      )
-        need(
-          goal.startDate >= linked.startDate && goal.endDate <= linked.endDate,
-          `${goal.code}: dates must stay within the approved parent goal period.`,
-        );
-      need(
-        data.assignments.some((k) => k.goalId === goal.id),
-        `${goal.code}: add a KPI assignment with planned targets.`,
-      );
-      need(
-        data.actions.some((a) => a.goalId === goal.id) ||
-          (data.actionLinks || []).some((a) => a.goalId === goal.id) ||
-          goal.noActionReason?.trim(),
-        `${goal.code}: add a delivery action, link an existing action, or explain why no separate action plan is needed.`,
-      );
-    }
-  }
+  };
   for (const assignment of data.assignments) {
+    if (goalId && assignment.goalId !== goalId) continue;
     const contribution = data.goals.find((g) => g.id === assignment.goalId);
     const definition = state.definitions.find(
       (k) => k.id === assignment.definitionId,
@@ -909,7 +1285,9 @@ export function validatePlan(
     );
     need(assignment.source, `${assignment.code}: identify the data source.`);
     need(
-      assignment.baseline !== null || assignment.baselineReason,
+      (typeof assignment.baseline === 'number' &&
+        Number.isFinite(assignment.baseline)) ||
+        assignment.baselineReason,
       `${assignment.code}: enter a baseline or its unavailable reason.`,
     );
     dates(assignment.startDate, assignment.endDate, assignment.code);
@@ -925,6 +1303,15 @@ export function validatePlan(
           assignment.endDate <= contribution.endDate,
         `${assignment.code}: dates must stay within the contribution goal period.`,
       );
+    need(
+      FREQUENCIES.includes(assignment.updateFrequency) &&
+        FREQUENCIES.includes(assignment.reviewFrequency),
+      `${assignment.code}: select valid update and review frequencies.`,
+    );
+    need(
+      ['SAME', 'VARIED'].includes(assignment.targetMode),
+      `${assignment.code}: select a target method.`,
+    );
     const expected = calendarPeriods(
       assignment.startDate,
       assignment.endDate,
@@ -971,6 +1358,7 @@ export function validatePlan(
   for (let i = 0; i < data.assignments.length; i++) {
     const left = data.assignments[i];
     for (const right of data.assignments.slice(i + 1)) {
+      if (goalId && left.goalId !== goalId && right.goalId !== goalId) continue;
       if (
         left.definitionId &&
         left.definitionId === right.definitionId &&
@@ -988,6 +1376,241 @@ export function validatePlan(
         );
     }
   }
+  return [...new Set(errors)];
+}
+
+export function validatePlan(
+  document: PlanningDocument,
+  state: PlanningState,
+  refs: PlanningReferences,
+  today: string,
+): string[] {
+  const data = document.data,
+    errors: string[] = [];
+  const person = (id: string) => refs.people.find((p) => p.id === id);
+  const need = (ok: unknown, message: string) => {
+    if (!ok) errors.push(message);
+  };
+  const dates = (start: string, end: string, label: string) => {
+    need(
+      validDate(start) && validDate(end) && start <= end,
+      `${label}: enter valid start and end dates.`,
+    );
+    if (validDate(start) && validDate(end))
+      need(
+        start >= data.startDate && end <= data.endDate,
+        `${label}: dates must stay within the plan period.`,
+      );
+  };
+  errors.push(...planSetupIssues(document, state, refs));
+  if (document.kind === 'SWOT') {
+    for (const pillar of PILLAR_CODES)
+      need(
+        data.consideredPillars.includes(pillar),
+        `Consider ${pillar}, even when there are no findings.`,
+      );
+    for (const finding of data.findings) {
+      errors.push(
+        ...findingAlignmentIssues(finding).map(
+          (issue) => `${finding.code}: ${issue}`,
+        ),
+      );
+      need(
+        finding.title && finding.title.length <= 350,
+        `${finding.code}: enter a short finding.`,
+      );
+      need(
+        validFindingWeightage(finding.weightage),
+        `${finding.code}: enter weightage as a whole number from 1 to 10.`,
+      );
+      if (validFindingWeightage(finding.weightage))
+        need(
+          finding.priority === findingPriority(finding.weightage),
+          `${finding.code}: save the finding to recalculate its priority from weightage.`,
+        );
+      need(finding.response, `${finding.code}: choose a management response.`);
+      if (finding.response === 'MONITOR') {
+        need(
+          person(finding.followupOwnerId),
+          `${finding.code}: choose a follow-up owner.`,
+        );
+        need(
+          validDate(finding.reviewDate),
+          `${finding.code}: choose a review date.`,
+        );
+      }
+    }
+    return errors;
+  }
+  if (document.kind === 'COMPANY') {
+    need(data.objectives.length, 'Create at least one objective.');
+    for (const allocation of objectiveAllocations(data.objectives)) {
+      if (!allocation.count) continue;
+      need(
+        allocation.balanced,
+        `${allocation.pillar}: objective weightages must total exactly ${allocation.target}%. Currently ${allocation.total}%.${allocation.missing ? ` ${allocation.missing} objective weightage(s) are missing.` : ''}${allocation.invalid ? ' Correct the invalid weightages.' : ''}`,
+      );
+    }
+    for (const objective of data.objectives) {
+      need(
+        validObjectivePriority(objective.priority),
+        `${objective.code}: enter objective priority as a whole number from 1 to 10.`,
+      );
+      need(
+        validObjectiveWeightage(objective.weightage, objective.pillar),
+        `${objective.code}: enter objective weightage from 1 to ${OBJECTIVE_PILLAR_BUDGETS[objective.pillar as keyof typeof OBJECTIVE_PILLAR_BUDGETS] || 'the pillar limit'}%, with up to two decimals.`,
+      );
+      need(
+        objective.title && objective.meaning,
+        `${objective.code}: explain the objective's direction and meaning.`,
+      );
+      need(
+        PILLAR_CODES.includes(objective.pillar as never),
+        `${objective.code}: select the primary pillar.`,
+      );
+      need(
+        objectiveAlignmentValues(objective).length > 0 &&
+          objectiveAlignmentValues(objective).every((value) =>
+            ['Q', 'C', 'D', 'S', 'M', 'T', 'OTHER'].includes(value),
+          ),
+        `${objective.code}: select one or more QCDSMT alignments or Business focus.`,
+      );
+      if (objectiveAlignmentValues(objective).includes('OTHER'))
+        need(
+          objective.otherBusinessFocus?.trim(),
+          `${objective.code}: describe the Business focus.`,
+        );
+      need(person(objective.ownerId), `${objective.code}: select an owner.`);
+      dates(objective.startDate, objective.endDate, objective.code);
+      need(
+        objective.measure?.trim() && objective.unit?.trim(),
+        `${objective.code}: enter the objective's measure and unit.`,
+      );
+      need(
+        typeof objective.target === 'number' &&
+          Number.isFinite(objective.target),
+        `${objective.code}: enter the objective's target (zero is valid).`,
+      );
+      need(
+        (typeof objective.baseline === 'number' &&
+          Number.isFinite(objective.baseline)) ||
+          objective.baselineReason?.trim(),
+        `${objective.code}: enter a baseline or explain why it is unavailable.`,
+      );
+      need(
+        objective.approach?.trim(),
+        `${objective.code}: explain how the objective can be achieved.`,
+      );
+      need(
+        objective.selectionReason?.trim(),
+        `${objective.code}: explain why this objective was selected.`,
+      );
+      need(
+        objective.departmentIds?.length &&
+          objective.departmentIds.every((id) =>
+            refs.departments.some((d) => d.id === id),
+          ),
+        `${objective.code}: choose contributing departments from EMS.`,
+      );
+      errors.push(
+        ...sourceIssues(objective, state).map(
+          (issue) => `${objective.code}: ${issue}`,
+        ),
+      );
+    }
+    // Company commitments now live on the objective itself. Older linked goals
+    // stay in existing history; they are not required or republished as new goals.
+    return errors;
+  }
+  need(data.goals.length, 'Add at least one goal or role contribution.');
+  for (const goal of data.goals) {
+    need(goal.title, `${goal.code}: describe the result.`);
+    need(person(goal.ownerId), `${goal.code}: select the responsible person.`);
+    dates(goal.startDate, goal.endDate, goal.code);
+    if (['COMPANY', 'DEPARTMENT', 'INDIVIDUAL'].includes(document.kind)) {
+      need(
+        goal.measure && goal.unit,
+        `${goal.code}: enter the measure and unit.`,
+      );
+      need(
+        typeof goal.target === 'number' && Number.isFinite(goal.target),
+        `${goal.code}: enter a target (zero is valid).`,
+      );
+      if (document.kind !== 'INDIVIDUAL')
+        need(
+          (typeof goal.baseline === 'number' &&
+            Number.isFinite(goal.baseline)) ||
+            goal.baselineReason,
+          `${goal.code}: enter a baseline or explain why it is unavailable.`,
+        );
+    }
+    if (document.kind === 'DEPARTMENT') {
+      const owner = person(goal.ownerId);
+      need(
+        owner &&
+          (MANAGEMENT.includes(owner.role) ||
+            (owner.role === 'HOD' &&
+              owner.departmentId === document.departmentId)),
+        `${goal.code}: choose the accountable HOD or an authorised management owner.`,
+      );
+    }
+    {
+      const resolved = goal.parent && resolveApprovedParent(state, goal.parent);
+      const parent = resolved?.document;
+      const linked = resolved?.goal;
+      if (goal.parent)
+        errors.push(
+          ...parentReferenceIssues(document, goal.parent, state).map(
+            (issue) => `${goal.code}: ${issue}`,
+          ),
+        );
+      if (document.kind === 'DEPARTMENT') {
+        if (goal.parent || !goal.ongoingReason)
+          need(
+            parent?.kind === 'COMPANY' &&
+              parent.cycle === document.cycle &&
+              linked,
+            `${goal.code}: select an approved company goal, or explain the essential department responsibility.`,
+          );
+        if (linked && goal.parent?.itemKind !== 'OBJECTIVE')
+          need(
+            linked.departmentIds.includes(document.scopeId),
+            `${goal.code}: this department must be identified as a contributor to the company goal.`,
+          );
+      } else if (goal.parent || !goal.ongoingReason)
+        need(
+          (parent?.kind === 'DEPARTMENT' ||
+            (document.kind === 'INDIVIDUAL' && parent?.kind === 'COMPANY')) &&
+            parent.cycle === document.cycle &&
+            (document.kind === 'INDIVIDUAL' ||
+              parent.scopeId === document.departmentId) &&
+            linked,
+          `${goal.code}: link an approved ${document.kind === 'INDIVIDUAL' ? 'company or department' : 'department'} goal, or identify an ongoing role responsibility.`,
+        );
+      if (
+        linked &&
+        validDate(linked.startDate) &&
+        validDate(linked.endDate) &&
+        validDate(goal.startDate) &&
+        validDate(goal.endDate)
+      )
+        need(
+          goal.startDate >= linked.startDate && goal.endDate <= linked.endDate,
+          `${goal.code}: dates must stay within the approved parent goal period.`,
+        );
+      need(
+        data.assignments.some((k) => k.goalId === goal.id),
+        `${goal.code}: add a KPI assignment with planned targets.`,
+      );
+      need(
+        data.actions.some((a) => a.goalId === goal.id) ||
+          (data.actionLinks || []).some((a) => a.goalId === goal.id) ||
+          goal.noActionReason?.trim(),
+        `${goal.code}: add a delivery action, link an existing action, or explain why no separate action plan is needed.`,
+      );
+    }
+  }
+  errors.push(...assignmentReadinessIssues(document, state, refs));
   const seenLinks = new Set<string>();
   for (const link of data.actionLinks || []) {
     const key = `${link.documentId}/${link.actionId}`;
@@ -1065,6 +1688,20 @@ export function sanitizeForReader(
     copy.data = structuredClone(version.data);
     copy.status = 'APPROVED';
     copy.versions = copy.versions.filter((v) => v.effectiveDate <= today);
+    for (const approved of copy.versions) {
+      delete approved.legacyCompanyGoals;
+      // An unrelated cumulative snapshot may contain a future revision. Readers
+      // receive only the row whose approval this version actually represents.
+      if (approved.approvedItem) {
+        const { kind, itemId } = approved.approvedItem;
+        approved.data.objectives = approved.data.objectives.filter(
+          (item) => kind === 'objective' && item.id === itemId,
+        );
+        approved.data.goals = approved.data.goals.filter(
+          (item) => kind === 'goal' && item.id === itemId,
+        );
+      }
+    }
     copy.history = [];
     copy.revisionReason = '';
     copy.effectiveDate = version.effectiveDate;

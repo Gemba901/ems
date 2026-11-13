@@ -24,6 +24,33 @@ const calendar = (
 });
 
 describe('planning calendar snapshots', () => {
+  it.each([
+    ['MONTHLY', 60],
+    ['QUARTERLY', 20],
+    ['YEARLY', 5],
+  ] as const)(
+    'supports five-year %s schedules without shortening the plan',
+    (frequency, count) => {
+      const rows = calendarPeriods(
+        '2026-01-01',
+        '2030-12-31',
+        frequency,
+        calendar(),
+      );
+      expect(rows).toHaveLength(count);
+      expect(rows[0].start).toBe('2026-01-01');
+      expect(rows.at(-1)?.end).toBe('2030-12-31');
+      expect(rows.every((row) => row.target === null)).toBe(true);
+    },
+  );
+
+  it('limits generated target rows rather than the overall plan duration', () => {
+    expect(() =>
+      calendarPeriods('2026-01-01', '2030-12-31', 'DAILY', calendar()),
+    ).toThrow(
+      'shorter assignment period or a less frequent reporting schedule',
+    );
+  });
   it('keeps non-working and holiday days as Not scheduled with null targets', () => {
     const rows = calendarPeriods(
       '2026-01-02',

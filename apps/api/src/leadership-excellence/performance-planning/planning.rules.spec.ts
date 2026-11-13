@@ -6,11 +6,16 @@ import {
   cleanItem,
   cleanFindingWeightage,
   cleanNumber,
+  objectiveAlignmentValues,
   findingPriority,
+  findingReviewIssues,
   itemDefaults,
   periods,
   permissions,
   published,
+  resolvePlanningPeriod,
+  resolveApprovedParent,
+  parentReferenceIssues,
   sanitizeForReader,
   sourceIssues,
   validatePlan,
@@ -88,6 +93,213 @@ const document = (
 });
 
 describe('Area 03 planning rules', () => {
+  test('objective multi-alignment selection is canonical and legacy fallback never overrides an explicit clear', () => {
+    expect(
+      cleanItem(
+        'objective',
+        { alignments: ['Q', 'D', 'T'], alignment: 'C' },
+        refs,
+      ).alignments,
+    ).toEqual(['Q', 'D', 'T']);
+    expect(cleanItem('objective', { alignment: 'C' }, refs).alignments).toEqual(
+      ['C'],
+    );
+    expect(
+      cleanItem('objective', { alignments: [], alignment: 'D' }, refs)
+        .alignments,
+    ).toEqual([]);
+    expect(objectiveAlignmentValues({ alignment: 'S' })).toEqual(['S']);
+    expect(
+      objectiveAlignmentValues({ alignments: [], alignment: 'S' }),
+    ).toEqual([]);
+    expect(objectiveAlignmentValues({ alignment: 'OTHER' })).toEqual(['OTHER']);
+    expect(
+      cleanItem('objective', { alignments: ['Q', 'OTHER'] }, refs).alignments,
+    ).toEqual(['Q', 'OTHER']);
+    expect(() =>
+      cleanItem('objective', { alignments: ['Q', 'UNKNOWN'] }, refs),
+    ).toThrow(/QCDSMT/);
+    const finding = { pillar: 'OPX', category: 'W', title: 'Material loss' };
+    expect(
+      cleanItem(
+        'finding',
+        { ...finding, alignments: ['C', 'Q', 'OTHER'], alignment: 'D' },
+        refs,
+      ).alignments,
+    ).toEqual(['C', 'Q', 'OTHER']);
+    expect(
+      cleanItem('finding', { ...finding, alignment: 'OTHER' }, refs).alignments,
+    ).toEqual(['OTHER']);
+    expect(
+      cleanItem('finding', { ...finding, alignments: [], alignment: 'C' }, refs)
+        .alignments,
+    ).toEqual([]);
+  });
+  test('objective drafts preserve missing and zero values and reject invalid numeric or department inputs', () => {
+    expect(
+      cleanItem('objective', { title: 'Reduce loss' }, refs),
+    ).toMatchObject({
+      measure: '',
+      baseline: null,
+      target: null,
+      unit: '',
+      departmentIds: [],
+    });
+    expect(
+      cleanItem(
+        'objective',
+        { baseline: 0, target: 0, departmentIds: ['d1'] },
+        refs,
+      ),
+    ).toMatchObject({ baseline: 0, target: 0 });
+    for (const input of [
+      { target: '5' },
+      { baseline: Infinity },
+      { departmentIds: ['another-org'] },
+    ])
+      expect(() => cleanItem('objective', input, refs)).toThrow();
+  });
+
+  test('legacy goal links remain pinned while a new measurable objective version cannot expose archived goals', () => {
+    const company = document('COMPANY');
+    const legacyGoal = {
+      ...cleanItem(
+        'goal',
+        { title: 'Old commitment', target: 20, departmentIds: ['d1'] },
+        refs,
+      ),
+      id: 'legacy-goal',
+      code: 'G1',
+    } as never;
+    company.data.goals = [legacyGoal];
+    company.versions = [
+      {
+        version: 1,
+        data: structuredClone(company.data),
+        approvedAt: '2026-01-01',
+        approvedBy: 'u1',
+        effectiveDate: '2026-01-01',
+        reason: '',
+        definitions: [],
+      },
+    ];
+    const objective = {
+      ...cleanItem(
+        'objective',
+        {
+          title: 'New measured objective',
+          measure: 'Downtime',
+          baseline: 8,
+          target: 0,
+          unit: 'hours',
+          departmentIds: ['d1'],
+        },
+        refs,
+      ),
+      id: 'objective',
+      code: 'OBJ1',
+    } as unknown as Objective;
+    company.versions.push({
+      ...structuredClone(company.versions[0]),
+      version: 2,
+      companyPlanningModel: 'MEASURABLE_OBJECTIVES',
+      data: { ...structuredClone(company.data), objectives: [objective] },
+    });
+    const state = { ...emptyPlanningState(), documents: [company] };
+    const before = structuredClone(state);
+    const old = { documentId: company.id, goalId: 'legacy-goal', version: 1 };
+    const next = {
+      documentId: company.id,
+      goalId: 'objective',
+      version: 2,
+      itemKind: 'OBJECTIVE' as const,
+    };
+    expect(resolveApprovedParent(state, old)?.goal.target).toBe(20);
+    expect(resolveApprovedParent(state, next)?.goal.target).toBe(0);
+    expect(resolveApprovedParent(state, { ...old, version: 2 })).toBeNull();
+    expect(
+      resolveApprovedParent(state, { ...next, itemKind: undefined }),
+    ).toBeNull();
+    expect(resolveApprovedParent(state, { ...next, version: 1 })).toBeNull();
+    const choices = approvedParentGoals(state, employee);
+    expect(choices.map((row) => [row.version, row.goal.id])).toEqual([
+      [2, 'objective'],
+      [1, 'legacy-goal'],
+    ]);
+    const department = document('DEPARTMENT');
+    department.scopeId = 'd1';
+    expect(parentReferenceIssues(department, next, state, manager)).toEqual([]);
+    department.cycle = '2027';
+    expect(parentReferenceIssues(department, next, state, manager)).not.toEqual(
+      [],
+    );
+    department.cycle = '2026';
+    department.scopeId = 'unauthorised-department';
+    expect(parentReferenceIssues(department, next, state, manager)).not.toEqual(
+      [],
+    );
+    expect(state).toEqual(before);
+  });
+  test('planning period normalization preserves year keys and accepts real multi-year leap dates', () => {
+    expect(resolvePlanningPeriod({ cycle: '2026' })).toEqual({
+      cycle: '2026',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+    });
+    expect(
+      resolvePlanningPeriod({ startDate: '2028-02-29', endDate: '2031-02-28' }),
+    ).toEqual({
+      cycle: '2028-02-29..2031-02-28',
+      startDate: '2028-02-29',
+      endDate: '2031-02-28',
+    });
+    expect(periods('2026-01-01', '2030-12-31', 'MONTHLY')).toHaveLength(60);
+    const d = document();
+    d.cycle = '2026-04-01..2029-03-31';
+    d.data.startDate = '2026-04-01';
+    d.data.endDate = '2029-03-31';
+    d.data.consideredPillars = ['LEX', 'PEX', 'OPX', 'CMX', 'SGEX', 'FPEX'];
+    expect(validatePlan(d, emptyPlanningState(), refs, '2026-11-04')).toEqual(
+      [],
+    );
+    d.data.endDate = '2030-03-31';
+    expect(validatePlan(d, emptyPlanningState(), refs, '2026-11-04')).toContain(
+      'Plan dates must stay within the selected planning period.',
+    );
+  });
+
+  test('legacy findings remain readable unchanged but require main alignment for a new review', () => {
+    const legacy = {
+      ...itemDefaults('finding'),
+      pillar: 'OPX',
+      category: 'W',
+      title: 'Material loss',
+      explanation: 'Waste report',
+      impact: 'Increased cost',
+      evidence: 'October report',
+      weightage: 8,
+      response: 'OBJECTIVE',
+      decisionNote: 'Reduce waste',
+    } as never;
+    const before = structuredClone(legacy);
+    expect(findingReviewIssues(legacy, refs)).toContain(
+      'Select one or more QCDSMT alignments or Business focus.',
+    );
+    expect(legacy).toEqual(before);
+    expect(() =>
+      cleanItem(
+        'finding',
+        {
+          ...itemDefaults('finding'),
+          pillar: 'OPX',
+          category: 'W',
+          title: 'Gap',
+          alignment: 'INVALID',
+        },
+        refs,
+      ),
+    ).toThrow(/QCDSMT/);
+  });
   test.each([
     [1, 'LOW'],
     [2, 'LOW'],
@@ -95,7 +307,7 @@ describe('Area 03 planning rules', () => {
     [4, 'MEDIUM'],
     [5, 'MEDIUM'],
     [6, 'MEDIUM'],
-    [7, 'HIGH'],
+    [7, 'MEDIUM'],
     [8, 'HIGH'],
     [9, 'HIGH'],
     [10, 'HIGH'],
@@ -173,6 +385,7 @@ describe('Area 03 planning rules', () => {
               pillar: 'OPX',
               category: 'W',
               title: 'Legacy or restored finding',
+              alignment: 'D',
               response: 'OBJECTIVE',
             },
             refs,
@@ -201,6 +414,7 @@ describe('Area 03 planning rules', () => {
             pillar: 'OPX',
             category: 'W',
             title: 'Restored finding',
+            alignment: 'D',
             weightage: 2,
             response: 'OBJECTIVE',
           },
@@ -537,6 +751,13 @@ describe('Area 03 planning rules', () => {
     const source = document('DEPARTMENT');
     source.id = 'dept';
     source.scopeId = 'd1';
+    source.data.goals = [
+      {
+        ...cleanItem('goal', { title: 'Department commitment' }, refs),
+        id: 'department-goal',
+        code: 'DG1',
+      } as never,
+    ];
     source.data.actions = [
       {
         ...cleanItem(
@@ -602,6 +823,9 @@ describe('Area 03 planning rules', () => {
       version: 1,
     };
     const state = { ...emptyPlanningState(), documents: [source, child] };
+    expect(actionLinkIssues(child, link, state, '2026-11-04')).toEqual([]);
+    source.departmentId = 'another-department';
+    source.scopeId = 'another-department';
     expect(actionLinkIssues(child, link, state, '2026-11-04')).toEqual([]);
     source.data.actions[0].ownerId = 'p1';
     expect(actionLinkIssues(child, link, state, '2026-11-04')).toEqual([]);
@@ -718,7 +942,7 @@ describe('Area 03 planning rules', () => {
       const parentIssue =
         kind === 'DEPARTMENT'
           ? 'G1: select an approved company goal, or explain the essential department responsibility.'
-          : 'G1: link an approved department goal, or identify an ongoing role responsibility.';
+          : `G1: link an approved ${kind === 'INDIVIDUAL' ? 'company or department' : 'department'} goal, or identify an ongoing role responsibility.`;
       expect(validatePlan(child, state, refs, '2026-11-03')).not.toContain(
         parentIssue,
       );
@@ -735,9 +959,14 @@ describe('Area 03 planning rules', () => {
         parent.versions[0].data.goals[0].departmentIds = ['d1'];
       } else {
         parent.scopeId = 'another-department';
-        expect(validatePlan(child, state, refs, '2026-11-03')).toContain(
-          parentIssue,
-        );
+        if (kind === 'INDIVIDUAL')
+          expect(validatePlan(child, state, refs, '2026-11-03')).not.toContain(
+            parentIssue,
+          );
+        else
+          expect(validatePlan(child, state, refs, '2026-11-03')).toContain(
+            parentIssue,
+          );
         parent.scopeId = 'd1';
       }
       parent.data.goals[0].startDate = '2026-01-01';
@@ -920,6 +1149,7 @@ describe('Area 03 planning rules', () => {
     const parent = document('DEPARTMENT');
     parent.id = 'parent';
     parent.scopeId = 'other-department';
+    parent.cycle = '2027';
     const parentGoal = {
       ...cleanItem(
         'goal',
@@ -977,9 +1207,9 @@ describe('Area 03 planning rules', () => {
     ];
     const state = { ...emptyPlanningState(), documents: [parent, child] };
     const issue =
-      'G1: link an approved department goal, or identify an ongoing role responsibility.';
+      'G1: link an approved company or department goal, or identify an ongoing role responsibility.';
     expect(validatePlan(child, state, refs, '2026-11-03')).toContain(issue);
-    parent.scopeId = 'd1';
+    parent.cycle = child.cycle;
     expect(validatePlan(child, state, refs, '2026-11-03')).not.toContain(issue);
     child.data.goals[0].parent = null;
     expect(validatePlan(child, state, refs, '2026-11-03')).not.toContain(issue);

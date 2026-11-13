@@ -3,8 +3,7 @@ import { useState } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { PerformancePlanningService } from "@/services/leadership-excellence/performance-planning.service";
 import { usePlanning } from "./PlanningProvider";
-import { Button } from "@/components/ui/button";
-import { card, ErrorList, Modal } from "./PlanningUi";
+import { Button, card, ErrorList, Modal } from "./PlanningUi";
 export function PlanningBackup() {
   const token = useAuthStore((s) => s.accessToken);
   const { data, refresh } = usePlanning();
@@ -39,7 +38,7 @@ export function PlanningBackup() {
         Planning backup & restore
       </summary>
       <div className="mt-4 space-y-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-slate-500">
           Management-only export includes confidential SWOT, source references,
           evidence and approved history. Store it securely. Restore accepts an
           unmodified backup for this organisation and preserves all existing
@@ -47,7 +46,7 @@ export function PlanningBackup() {
         </p>
         <ErrorList error={error} />
         {message && (
-          <p role="status" className="text-sm text-gemba-lime-ink">
+          <p role="status" className="text-sm text-emerald-700">
             {message}
           </p>
         )}
@@ -84,7 +83,7 @@ export function PlanningBackup() {
           </p>
           <p className="my-4 break-all text-sm font-medium">{file.name}</p>
           <ErrorList error={error} />
-          <div className="mt-5 flex justify-end gap-3">
+          <div className="mt-5 flex flex-wrap justify-end gap-3">
             <Button variant="outline" onClick={() => setFile(null)}>
               Cancel
             </Button>

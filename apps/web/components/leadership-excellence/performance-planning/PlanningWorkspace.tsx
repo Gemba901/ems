@@ -14,11 +14,12 @@ import {
   Plus,
   Settings2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type {
+  ApprovedParentGoal,
   Finding,
   Goal,
   ItemKind,
+  ParentGoal,
   PlanningDocument,
   PlanningView,
   SourceLink,
@@ -44,9 +45,21 @@ import {
 } from "./PlanningLinks";
 import { PlanningGuide } from "./PlanningGuide";
 import { PlanningYearPicker } from "./PlanningYearPicker";
-import { PlanningRegister as Register } from "./PlanningRegister";
-import { PlanningSteps, PlanCollection, Readiness } from "./PlanningOverview";
 import {
+  planningPeriodBounds,
+  planningPeriodKey,
+  planningPeriodLabel,
+  planningPeriodValidation,
+} from "@/services/leadership-excellence/performance-planning/planning-period";
+import { PlanningStrategyMap } from "./PlanningStrategyMap";
+import { PlanningRegister as Register } from "./PlanningRegister";
+import { PlanningFlowNav } from "./PlanningFlowNav";
+import { resolveParentGoal } from "@/services/leadership-excellence/performance-planning/measurable-objective";
+import { PlanningCreateGoal } from "./PlanningCreateGoal";
+import { PlanningApprovedGoals } from "./PlanningApprovedGoals";
+import { PlanCollection, Readiness } from "./PlanningOverview";
+import {
+  Button,
   card,
   control,
   categories,
@@ -89,15 +102,18 @@ function NewPlan({
     kinds.includes("INDIVIDUAL")
       ? "INDIVIDUAL"
       : kinds[0];
+  const initialPeriod =
+    planningPeriodBounds(initialCycle || "") ||
+    planningPeriodBounds(String(new Date().getFullYear()))!;
   const [kind, setKind] = useState(initialKind),
-    [cycle, setCycle] = useState(
-      initialCycle || String(new Date().getFullYear()),
-    ),
+    [startDate, setStartDate] = useState(initialPeriod.startDate),
+    [endDate, setEndDate] = useState(initialPeriod.endDate),
     [scopeId, setScope] = useState(
       data.actor.role === "EMPLOYEE" ? data.actor.employeeId : "",
     ),
     [title, setTitle] = useState(""),
     [error, setError] = useState("");
+  const cycle = planningPeriodKey(startDate, endDate);
   const scopes =
     kind === "DEPARTMENT"
       ? data.references.departments
@@ -131,9 +147,20 @@ function NewPlan({
         onSubmit={async (e) => {
           e.preventDefault();
           if (!validScope || busy) return;
+          if (!cycle) {
+            setError(planningPeriodValidation(startDate, endDate).join("\n"));
+            return;
+          }
           try {
             onCreated(
-              await run("CREATE_PLAN", { kind, cycle, scopeId, title }),
+              await run("CREATE_PLAN", {
+                kind,
+                cycle,
+                startDate,
+                endDate,
+                scopeId,
+                title,
+              }),
               cycle,
             );
             onClose();
@@ -157,23 +184,42 @@ function NewPlan({
                 {k === "SWOT"
                   ? "Company SWOT assessment"
                   : k === "COMPANY"
-                    ? "Company objective & goal plan"
+                    ? "Company objective plan"
                     : `${k[0]}${k.slice(1).toLowerCase()} plan`}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Planning year">
-          <input
-            className={control}
-            type="number"
-            min={2000}
-            max={2200}
-            value={cycle}
-            readOnly={lockCycle}
-            onChange={(e) => setCycle(e.target.value)}
-          />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="From">
+            <input
+              className={control}
+              type="date"
+              min="2000-01-01"
+              max="2200-12-31"
+              value={startDate}
+              readOnly={lockCycle}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </Field>
+          <Field label="To">
+            <input
+              className={control}
+              type="date"
+              min={startDate || "2000-01-01"}
+              max="2200-12-31"
+              value={endDate}
+              readOnly={lockCycle}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </Field>
+        </div>
+        {lockCycle && (
+          <p className="text-xs text-slate-500">
+            Uses the selected planning period. Change it from the period
+            selector to work on a different plan.
+          </p>
+        )}
         {!["SWOT", "COMPANY"].includes(kind) && (
           <Field
             label={
@@ -209,18 +255,18 @@ function NewPlan({
           <div
             role="status"
             aria-label="EMS team availability"
-            className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-4 text-sm"
+            className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm"
           >
-            <Info size={18} className="mt-0.5 shrink-0 text-muted-foreground" />
+            <Info size={18} className="mt-0.5 shrink-0 text-slate-500" />
             <div className="min-w-0 space-y-3">
               <p className="font-medium">No EMS teams are available yet.</p>
-              <p className="leading-6 text-muted-foreground">
+              <p className="leading-6 text-slate-500">
                 Teams use active employees with the same department and Section
                 / Area in EMS. To set up a team, an EMS administrator can open
                 an employee&apos;s Work Allocation and fill in Department and
                 Section / Area for its members. Then refresh teams here.
               </p>
-              <p className="text-muted-foreground">
+              <p className="text-slate-500">
                 For one person&apos;s plan, choose Individual plan and select
                 their EMS employee record.
               </p>
@@ -257,7 +303,7 @@ function NewPlan({
           </div>
         )}
         {kind === "POSITION" && !scopes.length && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500">
             No position records are available from EMS / Organisation Framework
             yet. Position planning needs its stable position ID; use an employee
             plan until the shared position source is connected.
@@ -271,8 +317,8 @@ function NewPlan({
             onChange={(e) => setTitle(e.target.value)}
           />
         </Field>
-        <p className="text-sm text-muted-foreground">
-          One record per scope and planning year. Start with a draft, then set
+        <p className="text-sm text-slate-500">
+          One record per scope and planning period. Start with a draft, then set
           its dates, owner and single approver.
         </p>
         <Button type="submit" disabled={busy || !validScope}>
@@ -283,7 +329,7 @@ function NewPlan({
   );
 }
 
-function ApprovalActions({
+export function ApprovalActions({
   document,
   onResolve,
 }: {
@@ -425,13 +471,13 @@ function ApprovalActions({
                     />
                   </Field>
                 )}
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-slate-500">
                   The previous approved version remains available. A future
                   revision takes effect only on its effective date.
                 </p>
               </>
             )}
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-wrap justify-end gap-3">
               <Button variant="outline" onClick={() => setDialog(null)}>
                 Cancel
               </Button>
@@ -463,16 +509,14 @@ function PlanBar({
   onResolve?: (issue: string) => void;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Status status={document.status} swot={document.kind === "SWOT"} />
-            <span className="text-xs text-muted-foreground">
-              {document.code}
-            </span>
+            <span className="text-xs text-slate-500">{document.code}</span>
           </div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          <p className="mt-2 text-xs leading-5 text-slate-500">
             {document.status === "APPROVED"
               ? "This plan is locked. Its approved commitments are available to the next planning stage."
               : document.status === "IN_REVIEW"
@@ -513,11 +557,8 @@ function SwotBoard({
     consideredCount > 0 && consideredCount === data.references.pillars.length;
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm">
-        <LockKeyhole
-          className="mt-0.5 shrink-0 text-muted-foreground"
-          size={17}
-        />
+      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm">
+        <LockKeyhole className="mt-0.5 shrink-0 text-slate-500" size={17} />
         <p>
           Confidential planning input. Only management, coordinators and
           selected contributors can access this assessment. Approved company
@@ -534,7 +575,7 @@ function SwotBoard({
         ])}
       />
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 basis-72 text-sm text-muted-foreground">
+        <div className="min-w-0 flex-1 basis-72 text-sm text-slate-500">
           <p role="status">
             {consideredCount} of 6 pillars considered. Empty quadrants are
             allowed.
@@ -606,9 +647,7 @@ function SwotBoard({
                       ({findings.length})
                     </span>
                   </h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {category.hint}
-                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{category.hint}</p>
                 </div>
                 {document.permissions.canEdit && (
                   <Button
@@ -636,9 +675,9 @@ function SwotBoard({
                     onClick={() =>
                       edit({ document, kind: "finding", initial: { ...f } })
                     }
-                    className="w-full rounded-lg border border-white/80 bg-card p-4 text-left shadow-sm transition hover:shadow-md"
+                    className="w-full rounded-lg border border-white/80 bg-white p-4 text-left shadow-sm transition hover:shadow-md"
                   >
-                    <div className="mb-2 flex flex-wrap justify-between gap-2 text-[11px] text-muted-foreground">
+                    <div className="mb-2 flex flex-wrap justify-between gap-2 text-[11px] text-slate-500">
                       <span>
                         {f.code}
                         {f.pillar !== pillar
@@ -647,17 +686,17 @@ function SwotBoard({
                       </span>
                       <FindingWeightage weightage={f.weightage} />
                     </div>
-                    <p className="text-sm font-medium text-gemba-navy">
+                    <p className="text-sm font-medium text-slate-900">
                       {f.title}
                     </p>
-                    <p className="mt-2 text-xs text-muted-foreground">
+                    <p className="mt-2 text-xs text-slate-500">
                       {responseLabels[f.response]}
                       {f.basis === "NEEDS_CHECKING" ? " · Needs checking" : ""}
                     </p>
                   </button>
                 ))}
                 {!findings.length && (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
+                  <p className="py-8 text-center text-sm text-slate-500">
                     No {category.label.toLowerCase()} recorded for this pillar.
                   </p>
                 )}
@@ -734,12 +773,12 @@ function SwotSummary({
   );
   return (
     <section className={`${card} space-y-4`}>
-      <h2 className="font-semibold text-gemba-navy">
+      <h2 className="font-semibold text-slate-900">
         Summary & management decisions
       </h2>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-slate-500">
         Highest weightage first; unassessed findings appear last. Priority is
-        derived from weightage: Low 1–3, Medium 4–6, High 7–10.
+        derived from weightage: Low 1–3, Medium 4–7, High 8–10.
       </p>
       <input
         aria-label="Search SWOT summary"
@@ -823,12 +862,12 @@ function SwotSummary({
         </div>
       </div>
       {document.status !== "APPROVED" && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-slate-500">
           Finalise the assessment before selecting sources for objectives. You
           can record decisions while it is a draft.
         </p>
       )}
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-slate-100">
         {rows.map((f) => (
           <div key={f.id} className="flex items-start gap-3 py-4">
             <input
@@ -852,16 +891,16 @@ function SwotSummary({
                   edit({ document, kind: "finding", initial: { ...f } })
                 }
               >
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-slate-500">
                   {f.code} · {f.pillar} · {categories[f.category].singular}
                 </span>
-                <p className="mt-1 text-sm font-medium text-gemba-navy">
+                <p className="mt-1 text-sm font-medium text-slate-900">
                   {f.title}
                 </p>
                 <div className="mt-2">
                   <FindingWeightage weightage={f.weightage} />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-slate-500">
                   {responseLabels[f.response]}
                   {f.basis === "NEEDS_CHECKING" ? " · Needs checking" : ""}
                 </p>
@@ -874,12 +913,12 @@ function SwotSummary({
                 }
               />
             </div>
-            <ChevronRight size={15} className="mt-3 text-muted-foreground" />
+            <ChevronRight size={15} className="mt-3 text-slate-500" />
           </div>
         ))}
       </div>
       {!rows.length && (
-        <p className="py-6 text-center text-sm text-muted-foreground">
+        <p className="py-6 text-center text-sm text-slate-500">
           No findings match these filters.
         </p>
       )}
@@ -937,15 +976,15 @@ function Delivery({
               onClick={() =>
                 edit({ document, kind: "assignment", initial: { ...a } })
               }
-              className="block w-full rounded-lg border border-border p-4 text-left"
+              className="block w-full rounded-lg border border-slate-200 p-4 text-left"
             >
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-slate-500">
                 {a.code} · {data.kras.find((r) => r.id === k?.kraId)?.name}
               </span>
               <h3 className="mt-1 font-medium">
                 {k?.name || "KPI not selected"}
               </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-slate-500">
                 Update: {a.updateFrequency.replaceAll("_", " ")} · Review:{" "}
                 {a.reviewFrequency.replaceAll("_", " ")} · {a.targets.length}{" "}
                 periods ·{" "}
@@ -957,7 +996,7 @@ function Delivery({
                 targets missing
               </p>
               {a.targets.some((period) => period.scheduled === false) && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-slate-500">
                   {
                     a.targets.filter((period) => period.scheduled === false)
                       .length
@@ -965,11 +1004,11 @@ function Delivery({
                   non-working dates not scheduled
                 </p>
               )}
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-slate-500">
                 {document.data.goals.find((g) => g.id === a.goalId)?.title ||
                   "Goal not selected"}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-slate-500">
                 Accountable owner:{" "}
                 {data.references.people.find(
                   (person) => person.id === a.ownerId,
@@ -982,7 +1021,7 @@ function Delivery({
           );
         })}
         {!document.data.assignments.length && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500">
             Assign a reusable measure to a contribution goal, then set targets
             for its reporting periods.
           </p>
@@ -1004,21 +1043,21 @@ function Delivery({
             onClick={() =>
               edit({ document, kind: "action", initial: { ...a } })
             }
-            className="block w-full rounded-lg border border-border p-4 text-left"
+            className="block w-full rounded-lg border border-slate-200 p-4 text-left"
           >
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-slate-500">
               {a.code}
               {a.parentActionId ? " · Sub-action" : ""} · Due{" "}
               {a.dueDate || "not set"}
             </span>
             <p className="mt-1 font-medium">{a.title || "Untitled action"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-xs text-slate-500">
               {a.expectedResult || "Expected result not set"}
             </p>
           </button>
         ))}
         {!document.data.actions.length && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500">
             Plan the work, owner, due date and evidence needed to deliver each
             contribution.
           </p>
@@ -1033,7 +1072,7 @@ function Delivery({
   );
 }
 
-function History({
+export function History({
   document,
   expanded = false,
 }: {
@@ -1047,14 +1086,14 @@ function History({
         Version & audit history
       </summary>
       <div className="mt-4 space-y-3">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-slate-500">
           Times shown in {data.references.timeZone || "UTC"}. Previous approvals
           remain available during revisions.
         </p>
         {document.versions.map((v) => (
           <details
             key={v.version}
-            className="rounded-lg border border-border p-3"
+            className="rounded-lg border border-slate-200 p-3"
           >
             <summary className="cursor-pointer text-sm">
               Version {v.version} · effective {v.effectiveDate} · approved{" "}
@@ -1069,12 +1108,12 @@ function History({
                 ...v.data.actions,
               ].map((item) => (
                 <p key={item.id}>
-                  <span className="text-muted-foreground">{item.code}</span> —{" "}
+                  <span className="text-slate-500">{item.code}</span> —{" "}
                   {item.title || "Untitled"}
                 </p>
               ))}
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-xs text-slate-500">
               {v.data.assignments.length} KPI assignments preserved with this
               version.
             </p>
@@ -1084,12 +1123,15 @@ function History({
           .slice()
           .reverse()
           .map((event) => (
-            <div key={event.id} className="border-b border-border pb-2 text-xs">
+            <div
+              key={event.id}
+              className="border-b border-slate-200 pb-2 text-xs"
+            >
               <p className="font-medium">
                 {event.action}
                 {event.detail ? ` · ${event.detail}` : ""}
               </p>
-              <p className="mt-1 text-muted-foreground">
+              <p className="mt-1 text-slate-500">
                 {event.actorName} ·{" "}
                 {planningTime(event.at, data.references.timeZone)}
               </p>
@@ -1097,7 +1139,7 @@ function History({
             </div>
           ))}
         {!document.versions.length && !document.history.length && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500">
             No visible version history yet.
           </p>
         )}
@@ -1140,16 +1182,13 @@ function ReadItem({ edit, onClose }: { edit: Edit; onClose: () => void }) {
           .join("\n") || "No periods yet"
       );
     if (key === "parent" && typeof v === "object") {
-      const parent = v as {
-        documentId: string;
-        goalId: string;
-        version: number;
-      };
+      const parent = v as ParentGoal;
       const plan = data.documents.find((d) => d.id === parent.documentId);
-      const goal = plan?.versions
-        .find((version) => version.version === parent.version)
-        ?.data.goals.find((g) => g.id === parent.goalId);
-      return `${goal?.title || "Approved parent goal"} · v${parent.version}`;
+      const version = plan?.versions.find(
+        (version) => version.version === parent.version,
+      );
+      const goal = version && resolveParentGoal(version.data, parent);
+      return `${goal?.title || "Approved parent commitment"} · v${parent.version}`;
     }
     if (Array.isArray(v))
       return (
@@ -1179,16 +1218,14 @@ function ReadItem({ edit, onClose }: { edit: Edit; onClose: () => void }) {
       onClose={onClose}
       wide
     >
-      <p className="mb-4 text-sm text-muted-foreground">
+      <p className="mb-4 text-sm text-slate-500">
         Read-only record. Approved information can be changed only through a
         dated revision.
       </p>
       <dl className="grid gap-4 sm:grid-cols-2">
         {edit.kind === "finding" && (
-          <div className="min-w-0 rounded-lg bg-muted/50 p-3">
-            <dt className="text-xs text-muted-foreground">
-              Weightage & priority
-            </dt>
+          <div className="min-w-0 rounded-lg bg-slate-50 p-3">
+            <dt className="text-xs text-slate-500">Weightage & priority</dt>
             <dd className="mt-1">
               <FindingWeightage weightage={value.weightage} />
             </dd>
@@ -1196,7 +1233,7 @@ function ReadItem({ edit, onClose }: { edit: Edit; onClose: () => void }) {
               edit.document.status === "APPROVED" &&
               typeof value.priority === "string" &&
               ["HIGH", "MEDIUM", "LOW"].includes(value.priority) && (
-                <dd className="mt-2 text-xs text-muted-foreground">
+                <dd className="mt-2 text-xs text-slate-500">
                   Previous priority (before weightage): {value.priority}
                 </dd>
               )}
@@ -1205,8 +1242,8 @@ function ReadItem({ edit, onClose }: { edit: Edit; onClose: () => void }) {
         {Object.entries(value)
           .filter(([key]) => !skip.has(key))
           .map(([key, v]) => (
-            <div key={key} className="min-w-0 rounded-lg bg-muted/50 p-3">
-              <dt className="text-xs capitalize text-muted-foreground">
+            <div key={key} className="min-w-0 rounded-lg bg-slate-50 p-3">
+              <dt className="text-xs capitalize text-slate-500">
                 {key.replace(/([A-Z])/g, " $1")}
               </dt>
               <dd className="mt-1 break-words whitespace-pre-wrap text-sm">
@@ -1236,6 +1273,10 @@ export function PlanningWorkspace({ section }: { section: Section }) {
     setPlanningCycle: setCycle,
     contributionContext,
     setContributionContext,
+    planFocus,
+    setPlanFocus,
+    registerFocus,
+    setRegisterFocus,
   } = usePlanning();
   const cycle =
     planningCycle ||
@@ -1249,14 +1290,22 @@ export function PlanningWorkspace({ section }: { section: Section }) {
   const [requestedTab, setTab] = useState("summary"),
     [swotOpen, setSwotOpen] = useState(false),
     [newKind, setNewKind] = useState<PlanningDocument["kind"] | null>(null),
-    [personalKind, setPersonalKind] =
-      useState<PlanningDocument["kind"]>("INDIVIDUAL"),
+    [requestedPersonalKind, setPersonalKind] = useState<
+      PlanningDocument["kind"]
+    >(() => {
+      const focused = data.documents.find((d) => d.id === planFocus);
+      return focused &&
+        ["TEAM", "POSITION", "INDIVIDUAL"].includes(focused.kind)
+        ? focused.kind
+        : "INDIVIDUAL";
+    }),
     [scopeSelection, setScopeSelection] = useState({
       cycle,
       id:
         section === "department" && contributionContext?.cycle === cycle
           ? contributionContext.departmentId
-          : "",
+          : data.documents.find((d) => d.id === planFocus && d.cycle === cycle)
+              ?.scopeId || "",
     }),
     [contributionGoal, setContributionGoal] = useState<Goal | null>(null),
     [settingsId, setSettingsId] = useState(""),
@@ -1268,15 +1317,37 @@ export function PlanningWorkspace({ section }: { section: Section }) {
     } | null>(null),
     [review, setReview] = useState(false),
     [history, setHistory] = useState(false),
-    [id, setId] = useState(""),
+    [id, setId] = useState(section === "approval" ? planFocus : ""),
     [create, setCreate] = useState(false),
     [companyDraft, setCompanyDraft] = useState<string | null>(null),
     [edit, setEdit] = useState<Edit | null>(null),
     [sourceLinks, setSourceLinks] = useState<SourceLink[] | null>(null),
     [objectiveId, setObjectiveId] = useState("");
+  const [createGoal, setCreateGoal] = useState(false);
+  const [pendingEditor, setPendingEditor] = useState<{
+    documentId: string;
+    kind: ItemKind;
+    initial?: Record<string, unknown>;
+  } | null>(null);
   const tab = canSeeSwot ? requestedTab : "objectives";
   const { run, busy } = usePlanning();
   const [linkError, setLinkError] = useState("");
+  const personalKinds: PlanningDocument["kind"][] = (
+    ["INDIVIDUAL", "TEAM", "POSITION"] as const
+  ).filter(
+    (kind) =>
+      data.actor.role !== "EMPLOYEE" ||
+      kind === "INDIVIDUAL" ||
+      data.documents.some(
+        (plan) =>
+          plan.cycle === cycle &&
+          plan.kind === kind &&
+          plan.permissions.canRead,
+      ),
+  );
+  const personalKind = personalKinds.includes(requestedPersonalKind)
+    ? requestedPersonalKind
+    : "INDIVIDUAL";
   const kinds: PlanningDocument["kind"][] =
     section === "company"
       ? ["COMPANY"]
@@ -1300,15 +1371,24 @@ export function PlanningWorkspace({ section }: { section: Section }) {
               ...person,
               name: `${person.name} · ${person.position}`,
             }))
-  ).filter((scope) =>
-    data.actor.role === "EMPLOYEE"
-      ? scopeKind === "DEPARTMENT"
-        ? scope.id === data.actor.departmentId
-        : scopeKind === "INDIVIDUAL" && scope.id === data.actor.employeeId
-      : data.actor.role === "HOD"
-        ? scope.departmentId === data.actor.departmentId
-        : true,
-  );
+  ).filter((scope) => {
+    const sharedWithActor = data.documents.some(
+      (plan) =>
+        plan.kind === scopeKind &&
+        plan.cycle === cycle &&
+        plan.scopeId === scope.id &&
+        plan.permissions.canRead,
+    );
+    if (data.actor.role === "EMPLOYEE")
+      return (
+        sharedWithActor ||
+        (scopeKind === "DEPARTMENT" && scope.id === data.actor.departmentId) ||
+        (scopeKind === "INDIVIDUAL" && scope.id === data.actor.employeeId)
+      );
+    if (data.actor.role === "HOD")
+      return sharedWithActor || scope.departmentId === data.actor.departmentId;
+    return true;
+  });
   const scopeId =
     scopeSelection.cycle === cycle &&
     scopeOptions.some((scope) => scope.id === scopeSelection.id)
@@ -1414,8 +1494,18 @@ export function PlanningWorkspace({ section }: { section: Section }) {
       ?.data.findings.find(
         (f) => f.id === pendingObjective.sources[0]?.findingId,
       );
+  const pendingEditorDocument =
+    pendingEditor &&
+    data.documents.find((d) => d.id === pendingEditor.documentId);
   const activeEdit: Edit | null =
     edit ||
+    (pendingEditorDocument && pendingEditor
+      ? {
+          document: pendingEditorDocument,
+          kind: pendingEditor.kind,
+          initial: pendingEditor.initial,
+        }
+      : null) ||
     (pendingDocument && pendingObjective
       ? {
           document: pendingDocument,
@@ -1429,6 +1519,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
   const closeEditor = () => {
     setEdit(null);
     setPendingObjective(null);
+    setPendingEditor(null);
   };
   const editorDocument =
     activeEdit &&
@@ -1447,14 +1538,8 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         ...activeEdit?.initial,
       }
     : activeEdit?.initial;
-  const startFromSwot = () => {
-    if (section !== "company") {
-      router.push("/leadership-excellence/performance-planning/objectives");
-      return;
-    }
-    setTab("summary");
-    setSwotOpen(true);
-  };
+  const startFromSwot = () =>
+    router.push("/leadership-excellence/performance-planning/swot-findings");
   const selectedScope = scopeOptions.find((scope) => scope.id === scopeId);
   const relatedDepartmentId =
     document?.departmentId || selectedScope?.departmentId;
@@ -1480,12 +1565,64 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         kind,
         scopeId: scope.id,
         cycle,
-        title: `${scope.name} · ${cycle}`,
+        title: `${scope.name} · ${planningPeriodLabel(cycle)}`,
       });
       setId(savedId);
       setScopeSelection({ cycle, id: scope.id });
     } catch {
       /* The provider keeps the entered scope and displays the error. */
+    }
+  }
+  function openPlan(plan: Plan) {
+    setContributionContext(null);
+    setCycle(plan.cycle);
+    setPlanFocus(plan.id);
+    setId(plan.id);
+    setScopeSelection({ cycle: plan.cycle, id: plan.scopeId });
+    if (["TEAM", "POSITION", "INDIVIDUAL"].includes(plan.kind))
+      setPersonalKind(plan.kind);
+    if (plan.kind === "COMPANY" && section === "company") {
+      setReview(true);
+      return;
+    }
+    const path =
+      plan.kind === "COMPANY"
+        ? "objectives"
+        : plan.kind === "DEPARTMENT"
+          ? "department-plans"
+          : plan.kind === "SWOT"
+            ? "check-approve"
+            : "team-individual-plans";
+    router.push(`/leadership-excellence/performance-planning/${path}`);
+  }
+  async function linkApprovedGoal(parent: ApprovedParentGoal) {
+    if (!selectedScope || busy || (document && !document.permissions.canEdit))
+      return;
+    try {
+      const documentId =
+        document?.id ||
+        (await run("CREATE_PLAN", {
+          kind: scopeKind,
+          scopeId: selectedScope.id,
+          cycle,
+          title: `${selectedScope.name} · ${planningPeriodLabel(cycle)}`,
+        }));
+      setPendingEditor({
+        documentId,
+        kind: "goal",
+        initial: {
+          parent: {
+            documentId: parent.documentId,
+            goalId: parent.goal.id,
+            version: parent.version,
+            ...(parent.itemKind ? { itemKind: parent.itemKind } : {}),
+          },
+          startDate: parent.goal.startDate,
+          endDate: parent.goal.endDate,
+        },
+      });
+    } catch {
+      /* Provider displays the error and keeps the selected scope. */
     }
   }
   async function completeDepartmentSetup() {
@@ -1496,7 +1633,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
     if (!relatedDepartment || !canCreateDepartment) {
       setSetupNotice(
         relatedDepartment
-          ? `Ask your department manager to create the ${relatedDepartment.name} plan for ${cycle}. Your draft is saved and you can keep working on it.`
+          ? `Ask your department manager to create the ${relatedDepartment.name} plan for ${planningPeriodLabel(cycle)}. Your draft is saved and you can keep working on it.`
           : "Your employee record needs a department in EMS. Ask your EMS administrator to confirm it; your saved draft stays available.",
       );
       return;
@@ -1507,7 +1644,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         kind: "DEPARTMENT",
         scopeId: relatedDepartment.id,
         cycle,
-        title: `${relatedDepartment.name} · ${cycle}`,
+        title: `${relatedDepartment.name} · ${planningPeriodLabel(cycle)}`,
       });
       setSettingsId(savedId);
     } catch {
@@ -1547,31 +1684,23 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         }
         setEdit({
           document: plan,
-          kind:
-            kind === "objective" &&
-            issue.includes("add a measurable linked goal")
-              ? "goal"
-              : kind,
-          initial:
-            kind === "objective" &&
-            issue.includes("add a measurable linked goal")
-              ? { objectiveId: item.id }
-              : { ...item },
+          kind,
+          initial: { ...item },
         });
         return;
       }
     }
     if (issue.startsWith("Consider ")) {
-      if (section === "company") {
-        setSwotOpen(true);
-        setTab("swot");
-      } else setTab("swot");
+      router.push("/leadership-excellence/performance-planning/swot-findings");
     } else if (issue.includes("before submitting. Your draft")) {
       void completeDepartmentSetup();
     } else if (issue.includes("at least one objective")) {
       setEdit({ document: plan, kind: "objective" });
     } else if (issue.includes("at least one goal")) {
-      setEdit({ document: plan, kind: "goal" });
+      setEdit({
+        document: plan,
+        kind: plan.kind === "COMPANY" ? "objective" : "goal",
+      });
     } else openSettings(plan);
   }
   const personName = (personId: string) =>
@@ -1585,6 +1714,8 @@ export function PlanningWorkspace({ section }: { section: Section }) {
           (parent) =>
             parent.documentId === contributionContext.parent.documentId &&
             parent.goal.id === contributionContext.parent.goalId &&
+            (parent.itemKind || "GOAL") ===
+              (contributionContext.parent.itemKind || "GOAL") &&
             parent.version === contributionContext.parent.version &&
             parent.cycle === cycle &&
             parent.goal.departmentIds.includes(scopeId),
@@ -1606,141 +1737,106 @@ export function PlanningWorkspace({ section }: { section: Section }) {
     },
   };
   return (
-    <div className="mx-auto w-full max-w-[1500px] space-y-5">
+    <div className="mx-auto w-full min-w-0 max-w-[1500px] space-y-5 text-slate-900">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span>Leadership Excellence</span>
             <ChevronRight size={12} />
             <span>Performance planning &amp; alignment</span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-gemba-navy sm:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             Performance planning
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Start with SWOT. Turn reviewed findings into objectives, goals and
-            clear contributions.
+          <p className="mt-2 text-sm text-slate-500">
+            Save once. Find it in the register. Link each contribution to its
+            approved objective or department goal.
           </p>
         </div>
-        <PlanningYearPicker
-          value={cycle}
-          years={cycles}
-          onChange={(year, created) => {
-            setCycle(year);
-            setId("");
-            setReview(false);
-            setHistory(false);
-            setPendingSources([]);
-            setPendingObjective(null);
-            setContributionContext(null);
-            if (created && section === "company") {
-              setSwotOpen(true);
-              setTab("swot");
-            }
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          {section === "company" && <PlanningStrategyMap cycle={cycle} />}
+          <PlanningYearPicker
+            value={cycle}
+            years={cycles}
+            onChange={(year, created) => {
+              setCycle(year);
+              setId("");
+              setReview(false);
+              setHistory(false);
+              setPendingSources([]);
+              setPendingObjective(null);
+              setContributionContext(null);
+              setPlanFocus("");
+              setRegisterFocus(null);
+              if (created && section === "company") {
+                setSwotOpen(true);
+                setTab("swot");
+              }
+            }}
+          />
+        </div>
       </header>
-      <PlanningSteps section={section} />
-      <section
-        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4"
-        aria-label="Your next step"
-      >
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-blue-700">YOUR NEXT STEP</p>
-          <p className="mt-1 text-sm text-gemba-navy">
-            {section === "company"
-              ? "Review SWOT findings, then agree your company objectives and measurable goals."
-              : section === "department"
+      <PlanningFlowNav active={section} />
+      {section !== "company" && (
+        <section
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4"
+          aria-label="Your next step"
+        >
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-blue-700">
+              YOUR NEXT STEP
+            </p>
+            <p className="mt-1 text-sm text-slate-900">
+              {section === "department"
                 ? "Choose a department. Add its contribution, then assign KPIs and actions below that goal."
                 : section === "personal"
                   ? "Choose a person. Agree their contribution and reuse department work where relevant."
                   : "Complete any missing details, then send each plan to its single approver."}
-          </p>
-        </div>
-        {document && (
-          <Button variant="outline" onClick={() => setReview(true)}>
-            Check readiness <ArrowRight size={14} />
-          </Button>
-        )}
-      </section>
-      {section === "company" && canSeeSwot && (
-        <details
-          open={swotOpen}
-          onToggle={(event) => setSwotOpen(event.currentTarget.open)}
-          className="rounded-xl border border-border bg-card p-4 sm:p-5"
-        >
-          <summary className="cursor-pointer text-sm font-semibold text-gemba-navy">
-            SWOT findings{" "}
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {swotDocument
-                ? `${swotDocument.data.findings.length} findings · ${swotDocument.status === "APPROVED" ? "Reviewed" : "Draft"}`
-                : "Start your business assessment"}
-            </span>
-          </summary>
-          <div className="mt-5 space-y-4">
-            {swotDocument ? (
-              <>
-                <PlanBar
-                  document={swotDocument}
-                  onSettings={() => openSettings(swotDocument)}
-                  onResolve={(issue) => resolveIssue(swotDocument, issue)}
-                />
-                <Tabs
-                  label="SWOT view"
-                  value={tab === "swot" ? "swot" : "summary"}
-                  onChange={setTab}
-                  items={[
-                    ["swot", "Findings by pillar"],
-                    ["summary", "Reviewed findings & decisions"],
-                  ]}
-                />
-                {tab === "swot" ? (
-                  <SwotBoard
-                    key={swotDocument.id}
-                    document={swotDocument}
-                    edit={setEdit}
-                  />
-                ) : (
-                  <SwotSummary
-                    key={`${swotDocument.id}/${swotDocument.status}`}
-                    document={swotDocument}
-                    edit={setEdit}
-                    onUse={(links) => {
-                      setSourceLinks(links);
-                      setObjectiveId("");
-                      setLinkError("");
-                    }}
-                  />
-                )}
-                <History document={swotDocument} />
-              </>
-            ) : (
-              <Empty
-                title="Add your first SWOT findings"
-                action={
-                  canCreate ? (
-                    <Button
-                      onClick={() => {
-                        setNewKind("SWOT");
-                        setCreate(true);
-                      }}
-                    >
-                      Start SWOT assessment
-                    </Button>
-                  ) : undefined
-                }
-              >
-                Record business findings, consider the six pillars and have the
-                assessment reviewed before finalising company objectives.
-              </Empty>
-            )}
+            </p>
           </div>
-        </details>
+          {document && (
+            <Button variant="outline" onClick={() => setReview(true)}>
+              Check readiness <ArrowRight size={14} />
+            </Button>
+          )}
+        </section>
+      )}
+      {section === "company" && !document && (
+        <Empty
+          title="Create your company objective plan"
+          action={
+            canCreate ? (
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  try {
+                    const savedId = await run("CREATE_PLAN", {
+                      kind: "COMPANY",
+                      cycle,
+                      title: `Company plan · ${planningPeriodLabel(cycle)}`,
+                    });
+                    setPendingEditor({
+                      documentId: savedId,
+                      kind: "objective",
+                    });
+                  } catch {
+                    /* Provider retains the error and form context. */
+                  }
+                }}
+              >
+                <Plus size={16} /> Create objective
+              </Button>
+            ) : undefined
+          }
+        >
+          Start with reviewed SWOT evidence. Save incomplete drafts and add
+          measurable goals under each objective.
+        </Empty>
       )}
       {(section === "department" || section === "personal") && (
-        <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
           <div className="flex flex-wrap items-end gap-4">
-            {section === "personal" && data.actor.role !== "EMPLOYEE" && (
+            {section === "personal" && personalKinds.length > 1 && (
               <div className="w-full sm:w-44">
                 <Field label="Plan for">
                   <select
@@ -1754,9 +1850,15 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                       setId("");
                     }}
                   >
-                    <option value="INDIVIDUAL">Individual</option>
-                    <option value="TEAM">Team / section</option>
-                    <option value="POSITION">Position</option>
+                    {personalKinds.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {kind === "INDIVIDUAL"
+                          ? "Individual"
+                          : kind === "TEAM"
+                            ? "Team / section"
+                            : "Position"}
+                      </option>
+                    ))}
                   </select>
                 </Field>
               </div>
@@ -1802,12 +1904,15 @@ export function PlanningWorkspace({ section }: { section: Section }) {
               </Button>
             )}
           </div>
-          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          <p className="mt-3 text-xs leading-5 text-slate-500">
             {section === "personal" && relatedDepartment
-              ? `${relatedDepartment.name} · `
+              ? `EMS department: ${relatedDepartment.name} · `
               : ""}
-            Planning year {cycle}. Your selections come from EMS. You can save
-            an incomplete draft and finish setup later.
+            Planning period {planningPeriodLabel(cycle)}.{" "}
+            {section === "personal" && personalKind === "INDIVIDUAL"
+              ? "Employee details come from EMS; goals come from approved company or department plans you can access, including other departments."
+              : "People and departments come from EMS."}{" "}
+            You can save an incomplete draft and finish setup later.
           </p>
           {section === "personal" &&
             personalKind === "TEAM" &&
@@ -1820,44 +1925,69 @@ export function PlanningWorkspace({ section }: { section: Section }) {
             )}
         </section>
       )}
-      {section === "personal" && relatedDepartment && !departmentPlan && (
-        <section
-          aria-label="Department setup"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4"
-        >
-          <div className="min-w-0 flex-1 basis-64">
-            <p className="text-sm font-semibold text-amber-900">
-              {relatedDepartment.name} plan needs setup
-            </p>
-            <p className="mt-1 text-xs leading-5 text-amber-800">
-              You can save this person&apos;s draft now. Create the department
-              plan for {cycle} before submitting. Approved department goals will
-              then be available for linking.
-            </p>
-          </div>
-          {canCreateDepartment ? (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => void completeDepartmentSetup()}
-            >
-              Create {relatedDepartment.name} draft
-            </Button>
-          ) : (
-            <p className="text-xs text-amber-800">
-              Ask your department manager to complete this setup.
-            </p>
-          )}
-        </section>
-      )}
+      {(section === "department" || section === "personal") &&
+        selectedScope && (
+          <details className="rounded-xl border border-slate-200 bg-white p-4">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Browse approved parent goals
+            </summary>
+            <PlanningApprovedGoals
+              child={{
+                id: document?.id,
+                kind: scopeKind,
+                cycle,
+                scopeId,
+                departmentId: relatedDepartmentId || "",
+              }}
+              canLink={document ? document.permissions.canEdit : canCreate}
+              busy={busy}
+              onLink={(parent) => void linkApprovedGoal(parent)}
+            />
+          </details>
+        )}
+      {section === "personal" &&
+        personalKind !== "INDIVIDUAL" &&
+        relatedDepartment &&
+        !departmentPlan && (
+          <section
+            aria-label="Department setup"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4"
+          >
+            <div className="min-w-0 flex-1 basis-64">
+              <p className="text-sm font-semibold text-amber-900">
+                {relatedDepartment.name} plan needs setup
+              </p>
+              <p className="mt-1 text-xs leading-5 text-amber-800">
+                You can save this person&apos;s draft now. Create the department
+                plan for {planningPeriodLabel(cycle)} before submitting.
+                Approved department goals will then be available for linking.
+              </p>
+            </div>
+            {canCreateDepartment ? (
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => void completeDepartmentSetup()}
+              >
+                Create {relatedDepartment.name} draft
+              </Button>
+            ) : (
+              <p className="text-xs text-amber-800">
+                Ask your department manager to complete this setup.
+              </p>
+            )}
+          </section>
+        )}
       {handoffParent && (
         <section
-          aria-label="Selected company goal"
+          aria-label="Selected company objective"
           className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/40 p-4"
         >
           <div className="min-w-0 flex-1 basis-64">
-            <p className="text-xs text-muted-foreground">
-              Contributing to company goal · approved v{handoffParent.version}
+            <p className="text-xs text-slate-500">
+              Contributing to company{" "}
+              {handoffParent.itemKind === "OBJECTIVE" ? "objective" : "goal"} ·
+              approved v{handoffParent.version}
             </p>
             <p className="mt-1 text-sm font-semibold">
               {handoffParent.goal.title}
@@ -1885,7 +2015,8 @@ export function PlanningWorkspace({ section }: { section: Section }) {
           </Button>
         </section>
       )}
-      {section === "approval" && !document ? (
+      {section === "company" && !document ? null : section === "approval" &&
+        !document ? (
         <PlanCollection
           key={`${section}/${cycle}`}
           documents={documents}
@@ -1910,10 +2041,10 @@ export function PlanningWorkspace({ section }: { section: Section }) {
           }
         >
           {section === "company"
-            ? "Choose a reviewed finding above to create an objective and its first measurable goal."
+            ? "Choose a reviewed finding above to create a measurable company objective."
             : selectedScope
               ? "Create a draft above. Add the contribution first; KPIs and actions stay beside it."
-              : "Select a department, employee, team or position above. The same planning year carries through all four steps."}
+              : "Select a department, employee, team or position above. The same planning period carries through all six steps."}
         </Empty>
       ) : (
         <div className="min-w-0 space-y-4">
@@ -1921,26 +2052,24 @@ export function PlanningWorkspace({ section }: { section: Section }) {
             <button
               type="button"
               onClick={() => setId("")}
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground"
+              className="inline-flex items-center gap-2 text-sm text-slate-500"
             >
               <ArrowLeft size={14} /> All plans for review
             </button>
           )}
-          <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold text-gemba-navy">
-                    {section === "company"
-                      ? "Objectives & goals"
-                      : titleOf(document)}
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    {section === "company" ? "Company plan" : titleOf(document)}
                   </h2>
                   <Status
                     status={document.status}
                     swot={document.kind === "SWOT"}
                   />
                 </div>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                <p className="mt-2 text-xs leading-5 text-slate-500">
                   Owner: {personName(document.data.ownerId)} · Approver:{" "}
                   {personName(document.data.approverId)} ·{" "}
                   {document.data.startDate || "Start date not set"} —{" "}
@@ -2015,20 +2144,22 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                   </Button>
                 </section>
               )}
-              <Register
-                key={document.id}
-                document={document}
-                edit={setEdit}
-                onStartFromSwot={canSeeSwot ? startFromSwot : undefined}
-                onPlanContributions={setContributionGoal}
-              />
+              {
+                <Register
+                  key={document.id}
+                  document={document}
+                  edit={setEdit}
+                  onStartFromSwot={canSeeSwot ? startFromSwot : undefined}
+                  onPlanContributions={setContributionGoal}
+                />
+              }
               {orphanDelivery &&
                 document.kind !== "COMPANY" &&
                 orphanDelivery.data.assignments.length +
                   orphanDelivery.data.actions.length +
                   (orphanDelivery.data.actionLinks?.length || 0) >
                   0 && (
-                  <details className="rounded-xl border border-border bg-card p-4">
+                  <details className="rounded-xl border border-slate-200 bg-white p-4">
                     <summary className="cursor-pointer text-sm font-semibold">
                       Unlinked draft KPIs & actions · choose their goal to
                       finish setup
@@ -2045,7 +2176,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
             </>
           )}
           {section === "company" && (
-            <p className="text-xs leading-5 text-muted-foreground">
+            <p className="text-xs leading-5 text-slate-500">
               Company achievement comes from its own verified measures.
               Department contributions remain distinct.
             </p>
@@ -2054,7 +2185,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
       )}
       <PlanningGuide section={section} />
       {data.references.refreshedAt && (
-        <details className="text-xs text-muted-foreground">
+        <details className="text-xs text-slate-500">
           <summary className="cursor-pointer">Shared organisation data</summary>
           <p className="mt-2 leading-5">
             People and departments: {data.references.source || "EMS"} &middot;
@@ -2069,8 +2200,8 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         </details>
       )}
       {section === "approval" && (
-        <details className="rounded-xl border border-border bg-card p-4">
-          <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+        <details className="rounded-xl border border-slate-200 bg-white p-4">
+          <summary className="cursor-pointer text-xs font-medium text-slate-500">
             Backup &amp; restore
           </summary>
           <div className="mt-4">
@@ -2082,12 +2213,12 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         <Modal title="Check & approval" onClose={() => setReview(false)}>
           <div className="space-y-5">
             <div>
-              <h3 className="font-semibold text-gemba-navy">
+              <h3 className="font-semibold text-slate-900">
                 {titleOf(document)}
               </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Planning year {document.cycle} &middot; The whole plan is
-                checked together.
+              <p className="mt-1 text-xs text-slate-500">
+                Planning period {planningPeriodLabel(document.cycle)} &middot;
+                The whole plan is checked together.
               </p>
             </div>
             <Readiness
@@ -2115,9 +2246,10 @@ export function PlanningWorkspace({ section }: { section: Section }) {
           title="Plan department contributions"
           onClose={() => setContributionGoal(null)}
         >
-          <p className="mb-4 text-sm text-muted-foreground">
-            {contributionGoal.title} · Planning year {cycle}. Choose a
-            contributing department; its targets will be planned separately.
+          <p className="mb-4 text-sm text-slate-500">
+            {contributionGoal.title} · Planning period{" "}
+            {planningPeriodLabel(cycle)}. Choose a contributing department; its
+            targets will be planned separately.
           </p>
           <div className="space-y-3">
             {contributionGoal.departmentIds
@@ -2130,13 +2262,16 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                 const department = data.references.departments.find(
                   (d) => d.id === departmentId,
                 );
-                const parent = data.approvedParentGoals?.find(
-                  (candidate) =>
-                    candidate.documentId === document.id &&
-                    candidate.goal.id === contributionGoal.id &&
-                    candidate.cycle === cycle &&
-                    candidate.goal.departmentIds.includes(departmentId),
-                );
+                const parent = data.approvedParentGoals
+                  ?.filter(
+                    (candidate) =>
+                      candidate.documentId === document.id &&
+                      candidate.itemKind === "OBJECTIVE" &&
+                      candidate.goal.id === contributionGoal.id &&
+                      candidate.cycle === cycle &&
+                      candidate.goal.departmentIds.includes(departmentId),
+                  )
+                  .sort((a, b) => b.version - a.version)[0];
                 const existing = data.documents.find(
                   (d) =>
                     d.kind === "DEPARTMENT" &&
@@ -2148,7 +2283,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                     key={departmentId}
                     type="button"
                     disabled={!parent || !department}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-border p-4 text-left text-sm hover:bg-muted/30 disabled:opacity-50"
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 p-4 text-left text-sm hover:bg-slate-50 disabled:opacity-50"
                     onClick={() => {
                       if (!parent) return;
                       setCycle(cycle);
@@ -2159,6 +2294,9 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                           documentId: parent.documentId,
                           goalId: parent.goal.id,
                           version: parent.version,
+                          ...(parent.itemKind
+                            ? { itemKind: parent.itemKind }
+                            : {}),
                         },
                       });
                       router.push(
@@ -2171,12 +2309,12 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                       <strong className="block">
                         {department?.name || "Department unavailable"}
                       </strong>
-                      <span className="mt-1 block text-xs text-muted-foreground">
+                      <span className="mt-1 block text-xs text-slate-500">
                         {parent
                           ? existing
                             ? "Open existing department plan"
                             : "Start a department draft"
-                          : "Approve this company goal first"}
+                          : "Approve this company objective first"}
                       </span>
                     </span>
                     <ArrowRight size={16} />
@@ -2188,10 +2326,10 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                 !["HOD", "EMPLOYEE"].includes(data.actor.role) ||
                 departmentId === data.actor.departmentId,
             ) && (
-              <p className="text-sm text-muted-foreground">
-                No contributing department is available to your role. The goal
-                owner can choose contributing departments before finalising the
-                goal.
+              <p className="text-sm text-slate-500">
+                No contributing department is available to your role. The
+                objective owner can choose contributing departments before
+                finalising the objective.
               </p>
             )}
           </div>
@@ -2241,6 +2379,16 @@ export function PlanningWorkspace({ section }: { section: Section }) {
           }}
         />
       )}
+      {createGoal && (
+        <PlanningCreateGoal
+          cycle={cycle}
+          onClose={() => setCreateGoal(false)}
+          onReady={(documentId, kind, initial) =>
+            setPendingEditor({ documentId, kind, initial })
+          }
+          onOpen={openPlan}
+        />
+      )}
       {settingsDocument && (
         <PlanSettings
           key={settingsDocument.id}
@@ -2257,13 +2405,26 @@ export function PlanningWorkspace({ section }: { section: Section }) {
             document={editorDocument!}
             initial={editorInitial}
             onClose={closeEditor}
-            onSaved={(savedId, continueToGoal) => {
-              if (activeEdit.kind === "objective" && continueToGoal)
-                setEdit({
-                  document: activeEdit.document,
-                  kind: "goal",
-                  initial: { objectiveId: savedId },
+            onSaved={(savedId) => {
+              if (
+                activeEdit.kind === "objective" ||
+                activeEdit.kind === "goal"
+              ) {
+                setRegisterFocus({
+                  documentId: activeEdit.document.id,
+                  itemId: savedId,
                 });
+                setCycle(activeEdit.document.cycle);
+                const destination =
+                  activeEdit.document.kind === "COMPANY"
+                    ? "objectives"
+                    : activeEdit.document.kind === "DEPARTMENT"
+                      ? "department-plans"
+                      : "team-individual-plans";
+                router.push(
+                  `/leadership-excellence/performance-planning/${destination}`,
+                );
+              }
             }}
           />
         ) : (
@@ -2278,7 +2439,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
             <ErrorList error={linkError} />
             <p className="text-sm">
               {sourceLinks.length} reviewed finding(s) selected. These are the
-              source for the objective and its linked goals.
+              source for the measurable company objective.
             </p>
             <ReviewedSources sources={sourceLinks} />
             {companyPlan ? (
@@ -2303,7 +2464,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
               </>
             ) : (
               <>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-slate-500">
                   {existingCompanyPlan
                     ? "This company plan is locked. Open its dated revision to continue; your selected findings will stay with you."
                     : "Create the company plan for this year. Your selected findings will carry into the objective automatically."}

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Info } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth.store";
 import {
   PerformancePlanningService,
@@ -13,11 +12,20 @@ import {
   type TargetPeriod,
   type Frequency,
   type PlanningCalendar,
+  type Pillar,
 } from "@/services/leadership-excellence/performance-planning.service";
 import { usePlanning } from "./PlanningProvider";
 import { PlanningEvidence } from "./PlanningEvidence";
 import { QcdsmtGuidance } from "./QcdsmtGuidance";
 import { FindingWeightage } from "./FindingWeightage";
+import { PlanningFindingEditor } from "./PlanningFindingEditor";
+import {
+  objectiveAllocation,
+  objectiveWeightLimit,
+  objectiveWeightageMessage,
+  validObjectivePriority,
+  validObjectiveWeightage,
+} from "@/services/leadership-excellence/performance-planning/objective-weightage";
 import {
   compareFindingWeightage,
   findingPriority,
@@ -25,6 +33,10 @@ import {
   validFindingWeightage,
 } from "@/services/leadership-excellence/performance-planning/finding-weightage";
 import { planningToday } from "./PlanningLinks";
+import {
+  planningPeriodBounds,
+  planningPeriodLabel,
+} from "@/services/leadership-excellence/performance-planning/planning-period";
 import {
   approvedParentAvailability,
   planningDocumentFingerprint,
@@ -36,6 +48,7 @@ import {
   sourceKey,
 } from "./PlanningSources";
 import {
+  Button,
   Modal,
   Field,
   control,
@@ -67,13 +80,13 @@ export function MultiSelect({
 }) {
   return (
     <fieldset className="min-w-0">
-      <legend className="text-sm font-medium text-gemba-navy">{label}</legend>
-      <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-auto rounded-lg border border-border p-3">
+      <legend className="text-sm font-medium text-slate-900">{label}</legend>
+      <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-auto rounded-lg border border-slate-200 p-3">
         {options.length ? (
           options.map((o) => (
             <label
               key={o.id}
-              className="flex items-center gap-2 rounded-md bg-muted px-2 py-1.5 text-xs"
+              className="flex max-w-full items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-700"
             >
               <input
                 type="checkbox"
@@ -90,9 +103,7 @@ export function MultiSelect({
             </label>
           ))
         ) : (
-          <p className="text-xs text-muted-foreground">
-            No records available in EMS.
-          </p>
+          <p className="text-xs text-slate-500">No records available in EMS.</p>
         )}
       </div>
     </fieldset>
@@ -126,7 +137,7 @@ export function SourcePicker({
     (source) => !rows.some((row) => key(row) === key(source)),
   );
   return (
-    <fieldset className="space-y-2 rounded-xl border border-border p-4">
+    <fieldset className="space-y-2 rounded-xl border border-slate-200 p-4">
       <legend className="px-1 text-sm font-medium">
         Reviewed SWOT sources
       </legend>
@@ -137,7 +148,7 @@ export function SourcePicker({
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-slate-500">
         {value.length} selected
         {hidden ? ` · ${hidden} outside this search` : ""}. References retain
         their reviewed version.
@@ -146,7 +157,7 @@ export function SourcePicker({
         <div className="space-y-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
           <p>
             Some saved sources are unavailable or not eligible for this planning
-            year. Replace them with a reviewed finding below.
+            period. Replace them with a reviewed finding below.
           </p>
           {unavailable.map((source, index) => (
             <div
@@ -172,7 +183,7 @@ export function SourcePicker({
         {filtered.map((s) => (
           <label
             key={key(s)}
-            className="flex items-start gap-3 rounded-lg bg-muted/60 p-3 text-sm"
+            className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 text-sm"
           >
             <input
               type="checkbox"
@@ -194,7 +205,7 @@ export function SourcePicker({
               }
             />
             <span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-xs text-slate-500">
                 {s.finding.pillar} · {s.finding.code} · v{s.version}
               </span>
               {s.finding.title}
@@ -205,9 +216,9 @@ export function SourcePicker({
           </label>
         ))}
         {!filtered.length && (
-          <p className="py-3 text-sm text-muted-foreground">
-            No eligible sources. Finalise a SWOT assessment first; findings
-            marked Needs checking cannot support approval.
+          <p className="py-3 text-sm text-slate-500">
+            No reviewed sources yet. Review a finding in Review &amp; decide
+            first; findings needing evidence cannot support approval.
           </p>
         )}
       </div>
@@ -215,28 +226,104 @@ export function SourcePicker({
   );
 }
 
-export function ItemEditor({
-  document,
-  kind,
-  initial = {},
-  onClose,
-  onSaved,
-}: {
+type ItemEditorProps = {
   document: PlanningDocument;
   kind: ItemKind;
   initial?: Fields;
   onClose: () => void;
   onSaved?: (id: string, continueToGoal: boolean) => void;
-}) {
+};
+
+export function ItemEditor(props: ItemEditorProps) {
+  // Older callers can still request a new company goal. Open its objective
+  // instead; existing saved goal records remain editable through their own IDs.
+  if (
+    props.kind === "goal" &&
+    props.document.kind === "COMPANY" &&
+    !props.initial?.id
+  ) {
+    const objective = props.document.data.objectives.find(
+      (item) => item.id === props.initial?.objectiveId,
+    );
+    return (
+      <PlanningItemEditor
+        {...props}
+        kind="objective"
+        initial={objective ? { ...objective } : {}}
+      />
+    );
+  }
+  return props.kind === "finding" ? (
+    <PlanningFindingEditor {...props} />
+  ) : (
+    <PlanningItemEditor {...props} />
+  );
+}
+
+function PlanningItemEditor({
+  document,
+  kind,
+  initial = {},
+  onClose,
+  onSaved,
+}: ItemEditorProps) {
   const { data, run, busy, refresh } = usePlanning();
   const token = useAuthStore((s) => s.accessToken);
   const [formRevision, setFormRevision] = useState(data.revision);
   const [openingDocument] = useState(() =>
     planningDocumentFingerprint(document),
   );
+  const legacyLinkedGoals =
+    kind === "objective" && initial.id
+      ? document.data.goals.filter((goal) => goal.objectiveId === initial.id)
+      : [];
+  const [initialForm] = useState(() => {
+    const values: Fields = { ...initial };
+    const prefilledFields: string[] = [];
+    if (legacyLinkedGoals.length === 1) {
+      const goal = legacyLinkedGoals[0];
+      for (const key of [
+        "title",
+        "measure",
+        "baseline",
+        "baselineReason",
+        "target",
+        "unit",
+        "ownerId",
+        "startDate",
+        "endDate",
+        "departmentIds",
+        "approach",
+      ] as const) {
+        const oldValue = values[key],
+          linkedValue = goal[key];
+        const blank =
+          oldValue == null ||
+          (typeof oldValue === "string" && !oldValue.trim()) ||
+          (Array.isArray(oldValue) && oldValue.length === 0);
+        const available =
+          linkedValue != null &&
+          linkedValue !== "" &&
+          (!Array.isArray(linkedValue) || linkedValue.length > 0);
+        if (blank && available) {
+          values[key] = Array.isArray(linkedValue)
+            ? [...linkedValue]
+            : linkedValue;
+          prefilledFields.push(key);
+        }
+      }
+    }
+    return { values, prefilledFields };
+  });
   const [form, setForm] = useState<Fields>({
-    startDate: document.data.startDate,
-    endDate: document.data.endDate,
+    startDate:
+      document.data.startDate ||
+      planningPeriodBounds(document.cycle)?.startDate ||
+      "",
+    endDate:
+      document.data.endDate ||
+      planningPeriodBounds(document.cycle)?.endDate ||
+      "",
     ownerId:
       document.kind === "INDIVIDUAL"
         ? document.scopeId
@@ -253,13 +340,67 @@ export function ItemEditor({
     targetMode: "SAME",
     targets: [],
     calendar: data.references.calendar,
-    ...initial,
+    ...initialForm.values,
   });
   const [step, setStep] = useState(0);
-  // Only objectives need the source-first guided flow. Everyday contributions,
-  // assignments and actions stay in one form so responsibility is never hidden
-  // behind another screen and an incomplete draft can be saved at any point.
-  const compactForm = kind !== "objective";
+  // Keep the preview's single form: sources, direction and ownership are visible
+  // together, and Save Draft is available before the approval checks are met.
+  const compactForm = true;
+  const [objectivePriorityInput, setObjectivePriorityInput] = useState(
+    initial.priority == null ? "" : String(initial.priority),
+  );
+  const [objectiveWeightInput, setObjectiveWeightInput] = useState(
+    initial.weightage == null ? "" : String(initial.weightage),
+  );
+  const [objectiveBadInput, setObjectiveBadInput] = useState({
+    priority: false,
+    weightage: false,
+  });
+  const [objectiveMeasures, setObjectiveMeasures] = useState({
+    baseline:
+      initialForm.values.baseline == null
+        ? ""
+        : String(initialForm.values.baseline),
+    target:
+      initialForm.values.target == null
+        ? ""
+        : String(initialForm.values.target),
+  });
+  const [objectiveMeasureBadInput, setObjectiveMeasureBadInput] = useState({
+    baseline: false,
+    target: false,
+  });
+  const objectiveLimit = objectiveWeightLimit(String(form.pillar || ""));
+  const objectivePriorityInvalid =
+    objectiveBadInput.priority ||
+    (objectivePriorityInput !== "" &&
+      !validObjectivePriority(Number(objectivePriorityInput)));
+  const objectiveWeightInvalid =
+    objectiveBadInput.weightage ||
+    (objectiveWeightInput !== "" &&
+      !validObjectiveWeightage(
+        Number(objectiveWeightInput),
+        String(form.pillar || ""),
+      ));
+  const allocation =
+    kind === "objective" && objectiveLimit !== null
+      ? objectiveAllocation(
+          [
+            ...document.data.objectives.filter(
+              (objective) => objective.id !== initial.id,
+            ),
+            {
+              id: String(initial.id || "new-objective"),
+              pillar: String(form.pillar),
+              weightage:
+                objectiveWeightInput === ""
+                  ? null
+                  : Number(objectiveWeightInput),
+            },
+          ],
+          String(form.pillar) as Pillar,
+        )
+      : null;
   const [invalidWeightageInput, setInvalidWeightageInput] = useState(false);
   const invalidWeightage =
     kind === "finding" &&
@@ -291,7 +432,7 @@ export function ItemEditor({
             ? undefined
             : key === "title"
               ? kind === "objective"
-                ? "e.g. Improve equipment reliability"
+                ? "e.g. Reduce unplanned downtime from 40 to 20 hours per month by 31 March 2028"
                 : kind === "action"
                   ? "e.g. Introduce weekly machine inspections"
                   : undefined
@@ -369,13 +510,14 @@ export function ItemEditor({
   const dates = (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {input("startDate", "Start date", "date")}
-      {input("endDate", "End date", "date")}
+      {input("endDate", kind === "objective" ? "Deadline" : "End date", "date")}
     </div>
   );
   const parentAvailability = approvedParentAvailability(
     data,
     document,
     planningToday(data.references.timeZone),
+    typeof initial.id === "string" ? initial.id : undefined,
   );
   const parentOptions = parentAvailability.options;
   const currentDocument = data.documents.find(
@@ -391,8 +533,40 @@ export function ItemEditor({
     planningDocumentFingerprint(currentDocument) === openingDocument
       ? data.revision
       : formRevision;
-  async function save(continueToGoal = false) {
+  async function save() {
     setError("");
+    if (
+      kind === "objective" &&
+      (["baseline", "target"] as const).some(
+        (key) =>
+          objectiveMeasureBadInput[key] ||
+          (objectiveMeasures[key] !== "" &&
+            !Number.isFinite(Number(objectiveMeasures[key]))),
+      )
+    ) {
+      setError(
+        "Enter a valid numeric baseline and target, or leave them blank while drafting. Missing values are not zero.",
+      );
+      return;
+    }
+    if (
+      kind === "objective" &&
+      (objectivePriorityInvalid || objectiveWeightInvalid)
+    ) {
+      setError(
+        [
+          ...(objectivePriorityInvalid
+            ? [
+                "Enter a whole-number priority from 1 to 10, or leave it blank while drafting.",
+              ]
+            : []),
+          ...(objectiveWeightInvalid
+            ? [objectiveWeightageMessage(String(form.pillar || ""))]
+            : []),
+        ].join("\n"),
+      );
+      return;
+    }
     if (invalidWeightage) {
       setError(weightageInputMessage);
       return;
@@ -410,13 +584,33 @@ export function ItemEditor({
                   weightage: form.weightage ?? null,
                   priority: findingPriority(form.weightage),
                 }
-              : form,
+              : kind === "objective"
+                ? {
+                    ...form,
+                    baseline:
+                      objectiveMeasures.baseline === ""
+                        ? null
+                        : Number(objectiveMeasures.baseline),
+                    target:
+                      objectiveMeasures.target === ""
+                        ? null
+                        : Number(objectiveMeasures.target),
+                    priority:
+                      objectivePriorityInput === ""
+                        ? null
+                        : Number(objectivePriorityInput),
+                    weightage:
+                      objectiveWeightInput === ""
+                        ? null
+                        : Number(objectiveWeightInput),
+                  }
+                : form,
         },
         document.id,
         saveRevision,
       );
       onClose();
-      onSaved?.(savedId, continueToGoal);
+      onSaved?.(savedId, false);
     } catch (cause) {
       setError(formError(cause));
     }
@@ -515,14 +709,14 @@ export function ItemEditor({
   };
   const titles = {
     finding: "SWOT finding",
-    objective: "objective",
+    objective: "company objective",
     goal: document.kind === "COMPANY" ? "linked goal" : "contribution",
     assignment: "KPI assignment",
     action: "delivery action",
   };
   const steps: Record<ItemKind, string[]> = {
     finding: ["Finding", "Evidence & response", "Review"],
-    objective: ["Reviewed SWOT", "Direction", "Ownership", "Review"],
+    objective: ["Reviewed SWOT", "Measurable objective", "Ownership", "Review"],
     goal: [
       document.kind === "COMPANY" ? "Measurable result" : "Contribution",
       "Responsibility",
@@ -533,8 +727,6 @@ export function ItemEditor({
   };
   const lastStep = steps[kind].length - 1;
   const isReview = step === lastStep;
-  const continueToGoal =
-    kind === "objective" && !initial.id && !!onSaved && hasObjectiveSource;
   const personName = (id: string) =>
     data.references.people.find((p) => p.id === id)?.name || "Not assigned";
   const value = (key: string) => text(key).trim() || "Not set";
@@ -545,12 +737,43 @@ export function ItemEditor({
       ? [
           ["Objective", value("title")],
           ["Meaning", value("meaning")],
+          ["Measure", value("measure")],
+          [
+            "Baseline",
+            objectiveMeasures.baseline === ""
+              ? "Not set"
+              : objectiveMeasures.baseline,
+          ],
+          [
+            "Target",
+            objectiveMeasures.target === ""
+              ? "Not set"
+              : `${objectiveMeasures.target} ${text("unit")}`,
+          ],
+          ["Selection reason", value("selectionReason")],
+          ["Achievability", value("approach")],
+          [
+            "Contributing departments",
+            data.references.departments
+              .filter((department) =>
+                ids("departmentIds").includes(department.id),
+              )
+              .map((department) => department.name)
+              .join(", ") || "Not selected",
+          ],
           [
             "Primary pillar",
             data.references.pillars.find((p) => p.code === form.pillar)?.name ||
               "Not set",
           ],
           ["Owner", personName(text("ownerId"))],
+          ["Priority", objectivePriorityInput || "Not set"],
+          [
+            "Objective weightage",
+            objectiveWeightInput === ""
+              ? "Not set"
+              : `${objectiveWeightInput}%`,
+          ],
           ["Planning dates", value("startDate") + " / " + value("endDate")],
           [
             "Reviewed sources",
@@ -583,7 +806,7 @@ export function ItemEditor({
                   ] as [string, string],
                 ]
               : []),
-            ...(["COMPANY", "DEPARTMENT"].includes(document.kind)
+            ...(["COMPANY", "DEPARTMENT", "INDIVIDUAL"].includes(document.kind)
               ? ([
                   ["Measure", value("measure")],
                   [
@@ -646,8 +869,8 @@ export function ItemEditor({
     <Modal
       title={(initial.id ? "Edit " : "Create ") + titles[kind]}
       description={
-        "Planning year " +
-        document.cycle +
+        "Planning period " +
+        planningPeriodLabel(document.cycle) +
         " / " +
         (document.data.title || document.code)
       }
@@ -672,10 +895,10 @@ export function ItemEditor({
                 onClick={() => goToStep(index)}
                 aria-current={step === index ? "step" : undefined}
                 className={
-                  "min-w-0 border-t-[3px] pt-2 text-left text-[10px] leading-5 wrap-anywhere transition sm:text-xs " +
+                  "min-w-0 border-t-[3px] pt-2 text-left text-[10px] leading-5 wrap-anywhere transition-colors focus-visible:outline-2 focus-visible:outline-indigo-500 sm:text-xs " +
                   (step === index
-                    ? "border-gemba-navy font-semibold text-gemba-navy"
-                    : "border-border text-muted-foreground hover:border-gemba-navy/40")
+                    ? "border-indigo-500 font-semibold text-indigo-700"
+                    : "border-slate-200 text-slate-500 hover:border-indigo-300")
                 }
               >
                 {index + 1}. {label}
@@ -687,7 +910,7 @@ export function ItemEditor({
       footer={
         <div className="flex flex-wrap items-center justify-between gap-2">
           {compactForm ? (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-slate-500">
               Incomplete? Save a draft and finish later.
             </span>
           ) : (
@@ -701,7 +924,7 @@ export function ItemEditor({
               {busy ? "Saving..." : "Save draft"}
             </Button>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -725,21 +948,15 @@ export function ItemEditor({
               disabled={
                 busy || (!compactForm && !isReview && sourceStepBlocked)
               }
-              className="h-auto min-h-9 max-w-48 whitespace-normal bg-gemba-navy py-2 text-white hover:bg-gemba-navy-deep"
+              className="h-auto min-h-9 max-w-48 py-2"
               onClick={() =>
-                compactForm || isReview
-                  ? void save(continueToGoal)
-                  : goToStep(step + 1)
+                compactForm || isReview ? void save() : goToStep(step + 1)
               }
             >
               {compactForm || isReview ? (
                 <>
                   <Check size={14} className="shrink-0" />
-                  {continueToGoal
-                    ? "Save objective & add goal"
-                    : compactForm
-                      ? "Save draft"
-                      : "Save to plan"}
+                  {compactForm ? "Save draft" : "Save to plan"}
                 </>
               ) : (
                 <>
@@ -756,19 +973,42 @@ export function ItemEditor({
         className="w-full space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          if (compactForm || isReview) void save(continueToGoal);
+          if (compactForm || isReview) void save();
           else goToStep(step + 1);
         }}
       >
         <ErrorList error={error} />
         {compactForm && (
-          <p className="rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-3 text-xs leading-5 text-muted-foreground">
+          <p className="rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-3 text-xs leading-5 text-slate-500">
             Complete what you know and save a draft. Missing details can be
             filled in later, before the whole plan is approved.
           </p>
         )}
+        {kind === "objective" && initialForm.prefilledFields.length > 0 && (
+          <p
+            role="status"
+            className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950"
+          >
+            Some blank fields are pre-filled from the existing linked goal{" "}
+            <strong>
+              {legacyLinkedGoals[0]?.code || legacyLinkedGoals[0]?.title}
+            </strong>
+            . Review these details before saving. The existing linked goal and
+            its references will remain unchanged.
+          </p>
+        )}
+        {kind === "objective" && legacyLinkedGoals.length > 1 && (
+          <p
+            role="status"
+            className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-xs leading-5 text-slate-600"
+          >
+            This objective has {legacyLinkedGoals.length} existing linked goals.
+            Enter its own measure and target below; their values have not been
+            combined.
+          </p>
+        )}
         {kind === "objective" && step > 0 && (
-          <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-5 text-gemba-navy">
+          <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-5 text-slate-900">
             <p className="font-semibold">Reviewed SWOT → Objective</p>
             {resolvedSources.map((source) => (
               <p key={sourceKey(source)} className="mt-1">
@@ -822,7 +1062,7 @@ export function ItemEditor({
         {kind === "finding" && (compactForm || step === 1) && (
           <>
             <div className="grid grid-cols-1 gap-4">
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <Field
                     label="Weightage (1–10)"
@@ -866,8 +1106,8 @@ export function ItemEditor({
                     <FindingWeightage weightage={form.weightage} />
                   </div>
                 </div>
-                <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                  1–3 Low · 4–6 Medium · 7–10 High. Priority is calculated
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  1–3 Low · 4–7 Medium · 8–10 High. Priority is calculated
                   automatically. Leave blank while drafting; assess every
                   finding before finalising the SWOT.
                 </p>
@@ -891,7 +1131,7 @@ export function ItemEditor({
                 {input("reviewDate", "Review date", "date")}
               </div>
             )}
-            <details className="rounded-lg border border-border p-4">
+            <details className="rounded-lg border border-slate-200 p-4">
               <summary className="cursor-pointer text-sm font-medium">
                 Evidence, explanation & confidence
               </summary>
@@ -908,7 +1148,7 @@ export function ItemEditor({
                 {area("impact", "Business impact")}
                 {area("evidence", "Evidence or reference")}
                 {area("decisionNote", "Decision note (optional)")}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   Small supporting files can be attached after saving the
                   finding. Findings marked Needs checking cannot support a new
                   approved objective.
@@ -926,17 +1166,17 @@ export function ItemEditor({
             )}
           </>
         )}
-        {kind === "objective" && step === 0 && (
+        {kind === "objective" && (compactForm || step === 0) && (
           <>
-            <div className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm leading-6 text-gemba-navy">
+            <div className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-900">
               <Info size={17} className="mt-1 shrink-0" />
               <p>
-                Start with the reviewed SWOT findings that explain this
-                objective. The goal you create next will keep this connection.
+                Select the reviewed SWOT findings behind this objective, then
+                define its measurable result, target, owner and deadline here.
               </p>
             </div>
             {retainedRestrictedSource ? (
-              <p className="rounded-lg border border-border p-3 text-xs leading-5 text-muted-foreground">
+              <p className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-500">
                 The approved objective retains its reviewed SWOT source. Source
                 details are restricted to authorised users.
               </p>
@@ -961,23 +1201,74 @@ export function ItemEditor({
               />
             )}
             {!hasObjectiveSource && (
-              <p className="text-xs leading-5 text-muted-foreground">
-                Select at least one eligible source to continue. Unreviewed
-                findings and findings marked Needs checking cannot be used. Save
-                draft remains available while you prepare the assessment.
+              <p className="text-xs leading-5 text-slate-500">
+                Select at least one reviewed finding before approval. You can
+                save this draft while the evidence is still being reviewed.
               </p>
             )}
           </>
         )}
-        {kind === "objective" && step === 1 && (
+        {kind === "objective" && (compactForm || step === 1) && (
           <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-4">
-              {input("title", "What direction should the company take?")}
+              {input(
+                "title",
+                "Objective / result statement",
+                "text",
+                "State the measurable result the company intends to achieve.",
+              )}
               {area(
                 "meaning",
                 "What does this mean for the business?",
                 "One or two clear sentences describing the outcome.",
               )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {input("measure", "How will you measure it?")}
+                {input("unit", "Unit")}
+                {(["baseline", "target"] as const).map((key) => (
+                  <Field
+                    key={key}
+                    label={
+                      key === "baseline"
+                        ? "Baseline - current value"
+                        : "Target - desired value"
+                    }
+                    hint={
+                      key === "baseline"
+                        ? "Leave blank if unavailable. A real zero can be entered as 0."
+                        : undefined
+                    }
+                  >
+                    <input
+                      className={control}
+                      type="number"
+                      step="any"
+                      value={objectiveMeasures[key]}
+                      aria-invalid={objectiveMeasureBadInput[key] || undefined}
+                      onChange={(event) => {
+                        const value = event.target.value,
+                          badInput = event.target.validity.badInput;
+                        setDirty(true);
+                        setObjectiveMeasures((current) => ({
+                          ...current,
+                          [key]: value,
+                        }));
+                        setObjectiveMeasureBadInput((current) => ({
+                          ...current,
+                          [key]: badInput,
+                        }));
+                      }}
+                    />
+                  </Field>
+                ))}
+              </div>
+              {objectiveMeasures.baseline === "" &&
+                input(
+                  "baselineReason",
+                  "Why is the baseline unavailable?",
+                  "text",
+                  "Explain the missing baseline before submitting for approval.",
+                )}
               {select(
                 "pillar",
                 "Primary pillar",
@@ -985,6 +1276,92 @@ export function ItemEditor({
                   id: p.code,
                   name: p.code + " / " + p.name,
                 })),
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Priority (1–10)"
+                  hint="Enter a whole number. 10 is the highest priority."
+                >
+                  <input
+                    className={control}
+                    type="number"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={objectivePriorityInput}
+                    aria-invalid={objectivePriorityInvalid || undefined}
+                    onChange={(event) => {
+                      setDirty(true);
+                      setObjectivePriorityInput(event.target.value);
+                      setObjectiveBadInput((current) => ({
+                        ...current,
+                        priority: event.target.validity.badInput,
+                      }));
+                    }}
+                  />
+                </Field>
+                <Field
+                  label="Weightage (%)"
+                  hint={
+                    objectiveLimit === null
+                      ? "Select a primary pillar first."
+                      : `Allowed: 1–${objectiveLimit}% for ${String(form.pillar)}. Up to two decimals.`
+                  }
+                >
+                  <input
+                    className={control}
+                    type="number"
+                    min={1}
+                    max={objectiveLimit ?? undefined}
+                    step="0.01"
+                    disabled={objectiveLimit === null}
+                    value={objectiveWeightInput}
+                    aria-invalid={objectiveWeightInvalid || undefined}
+                    onChange={(event) => {
+                      setDirty(true);
+                      setObjectiveWeightInput(event.target.value);
+                      setObjectiveBadInput((current) => ({
+                        ...current,
+                        weightage: event.target.validity.badInput,
+                      }));
+                    }}
+                  />
+                </Field>
+              </div>
+              {(objectivePriorityInvalid || objectiveWeightInvalid) && (
+                <p role="alert" className="text-xs text-destructive">
+                  {objectivePriorityInvalid
+                    ? "Priority must be a whole number from 1 to 10. "
+                    : ""}
+                  {objectiveWeightInvalid
+                    ? objectiveWeightageMessage(String(form.pillar || ""))
+                    : ""}
+                </p>
+              )}
+              {allocation && (
+                <div
+                  role="status"
+                  className={`rounded-lg border p-3 text-xs leading-5 ${allocation.balanced ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}
+                >
+                  <p>
+                    This objective:{" "}
+                    <strong>
+                      {objectiveWeightInput === ""
+                        ? "Unassigned"
+                        : `${objectiveWeightInput}%`}
+                    </strong>
+                  </p>
+                  <p className="mt-1">
+                    {String(form.pillar)} pillar total (all objectives):{" "}
+                    <strong>
+                      {allocation.total}% / {allocation.target}%
+                    </strong>
+                  </p>
+                  <p className="mt-1">
+                    {allocation.messages.join(" ")} Values are never adjusted
+                    automatically.
+                  </p>
+                </div>
               )}
               <MultiSelect
                 label="QCDSMT alignment"
@@ -1000,8 +1377,8 @@ export function ItemEditor({
                 onChange={(v) => set("alignments", v)}
               />
               {!ids("alignments").length && (
-                <details className="rounded-lg border border-border p-3">
-                  <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                <details className="rounded-lg border border-slate-200 p-3">
+                  <summary className="cursor-pointer text-xs font-medium text-slate-500">
                     No alignment applies?
                   </summary>
                   <div className="mt-3">
@@ -1016,12 +1393,32 @@ export function ItemEditor({
             <QcdsmtGuidance />
           </div>
         )}
-        {kind === "objective" && step === 2 && (
+        {kind === "objective" && (compactForm || step === 2) && (
           <>
             {person("ownerId", "Objective owner")}
             {dates}
-            <details className="rounded-lg border border-border p-3">
-              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+            <MultiSelect
+              label="Contributing departments"
+              options={data.references.departments}
+              value={ids("departmentIds")}
+              onChange={(values) => set("departmentIds", values)}
+            />
+            <p className="text-xs leading-5 text-slate-500">
+              Once approved, this objective is available for department and
+              individual contributions in the same planning period.
+            </p>
+            {area(
+              "selectionReason",
+              "Why was this objective selected?",
+              "Explain its strategic importance and connection to the reviewed findings.",
+            )}
+            {area(
+              "approach",
+              "How is this objective achievable?",
+              "Describe the approach, resources and practical capacity to reach the target.",
+            )}
+            <details className="rounded-lg border border-slate-200 p-3">
+              <summary className="cursor-pointer text-xs font-medium text-slate-500">
                 Explain the link to another pillar, if needed
               </summary>
               <div className="mt-3">
@@ -1036,12 +1433,12 @@ export function ItemEditor({
         )}
         {kind === "goal" && (compactForm || step === 0) && (
           <section className="space-y-4">
-            <h3 className="text-sm font-semibold text-gemba-navy">
+            <h3 className="text-sm font-semibold text-slate-900">
               1. Define the result
             </h3>
             {document.kind === "COMPANY" ? (
               <>
-                <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-5 text-gemba-navy">
+                <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-5 text-slate-900">
                   <p className="font-semibold">
                     Reviewed SWOT → Objective → Linked goal
                   </p>
@@ -1098,10 +1495,16 @@ export function ItemEditor({
             ) : (
               <>
                 <Field
-                  label="Approved parent goal"
+                  label={
+                    document.kind === "DEPARTMENT"
+                      ? "Approved company objective"
+                      : "Approved objective or department goal"
+                  }
                   hint={
                     parentOptions.length
-                      ? "Approved goals appear here automatically. The selected approved version stays linked to this contribution."
+                      ? document.kind === "INDIVIDUAL"
+                        ? "Choose an approved company objective or department goal. Different contributions can link to different parents; the employee's EMS department will not change."
+                        : "Approved company objectives appear here automatically. The selected approved version stays linked to this contribution."
                       : undefined
                   }
                 >
@@ -1118,8 +1521,10 @@ export function ItemEditor({
                   >
                     <option value="">
                       {parentOptions.length
-                        ? "Select an approved goal..."
-                        : "No eligible approved goals yet"}
+                        ? document.kind === "DEPARTMENT"
+                          ? "Select an approved company objective..."
+                          : "Select an approved objective or department goal..."
+                        : "No eligible approved parent yet"}
                     </option>
                     {parentOptions.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -1141,7 +1546,7 @@ export function ItemEditor({
                 {!parentOptions.length && (
                   <div
                     role="status"
-                    aria-label="Parent goal availability"
+                    aria-label="Approved parent availability"
                     className="flex min-w-0 items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
                   >
                     <Info size={18} className="mt-0.5 shrink-0" />
@@ -1175,16 +1580,16 @@ export function ItemEditor({
                         onClick={refresh}
                         disabled={busy}
                       >
-                        Refresh approved goals
+                        Refresh approved parents
                       </Button>
                     </div>
                   </div>
                 )}
                 <details
-                  className="rounded-lg border border-border p-3"
+                  className="rounded-lg border border-slate-200 p-3"
                   open={form.ongoingReason ? true : undefined}
                 >
-                  <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                  <summary className="cursor-pointer text-xs font-medium text-slate-500">
                     An essential ongoing responsibility instead?
                   </summary>
                   <div className="mt-3">
@@ -1203,7 +1608,9 @@ export function ItemEditor({
                 ? "What measurable result do you want?"
                 : "What will you contribute?",
             )}
-            {["COMPANY", "DEPARTMENT"].includes(document.kind) && (
+            {["COMPANY", "DEPARTMENT", "INDIVIDUAL"].includes(
+              document.kind,
+            ) && (
               <>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {input("measure", "How will you measure it?")}
@@ -1213,10 +1620,10 @@ export function ItemEditor({
                 </div>
                 {(form.baseline == null || form.baseline === "") && (
                   <details
-                    className="rounded-lg border border-border p-3"
+                    className="rounded-lg border border-slate-200 p-3"
                     open={form.baselineReason ? true : undefined}
                   >
-                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                    <summary className="cursor-pointer text-xs font-medium text-slate-500">
                       No baseline available?
                     </summary>
                     <div className="mt-3">
@@ -1234,8 +1641,8 @@ export function ItemEditor({
           </section>
         )}
         {kind === "goal" && (compactForm || step === 1) && (
-          <section className="space-y-4 border-t border-border pt-5">
-            <h3 className="text-sm font-semibold text-gemba-navy">
+          <section className="space-y-4 border-t border-slate-200 pt-5">
+            <h3 className="text-sm font-semibold text-slate-900">
               2. Responsibility & timing
             </h3>
             {person(
@@ -1253,11 +1660,11 @@ export function ItemEditor({
                   value={ids("departmentIds")}
                   onChange={(v) => set("departmentIds", v)}
                 />
-                <p className="text-xs leading-5 text-muted-foreground">
+                <p className="text-xs leading-5 text-slate-500">
                   After approval, this goal will appear in these
-                  departments&apos; plans for the same planning year. To include
-                  another department later, add it in a revision and approve
-                  that revision.
+                  departments&apos; plans for the same planning period. To
+                  include another department later, add it in a revision and
+                  approve that revision.
                 </p>
               </div>
             )}
@@ -1266,8 +1673,8 @@ export function ItemEditor({
               "How can this result be achieved?",
               "Describe a practical approach using the available resources.",
             )}
-            <details className="rounded-lg border border-border p-3">
-              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+            <details className="rounded-lg border border-slate-200 p-3">
+              <summary className="cursor-pointer text-xs font-medium text-slate-500">
                 Delivery arrangements / existing work
               </summary>
               <div className="mt-3">
@@ -1283,7 +1690,7 @@ export function ItemEditor({
               </div>
             </details>
             {document.kind !== "COMPANY" && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-slate-500">
                 After saving, assign relevant KPIs and add or link the delivery
                 actions.
               </p>
@@ -1292,7 +1699,7 @@ export function ItemEditor({
         )}
         {kind === "assignment" && (compactForm || step === 0) && (
           <section className="space-y-4">
-            <h3 className="text-sm font-semibold text-gemba-navy">
+            <h3 className="text-sm font-semibold text-slate-900">
               1. Measure & responsibility
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1314,13 +1721,13 @@ export function ItemEditor({
               )}
             </div>
             {definition && (
-              <div className="rounded-lg bg-muted p-3 text-sm">
+              <div className="rounded-lg bg-slate-100 p-3 text-sm">
                 <strong>{definition.name}</strong>
                 <p>{definition.meaning}</p>
                 <p className="mt-1 text-xs">
                   Unit: {definition.unit} · {definition.direction}
                 </p>
-                <details className="mt-3 border-t border-border pt-2 text-xs">
+                <details className="mt-3 border-t border-slate-200 pt-2 text-xs">
                   <summary className="cursor-pointer font-medium">
                     Calculation & aggregation
                   </summary>
@@ -1342,8 +1749,8 @@ export function ItemEditor({
               {input("baseline", "Baseline", "number")}
             </div>
             {form.baseline == null && (
-              <details className="rounded-lg border border-border p-3">
-                <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+              <details className="rounded-lg border border-slate-200 p-3">
+                <summary className="cursor-pointer text-xs font-medium text-slate-500">
                   No baseline available?
                 </summary>
                 <div className="mt-3">
@@ -1354,8 +1761,8 @@ export function ItemEditor({
           </section>
         )}
         {kind === "assignment" && (compactForm || step === 1) && (
-          <section className="space-y-4 border-t border-border pt-5">
-            <h3 className="text-sm font-semibold text-gemba-navy">
+          <section className="space-y-4 border-t border-slate-200 pt-5">
+            <h3 className="text-sm font-semibold text-slate-900">
               2. Reporting
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1370,7 +1777,7 @@ export function ItemEditor({
                 frequencies.map(([id, name]) => ({ id, name })),
               )}
             </div>
-            <details className="rounded-lg border border-border p-4">
+            <details className="rounded-lg border border-slate-200 p-4">
               <summary className="cursor-pointer text-sm font-medium">
                 Reporting calendar & submission deadline
               </summary>
@@ -1397,7 +1804,7 @@ export function ItemEditor({
                     />
                     <span>
                       Use the current organisation calendar
-                      <span className="block text-xs text-muted-foreground">
+                      <span className="block text-xs text-slate-500">
                         Changing calendars clears the period target grid.
                         Generate it again and review targets before saving;
                         approved changes still require a plan revision.
@@ -1405,7 +1812,7 @@ export function ItemEditor({
                     </span>
                   </label>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   {calendar?.source === "AREA_02"
                     ? `Approved organisation calendar · version ${calendar.version}`
                     : "Uses the organisation's work settings and recorded holidays. The approved Performance Rules calendar is not connected yet."}{" "}
@@ -1483,7 +1890,7 @@ export function ItemEditor({
                     />
                   </Field>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   Daily non-working dates are Not scheduled. They have no target
                   and are never treated as zero. Saved assignments retain their
                   calendar version.
@@ -1493,8 +1900,8 @@ export function ItemEditor({
           </section>
         )}
         {kind === "assignment" && (compactForm || step === 2) && (
-          <section className="space-y-4 border-t border-border pt-5">
-            <h3 className="text-sm font-semibold text-gemba-navy">
+          <section className="space-y-4 border-t border-slate-200 pt-5">
+            <h3 className="text-sm font-semibold text-slate-900">
               3. Period targets
             </h3>
             {select("targetMode", "Period target method", [
@@ -1526,16 +1933,16 @@ export function ItemEditor({
                   {((form.targets || []) as TargetPeriod[]).map((p, index) => (
                     <div
                       key={p.id}
-                      className="grid grid-cols-2 gap-3 border-b border-border py-2 sm:grid-cols-3"
+                      className="grid grid-cols-2 gap-3 border-b border-slate-200 py-2 sm:grid-cols-3"
                     >
                       <span className="text-xs self-center">
                         {p.label}
                         {p.scheduled === false ? (
-                          <span className="block text-muted-foreground">
+                          <span className="block text-slate-500">
                             Not scheduled
                           </span>
                         ) : p.submissionDate ? (
-                          <span className="block text-muted-foreground">
+                          <span className="block text-slate-500">
                             Submit by {p.submissionDate}
                           </span>
                         ) : null}
@@ -1595,7 +2002,7 @@ export function ItemEditor({
                 </div>
               </>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-slate-500">
               Annual targets are never divided automatically. Blank targets
               remain missing; zero is a valid value.
             </p>
@@ -1625,8 +2032,8 @@ export function ItemEditor({
               "completionEvidence",
               "Evidence required to confirm completion",
             )}
-            <details className="rounded-lg border border-border p-3">
-              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+            <details className="rounded-lg border border-slate-200 p-3">
+              <summary className="cursor-pointer text-xs font-medium text-slate-500">
                 Support & dependencies
               </summary>
               <div className="mt-3 space-y-4">
@@ -1658,16 +2065,16 @@ export function ItemEditor({
           <>
             <details
               open={!compactForm || undefined}
-              className="rounded-xl border border-border bg-muted/25 p-4"
+              className="rounded-xl border border-slate-200 bg-slate-50 p-4"
             >
-              <summary className="cursor-pointer text-sm font-semibold text-gemba-navy">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900">
                 Check your draft
               </summary>
               <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {reviewRows.map(([label, entry]) => (
                   <div key={label}>
-                    <dt className="text-xs text-muted-foreground">{label}</dt>
-                    <dd className="mt-1 break-words text-sm text-gemba-navy">
+                    <dt className="text-xs text-slate-500">{label}</dt>
+                    <dd className="mt-1 break-words text-sm text-slate-900">
                       {entry}
                     </dd>
                   </div>
@@ -1675,14 +2082,11 @@ export function ItemEditor({
               </dl>
             </details>
             {!compactForm && (
-              <div className="flex gap-3 rounded-lg border border-blue-100 bg-blue-50/50 p-4 text-xs leading-5 text-muted-foreground">
+              <div className="flex gap-3 rounded-lg border border-blue-100 bg-blue-50/50 p-4 text-xs leading-5 text-slate-500">
                 <Info size={17} className="mt-0.5 shrink-0 text-blue-600" />
                 <p>
                   Save this draft to the plan. Missing details can be filled in
                   later; the whole plan is checked before approval.
-                  {continueToGoal
-                    ? " Next, add the first measurable goal under this objective."
-                    : ""}
                 </p>
               </div>
             )}
@@ -1726,11 +2130,11 @@ export function ItemEditor({
               )}
           </>
         )}
-        <p className="border-t border-border pt-3 text-[11px] leading-5 text-muted-foreground">
+        <p className="border-t border-slate-200 pt-3 text-[11px] leading-5 text-slate-500">
           {initial.code
             ? "Code: " + String(initial.code)
             : "Code is generated when you save."}{" "}
-          / Planning year {document.cycle}
+          / Planning period {planningPeriodLabel(document.cycle)}
         </p>
       </form>
     </Modal>
@@ -1746,7 +2150,17 @@ export function PlanSettings({
 }) {
   const { data, run, busy } = usePlanning();
   const [formRevision] = useState(data.revision);
-  const [form, setForm] = useState({ ...document.data }),
+  const [form, setForm] = useState({
+      ...document.data,
+      startDate:
+        document.data.startDate ||
+        planningPeriodBounds(document.cycle)?.startDate ||
+        "",
+      endDate:
+        document.data.endDate ||
+        planningPeriodBounds(document.cycle)?.endDate ||
+        "",
+    }),
     [error, setError] = useState("");
   const access = data.documents.find((d) => d.id === document.id)!.permissions;
   const canChangeOwner = document.kind !== "SWOT" || access.canConfigure;
@@ -1777,7 +2191,11 @@ export function PlanSettings({
     }
   }
   return (
-    <Modal title="Plan settings & access" onClose={onClose}>
+    <Modal
+      title="Plan settings & access"
+      description={`Planning period ${planningPeriodLabel(document.cycle)}`}
+      onClose={onClose}
+    >
       <div className="space-y-5">
         <ErrorList error={error} />
         <Field label="Plan name">
@@ -1796,6 +2214,8 @@ export function PlanSettings({
               <input
                 className={control}
                 type="date"
+                min={planningPeriodBounds(document.cycle)?.startDate}
+                max={planningPeriodBounds(document.cycle)?.endDate}
                 value={form[key as "startDate"]}
                 onChange={(e) => change(key, e.target.value)}
               />
@@ -1858,9 +2278,9 @@ export function PlanSettings({
               />
             )}
             {["TEAM", "POSITION"].includes(document.kind) && (
-              <section className="space-y-3 rounded-lg border border-border p-4">
+              <section className="space-y-3 rounded-lg border border-slate-200 p-4">
                 <h3 className="text-sm font-medium">Plan membership</h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   {form.contributorIds
                     .map(
                       (id) =>
@@ -1870,7 +2290,7 @@ export function PlanSettings({
                     )
                     .join(", ") || "No members assigned"}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   Approved membership is preserved after transfers. Refresh
                   members explicitly in this draft and approve the revision to
                   change responsibility.
@@ -1908,7 +2328,7 @@ export function PlanSettings({
             )}
           </>
         )}
-        <div className="flex justify-end gap-3">
+        <div className="flex flex-wrap justify-end gap-3">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
@@ -2085,7 +2505,7 @@ export function DefinitionEditor({ onClose }: { onClose: () => void }) {
                 ["MILESTONE", "Milestone"],
               ],
         )}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-slate-500">
           Definitions are shared. Each plan keeps its own targets and
           frequencies. Existing definitions are preserved when you adapt them.
         </p>

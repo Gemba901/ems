@@ -1,4 +1,5 @@
 "use client";
+import { planningPeriodLabel } from "@/services/leadership-excellence/performance-planning/planning-period";
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -12,10 +13,9 @@ import {
   Search,
   Users,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { PlanningView } from "@/services/leadership-excellence/performance-planning.service";
 import { usePlanning } from "./PlanningProvider";
-import { card, control, Empty, Status } from "./PlanningUi";
+import { Button, card, control, Empty, Status } from "./PlanningUi";
 
 type Plan = PlanningView["documents"][number];
 export type PlanningSection =
@@ -29,7 +29,7 @@ const stages = [
     section: "company",
     path: "objectives",
     label: "Company plan",
-    hint: "SWOT → objectives → goals",
+    hint: "SWOT → measurable objectives",
   },
   {
     section: "department",
@@ -55,17 +55,17 @@ export function PlanningSteps({ section }: { section: PlanningSection }) {
   return (
     <nav
       aria-label="Planning stages"
-      className="grid w-full grid-cols-4 rounded-xl border border-border bg-card p-1.5"
+      className="grid w-full grid-cols-4 rounded-xl border border-slate-200 bg-white p-1.5"
     >
       {stages.map((stage, index) => (
         <Link
           key={stage.section}
           href={`${BASE}/${stage.path}`}
           aria-current={section === stage.section ? "page" : undefined}
-          className={`relative flex min-w-0 flex-col items-center gap-2 rounded-lg px-1.5 py-3 text-center transition sm:flex-row sm:gap-3 sm:px-3 sm:text-left ${section === stage.section ? "bg-slate-100 text-gemba-navy" : "text-muted-foreground hover:bg-muted/60"}`}
+          className={`relative flex min-w-0 flex-col items-center gap-2 rounded-lg px-1.5 py-3 text-center transition sm:flex-row sm:gap-3 sm:px-3 sm:text-left ${section === stage.section ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-50"}`}
         >
           <span
-            className={`flex size-7 shrink-0 items-center justify-center rounded-lg border text-xs sm:size-8 ${section === stage.section ? "border-gemba-navy bg-gemba-navy text-white" : "border-border bg-card"}`}
+            className={`flex size-7 shrink-0 items-center justify-center rounded-lg border text-xs sm:size-8 ${section === stage.section ? "border-indigo-500 bg-[#52618a] text-white" : "border-slate-200 bg-white"}`}
           >
             {index + 1}
           </span>
@@ -73,7 +73,7 @@ export function PlanningSteps({ section }: { section: PlanningSection }) {
             <span className="block text-[10px] leading-4 font-semibold sm:text-xs xl:text-sm">
               {stage.label}
             </span>
-            <span className="mt-0.5 hidden text-[11px] leading-4 text-muted-foreground xl:block">
+            <span className="mt-0.5 hidden text-[11px] leading-4 text-slate-500 xl:block">
               {stage.hint}
             </span>
           </span>
@@ -102,7 +102,7 @@ export function Readiness({
     document.permissions.canEdit || document.permissions.canApprove;
   if (document.status === "APPROVED") {
     return (
-      <p className="flex items-start gap-2 text-sm text-gemba-lime-ink">
+      <p className="flex items-start gap-2 text-sm text-emerald-700">
         <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
         Approved and locked. Changes require a dated revision.
       </p>
@@ -110,18 +110,18 @@ export function Readiness({
   }
   if (!hasAccess)
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-slate-500">
         The owner and designated approver can check this draft.
       </p>
     );
   if (!document.issues.length) {
     return (
       <div className="space-y-2">
-        <p className="flex items-start gap-2 text-sm text-gemba-lime-ink">
+        <p className="flex items-start gap-2 text-sm text-emerald-700">
           <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
           Required planning details are complete.
         </p>
-        <p className="text-xs leading-5 text-muted-foreground">
+        <p className="text-xs leading-5 text-slate-500">
           The approver confirms that the commitments are realistic, relevant and
           measurable.
         </p>
@@ -131,7 +131,7 @@ export function Readiness({
   const issues = compact ? document.issues.slice(0, 3) : document.issues;
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-gemba-navy">
+      <p className="text-sm font-medium text-slate-900">
         {document.issues.length}{" "}
         {document.issues.length === 1 ? "detail needs" : "details need"}{" "}
         attention
@@ -145,7 +145,7 @@ export function Readiness({
               <button
                 type="button"
                 onClick={() => onResolve(issue)}
-                className="shrink-0 font-semibold text-gemba-navy underline underline-offset-2"
+                className="shrink-0 font-semibold text-slate-900 underline underline-offset-2"
               >
                 Complete now
               </button>
@@ -154,7 +154,7 @@ export function Readiness({
         ))}
       </ul>
       {compact && document.issues.length > issues.length && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-slate-500">
           +{document.issues.length - issues.length} more in the full check
         </p>
       )}
@@ -191,71 +191,73 @@ export function PlanOverview({
         : null;
   return (
     <aside className="min-w-0 space-y-4">
-      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-gemba-navy">
+          <h2 className="text-sm font-semibold text-slate-900">
             Plan at a glance
           </h2>
           <Status status={document.status} swot={document.kind === "SWOT"} />
         </div>
         <div className="mt-5 grid grid-cols-2 gap-4">
           <div>
-            <strong className="block text-2xl font-semibold text-gemba-navy">
+            <strong className="block text-2xl font-semibold text-slate-900">
               {swot
                 ? document.data.findings.length
                 : company
                   ? document.data.objectives.length
                   : document.data.goals.length}
             </strong>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-slate-500">
               {swot ? "Findings" : company ? "Objectives" : "Contributions"}
             </span>
           </div>
           <div>
-            <strong className="block text-2xl font-semibold text-gemba-navy">
+            <strong className="block text-2xl font-semibold text-slate-900">
               {swot
                 ? document.data.consideredPillars.length
                 : company
-                  ? document.data.goals.length
+                  ? new Set(
+                      document.data.objectives.flatMap(
+                        (objective) => objective.departmentIds || [],
+                      ),
+                    ).size
                   : document.data.actions.length +
                     (document.data.actionLinks?.length || 0)}
             </strong>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-slate-500">
               {swot
                 ? "Pillars considered"
                 : company
-                  ? "Linked goals"
+                  ? "Contributing departments"
                   : "Delivery actions"}
             </span>
           </div>
         </div>
-        <dl className="mt-5 space-y-3 border-t border-border pt-4 text-xs">
+        <dl className="mt-5 space-y-3 border-t border-slate-200 pt-4 text-xs">
           {[
-            ["Planning year", document.cycle],
+            ["Planning period", planningPeriodLabel(document.cycle)],
             ["Owner", person(document.data.ownerId)],
             ["Single approver", person(document.data.approverId)],
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="text-right font-medium text-gemba-navy">
-                {value}
-              </dd>
+              <dt className="text-slate-500">{label}</dt>
+              <dd className="text-right font-medium text-slate-900">{value}</dd>
             </div>
           ))}
         </dl>
         <button
           type="button"
-          className="mt-5 text-xs font-medium text-gemba-navy underline-offset-4 hover:underline"
+          className="mt-5 text-xs font-medium text-slate-900 underline-offset-4 hover:underline"
           onClick={onHistory}
         >
           View version history
         </button>
       </section>
       <section className="rounded-xl border border-slate-200 bg-slate-100/80 p-5">
-        <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+        <p className="text-[10px] font-semibold tracking-widest text-slate-500 uppercase">
           Your next step
         </p>
-        <h3 className="mt-2 text-sm font-semibold text-gemba-navy">
+        <h3 className="mt-2 text-sm font-semibold text-slate-900">
           {document.status === "APPROVED"
             ? next
               ? "Connect the next contribution"
@@ -264,7 +266,7 @@ export function PlanOverview({
               ? "Review the plan together"
               : "Finish the essentials"}
         </h3>
-        <p className="mt-2 text-xs leading-6 text-muted-foreground">
+        <p className="mt-2 text-xs leading-6 text-slate-500">
           {document.status === "APPROVED"
             ? next
               ? "Use these approved goals to agree distinct contributions and responsibilities."
@@ -274,7 +276,7 @@ export function PlanOverview({
         {document.status === "APPROVED" && next ? (
           <Link
             href={`${BASE}/${next.path}`}
-            className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-xs font-medium text-gemba-navy"
+            className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-900"
           >
             <ArrowRight size={14} />
             {next.label}
@@ -293,15 +295,15 @@ export function PlanOverview({
         )}
       </section>
       {section !== "company" && (
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h3 className="mb-3 text-sm font-semibold text-gemba-navy">
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">
             Readiness
           </h3>
           <Readiness document={document} compact />
         </section>
       )}
       {company && (
-        <p className="px-1 text-xs leading-6 text-muted-foreground">
+        <p className="px-1 text-xs leading-6 text-slate-500">
           Company achievement uses its own verified measures. Department
           contributions and employee scores do not replace it.
         </p>
@@ -310,7 +312,7 @@ export function PlanOverview({
         <button
           type="button"
           onClick={onSwot}
-          className="flex items-center gap-1 px-1 text-xs font-medium text-gemba-navy"
+          className="flex items-center gap-1 px-1 text-xs font-medium text-slate-900"
         >
           View SWOT &amp; reviewed sources
           <ChevronRight size={14} />
@@ -364,7 +366,7 @@ export function PlanCollection({
           <span className="sr-only">Search plans</span>
           <Search
             size={16}
-            className="absolute top-3.5 left-3 text-muted-foreground"
+            className="absolute top-3.5 left-3 text-slate-500"
           />
           <input
             className={`${control} mt-0 pl-9`}
@@ -398,29 +400,35 @@ export function PlanCollection({
               )}
             </span>
             <div className="min-w-0 flex-1">
-              <h3 className="text-base font-semibold text-gemba-navy">
+              <h3 className="text-base font-semibold text-slate-900">
                 {label(document)}
               </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-slate-500">
                 {document.code} · {person(document.data.ownerId)}
               </p>
             </div>
             <Status status={document.status} swot={document.kind === "SWOT"} />
           </div>
-          <p className="mt-4 text-sm font-medium text-gemba-navy">
-            {document.data.goals[0]?.title ||
+          <p className="mt-4 text-sm font-medium text-slate-900">
+            {(document.kind === "COMPANY"
+              ? document.data.objectives[0]?.title
+              : document.data.goals[0]?.title) ||
               (document.kind === "SWOT"
                 ? "SWOT findings & decisions"
-                : "Add your first measurable contribution")}
+                : document.kind === "COMPANY"
+                  ? "Add your first measurable objective"
+                  : "Add your first measurable contribution")}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-slate-500">
             {document.kind === "SWOT"
               ? `${document.data.findings.length} findings`
-              : `${document.data.goals.length} ${document.kind === "COMPANY" ? "linked goals" : "contributions"} · ${document.data.assignments.length} KPI assignments`}
+              : document.kind === "COMPANY"
+                ? `${document.data.objectives.length} measurable objectives`
+                : `${document.data.goals.length} contributions · ${document.data.assignments.length} KPI assignments`}
           </p>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-            <span className="text-xs text-muted-foreground">
-              {document.cycle}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+            <span className="text-xs text-slate-500">
+              {planningPeriodLabel(document.cycle)}
               {section === "approval" &&
               document.status !== "APPROVED" &&
               (document.permissions.canEdit || document.permissions.canApprove)

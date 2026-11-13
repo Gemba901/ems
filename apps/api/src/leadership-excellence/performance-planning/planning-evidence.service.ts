@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import { Prisma } from 'db';
 import { randomUUID } from 'node:crypto';
-import { PrismaService } from 'src/prisma/prisma.service';
-import type { AccessTokenPayload } from 'src/auth/access-token-payload';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { AccessTokenPayload } from '../../auth/access-token-payload';
 import { PlanningReferencesService } from './planning-references.service';
 import { permissions } from './planning.rules';
 import type { PlanningState } from './planning.types';
@@ -55,9 +55,15 @@ export class PlanningEvidenceService {
       throw new ForbiddenException('This finding is restricted or locked.');
     if (
       write &&
-      document.versions.some((v) =>
-        v.data.findings.some((f) => f.id === findingId),
-      )
+      (document.data.findings.some(
+        (f) => f.id === findingId && f.reviewStatus === 'REVIEWED',
+      ) ||
+        document.findingReviews?.some(
+          (review) => review.finding.id === findingId,
+        ) ||
+        document.versions.some((v) =>
+          v.data.findings.some((f) => f.id === findingId),
+        ))
     )
       throw new BadRequestException(
         'Evidence attached to a reviewed finding is preserved. Add a new finding for new evidence.',

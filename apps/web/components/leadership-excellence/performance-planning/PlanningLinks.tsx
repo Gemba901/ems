@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import type {
   AuditEvent,
   PlanningView,
@@ -11,7 +10,15 @@ import { validFindingWeightage } from "@/services/leadership-excellence/performa
 import { FindingWeightage } from "./FindingWeightage";
 import { usePlanning } from "./PlanningProvider";
 import { PlanningEvidence } from "./PlanningEvidence";
-import { categories, control, ErrorList, Field, Modal } from "./PlanningUi";
+import { reviewedSwotSources } from "./PlanningSources";
+import {
+  Button,
+  categories,
+  control,
+  ErrorList,
+  Field,
+  Modal,
+} from "./PlanningUi";
 
 type Plan = PlanningView["documents"][number];
 
@@ -57,24 +64,25 @@ export function ReviewedSources({ sources }: { sources: SourceLink[] }) {
         const assessment = data.documents.find(
           (item) => item.id === source.documentId,
         );
-        const reviewed = assessment?.versions.find(
-          (item) => item.version === source.version,
-        );
-        const finding = reviewed?.data.findings.find(
-          (item) => item.id === source.findingId,
-        );
+        const finding =
+          assessment &&
+          reviewedSwotSources([assessment], assessment.cycle).find(
+            (item) =>
+              item.version === source.version &&
+              item.findingId === source.findingId,
+          )?.finding;
         return (
           <li
             key={`${source.documentId}/${source.version}/${source.findingId}`}
-            className="rounded-lg border border-border bg-background p-3"
+            className="rounded-lg border border-slate-200 bg-white p-3"
           >
             {!finding || !assessment ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-slate-500">
                 This reviewed source is restricted or unavailable.
               </p>
             ) : (
               <>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   {finding.code} · {finding.pillar} ·{" "}
                   {categories[finding.category].singular} · reviewed version{" "}
                   {source.version}
@@ -85,7 +93,7 @@ export function ReviewedSources({ sources }: { sources: SourceLink[] }) {
                 </div>
                 {!validFindingWeightage(finding.weightage) &&
                   finding.priority && (
-                    <p className="mt-2 text-xs text-muted-foreground">
+                    <p className="mt-2 text-xs text-slate-500">
                       Previous priority (before weightage): {finding.priority}
                     </p>
                   )}
@@ -99,9 +107,7 @@ export function ReviewedSources({ sources }: { sources: SourceLink[] }) {
                     .filter(([, value]) => value)
                     .map(([label, value]) => (
                       <div key={label}>
-                        <dt className="text-xs text-muted-foreground">
-                          {label}
-                        </dt>
+                        <dt className="text-xs text-slate-500">{label}</dt>
                         <dd className="whitespace-pre-wrap break-words">
                           {value}
                         </dd>
@@ -109,7 +115,7 @@ export function ReviewedSources({ sources }: { sources: SourceLink[] }) {
                     ))}
                   {finding.sourceUrl && (
                     <div>
-                      <dt className="text-xs text-muted-foreground">
+                      <dt className="text-xs text-slate-500">
                         Supporting link
                       </dt>
                       <dd>
@@ -189,7 +195,7 @@ export function FindingConnections({
         connections.map(({ document, kind, item }) => (
           <button
             key={`${document.id}/${kind}/${item.id}`}
-            className="rounded border border-border bg-muted px-2 py-1 text-left text-xs hover:bg-muted/60"
+            className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-left text-xs hover:bg-slate-50"
             onClick={() => onOpen(document, kind, { ...item })}
           >
             {kind === "objective" ? "Objective" : "Action"}: {item.code} ·{" "}
@@ -197,7 +203,7 @@ export function FindingConnections({
           </button>
         ))
       ) : (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-slate-500">
           No linked objectives or actions visible.
         </span>
       )}
@@ -272,7 +278,7 @@ export function LinkFindingAction({
         }}
       >
         <ErrorList error={error} />
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-slate-500">
           {sources.length} reviewed finding(s) will be referenced by the
           existing action. Approved actions must be opened in a plan revision
           before their planning links can change.
@@ -293,8 +299,8 @@ export function LinkFindingAction({
           </select>
         </Field>
         {!choices.length && (
-          <p className="text-sm text-muted-foreground">
-            No editable actions in this planning year. Add the delivery action
+          <p className="text-sm text-slate-500">
+            No editable actions in this planning period. Add the delivery action
             in its department plan, or open a revision of that plan, then return
             here.
           </p>
@@ -358,7 +364,7 @@ export function SharedActions({
   );
   if ((!eligiblePlan || unlinkedOnly) && !visibleLinks.length) return null;
   return (
-    <div className="space-y-3 border-t border-border pt-4">
+    <div className="space-y-3 border-t border-slate-200 pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold">Assigned department actions</h3>
         {document.permissions.canEdit &&
@@ -379,7 +385,7 @@ export function SharedActions({
       </div>
       <ErrorList error={open ? "" : error} />
       {!visibleLinks.length && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-slate-500">
           Reuse a department action or assigned step against your contribution.
           Its code, owner, deadline and evidence remain on the original record.
         </p>
@@ -400,11 +406,11 @@ export function SharedActions({
         return (
           <div
             key={link.id}
-            className="rounded-lg border border-border p-4 text-sm"
+            className="rounded-lg border border-slate-200 p-4 text-sm"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   {action?.code || "Department action"} · approved version{" "}
                   {link.version}
                 </p>
@@ -435,7 +441,7 @@ export function SharedActions({
             </div>
             {action && (
               <>
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="mt-2 text-xs text-slate-500">
                   Owner:{" "}
                   {data.references.people.find(
                     (person) => person.id === action.ownerId,
@@ -443,17 +449,17 @@ export function SharedActions({
                   · Due {action.dueDate || "not set"}
                 </p>
                 <p className="mt-2">{action.expectedResult}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-slate-500">
                   Completion evidence: {action.completionEvidence || "Not set"}
                 </p>
                 {action.support && (
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs text-slate-500">
                     Support: {action.support}
                   </p>
                 )}
               </>
             )}
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-xs text-slate-500">
               Contribution:{" "}
               {document.data.goals.find((goal) => goal.id === link.goalId)
                 ?.title || "Unavailable"}
@@ -533,19 +539,19 @@ export function SharedActions({
                 ))}
               </select>
             </Field>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-slate-500">
               Actions come from the same approved department goal and version as
               your contribution. The action owner and deadline must fit this
               plan. No duplicate action is created.
             </p>
             {goalId && !candidates.length && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-slate-500">
                 No unlinked actions are available for this goal&apos;s approved
                 department version.
               </p>
             )}
             {!document.data.goals.some((goal) => goal.parent) && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-slate-500">
                 First create a contribution linked to an approved department
                 goal.
               </p>
@@ -578,7 +584,7 @@ export function AuditChanges({ event }: { event: AuditEvent }) {
   };
   if (!event.changes?.length) return null;
   return (
-    <details className="mt-2 rounded border border-border p-2">
+    <details className="mt-2 rounded border border-slate-200 p-2">
       <summary className="cursor-pointer">
         View {event.changes.length} change(s)
       </summary>
@@ -589,14 +595,14 @@ export function AuditChanges({ event }: { event: AuditEvent }) {
               {change.field.replace(/([a-z])([A-Z])/g, "$1 $2")}
             </dt>
             <dd className="mt-1 grid gap-2 sm:grid-cols-2">
-              <div className="min-w-0 rounded bg-muted p-2">
-                <span className="block text-muted-foreground">Before</span>
+              <div className="min-w-0 rounded bg-slate-100 p-2">
+                <span className="block text-slate-500">Before</span>
                 <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans">
                   {show(change.before)}
                 </pre>
               </div>
-              <div className="min-w-0 rounded bg-muted p-2">
-                <span className="block text-muted-foreground">After</span>
+              <div className="min-w-0 rounded bg-slate-100 p-2">
+                <span className="block text-slate-500">After</span>
                 <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans">
                   {show(change.after)}
                 </pre>

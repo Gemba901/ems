@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Prisma } from 'db';
-import { PrismaService } from 'src/prisma/prisma.service';
-import type { AccessTokenPayload } from 'src/auth/access-token-payload';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { AccessTokenPayload } from '../../auth/access-token-payload';
 import { PlanningReferencesService } from './planning-references.service';
 import { isManager } from './planning.rules';
 import type { PlanningState } from './planning.types';
@@ -133,6 +133,20 @@ export class PlanningBackupService {
             'Planning records changed. Refresh before restoring.',
           );
         const current = row?.state as unknown as PlanningState | undefined;
+        for (const key of [
+          'programmeResults',
+          'programmeReviews',
+          'programmeActionProgress',
+        ] as const)
+          for (const saved of current?.[key] || []) {
+            const restored = backup.state[key]?.find(
+              (item) => item.id === saved.id,
+            );
+            if (JSON.stringify(restored) !== JSON.stringify(saved))
+              throw new BadRequestException(
+                'This backup would remove or alter recorded results, verification, reviews or action history.',
+              );
+          }
         // Restores may not erase an approved version, delete a record or reuse a code.
         for (const document of current?.documents || []) {
           const restored = backup.state.documents.find(
@@ -145,6 +159,16 @@ export class PlanningBackupService {
                 JSON.stringify(
                   restored.versions.find((v) => v.version === version.version),
                 ) !== JSON.stringify(version),
+            ) ||
+            (document.findingReviews || []).some(
+              (review) =>
+                JSON.stringify(
+                  restored?.findingReviews?.find(
+                    (saved) =>
+                      saved.version === review.version &&
+                      saved.finding.id === review.finding.id,
+                  ),
+                ) !== JSON.stringify(review),
             )
           )
             throw new BadRequestException(

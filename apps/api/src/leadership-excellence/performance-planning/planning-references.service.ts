@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import { PrismaService } from 'src/prisma/prisma.service';
-import type { AccessTokenPayload } from 'src/auth/access-token-payload';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { AccessTokenPayload } from '../../auth/access-token-payload';
 import {
   LEX_PILLARS,
   type StrategicDirectionProvider,
@@ -9,8 +9,8 @@ import {
 import { StrategicDirectionService } from '../strategic-direction/strategic-direction.service';
 import { OrganisationFrameworkService } from '../organisation-framework/organisation-framework.service';
 import { PerformanceIntelligenceService } from '../performance-intelligence/performance-intelligence.service';
-import { WorkScheduleService, holidayCalendar } from 'src/work/work-schedule';
-import { fromDbDate } from 'src/work/work-date';
+import { WorkScheduleService, holidayCalendar } from '../../work/work-schedule';
+import { fromDbDate } from '../../work/work-date';
 import { validatePlanningCalendar } from './planning-calendar';
 import type {
   ApprovedPlanningLibraryProvider,
@@ -129,7 +129,7 @@ export class PlanningReferencesService {
         },
         orderBy: { firstName: 'asc' },
       }),
-      // Area 01 is a scaffold on this branch. Its provider plugs in after upstream merge.
+      // Area 01 publishes only its approved, locked company direction.
       (
         this.directionProvider as Partial<StrategicDirectionProvider>
       ).getApproved?.(user.organizationId) ?? Promise.resolve(null),
@@ -178,6 +178,11 @@ export class PlanningReferencesService {
           purpose: direction.purpose,
           vision: direction.vision,
           mission: direction.mission,
+          values: (direction.values || []).map(({ id, name, why }) => ({
+            id,
+            name,
+            why,
+          })),
         }
       : null;
     return {

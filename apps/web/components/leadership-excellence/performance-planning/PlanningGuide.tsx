@@ -2,19 +2,19 @@
 
 const guides = {
   company: {
-    what: "Agree the company direction through reviewed SWOT findings, clear objectives and measurable linked goals.",
+    what: "Turn reviewed SWOT findings into measurable company objectives that departments can contribute to directly.",
     why: "A small, evidence-led plan gives departments a clear contribution to make.",
     who: "Management and the planning coordinator; selected contributors help with SWOT. Employees read approved commitments.",
     prepare:
       "Company direction, relevant business findings, evidence where available, goal owners and the planning period.",
     steps: [
       "Consider all six pillars and record short SWOT findings; empty quadrants are allowed.",
-      "Give each finding an integer weightage from 1–10 to assess its importance. Priority follows automatically: Low 1–3, Medium 4–6, High 7–10. Weightage can stay blank in a draft and is required before finalising.",
+      "Give each finding an integer weightage from 1–10 to assess its importance. Priority follows automatically: Low 1–3, Medium 4–7, High 8–10. Weightage can stay blank in a draft and is required before finalising.",
       "Review findings from highest weightage first and choose an objective, existing action, monitoring or no action for each finding. Finalise the assessment once.",
-      "Link reviewed findings to a clear objective, then add one or two SMART goals with their own measures and targets.",
+      "Create a measurable objective with its own result, KPI or measurement, baseline, target, unit, owner and deadline. Select contributing departments and explain why this objective matters and how it can be achieved.",
     ],
     output:
-      "One company objective-and-goal register with reviewed sources and contributing departments.",
+      "One measurable company objective register with reviewed sources and contributing departments.",
     next: "Check and approve the company plan, then open Department & Function Plans.",
   },
   department: {
@@ -22,9 +22,9 @@ const guides = {
     why: "Department targets describe its own contribution rather than copying the company target.",
     who: "The accountable HOD or function manager and the designated plan approver.",
     prepare:
-      "An EMS department, approved company goals, suitable KPI definitions, accountable people and reporting dates.",
+      "An EMS department, approved company objectives, suitable KPI definitions, accountable people and reporting dates.",
     steps: [
-      "Link a contribution to the approved company goal, or explain an essential ongoing responsibility.",
+      "Link a department goal directly to an approved company objective, or explain an essential ongoing responsibility.",
       "Set the goal's baseline, target, unit and dates. Assign suitable KPIs with their own owners, schedules, providers, verifiers and period targets.",
       "Add delivery actions and assigned steps, or explain why a separate action is unnecessary.",
     ],
@@ -33,13 +33,13 @@ const guides = {
     next: "Check and approve the plan; agree team, position and individual contributions against it.",
   },
   personal: {
-    what: "Agree realistic team, position or employee contributions to an approved department plan.",
+    what: "Agree realistic team, position or employee contributions. Individuals can link an approved company objective or department goal; teams and positions link their department plan.",
     why: "People see only the measures and delivery work for which they are responsible.",
     who: "Managers and team leaders, with employees proposing and acknowledging their own commitments.",
     prepare:
-      "The approved department plan and relevant EMS team, position or person.",
+      "The relevant approved company objective or department goal and EMS team, position or person.",
     steps: [
-      "Select a contribution from the department plan or explain an ongoing responsibility.",
+      "Select an approved parent commitment available to you, or explain an ongoing responsibility.",
       "Assign relevant KPIs, owners and period targets; reuse existing department actions or steps.",
       "Agree the commitment with the manager, approve once and record employee acknowledgement.",
     ],
@@ -67,22 +67,22 @@ const guides = {
 export function PlanningGuide({ section }: { section: keyof typeof guides }) {
   const guide = guides[section];
   return (
-    <details className="rounded-xl border border-border bg-card p-4 text-sm">
-      <summary className="cursor-pointer font-medium text-gemba-navy">
+    <details className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+      <summary className="cursor-pointer font-medium text-slate-900">
         How to use this section · Know more
       </summary>
-      <div className="mt-4 space-y-3 leading-6 text-muted-foreground">
+      <div className="mt-4 space-y-3 leading-6 text-slate-500">
         <p>
-          <strong className="text-foreground">What:</strong> {guide.what}
+          <strong className="text-slate-900">What:</strong> {guide.what}
         </p>
         <p>
-          <strong className="text-foreground">Why:</strong> {guide.why}
+          <strong className="text-slate-900">Why:</strong> {guide.why}
         </p>
         <p>
-          <strong className="text-foreground">Who:</strong> {guide.who}
+          <strong className="text-slate-900">Who:</strong> {guide.who}
         </p>
         <p>
-          <strong className="text-foreground">Prepare:</strong> {guide.prepare}
+          <strong className="text-slate-900">Prepare:</strong> {guide.prepare}
         </p>
         <ol className="list-decimal space-y-1 pl-5">
           {guide.steps.map((step) => (
@@ -90,10 +90,10 @@ export function PlanningGuide({ section }: { section: keyof typeof guides }) {
           ))}
         </ol>
         <p>
-          <strong className="text-foreground">Output:</strong> {guide.output}
+          <strong className="text-slate-900">Output:</strong> {guide.output}
         </p>
         <p>
-          <strong className="text-foreground">Next:</strong> {guide.next}
+          <strong className="text-slate-900">Next:</strong> {guide.next}
         </p>
       </div>
     </details>

@@ -17,13 +17,14 @@ test("all ten scores map to the agreed priority bands", () => {
       "MEDIUM",
       "MEDIUM",
       "MEDIUM",
-      "HIGH",
+      "MEDIUM",
       "HIGH",
       "HIGH",
       "HIGH",
     ],
   );
   assert.equal(findingWeightageText(8), "Weightage 8/10 · High");
+  assert.equal(findingWeightageText(7), "Weightage 7/10 · Medium");
 });
 
 test("blank and legacy weightage never become zero or an inferred priority", () => {

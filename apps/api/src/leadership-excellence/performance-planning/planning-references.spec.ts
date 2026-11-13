@@ -35,7 +35,7 @@ function fixture() {
         ]),
     },
   };
-  const direction = {};
+  const direction: Record<string, unknown> = {};
   const framework: Record<string, unknown> = {};
   const library: Record<string, unknown> = {};
   const schedules = {
@@ -54,7 +54,7 @@ function fixture() {
     roleLevel: 'HOD',
     email: null,
   } as never;
-  return { db, framework, library, schedules, service, user };
+  return { db, direction, framework, library, schedules, service, user };
 }
 
 describe('planning dependency adapters', () => {
@@ -70,6 +70,8 @@ describe('planning dependency adapters', () => {
     expect(references.positions).toEqual([]);
     expect(references.dependencyStatus?.positions).toBe('UNAVAILABLE');
     expect(references.dependencyStatus?.library).toBe('LOCAL_CATALOGUE');
+    expect(references.direction).toBeNull();
+    expect(references.dependencyStatus?.direction).toBe('UNAVAILABLE');
     expect(actor.name).toBe('Asha Account');
     expect(references.sourceUpdatedAt).toBe('2026-11-01T10:00:00.000Z');
     expect(db.employee.findMany.mock.calls[0][0].where.organizationId).toBe(
@@ -78,6 +80,41 @@ describe('planning dependency adapters', () => {
     expect(db.workHoliday.findMany.mock.calls[0][0].where.organizationId).toBe(
       'org-1',
     );
+  });
+
+  it('passes through approved company direction and original core value identities', async () => {
+    const { service, direction, user } = fixture();
+    const approved = {
+      version: 2,
+      company: 'Gemba Plastic',
+      purpose: 'Reliable packaging',
+      vision: 'Trusted packaging partner',
+      mission: 'Deliver consistent product quality',
+      values: [
+        { id: 'value-quality', name: 'Quality', why: 'Right first time' },
+      ],
+    };
+    direction.getApproved = jest.fn().mockResolvedValue(approved);
+    const { references } = await service.get(user);
+    expect(direction.getApproved).toHaveBeenCalledWith('org-1');
+    expect(references.direction).toEqual(approved);
+    expect(references.dependencyStatus?.direction).toBe('AVAILABLE');
+    expect(references.direction?.values).not.toBe(approved.values);
+  });
+
+  it('does not invent direction or values when the provider has not published them', async () => {
+    const { service, direction, user } = fixture();
+    direction.getApproved = jest.fn().mockResolvedValue(null);
+    expect((await service.get(user)).references.direction).toBeNull();
+
+    direction.getApproved = jest.fn().mockResolvedValue({
+      version: 1,
+      company: 'Gemba Plastic',
+      purpose: '',
+      vision: '',
+      mission: '',
+    });
+    expect((await service.get(user)).references.direction?.values).toEqual([]);
   });
 
   it('uses stable provider positions including vacancies, never job-title based IDs', async () => {

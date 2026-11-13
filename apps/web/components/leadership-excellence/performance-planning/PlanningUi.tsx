@@ -6,16 +6,60 @@ import {
   useEffect,
   useId,
   useRef,
+  type ComponentProps,
   type ReactElement,
   type ReactNode,
 } from "react";
 import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button as SharedButton } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+const buttonStyles = {
+  default: "bg-[#52618a] text-white hover:bg-[#445174]",
+  outline:
+    "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900",
+  secondary: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
+  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  destructive:
+    "bg-red-50 text-red-700 hover:bg-red-100 focus-visible:border-red-500 focus-visible:ring-red-500/20",
+  link: "text-indigo-700 hover:text-indigo-800",
+};
+const buttonSizes = {
+  default: "h-auto min-h-10 gap-2 px-4 py-2",
+  xs: "h-auto min-h-7 gap-1 px-2 py-1 text-xs",
+  sm: "h-auto min-h-9 gap-1.5 px-3 py-1.5 text-xs",
+  lg: "h-auto min-h-11 gap-2 px-5 py-2.5",
+  icon: "size-10",
+  "icon-xs": "size-7",
+  "icon-sm": "size-9",
+  "icon-lg": "size-11",
+};
+
+export function Button({
+  className,
+  variant = "default",
+  size = "default",
+  ...props
+}: ComponentProps<typeof SharedButton>) {
+  return (
+    <SharedButton
+      variant={variant}
+      size={size}
+      className={cn(
+        "min-w-0 max-w-full whitespace-normal rounded-lg leading-5 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20",
+        buttonStyles[variant || "default"],
+        buttonSizes[size || "default"],
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 export const card =
-  "rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6";
+  "min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6";
 export const control =
-  "mt-1.5 w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-gemba-navy focus:ring-2 focus:ring-gemba-navy/10 disabled:cursor-not-allowed disabled:opacity-60";
+  "mt-1.5 min-h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 disabled:opacity-60";
 export const categories = {
   S: {
     label: "Strengths",
@@ -62,6 +106,10 @@ export const responseLabels: Record<string, string> = {
   ACTION: "Action within an existing plan",
   MONITOR: "Monitor",
   NONE: "No action now",
+  MAINTAIN: "Maintain strength",
+  USE: "Use for opportunity",
+  DEFER: "Defer",
+  VERIFY: "Verify evidence",
 };
 export function Status({
   status,
@@ -72,7 +120,7 @@ export function Status({
 }) {
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status === "APPROVED" ? "bg-gemba-lime/15 text-gemba-lime-ink" : status === "IN_REVIEW" ? "bg-amber-50 text-amber-800" : "bg-muted text-muted-foreground"}`}
+      className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs font-medium ${status === "APPROVED" ? "bg-emerald-50 text-emerald-700" : status === "IN_REVIEW" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}
     >
       {status === "APPROVED"
         ? swot
@@ -107,7 +155,7 @@ export function Field({
       )
     : children;
   return (
-    <label className="block min-w-0 text-sm font-medium text-gemba-navy">
+    <label className="block min-w-0 text-sm font-medium text-slate-700">
       <span id={id} className="block">
         {label}
       </span>
@@ -115,7 +163,7 @@ export function Field({
       {hint && (
         <span
           id={`${id}-hint`}
-          className="mt-1.5 block text-xs font-normal leading-5 text-muted-foreground"
+          className="mt-1.5 block text-xs font-normal leading-5 text-slate-500"
         >
           {hint}
         </span>
@@ -134,8 +182,8 @@ export function Empty({
 }) {
   return (
     <section className={`${card} py-12 text-center`}>
-      <h2 className="text-lg font-semibold text-gemba-navy">{title}</h2>
-      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
+      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
         {children}
       </p>
       {action && <div className="mt-5 flex justify-center">{action}</div>}
@@ -181,16 +229,16 @@ export function Modal({
         event.preventDefault();
         onClose();
       }}
-      className={`fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-hidden rounded-2xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40 ${wide ? "max-w-5xl" : "max-w-3xl"}`}
+      className={`fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/40 ${wide ? "max-w-5xl" : "max-w-3xl"}`}
     >
       <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border bg-card px-5 py-4 sm:px-7">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
           <div className="min-w-0">
-            <h2 id={id} className="text-lg font-semibold text-gemba-navy">
+            <h2 id={id} className="text-lg font-semibold text-slate-900">
               {title}
             </h2>
             {description && (
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              <p className="mt-1 text-xs leading-5 text-slate-500">
                 {description}
               </p>
             )}
@@ -207,18 +255,18 @@ export function Modal({
           </Button>
         </div>
         {progress && (
-          <div className="shrink-0 border-b border-border px-5 py-3 sm:px-7">
+          <div className="shrink-0 border-b border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-6">
             {progress}
           </div>
         )}
         <div
           data-planning-modal-body
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6"
         >
           {children}
         </div>
         {footer && (
-          <div className="shrink-0 border-t border-border bg-muted/25 px-4 py-3 sm:px-7">
+          <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
             {footer}
           </div>
         )}
@@ -240,7 +288,7 @@ export function Tabs({
   return (
     <nav
       aria-label={label}
-      className="flex flex-wrap gap-2 border-b border-border pb-3"
+      className="flex flex-wrap gap-2 border-b border-slate-200 pb-3"
     >
       {items.map(([key, title]) => (
         <button
@@ -248,7 +296,7 @@ export function Tabs({
           key={key}
           onClick={() => onChange(key)}
           aria-current={value === key ? "page" : undefined}
-          className={`rounded-lg px-4 py-2.5 text-sm font-medium transition ${value === key ? "bg-gemba-navy text-white" : "bg-card text-muted-foreground hover:bg-muted"}`}
+          className={`min-h-10 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 ${value === key ? "bg-indigo-50 text-indigo-700" : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}
         >
           {title}
         </button>

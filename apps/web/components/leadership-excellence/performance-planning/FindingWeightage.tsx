@@ -12,7 +12,7 @@ export function FindingWeightage({ weightage }: { weightage?: unknown }) {
         ? "border-amber-200 bg-amber-50 text-amber-800"
         : priority === "LOW"
           ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-          : "border-border bg-muted/50 text-muted-foreground";
+          : "border-slate-200 bg-slate-50 text-slate-500";
   return (
     <span
       className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 text-xs font-medium ${color}`}

@@ -13,7 +13,7 @@ export function findingPriority(
   value: unknown,
 ): "LOW" | "MEDIUM" | "HIGH" | "" {
   if (!validFindingWeightage(value)) return "";
-  return value <= 3 ? "LOW" : value <= 6 ? "MEDIUM" : "HIGH";
+  return value <= 3 ? "LOW" : value <= 7 ? "MEDIUM" : "HIGH";
 }
 
 export function findingWeightageText(value: unknown) {

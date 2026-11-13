@@ -7,8 +7,7 @@ import {
   type PlanningDocument,
 } from "@/services/leadership-excellence/performance-planning.service";
 import { usePlanning } from "./PlanningProvider";
-import { Button } from "@/components/ui/button";
-import { ErrorList } from "./PlanningUi";
+import { Button, ErrorList } from "./PlanningUi";
 export function PlanningEvidence({
   document,
   findingId,
@@ -38,7 +37,7 @@ export function PlanningEvidence({
     enabled: !!token,
   });
   return (
-    <section className="space-y-3 rounded-lg border border-border p-4">
+    <section className="space-y-3 rounded-lg border border-slate-200 p-4">
       <h3 className="text-sm font-medium">Supporting files</h3>
       <ErrorList error={error || query.error?.message || ""} />
       {query.data?.map((file) => (
@@ -48,7 +47,7 @@ export function PlanningEvidence({
         >
           <span className="break-all">
             {file.name}{" "}
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-slate-500">
               ({Math.ceil(file.size / 1024)} KB)
             </span>
           </span>
@@ -70,13 +69,20 @@ export function PlanningEvidence({
         </div>
       ))}
       {!query.isPending && !query.data?.length && (
-        <p className="text-xs text-muted-foreground">No files attached.</p>
+        <p className="text-xs text-slate-500">No files attached.</p>
       )}
       {editable &&
+        !document.findingReviews?.some(
+          (review) => review.finding.id === findingId,
+        ) &&
+        !document.data.findings.some(
+          (finding) =>
+            finding.id === findingId && finding.reviewStatus === "REVIEWED",
+        ) &&
         !document.versions.some((v) =>
           v.data.findings.some((f) => f.id === findingId),
         ) && (
-          <label className="block text-xs text-muted-foreground">
+          <label className="block text-xs text-slate-500">
             Attach up to five files, 500 KB each. PDF, images, Office documents
             or text.
             <input

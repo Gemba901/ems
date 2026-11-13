@@ -11,10 +11,26 @@ export function reviewedSwotSources(
 ) {
   return documents
     .filter((document) => document.kind === "SWOT" && document.cycle === cycle)
-    .flatMap((document) =>
-      document.versions.flatMap((version) =>
+    .flatMap((document) => [
+      ...(document.findingReviews || [])
+        .filter(
+          (review) =>
+            review.finding.reviewStatus === "REVIEWED" &&
+            review.finding.basis !== "NEEDS_CHECKING",
+        )
+        .map((review) => ({
+          documentId: document.id,
+          version: review.version,
+          findingId: review.finding.id,
+          finding: review.finding,
+        })),
+      ...document.versions.flatMap((version) =>
         version.data.findings
-          .filter((finding) => finding.basis !== "NEEDS_CHECKING")
+          .filter(
+            (finding) =>
+              finding.basis !== "NEEDS_CHECKING" &&
+              (!finding.reviewStatus || finding.reviewStatus === "REVIEWED"),
+          )
           .map((finding) => ({
             documentId: document.id,
             version: version.version,
@@ -22,7 +38,27 @@ export function reviewedSwotSources(
             finding,
           })),
       ),
+    ])
+    .filter(
+      (source, index, all) =>
+        all.findIndex(
+          (candidate) => sourceKey(candidate) === sourceKey(source),
+        ) === index,
     );
+}
+
+export function findingReviewStatus(
+  finding: import("@/services/leadership-excellence/performance-planning.service").Finding,
+  document: PlanningDocument,
+) {
+  return (
+    finding.reviewStatus ||
+    (document.status === "APPROVED" && finding.basis !== "NEEDS_CHECKING"
+      ? "REVIEWED"
+      : finding.basis === "NEEDS_CHECKING"
+        ? "NEEDS_EVIDENCE"
+        : "UNDER_REVIEW")
+  );
 }
 
 export const sourceKey = (source: SourceLink) =>

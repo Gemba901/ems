@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 import { CalendarDays, Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  PLANNING_DATE_MIN,
+  PLANNING_DATE_MAX,
+  planningPeriodBounds,
+  planningPeriodKey,
+  planningPeriodLabel,
+  planningPeriodValidation,
+} from "@/services/leadership-excellence/performance-planning/planning-period";
 import { usePlanning } from "./PlanningProvider";
-import { control, ErrorList, Field, Modal } from "./PlanningUi";
+import { Button, control, ErrorList, Field, Modal } from "./PlanningUi";
 
 export function PlanningYearPicker({
   value,
@@ -13,28 +20,33 @@ export function PlanningYearPicker({
 }: {
   value: string;
   years: string[];
-  onChange: (year: string, created?: boolean) => void;
+  onChange: (period: string, created?: boolean) => void;
 }) {
   const { data, run, busy } = usePlanning();
   const [open, setOpen] = useState(false);
-  const [year, setYear] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [error, setError] = useState("");
   const canCreate = ["ADMIN", "SUPER_ADMIN", "MANAGEMENT"].includes(
     data.actor.role,
   );
-  const cleanedYear = year.trim();
-  // Years come from the one plan register. Reuse an existing year instead of
-  // creating a second calendar master or another company assessment.
-  const existing = data.documents.some((plan) => plan.cycle === cleanedYear);
+  const candidate = planningPeriodKey(from, to);
+  // Reuse the single register's canonical period, including legacy year keys.
+  const existing = candidate
+    ? data.documents.find((plan) => {
+        const bounds = planningPeriodBounds(plan.cycle);
+        return (
+          bounds &&
+          planningPeriodKey(bounds.startDate, bounds.endDate) === candidate
+        );
+      })
+    : undefined;
 
   async function save() {
     if (busy || !canCreate) return;
-    if (
-      !/^\d{4}$/.test(cleanedYear) ||
-      Number(cleanedYear) < 2000 ||
-      Number(cleanedYear) > 2200
-    ) {
-      setError("Enter a four-digit year between 2000 and 2200.");
+    const issues = planningPeriodValidation(from, to);
+    if (!candidate || issues.length) {
+      setError(issues.join("\n"));
       return;
     }
     setError("");
@@ -42,37 +54,39 @@ export function PlanningYearPicker({
       if (!existing) {
         await run("CREATE_PLAN", {
           kind: "SWOT",
-          cycle: cleanedYear,
-          title: `Company SWOT · ${cleanedYear}`,
+          cycle: candidate,
+          startDate: from,
+          endDate: to,
+          title: `Company SWOT · ${planningPeriodLabel(candidate)}`,
         });
       }
-      onChange(cleanedYear, !existing);
+      onChange(existing?.cycle || candidate, !existing);
       setOpen(false);
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
-          : "Could not add the planning year. Try again.",
+          : "Could not add the planning period. Try again.",
       );
     }
   }
 
   return (
     <>
-      <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex max-w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-sm">
         <CalendarDays size={18} className="shrink-0" />
-        <label>
-          <span className="block text-[10px]">Planning year</span>
+        <label className="min-w-0">
+          <span className="block text-[10px]">Planning period</span>
           <select
-            aria-label="Planning year"
-            className="max-w-36 bg-transparent py-1 text-sm font-semibold text-gemba-navy outline-offset-2"
+            aria-label="Planning period"
+            className="max-w-64 rounded bg-transparent py-1 text-sm font-semibold text-slate-900 outline-offset-2 focus-visible:outline-indigo-500"
             value={value}
             disabled={busy}
             onChange={(event) => onChange(event.target.value)}
           >
             {years.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {planningPeriodLabel(option)}
               </option>
             ))}
           </select>
@@ -80,12 +94,14 @@ export function PlanningYearPicker({
         {canCreate && (
           <button
             type="button"
-            aria-label="Add planning year"
-            title="Add planning year"
+            aria-label="Add planning period"
+            title="Add planning period"
             disabled={busy}
-            className="flex size-8 shrink-0 items-center justify-center rounded-md text-gemba-navy hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gemba-navy disabled:opacity-50"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-slate-900 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50"
             onClick={() => {
-              setYear("");
+              const bounds = planningPeriodBounds(value);
+              setFrom(bounds?.startDate || "");
+              setTo(bounds?.endDate || "");
               setError("");
               setOpen(true);
             }}
@@ -96,7 +112,7 @@ export function PlanningYearPicker({
       </div>
       {open && (
         <Modal
-          title="Add planning year"
+          title="Add planning period"
           onClose={() => {
             if (!busy) setOpen(false);
           }}
@@ -109,37 +125,55 @@ export function PlanningYearPicker({
             }}
             className="space-y-4"
           >
-            <p className="text-sm leading-6 text-muted-foreground">
-              Enter a year to start its draft SWOT assessment. You can complete
-              the findings and plan details later.
+            <p className="text-sm leading-6 text-slate-500">
+              Choose the dates your plan covers. This can be a calendar year, a
+              financial year or several years. A new period starts with a draft
+              SWOT assessment.
             </p>
-            <Field
-              label="New planning year"
-              hint="Use a four-digit year, for example 2031."
-            >
-              <input
-                className={control}
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                autoFocus
-                value={year}
-                disabled={busy}
-                aria-invalid={!!error}
-                placeholder={String(Math.min(2200, Number(value) + 1))}
-                onChange={(event) => {
-                  setYear(event.target.value);
-                  setError("");
-                }}
-              />
-            </Field>
-            {existing && (
-              <p role="status" className="text-sm text-muted-foreground">
-                This year already has a plan. Select it to continue.
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="From">
+                <input
+                  className={control}
+                  type="date"
+                  min={PLANNING_DATE_MIN}
+                  max={PLANNING_DATE_MAX}
+                  autoFocus
+                  value={from}
+                  disabled={busy}
+                  aria-invalid={!!error}
+                  onChange={(event) => {
+                    setFrom(event.target.value);
+                    setError("");
+                  }}
+                />
+              </Field>
+              <Field label="To">
+                <input
+                  className={control}
+                  type="date"
+                  min={PLANNING_DATE_MIN}
+                  max={PLANNING_DATE_MAX}
+                  value={to}
+                  disabled={busy}
+                  aria-invalid={!!error}
+                  onChange={(event) => {
+                    setTo(event.target.value);
+                    setError("");
+                  }}
+                />
+              </Field>
+            </div>
+            {existing ? (
+              <p role="status" className="text-sm text-slate-500">
+                This period already has a plan. Select it to continue.
               </p>
-            )}
+            ) : candidate ? (
+              <p className="text-sm text-slate-500">
+                Planning period: {planningPeriodLabel(candidate)}
+              </p>
+            ) : null}
             <ErrorList error={error} />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -149,7 +183,11 @@ export function PlanningYearPicker({
                 Cancel
               </Button>
               <Button type="submit" disabled={busy}>
-                {busy ? "Saving…" : existing ? "Select year" : "Create year"}
+                {busy
+                  ? "Saving…"
+                  : existing
+                    ? "Select period"
+                    : "Create period"}
               </Button>
             </div>
           </form>

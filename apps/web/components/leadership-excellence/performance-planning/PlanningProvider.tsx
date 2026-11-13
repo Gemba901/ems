@@ -18,7 +18,7 @@ import {
   type PlanningView,
   type ParentGoal,
 } from "@/services/leadership-excellence/performance-planning.service";
-import { Button } from "@/components/ui/button";
+import { Button } from "./PlanningUi";
 import { Loader2, RefreshCw } from "lucide-react";
 
 type PlanningContext = {
@@ -26,6 +26,12 @@ type PlanningContext = {
   busy: boolean;
   planningCycle: string;
   setPlanningCycle: (cycle: string) => void;
+  planFocus: string;
+  setPlanFocus: (id: string) => void;
+  registerFocus: { documentId: string; itemId: string } | null;
+  setRegisterFocus: (
+    value: { documentId: string; itemId: string } | null,
+  ) => void;
   contributionContext: {
     cycle: string;
     departmentId: string;
@@ -100,6 +106,11 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     };
   }, [client, key, organizationId, token]);
   const [selection, setSelection] = useState({ organizationId, cycle: "" });
+  const [focus, setFocus] = useState<{
+    organizationId: typeof organizationId;
+    plan: string;
+    register: PlanningContext["registerFocus"];
+  }>({ organizationId, plan: "", register: null });
   const [handoff, setHandoff] = useState<{
     organizationId: typeof organizationId;
     value: PlanningContext["contributionContext"];
@@ -133,6 +144,18 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
       // A GET begun before approval must not overwrite the approved response.
       await client.cancelQueries({ queryKey: key, exact: true });
       client.setQueryData(key, result);
+      if (action === "SAVE_GOALS") {
+        const saved = result.documents.find((d) => d.id === documentId);
+        console.info("[EMS-DEBUG] SAVE_GOALS response", {
+          documentId,
+          goals: saved?.data.goals.map((g) => g.id),
+          assignments: saved?.data.assignments.map((a) => ({
+            id: a.id,
+            goalId: a.goalId,
+            definitionId: a.definitionId,
+          })),
+        });
+      }
       channel.current?.postMessage({
         type: "workspace-changed",
         organizationId,
@@ -178,7 +201,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
   if (!query.data || (query.isError && !transientRefreshFailure))
     return (
       <section className="rounded-xl border border-border bg-card p-6">
-        <h1 className="text-xl font-semibold text-gemba-navy">
+        <h1 className="text-xl font-semibold text-slate-900">
           Performance Planning &amp; Alignment
         </h1>
         <p className="my-4 text-destructive" role="alert">
@@ -198,6 +221,24 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
         busy,
         planningCycle,
         setPlanningCycle: (cycle) => setSelection({ organizationId, cycle }),
+        planFocus: focus.organizationId === organizationId ? focus.plan : "",
+        setPlanFocus: (plan) =>
+          setFocus((current) => ({
+            organizationId,
+            plan,
+            register:
+              current.organizationId === organizationId
+                ? current.register
+                : null,
+          })),
+        registerFocus:
+          focus.organizationId === organizationId ? focus.register : null,
+        setRegisterFocus: (register) =>
+          setFocus((current) => ({
+            organizationId,
+            register,
+            plan: current.organizationId === organizationId ? current.plan : "",
+          })),
         contributionContext:
           handoff.organizationId === organizationId ? handoff.value : null,
         setContributionContext: (value) =>
@@ -232,7 +273,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
         {message && (
           <div
             role="status"
-            className="flex items-center justify-between gap-3 rounded-lg border border-gemba-lime/30 bg-gemba-lime/10 px-4 py-3 text-sm text-gemba-lime-ink"
+            className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
           >
             {message}
             <button

@@ -1,5 +1,5 @@
-import { PlanningWorkspace } from "@/components/leadership-excellence/performance-planning/PlanningWorkspace";
+import { PlanningProgrammeWorkspace } from "@/components/leadership-excellence/performance-planning/PlanningProgrammeWorkspace";
 
 export default function Page() {
-  return <PlanningWorkspace section="company" />;
+  return <PlanningProgrammeWorkspace stage="company" />;
 }

@@ -13,7 +13,7 @@ export function QcdsmtGuidance() {
   return (
     <aside
       aria-label="QCDSMT alignment guidance"
-      className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-gemba-navy sm:p-5"
+      className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-slate-900 sm:p-5"
     >
       <div className="flex items-center gap-2">
         <Info size={18} className="shrink-0" aria-hidden="true" />
@@ -35,7 +35,7 @@ export function QcdsmtGuidance() {
             </dt>
             <dd className="min-w-0 text-xs leading-5">
               <span className="font-semibold">{name}</span>
-              <span className="block text-muted-foreground">{purpose}</span>
+              <span className="block text-slate-500">{purpose}</span>
             </dd>
           </div>
         ))}

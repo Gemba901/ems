@@ -6,6 +6,9 @@ import type {
 } from './planning.types';
 
 const DAY = 86_400_000;
+export const MAX_TARGET_PERIODS = 732;
+export const TARGET_PERIOD_LIMIT_MESSAGE =
+  'This assignment would create more than 732 target periods. Use a shorter assignment period or a less frequent reporting schedule.';
 const FREQUENCIES: Frequency[] = [
   'DAILY',
   'WEEKLY',
@@ -150,8 +153,6 @@ export function calendarPeriods(
     !FREQUENCIES.includes(frequency)
   )
     return [];
-  if ((Date.parse(end) - Date.parse(start)) / DAY > 731)
-    throw new BadRequestException('Plan dates may span at most two years.');
   if (calendar) {
     validatePlanningCalendar(calendar);
     if (
@@ -167,6 +168,8 @@ export function calendarPeriods(
   const rows: TargetPeriod[] = [];
   let current = start;
   while (current <= end) {
+    if (rows.length >= MAX_TARGET_PERIODS)
+      throw new BadRequestException(TARGET_PERIOD_LIMIT_MESSAGE);
     const date = new Date(`${current}T00:00:00Z`);
     const year = date.getUTCFullYear(),
       month = date.getUTCMonth();

@@ -30,6 +30,8 @@ export interface ParentGoal {
   documentId: string;
   goalId: string;
   version: number;
+  /** Missing means a legacy goal reference; objective IDs are never guessed. */
+  itemKind?: 'OBJECTIVE' | 'GOAL';
 }
 export interface Stamp {
   id: string;
@@ -40,10 +42,15 @@ export interface Stamp {
   updatedBy: string;
 }
 export interface Finding extends Stamp {
+  /** Canonical multi-selection. Absent only in legacy snapshots; OTHER means Business focus. */
+  alignments?: string[];
   pillar: Pillar;
   category: 'S' | 'W' | 'O' | 'T';
   title: string;
   relatedPillars: Pillar[];
+  /** Compatibility-only scalar used when alignments is absent. */
+  alignment?: '' | 'Q' | 'C' | 'D' | 'S' | 'M' | 'T' | 'OTHER';
+  otherBusinessFocus?: string;
   explanation: string;
   impact: string;
   evidence: string;
@@ -52,12 +59,34 @@ export interface Finding extends Stamp {
   /** Absent only in legacy JSON; never infer a score from its saved priority. */
   weightage?: number | null;
   priority: '' | 'HIGH' | 'MEDIUM' | 'LOW';
-  response: '' | 'OBJECTIVE' | 'ACTION' | 'MONITOR' | 'NONE';
+  response:
+    | ''
+    | 'OBJECTIVE'
+    | 'ACTION'
+    | 'MONITOR'
+    | 'NONE'
+    | 'MAINTAIN'
+    | 'USE'
+    | 'DEFER'
+    | 'VERIFY';
+  /** Legacy reviewed assessment snapshots omit these fields. */
+  reviewStatus?: 'UNDER_REVIEW' | 'NEEDS_EVIDENCE' | 'REVIEWED';
+  reviewedAt?: string;
+  reviewedBy?: string;
   decisionNote: string;
   followupOwnerId: string;
   reviewDate: string;
 }
 export interface Objective extends Stamp {
+  result?: string;
+  alignment?: '' | 'Q' | 'C' | 'D' | 'S' | 'M' | 'T' | 'OTHER';
+  otherBusinessFocus?: string;
+  direction?: '' | 'HIGHER' | 'LOWER' | 'MAINTAIN_MIN' | 'MAINTAIN_MAX';
+  baselinePeriod?: string;
+  definition?: string;
+  dataSource?: string;
+  reviewFrequency?: string;
+  guardrails?: string;
   title: string;
   meaning: string;
   pillar: Pillar | '';
@@ -68,8 +97,26 @@ export interface Objective extends Stamp {
   endDate: string;
   sources: SourceLink[];
   sourceRationale: string;
+  priority?: number | null;
+  weightage?: number | null;
+  /** Optional only for legacy direction-only records and incomplete drafts. */
+  measure?: string;
+  baseline?: number | null;
+  baselineReason?: string;
+  target?: number | null;
+  unit?: string;
+  departmentIds?: string[];
+  approach?: string;
+  selectionReason?: string;
 }
 export interface Goal extends Stamp {
+  goalNo?: number | null;
+  departmentCode?: string;
+  definition?: string;
+  direction?: '' | 'HIGHER' | 'LOWER' | 'MAINTAIN_MIN' | 'MAINTAIN_MAX';
+  baselinePeriod?: string;
+  source?: string;
+  frequency?: Frequency | '';
   title: string;
   objectiveId: string;
   parent: ParentGoal | null;
@@ -133,6 +180,7 @@ export interface Assignment extends Stamp {
   targets: TargetPeriod[];
 }
 export interface DeliveryAction extends Stamp {
+  parent?: ParentGoal | null;
   title: string;
   goalId: string;
   parentActionId: string;
@@ -173,6 +221,12 @@ export interface PlanData {
   actionLinks?: ActionLink[];
 }
 export interface ApprovedVersion {
+  /** Read projection: each published item retains its canonical approval version. */
+  itemVersions?: Record<string, number>;
+  approvedItem?: { kind: 'objective' | 'goal'; itemId: string };
+  companyPlanningModel?: 'MEASURABLE_OBJECTIVES';
+  /** Preserved for history/revision only; not approved commitments or parent choices. */
+  legacyCompanyGoals?: Goal[];
   version: number;
   data: PlanData;
   approvedAt: string;
@@ -191,6 +245,10 @@ export interface AuditEvent {
   changes?: { field: string; before: unknown; after: unknown }[];
 }
 export interface PlanningDocument {
+  /** Marks programme drafts even before their optional fields are completed. */
+  planningModel?: 'PROGRAMME';
+  /** Current item locks; historical payloads live in immutable approved versions. */
+  itemApprovals?: ItemApproval[];
   id: string;
   code: string;
   kind: PlanKind;
@@ -200,6 +258,13 @@ export interface PlanningDocument {
   status: 'DRAFT' | 'IN_REVIEW' | 'APPROVED';
   data: PlanData;
   versions: ApprovedVersion[];
+  /** Immutable per-finding reviews share a version namespace with full reviews. */
+  findingReviews?: {
+    version: number;
+    finding: Finding;
+    reviewedAt: string;
+    reviewedBy: string;
+  }[];
   revisionReason: string;
   effectiveDate: string;
   history: AuditEvent[];
@@ -227,6 +292,11 @@ export interface KpiDefinition {
   adaptedFromId?: string;
 }
 export interface PlanningState {
+  /** Monotonic department goal numbers, scoped by period, department and parent identity. */
+  departmentGoalSequences?: Record<string, number>;
+  programmeResults?: ProgrammeResult[];
+  programmeReviews?: ProgrammeReview[];
+  programmeActionProgress?: ProgrammeActionProgress[];
   schema: 1;
   sequence: number;
   documents: PlanningDocument[];
@@ -266,6 +336,8 @@ export interface PlanningReferences {
     purpose: string;
     vision: string;
     mission: string;
+    /** Approved Area 01 values; optional for older API responses. */
+    values?: { id: string; name: string; why: string }[];
   } | null;
   departments: { id: string; name: string }[];
   people: PlanningPerson[];
@@ -294,6 +366,7 @@ export interface DocumentPermissions {
 }
 /** Approved snapshots available for planning, including future effective dates. */
 export interface ApprovedParentGoal {
+  itemKind?: 'OBJECTIVE' | 'GOAL';
   documentId: string;
   kind: 'COMPANY' | 'DEPARTMENT';
   cycle: string;
@@ -301,18 +374,25 @@ export interface ApprovedParentGoal {
   departmentId: string;
   version: number;
   effectiveDate: string;
+  /** Restricted summaries can only be retained on these existing contributions. */
+  retainedFor?: { documentId: string; goalId: string }[];
   goal: Pick<
     Goal,
     'id' | 'code' | 'title' | 'departmentIds' | 'startDate' | 'endDate'
   >;
 }
 export interface PlanningView {
+  programmeResults?: ProgrammeResult[];
+  programmeReviews?: ProgrammeReview[];
+  programmeActionProgress?: ProgrammeActionProgress[];
+  programmeActions?: { documentId: string; action: DeliveryAction }[];
   revision: number;
   references: PlanningReferences;
   actor: PlanningActor;
   documents: (PlanningDocument & {
     permissions: DocumentPermissions;
     issues: string[];
+    programmeIssues?: Record<string, string[]>;
   })[];
   kras: Kra[];
   definitions: KpiDefinition[];
@@ -325,6 +405,17 @@ export interface PlanningCommand {
     | 'CREATE_PLAN'
     | 'SAVE_SETTINGS'
     | 'SAVE_ITEM'
+    | 'SAVE_FINDINGS'
+    | 'SAVE_GOALS'
+    | 'REVIEW_FINDINGS'
+    | 'APPROVE_ITEM'
+    | 'REVISE_ITEM'
+    | 'SAVE_RESULT'
+    | 'VERIFY_RESULT'
+    | 'SAVE_REVIEW'
+    | 'UPDATE_ACTION_PROGRESS'
+    | 'REVIEW_FINDING'
+    | 'REOPEN_FINDING'
     | 'DELETE_ITEM'
     | 'CONSIDER_PILLAR'
     | 'CONSIDER_ALL_PILLARS'
@@ -338,4 +429,58 @@ export interface PlanningCommand {
     | 'SAVE_DEFINITION';
   documentId?: string;
   payload: Record<string, unknown>;
+}
+
+export interface ItemApproval {
+  kind: 'objective' | 'goal';
+  itemId: string;
+  status: 'APPROVED' | 'DRAFT';
+  version: number;
+  approvedAt: string;
+  approvedBy: string;
+  reason?: string;
+  effectiveDate?: string;
+}
+export interface ProgrammeResult {
+  id: string;
+  documentId: string;
+  itemId: string;
+  itemKind: 'OBJECTIVE' | 'GOAL';
+  version: number;
+  scope: 'COMPANY' | 'DEPARTMENT' | 'INDIVIDUAL';
+  periodStart: string;
+  periodEnd: string;
+  actual: number;
+  numerator: number | null;
+  denominator: number | null;
+  source: string;
+  notes: string;
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  recordedBy: string;
+  recordedAt: string;
+  verifiedBy: string;
+  verifiedAt: string;
+  verificationNote: string;
+}
+export interface ProgrammeReview {
+  id: string;
+  documentId: string;
+  itemId: string;
+  version: number;
+  resultId: string;
+  decision: 'INVESTIGATE' | 'SUSTAIN' | 'REVISE';
+  note: string;
+  nextReviewDate: string;
+  reviewedBy: string;
+  reviewedAt: string;
+}
+export interface ProgrammeActionProgress {
+  id: string;
+  documentId: string;
+  actionId: string;
+  status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED';
+  evidence: string;
+  note: string;
+  updatedBy: string;
+  updatedAt: string;
 }

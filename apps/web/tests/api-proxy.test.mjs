@@ -9,6 +9,17 @@ function req(path, { host = 'acme.example.test', method = 'GET', origin, headers
 }
 const json = (value, headers = {}, status = 200) => Response.json(value, { status, headers });
 
+test('routes Area 03 through the trusted company proxy', async () => {
+  const parts=['leadership-excellence','performance-planning','commands'];
+  const response=await proxyRequest(req(parts.join('/'),{method:'POST',origin:'https://acme.example.test',headers:{authorization:'Bearer test-access','content-type':'application/json'},body:JSON.stringify({action:'CREATE_PLAN'})}),parts,config,async(url,options)=>{
+    assert.equal(url.pathname,'/leadership-excellence/performance-planning/commands');
+    assert.equal(options.headers.get('x-gemba-tenant-hostname'),'acme.example.test');
+    assert.equal(options.headers.get('authorization'),'Bearer test-access');
+    return json({revision:1});
+  });
+  assert.equal(response.status,200);
+});
+
 for (const host of ['example.test.evil.org', 'a.b.example.test', 'api.example.test', 'ab.example.test', 'acme.example.test.', 'https://acme.example.test', 'acme.example.test:99999', 'acme.example.test:80', 'acme.example.test,evil.test']) {
   test(`rejects hostname ${host}`, () => assert.throws(() => workspace(host, config)));
 }

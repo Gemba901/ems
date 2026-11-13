@@ -1,1 +1,25 @@
-// Leadership Excellence — 03-performance-planning. Owner: see docs/leadership-excellence/README.md
+// Area 03 owns this aggregate. Stable IDs and approved snapshots are stored once;
+// other areas consume the approved handover instead of copying planning records.
+model LexPlanningWorkspace {
+  organizationId String @id
+  revision       Int @default(0)
+  state          Json
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  evidence       LexPlanningEvidence[]
+}
+
+model LexPlanningEvidence {
+  id             String @id @default(uuid())
+  organizationId String
+  findingId      String
+  name           String
+  mimeType       String
+  size           Int
+  content        Bytes
+  uploadedBy     String
+  createdAt      DateTime @default(now())
+  workspace      LexPlanningWorkspace @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade, map: "LexPlanningEvidence_workspace_fkey")
+
+  @@index([organizationId, findingId])
+}

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
+import { normalizeAttendanceStatus } from "@/lib/work/attendance-status";
 import {
   WorkApiError,
   WorkService,
@@ -295,6 +296,8 @@ export function useAttendanceStatus() {
   return useQuery({
     queryKey: [...scope, "attendance", "status"],
     queryFn: () => WorkService.attendanceStatus(token),
+    // Also handles older responses already held in the query cache during HMR.
+    select: normalizeAttendanceStatus,
     retry: retryTransient,
     enabled,
     refetchOnWindowFocus: "always",

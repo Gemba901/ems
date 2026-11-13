@@ -1,0 +1,27 @@
+.planning-programme { color: #183452; font-size: 14px; line-height: 1.55; }
+.planning-programme h1 { font-size: 27px; font-weight: 700; letter-spacing: -.6px; line-height: 1.3; }
+.planning-programme h2 { font-size: 19px; font-weight: 650; letter-spacing: -.3px; }
+.planning-programme h3 { font-size: 15px; font-weight: 650; }
+.planning-programme button { font-size: 12px; }
+.planning-programme input:not([type=checkbox]), .planning-programme select, .planning-programme textarea { font-size: 13px; }
+.planning-programme dialog label { font-size: 12px; }
+.planning-programme dialog h2 { font-size: 21px; }
+.planning-programme dialog { color: #183452; border-color: #dfe6f0; border-radius: 15px; }
+.planning-programme dialog [data-planning-modal-body] { padding-top: 22px; padding-bottom: 22px; }
+.programme-card { min-width: 0; background: white; border: 1px solid #dfe6f0; border-radius: 12px; padding: 20px; box-shadow: 0 2px 3px #18345204; }
+.programme-callout { border: 1px solid #dce5fc; background: #f0f5ff; padding: 13px 16px; border-radius: 9px; color: #3f537f; line-height: 1.6; font-size: 12px; }
+.programme-callout.amber { border-color: #f3dfb5; background: #fffbef; color: #926214; }
+.programme-callout.green { border-color: #c4e8d7; background: #f0fbf6; color: #176a52; }
+.programme-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.programme-table th { font-size: 10px; font-weight: 600; letter-spacing: .055em; text-transform: uppercase; color: #7d8ba1; background: #f9fafc; padding: 12px 15px; }
+.programme-table td { padding: 15px; border-top: 1px solid #dfe6f0; vertical-align: top; }
+.programme-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 5px; padding: 3px 8px; font-size: 11px; font-weight: 600; background: #f0f3f7; color: #60718a; }
+.programme-badge.green { background: #eaf8f0; color: #177650; }
+.programme-badge.amber { background: #fff6df; color: #976718; }
+.programme-badge.blue { background: #eef0ff; color: #5149a9; }
+.programme-section { border-top: 1px solid #dfe6f0; padding-top: 18px; margin-top: 4px; }
+@media(max-width:650px) {
+  .planning-programme h1 { font-size: 23px; }
+  .planning-programme dialog h2 { font-size: 18px; }
+  .programme-card { padding: 16px; }
+}

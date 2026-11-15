@@ -19,6 +19,7 @@ import type { CalendarRules } from "./calendar-model";
 import { displayDate } from "./calendar-editor";
 import {
   suggestedSelection,
+  leadershipSuggestionGroups,
   SUGGESTED_SELECTION_LABELS,
   type SuggestedSelection,
 } from "./calendar-selection";
@@ -50,13 +51,16 @@ export function CalendarAudienceEditor({
   const [departmentSearch, setDepartmentSearch] = useState("");
   const [suggestionKind, setSuggestionKind] =
     useState<SuggestedSelection>("OFFICE");
-  const [suggestion, setSuggestion] = useState<{
-    kind: SuggestedSelection;
-    departmentIds: string[];
-    employeeIds: string[];
-  } | null>(null);
+  const [excludedSuggestions, setExcludedSuggestions] = useState<
+    Partial<Record<SuggestedSelection, string[]>>
+  >({});
+  const [includeHeads, setIncludeHeads] = useState(false);
   const [includeManagers, setIncludeManagers] = useState(false),
     [includeSupervisors, setIncludeSupervisors] = useState(false);
+  function closeSuggestions() {
+    if (suggestionPanel.current) suggestionPanel.current.open = false;
+    setExcludedSuggestions({});
+  }
   useEffect(() => {
     if (["audienceDepartments", "audiencePeople"].includes(feedback.active))
       setChoosing(true);
@@ -173,15 +177,56 @@ export function CalendarAudienceEditor({
   const matchingDepartments = (directory?.departments ?? []).filter((d) =>
     d.name.toLowerCase().includes(departmentSearch.trim().toLowerCase()),
   );
-  const suggestionPool =
-    directory && suggestion
-      ? suggestedSelection(
-          directory,
-          suggestion.kind,
-          includeManagers,
-          includeSupervisors,
+  const suggestionOptions = {
+    headsOfDepartment: includeHeads,
+    managers: includeManagers,
+    supervisors: includeSupervisors,
+  };
+  const suggestionPool = directory
+    ? suggestedSelection(directory, suggestionKind, suggestionOptions)
+    : { departmentIds: [], employeeIds: [] };
+  // Keep individual exclusions while options change, including off/on and kind changes.
+  // The actual calendar audience changes only when the reviewed selection is applied.
+  const exclusions = excludedSuggestions[suggestionKind] ?? [];
+  const suggestion = {
+    kind: suggestionKind,
+    departmentIds: suggestionPool.departmentIds.filter(
+      (id) => !exclusions.includes(id),
+    ),
+    employeeIds: suggestionPool.employeeIds.filter(
+      (id) => !exclusions.includes(id),
+    ),
+  };
+  const suggestionGroups = directory
+    ? suggestionKind === "LEADERSHIP"
+      ? leadershipSuggestionGroups(directory, suggestionOptions).map(
+          (group) => ({
+            key: group.key,
+            label: group.label,
+            items: group.people.map((person) => ({
+              id: person.id,
+              name: person.name,
+              detail: [
+                person.jobTitle,
+                departments.get(person.departmentId ?? ""),
+                person.branch,
+                person.code,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+            })),
+          }),
         )
-      : { departmentIds: [], employeeIds: [] };
+      : [
+          {
+            key: "departments",
+            label: "Departments",
+            items: directory.departments
+              .filter((d) => suggestionPool.departmentIds.includes(d.id))
+              .map((d) => ({ ...d, detail: "Department" })),
+          },
+        ]
+    : [];
   const allMatchingDepartments = [
     ...new Set([...a.departmentIds, ...matchingDepartments.map((d) => d.id)]),
   ];
@@ -193,7 +238,7 @@ export function CalendarAudienceEditor({
       onClick={() => {
         onChange(previous);
         setPrevious(null);
-        setSuggestion(null);
+        closeSuggestions();
       }}
     >
       Undo selection change
@@ -236,7 +281,7 @@ export function CalendarAudienceEditor({
                         kind: e.target.value as CalendarAudience["kind"],
                       });
                       setChoosing(true);
-                      setSuggestion(null);
+                      closeSuggestions();
                       setSelectedOnly(false);
                     }}
                   >
@@ -323,7 +368,6 @@ export function CalendarAudienceEditor({
                           setSuggestionKind(
                             e.target.value as SuggestedSelection,
                           );
-                          setSuggestion(null);
                         }}
                       >
                         {Object.entries(SUGGESTED_SELECTION_LABELS).map(
@@ -335,165 +379,215 @@ export function CalendarAudienceEditor({
                         )}
                       </select>
                     </label>
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        setSuggestion({
-                          kind: suggestionKind,
-                          ...suggestedSelection(
-                            directory,
-                            suggestionKind,
-                            includeManagers,
-                            includeSupervisors,
-                          ),
-                        })
-                      }
-                    >
-                      Show suggestions
-                    </Button>
                   </div>
                   {suggestionKind === "LEADERSHIP" && (
-                    <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={includeManagers}
-                          disabled={busy}
-                          onChange={(e) => {
-                            setIncludeManagers(e.target.checked);
-                            setSuggestion(null);
-                          }}
-                        />{" "}
-                        Include managers
-                      </label>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={includeSupervisors}
-                          disabled={busy}
-                          onChange={(e) => {
-                            setIncludeSupervisors(e.target.checked);
-                            setSuggestion(null);
-                          }}
-                        />{" "}
-                        Include supervisors
-                      </label>
-                    </div>
-                  )}
-                  {suggestion && (
-                    <div className="mt-3 space-y-3">
-                      <p className="text-sm">
-                        {suggestion.kind === "LEADERSHIP"
-                          ? "Suggested from titles such as Chief, CEO, Director and Head of Department. Confirm the people you want; this does not create an automatically updated leadership group."
-                          : `Suggested from department names for ${SUGGESTED_SELECTION_LABELS[suggestion.kind].toLowerCase()}. Uncheck any that use a different calendar.`}
+                    <>
+                      <p className="mt-3 text-sm">
+                        Suggestions start with titles such as CEO, Chief and
+                        Director. Include other roles below.
                       </p>
-                      <ul className={styles.selectionList}>
-                        {(suggestion.kind === "LEADERSHIP"
-                          ? directory.people
-                              .filter((p) =>
-                                suggestionPool.employeeIds.includes(p.id),
-                              )
-                              .map((p) => ({
-                                id: p.id,
-                                name: p.name,
-                                detail: [
-                                  p.jobTitle,
-                                  departments.get(p.departmentId ?? ""),
-                                  p.branch,
-                                  p.code,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · "),
-                              }))
-                          : directory.departments
-                              .filter((d) =>
-                                suggestionPool.departmentIds.includes(d.id),
-                              )
-                              .map((d) => ({ ...d, detail: "Department" }))
-                        ).map((item) => (
-                          <li key={item.id}>
-                            <label className={styles.selectionChoice}>
-                              <input
-                                type="checkbox"
-                                disabled={busy}
-                                checked={(suggestion.kind === "LEADERSHIP"
-                                  ? suggestion.employeeIds
-                                  : suggestion.departmentIds
-                                ).includes(item.id)}
-                                onChange={(e) => {
-                                  const key =
-                                    suggestion.kind === "LEADERSHIP"
-                                      ? "employeeIds"
-                                      : "departmentIds";
-                                  setSuggestion({
-                                    ...suggestion,
-                                    [key]: e.target.checked
-                                      ? [...suggestion[key], item.id]
-                                      : suggestion[key].filter(
-                                          (id) => id !== item.id,
-                                        ),
+                      <div className="mt-3 flex flex-wrap gap-4 text-sm">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={includeHeads}
+                            disabled={busy}
+                            onChange={(e) => setIncludeHeads(e.target.checked)}
+                          />{" "}
+                          Include heads of department (HODs)
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={includeManagers}
+                            disabled={busy}
+                            onChange={(e) =>
+                              setIncludeManagers(e.target.checked)
+                            }
+                          />{" "}
+                          Include managers
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={includeSupervisors}
+                            disabled={busy}
+                            onChange={(e) =>
+                              setIncludeSupervisors(e.target.checked)
+                            }
+                          />{" "}
+                          Include supervisors
+                        </label>
+                      </div>
+                    </>
+                  )}
+                  <div className="mt-3 space-y-3">
+                    <p className="text-sm">
+                      {suggestion.kind === "LEADERSHIP"
+                        ? "Review the suggested people and confirm who should use this calendar."
+                        : `Suggested from department names for ${SUGGESTED_SELECTION_LABELS[suggestion.kind].toLowerCase()}. Uncheck any that use a different calendar.`}
+                    </p>
+                    {suggestion.kind === "LEADERSHIP" && (
+                      <details className="text-sm">
+                        <summary className="cursor-pointer">
+                          About this selection
+                        </summary>
+                        <p className="mt-2">
+                          Suggestions are grouped by job title. Check each
+                          person’s role before confirming. You’ll need to update
+                          the selection when people move into or out of these
+                          roles.
+                        </p>
+                      </details>
+                    )}
+                    <ul
+                      className={styles.selectionList}
+                      aria-label={
+                        suggestion.kind === "LEADERSHIP"
+                          ? "Suggested people"
+                          : "Suggested departments"
+                      }
+                    >
+                      {suggestionGroups.map((group) => (
+                        <li key={group.key}>
+                          <div className="flex flex-wrap items-center gap-2 px-2 py-2">
+                            <h4 className="font-semibold text-teal-700">
+                              {group.label} · {group.items.length}
+                            </h4>
+
+                            {group.key === "topManagement" && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={busy || group.items.length === 0}
+                                onClick={() => {
+                                  const ids = new Set(group.items.map((item) => item.id));
+
+                                  setExcludedSuggestions((previous) => {
+                                    const excluded = previous.LEADERSHIP ?? [];
+                                    const anyChecked = [...ids].some(
+                                      (id) => !excluded.includes(id),
+                                    );
+
+                                    return {
+                                      ...previous,
+                                      LEADERSHIP: anyChecked
+                                        ? [...new Set([...excluded, ...ids])]
+                                        : excluded.filter((id) => !ids.has(id)),
+                                    };
                                   });
                                 }}
-                              />
-                              <span>
-                                <strong>{item.name}</strong>
-                                <small className="block text-muted-foreground">
-                                  {item.detail}
-                                </small>
-                              </span>
-                            </label>
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="text-sm">
-                        {suggestion.departmentIds.length +
-                          suggestion.employeeIds.length}{" "}
-                        selected suggestions. You can add others after using
-                        this selection.
-                      </p>
-                      <Button
-                        disabled={
-                          busy ||
-                          !(
-                            suggestion.departmentIds.length +
-                            suggestion.employeeIds.length
-                          ) ||
-                          suggestion.employeeIds.length +
-                            suggestion.departmentIds.length >
-                            MAX_AUDIENCE_MEMBERS
-                        }
-                        onClick={() => {
-                          selection({
-                            kind:
-                              suggestion.kind === "LEADERSHIP"
-                                ? "PEOPLE"
-                                : "DEPARTMENTS",
-                            label: SUGGESTED_SELECTION_LABELS[suggestion.kind],
-                            departmentIds: suggestion.departmentIds,
-                            employeeIds: suggestion.employeeIds,
-                          });
-                          setChoosing(false);
-                          if (suggestionPanel.current)
-                            suggestionPanel.current.open = false;
-                          setSuggestion(null);
-                          setSearch("");
-                          setDepartment("");
-                          setBranch("");
-                          setSelectedOnly(false);
-                        }}
-                      >
-                        Use reviewed selection
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => setSuggestion(null)}
-                      >
-                        Cancel suggestions
-                      </Button>
-                    </div>
-                  )}
+                              >
+                                {group.items.some((item) => !exclusions.includes(item.id))
+                                  ? "Uncheck all"
+                                  : "Select all"}
+                              </Button>
+                            )}
+                          </div>
+                          {group.key === "topManagement" &&
+                          group.items.every((item) => exclusions.includes(item.id))
+                            ? null
+                            : group.items.length === 0 ? (
+                            <p className="px-2 pb-2 text-sm">
+                              No matching{" "}
+                              {group.key === "departments"
+                                ? "departments"
+                                : "people"}{" "}
+                              found.
+                            </p>
+                          ) : (
+                            <ul
+                              className="m-0 list-none p-0"
+                              aria-label={group.label}
+                            >
+                              {group.items.map((item) => (
+                                <li key={item.id}>
+                                  <label className={styles.selectionChoice}>
+                                    <input
+                                      type="checkbox"
+                                      disabled={busy}
+                                      checked={!exclusions.includes(item.id)}
+                                      onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setExcludedSuggestions((previous) => ({
+                                          ...previous,
+                                          [suggestionKind]: checked
+                                            ? (
+                                                previous[suggestionKind] ?? []
+                                              ).filter((id) => id !== item.id)
+                                            : [
+                                                ...new Set([
+                                                  ...(previous[
+                                                    suggestionKind
+                                                  ] ?? []),
+                                                  item.id,
+                                                ]),
+                                              ],
+                                        }));
+                                      }}
+                                    />
+                                    <span>
+                                      <strong>{item.name}</strong>
+                                      <small className="block text-muted-foreground">
+                                        {item.detail}
+                                      </small>
+                                    </span>
+                                  </label>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-sm" role="status">
+                      {suggestion.departmentIds.length +
+                        suggestion.employeeIds.length}{" "}
+                      {suggestion.kind === "LEADERSHIP"
+                        ? "people"
+                        : "departments"}{" "}
+                      selected. You can add others after using this selection.
+                    </p>
+                    <Button
+                      disabled={
+                        busy ||
+                        !(
+                          suggestion.departmentIds.length +
+                          suggestion.employeeIds.length
+                        ) ||
+                        suggestion.employeeIds.length +
+                          suggestion.departmentIds.length >
+                          MAX_AUDIENCE_MEMBERS
+                      }
+                      onClick={() => {
+                        selection({
+                          kind:
+                            suggestion.kind === "LEADERSHIP"
+                              ? "PEOPLE"
+                              : "DEPARTMENTS",
+                          label: SUGGESTED_SELECTION_LABELS[suggestion.kind],
+                          departmentIds: suggestion.departmentIds,
+                          employeeIds: suggestion.employeeIds,
+                        });
+                        setChoosing(false);
+                        closeSuggestions();
+                        setSearch("");
+                        setDepartment("");
+                        setBranch("");
+                        setSelectedOnly(false);
+                      }}
+                    >
+                      Use reviewed selection
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={closeSuggestions}
+                    >
+                      Cancel suggestions
+                    </Button>
+                  </div>
                 </details>
               )}
               {directory && ["DEPARTMENTS", "PEOPLE"].includes(a.kind) && (

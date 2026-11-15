@@ -13,12 +13,59 @@ const words = (text: string) =>
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 
+export interface LeadershipSuggestionOptions {
+  headsOfDepartment?: boolean;
+  managers?: boolean;
+  supervisors?: boolean;
+}
+
+const leadershipGroups = [
+  { key: "topManagement", label: "Top management" },
+  { key: "headsOfDepartment", label: "Heads of department" },
+  { key: "managers", label: "Managers" },
+  { key: "supervisors", label: "Supervisors" },
+] as const;
+type LeadershipGroup = (typeof leadershipGroups)[number]["key"];
+
+function leadershipGroup(jobTitle: string | null): LeadershipGroup | null {
+  const title = words(jobTitle ?? "");
+  // Specific department-head titles stay optional, even if they also contain "manager".
+  if (/\bhod\b|\bhead of\b/.test(title)) return "headsOfDepartment";
+  if (/\b(ceo|coo|cfo|cto|cio|chro|cmo|chief|director)\b/.test(title))
+    return "topManagement";
+  if (/\bmanager\b/.test(title)) return "managers";
+  if (/\bsupervisor\b/.test(title)) return "supervisors";
+  return null;
+}
+
+/** Title-based review aids, not confirmed hierarchy or access permissions. */
+export function leadershipSuggestionGroups(
+  directory: CalendarDirectory,
+  options: LeadershipSuggestionOptions = {},
+) {
+  const seen = new Set<string>();
+  const people = directory.people
+    .filter((person) => {
+      if (!person.active || seen.has(person.id)) return false;
+      seen.add(person.id);
+      return true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return leadershipGroups
+    .filter(({ key }) => key === "topManagement" || options[key])
+    .map((group) => ({
+      ...group,
+      people: people.filter(
+        (person) => leadershipGroup(person.jobTitle) === group.key,
+      ),
+    }));
+}
+
 /** Suggestions only. Never turns a job title into an access permission or a maintained group. */
 export function suggestedSelection(
   directory: CalendarDirectory,
   kind: SuggestedSelection,
-  managers = false,
-  supervisors = false,
+  options: LeadershipSuggestionOptions = {},
 ) {
   const departmentPattern =
     kind === "OFFICE"
@@ -34,19 +81,9 @@ export function suggestedSelection(
     employeeIds:
       kind !== "LEADERSHIP"
         ? []
-        : directory.people
-            .filter((p) => {
-              if (!p.active || !p.jobTitle) return false;
-              const title = words(p.jobTitle);
-              return (
-                /\b(ceo|coo|cfo|cto|cio|chro|cmo|hod|chief|director)\b|\bhead of\b/.test(
-                  title,
-                ) ||
-                (managers && /\bmanager\b/.test(title)) ||
-                (supervisors && /\bsupervisor\b/.test(title))
-              );
-            })
-            .map((p) => p.id),
+        : leadershipSuggestionGroups(directory, options).flatMap((group) =>
+            group.people.map((person) => person.id),
+          ),
   };
 }
 

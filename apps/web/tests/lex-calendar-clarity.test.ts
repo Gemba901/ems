@@ -108,15 +108,14 @@ test("team suggestions use actual recorded departments and active job titles, wi
     "maint",
     "store",
   ]);
-  assert.deepEqual(suggestedSelection(d, "LEADERSHIP").employeeIds, [
-    "0",
-    "1",
-    "2",
-    "3",
-  ]);
+  assert.deepEqual(suggestedSelection(d, "LEADERSHIP").employeeIds, ["0", "3"]);
   assert.deepEqual(
-    suggestedSelection(d, "LEADERSHIP", true, true).employeeIds,
-    ["0", "1", "2", "3", "4", "5"],
+    suggestedSelection(d, "LEADERSHIP", {
+      headsOfDepartment: true,
+      managers: true,
+      supervisors: true,
+    }).employeeIds,
+    ["0", "3", "2", "1", "4", "5"],
   );
   assert.deepEqual(d, before);
 });

@@ -15,7 +15,7 @@ type Plan = PlanningView["documents"][number];
 const levels: [PlanKind, string][] = [
   ["COMPANY", "Company objective"],
   ["DEPARTMENT", "Department goal"],
-  ["INDIVIDUAL", "Individual goal"],
+  ["INDIVIDUAL", "Individual plan and KPI"],
   ["TEAM", "Team / section goal"],
   ["POSITION", "Position goal"],
 ];
@@ -115,7 +115,14 @@ export function PlanningCreateGoal({
   }
 
   return (
-    <Modal title="Create an objective or goal" onClose={onClose}>
+    <Modal
+      title={
+        kind === "INDIVIDUAL"
+          ? "Individual plan and KPI"
+          : "Create an objective or goal"
+      }
+      onClose={onClose}
+    >
       <form
         className="space-y-5"
         onSubmit={(event) => {
@@ -195,8 +202,9 @@ export function PlanningCreateGoal({
         )}
         <p className="text-xs leading-5 text-slate-500">
           Save an incomplete draft at any time. Company objectives include their
-          own measure and target. Department and individual goals link to an
-          approved objective or goal before finalising.
+          own measure and target. Department goals link to an approved company
+          objective; individual goals link to an approved department goal before
+          finalising.
         </p>
         <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>

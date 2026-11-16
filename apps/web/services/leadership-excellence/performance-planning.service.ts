@@ -1,4 +1,8 @@
 import { apiClient } from "@/lib/api-client";
+import {
+  readPlanningLibraryTemplates,
+  type PlanningTemplateKind,
+} from "./performance-planning/library-templates";
 import type {
   PlanningCommand,
   PlanningView,
@@ -53,6 +57,20 @@ async function request<T>(
   return result as T;
 }
 export const PerformancePlanningService = {
+  getLibraryTemplates: async (
+    token: string,
+    kind: PlanningTemplateKind,
+    signal?: AbortSignal,
+  ) =>
+    readPlanningLibraryTemplates(
+      await request<unknown>(
+        token,
+        `/library-templates?${new URLSearchParams({ kind })}`,
+        undefined,
+        signal,
+      ),
+      kind,
+    ),
   backup: (token: string) =>
     request<{ payload: string; signature: string }>(token, "/backup"),
   restore: async (token: string, revision: number, file: File) => {

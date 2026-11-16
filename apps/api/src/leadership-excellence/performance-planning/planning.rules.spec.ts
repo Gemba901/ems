@@ -942,7 +942,9 @@ describe('Area 03 planning rules', () => {
       const parentIssue =
         kind === 'DEPARTMENT'
           ? 'G1: select an approved company goal, or explain the essential department responsibility.'
-          : `G1: link an approved ${kind === 'INDIVIDUAL' ? 'company or department' : 'department'} goal, or identify an ongoing role responsibility.`;
+          : kind === 'INDIVIDUAL'
+            ? 'G1: link an approved department goal for this individual plan.'
+            : 'G1: link an approved department goal, or identify an ongoing role responsibility.';
       expect(validatePlan(child, state, refs, '2026-11-03')).not.toContain(
         parentIssue,
       );
@@ -1207,12 +1209,12 @@ describe('Area 03 planning rules', () => {
     ];
     const state = { ...emptyPlanningState(), documents: [parent, child] };
     const issue =
-      'G1: link an approved company or department goal, or identify an ongoing role responsibility.';
+      'G1: link an approved department goal for this individual plan.';
     expect(validatePlan(child, state, refs, '2026-11-03')).toContain(issue);
     parent.cycle = child.cycle;
     expect(validatePlan(child, state, refs, '2026-11-03')).not.toContain(issue);
     child.data.goals[0].parent = null;
-    expect(validatePlan(child, state, refs, '2026-11-03')).not.toContain(issue);
+    expect(validatePlan(child, state, refs, '2026-11-03')).toContain(issue);
     child.data.goals[0].ongoingReason = '';
     expect(validatePlan(child, state, refs, '2026-11-03')).toContain(issue);
   });

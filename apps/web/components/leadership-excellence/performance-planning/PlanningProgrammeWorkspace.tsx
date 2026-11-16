@@ -484,7 +484,7 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
               "Review the information, request missing evidence or choose a management response. A high priority does not automatically become an objective.",
               "Create a measurable company objective from reviewed findings. Enter its own measurement, baseline, target, timing, owner, priority and weightage. Approve it once ready.",
               "Create department goals directly under an approved company objective. Each goal has its own KPI, baseline, target, unit, owner and deadline. One company objective can have several goals across departments. A reviewed finding can also go straight to a department action.",
-              "Create an individual plan and link each person's goal to the relevant approved department goal. Authorised direct company-objective links remain available when needed.",
+              "Create an individual plan and KPI, and link each person's goal to an approved department goal available to them. Each individual goal has its own measurable target and deadline.",
               "Record actual results, have another authorised reviewer verify them, then review progress and decide what to sustain or change.",
             ].map((text) => (
               <li key={text}>{text}</li>

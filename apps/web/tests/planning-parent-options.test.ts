@@ -299,7 +299,7 @@ test("team and position plans receive only their department's approved goals", (
   }
 });
 
-test("a Management individual can select authorised company and Production goals without the full plans", () => {
+test("a Management individual can select only authorised department goals without the full plans", () => {
   const personal = {
     ...child,
     kind: "INDIVIDUAL" as const,
@@ -340,16 +340,10 @@ test("a Management individual can select authorised company and Production goals
   ];
   const options = approvedParentOptions(view, personal, "2026-11-07");
   assert.equal(view.documents.length, 0);
-  assert.equal(options.length, 4);
+  assert.equal(options.length, 3);
   assert.deepEqual(
     options.map((option) => JSON.parse(option.value)),
     [
-      {
-        documentId: "company-plan",
-        goalId: "downtime",
-        version: 2,
-        itemKind: "OBJECTIVE",
-      },
       { documentId: "production-parent", goalId: "downtime", version: 2 },
       {
         documentId: "management-parent",
@@ -359,13 +353,17 @@ test("a Management individual can select authorised company and Production goals
       { documentId: "production-parent", goalId: "downtime", version: 1 },
     ],
   );
-  assert.match(options[0].label, /Company.*GOAL-002.*Reduce downtime.*v2/);
   assert.match(
-    options[1].label,
+    options[0].label,
     /Production.*GOAL-002.*Reduce downtime.*v2.*Effective 2027-03-01/,
   );
-  assert.match(options[2].label, /Management.*GOAL-003/);
-  assert.doesNotMatch(options[3].label, /Effective/);
+  assert.match(options[1].label, /Management.*GOAL-003/);
+  assert.doesNotMatch(options[2].label, /Effective/);
+  assert.ok(
+    options.every(
+      (option) => JSON.parse(option.value).documentId !== "company-plan",
+    ),
+  );
   const availability = approvedParentAvailability(view, personal, "2026-11-07");
   assert.equal(availability.reason, "AVAILABLE");
   assert.deepEqual(availability.options, options);
@@ -426,6 +424,46 @@ test("an assigned parent can be retained only by its exact existing individual g
       "assigned-goal",
     ),
     [],
+  );
+});
+
+test("individual choices update after department approval and company approvals never satisfy their empty state", () => {
+  const personal = {
+    ...child,
+    kind: "INDIVIDUAL" as const,
+    scopeId: "operator",
+    departmentId: "production",
+  };
+  const view = workspace([
+    parent,
+    { ...parent, cycle: "2028", documentId: "next-company" },
+  ]);
+  const initial = approvedParentAvailability(view, personal, "2026-11-07");
+  assert.equal(initial.reason, "NO_APPROVED_PARENT");
+  assert.deepEqual(initial.options, []);
+  assert.match(initial.message, /approved department goals/);
+  assert.doesNotMatch(initial.message, /company|2028/i);
+
+  view.approvedParentGoals!.push({
+    ...parent,
+    documentId: "production-parent",
+    kind: "DEPARTMENT",
+    itemKind: "GOAL",
+    scopeId: "production",
+    departmentId: "production",
+  });
+  const updated = approvedParentAvailability(view, personal, "2026-11-07");
+  assert.equal(updated.reason, "AVAILABLE");
+  assert.deepEqual(
+    updated.options.map((option) => JSON.parse(option.value)),
+    [
+      {
+        documentId: "production-parent",
+        goalId: parent.goal.id,
+        version: parent.version,
+        itemKind: "GOAL",
+      },
+    ],
   );
 });
 
@@ -607,7 +645,7 @@ test("legacy company goals are available only to their exact retained contributi
   assert.equal(JSON.stringify(view), before);
 });
 
-test("server-retained legacy summary is not offered for a new contribution or another plan", () => {
+test("retained company links remain readable but never selectable for individual goals", () => {
   const personal = {
     ...child,
     kind: "INDIVIDUAL" as const,
@@ -621,14 +659,31 @@ test("server-retained legacy summary is not offered for a new contribution or an
       retainedFor: [{ documentId: personal.id, goalId: "existing" }],
     },
   ]);
+  const before = JSON.stringify(view);
   assert.equal(
     approvedParentOptions(view, personal, "2026-11-07", "existing").length,
-    1,
+    0,
   );
   assert.deepEqual(approvedParentOptions(view, personal, "2026-11-07"), []);
   assert.deepEqual(
     approvedParentOptions(view, personal, "2026-11-07", "new"),
     [],
+  );
+  view.approvedParentGoals![0].itemKind = "OBJECTIVE";
+  assert.deepEqual(
+    approvedParentOptions(view, personal, "2026-11-07", "existing"),
+    [],
+  );
+  assert.equal(
+    approvedParents(view).length,
+    1,
+    "Historical approved sources remain readable",
+  );
+  delete view.approvedParentGoals![0].itemKind;
+  assert.equal(
+    JSON.stringify(view),
+    before,
+    "Parent filtering never changes saved references",
   );
   assert.deepEqual(
     approvedParentOptions(
@@ -851,7 +906,7 @@ test("individual availability uses accessible departments to explain a different
   assert.equal(result.reason, "DIFFERENT_YEAR");
   assert.match(
     result.message,
-    /approved company objectives or department goals available to you.*2028.*2027/,
+    /approved department goals available to you.*2028.*2027/,
   );
   assert.doesNotMatch(result.message, /Management's plan/);
   assert.deepEqual(result.options, []);
@@ -862,7 +917,7 @@ test("individual availability uses accessible departments to explain a different
   assert.equal(empty.reason, "NO_APPROVED_PARENT");
   assert.match(
     empty.message,
-    /no approved company objectives or department goals available to you for 2027/,
+    /no approved department goals available to you for 2027/,
   );
   assert.doesNotMatch(
     empty.message,

@@ -40,6 +40,8 @@ import {
   resolveAssignmentCalendar,
 } from './planning-calendar';
 import { PlanningReferencesService } from './planning-references.service';
+import { PlanningLibraryService } from './planning-library.service';
+import { PlanningLibraryQueryDto } from './dto/planning-library-query.dto';
 import type { Frequency } from './planning.types';
 
 @TenantRequired()
@@ -66,7 +68,14 @@ export class PerformancePlanningController {
     private readonly evidence: PlanningEvidenceService,
     private readonly backup: PlanningBackupService,
     private readonly references: PlanningReferencesService,
+    private readonly library: PlanningLibraryService,
   ) {}
+
+  @Get('library-templates')
+  @Header('Cache-Control', 'no-store')
+  libraryTemplates(@Query() query: PlanningLibraryQueryDto) {
+    return this.library.list(query.kind);
+  }
 
   @Get('backup')
   @Header('Cache-Control', 'no-store')

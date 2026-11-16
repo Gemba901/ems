@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import {
   cleanNumber,
   cleanText,
+  departmentGoalSmartIssues,
   FREQUENCIES,
   isManager,
   objectiveAllocations,
@@ -181,7 +182,12 @@ export function programmeItemIssues(
       FREQUENCIES.includes(g.frequency as never),
       'Choose the measurement review frequency.',
     );
-    need(g.parent, 'Choose an approved company objective or department goal.');
+    need(
+      g.parent,
+      document.kind === 'INDIVIDUAL'
+        ? 'Choose an approved department goal for this individual plan.'
+        : 'Choose an approved company objective for this department goal.',
+    );
     if (g.parent) {
       errors.push(...parentReferenceIssues(document, g.parent, state));
       const resolved = resolveApprovedParent(state, g.parent);
@@ -193,6 +199,7 @@ export function programmeItemIssues(
         );
     }
     if (document.kind === 'DEPARTMENT') {
+      errors.push(...departmentGoalSmartIssues(g));
       need(
         Number.isSafeInteger(g.goalNo) && Number(g.goalNo) >= 1,
         'Save this contribution with its approved parent to generate its goal code.',

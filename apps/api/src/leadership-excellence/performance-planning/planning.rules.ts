@@ -467,18 +467,22 @@ export function parentReferenceIssues(
             ?.data.objectives.find((o) => o.id === reference.goalId)
             ?.result?.trim()) ||
           goal.departmentIds.includes(child.scopeId))
-      : child.kind === 'INDIVIDUAL' && parent.kind === 'COMPANY'
-        ? true
-        : ['TEAM', 'POSITION', 'INDIVIDUAL'].includes(child.kind) &&
-          parent.kind === 'DEPARTMENT' &&
-          (child.kind === 'INDIVIDUAL' ||
-            parent.scopeId === child.departmentId);
+      : ['TEAM', 'POSITION', 'INDIVIDUAL'].includes(child.kind) &&
+        parent.kind === 'DEPARTMENT' &&
+        (child.kind === 'INDIVIDUAL' || parent.scopeId === child.departmentId);
   const retaining =
     child.kind === 'INDIVIDUAL' &&
     previous?.documentId === reference.documentId &&
     previous.goalId === reference.goalId &&
     previous.version === reference.version &&
     (previous.itemKind || 'GOAL') === (reference.itemKind || 'GOAL');
+  // Existing drafts may retain their exact historical reference while being
+  // edited. It remains readable, but it cannot be selected for another goal or
+  // re-approved: readiness calls this function without actor/previous.
+  if (child.kind === 'INDIVIDUAL' && parent.kind === 'COMPANY')
+    return actor && retaining
+      ? []
+      : ['Choose an approved department goal for this individual plan.'];
   if (
     !matchingScope ||
     (actor && !permissions(parent, actor).canRead && !retaining)
@@ -487,6 +491,21 @@ export function parentReferenceIssues(
       'Choose an authorised approved parent objective or goal for this plan and planning period.',
     ];
   return [];
+}
+
+/** S, M and T use the goal's existing result, measures and dates. A and R
+ * require the planner's explanation; a target alone cannot prove feasibility. */
+export function departmentGoalSmartIssues(goal: Goal): string[] {
+  const errors: string[] = [];
+  if (!goal.approach?.trim())
+    errors.push(
+      'Explain how the department can reach this target with its resources and approach.',
+    );
+  if (!goal.relevance?.trim())
+    errors.push(
+      'Explain how this department goal supports the linked company objective.',
+    );
+  return errors;
 }
 /** Planning may link an approved snapshot before it becomes operational. */
 export function approvedParentGoals(
@@ -810,6 +829,7 @@ export function itemDefaults(kind: ItemKind): Record<string, unknown> {
       startDate: '',
       endDate: '',
       approach: '',
+      relevance: '',
       departmentIds: [],
       noActionReason: '',
     };
@@ -1545,6 +1565,11 @@ export function validatePlan(
         );
     }
     if (document.kind === 'DEPARTMENT') {
+      errors.push(
+        ...departmentGoalSmartIssues(goal).map(
+          (issue) => `${goal.code}: ${issue}`,
+        ),
+      );
       const owner = person(goal.ownerId);
       need(
         owner &&
@@ -1577,15 +1602,20 @@ export function validatePlan(
             linked.departmentIds.includes(document.scopeId),
             `${goal.code}: this department must be identified as a contributor to the company goal.`,
           );
-      } else if (goal.parent || !goal.ongoingReason)
+      } else if (
+        document.kind === 'INDIVIDUAL' ||
+        goal.parent ||
+        !goal.ongoingReason
+      )
         need(
-          (parent?.kind === 'DEPARTMENT' ||
-            (document.kind === 'INDIVIDUAL' && parent?.kind === 'COMPANY')) &&
+          parent?.kind === 'DEPARTMENT' &&
             parent.cycle === document.cycle &&
             (document.kind === 'INDIVIDUAL' ||
               parent.scopeId === document.departmentId) &&
             linked,
-          `${goal.code}: link an approved ${document.kind === 'INDIVIDUAL' ? 'company or department' : 'department'} goal, or identify an ongoing role responsibility.`,
+          document.kind === 'INDIVIDUAL'
+            ? `${goal.code}: link an approved department goal for this individual plan.`
+            : `${goal.code}: link an approved department goal, or identify an ongoing role responsibility.`,
         );
       if (
         linked &&

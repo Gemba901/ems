@@ -25,12 +25,14 @@ import {
   planningPeriodLabel,
 } from "@/services/leadership-excellence/performance-planning/planning-period";
 import { businessAlignmentLabels } from "@/services/leadership-excellence/performance-planning/business-alignment";
+import { templateDraftFields } from "@/services/leadership-excellence/performance-planning/library-templates";
 import { linkedFindingObjectives } from "@/services/leadership-excellence/performance-planning/finding-objectives";
 import {
   programmeItemStatus,
   programmeItemVersion,
 } from "@/services/leadership-excellence/performance-planning/programme";
 import { usePlanning } from "./PlanningProvider";
+import { PlanningTemplateLibrary } from "./PlanningTemplateLibrary";
 import { DefinitionEditor } from "./PlanningEditors";
 import {
   ProgrammeIndividualKpis,
@@ -85,6 +87,15 @@ function useDraft(initial: Fields) {
   const set = (name: string, value: unknown) => {
     setDirty(true);
     setValues((current) => ({ ...current, [name]: value }));
+  };
+  const applyTemplate = (fields: Fields) => {
+    setDirty(true);
+    setValues((current) => ({ ...current, ...fields }));
+    setInvalidNumbers((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([name]) => !(name in fields)),
+      ),
+    );
   };
   const input = (
     name: string,
@@ -165,7 +176,17 @@ function useDraft(initial: Fields) {
         return [name, raw === "" ? null : Number(raw)];
       }),
     );
-  return { values, set, setValues, dirty, input, area, select, numbers };
+  return {
+    values,
+    set,
+    setValues,
+    applyTemplate,
+    dirty,
+    input,
+    area,
+    select,
+    numbers,
+  };
 }
 
 function Section({ title, children }: { title: string; children?: ReactNode }) {
@@ -544,6 +565,16 @@ export function ProgrammeObjectiveEditor({
             ? "This approved version is locked. Use a dated revision to make changes."
             : "Save incomplete details now; complete the checks before approval."}
         </p>
+        {!initial && !readOnly && (
+          <PlanningTemplateLibrary
+            kind="objective"
+            disabled={busy}
+            onSelect={(template) => {
+              draft.applyTemplate(templateDraftFields(template));
+              setError("");
+            }}
+          />
+        )}
         <fieldset
           disabled={busy || readOnly}
           className="grid min-w-0 gap-4 sm:grid-cols-2"
@@ -681,8 +712,11 @@ function ParentSelect({
   onChange: (value: ParentGoal | null) => void;
   individual?: boolean;
 }) {
+  const availableParents = individual
+    ? parents.filter((parent) => parent.kind === "DEPARTMENT")
+    : parents;
   const options = (kind: "COMPANY" | "DEPARTMENT") =>
-    parents
+    availableParents
       .filter((parent) => parent.kind === kind)
       .map((parent) => (
         <option
@@ -696,13 +730,11 @@ function ParentSelect({
   return (
     <Field
       label={
-        individual
-          ? "Linked company objective or department goal"
-          : "Approved company objective"
+        individual ? "Approved department goal" : "Approved company objective"
       }
       hint={
         individual
-          ? "Choose an approved department goal or company objective. Different individual goals can support different departments."
+          ? "Link this person's contribution to an approved department goal. Goals from other departments are available when you have access."
           : undefined
       }
     >
@@ -710,7 +742,7 @@ function ParentSelect({
         className={control}
         value={parentKey(value)}
         onChange={(event) => {
-          const selected = parents.find(
+          const selected = availableParents.find(
             (parent) => parentKey(parentRef(parent)) === event.target.value,
           );
           onChange(selected ? parentRef(selected) : null);
@@ -718,27 +750,20 @@ function ParentSelect({
       >
         <option value="">
           {individual
-            ? "Choose an approved department goal or company objective"
+            ? "Choose an approved department goal"
             : "Choose an approved company objective"}
         </option>
         {value &&
-          !parents.some(
+          !availableParents.some(
             (parent) => parentKey(parentRef(parent)) === parentKey(value),
           ) && (
-            <option value={parentKey(value)}>
-              Saved parent link · v{value.version} (currently unavailable)
+            <option value={parentKey(value)} disabled>
+              {individual
+                ? `Previous link · v${value.version} — choose an approved department goal`
+                : `Saved parent link · v${value.version} (currently unavailable)`}
             </option>
           )}
-        {individual ? (
-          <>
-            <optgroup label="Department goals">
-              {options("DEPARTMENT")}
-            </optgroup>
-            <optgroup label="Company objectives">{options("COMPANY")}</optgroup>
-          </>
-        ) : (
-          options("COMPANY")
-        )}
+        {individual ? options("DEPARTMENT") : options("COMPANY")}
       </select>
     </Field>
   );
@@ -953,12 +978,22 @@ export function ProgrammeDepartmentEditor({
       >
         <ErrorList error={error} />
         <p className="text-sm text-slate-500">
-          Link the approved company objective and define this department’s
-          measurable goal.{" "}
+          Set a SMART department goal: specific, measurable, achievable,
+          relevant and time-bound.{" "}
           {readOnly
             ? "This approved commitment is locked."
-            : "You can save an incomplete draft."}
+            : "You can save an incomplete draft; complete the SMART details before approval."}
         </p>
+        {!initial && !readOnly && (
+          <PlanningTemplateLibrary
+            kind="department-goal"
+            disabled={busy}
+            onSelect={(template) => {
+              draft.applyTemplate(templateDraftFields(template));
+              setError("");
+            }}
+          />
+        )}
         <fieldset disabled={busy || readOnly} className="min-w-0 space-y-4">
           {identityLocked && (
             <p className="rounded-lg bg-indigo-50 p-3 text-sm text-slate-700">
@@ -995,7 +1030,19 @@ export function ProgrammeDepartmentEditor({
             <strong className="text-slate-700">Department goal ID:</strong>{" "}
             {initial?.code || "Generated when the goal is saved"}
           </p>
-          {input("title", "Department goal")}
+          <Section title="S — Specific">
+            Describe the result this department will deliver and its scope.
+          </Section>
+          {area(
+            "title",
+            "Department goal",
+            "For example: reduce average changeover time on Filling Line 01 from 52 to 30 minutes by 28 February 2027.",
+            2,
+          )}
+          <Section title="M — Measurable">
+            Use a clear measure, a measured starting point and a numerical
+            target.
+          </Section>
           <div className="grid gap-4 sm:grid-cols-2">
             {input("measure", "Measure / KPI")}
             {input("unit", "Unit")}
@@ -1013,15 +1060,37 @@ export function ProgrammeDepartmentEditor({
             {select("direction", "Improvement means", directions)}
           </div>
           {input("baselinePeriod", "Baseline period & scope")}
+          {input("source", "Data source")}
+          <Section title="A — Achievable">
+            Explain the practical steps and resources that make the target
+            realistic.
+          </Section>
+          {area(
+            "approach",
+            "How will this goal be achieved?",
+            "Include the method, available people or resources, and any support needed.",
+          )}
+          {select(
+            "ownerId",
+            "Accountable owner",
+            data.references.people.map((person) => [
+              person.id,
+              `${person.name} · ${person.position}`,
+            ]),
+          )}
+          <Section title="R — Relevant">
+            Connect this department&apos;s result to the approved company
+            objective selected above.
+          </Section>
+          {area(
+            "relevance",
+            "How does this goal support the company objective?",
+            "Explain the contribution, for example: faster changeovers help production meet the company's on-time delivery target.",
+          )}
+          <Section title="T — Time-bound">
+            Set a deadline and how often progress will be reviewed.
+          </Section>
           <div className="grid gap-4 sm:grid-cols-2">
-            {select(
-              "ownerId",
-              "Accountable owner",
-              data.references.people.map((person) => [
-                person.id,
-                `${person.name} · ${person.position}`,
-              ]),
-            )}
             {input(
               "endDate",
               "Deadline",
@@ -1032,9 +1101,8 @@ export function ProgrammeDepartmentEditor({
                 max: selectedParent?.goal.endDate || period?.endDate,
               },
             )}
+            {select("frequency", "Operating review frequency", frequencies)}
           </div>
-          {input("source", "Data source")}
-          {select("frequency", "Operating review frequency", frequencies)}
         </fieldset>
       </form>
     </Modal>
@@ -1240,10 +1308,10 @@ export function ProgrammeIndividualEditor({
       wide
       title={
         readOnly
-          ? "Approved individual plan"
+          ? "Approved individual plan and KPI"
           : document
-            ? "Edit individual plan"
-            : "Create individual plan"
+            ? "Edit individual plan and KPI"
+            : "Individual plan and KPI"
       }
       onClose={close}
       scrollKey={error}
@@ -1321,9 +1389,7 @@ export function ProgrammeIndividualEditor({
             const parents = approvedParents(data).filter(
               (option) =>
                 option.cycle === cycle &&
-                (option.kind !== "COMPANY" ||
-                  option.itemKind === "OBJECTIVE" ||
-                  parentKey(parent) === parentKey(parentRef(option))) &&
+                option.kind === "DEPARTMENT" &&
                 (!option.retainedFor ||
                   option.retainedFor.some(
                     (link) =>
@@ -1449,6 +1515,13 @@ export function ProgrammeIndividualEditor({
                   value={parent}
                   onChange={(value) => update(block.key, "parent", value)}
                 />
+                {!readOnly && parents.length === 0 && (
+                  <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                    No approved department goals are available for this planning
+                    period. You can save a draft now and link a department goal
+                    after it is approved.
+                  </p>
+                )}
                 {area("title", "What will this person achieve?")}
                 <div className="grid gap-4 sm:grid-cols-2">
                   {input("measure", "Measure / KPI")}

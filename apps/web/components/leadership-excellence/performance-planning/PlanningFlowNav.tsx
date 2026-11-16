@@ -15,7 +15,7 @@ export const planningStages = [
   [
     "personal",
     "Individual plans",
-    "People & commitments",
+    "Linked to department goals",
     "team-individual-plans",
   ],
   ["results", "Results & review", "Verify & sustain", "results"],

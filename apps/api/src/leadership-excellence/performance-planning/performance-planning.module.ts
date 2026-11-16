@@ -8,6 +8,7 @@ import { PerformancePlanningService } from './performance-planning.service';
 import { PlanningReferencesService } from './planning-references.service';
 import { PlanningEvidenceService } from './planning-evidence.service';
 import { PlanningBackupService } from './planning-backup.service';
+import { PlanningLibraryService } from './planning-library.service';
 import { StrategicDirectionModule } from '../strategic-direction/strategic-direction.module';
 import { OrganisationFrameworkModule } from '../organisation-framework/organisation-framework.module';
 import { PerformanceIntelligenceModule } from '../performance-intelligence/performance-intelligence.module';
@@ -28,6 +29,7 @@ import { WorkScheduleService } from '../../work/work-schedule';
     PlanningReferencesService,
     PlanningEvidenceService,
     PlanningBackupService,
+    PlanningLibraryService,
     WorkScheduleService,
     ModuleGuard,
   ],

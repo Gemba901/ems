@@ -11,7 +11,12 @@ import {
   validFindingWeightage,
 } from "@/services/leadership-excellence/performance-planning/finding-weightage";
 import { planningPeriodLabel } from "@/services/leadership-excellence/performance-planning/planning-period";
+import {
+  templateDraftFields,
+  type PlanningLibraryTemplate,
+} from "@/services/leadership-excellence/performance-planning/library-templates";
 import { usePlanning } from "./PlanningProvider";
+import { PlanningTemplateLibrary } from "./PlanningTemplateLibrary";
 import { PlanningEvidence } from "./PlanningEvidence";
 import { FindingWeightage } from "./FindingWeightage";
 import { BusinessAlignmentFields } from "./BusinessAlignmentFields";
@@ -140,6 +145,30 @@ export function PlanningFindingEditor({
       }),
     ]);
     setDirty(true);
+  };
+  const applyTemplate = (key: string, template: PlanningLibraryTemplate) => {
+    if (!editable || busy || editing || template.kind !== "finding") return;
+    const fields = templateDraftFields(template);
+    setBlocks((items) =>
+      items.map((item) =>
+        item.key === key
+          ? {
+              ...item,
+              fields: {
+                ...item.fields,
+                ...fields,
+                relatedPillars: (
+                  (item.fields.relatedPillars || []) as string[]
+                ).filter((pillar) => pillar !== fields.pillar),
+              },
+              score: fields.weightage == null ? "" : String(fields.weightage),
+              badScore: false,
+            }
+          : item,
+      ),
+    );
+    setDirty(true);
+    setError("");
   };
   async function save() {
     if (!editable || busy) return;
@@ -290,6 +319,13 @@ export function PlanningFindingEditor({
                 Finding {index + 1}
                 {text("code") ? ` · ${text("code")}` : ""}
               </legend>
+              {!editing && editable && (
+                <PlanningTemplateLibrary
+                  kind="finding"
+                  disabled={busy}
+                  onSelect={(template) => applyTemplate(item.key, template)}
+                />
+              )}
               {!editing && blocks.length > 1 && (
                 <div className="flex justify-end">
                   <Button

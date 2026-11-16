@@ -776,7 +776,7 @@ export function PlanningProgrammeRegister({
           </h2>
           <p className="mt-1 text-xs text-slate-500">
             One plan per person and planning period. Add distinct contributions
-            to company objectives or department goals.
+            to approved department goals and assign their KPIs.
           </p>
         </div>
         {canCreate && (
@@ -785,7 +785,7 @@ export function PlanningProgrammeRegister({
             disabled={busy}
             onClick={() => onAction({ action: "create-individual" })}
           >
-            <Plus size={14} /> Create individual plan
+            <Plus size={14} /> Individual plan and KPI
           </Button>
         )}
       </div>
@@ -864,7 +864,7 @@ export function PlanningProgrammeRegister({
                         ? `${parent.kind === "COMPANY" ? (parent.reference.itemKind === "OBJECTIVE" ? "Company objective" : "Earlier company goal") : "Department goal"} · ${parent.record.code} · ${parent.record.title} · v${parent.reference.version}`
                         : goal.ongoingReason
                           ? `Ongoing responsibility: ${goal.ongoingReason}`
-                          : "Parent commitment not yet selected"}
+                          : "Department goal not yet selected"}
                     </p>
                     <p className="mt-2 text-xs text-slate-700">
                       {value(goal.baseline)} → {value(goal.target)} {goal.unit}{" "}

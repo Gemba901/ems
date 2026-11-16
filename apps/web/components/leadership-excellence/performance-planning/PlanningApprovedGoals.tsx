@@ -49,7 +49,7 @@ export function PlanningApprovedGoals({
         (department
           ? parent.kind === "COMPANY"
           : individual
-            ? parent.kind === "COMPANY" || parent.kind === "DEPARTMENT"
+            ? parent.kind === "DEPARTMENT"
             : parent.kind === "DEPARTMENT" &&
               parent.scopeId === child.departmentId),
     )
@@ -68,7 +68,7 @@ export function PlanningApprovedGoals({
         department
           ? "Approved company objectives"
           : individual
-            ? "Approved company objectives & department goals"
+            ? "Approved department goals"
             : "Approved department goals"
       }
       className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"
@@ -79,22 +79,23 @@ export function PlanningApprovedGoals({
             {department
               ? "Approved company objectives"
               : individual
-                ? "Approved company objectives & department goals"
+                ? "Approved department goals"
                 : `Approved ${departmentName} goals`}
           </h2>
           <p className="mt-1 text-xs leading-5 text-slate-500">
             {department
               ? `Link ${departmentName}'s contribution directly to an approved company objective.`
               : individual
-                ? "Choose an approved company objective or department goal. Earlier company goal links remain available with their original approved version."
+                ? "Choose an approved department goal available to you. Each individual goal keeps its own target and the selected approved version."
                 : "Use an approved goal from this team's or position's department. Each contribution keeps its own target."}
           </p>
         </div>
         <Link
-          href="/leadership-excellence/performance-planning/objectives"
+          href={`/leadership-excellence/performance-planning/${department ? "objectives" : "department-plans"}`}
           className="inline-flex items-center gap-1 rounded text-xs font-medium text-indigo-700 hover:text-indigo-800 focus-visible:outline-2 focus-visible:outline-indigo-500"
         >
-          Company objectives <ArrowRight size={13} />
+          {department ? "Company objectives" : "Department goals"}{" "}
+          <ArrowRight size={13} />
         </Link>
       </div>
       {parents.length ? (
@@ -202,7 +203,7 @@ export function PlanningApprovedGoals({
           {department
             ? `No company objectives are approved for ${planningPeriodLabel(child.cycle)} yet.`
             : individual
-              ? `No approved company objectives or department goals are available to you for ${planningPeriodLabel(child.cycle)}.`
+              ? `No approved department goals are available to you for ${planningPeriodLabel(child.cycle)}.`
               : `No approved department goal is available for ${departmentName} in ${planningPeriodLabel(child.cycle)}.`}{" "}
           You can still prepare and save a draft.
         </p>

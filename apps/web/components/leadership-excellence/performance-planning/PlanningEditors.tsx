@@ -19,6 +19,12 @@ import { PlanningEvidence } from "./PlanningEvidence";
 import { QcdsmtGuidance } from "./QcdsmtGuidance";
 import { FindingWeightage } from "./FindingWeightage";
 import { PlanningFindingEditor } from "./PlanningFindingEditor";
+import { PlanningTemplateLibrary } from "./PlanningTemplateLibrary";
+import {
+  templateDraftFields,
+  type PlanningLibraryTemplate,
+  type PlanningTemplateKind,
+} from "@/services/leadership-excellence/performance-planning/library-templates";
 import {
   objectiveAllocation,
   objectiveWeightLimit,
@@ -510,7 +516,15 @@ function PlanningItemEditor({
   const dates = (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {input("startDate", "Start date", "date")}
-      {input("endDate", kind === "objective" ? "Deadline" : "End date", "date")}
+      {input(
+        "endDate",
+        kind === "goal" && document.kind === "DEPARTMENT"
+          ? "T — Time-bound deadline"
+          : kind === "objective"
+            ? "Deadline"
+            : "End date",
+        "date",
+      )}
     </div>
   );
   const parentAvailability = approvedParentAvailability(
@@ -523,6 +537,45 @@ function PlanningItemEditor({
   const currentDocument = data.documents.find(
     (item) => item.id === document.id,
   );
+  const templateKind: PlanningTemplateKind | null =
+    !initial.id &&
+    currentDocument?.permissions.canEdit &&
+    document.status !== "APPROVED"
+      ? kind === "objective" && document.kind === "COMPANY"
+        ? "objective"
+        : kind === "goal" && document.kind === "DEPARTMENT"
+          ? "department-goal"
+          : null
+      : null;
+  const applyTemplate = (template: PlanningLibraryTemplate) => {
+    if (!templateKind || busy || template.kind !== templateKind) return;
+    const fields = templateDraftFields(template);
+    // Template content never supplies an organisation's record IDs, owners,
+    // approved sources or parent links. Keep the planner's current selections.
+    setForm((current) => ({ ...current, ...fields }));
+    if (kind === "objective") {
+      setObjectiveMeasures((current) => ({
+        baseline:
+          "baseline" in fields
+            ? fields.baseline == null
+              ? ""
+              : String(fields.baseline)
+            : current.baseline,
+        target:
+          "target" in fields
+            ? fields.target == null
+              ? ""
+              : String(fields.target)
+            : current.target,
+      }));
+      setObjectiveMeasureBadInput((current) => ({
+        baseline: "baseline" in fields ? false : current.baseline,
+        target: "target" in fields ? false : current.target,
+      }));
+    }
+    setDirty(true);
+    setError("");
+  };
   // Approval of a parent can refresh an open contribution form safely when
   // the contribution's own persisted plan has not changed. Keep its inputs;
   // a concurrent edit of this plan must still fail the revision check.
@@ -821,6 +874,14 @@ function PlanningItemEditor({
               : []),
             ["Planning dates", value("startDate") + " / " + value("endDate")],
             ["Practical approach", value("approach")],
+            ...(document.kind === "DEPARTMENT"
+              ? [
+                  [
+                    "Relevance to the company objective",
+                    value("relevance"),
+                  ] as [string, string],
+                ]
+              : []),
           ]
         : kind === "assignment"
           ? [
@@ -867,7 +928,11 @@ function PlanningItemEditor({
               ];
   return (
     <Modal
-      title={(initial.id ? "Edit " : "Create ") + titles[kind]}
+      title={
+        kind === "goal" && document.kind === "INDIVIDUAL"
+          ? "Individual plan and KPI"
+          : (initial.id ? "Edit " : "Create ") + titles[kind]
+      }
       description={
         "Planning period " +
         planningPeriodLabel(document.cycle) +
@@ -978,6 +1043,13 @@ function PlanningItemEditor({
         }}
       >
         <ErrorList error={error} />
+        {templateKind && (
+          <PlanningTemplateLibrary
+            kind={templateKind}
+            disabled={busy}
+            onSelect={applyTemplate}
+          />
+        )}
         {compactForm && (
           <p className="rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-3 text-xs leading-5 text-slate-500">
             Complete what you know and save a draft. Missing details can be
@@ -1436,6 +1508,13 @@ function PlanningItemEditor({
             <h3 className="text-sm font-semibold text-slate-900">
               1. Define the result
             </h3>
+            {document.kind === "DEPARTMENT" && (
+              <p className="text-sm text-slate-500">
+                Make the goal SMART: specific, measurable, achievable, relevant
+                and time-bound. Save an incomplete draft at any time; complete
+                these details before approval.
+              </p>
+            )}
             {document.kind === "COMPANY" ? (
               <>
                 <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-5 text-slate-900">
@@ -1498,13 +1577,15 @@ function PlanningItemEditor({
                   label={
                     document.kind === "DEPARTMENT"
                       ? "Approved company objective"
-                      : "Approved objective or department goal"
+                      : "Approved department goal"
                   }
                   hint={
                     parentOptions.length
                       ? document.kind === "INDIVIDUAL"
-                        ? "Choose an approved company objective or department goal. Different contributions can link to different parents; the employee's EMS department will not change."
-                        : "Approved company objectives appear here automatically. The selected approved version stays linked to this contribution."
+                        ? "Choose an approved department goal available to you. Different contributions can support different departments; the employee's EMS department will not change."
+                        : document.kind === "DEPARTMENT"
+                          ? "Approved company objectives appear here automatically. The selected approved version stays linked to this contribution."
+                          : "Choose an approved goal from this team's or position's department."
                       : undefined
                   }
                 >
@@ -1523,9 +1604,19 @@ function PlanningItemEditor({
                       {parentOptions.length
                         ? document.kind === "DEPARTMENT"
                           ? "Select an approved company objective..."
-                          : "Select an approved objective or department goal..."
+                          : "Select an approved department goal..."
                         : "No eligible approved parent yet"}
                     </option>
+                    {document.kind === "INDIVIDUAL" &&
+                      !!form.parent &&
+                      !parentOptions.some(
+                        (option) =>
+                          option.value === JSON.stringify(form.parent),
+                      ) && (
+                        <option value={JSON.stringify(form.parent)} disabled>
+                          Previous link — choose an approved department goal
+                        </option>
+                      )}
                     {parentOptions.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -1585,35 +1676,44 @@ function PlanningItemEditor({
                     </div>
                   </div>
                 )}
-                <details
-                  className="rounded-lg border border-slate-200 p-3"
-                  open={form.ongoingReason ? true : undefined}
-                >
-                  <summary className="cursor-pointer text-xs font-medium text-slate-500">
-                    An essential ongoing responsibility instead?
-                  </summary>
-                  <div className="mt-3">
-                    {area(
-                      "ongoingReason",
-                      "Explain the responsibility",
-                      "If no parent goal applies, explain why this distinct contribution is needed.",
-                    )}
-                  </div>
-                </details>
+                {document.kind !== "INDIVIDUAL" && (
+                  <details
+                    className="rounded-lg border border-slate-200 p-3"
+                    open={form.ongoingReason ? true : undefined}
+                  >
+                    <summary className="cursor-pointer text-xs font-medium text-slate-500">
+                      An essential ongoing responsibility instead?
+                    </summary>
+                    <div className="mt-3">
+                      {area(
+                        "ongoingReason",
+                        "Explain the responsibility",
+                        "If no parent goal applies, explain why this distinct contribution is needed.",
+                      )}
+                    </div>
+                  </details>
+                )}
               </>
             )}
             {area(
               "title",
               document.kind === "COMPANY"
                 ? "What measurable result do you want?"
-                : "What will you contribute?",
+                : document.kind === "DEPARTMENT"
+                  ? "S — Specific department result"
+                  : "What will you contribute?",
             )}
             {["COMPANY", "DEPARTMENT", "INDIVIDUAL"].includes(
               document.kind,
             ) && (
               <>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {input("measure", "How will you measure it?")}
+                  {input(
+                    "measure",
+                    document.kind === "DEPARTMENT"
+                      ? "M — Measurable KPI"
+                      : "How will you measure it?",
+                  )}
                   {input("unit", "Unit")}
                   {input("baseline", "Baseline - current value", "number")}
                   {input("target", "Target - desired value", "number")}
@@ -1670,9 +1770,17 @@ function PlanningItemEditor({
             )}
             {area(
               "approach",
-              "How can this result be achieved?",
+              document.kind === "DEPARTMENT"
+                ? "A — Achievable: how will you reach the target?"
+                : "How can this result be achieved?",
               "Describe a practical approach using the available resources.",
             )}
+            {document.kind === "DEPARTMENT" &&
+              area(
+                "relevance",
+                "R — Relevant: how does this support the company objective?",
+                "Explain how this department's result contributes to the selected company objective.",
+              )}
             <details className="rounded-lg border border-slate-200 p-3">
               <summary className="cursor-pointer text-xs font-medium text-slate-500">
                 Delivery arrangements / existing work

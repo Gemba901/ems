@@ -227,6 +227,8 @@ export function Modal({
       aria-labelledby={id}
       onCancel={(event) => {
         event.preventDefault();
+        // Escape dismisses only the top dialog, including portalled pickers.
+        event.stopPropagation();
         onClose();
       }}
       className={`fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/40 ${wide ? "max-w-5xl" : "max-w-3xl"}`}

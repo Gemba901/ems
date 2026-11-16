@@ -141,7 +141,14 @@ function NewPlan({
   const validScope =
     !requiresScope || scopes.some((scope) => scope.id === scopeId);
   return (
-    <Modal title="Start a planning record" onClose={onClose}>
+    <Modal
+      title={
+        kind === "INDIVIDUAL"
+          ? "Individual plan and KPI"
+          : "Start a planning record"
+      }
+      onClose={onClose}
+    >
       <form
         className="space-y-5"
         onSubmit={async (e) => {
@@ -185,7 +192,9 @@ function NewPlan({
                   ? "Company SWOT assessment"
                   : k === "COMPANY"
                     ? "Company objective plan"
-                    : `${k[0]}${k.slice(1).toLowerCase()} plan`}
+                    : k === "INDIVIDUAL"
+                      ? "Individual plan and KPI"
+                      : `${k[0]}${k.slice(1).toLowerCase()} plan`}
               </option>
             ))}
           </select>
@@ -1790,7 +1799,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
               {section === "department"
                 ? "Choose a department. Add its contribution, then assign KPIs and actions below that goal."
                 : section === "personal"
-                  ? "Choose a person. Agree their contribution and reuse department work where relevant."
+                  ? "Choose a person. Link their contribution to an approved department goal and assign their KPIs."
                   : "Complete any missing details, then send each plan to its single approver."}
             </p>
           </div>

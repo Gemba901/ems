@@ -201,6 +201,8 @@ function harness(initialState?: PlanningState) {
     startDate: '2026-01-01',
     endDate: '2026-12-31',
     approach: 'Operators maintain and inspect equipment each shift.',
+    relevance:
+      'Equipment availability supports the company production reliability objective.',
     noActionReason: 'Covered by the existing approved routine work programme.',
     ...extra,
   });
@@ -341,8 +343,36 @@ describe('Area 03 completion workflows', () => {
     };
     return { ...h, company, objective, parent, swot, otherFinding };
   }
+  async function programmeIndividualFixture() {
+    const h = await programmeFixture();
+    const department = await h.plan('DEPARTMENT', 'production');
+    const goal = await h.item(department, 'goal', {
+      ...h.goalData(),
+      parent: h.parent,
+      definition: 'Setup delay minutes per shift',
+      baselinePeriod: 'October 2026',
+      source: 'Operator setup log',
+      frequency: 'MONTHLY',
+      direction: 'LOWER',
+    });
+    await h.command(
+      'APPROVE_ITEM',
+      { kind: 'goal', id: goal, evidenceChecked: true },
+      department,
+    );
+    return {
+      ...h,
+      companyParent: h.parent,
+      parent: {
+        documentId: department,
+        goalId: goal,
+        version: 1,
+        itemKind: 'GOAL',
+      },
+    };
+  }
   test('programme individual readiness and approval agree when optional KPI assignments are absent', async () => {
-    const h = await programmeFixture(),
+    const h = await programmeIndividualFixture(),
       individual = await h.plan('INDIVIDUAL', 'operator');
     await h.command(
       'SAVE_GOALS',
@@ -386,7 +416,7 @@ describe('Area 03 completion workflows', () => {
     );
   });
   test('nested individual KPI drafts save atomically, force goal identity and preserve omitted assignments', async () => {
-    const h = await programmeFixture(),
+    const h = await programmeIndividualFixture(),
       individual = await h.plan('INDIVIDUAL', 'operator');
     const row = (title: string) => ({
       data: {
@@ -510,7 +540,7 @@ describe('Area 03 completion workflows', () => {
     ).rejects.toThrow(/linked/);
   });
   test('complete explicit individual KPI assignments validate targets and independent people, then lock in approved snapshots', async () => {
-    const h = await programmeFixture(),
+    const h = await programmeIndividualFixture(),
       individual = await h.plan('INDIVIDUAL', 'operator');
     const goalFields = {
       ...h.goalData(),
@@ -614,6 +644,206 @@ describe('Area 03 completion workflows', () => {
     ).rejects.toThrow(/locked/);
     expect(h.snapshot()).toEqual(before);
   });
+  test('department SMART explanations are draft-safe, required by both approval paths and retained in the approved version', async () => {
+    const h = await programmeFixture();
+    const department = await h.plan('DEPARTMENT', 'production');
+    const fields = {
+      ...h.goalData(),
+      parent: h.parent,
+      title: 'Reduce setup delays from 8 to 4 hours by 31 December 2026',
+      definition: 'Total unplanned setup delay hours in each calendar month',
+      baselinePeriod: 'October 2026',
+      source: 'Verified setup log',
+      frequency: 'MONTHLY',
+      direction: 'LOWER',
+      approach: '',
+      relevance: '',
+    };
+    const goalId = await h.item(department, 'goal', fields);
+    const draft = await h.document(department);
+    expect(draft.data.goals[0]).toMatchObject({ approach: '', relevance: '' });
+    expect(draft.programmeIssues?.[goalId].join(' ')).toMatch(
+      /Explain how the department can reach this target/,
+    );
+    expect(draft.programmeIssues?.[goalId].join(' ')).toMatch(
+      /Explain how this department goal supports the linked company objective/,
+    );
+    const before = h.snapshot();
+    for (const action of ['SUBMIT', 'APPROVE'] as const)
+      await expect(h.command(action, {}, department)).rejects.toMatchObject({
+        response: { message: draft.issues },
+      });
+    await expect(
+      h.command(
+        'APPROVE_ITEM',
+        {
+          kind: 'goal',
+          id: goalId,
+          evidenceChecked: true,
+        },
+        department,
+      ),
+    ).rejects.toThrow();
+    expect(h.snapshot()).toEqual(before);
+
+    const explanations = {
+      approach:
+        'Two trained setters will trial the approved setup checklist during scheduled changeovers.',
+      relevance:
+        'Reducing setup loss directly improves the linked company production reliability objective.',
+    };
+    await h.item(department, 'goal', { ...fields, ...explanations }, goalId);
+    expect((await h.document(department)).issues).toEqual([]);
+    await h.command(
+      'APPROVE_ITEM',
+      {
+        kind: 'goal',
+        id: goalId,
+        evidenceChecked: true,
+      },
+      department,
+    );
+    const approved = await h.document(department);
+    expect(approved.versions[0].data.goals[0]).toMatchObject(explanations);
+    await expect(
+      h.item(
+        department,
+        'goal',
+        {
+          ...fields,
+          ...explanations,
+          relevance: 'Overwrite approval',
+        },
+        goalId,
+      ),
+    ).rejects.toThrow(/locked/);
+    expect((await h.document(department)).versions[0]).toEqual(
+      approved.versions[0],
+    );
+  });
+
+  test('individual drafts reject company parents through single and batch saves without losing valid department-linked rows', async () => {
+    const h = await programmeIndividualFixture();
+    const individual = await h.plan('INDIVIDUAL', 'operator');
+    const fields = {
+      ...h.goalData(),
+      ownerId: 'operator',
+      parent: h.parent,
+      definition: 'Setup delay minutes per shift',
+      source: 'Operator log',
+      direction: 'LOWER',
+      frequency: 'MONTHLY',
+    };
+    const goalId = await h.item(individual, 'goal', fields);
+    const before = h.snapshot();
+    for (const id of [undefined, goalId])
+      await expect(
+        h.item(
+          individual,
+          'goal',
+          {
+            ...fields,
+            parent: h.companyParent,
+          },
+          id,
+        ),
+      ).rejects.toThrow(/approved department goal/);
+    await expect(
+      h.command(
+        'SAVE_GOALS',
+        {
+          goals: [
+            {
+              id: goalId,
+              data: { ...fields, title: 'Must not be partially saved' },
+            },
+            { data: { ...fields, parent: h.companyParent } },
+          ],
+        },
+        individual,
+      ),
+    ).rejects.toThrow(/approved department goal/);
+    expect(h.snapshot()).toEqual(before);
+    await h.command(
+      'SAVE_GOALS',
+      {
+        goals: [
+          {
+            id: goalId,
+            data: {
+              ...fields,
+              parent: null,
+              ongoingReason: 'Daily role responsibility',
+            },
+          },
+        ],
+      },
+      individual,
+    );
+    expect((await h.document(individual)).issues.join(' ')).toMatch(
+      /approved department goal/,
+    );
+    await expect(h.command('APPROVE', {}, individual)).rejects.toThrow();
+  });
+
+  test('historical approved individual company links remain readable but their revision must select an approved department goal', async () => {
+    const fixture = await programmeIndividualFixture();
+    const individual = await fixture.plan('INDIVIDUAL', 'operator');
+    const fields = {
+      ...fixture.goalData(),
+      ownerId: 'operator',
+      parent: fixture.parent,
+      definition: 'Setup delay minutes per shift',
+      source: 'Operator log',
+      direction: 'LOWER',
+      frequency: 'MONTHLY',
+    };
+    const goalId = await fixture.item(individual, 'goal', fields);
+    await fixture.command('APPROVE', {}, individual);
+    // Restore an immutable snapshot produced before department-only linking.
+    const restored = fixture.snapshot().get('org-one')!.state;
+    const old = restored.documents.find((d) => d.id === individual)!;
+    const historicalParent = {
+      ...fixture.companyParent,
+      itemKind: 'OBJECTIVE' as const,
+    };
+    old.data.goals[0].parent = historicalParent;
+    old.versions[0].data.goals[0].parent = structuredClone(historicalParent);
+    const previousVersion = structuredClone(old.versions[0]);
+    const h = harness(restored);
+    expect((await h.document(individual)).versions[0]).toEqual(previousVersion);
+    await h.command(
+      'REVISE',
+      {
+        reason:
+          'Link the individual contribution through the accountable department.',
+        effectiveDate: '2026-11-04',
+      },
+      individual,
+    );
+    await h.item(
+      individual,
+      'goal',
+      { ...fields, parent: historicalParent },
+      goalId,
+    );
+    expect((await h.document(individual)).issues.join(' ')).toMatch(
+      /approved department goal/,
+    );
+    await expect(h.command('APPROVE', {}, individual)).rejects.toThrow();
+    await expect(
+      h.item(individual, 'goal', {
+        ...fields,
+        parent: historicalParent,
+      }),
+    ).rejects.toThrow(/approved department goal/);
+    await h.item(individual, 'goal', fields, goalId);
+    await h.command('APPROVE', {}, individual);
+    const revised = await h.document(individual);
+    expect(revised.versions[0]).toEqual(previousVersion);
+    expect(revised.versions[1].data.goals[0].parent).toEqual(fixture.parent);
+  });
+
   test('department card approval checks and snapshots supplied KPIs without requiring an assignment when none exists', async () => {
     const h = await programmeFixture(),
       department = await h.plan('DEPARTMENT', 'production');
@@ -1167,7 +1397,7 @@ describe('Area 03 completion workflows', () => {
     ).rejects.toThrow(/already/);
   });
   test('individual contribution batches are atomic and permit an incomplete empty draft', async () => {
-    const h = await programmeFixture();
+    const h = await programmeIndividualFixture();
     const individual = await h.plan('INDIVIDUAL', 'operator');
     await h.command('SAVE_GOALS', { goals: [] }, individual);
     const before = h.snapshot();
@@ -2388,7 +2618,7 @@ describe('Area 03 completion workflows', () => {
     },
   );
 
-  test('an explained individual responsibility can submit and approve without a home department plan', async () => {
+  test('an explained individual responsibility remains a draft until it links an approved department goal', async () => {
     const h = harness();
     const id = await h.plan('INDIVIDUAL', 'operator');
     const goalId = await h.item(
@@ -2397,7 +2627,9 @@ describe('Area 03 completion workflows', () => {
       h.goalData({ ownerId: 'operator' }),
     );
     await h.assignment(id, goalId, { ownerId: 'operator' });
-    expect((await h.document(id)).issues).toEqual([]);
+    expect((await h.document(id)).issues.join(' ')).toMatch(
+      /link an approved department goal/,
+    );
     await h.item(
       id,
       'goal',
@@ -2409,14 +2641,26 @@ describe('Area 03 completion workflows', () => {
       await expect(h.command(action, {}, id)).rejects.toThrow();
       expect(h.snapshot()).toEqual(before);
     }
-    await h.item(id, 'goal', h.goalData({ ownerId: 'operator' }), goalId);
+    const department = await h.department();
+    await h.command('APPROVE', {}, department.id);
+    const parent = {
+      documentId: department.id,
+      goalId: department.goalId,
+      version: 1,
+    };
+    await h.item(
+      id,
+      'goal',
+      h.goalData({ ownerId: 'operator', parent }),
+      goalId,
+    );
     expect((await h.document(id)).issues).toEqual([]);
     await h.command('SUBMIT', {}, id, h.employee);
     await h.command('APPROVE', {}, id);
-    expect((await h.document(id)).versions[0].data.goals[0].id).toBe(goalId);
-    expect(
-      (await h.view()).documents.some((d) => d.kind === 'DEPARTMENT'),
-    ).toBe(false);
+    expect((await h.document(id)).versions[0].data.goals[0]).toMatchObject({
+      id: goalId,
+      parent,
+    });
   });
 
   test('draft-first creation retains EMS scope, self-service and tenant boundaries', async () => {
@@ -2794,7 +3038,7 @@ describe('Area 03 completion workflows', () => {
     }
   });
 
-  test('a measurable company objective directly supplies department and individual parents without a duplicate goal', async () => {
+  test('a measurable company objective supplies department parents and individuals link through approved department goals', async () => {
     const h = harness();
     const assessment = await h.plan('SWOT');
     const findingId = await h.item(assessment, 'finding', {
@@ -2858,33 +3102,23 @@ describe('Area 03 completion workflows', () => {
     const choices = (await h.view(hod)).approvedParentGoals;
     expect(choices).toEqual(approved.approvedParentGoals);
     expect(JSON.stringify(choices)).not.toContain(findingId);
-    // Direct individual company contributions do not require a department plan.
+    // Individuals cannot bypass the department goal, even with full management access.
     const personal = await h.plan('INDIVIDUAL', 'operator');
-    const personalGoal = await h.item(
-      personal,
-      'goal',
-      h.goalData({
-        ownerId: 'operator',
-        parent: {
-          documentId: company,
-          goalId,
-          version: 1,
-          itemKind: 'OBJECTIVE',
-        },
-        noActionReason:
-          'Carried out through the employee daily operating checklist.',
-      }),
-    );
-    await h.assignment(personal, personalGoal, { ownerId: 'operator' });
-    await h.command('APPROVE', {}, personal);
-    expect(
-      (await h.document(personal)).versions[0].data.goals[0].parent,
-    ).toEqual({
-      documentId: company,
-      goalId,
-      version: 1,
-      itemKind: 'OBJECTIVE',
-    });
+    await expect(
+      h.item(
+        personal,
+        'goal',
+        h.goalData({
+          ownerId: 'operator',
+          parent: {
+            documentId: company,
+            goalId,
+            version: 1,
+            itemKind: 'OBJECTIVE',
+          },
+        }),
+      ),
+    ).rejects.toThrow(/approved department goal/);
     const department = await h.department();
     const parent = {
       documentId: company,
@@ -2906,6 +3140,24 @@ describe('Area 03 completion workflows', () => {
     expect(
       (await h.document(department.id)).versions[0].data.goals[0].parent,
     ).toEqual(parent);
+    const individualParent = {
+      documentId: department.id,
+      goalId: department.goalId,
+      version: 1,
+    };
+    const personalGoal = await h.item(
+      personal,
+      'goal',
+      h.goalData({
+        ownerId: 'operator',
+        parent: individualParent,
+      }),
+    );
+    await h.assignment(personal, personalGoal, { ownerId: 'operator' });
+    await h.command('APPROVE', {}, personal);
+    expect(
+      (await h.document(personal)).versions[0].data.goals[0].parent,
+    ).toEqual(individualParent);
     const otherDepartment = await h.plan('DEPARTMENT', 'quality');
     await expect(
       h.item(otherDepartment, 'goal', h.goalData({ parent })),

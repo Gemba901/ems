@@ -23,3 +23,30 @@ model LexPlanningEvidence {
 
   @@index([organizationId, findingId])
 }
+
+// Shared example content, not organisation planning records. Selecting a
+// template copies editable fields into a draft; it never links tenant records
+// or changes the library. Stable IDs prevent duplicates during provisioning.
+model LexPlanningLibraryTemplate {
+  id                   String   @id
+  kind                 String
+  title                String
+  pillar               String
+  category             String?
+  department           String?
+  sourceCode           String
+  sourceSheet          String
+  sourceRow            Int
+  ownerRole            String?
+  parentObjectiveCode  String?
+  parentObjectiveTitle String?
+  fields               Json
+  notes                String[] @default([])
+  active               Boolean  @default(true)
+  version              Int      @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([kind, sourceCode])
+  @@index([kind, active, pillar])
+}

@@ -148,6 +148,8 @@ export interface Goal extends Stamp {
   startDate: string;
   endDate: string;
   approach: string;
+  /** Why this department result contributes to its linked company objective. */
+  relevance?: string;
   departmentIds: string[];
   /** Required at approval when a contribution has no separate delivery action. */
   noActionReason?: string;

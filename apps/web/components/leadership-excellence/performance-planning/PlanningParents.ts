@@ -143,7 +143,7 @@ export function approvedParentOptions(
           ? parent.kind === "COMPANY" &&
             parentAvailableToDepartment(view, parent, child.scopeId)
           : child.kind === "INDIVIDUAL"
-            ? parent.kind === "COMPANY" || parent.kind === "DEPARTMENT"
+            ? parent.kind === "DEPARTMENT"
             : parent.kind === "DEPARTMENT" &&
               ["TEAM", "POSITION"].includes(child.kind) &&
               parent.scopeId === child.departmentId),
@@ -154,11 +154,9 @@ export function approvedParentOptions(
         parent,
         today,
         child.kind === "INDIVIDUAL"
-          ? parent.kind === "COMPANY"
-            ? "Company"
-            : view.references.departments.find(
-                (department) => department.id === parent.scopeId,
-              )?.name || "Department"
+          ? view.references.departments.find(
+              (department) => department.id === parent.scopeId,
+            )?.name || "Department"
           : undefined,
       ),
     );
@@ -194,7 +192,7 @@ export function approvedParentAvailability(
       (child.kind === "DEPARTMENT"
         ? parent.kind === "COMPANY"
         : child.kind === "INDIVIDUAL"
-          ? parent.kind === "COMPANY" || parent.kind === "DEPARTMENT"
+          ? parent.kind === "DEPARTMENT"
           : parent.kind === "DEPARTMENT" &&
             ["TEAM", "POSITION"].includes(child.kind) &&
             parent.scopeId === child.departmentId),
@@ -230,7 +228,7 @@ export function approvedParentAvailability(
     | "NO_APPROVED_PARENT" = "AVAILABLE";
   let message =
     child.kind === "INDIVIDUAL"
-      ? "Approved company objectives and department goals available to you appear here automatically. Each contribution retains its selected approved version."
+      ? "Approved department goals available to you appear here automatically. Each individual goal retains its selected approved version."
       : child.kind === "DEPARTMENT"
         ? "Approved company objectives appear here automatically. The selected approved version stays linked to this department goal."
         : "Approved department goals appear here automatically. The selected approved version stays linked to this goal.";
@@ -248,7 +246,7 @@ export function approvedParentAvailability(
         child.kind === "DEPARTMENT"
           ? `Approved company objectives are available for ${years}, but this plan uses ${planningPeriodLabel(child.cycle)}. Choose the intended planning period and check its contributing departments, or approve a company objective for ${planningPeriodLabel(child.cycle)}.`
           : child.kind === "INDIVIDUAL"
-            ? `The approved company objectives or department goals available to you are for ${years}, but this plan uses ${planningPeriodLabel(child.cycle)}. Choose the matching planning period or ask an authorised planner to approve a company objective or department goal for ${planningPeriodLabel(child.cycle)}.`
+            ? `The approved department goals available to you are for ${years}, but this plan uses ${planningPeriodLabel(child.cycle)}. Choose the matching planning period or ask an authorised planner to approve a department goal for ${planningPeriodLabel(child.cycle)}.`
             : `Approved department goals in ${departmentName}'s plan are available for ${years}, but this plan uses ${planningPeriodLabel(child.cycle)}. Choose the matching planning period or approve a department goal for ${planningPeriodLabel(child.cycle)}.`;
     } else {
       reason = "NO_APPROVED_PARENT";
@@ -256,7 +254,7 @@ export function approvedParentAvailability(
         child.kind === "DEPARTMENT"
           ? `No approved company objective is available for ${planningPeriodLabel(child.cycle)}. Approve a company objective for the matching planning period.`
           : child.kind === "INDIVIDUAL"
-            ? `There are no approved company objectives or department goals available to you for ${planningPeriodLabel(child.cycle)}. Check the planning period or ask an authorised planner to approve a company objective or department goal you can access before linking a contribution.`
+            ? `There are no approved department goals available to you for ${planningPeriodLabel(child.cycle)}. Check the planning period or ask an authorised planner to approve a department goal you can access before linking an individual goal.`
             : `No approved department goal is available in ${departmentName}'s plan for ${planningPeriodLabel(child.cycle)}. Approve a department goal before linking a contribution.`;
     }
   }

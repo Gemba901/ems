@@ -1,0 +1,16 @@
+/*
+ * 02.02 position chart: the department colours used when the chart is zoomed out (blocks and legend).
+ * Scoped to this view; the first three are BEES tokens, the rest complete a distinguishable set of eight.
+ * Slot 0 is "Other" (smaller departments, and positions without a department).
+ */
+.chart {
+  --dept-0: var(--color-muted-foreground);
+  --dept-1: var(--color-gemba-navy);
+  --dept-2: var(--color-gemba-lime);
+  --dept-3: var(--color-gemba-red);
+  --dept-4: #12796f; /* LEX prototype teal */
+  --dept-5: #d39b1b;
+  --dept-6: #3b6fb6;
+  --dept-7: #8e4b8a;
+  --dept-8: #8a5a2b;
+}

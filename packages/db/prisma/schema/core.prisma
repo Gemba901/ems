@@ -194,6 +194,7 @@ model Organization {
   lexStrategicDirection       LexStrategicDirection?
 
 
+  lexPerformanceCalendars LexPerformanceCalendar[] // LEX 02.03
 }
 
 //specific user

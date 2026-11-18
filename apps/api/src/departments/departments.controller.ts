@@ -1,4 +1,4 @@
-import { Controller, UseGuards, Post, Get, Patch, Delete, Body, Param, Request, UnauthorizedException } from '@nestjs/common';
+import { Controller, UseGuards, Post, Get, Patch, Delete, Body, Param, Request, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { DepartmentsService } from './departments.service';
@@ -27,8 +27,14 @@ export class DepartmentsController {
     // only admins can create departments
     @Post()
     @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-    createDepartment(@Body() body: { name: string }, @Request() req: TenantRequest) {
-        return this.departmentsService.createDepartment(body.name, this.organizationId(req));
+    createDepartment(@Body() body: { name?: unknown; names?: unknown }, @Request() req: TenantRequest) {
+        const organizationId = this.organizationId(req);
+        if (!body || typeof body !== 'object' || Array.isArray(body)) throw new BadRequestException('Provide department names.');
+        if ('names' in body) {
+            if ('name' in body) throw new BadRequestException('Provide name or names, not both.');
+            return this.departmentsService.createDepartments(body.names, organizationId);
+        }
+        return this.departmentsService.createDepartment(body.name, organizationId);
     }
 
     // both admins and managers can view departments in their organization

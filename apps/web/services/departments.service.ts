@@ -25,6 +25,12 @@ export interface DepartmentWithCount {
 }
 
 export const DepartmentsService = {
+  async createMany(names: string[], token: string): Promise<{ created: string[]; existing: string[] }> {
+    const res = await apiClient(`${API_URL}/departments`, {
+      method: "POST", headers: authHeaders(token), body: JSON.stringify({ names }),
+    }, token);
+    return handleResponse(res);
+  },
   async getAll(token: string): Promise<DepartmentWithCount[]> {
     const res = await apiClient(`${API_URL}/departments`, { headers: authHeaders(token) }, token);
     return handleResponse<DepartmentWithCount[]>(res);

@@ -571,6 +571,9 @@ export class AuthService {
         };
 
         if (hasPassword) return responseData;
+        if (await this.prisma.emsAccountLink.findFirst({ where: { userId: user.id }, select: { employeeId: true } })) {
+            throw new UnauthorizedException('Use your secure account-verification invitation, or contact your existing account administrator.');
+        }
 
         // SECURITY: knowing an identifier is not proof of account ownership, so anyone who knows
         // an employee's email, phone or code can set their first password. Temporary until
@@ -614,7 +617,9 @@ export class AuthService {
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
             const changed = await this.prisma.user.updateMany({
-                where: { id: decoded.userId, password: null },
+                where: { id: decoded.userId, password: null,
+                    ...(decoded.purpose === 'FIRST_TIME_SETUP' ? { emsAccountLinks: { none: {} } } : {}),
+                },
                 data: { password: hashedPassword },
             });
             if (changed.count !== 1) throw new UnauthorizedException('Password already set');

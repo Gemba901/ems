@@ -15,9 +15,9 @@ describe('Department isolation', () => {
       findFirst: jest.fn().mockImplementation(async ({ where }) =>
         [own, other].find(row => row.id === where.id &&
           (where.organizationId === undefined || row.organizationId === where.organizationId)) ?? null),
-      findMany: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn(),
+      findMany: jest.fn().mockImplementation(async ({ where }) => [own, other].filter(row => row.organizationId === where.organizationId && row.id !== where.id?.not)), create: jest.fn(), update: jest.fn(), delete: jest.fn(),
     };
-    service = new DepartmentsService({ department } as unknown as PrismaService);
+    service = new DepartmentsService({ department, $transaction: (work: (tx: unknown) => unknown) => work({ department, $queryRaw: jest.fn() }) } as unknown as PrismaService);
   });
 
   it('reads its own department', async () => {
@@ -46,9 +46,9 @@ describe('Department isolation', () => {
   });
 
   it('scopes creation and listing', async () => {
-    await service.createDepartment('Finance', own.organizationId);
+    await service.createDepartment('Research', own.organizationId);
     await service.getDepartments(own.organizationId);
-    expect(department.create).toHaveBeenCalledWith({ data: { name: 'Finance', organizationId: own.organizationId } });
+    expect(department.create).toHaveBeenCalledWith({ data: { name: 'Research', organizationId: own.organizationId } });
     expect(department.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: own.organizationId } }));
   });
 });

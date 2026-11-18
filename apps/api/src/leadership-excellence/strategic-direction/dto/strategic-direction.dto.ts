@@ -79,6 +79,16 @@ export class ReasonDto {
   @IsString() @IsNotEmpty() @MaxLength(1000) reason!: string;
 }
 
+/** Approve: the updatedAt of the submission the reviewer read. */
+export class ReviewDto {
+  @IsISO8601() expectedUpdatedAt!: string;
+}
+
+/** Return for changes: why, plus the updatedAt of the submission the reviewer read. */
+export class ReturnDto extends ReasonDto {
+  @IsISO8601() expectedUpdatedAt!: string;
+}
+
 /** Replaces the list of people who approve the direction. */
 export class SetApproversDto {
   @IsArray()

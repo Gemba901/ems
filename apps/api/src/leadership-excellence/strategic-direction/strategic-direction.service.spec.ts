@@ -6,6 +6,7 @@ import { validate } from 'class-validator';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { ROLES_KEY } from 'src/auth/decorators/roles.decorator';
 import { Role } from 'src/common/enum/role.enum';
+import { Prisma } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SaveDraftDto } from './dto/strategic-direction.dto';
 import { StrategicDirectionController } from './strategic-direction.controller';
@@ -34,6 +35,9 @@ const COMPLETE = {
   updatedAt: new Date('2026-11-07T10:00:00.000Z'),
 };
 
+// The updatedAt of the copy a reviewer has on screen.
+const TS_SEEN = COMPLETE.updatedAt.toISOString();
+
 const ACTOR = { id: 'emp-1', firstName: 'Amina', lastName: 'Otieno' };
 
 const SNAPSHOT = {
@@ -52,6 +56,7 @@ function setup(
   actor: unknown = ACTOR,
   published: unknown = null,
 ) {
+  let written: object | null = null;
   const prisma = {
     employee: {
       findFirst: jest.fn().mockResolvedValue(actor),
@@ -68,16 +73,22 @@ function setup(
     },
     lexStrategicDirection: {
       findUnique: jest.fn().mockResolvedValue(draft),
-      upsert: jest
-        .fn()
-        .mockImplementation(({ create, update }) =>
-          Promise.resolve({ id: 'dir-1', ...(draft ? update : create) }),
-        ),
-      update: jest
+      create: jest
         .fn()
         .mockImplementation(({ data }) =>
-          Promise.resolve({ ...(draft as object), ...data }),
+          Promise.resolve({ id: 'dir-1', ...data }),
         ),
+      // Like Postgres: writes only while updatedAt still matches the WHERE.
+      updateMany: jest.fn().mockImplementation(({ where, data }) => {
+        const row = (written ?? draft) as { updatedAt: Date } | null;
+        if (!row || row.updatedAt.getTime() !== where.updatedAt.getTime())
+          return Promise.resolve({ count: 0 });
+        written = { ...row, ...data, updatedAt: new Date() };
+        return Promise.resolve({ count: 1 });
+      }),
+      findUniqueOrThrow: jest
+        .fn()
+        .mockImplementation(() => Promise.resolve(written)),
     },
     lexStrategicDirectionVersion: {
       findUnique: jest.fn().mockResolvedValue(published),
@@ -112,7 +123,7 @@ describe('StrategicDirectionService', () => {
           FPEX: 10,
         },
       });
-      expect(prisma.lexStrategicDirection.upsert).not.toHaveBeenCalled();
+      expect(prisma.lexStrategicDirection.create).not.toHaveBeenCalled();
     });
   });
 
@@ -121,14 +132,12 @@ describe('StrategicDirectionService', () => {
       const { prisma, service } = setup();
       await service.saveDraft(USER, { company: '  Gemba  ' });
 
-      expect(prisma.lexStrategicDirection.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: expect.objectContaining({
-            organizationId: 'org-1',
-            company: 'Gemba',
-          }),
+      expect(prisma.lexStrategicDirection.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          organizationId: 'org-1',
+          company: 'Gemba',
         }),
-      );
+      });
       expect(prisma.lexStrategicDirectionEvent.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           action: 'DRAFT_SAVED',
@@ -155,9 +164,9 @@ describe('StrategicDirectionService', () => {
     it('clears a field sent as null instead of crashing', async () => {
       const { prisma, service } = setup(COMPLETE);
       await service.saveDraft(USER, { vision: null as unknown as string });
-      expect(prisma.lexStrategicDirection.upsert).toHaveBeenCalledWith(
+      expect(prisma.lexStrategicDirection.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          update: expect.objectContaining({ vision: null }),
+          data: expect.objectContaining({ vision: null }),
         }),
       );
     });
@@ -174,9 +183,8 @@ describe('StrategicDirectionService', () => {
       });
       await service.saveDraft(USER, { visionWhy: 'New reason' });
 
-      const [[{ update }]] = prisma.lexStrategicDirection.upsert.mock.calls as [
-        [{ update: { sectionMeta: Record<string, unknown> } }],
-      ];
+      const [[{ data: update }]] = prisma.lexStrategicDirection.updateMany.mock
+        .calls as [[{ data: { sectionMeta: Record<string, unknown> } }]];
       expect(update.sectionMeta).toEqual({
         mission: earlier,
         vision: expect.objectContaining({
@@ -198,9 +206,8 @@ describe('StrategicDirectionService', () => {
       };
       await service.saveDraft(USER, { pillarWeights: weights });
 
-      const [[{ update }]] = prisma.lexStrategicDirection.upsert.mock.calls as [
-        [{ update: { pillarWeights: unknown; sectionMeta: object } }],
-      ];
+      const [[{ data: update }]] = prisma.lexStrategicDirection.updateMany.mock
+        .calls as [[{ data: { pillarWeights: unknown; sectionMeta: object } }]];
       expect(update.pillarWeights).toEqual(weights);
       expect(Object.keys(update.sectionMeta)).toEqual(['pillars']);
     });
@@ -225,9 +232,8 @@ describe('StrategicDirectionService', () => {
       await service.saveDraft(USER, {
         values: [{ name: 'Safety', why: 'Everyone home' }],
       });
-      const [[{ update }]] = prisma.lexStrategicDirection.upsert.mock.calls as [
-        [{ update: { values: { id: string }[] } }],
-      ];
+      const [[{ data: update }]] = prisma.lexStrategicDirection.updateMany.mock
+        .calls as [[{ data: { values: { id: string }[] } }]];
       expect(typeof update.values[0].id).toBe('string');
 
       await expect(
@@ -267,7 +273,50 @@ describe('StrategicDirectionService', () => {
         company: 'Other',
         expectedUpdatedAt: COMPLETE.updatedAt.toISOString(),
       });
-      expect(prisma.lexStrategicDirection.upsert).toHaveBeenCalled();
+      expect(prisma.lexStrategicDirection.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'dir-1', updatedAt: COMPLETE.updatedAt },
+        }),
+      );
+    });
+
+    it('lets only one of two concurrent saves on the same copy through', async () => {
+      const { prisma, service } = setup(COMPLETE);
+      const expectedUpdatedAt = COMPLETE.updatedAt.toISOString();
+      // Both requests read the row before either writes.
+      const [first, second] = await Promise.allSettled([
+        service.saveDraft(USER, { company: 'First', expectedUpdatedAt }),
+        service.saveDraft(USER, { company: 'Second', expectedUpdatedAt }),
+      ]);
+      expect(first.status).toBe('fulfilled');
+      expect(second).toMatchObject({
+        status: 'rejected',
+        reason: { status: 409 },
+      });
+      expect(prisma.lexStrategicDirectionEvent.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('guards on the copy it read when the client sends no timestamp', async () => {
+      const { prisma, service } = setup(COMPLETE);
+      await service.saveDraft(USER, { company: 'Other' });
+      expect(prisma.lexStrategicDirection.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'dir-1', updatedAt: COMPLETE.updatedAt },
+        }),
+      );
+    });
+
+    it('turns a second concurrent first save into a 409', async () => {
+      const { prisma, service } = setup();
+      prisma.lexStrategicDirection.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+      await expect(
+        service.saveDraft(USER, { company: 'Gemba' }),
+      ).rejects.toMatchObject({ status: 409 });
     });
 
     it('logs a null actor when the user has no employee row', async () => {
@@ -462,16 +511,20 @@ describe('StrategicDirectionService', () => {
   describe('returnForChanges', () => {
     it('requires a reason', async () => {
       const { prisma, service } = setup({ ...COMPLETE, status: 'IN_REVIEW' });
-      await expect(service.returnForChanges(USER, '   ')).rejects.toMatchObject(
-        { status: 400 },
-      );
+      await expect(
+        service.returnForChanges(USER, '   ', COMPLETE.updatedAt.toISOString()),
+      ).rejects.toMatchObject({ status: 400 });
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('stores the trimmed reason on the draft and the event', async () => {
       const { prisma, service } = setup({ ...COMPLETE, status: 'IN_REVIEW' });
       await expect(
-        service.returnForChanges(USER, '  Tighten the vision  '),
+        service.returnForChanges(
+          USER,
+          '  Tighten the vision  ',
+          COMPLETE.updatedAt.toISOString(),
+        ),
       ).resolves.toMatchObject({
         status: 'DRAFT',
         returnReason: 'Tighten the vision',
@@ -486,17 +539,29 @@ describe('StrategicDirectionService', () => {
 
     it('refuses a draft that was never submitted', async () => {
       const { service } = setup(COMPLETE);
-      await expect(service.returnForChanges(USER, 'Fix')).rejects.toMatchObject(
-        { status: 409 },
-      );
+      await expect(
+        service.returnForChanges(USER, 'Fix', COMPLETE.updatedAt.toISOString()),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+
+    it('refuses a submission that changed since the reviewer opened it', async () => {
+      const { prisma, service } = setup({
+        ...COMPLETE,
+        status: 'IN_REVIEW',
+        updatedAt: new Date('2026-11-07T11:00:00.000Z'),
+      });
+      await expect(
+        service.returnForChanges(USER, 'Fix', TS_SEEN),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('refuses someone who is not a chosen approver', async () => {
       const { prisma, service } = setup({ ...COMPLETE, status: 'IN_REVIEW' });
       prisma.lexStrategicDirectionApprover.findUnique.mockResolvedValue(null);
-      await expect(service.returnForChanges(USER, 'Fix')).rejects.toMatchObject(
-        { status: 403 },
-      );
+      await expect(
+        service.returnForChanges(USER, 'Fix', COMPLETE.updatedAt.toISOString()),
+      ).rejects.toMatchObject({ status: 403 });
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
@@ -509,7 +574,9 @@ describe('StrategicDirectionService', () => {
         submittedById: 'emp-2',
         sectionMeta: {},
       });
-      await expect(service.approve(USER)).resolves.toMatchObject({
+      await expect(
+        service.approve(USER, COMPLETE.updatedAt.toISOString()),
+      ).resolves.toMatchObject({
         status: 'APPROVED',
         currentVersion: 1,
       });
@@ -533,7 +600,9 @@ describe('StrategicDirectionService', () => {
 
     it('refuses a draft that was not sent for review', async () => {
       const { prisma, service } = setup(COMPLETE);
-      await expect(service.approve(USER)).rejects.toMatchObject({
+      await expect(
+        service.approve(USER, COMPLETE.updatedAt.toISOString()),
+      ).rejects.toMatchObject({
         status: 409,
       });
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -542,7 +611,9 @@ describe('StrategicDirectionService', () => {
     it('refuses someone who is not a chosen approver', async () => {
       const { prisma, service } = setup({ ...COMPLETE, status: 'IN_REVIEW' });
       prisma.lexStrategicDirectionApprover.findUnique.mockResolvedValue(null);
-      await expect(service.approve(USER)).rejects.toMatchObject({
+      await expect(
+        service.approve(USER, COMPLETE.updatedAt.toISOString()),
+      ).rejects.toMatchObject({
         status: 403,
       });
     });
@@ -553,7 +624,9 @@ describe('StrategicDirectionService', () => {
         status: 'IN_REVIEW',
         submittedById: 'emp-1',
       });
-      await expect(service.approve(USER)).rejects.toMatchObject({
+      await expect(
+        service.approve(USER, COMPLETE.updatedAt.toISOString()),
+      ).rejects.toMatchObject({
         status: 403,
       });
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -576,7 +649,7 @@ describe('StrategicDirectionService', () => {
           approvedById: 'emp-1',
         },
       );
-      await service.approve(USER);
+      await service.approve(USER, COMPLETE.updatedAt.toISOString());
 
       expect(prisma.lexStrategicDirectionVersion.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ version: 2 }),
@@ -596,15 +669,53 @@ describe('StrategicDirectionService', () => {
         status: 'IN_REVIEW',
         purpose: null,
       });
-      await expect(service.approve(USER)).rejects.toMatchObject({
+      await expect(
+        service.approve(USER, COMPLETE.updatedAt.toISOString()),
+      ).rejects.toMatchObject({
         status: 400,
       });
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
+    it('refuses a submission withdrawn and resubmitted since the reviewer opened it', async () => {
+      // The reviewer loaded "100 customers"; the author withdrew, edited and resubmitted.
+      const { prisma, service } = setup({
+        ...COMPLETE,
+        status: 'IN_REVIEW',
+        submittedById: 'emp-2',
+        vision: 'Target: 1,000 customers',
+        updatedAt: new Date('2026-11-07T11:00:00.000Z'),
+      });
+      await expect(service.approve(USER, TS_SEEN)).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.lexStrategicDirectionVersion.create).not.toHaveBeenCalled();
+    });
+
+    it('publishes nothing when the submission changes during approval', async () => {
+      const { prisma, service } = setup({
+        ...COMPLETE,
+        status: 'IN_REVIEW',
+        submittedById: 'emp-2',
+        sectionMeta: {},
+      });
+      // A withdraw lands between the read and the write.
+      prisma.lexStrategicDirection.updateMany.mockResolvedValueOnce({
+        count: 0,
+      });
+      await expect(service.approve(USER, TS_SEEN)).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(prisma.lexStrategicDirectionVersion.create).not.toHaveBeenCalled();
+      expect(prisma.lexStrategicDirectionEvent.create).not.toHaveBeenCalled();
+    });
+
     it('refuses to approve twice', async () => {
       const { service } = setup({ ...COMPLETE, status: 'APPROVED' });
-      await expect(service.approve(USER)).rejects.toMatchObject({
+      await expect(
+        service.approve(USER, COMPLETE.updatedAt.toISOString()),
+      ).rejects.toMatchObject({
         status: 409,
       });
     });
@@ -700,9 +811,8 @@ describe('StrategicDirectionService', () => {
         { version: 1, snapshot: SNAPSHOT, sectionMeta: {} },
       );
       await service.startRevision(USER, 'Update');
-      const [[{ data }]] = prisma.lexStrategicDirection.update.mock.calls as [
-        [{ data: { pillarWeights: unknown } }],
-      ];
+      const [[{ data }]] = prisma.lexStrategicDirection.updateMany.mock
+        .calls as [[{ data: { pillarWeights: unknown } }]];
       expect(data.pillarWeights).toEqual({
         LEX: 10,
         PEX: 20,

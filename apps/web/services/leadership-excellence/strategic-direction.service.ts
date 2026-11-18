@@ -174,8 +174,11 @@ export const StrategicDirectionService = {
   saveDraft: (token: string, payload: SaveDraftPayload) => request<unknown>("/draft", token, "PATCH", payload),
   submit: (token: string) => request<unknown>("/submit", token, "POST"),
   withdraw: (token: string) => request<unknown>("/withdraw", token, "POST"),
-  returnForChanges: (token: string, reason: string) => request<unknown>("/return", token, "POST", { reason }),
-  approve: (token: string) => request<unknown>("/approve", token, "POST"),
+  // expectedUpdatedAt: the submission the reviewer read; the API refuses (409) if it changed since.
+  returnForChanges: (token: string, reason: string, expectedUpdatedAt: string) =>
+    request<unknown>("/return", token, "POST", { reason, expectedUpdatedAt }),
+  approve: (token: string, expectedUpdatedAt: string) =>
+    request<unknown>("/approve", token, "POST", { expectedUpdatedAt }),
   startRevision: (token: string, reason: string) => request<unknown>("/revise", token, "POST", { reason }),
   getApproverCandidates: (token: string) => request<DirectionApprover[]>("/approvers/candidates", token),
   setApprovers: (token: string, employeeIds: string[]) =>

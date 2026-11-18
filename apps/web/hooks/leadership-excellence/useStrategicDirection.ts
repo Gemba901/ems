@@ -80,10 +80,13 @@ export function useDirectionActions() {
     ),
     submit: useDirectionMutation<void>((token) => StrategicDirectionService.submit(token)),
     withdraw: useDirectionMutation<void>((token) => StrategicDirectionService.withdraw(token)),
-    returnForChanges: useDirectionMutation((token, reason: string) =>
-      StrategicDirectionService.returnForChanges(token, reason),
+    returnForChanges: useDirectionMutation(
+      (token, { reason, expectedUpdatedAt }: { reason: string; expectedUpdatedAt: string }) =>
+        StrategicDirectionService.returnForChanges(token, reason, expectedUpdatedAt),
     ),
-    approve: useDirectionMutation<void>((token) => StrategicDirectionService.approve(token)),
+    approve: useDirectionMutation((token, expectedUpdatedAt: string) =>
+      StrategicDirectionService.approve(token, expectedUpdatedAt),
+    ),
     startRevision: useDirectionMutation((token, reason: string) =>
       StrategicDirectionService.startRevision(token, reason),
     ),

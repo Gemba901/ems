@@ -26,6 +26,8 @@ import {
 } from './strategic-direction.roles';
 import {
   ReasonDto,
+  ReturnDto,
+  ReviewDto,
   SaveDraftDto,
   SetApproversDto,
 } from './dto/strategic-direction.dto';
@@ -86,15 +88,19 @@ export class StrategicDirectionController {
   @Roles(...DIRECTION_EDITORS)
   returnForChanges(
     @CurrentUser() user: AccessTokenPayload,
-    @Body() dto: ReasonDto,
+    @Body() dto: ReturnDto,
   ) {
-    return this.service.returnForChanges(user, dto.reason);
+    return this.service.returnForChanges(
+      user,
+      dto.reason,
+      dto.expectedUpdatedAt,
+    );
   }
 
   @Post('approve')
   @Roles(...DIRECTION_EDITORS)
-  approve(@CurrentUser() user: AccessTokenPayload) {
-    return this.service.approve(user);
+  approve(@CurrentUser() user: AccessTokenPayload, @Body() dto: ReviewDto) {
+    return this.service.approve(user, dto.expectedUpdatedAt);
   }
 
   @Post('revise')

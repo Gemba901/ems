@@ -31,6 +31,12 @@ type DirectionContent = Omit<
   'version' | 'approvedAt' | 'approvedById'
 >;
 
+// 409 messages for a write made on a copy that someone else has since changed.
+const CHANGED_MESSAGE =
+  'Someone else saved changes since you opened this page. Copy your text, reload the page, then make your changes again.';
+const REVIEW_CHANGED_MESSAGE =
+  'This submission changed since you opened it. Reload the page and review the latest version.';
+
 // Plain text columns on LexStrategicDirection that the draft form edits.
 const TEXT_FIELDS = [
   'company',
@@ -231,19 +237,72 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     }
   }
 
+  /**
+   * Writes the row only if it still has the updatedAt the caller read. The check
+   * is part of the UPDATE, so two concurrent writers cannot both pass it.
+   */
+  private async updateIfUnchanged(
+    tx: Prisma.TransactionClient,
+    id: string,
+    expectedUpdatedAt: Date,
+    data: Prisma.LexStrategicDirectionUncheckedUpdateManyInput,
+    message = CHANGED_MESSAGE,
+  ) {
+    const { count } = await tx.lexStrategicDirection.updateMany({
+      where: { id, updatedAt: expectedUpdatedAt },
+      data,
+    });
+    if (count === 0) throw new ConflictException(message);
+    return tx.lexStrategicDirection.findUniqueOrThrow({ where: { id } });
+  }
+
+  /** Two first saves at once: organizationId is unique, so the second gets a 409. */
+  private async createFirstDraft(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    data: Omit<
+      Prisma.LexStrategicDirectionUncheckedCreateInput,
+      'organizationId'
+    >,
+  ) {
+    try {
+      return await tx.lexStrategicDirection.create({
+        data: { organizationId, ...data },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        throw new ConflictException(CHANGED_MESSAGE);
+      throw error;
+    }
+  }
+
+  /** A reviewer's approve or return must name the submission they read. */
+  private requireReviewed(direction: Direction, expectedUpdatedAt: string) {
+    if (new Date(expectedUpdatedAt).getTime() !== direction.updatedAt.getTime())
+      throw new ConflictException(REVIEW_CHANGED_MESSAGE);
+    return direction.updatedAt;
+  }
+
   // Moves the direction to a new status and records the event in one transaction.
   private transition(
     direction: Direction,
     actor: Actor,
     action: 'WITHDRAWN' | 'RETURNED' | 'REVISION_STARTED',
-    data: Prisma.LexStrategicDirectionUncheckedUpdateInput,
+    data: Prisma.LexStrategicDirectionUncheckedUpdateManyInput,
     reason: string | null = null,
+    message = CHANGED_MESSAGE,
   ) {
     return this.prisma.$transaction(async (tx) => {
-      const saved = await tx.lexStrategicDirection.update({
-        where: { id: direction.id },
+      const saved = await this.updateIfUnchanged(
+        tx,
+        direction.id,
+        direction.updatedAt,
         data,
-      });
+        message,
+      );
       await tx.lexStrategicDirectionEvent.create({
         data: {
           directionId: direction.id,
@@ -493,14 +552,14 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     }
 
     // Refuse a save made on an older copy, so one editor can't overwrite another.
-    if (
-      draft &&
-      dto.expectedUpdatedAt !== undefined &&
-      new Date(dto.expectedUpdatedAt).getTime() !== draft.updatedAt.getTime()
-    ) {
-      throw new ConflictException(
-        'Someone else saved changes since you opened this page. Copy your text, reload the page, then make your changes again.',
-      );
+    // The write below repeats this check atomically; this one only fails fast.
+    const expectedUpdatedAt = draft
+      ? dto.expectedUpdatedAt !== undefined
+        ? new Date(dto.expectedUpdatedAt)
+        : draft.updatedAt
+      : null;
+    if (draft && expectedUpdatedAt!.getTime() !== draft.updatedAt.getTime()) {
+      throw new ConflictException(CHANGED_MESSAGE);
     }
 
     // step 3: keep only the fields that actually changed.
@@ -576,11 +635,10 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     data.sectionMeta = sectionMeta;
 
     return this.prisma.$transaction(async (tx) => {
-      const saved = await tx.lexStrategicDirection.upsert({
-        where: { organizationId: user.organizationId },
-        create: { organizationId: user.organizationId, ...data },
-        update: data,
-      });
+      const saved = draft
+        ? // Every workflow write bumps updatedAt, so a submit racing this save also fails it.
+          await this.updateIfUnchanged(tx, draft.id, expectedUpdatedAt!, data)
+        : await this.createFirstDraft(tx, user.organizationId, data);
 
       await tx.lexStrategicDirectionEvent.create({
         data: {
@@ -625,15 +683,18 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const saved = await tx.lexStrategicDirection.update({
-        where: { id: draft.id },
-        data: {
+      // Submits exactly the text checked above, not a save that landed since.
+      const saved = await this.updateIfUnchanged(
+        tx,
+        draft.id,
+        draft.updatedAt,
+        {
           status: 'IN_REVIEW',
           submittedAt: new Date(),
           submittedById: actor?.id ?? null,
           returnReason: null,
         },
-      });
+      );
 
       await tx.lexStrategicDirectionEvent.create({
         data: {
@@ -668,7 +729,11 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
   }
 
   /** An approver sends the submission back with what to correct. */
-  async returnForChanges(user: AccessTokenPayload, reason: string) {
+  async returnForChanges(
+    user: AccessTokenPayload,
+    reason: string,
+    expectedUpdatedAt: string,
+  ) {
     const text = this.requireReason(reason);
     const actor = await this.findActor(user);
     const direction = await this.findDirection(user.organizationId);
@@ -678,6 +743,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
       );
     }
     await this.requireApprover(user.organizationId, actor);
+    this.requireReviewed(direction, expectedUpdatedAt);
 
     return this.transition(
       direction,
@@ -690,14 +756,16 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
         submittedById: null,
       },
       text,
+      REVIEW_CHANGED_MESSAGE,
     );
   }
 
   /**
    * Publishes a submission as the next version. Only a chosen approver may do it,
-   * and not on their own submission.
+   * and not on their own submission. `expectedUpdatedAt` is the submission the
+   * reviewer read; if it was withdrawn and resubmitted since, approval is refused.
    */
-  async approve(user: AccessTokenPayload) {
+  async approve(user: AccessTokenPayload, expectedUpdatedAt: string) {
     const actor = await this.findActor(user);
     const direction = await this.findDirection(user.organizationId);
     if (direction.status === 'APPROVED') {
@@ -712,6 +780,7 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
         'You sent this for review, so another approver must approve it.',
       );
     }
+    const reviewedAt = this.requireReviewed(direction, expectedUpdatedAt);
 
     const problems = this.missingItems(direction);
     if (problems.length > 0) {
@@ -726,7 +795,24 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
     const version = (direction.currentVersion ?? 0) + 1;
 
     return this.prisma.$transaction(async (tx) => {
-      // @@unique([directionId, version]) rejects a second concurrent approval.
+      // Lock in the reviewed row first: if it changed since it was read (a
+      // withdraw and resubmit, or another approval), nothing is published.
+      const saved = await this.updateIfUnchanged(
+        tx,
+        direction.id,
+        reviewedAt,
+        {
+          status: 'APPROVED',
+          currentVersion: version,
+          returnReason: null,
+          revisionReason: null,
+          submittedAt: null,
+          submittedById: null,
+        },
+        REVIEW_CHANGED_MESSAGE,
+      );
+
+      // @@unique([directionId, version]) is a second guard against a double approval.
       await tx.lexStrategicDirectionVersion.create({
         data: {
           directionId: direction.id,
@@ -735,18 +821,6 @@ export class StrategicDirectionService implements StrategicDirectionProvider {
           snapshot: content as unknown as Prisma.InputJsonObject,
           sectionMeta: direction.sectionMeta as Prisma.InputJsonValue,
           approvedById: actor?.id ?? null,
-        },
-      });
-
-      const saved = await tx.lexStrategicDirection.update({
-        where: { id: direction.id },
-        data: {
-          status: 'APPROVED',
-          currentVersion: version,
-          returnReason: null,
-          revisionReason: null,
-          submittedAt: null,
-          submittedById: null,
         },
       });
 

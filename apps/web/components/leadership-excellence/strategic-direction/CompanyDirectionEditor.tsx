@@ -148,6 +148,9 @@ export function CompanyDirectionEditor({
   }
 
   const save = () => actions.save.mutateAsync(toPayload(form, draft.updatedAt));
+  // The submission on screen. The page remounts this editor when updatedAt changes,
+  // so approve/return always name the version the reviewer is looking at.
+  const reviewedAt = draft.updatedAt ?? "";
   // Submitting uses the saved draft, so save unsaved typing first.
   const saveIfDirty = async () => {
     if (dirty) await save();
@@ -488,7 +491,7 @@ export function CompanyDirectionEditor({
         confirmLabel="Approve & lock"
         pending={busy}
         onClose={() => setDialog(null)}
-        onConfirm={() => run(() => actions.approve.mutateAsync(), "Company direction approved and locked.")}
+        onConfirm={() => run(() => actions.approve.mutateAsync(reviewedAt), "Company direction approved and locked.")}
       />
       <ConfirmDialog
         open={dialog === "return"}
@@ -499,7 +502,12 @@ export function CompanyDirectionEditor({
         reasonPlaceholder="For example: Make the vision shorter and more specific."
         pending={busy}
         onClose={() => setDialog(null)}
-        onConfirm={(reason) => run(() => actions.returnForChanges.mutateAsync(reason), "Returned for changes.")}
+        onConfirm={(reason) =>
+          run(
+            () => actions.returnForChanges.mutateAsync({ reason, expectedUpdatedAt: reviewedAt }),
+            "Returned for changes.",
+          )
+        }
       />
       <ConfirmDialog
         open={dialog === "revise"}

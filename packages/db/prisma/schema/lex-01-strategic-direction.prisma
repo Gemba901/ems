@@ -21,6 +21,8 @@ enum LexStrategicDirectionAction {
     missionWhy         String?
 
     values             Json  @default("[]")
+    // Percent per pillar code (01.02); later areas weight scores with it.
+    pillarWeights      Json  @default("{\"LEX\":10,\"PEX\":20,\"OPX\":30,\"CMX\":20,\"SGEX\":10,\"FPEX\":10}")
     sectionMeta        Json  @default("{}")
 
     submittedAt        DateTime? 
@@ -79,4 +81,20 @@ enum LexStrategicDirectionAction {
 
     @@index([directionId, createdAt])
     @@index([organizationId])
+ }
+
+ // The people the company chooses to approve its direction. Kept per organisation
+ // so they can be chosen before the first draft exists.
+ model LexStrategicDirectionApprover {
+    id                String   @id @default(uuid())
+    organizationId    String
+    employeeId        String
+    addedById         String?
+    createdAt         DateTime @default(now())
+
+    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    employee     Employee     @relation("LexDirectionApprover", fields: [employeeId], references: [id], onDelete: Cascade)
+    addedBy      Employee?    @relation("LexDirectionApproverAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+    @@unique([organizationId, employeeId])
  }

@@ -1,1 +1,57 @@
 // Leadership Excellence — 02-organisation-framework. Owner: see docs/leadership-excellence/README.md
+
+// BEGIN LEX 02.03 rules-calendar
+model LexPerformanceCalendar {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name               String
+  status             String   @default("DRAFT")
+  revision           Int      @default(0)
+  currentVersion     Int      @default(0)
+  draft              Json
+  revisionReason     String?
+  returnReason       String?
+  submittedByUserId  String?
+  createdByUserId    String
+  updatedByUserId    String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  versions           LexPerformanceCalendarVersion[]
+  events             LexPerformanceCalendarEvent[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, updatedAt])
+}
+
+model LexPerformanceCalendarVersion {
+  id                 String   @id @default(uuid())
+  calendarId         String
+  organizationId     String
+  version            Int
+  snapshot           Json
+  approvedByUserId   String
+  approvedAt         DateTime @default(now())
+  calendar           LexPerformanceCalendar @relation(fields: [calendarId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([calendarId, version])
+  @@index([organizationId])
+}
+
+model LexPerformanceCalendarEvent {
+  id                 String   @id @default(uuid())
+  calendarId         String
+  organizationId     String
+  action             String
+  actorUserId        String
+  revision           Int
+  reason             String?
+  // Draft changes stay in the editor-only audit trail.
+  snapshot           Json
+  createdAt          DateTime @default(now())
+  calendar           LexPerformanceCalendar @relation(fields: [calendarId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([calendarId, createdAt])
+  @@index([organizationId])
+}
+// END LEX 02.03 rules-calendar

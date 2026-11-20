@@ -196,6 +196,7 @@ model Organization {
   lexExecutionWorkspace       LexExecutionWorkspace?
 
 
+  lexPerformanceCalendars LexPerformanceCalendar[] // LEX 02.03
 }
 
 //specific user

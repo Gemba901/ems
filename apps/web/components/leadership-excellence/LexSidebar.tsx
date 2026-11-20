@@ -1,31 +1,49 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
-  Activity,
-  AlertTriangle,
   BarChart3,
   BookOpen,
-  CalendarCog,
-  CheckCircle2,
+  Building2,
+  CalendarDays,
+  ChartNoAxesCombined,
   ClipboardCheck,
+  ClipboardList,
   Compass,
-  Eye,
-  FileBarChart,
-  Flag,
-  HandHelping,
-  Landmark,
-  LayoutDashboard,
-  LineChart,
-  ListTodo,
-  MessagesSquare,
+  FileCheck2,
+  HelpCircle,
+  ListChecks,
+  MessageSquare,
   Network,
-  PenLine,
+  ShieldCheck,
   Target,
   Users,
-  UserSquare2,
   Wrench,
+  type LucideIcon,
 } from "lucide-react";
-import { ModuleSidebar, type SidebarNavGroup } from "@/components/shell/ModuleSidebar";
+import {
+  ModuleSidebar,
+  type SidebarNavGroup,
+} from "@/components/shell/ModuleSidebar";
+import { getLexArea, LEX_AREAS } from "./lex-navigation";
+
+const ICONS: Record<string, LucideIcon[]> = {
+  "01": [Compass, Building2, FileCheck2],
+  "02": [Network, Users, CalendarDays],
+  "03": [ClipboardList, ClipboardCheck, Target, Building2, Users, BarChart3],
+  "04": [ClipboardList, ListChecks, MessageSquare],
+  "05": [ShieldCheck, ChartNoAxesCombined, ClipboardList],
+  "06": [ClipboardCheck, MessageSquare, Wrench],
+  "07": [BookOpen, BarChart3, ChartNoAxesCombined],
+};
+const PLANNING_SHORT_LABELS = [
+  "Findings",
+  "Review",
+  "Objectives",
+  "Departments",
+  "Individuals",
+  "Results",
+];
 
 interface LexSidebarProps {
   open?: boolean;
@@ -34,83 +52,49 @@ interface LexSidebarProps {
   onToggle?: () => void;
 }
 
-const BASE = "/leadership-excellence";
-
-// One group per area, one item per sub-component, in prototype order (01 → 07).
-// Every route already exists, so area owners never need to edit this file.
-const GROUPS: SidebarNavGroup[] = [
-  {
-    name: "Overview",
-    items: [{ label: "Overview", href: BASE, icon: LayoutDashboard, exact: true }],
-  },
-  {
-    name: "01 Strategic Direction",
-    items: [
-      { label: "Company Direction", shortLabel: "Direction", href: `${BASE}/strategic-direction/company-direction`, icon: Compass },
-      { label: "Excellence Pillars", shortLabel: "Pillars", href: `${BASE}/strategic-direction/pillars`, icon: Landmark },
-      { label: "Preview & Finalise", shortLabel: "Preview", href: `${BASE}/strategic-direction/preview`, icon: Eye },
-    ],
-  },
-  {
-    name: "02 Organisation Framework",
-    items: [
-      { label: "EMS & Organogram", shortLabel: "Organogram", href: `${BASE}/organisation-framework/ems-organogram`, icon: Network },
-      { label: "Positions & Reporting", shortLabel: "Positions", href: `${BASE}/organisation-framework/positions-reporting`, icon: UserSquare2 },
-      { label: "Rules & Calendar", shortLabel: "Rules", href: `${BASE}/organisation-framework/rules-calendar`, icon: CalendarCog },
-    ],
-  },
-  {
-    name: "03 Performance Planning",
-    items: [
-      { label: "Objectives & Company Goals", shortLabel: "Objectives", href: `${BASE}/performance-planning/objectives`, icon: Target },
-      { label: "Department Plans", shortLabel: "Dept plans", href: `${BASE}/performance-planning/department-plans`, icon: Flag },
-      { label: "Team & Individual Plans", shortLabel: "Team plans", href: `${BASE}/performance-planning/team-individual-plans`, icon: Users },
-      { label: "Check & Approve", shortLabel: "Approve", href: `${BASE}/performance-planning/check-approve`, icon: ClipboardCheck },
-    ],
-  },
-  {
-    name: "04 Execution",
-    items: [
-      { label: "Results Entry", shortLabel: "Results", href: `${BASE}/execution/results-entry`, icon: PenLine },
-      { label: "Delivery Actions", shortLabel: "Actions", href: `${BASE}/execution/delivery-actions`, icon: ListTodo },
-      { label: "Support Requests", shortLabel: "Support", href: `${BASE}/execution/support-requests`, icon: HandHelping },
-    ],
-  },
-  {
-    name: "05 Monitoring & Control",
-    items: [
-      { label: "Verify Results", shortLabel: "Verify", href: `${BASE}/monitoring-control/verify-results`, icon: CheckCircle2 },
-      { label: "Performance & Gaps", shortLabel: "Gaps", href: `${BASE}/monitoring-control/performance-gaps`, icon: Activity },
-      { label: "Alerts & Follow-up", shortLabel: "Alerts", href: `${BASE}/monitoring-control/alerts`, icon: AlertTriangle },
-    ],
-  },
-  {
-    name: "06 Reviews & Development",
-    items: [
-      { label: "Reviews", href: `${BASE}/reviews-development/reviews`, icon: LineChart },
-      { label: "Feedback & Coaching", shortLabel: "Coaching", href: `${BASE}/reviews-development/feedback-coaching`, icon: MessagesSquare },
-      { label: "Improvement Actions", shortLabel: "Improve", href: `${BASE}/reviews-development/improvement-actions`, icon: Wrench },
-    ],
-  },
-  {
-    name: "07 Performance Intelligence",
-    items: [
-      { label: "KRA & KPI Libraries", shortLabel: "Libraries", href: `${BASE}/performance-intelligence/libraries`, icon: BookOpen },
-      { label: "Dashboards", href: `${BASE}/performance-intelligence/dashboards`, icon: BarChart3 },
-      { label: "Reports", href: `${BASE}/performance-intelligence/reports`, icon: FileBarChart },
-    ],
-  },
-];
-
+/** The same sidebar, collapse rail and mobile drawer used by other modules. */
 export function LexSidebar(props: LexSidebarProps) {
+  const pathname = usePathname();
+  const area = getLexArea(pathname) || LEX_AREAS[2];
+  const groups: SidebarNavGroup[] = [
+    {
+      name: area.label,
+      items: area.items.map((item, index) => ({
+        label: item.label,
+        href: item.href,
+        icon: ICONS[area.id]?.[index] || ClipboardList,
+        shortLabel:
+          area.id === "03" ? PLANNING_SHORT_LABELS[index] : item.label,
+      })),
+    },
+  ];
+
   return (
     <ModuleSidebar
       {...props}
       id="lex-sidebar"
       title="Leadership Excellence"
-      homeHref={BASE}
+      subtitle={`Area ${area.id}`}
+      homeHref={area.href}
       ariaLabel="Leadership Excellence navigation"
-      groups={GROUPS}
+      groups={groups}
+      footer={
+        area.id === "03"
+          ? (collapsed) => (
+              <button
+                type="button"
+                onClick={() => {
+                  props.onClose?.();
+                  window.dispatchEvent(new Event("planning-programme-guide"));
+                }}
+                className={`flex items-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${collapsed ? "w-[72px] flex-col gap-1 px-0.5 py-2 text-[10.5px]" : "w-full gap-3 px-3 py-2 text-sm"}`}
+              >
+                <HelpCircle size={18} strokeWidth={1.6} aria-hidden="true" />
+                Guide
+              </button>
+            )
+          : undefined
+      }
     />
   );
 }

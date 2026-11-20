@@ -192,6 +192,8 @@ model Organization {
   steelMaterialMasters        SteelMaterialMaster[]
   steelFinishedGoodsStocks    SteelFinishedGoodsStock[]
   lexStrategicDirection       LexStrategicDirection?
+  lexPlanningWorkspace        LexPlanningWorkspace?
+  lexExecutionWorkspace       LexExecutionWorkspace?
 
 
   lexPerformanceCalendars LexPerformanceCalendar[] // LEX 02.03

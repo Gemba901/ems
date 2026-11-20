@@ -322,9 +322,7 @@ export default function DashboardPage() {
     .map((key) => MODULE_REGISTRY[key])
     .filter(Boolean);
 
-  const upcomingToShow = UPCOMING_MODULES.filter(
-    (m) => !activeModules.includes((m as any).key)
-  );
+  const upcomingToShow = UPCOMING_MODULES;
 
   const canSeeExploreMore = ["SUPER_ADMIN", "ADMIN", "MANAGEMENT"].includes(user?.roleLevel ?? "");
 

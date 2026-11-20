@@ -12,6 +12,10 @@ import type { AccessTokenPayload } from '../../auth/access-token-payload';
 import { PlanningReferencesService } from './planning-references.service';
 import { emptyPlanningState } from './planning.seed';
 import {
+  actionHasExecutionRecords,
+  executionActionProgress,
+} from './planning-execution';
+import {
   reserveDepartmentGoalNumbers,
   sameDepartmentGoalParent,
   validDepartmentGoalNumber,
@@ -26,6 +30,7 @@ import {
   reviewProgrammeResult,
 } from './planning.programme';
 import {
+  approvedPlanningItems,
   approvedParentGoals,
   assertEdit,
   actionLinkIssues,
@@ -39,6 +44,7 @@ import {
   itemList,
   MANAGEMENT,
   permissions,
+  pillarAllocationSnapshot,
   parentReferenceIssues,
   PILLAR_CODES,
   published,
@@ -388,13 +394,17 @@ export class PerformancePlanningService {
     };
   }
   async getWorkspace(user: AccessTokenPayload) {
-    const [row, context] = await Promise.all([
+    const [row, context, execution] = await Promise.all([
       this.db.lexPlanningWorkspace.findUnique({
         where: { organizationId: user.organizationId },
       }),
       this.refs.get(user),
+      this.db.lexExecutionWorkspace.findUnique({
+        where: { organizationId: user.organizationId },
+        select: { state: true },
+      }),
     ]);
-    return this.view(
+    const view = this.view(
       this.useLibrary(
         row ? this.readState(row.state) : emptyPlanningState(),
         context.references,
@@ -402,6 +412,46 @@ export class PerformancePlanningService {
       row?.revision || 0,
       context,
     );
+    const visibleActions = new Set(
+      view.programmeActions?.map(
+        (entry) => `${entry.documentId}/action/${entry.action.id}`,
+      ),
+    );
+    const updates = executionActionProgress(execution?.state).filter((entry) =>
+      visibleActions.has(`${entry.documentId}/action/${entry.actionId}`),
+    );
+    const updated = new Set(
+      updates.map((entry) => `${entry.documentId}/${entry.actionId}`),
+    );
+    view.programmeActionProgress = [
+      ...updates,
+      ...(view.programmeActionProgress || []).filter(
+        (entry) => !updated.has(`${entry.documentId}/${entry.actionId}`),
+      ),
+    ];
+    return view;
+  }
+  /**
+   * Internal handover to Area 04, never exposed as an HTTP response. Execution
+   * applies its own assignment-level permissions: a named provider or action
+   * owner can work across departments without access to their SWOT or drafts.
+   * Keep immutable approval snapshots so targets and formulas remain pinned.
+   */
+  async getExecutionSource(user: AccessTokenPayload) {
+    const [row, context] = await Promise.all([
+      this.db.lexPlanningWorkspace.findUnique({
+        where: { organizationId: user.organizationId },
+      }),
+      this.refs.get(user),
+    ]);
+    return {
+      revision: row?.revision || 0,
+      state: this.useLibrary(
+        row ? this.readState(row.state) : emptyPlanningState(),
+        context.references,
+      ),
+      ...context,
+    };
   }
   private log(
     document: PlanningDocument,
@@ -1190,6 +1240,12 @@ export class PerformancePlanningService {
     );
     const at = new Date().toISOString();
     const snapshot: ApprovedVersion = {
+      ...(document.kind === 'COMPANY'
+        ? pillarAllocationSnapshot(document, context.references)
+        : {}),
+      ...(context.references.calendar
+        ? { calendar: structuredClone(context.references.calendar) }
+        : {}),
       approvedItem: { kind, itemId: id },
       ...(document.kind === 'COMPANY'
         ? {
@@ -1272,9 +1328,7 @@ export class PerformancePlanningService {
     const snapshot = [...document.versions]
       .reverse()
       .find((v) =>
-        (kind === 'objective' ? v.data.objectives : v.data.goals).some(
-          (i) => i.id === id,
-        ),
+        approvedPlanningItems(document, v).some((row) => row.goal.id === id),
       );
     if (!snapshot || !programmeItemLocked(document, kind, id))
       throw new ConflictException('Select an approved and locked commitment.');
@@ -1762,7 +1816,7 @@ export class PerformancePlanningService {
       today = organisationToday(context.references.timeZone);
     return this.db.$transaction(
       async (tx) => {
-        const row = await tx.lexPlanningWorkspace.upsert({
+        await tx.lexPlanningWorkspace.upsert({
           where: { organizationId: user.organizationId },
           create: {
             organizationId: user.organizationId,
@@ -1770,6 +1824,17 @@ export class PerformancePlanningService {
           },
           update: {},
         });
+        // Both areas lock planning before execution so an action cannot be
+        // removed while its first execution record is being saved.
+        await tx.$queryRaw`SELECT "organizationId" FROM "LexPlanningWorkspace"
+          WHERE "organizationId" = ${user.organizationId} FOR UPDATE`;
+        // An upsert with no update may return before a concurrent writer commits.
+        // Read again after acquiring the lock before checking the revision.
+        const row = await tx.lexPlanningWorkspace.findUnique({
+          where: { organizationId: user.organizationId },
+        });
+        if (!row)
+          throw new ConflictException('The planning workspace is unavailable.');
         if (row.revision !== command.expectedRevision)
           throw new ConflictException(
             'Someone updated this plan. Refresh the register before saving; your form entries have not been discarded.',
@@ -1889,6 +1954,44 @@ export class PerformancePlanningService {
           const access = permissions(document, actor);
           if (!access.canRead)
             throw new ForbiddenException('This plan is restricted.');
+          if (
+            ['SAVE_ITEM', 'DELETE_ITEM'].includes(command.action) &&
+            payload.kind === 'action' &&
+            typeof payload.id === 'string'
+          ) {
+            const execution = await tx.lexExecutionWorkspace.findUnique({
+              where: { organizationId: user.organizationId },
+              select: { state: true },
+            });
+            if (
+              actionHasExecutionRecords(
+                execution?.state,
+                `${document.id}/action/${payload.id}`,
+              )
+            )
+              throw new ConflictException(
+                'This action has execution updates or support requests. Keep its history and add a follow-up action instead.',
+              );
+          }
+          if (command.action === 'UPDATE_ACTION_PROGRESS') {
+            const action = document.data.actions.find(
+              (entry) => entry.id === payload.actionId,
+            );
+            const execution = await tx.lexExecutionWorkspace.findUnique({
+              where: { organizationId: user.organizationId },
+              select: { state: true },
+            });
+            if (
+              action &&
+              actionHasExecutionRecords(
+                execution?.state,
+                `${document.id}/action/${action.id}`,
+              )
+            )
+              throw new ConflictException(
+                'Update this goal action in Performance Execution > My actions, where its progress and completion check are recorded together.',
+              );
+          }
           focusId = document.id;
           if (command.action === 'SAVE_SETTINGS')
             this.settings(document, payload, context);
@@ -2112,6 +2215,29 @@ export class PerformancePlanningService {
               document.status = 'IN_REVIEW';
               this.log(document, actor, 'Submitted for one review');
             } else {
+              // A whole-plan approval cannot replace a commitment's agreed
+              // revision date. Materialise separately dated drafts first, then
+              // retain their canonical approval authority in the collection.
+              for (const approval of [...(document.itemApprovals || [])]) {
+                if (
+                  approval.status === 'DRAFT' &&
+                  approval.effectiveDate &&
+                  approval.effectiveDate !==
+                    (document.effectiveDate || today) &&
+                  ['COMPANY', 'DEPARTMENT'].includes(document.kind)
+                )
+                  this.approveProgrammeItem(
+                    document,
+                    state,
+                    {
+                      kind: approval.kind,
+                      id: approval.itemId,
+                      evidenceChecked: true,
+                    },
+                    context,
+                    today,
+                  );
+              }
               if (document.kind === 'SWOT')
                 for (const finding of document.data.findings) {
                   // Whole-assessment approval remains a supported review route.
@@ -2129,6 +2255,12 @@ export class PerformancePlanningService {
                     finding.reviewStatus === 'REVIEWED' ? actor.userId : '';
                 }
               const version: ApprovedVersion = {
+                ...(document.kind === 'COMPANY'
+                  ? pillarAllocationSnapshot(document, references)
+                  : {}),
+                ...(references.calendar
+                  ? { calendar: structuredClone(references.calendar) }
+                  : {}),
                 ...(document.kind === 'COMPANY'
                   ? {
                       companyPlanningModel: 'MEASURABLE_OBJECTIVES' as const,
@@ -2166,6 +2298,23 @@ export class PerformancePlanningService {
                 ),
                 reason: document.revisionReason,
               };
+              const commitments =
+                document.kind === 'COMPANY'
+                  ? document.data.objectives
+                  : document.data.goals;
+              if (
+                ['COMPANY', 'DEPARTMENT', 'INDIVIDUAL'].includes(document.kind)
+              )
+                version.itemVersions = Object.fromEntries(
+                  commitments.map((item) => {
+                    const previous = document.itemApprovals?.find(
+                      (approval) =>
+                        approval.itemId === item.id &&
+                        approval.status === 'APPROVED',
+                    );
+                    return [item.id, previous?.version || version.version];
+                  }),
+                );
               document.versions.push(version);
               if (
                 ['COMPANY', 'DEPARTMENT', 'INDIVIDUAL'].includes(document.kind)
@@ -2174,18 +2323,27 @@ export class PerformancePlanningService {
                   document.kind === 'COMPANY'
                     ? document.data.objectives
                     : document.data.goals
-                ).map((item) => ({
-                  kind:
-                    document.kind === 'COMPANY'
-                      ? ('objective' as const)
-                      : ('goal' as const),
-                  itemId: item.id,
-                  status: 'APPROVED' as const,
-                  version: version.version,
-                  approvedAt: version.approvedAt,
-                  approvedBy: version.approvedBy,
-                  effectiveDate: version.effectiveDate,
-                }));
+                ).map((item) => {
+                  const previous = document.itemApprovals?.find(
+                    (approval) =>
+                      approval.itemId === item.id &&
+                      approval.status === 'APPROVED',
+                  );
+                  return previous
+                    ? structuredClone(previous)
+                    : {
+                        kind:
+                          document.kind === 'COMPANY'
+                            ? ('objective' as const)
+                            : ('goal' as const),
+                        itemId: item.id,
+                        status: 'APPROVED' as const,
+                        version: version.version,
+                        approvedAt: version.approvedAt,
+                        approvedBy: version.approvedBy,
+                        effectiveDate: version.effectiveDate,
+                      };
+                });
               document.status = 'APPROVED';
               this.log(
                 document,

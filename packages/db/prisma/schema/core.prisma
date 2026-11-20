@@ -193,6 +193,7 @@ model Organization {
   steelFinishedGoodsStocks    SteelFinishedGoodsStock[]
   lexStrategicDirection       LexStrategicDirection?
   lexPlanningWorkspace        LexPlanningWorkspace?
+  lexExecutionWorkspace       LexExecutionWorkspace?
 
 
 }

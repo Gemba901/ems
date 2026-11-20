@@ -46,6 +46,15 @@ function mainAlignment(finding: Finding) {
   return businessAlignmentLabels(finding).join(", ") || "Not selected";
 }
 
+export type FindingReviewDraft = {
+  response: Finding["response"];
+  note: string;
+  owner: string;
+  date: string;
+  checked: boolean;
+  requestEvidence?: boolean;
+};
+
 export function ReviewFinding({
   document,
   finding,
@@ -53,23 +62,27 @@ export function ReviewFinding({
   onEdit,
   onNextAction,
   onSettings,
+  initialReview,
 }: {
   document: Plan;
   finding: Finding;
   onClose: () => void;
-  onEdit: () => void;
+  onEdit: (draft: FindingReviewDraft) => void;
   onNextAction?: () => void;
-  onSettings?: () => void;
+  onSettings?: (draft: FindingReviewDraft) => void;
+  initialReview?: FindingReviewDraft;
 }) {
   const { data, run, busy } = usePlanning();
-  const [response, setResponse] = useState(finding.response);
-  const [note, setNote] = useState(finding.decisionNote);
-  const [owner, setOwner] = useState(finding.followupOwnerId);
-  const [date, setDate] = useState(finding.reviewDate);
+  const [response, setResponse] = useState(initialReview?.response ?? finding.response);
+  const [note, setNote] = useState(initialReview?.note ?? finding.decisionNote);
+  const [owner, setOwner] = useState(initialReview?.owner ?? finding.followupOwnerId);
+  const [date, setDate] = useState(initialReview?.date ?? finding.reviewDate);
   const [error, setError] = useState("");
   const [reason, setReason] = useState("");
   const [reopen, setReopen] = useState(false);
-  const [checked, setChecked] = useState(false);
+  const [checked, setChecked] = useState(initialReview?.checked ?? false);
+  const [requestEvidence, setRequestEvidence] = useState(initialReview?.requestEvidence ?? finding.reviewStatus === "NEEDS_EVIDENCE");
+  const reviewDraft = () => ({ response, note, owner, date, checked, requestEvidence });
   const [revision] = useState(data.revision);
   const reviewed = findingReviewStatus(finding, document) === "REVIEWED";
   const decisionEditable =
@@ -101,6 +114,11 @@ export function ReviewFinding({
   async function decide(
     status: "REVIEWED" | "NEEDS_EVIDENCE" | "UNDER_REVIEW",
   ) {
+    if (status === "NEEDS_EVIDENCE" && (!note.trim() || !owner)) {
+      setRequestEvidence(true);
+      setError("Describe the missing evidence and select the person who should add it before requesting evidence.");
+      return;
+    }
     if (status === "REVIEWED" && !checked) {
       setError(
         "Confirm that you checked the evidence, period, scope, business impact and proposed score.",
@@ -153,9 +171,9 @@ export function ReviewFinding({
                 size="sm"
                 className="h-auto min-h-0 p-0"
                 disabled={busy}
-                onClick={onSettings}
+                onClick={() => onSettings(reviewDraft())}
               >
-                Change reviewer / access
+                Assessment settings
               </Button>
             )}
           </div>
@@ -207,9 +225,14 @@ export function ReviewFinding({
                       type="button"
                       variant="outline"
                       disabled={busy}
-                      onClick={() => void decide("NEEDS_EVIDENCE")}
+                      onClick={() => {
+                        if (!requestEvidence) {
+                          setRequestEvidence(true);
+                          if (!owner) setOwner(document.data.ownerId);
+                        } else void decide("NEEDS_EVIDENCE");
+                      }}
                     >
-                      Needs evidence
+                      {requestEvidence ? "Save evidence request" : "Needs evidence"}
                     </Button>
                   </>
                 )}
@@ -281,7 +304,7 @@ export function ReviewFinding({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={onEdit}
+                onClick={() => onEdit(reviewDraft())}
                 disabled={busy}
               >
                 Edit finding
@@ -397,7 +420,10 @@ export function ReviewFinding({
                     ))}
                   </select>
                 </Field>
-                <Field label="Why is this the right response?">
+                {requestEvidence && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                  Explain what is missing and who should respond. A person with access to this assessment can open the finding from SWOT findings or Review &amp; decide, choose Edit finding, and add supporting data and its reference, source and period. Use Assessment settings to grant access if needed. After saving, the finding returns for review. This request is recorded here; no notification is sent.
+                </div>}
+                <Field label={requestEvidence ? "What evidence is missing and where can it be found?" : "Why is this the right response?"} hint={requestEvidence ? "Required for an evidence request. Specify the data, period, scope or source the reviewer needs." : undefined}>
                   <textarea
                     className={control}
                     rows={3}
@@ -405,7 +431,7 @@ export function ReviewFinding({
                     onChange={(e) => setNote(e.target.value)}
                   />
                 </Field>
-                <Field label="Response owner">
+                <Field label={requestEvidence ? "Who should add the evidence?" : "Response owner"}>
                   <select
                     className={control}
                     value={owner}
@@ -451,7 +477,7 @@ export function ReviewFinding({
                     The assessment’s designated approver marks findings
                     reviewed.{" "}
                     {onSettings && document.permissions.canConfigure
-                      ? "Use Change reviewer / access below to assign an authorised reviewer."
+                      ? "Use Assessment settings below to assign an authorised reviewer."
                       : "Ask a planning administrator if no reviewer is assigned."}
                   </p>
                 )}

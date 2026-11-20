@@ -95,10 +95,15 @@ export function PlanningResultsHandoff() {
         className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-slate-600"
         role="status"
       >
-        Planning handover is ready below. Result entry, verification and
-        performance reviews will become available when the shared Execution,
-        Monitoring and Review screens are connected. No achievement is inferred
-        from an approved plan or from completed contributions.
+        Open Performance Execution to record results, update assigned actions
+        and ask for support. Submitted results remain provisional until an
+        independent verifier checks them in Monitoring &amp; Control.
+        <Link
+          href={`/leadership-excellence/execution?cycle=${encodeURIComponent(cycle)}`}
+          className="mt-3 inline-flex items-center gap-2 font-semibold text-indigo-700"
+        >
+          Open Performance Execution <ArrowRight size={16} />
+        </Link>
       </p>
       {commitments.length ? (
         <div className="space-y-3">

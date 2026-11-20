@@ -1,4 +1,16 @@
-import type { Kra, KpiDefinition, PlanningCalendar } from './planning.types';
+import type {
+  Kra,
+  KpiDefinition,
+  PlanningCalendar,
+  PlanningPillarWeights,
+} from './planning.types';
+
+/** Optional read capability; its absence never makes local defaults approved. */
+export interface ApprovedPlanningPillarWeightsProvider {
+  getApprovedPillarWeights(
+    organizationId: string,
+  ): Promise<PlanningPillarWeights | null>;
+}
 
 /** Provider contracts, implemented by the owning areas; Area 03 never creates EMS masters. */
 export interface PlanningPositionReference {

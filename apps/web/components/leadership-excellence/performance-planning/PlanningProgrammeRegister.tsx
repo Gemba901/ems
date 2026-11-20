@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, Plus } from "lucide-react";
 import type {
@@ -18,6 +18,10 @@ import {
   visibleProgrammeActionRows,
 } from "@/services/leadership-excellence/performance-planning/programme-action-links";
 import { usePlanning } from "./PlanningProvider";
+import { usePlanningUrlFilter } from "./PlanningUrlState";
+import { planningToday } from "./PlanningLinks";
+import { formatDateOnly } from "@/lib/work/format";
+import { approvedProgrammeItemHistory } from "@/services/leadership-excellence/performance-planning/editor-guidance";
 import { ProgrammeActionList } from "./PlanningProgrammeActions";
 import { approvedParents } from "./PlanningParents";
 import { findingReviewStatus } from "./PlanningSources";
@@ -60,6 +64,7 @@ const panel = "min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5";
 const pillarOrder = ["LEX", "PEX", "OPX", "CMX", "SGEX", "FPEX"];
 const value = (number: number | null | undefined) =>
   number == null ? "Not set" : String(number);
+const displayDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) ? formatDateOnly(date) : "Not set";
 
 function Badge({ approved }: { approved: boolean }) {
   return (
@@ -141,8 +146,8 @@ export function PlanningProgrammeRegister({
   children?: ReactNode;
 }) {
   const { data, busy } = usePlanning();
-  const [departmentFilter, setDepartmentFilter] = useState("");
-  const [objectiveFilter, setObjectiveFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = usePlanningUrlFilter("department");
+  const [objectiveFilter, setObjectiveFilter] = usePlanningUrlFilter("objective");
   const allPlans = data.documents.filter(
     (document) => document.cycle === cycle && document.permissions.canRead,
   );
@@ -231,27 +236,21 @@ export function PlanningProgrammeRegister({
     kind: "objective" | "goal",
     id: string,
   ) =>
-    document.versions.flatMap((version) => {
-      const record =
-        kind === "objective"
-          ? version.data.objectives.find((item) => item.id === id)
-          : version.data.goals.find((item) => item.id === id);
-      return record ? [{ version, record }] : [];
-    });
+    approvedProgrammeItemHistory(document, kind, id);
   const history = (document: Plan, kind: "objective" | "goal", id: string) => {
     const versions = priorVersions(document, kind, id);
     if (!versions.length) return null;
     return (
       <details className="border-t border-slate-100 pt-3 text-xs text-slate-500">
         <summary className="cursor-pointer">
-          Approved versions ({versions.length})
+        Version history ({versions.length} approved)
         </summary>
         <div className="mt-3 space-y-3">
           {[...versions].reverse().map(({ version, record }) => (
             <div key={version.version} className="rounded-lg bg-slate-50 p-3">
               <p className="font-medium text-slate-700">
                 {record.code} · v{version.version} · Effective{" "}
-                {version.effectiveDate || version.approvedAt.slice(0, 10)}
+                {displayDate(version.effectiveDate || version.approvedAt.slice(0, 10))}
               </p>
               <p className="mt-1 whitespace-pre-wrap">{record.title}</p>
               <p className="mt-1">
@@ -266,6 +265,18 @@ export function PlanningProgrammeRegister({
         </div>
       </details>
     );
+  };
+  const targetStatus = (document: Plan, kind: "objective" | "goal", id: string) => {
+    const today = planningToday(data.references.timeZone);
+    const versions = priorVersions(document, kind, id).sort((a, b) => a.version.effectiveDate.localeCompare(b.version.effectiveDate) || a.version.version - b.version.version);
+    const current = versions.filter(({ version }) => version.effectiveDate <= today).at(-1);
+    const future = versions.filter(({ version }) => version.effectiveDate > today);
+    if (!current && !future.length) return null;
+    return <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 text-xs leading-5 text-slate-700" data-effective-target={id}>
+      {current ? <p><strong>Current target:</strong> {value(current.record.target)} {current.record.unit} · v{current.version.version} · Effective {displayDate(current.version.effectiveDate)} · Due {displayDate(current.record.endDate)}</p> : <p>No approved target is effective yet.</p>}
+      {future.map(({ version, record }) => <p key={version.version} className="mt-1"><strong>Scheduled from {displayDate(version.effectiveDate)}:</strong> {value(record.target)} {record.unit} · v{version.version} · Due {displayDate(record.endDate)}</p>)}
+      {!state(document, kind, id).approved && <p className="mt-1">Draft changes below need approval; the current commitment remains in force.</p>}
+    </div>;
   };
 
   if (section === "company") {
@@ -326,21 +337,23 @@ export function PlanningProgrammeRegister({
                   <h3 className="mt-3 break-words text-base font-semibold text-slate-900">
                     {objective.title || "Untitled objective"}
                   </h3>
-                  <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+                  {objectiveResult(objective).trim() !== objective.title.trim() && <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
                     {objectiveResult(objective) || "Result not described"}
-                  </p>
+                  </p>}
                 </div>
-                <ObjectiveWeightSummary objective={objective} />
+                <ObjectiveWeightSummary objective={objective} document={document} />
               </div>
+              {targetStatus(document, "objective", objective.id)}
               {canCreate && objective.pillar && (
                 <ObjectiveAllocationNotice
                   objectives={objectives.map(({ objective }) => objective)}
                   pillar={objective.pillar}
+                  document={document}
                 />
               )}
               <div className="flex flex-col items-stretch justify-between gap-3 border-t border-slate-200 pt-3 sm:flex-row sm:items-center">
                 <p className="min-w-0 flex-1 text-xs text-slate-500">
-                  {value(objective.baseline)} → {value(objective.target)}{" "}
+                  Latest {item.approved ? "approved" : "draft"} details: {value(objective.baseline)} → {value(objective.target)}{" "}
                   {objective.unit || ""} ·{" "}
                   {objective.endDate
                     ? "Due " + objective.endDate
@@ -689,10 +702,11 @@ export function PlanningProgrammeRegister({
                         ? `Ongoing responsibility: ${goal.ongoingReason}`
                         : "Company objective not yet selected"}
                   </p>
+                  {targetStatus(document, "goal", goal.id)}
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div>
                       <p className="text-xs text-slate-500">
-                        Baseline → target
+                        Latest {item.approved ? "approved" : "draft"} baseline → target
                       </p>
                       <p className="mt-1 text-sm font-semibold">
                         {value(goal.baseline)} → {value(goal.target)}{" "}
@@ -726,6 +740,7 @@ export function PlanningProgrammeRegister({
                       }
                     />
                   </section>
+                  {history(document, "goal", goal.id)}
                 </article>
               );
             })}

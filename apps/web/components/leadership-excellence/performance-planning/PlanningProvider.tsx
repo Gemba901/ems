@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
 import {
   PerformancePlanningService,
@@ -20,6 +21,7 @@ import {
 } from "@/services/leadership-excellence/performance-planning.service";
 import { Button } from "./PlanningUi";
 import { Loader2, RefreshCw } from "lucide-react";
+import { useLexPlanningPeriod } from "../LexPlanningPeriod";
 
 type PlanningContext = {
   data: PlanningView;
@@ -105,7 +107,14 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
       if (channel.current === connection) channel.current = null;
     };
   }, [client, key, organizationId, token]);
-  const [selection, setSelection] = useState({ organizationId, cycle: "" });
+  const { cycle: planningCycle, setCycle: setPlanningCycle } =
+    useLexPlanningPeriod();
+  useEffect(() => {
+    if (!planningCycle && query.data)
+      setPlanningCycle(
+        query.data.documents.at(-1)?.cycle || String(new Date().getFullYear()),
+      );
+  }, [planningCycle, query.data, setPlanningCycle]);
   const [focus, setFocus] = useState<{
     organizationId: typeof organizationId;
     plan: string;
@@ -115,9 +124,8 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     organizationId: typeof organizationId;
     value: PlanningContext["contributionContext"];
   }>({ organizationId, value: null });
-  const planningCycle =
-    selection.organizationId === organizationId ? selection.cycle : "";
   const [message, setMessage] = useState("");
+  const [messageHref, setMessageHref] = useState("");
   const [error, setError] = useState("");
   async function run(
     action: PlanningCommand["action"],
@@ -131,6 +139,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     setBusy(true);
     setError("");
     setMessage("");
+    setMessageHref("");
     try {
       await client.cancelQueries({ queryKey: key, exact: true });
       const result = await PerformancePlanningService.command(token, {
@@ -162,14 +171,24 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
         revision: result.revision,
       });
       setMessage(
-        action === "APPROVE"
-          ? "Approved version saved and locked."
-          : action === "SUBMIT"
-            ? "Plan submitted to its designated approver."
-            : action === "CONSIDER_ALL_PILLARS"
-              ? "All 6 pillars marked as considered."
-              : "Changes saved successfully.",
+        action === "REVIEW_FINDING"
+          ? payload.status === "REVIEWED"
+            ? "Finding reviewed. It is ready to link to an objective."
+            : payload.status === "NEEDS_EVIDENCE"
+              ? "Evidence request saved with the finding."
+              : "Finding review saved."
+          : action === "APPROVE"
+            ? "Approved version saved and locked."
+            : action === "SUBMIT"
+              ? "Plan submitted to its designated approver."
+              : action === "CONSIDER_ALL_PILLARS"
+                ? "All 6 pillars marked as considered."
+                : "Changes saved successfully.",
       );
+      if (action === "REVIEW_FINDING" && typeof payload.id === "string")
+        setMessageHref(
+          `/leadership-excellence/performance-planning/swot-findings?finding=${encodeURIComponent(payload.id)}`,
+        );
       return result.focusId;
     } catch (cause) {
       setError(
@@ -220,7 +239,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
         data: query.data,
         busy,
         planningCycle,
-        setPlanningCycle: (cycle) => setSelection({ organizationId, cycle }),
+        setPlanningCycle,
         planFocus: focus.organizationId === organizationId ? focus.plan : "",
         setPlanFocus: (plan) =>
           setFocus((current) => ({
@@ -275,7 +294,14 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
             role="status"
             className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
           >
-            {message}
+            <span>
+              {message}{" "}
+              {messageHref && (
+                <Link href={messageHref} className="font-semibold underline">
+                  View finding
+                </Link>
+              )}
+            </span>
             <button
               type="button"
               onClick={() => setMessage("")}

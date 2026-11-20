@@ -29,6 +29,7 @@ const titles: Record<PlanningTemplateKind, string> = {
 };
 
 const previewFields = [
+  ["result", "Measurable result"],
   ["explanation", "Supporting data"],
   ["impact", "Business impact"],
   ["evidence", "Example reference / source"],
@@ -145,6 +146,7 @@ export function PlanningTemplateLibrary({
             Everything remains editable. Review example figures and dates, and
             choose your organisation&apos;s owner and links before approval.
           </p>
+          {applied.fields.measure && applied.fields.measure === applied.fields.definition ? <p className="mt-1">The example repeated its KPI as its definition. The KPI text is preserved; add a distinct counting rule, source and scope in the definition field.</p> : null}
           <details className="mt-1">
             <summary className="cursor-pointer font-medium text-slate-700">
               Example notes
@@ -448,7 +450,9 @@ function PlanningTemplateLibraryDialog({
                             .filter(
                               ([key]) =>
                                 key in template.fields &&
-                                template.fields[key] !== "",
+                                template.fields[key] !== "" &&
+                                !(key === "result" && template.fields.result === template.fields.title) &&
+                                !(key === "definition" && template.fields.definition === template.fields.measure),
                             )
                             .map(([key, label]) => (
                               <div key={key}>

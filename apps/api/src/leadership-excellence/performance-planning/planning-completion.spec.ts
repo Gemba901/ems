@@ -21,6 +21,8 @@ function harness(initialState?: PlanningState) {
       state: structuredClone(initialState),
     });
   const db = {
+    lexExecutionWorkspace: { findUnique: async () => null },
+    $queryRaw: async () => [],
     lexPlanningWorkspace: {
       findUnique: async ({ where }: { where: { organizationId: string } }) =>
         structuredClone(rows.get(where.organizationId) ?? null),
@@ -1664,10 +1666,11 @@ describe('Area 03 completion workflows', () => {
     );
     await h.command('SAVE_SETTINGS', { coordinatorIds: ['hod'] }, h.company);
     const recorder = { ...h.leader, userId: 'u-hod', roleLevel: Role.HOD };
+    jest.setSystemTime(Date.parse('2026-12-01T09:00:00Z'));
     const payload = {
       itemId: h.objective,
       version: 2,
-      periodStart: '2026-11-01',
+      periodStart: '2026-11-04',
       periodEnd: '2026-11-30',
       actual: null,
       source: 'Orders due register and confirmations',

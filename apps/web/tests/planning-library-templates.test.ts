@@ -187,13 +187,32 @@ test("department templates carry measurement and achievement content without cre
   assert.equal(fields.unit, "minutes");
   assert.equal(fields.direction, "LOWER");
   assert.ok(String(fields.measure).length > 0);
-  assert.ok(String(fields.definition).length >= String(fields.measure).length);
+  assert.equal(fields.definition, template.fields.definition);
+  assert.notEqual(fields.definition, fields.measure);
   assert.ok(String(fields.approach).length > 0);
   assert.ok(String(fields.relevance).length > 0);
   assert.match(String(fields.source), /Achievable check/);
   assert.ok(!("parent" in fields));
   assert.ok(!("ownerId" in fields));
   assert.ok(!("departmentIds" in fields));
+});
+
+test("template drafts leave repeated KPI definitions empty for an actual counting rule", () => {
+  const original = example("objective", "OPX-2027-OBJ02");
+  const repeated = {
+    ...original,
+    fields: { ...original.fields, measure: "Accepted units", definition: "  Accepted units  " },
+  };
+  const fields = templateDraftFields(repeated);
+  assert.equal(fields.measure, "Accepted units");
+  assert.equal(fields.definition, "");
+  assert.equal(repeated.fields.definition, "  Accepted units  ");
+
+  const defined = templateDraftFields({
+    ...original,
+    fields: { ...original.fields, measure: "Accepted units", definition: "Count units passing the final inspection once per lot." },
+  });
+  assert.equal(defined.definition, "Count units passing the final inspection once per lot.");
 });
 
 test("only editable content can cross from any library entry into a draft", () => {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccessTokenPayload } from '../../auth/access-token-payload';
@@ -14,11 +14,13 @@ import { fromDbDate } from '../../work/work-date';
 import { validatePlanningCalendar } from './planning-calendar';
 import type {
   ApprovedPlanningLibraryProvider,
+  ApprovedPlanningPillarWeightsProvider,
   OrganisationPlanningProvider,
 } from './planning-dependency.contracts';
 import type {
   PlanningActor,
   PlanningCalendar,
+  PlanningPillarWeights,
   PlanningReferences,
 } from './planning.types';
 
@@ -32,13 +34,46 @@ export class PlanningReferencesService {
     private readonly schedules: WorkScheduleService,
   ) {}
 
+  /** Only an explicit approved Area 01 publication can replace local allocations. */
+  async getPillarWeights(
+    organizationId: string,
+  ): Promise<PlanningPillarWeights | undefined> {
+    const approved = await (
+      this.directionProvider as Partial<ApprovedPlanningPillarWeightsProvider>
+    ).getApprovedPillarWeights?.(organizationId);
+    if (approved?.approved !== true) return undefined;
+    const weights = approved.weights;
+    if (
+      approved.source !== 'AREA_01' ||
+      !validVersion(approved.version) ||
+      !weights ||
+      LEX_PILLARS.some(
+        ({ code }) =>
+          typeof weights[code] !== 'number' ||
+          !Number.isFinite(weights[code]) ||
+          weights[code] < 0 ||
+          weights[code] > 100 ||
+          Math.abs(weights[code] * 100 - Math.round(weights[code] * 100)) >
+            0.000001,
+      ) ||
+      LEX_PILLARS.reduce(
+        (total, { code }) => total + Math.round(weights[code] * 100),
+        0,
+      ) !== 10000
+    )
+      throw new BadRequestException(
+        'The approved Area 01 pillar allocation must have a version and six percentages totalling 100%.',
+      );
+    return structuredClone(approved);
+  }
+
   /** Reuse the approved Area 02 calendar, or the real Work/Leave calendar read-only. */
   async getCalendar(organizationId: string): Promise<PlanningCalendar> {
     const approved = await (
       this.organisationProvider as Partial<OrganisationPlanningProvider>
     ).getApprovedPlanningCalendar?.(organizationId);
-    if (approved?.approved) {
-      const calendar = { ...approved, source: 'AREA_02' as const };
+    if (approved?.approved === true) {
+      const calendar = structuredClone(approved);
       validatePlanningCalendar(calendar);
       return calendar;
     }
@@ -94,6 +129,7 @@ export class PlanningReferencesService {
       departments,
       employees,
       direction,
+      pillarWeights,
       calendar,
       positions,
       library,
@@ -107,7 +143,8 @@ export class PlanningReferencesService {
       this.db.employee.findMany({
         where: {
           organizationId: user.organizationId,
-          employmentStatus: 'ACTIVE',
+          // Employment eligibility does not grant planning or approval permissions.
+          employmentStatus: { in: ['ACTIVE', 'PROBATION'] },
         },
         select: {
           id: true,
@@ -133,6 +170,7 @@ export class PlanningReferencesService {
       (
         this.directionProvider as Partial<StrategicDirectionProvider>
       ).getApproved?.(user.organizationId) ?? Promise.resolve(null),
+      this.getPillarWeights(user.organizationId),
       this.getCalendar(user.organizationId),
       (
         this.organisationProvider as Partial<OrganisationPlanningProvider>
@@ -191,6 +229,7 @@ export class PlanningReferencesService {
         people,
         teams,
         pillars: [...LEX_PILLARS],
+        ...(pillarWeights ? { pillarWeights } : {}),
         direction: approvedDirection,
         positions: positions || [],
         timeZone: calendar.timeZone,
@@ -205,6 +244,7 @@ export class PlanningReferencesService {
             ).toISOString()
           : undefined,
         dependencyStatus: {
+          pillarWeights: pillarWeights ? 'APPROVED' : 'UNAVAILABLE',
           direction: approvedDirection ? 'AVAILABLE' : 'UNAVAILABLE',
           calendar:
             calendar.source === 'AREA_02'
@@ -227,4 +267,10 @@ export class PlanningReferencesService {
       },
     };
   }
+}
+
+function validVersion(version: unknown): boolean {
+  return typeof version === 'number'
+    ? Number.isSafeInteger(version) && version > 0
+    : typeof version === 'string' && version.trim().length > 0;
 }

@@ -169,6 +169,8 @@ export interface PlanningCalendar {
   version: string | number;
   source: "AREA_02" | "WORK_SETTINGS";
   approved: boolean;
+  /** When published, reporting is limited to these Area 02 frequencies. */
+  frequencies?: Frequency[];
   timeZone: string;
   startDate: string;
   endDate: string;
@@ -240,8 +242,14 @@ export interface PlanData {
   actionLinks?: ActionLink[];
 }
 export interface ApprovedVersion {
-  /** Read projection: each published item retains its canonical approval version. */
+  /** Canonical item authority, retained when sibling items are approved later. */
   itemVersions?: Record<string, number>;
+  /** The reporting calendar in force at approval, never refreshed from live settings. */
+  calendar?: PlanningCalendar;
+  /** Approved Area 01 allocation adopted by this plan, pinned across revisions. */
+  pillarWeights?: PlanningPillarWeights;
+  /** Explicit local allocation when Area 01 had not published approved weights. */
+  localPillarWeights?: Record<Pillar, number>;
   approvedItem?: { kind: "objective" | "goal"; itemId: string };
   companyPlanningModel?: "MEASURABLE_OBJECTIVES";
   legacyCompanyGoals?: Goal[];
@@ -325,12 +333,21 @@ export interface PlanningPerson {
   role: string;
   userId: string | null;
 }
+export interface PlanningPillarWeights {
+  source: "AREA_01";
+  approved: true;
+  version: string | number;
+  weights: Record<Pillar, number>;
+}
 export interface PlanningReferences {
+  /** Absent until Area 01 publishes a versioned, approved allocation. */
+  pillarWeights?: PlanningPillarWeights;
   calendar?: PlanningCalendar;
   refreshedAt?: string;
   sourceUpdatedAt?: string;
   source?: string;
   dependencyStatus?: {
+    pillarWeights?: "APPROVED" | "UNAVAILABLE";
     calendar: "APPROVED" | "WORK_SETTINGS_FALLBACK";
     positions: "AVAILABLE" | "UNAVAILABLE";
     library: "AVAILABLE" | "LOCAL_CATALOGUE";

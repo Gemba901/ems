@@ -1,6 +1,7 @@
 import {
   calendarPeriods,
   resolveAssignmentCalendar,
+  validatePlanningCalendar,
 } from './planning-calendar';
 import type { PlanningCalendar } from './planning.types';
 
@@ -208,4 +209,44 @@ describe('planning calendar snapshots', () => {
       calendarPeriods('2026-01-03', '2026-01-03', 'DAILY', latest)[0].scheduled,
     ).toBe(true);
   });
+
+  it('uses only published supported frequencies and keeps their snapshot immutable', () => {
+    const approved = calendar({
+      source: 'AREA_02',
+      approved: true,
+      frequencies: ['WEEKLY', 'QUARTERLY'],
+    });
+    const pinned = resolveAssignmentCalendar(approved, {
+      frequencies: ['MONTHLY'],
+    });
+    expect(pinned?.frequencies).toEqual(['WEEKLY', 'QUARTERLY']);
+    expect(() =>
+      calendarPeriods('2026-01-01', '2026-03-31', 'MONTHLY', pinned),
+    ).toThrow('frequency supported by the approved calendar');
+    expect(
+      calendarPeriods('2026-01-01', '2026-03-31', 'QUARTERLY', pinned),
+    ).toHaveLength(1);
+    approved.frequencies?.push('MONTHLY');
+    expect(pinned?.frequencies).toEqual(['WEEKLY', 'QUARTERLY']);
+  });
+
+  it.each([
+    { version: '' },
+    { version: 0 },
+    { version: Number.NaN },
+    { version: 1.5 },
+    { source: 'AREA_02', approved: false },
+    { source: 'WORK_SETTINGS', approved: true },
+    { frequencies: [] },
+    { frequencies: ['CUSTOM'] },
+  ])(
+    'rejects unversioned or unsupported calendar publications %j',
+    (invalid) => {
+      expect(() =>
+        validatePlanningCalendar(
+          calendar(invalid as Partial<PlanningCalendar>),
+        ),
+      ).toThrow();
+    },
+  );
 });

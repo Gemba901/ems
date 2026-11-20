@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LockKeyhole, Plus, Trash2 } from "lucide-react";
 import {
   PlanningApiError,
@@ -94,6 +94,12 @@ export function PlanningFindingEditor({
   const nextBlock = useRef(2);
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const editing = typeof initial.id === "string" && !!initial.id;
   const permission = data.documents.find(
     (record) => record.id === document.id,
@@ -392,8 +398,8 @@ export function PlanningFindingEditor({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Field
-                    label="Importance / weightage (1–10)"
-                    hint="1–3 Low · 4–7 Medium · 8–10 High. Optional while drafting."
+                    label="SWOT importance (1–10)"
+                    hint="1–3 Low · 4–7 Medium · 8–10 High. This ranks the finding; it is separate from objective priority and percentage weight in the company score. The reviewer checks this proposed importance."
                   >
                     <input
                       className={control}
@@ -424,7 +430,7 @@ export function PlanningFindingEditor({
                   )}
                 </div>
                 <div className="text-sm font-medium text-slate-700">
-                  <p>Priority band</p>
+                  <p>Importance band</p>
                   <div className="mt-3">
                     <FindingWeightage weightage={score} />
                   </div>

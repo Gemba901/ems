@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { measurementValueIssue } from './planning-measurements';
 import {
   calendarPeriods,
   MAX_TARGET_PERIODS,
@@ -43,6 +44,34 @@ export const OBJECTIVE_PILLAR_BUDGETS = Object.freeze({
   SGEX: 10,
   FPEX: 10,
 });
+/** An approved plan keeps the allocation publication it was approved against.
+ * Legacy approvals used the local configuration and retain that meaning. */
+export function pillarAllocationSnapshot(
+  document: PlanningDocument,
+  refs: PlanningReferences,
+): Pick<ApprovedVersion, 'pillarWeights' | 'localPillarWeights'> {
+  const previous = document.versions.at(-1);
+  if (previous?.pillarWeights)
+    return { pillarWeights: structuredClone(previous.pillarWeights) };
+  if (previous?.localPillarWeights)
+    return { localPillarWeights: structuredClone(previous.localPillarWeights) };
+  if (!previous && refs.pillarWeights)
+    return { pillarWeights: structuredClone(refs.pillarWeights) };
+  return { localPillarWeights: { ...OBJECTIVE_PILLAR_BUDGETS } };
+}
+export function objectivePillarBudgets(
+  refs?: PlanningReferences,
+  document?: PlanningDocument,
+) {
+  const pinned =
+    document && refs ? pillarAllocationSnapshot(document, refs) : undefined;
+  return (
+    pinned?.pillarWeights?.weights ||
+    pinned?.localPillarWeights ||
+    refs?.pillarWeights?.weights ||
+    OBJECTIVE_PILLAR_BUDGETS
+  );
+}
 export const validObjectivePriority = (value: unknown): value is number =>
   typeof value === 'number' &&
   Number.isInteger(value) &&
@@ -51,17 +80,25 @@ export const validObjectivePriority = (value: unknown): value is number =>
 export const validObjectiveWeightage = (
   value: unknown,
   pillar: string,
+  refs?: PlanningReferences,
+  document?: PlanningDocument,
 ): value is number =>
   typeof value === 'number' &&
   Number.isFinite(value) &&
   value >= 1 &&
   value <=
-    OBJECTIVE_PILLAR_BUDGETS[pillar as keyof typeof OBJECTIVE_PILLAR_BUDGETS] &&
+    objectivePillarBudgets(refs, document)[
+      pillar as keyof typeof OBJECTIVE_PILLAR_BUDGETS
+    ] &&
   Math.abs(value * 100 - Math.round(value * 100)) < 0.000001;
-export function objectiveAllocations(objectives: Objective[]) {
+export function objectiveAllocations(
+  objectives: Objective[],
+  refs?: PlanningReferences,
+  document?: PlanningDocument,
+) {
   return PILLAR_CODES.map((pillar) => {
     const rows = objectives.filter((o) => o.pillar === pillar);
-    const target = OBJECTIVE_PILLAR_BUDGETS[pillar];
+    const target = objectivePillarBudgets(refs, document)[pillar];
     const total =
       rows.reduce(
         (sum, o) =>
@@ -74,7 +111,8 @@ export function objectiveAllocations(objectives: Objective[]) {
     const missing = rows.filter((o) => o.weightage == null).length;
     const invalid = rows.filter(
       (o) =>
-        o.weightage != null && !validObjectiveWeightage(o.weightage, pillar),
+        o.weightage != null &&
+        !validObjectiveWeightage(o.weightage, pillar, refs, document),
     ).length;
     return {
       pillar,
@@ -272,22 +310,49 @@ export const published = (document: PlanningDocument, today: string) => {
     .filter((v) => v.effectiveDate <= today)
     .sort((a, b) => a.version - b.version);
   const last = eligible.at(-1);
-  if (!last || !document.versions.some((v) => v.approvedItem)) return last;
+  if (!last || !document.versions.some((v) => v.approvedItem || v.itemVersions))
+    return last;
   // Per-item snapshots carry only their own approval authority. A later unrelated
   // approval cannot prematurely publish a future-dated revision copied in its data.
   const result = structuredClone(last),
     objectives = new Map<string, Objective>(),
     goals = new Map<string, Goal>(),
+    assignments = new Map<string, Assignment>(),
+    definitions = new Map<string, KpiDefinition>(),
     itemVersions: Record<string, number> = {};
+  const applyGoal = (item: Goal, version: ApprovedVersion) => {
+    goals.set(item.id, item);
+    itemVersions[item.id] = version.version;
+    for (const [id, assignment] of assignments)
+      if (assignment.goalId === item.id) assignments.delete(id);
+    for (const assignment of version.data.assignments.filter(
+      (a) => a.goalId === item.id,
+    )) {
+      assignments.set(assignment.id, assignment);
+      const definition = version.definitions.find(
+        (d) => d.id === assignment.definitionId,
+      );
+      if (definition) definitions.set(definition.id, definition);
+    }
+  };
   for (const version of eligible) {
     if (!version.approvedItem) {
       for (const item of version.data.objectives) {
+        if (
+          version.itemVersions?.[item.id] &&
+          version.itemVersions[item.id] !== version.version
+        )
+          continue;
         objectives.set(item.id, item);
         itemVersions[item.id] = version.version;
       }
       for (const item of version.data.goals) {
-        goals.set(item.id, item);
-        itemVersions[item.id] = version.version;
+        if (
+          version.itemVersions?.[item.id] &&
+          version.itemVersions[item.id] !== version.version
+        )
+          continue;
+        applyGoal(item, version);
       }
     } else {
       const { kind, itemId } = version.approvedItem;
@@ -299,15 +364,14 @@ export const published = (document: PlanningDocument, today: string) => {
         }
       } else {
         const row = version.data.goals.find((i) => i.id === itemId);
-        if (row) {
-          goals.set(row.id, row);
-          itemVersions[row.id] = version.version;
-        }
+        if (row) applyGoal(row, version);
       }
     }
   }
   result.data.objectives = structuredClone([...objectives.values()]);
   result.data.goals = structuredClone([...goals.values()]);
+  result.data.assignments = structuredClone([...assignments.values()]);
+  result.definitions = structuredClone([...definitions.values()]);
   result.itemVersions = itemVersions;
   return result;
 };
@@ -407,9 +471,11 @@ export function approvedPlanningItems(
     return version.data.objectives
       .filter(
         (objective) =>
-          !version.approvedItem ||
-          (version.approvedItem.kind === 'objective' &&
-            version.approvedItem.itemId === objective.id),
+          (!version.itemVersions?.[objective.id] ||
+            version.itemVersions[objective.id] === version.version) &&
+          (!version.approvedItem ||
+            (version.approvedItem.kind === 'objective' &&
+              version.approvedItem.itemId === objective.id)),
       )
       .map((objective) => ({
         itemKind: 'OBJECTIVE',
@@ -418,9 +484,11 @@ export function approvedPlanningItems(
   return version.data.goals
     .filter(
       (goal) =>
-        !version.approvedItem ||
-        (version.approvedItem.kind === 'goal' &&
-          version.approvedItem.itemId === goal.id),
+        (!version.itemVersions?.[goal.id] ||
+          version.itemVersions[goal.id] === version.version) &&
+        (!version.approvedItem ||
+          (version.approvedItem.kind === 'goal' &&
+            version.approvedItem.itemId === goal.id)),
     )
     .map((goal) => ({ itemKind: 'GOAL', goal }));
 }
@@ -1289,6 +1357,25 @@ export function assignmentReadinessIssues(
     const definition = state.definitions.find(
       (k) => k.id === assignment.definitionId,
     );
+    if (definition) {
+      for (const [label, value] of [
+        ['Baseline', assignment.baseline],
+        ['Target', assignment.target],
+        ['Upper target', assignment.upper],
+      ] as const) {
+        const issue = measurementValueIssue(definition.unit, value, label);
+        if (issue) errors.push(`${assignment.code}: ${issue}`);
+      }
+      for (const period of assignment.targets)
+        for (const [label, value] of [
+          ['Target', period.target],
+          ['Upper target', period.upper],
+        ] as const) {
+          const issue = measurementValueIssue(definition.unit, value, label);
+          if (issue)
+            errors.push(`${assignment.code}: ${period.label}: ${issue}`);
+        }
+    }
     need(definition, `${assignment.code}: choose a KPI definition.`);
     need(contribution, `${assignment.code}: choose a goal in this plan.`);
     need(
@@ -1464,7 +1551,11 @@ export function validatePlan(
   }
   if (document.kind === 'COMPANY') {
     need(data.objectives.length, 'Create at least one objective.');
-    for (const allocation of objectiveAllocations(data.objectives)) {
+    for (const allocation of objectiveAllocations(
+      data.objectives,
+      refs,
+      document,
+    )) {
       if (!allocation.count) continue;
       need(
         allocation.balanced,
@@ -1472,13 +1563,25 @@ export function validatePlan(
       );
     }
     for (const objective of data.objectives) {
+      for (const [label, value] of [
+        ['Baseline', objective.baseline],
+        ['Target', objective.target],
+      ] as const) {
+        const issue = measurementValueIssue(objective.unit, value, label);
+        if (issue) errors.push(`${objective.code}: ${issue}`);
+      }
       need(
         validObjectivePriority(objective.priority),
         `${objective.code}: enter objective priority as a whole number from 1 to 10.`,
       );
       need(
-        validObjectiveWeightage(objective.weightage, objective.pillar),
-        `${objective.code}: enter objective weightage from 1 to ${OBJECTIVE_PILLAR_BUDGETS[objective.pillar as keyof typeof OBJECTIVE_PILLAR_BUDGETS] || 'the pillar limit'}%, with up to two decimals.`,
+        validObjectiveWeightage(
+          objective.weightage,
+          objective.pillar,
+          refs,
+          document,
+        ),
+        `${objective.code}: enter objective weightage from 1 to ${objectivePillarBudgets(refs, document)[objective.pillar as keyof typeof OBJECTIVE_PILLAR_BUDGETS] || 'the pillar limit'}%, with up to two decimals.`,
       );
       need(
         objective.title && objective.meaning,
@@ -1544,6 +1647,13 @@ export function validatePlan(
   }
   need(data.goals.length, 'Add at least one goal or role contribution.');
   for (const goal of data.goals) {
+    for (const [label, value] of [
+      ['Baseline', goal.baseline],
+      ['Target', goal.target],
+    ] as const) {
+      const issue = measurementValueIssue(goal.unit, value, label);
+      if (issue) errors.push(`${goal.code}: ${issue}`);
+    }
     need(goal.title, `${goal.code}: describe the result.`);
     need(person(goal.ownerId), `${goal.code}: select the responsible person.`);
     dates(goal.startDate, goal.endDate, goal.code);
@@ -1722,13 +1832,27 @@ export function sanitizeForReader(
       delete approved.legacyCompanyGoals;
       // An unrelated cumulative snapshot may contain a future revision. Readers
       // receive only the row whose approval this version actually represents.
-      if (approved.approvedItem) {
-        const { kind, itemId } = approved.approvedItem;
-        approved.data.objectives = approved.data.objectives.filter(
-          (item) => kind === 'objective' && item.id === itemId,
+      if (approved.approvedItem || approved.itemVersions) {
+        const ids = new Set(
+          approvedPlanningItems(copy, approved).map((row) => row.goal.id),
         );
-        approved.data.goals = approved.data.goals.filter(
-          (item) => kind === 'goal' && item.id === itemId,
+        approved.data.objectives = approved.data.objectives.filter((item) =>
+          ids.has(item.id),
+        );
+        approved.data.goals = approved.data.goals.filter((item) =>
+          ids.has(item.id),
+        );
+        approved.data.assignments = approved.data.assignments.filter(
+          (assignment) => ids.has(assignment.goalId),
+        );
+        approved.definitions = approved.definitions.filter(
+          (definition) =>
+            approved.data.assignments.some(
+              (assignment) => assignment.definitionId === definition.id,
+            ) ||
+            approved.data.goals.some(
+              (goal) => goal.definitionId === definition.id,
+            ),
         );
       }
     }

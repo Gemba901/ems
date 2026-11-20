@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Compass,
   FileCheck2,
+  HelpCircle,
   ListChecks,
   MessageSquare,
   Network,
@@ -77,6 +78,23 @@ export function LexSidebar(props: LexSidebarProps) {
       homeHref={area.href}
       ariaLabel="Leadership Excellence navigation"
       groups={groups}
+      footer={
+        area.id === "03"
+          ? (collapsed) => (
+              <button
+                type="button"
+                onClick={() => {
+                  props.onClose?.();
+                  window.dispatchEvent(new Event("planning-programme-guide"));
+                }}
+                className={`flex items-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${collapsed ? "w-[72px] flex-col gap-1 px-0.5 py-2 text-[10.5px]" : "w-full gap-3 px-3 py-2 text-sm"}`}
+              >
+                <HelpCircle size={18} strokeWidth={1.6} aria-hidden="true" />
+                Guide
+              </button>
+            )
+          : undefined
+      }
     />
   );
 }

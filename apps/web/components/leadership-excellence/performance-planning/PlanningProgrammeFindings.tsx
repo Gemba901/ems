@@ -11,6 +11,7 @@ import { compareFindingWeightage } from "@/services/leadership-excellence/perfor
 import { businessAlignmentLabels } from "@/services/leadership-excellence/performance-planning/business-alignment";
 import { linkedFindingObjectives } from "@/services/leadership-excellence/performance-planning/finding-objectives";
 import { usePlanning } from "./PlanningProvider";
+import { usePlanningUrlFilter } from "./PlanningUrlState";
 import { findingReviewStatus } from "./PlanningSources";
 import { FindingWeightage } from "./FindingWeightage";
 import { Button, Empty, categories, responseLabels } from "./PlanningUi";
@@ -45,10 +46,10 @@ export function PlanningProgrammeFindings({
   onAction: (event: ProgrammeFindingAction) => void;
 }) {
   const { data, busy } = usePlanning();
-  const [pillar, setPillar] = useState("");
-  const [category, setCategory] = useState("");
-  const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
+  const [pillar, setPillar] = usePlanningUrlFilter("pillar");
+  const [category, setCategory] = usePlanningUrlFilter("category");
+  const [status, setStatus] = usePlanningUrlFilter("status");
+  const [search, setSearch] = usePlanningUrlFilter("search");
   const [limit, setLimit] = useState(20);
   const [selected, setSelected] = useState<string[]>([]);
   const documents = data.documents.filter(
@@ -293,7 +294,7 @@ export function PlanningProgrammeFindings({
                   ...(reviewOnly ? ["Select"] : []),
                   "Finding / evidence",
                   "Alignment",
-                  "SWOT priority",
+                  "SWOT importance",
                   "Review",
                   "Management decision",
                   "Linked objectives",
@@ -372,6 +373,7 @@ export function PlanningProgrammeFindings({
                       >
                         {reviewNames[current]}
                       </span>
+                      {current === "NEEDS_EVIDENCE" && <p className="mt-2 max-w-52 whitespace-pre-wrap text-xs leading-5 text-amber-800">{finding.decisionNote || "Open the review to describe the missing evidence."}<br />For: {data.references.people.find((person) => person.id === finding.followupOwnerId)?.name || "Owner not assigned"}{finding.reviewDate ? ` · By ${finding.reviewDate}` : ""}<br />Add evidence through Edit finding.</p>}
                     </td>
                     <td className="px-3 py-4">
                       <p className="max-w-36 text-slate-700">

@@ -93,8 +93,12 @@ export function programmeCommitments(
           snapshot.companyPlanningModel === "MEASURABLE_OBJECTIVES"
             ? ("OBJECTIVE" as const)
             : ("GOAL" as const);
-        if (!snapshot.approvedItem || (priorKind && priorKind !== kind))
+        const previous = new Map(records);
+        if ((priorKind && priorKind !== kind) || (!snapshot.approvedItem && !snapshot.itemVersions))
           records.clear();
+        else if (!snapshot.approvedItem && snapshot.itemVersions)
+          for (const id of records.keys())
+            if (!Object.hasOwn(snapshot.itemVersions, id)) records.delete(id);
         priorKind = kind;
         const rows =
           kind === "OBJECTIVE" ? snapshot.data.objectives : snapshot.data.goals;
@@ -108,6 +112,15 @@ export function programmeCommitments(
                 (kind === "OBJECTIVE" ? "objective" : "goal"))
           )
             continue;
+          const itemVersion =
+            snapshot.itemVersions?.[item.id] ?? snapshot.version;
+          if (itemVersion !== snapshot.version) {
+            // A whole-plan approval does not approve already locked items again.
+            // Retain their earlier effective snapshot, including its target.
+            const prior = previous.get(item.id);
+            if (prior) records.set(item.id, prior);
+            continue;
+          }
           records.set(item.id, {
             document,
             item,

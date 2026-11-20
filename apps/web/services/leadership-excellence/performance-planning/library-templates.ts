@@ -109,5 +109,8 @@ export function templateDraftFields(
       .filter((key) => Object.hasOwn(template.fields, key))
       .map((key) => [key, template.fields[key]]),
   );
+  // Some workbook examples repeat the KPI verbatim as its definition. Preserve
+  // that source text once, and ask the drafter for the actual counting rule.
+  if (typeof selected.measure === "string" && typeof selected.definition === "string" && selected.measure.trim() === selected.definition.trim()) selected.definition = "";
   return structuredClone(selected);
 }

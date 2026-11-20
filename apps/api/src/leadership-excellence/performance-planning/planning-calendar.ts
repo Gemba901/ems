@@ -36,8 +36,35 @@ const monthEnd = (year: number, month: number) =>
 
 /** A snapshot is validated before it can generate targets or be pinned in a plan. */
 export function validatePlanningCalendar(calendar: PlanningCalendar): void {
-  if (!calendar.id || !['AREA_02', 'WORK_SETTINGS'].includes(calendar.source))
+  if (
+    typeof calendar.id !== 'string' ||
+    !calendar.id.trim() ||
+    !['AREA_02', 'WORK_SETTINGS'].includes(calendar.source) ||
+    calendar.approved !== (calendar.source === 'AREA_02')
+  )
     throw new BadRequestException('The reporting calendar source is invalid.');
+  if (
+    !(
+      (typeof calendar.version === 'string' && calendar.version.trim()) ||
+      (typeof calendar.version === 'number' &&
+        Number.isSafeInteger(calendar.version) &&
+        calendar.version > 0)
+    )
+  )
+    throw new BadRequestException(
+      'The reporting calendar must identify its published version.',
+    );
+  if (
+    calendar.frequencies !== undefined &&
+    (!Array.isArray(calendar.frequencies) ||
+      !calendar.frequencies.length ||
+      calendar.frequencies.some(
+        (frequency) => !FREQUENCIES.includes(frequency),
+      ))
+  )
+    throw new BadRequestException(
+      'The reporting calendar contains unsupported frequencies.',
+    );
   if (
     !Array.isArray(calendar.workingDays) ||
     calendar.workingDays.some(
@@ -161,6 +188,10 @@ export function calendarPeriods(
     )
       throw new BadRequestException(
         'Assignment dates must stay inside the approved reporting calendar.',
+      );
+    if (calendar.frequencies && !calendar.frequencies.includes(frequency))
+      throw new BadRequestException(
+        'Choose a reporting frequency supported by the approved calendar.',
       );
   }
   const workingDays = new Set(calendar?.workingDays ?? [0, 1, 2, 3, 4, 5, 6]);

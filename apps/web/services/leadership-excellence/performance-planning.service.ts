@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api-client";
+import type { ResultSchedule } from "./performance-planning/result-periods";
 import {
   readPlanningLibraryTemplates,
   type PlanningTemplateKind,
@@ -57,6 +58,18 @@ async function request<T>(
   return result as T;
 }
 export const PerformancePlanningService = {
+  resultPeriods: (
+    token: string,
+    documentId: string,
+    itemId: string,
+    signal?: AbortSignal,
+  ) =>
+    request<ResultSchedule[]>(
+      token,
+      `/result-periods?${new URLSearchParams({ documentId, itemId })}`,
+      undefined,
+      signal,
+    ),
   getLibraryTemplates: async (
     token: string,
     kind: PlanningTemplateKind,

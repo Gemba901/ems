@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type {
   Goal,
   SourceLink,
@@ -257,27 +258,43 @@ export function ProgrammeActionList({
                   >
                     View details
                   </Button>
-                  {canEdit && !row.readOnly && status === "PLANNED" && (
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => void update(row, "IN_PROGRESS")}
+                  {(row.action.goalId || row.action.parent) && (
+                    <Link
+                      href={`/leadership-excellence/execution/delivery-actions?action=${encodeURIComponent(`${row.documentId}/action/${row.action.id}`)}`}
+                      className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
                     >
-                      Start action
-                    </Button>
+                      Update in My actions
+                    </Link>
                   )}
-                  {canEdit && !row.readOnly && status === "IN_PROGRESS" && (
-                    <Button
-                      disabled={busy}
-                      onClick={() => {
-                        setSelected({ ...row, complete: true });
-                        setEvidence("");
-                        setError("");
-                      }}
-                    >
-                      Record completion
-                    </Button>
-                  )}
+                  {canEdit &&
+                    !row.readOnly &&
+                    !row.action.goalId &&
+                    !row.action.parent &&
+                    status === "PLANNED" && (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void update(row, "IN_PROGRESS")}
+                      >
+                        Start action
+                      </Button>
+                    )}
+                  {canEdit &&
+                    !row.readOnly &&
+                    !row.action.goalId &&
+                    !row.action.parent &&
+                    status === "IN_PROGRESS" && (
+                      <Button
+                        disabled={busy}
+                        onClick={() => {
+                          setSelected({ ...row, complete: true });
+                          setEvidence("");
+                          setError("");
+                        }}
+                      >
+                        Record completion
+                      </Button>
+                    )}
                 </div>
               </article>
             );

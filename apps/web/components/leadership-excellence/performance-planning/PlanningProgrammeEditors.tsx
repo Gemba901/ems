@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import {
   PlanningApiError,
@@ -19,6 +19,7 @@ import {
   objectiveWeightageMessage,
   validObjectivePriority,
   validObjectiveWeightage,
+  planningPillarBudgets,
 } from "@/services/leadership-excellence/performance-planning/objective-weightage";
 import {
   planningPeriodBounds,
@@ -27,6 +28,8 @@ import {
 import { businessAlignmentLabels } from "@/services/leadership-excellence/performance-planning/business-alignment";
 import { templateDraftFields } from "@/services/leadership-excellence/performance-planning/library-templates";
 import { linkedFindingObjectives } from "@/services/leadership-excellence/performance-planning/finding-objectives";
+import { contributionDateBounds, contributionDateIssue, sameParentIdentity } from "@/services/leadership-excellence/performance-planning/editor-guidance";
+import { ApprovalRequirements, focusPlanningField, PlanningUnitInput, TemplateContentGuidance } from "./PlanningEditorGuidance";
 import {
   programmeItemStatus,
   programmeItemVersion,
@@ -55,6 +58,7 @@ import {
   control,
   ErrorList,
   Field,
+  frequencies as reviewFrequencies,
   Modal,
   responseLabels,
 } from "./PlanningUi";
@@ -64,6 +68,8 @@ type Choice = readonly [string, string];
 const directions: Choice[] = [
   ["HIGHER", "Higher is better"],
   ["LOWER", "Lower is better"],
+  ["MAINTAIN_MIN", "Maintain at least"],
+  ["MAINTAIN_MAX", "Maintain at most"],
 ];
 const frequencies: Choice[] = [
   ["DAILY", "Daily"],
@@ -84,6 +90,12 @@ function useDraft(initial: Fields) {
     {},
   );
   const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const set = (name: string, value: unknown) => {
     setDirty(true);
     setValues((current) => ({ ...current, [name]: value }));
@@ -111,6 +123,7 @@ function useDraft(initial: Fields) {
   ) => (
     <Field label={label} hint={hint}>
       <input
+        data-planning-field={name}
         className={control}
         type={type}
         value={text(values, name)}
@@ -130,6 +143,7 @@ function useDraft(initial: Fields) {
   const area = (name: string, label: string, hint?: string, rows = 3) => (
     <Field label={label} hint={hint}>
       <textarea
+        data-planning-field={name}
         className={control}
         rows={rows}
         maxLength={4000}
@@ -146,6 +160,7 @@ function useDraft(initial: Fields) {
   ) => (
     <Field label={label} hint={hint}>
       <select
+        data-planning-field={name}
         className={control}
         value={text(values, name)}
         onChange={(event) => set(name, event.target.value)}
@@ -282,7 +297,7 @@ function ProgrammeSourcePicker({
     (source) => !rows.some((row) => sourceKey(row) === sourceKey(source)),
   );
   return (
-    <details className="col-span-full rounded-xl border border-slate-200 p-4">
+    <details data-planning-field="sources" className="col-span-full rounded-xl border border-slate-200 p-4">
       <summary className="cursor-pointer text-sm font-semibold text-slate-700">
         {sources.length} linked finding{sources.length === 1 ? "" : "s"} ·
         Choose reviewed SWOT evidence
@@ -398,6 +413,7 @@ export function ProgrammeObjectiveEditor({
   document,
   initial,
   source,
+  focusField,
   readOnly: requestedReadOnly = false,
   onClose,
   onSaved,
@@ -405,6 +421,7 @@ export function ProgrammeObjectiveEditor({
   document: PlanningDocument;
   initial?: Objective;
   source?: SourceLink;
+  focusField?: string;
   readOnly?: boolean;
   onClose: () => void;
   onSaved: (id: string) => void;
@@ -425,12 +442,14 @@ export function ProgrammeObjectiveEditor({
       programmeItemStatus(document, "objective", initial.id) === "APPROVED");
   const [error, setError] = useState("");
   const formId = useId();
-  const period = planningPeriodBounds(document.cycle);
+  useEffect(() => { if (focusField) focusPlanningField(formId, focusField); }, [focusField, formId]);
+  const period = contributionDateBounds(planningPeriodBounds(document.cycle), document.data);
+  const seedFinding = source ? reviewedSwotSources(data.documents, document.cycle).find((row) => sourceKey(row) === sourceKey(source))?.finding : undefined;
   const draft = useDraft({
-    pillar: "OPX",
+    pillar: seedFinding?.pillar || "",
     direction: "HIGHER",
-    reviewFrequency: "Monthly",
     ...initial,
+    reviewFrequency: initial?.reviewFrequency?.toUpperCase() || "MONTHLY",
     alignments: initial
       ? (Array.isArray(initial.alignments)
           ? initial.alignments.length === 0 && initial.alignment === "OTHER"
@@ -440,7 +459,7 @@ export function ProgrammeObjectiveEditor({
         ).filter((value) =>
           BUSINESS_ALIGNMENT_OPTIONS.some(([code]) => code === value),
         )
-      : ["D"],
+      : seedFinding ? (seedFinding.alignments?.length ? seedFinding.alignments : seedFinding.alignment ? [seedFinding.alignment] : []) : [],
     sources: initial?.sources || (source ? [source] : []),
     baseline: initial?.baseline ?? "",
     target: initial?.target ?? "",
@@ -449,8 +468,11 @@ export function ProgrammeObjectiveEditor({
   });
   const { values, input, area, select } = draft;
   const selectedAlignments = values.alignments as string[];
+  const linkedFindings = reviewedSwotSources(data.documents, document.cycle).filter((row) => ((values.sources || []) as SourceLink[]).some((source) => sourceKey(source) === sourceKey(row)));
+  const sourceSuggestion = linkedFindings[0]?.finding;
   const close = useClose(draft.dirty, onClose);
-  const limit = objectiveWeightLimit(text(values, "pillar"));
+  const budgets = planningPillarBudgets(document, data.references);
+  const limit = objectiveWeightLimit(text(values, "pillar"), budgets.weights);
   const weight =
     text(values, "weightage") === "" ? null : Number(text(values, "weightage"));
   const allocation =
@@ -468,6 +490,7 @@ export function ProgrammeObjectiveEditor({
             },
           ],
           text(values, "pillar") as Pillar,
+          budgets.weights,
         );
   const save = async () => {
     if (busy || readOnly) return;
@@ -487,9 +510,9 @@ export function ProgrammeObjectiveEditor({
         );
       if (
         numeric.weightage !== null &&
-        !validObjectiveWeightage(numeric.weightage, text(values, "pillar"))
+        !validObjectiveWeightage(numeric.weightage, text(values, "pillar"), budgets.weights)
       )
-        throw new Error(objectiveWeightageMessage(text(values, "pillar")));
+        throw new Error(objectiveWeightageMessage(text(values, "pillar"), budgets.weights));
       setError("");
       const saveRevision =
         currentDocument &&
@@ -514,7 +537,7 @@ export function ProgrammeObjectiveEditor({
             alignment:
               selectedAlignments.length === 1 ? selectedAlignments[0] : "",
             otherBusinessFocus: text(values, "otherBusinessFocus"),
-            alignmentReason: initial?.alignmentReason || "",
+            alignmentReason: text(values, "alignmentReason"),
           },
         },
         document.id,
@@ -559,6 +582,8 @@ export function ProgrammeObjectiveEditor({
         data-programme-objective-form
       >
         <ErrorList error={error} />
+        {!readOnly && <ApprovalRequirements values={values} kind="objective" formId={formId} />}
+        <TemplateContentGuidance values={values} />
         <p className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 text-sm leading-6 text-slate-700">
           One company objective, one measurable commitment.{" "}
           {readOnly
@@ -580,10 +605,10 @@ export function ProgrammeObjectiveEditor({
           className="grid min-w-0 gap-4 sm:grid-cols-2"
         >
           <div className="col-span-full">
-            {input("title", "Objective title")}
+            {input("title", "Objective title", "text", "Use a short name. Put the measurable outcome, target and deadline in their own fields.")}
           </div>
           <div className="col-span-full">
-            {area("result", "What measurable result will the company achieve?")}
+            {area("result", "What measurable result will the company achieve?", "Describe the intended outcome. The KPI name and counting formula belong below.")}
           </div>
           {select(
             "pillar",
@@ -605,16 +630,27 @@ export function ProgrammeObjectiveEditor({
             document={document}
             objectiveId={initial?.id}
             sources={(values.sources || []) as SourceLink[]}
-            onChange={(sources) => draft.set("sources", sources)}
+            onChange={(sources) => {
+              draft.set("sources", sources);
+              const first = reviewedSwotSources(data.documents, document.cycle).find((row) => sources.some((source) => sourceKey(source) === sourceKey(row)))?.finding;
+              if (first && !text(values, "pillar")) draft.set("pillar", first.pillar);
+              if (first && selectedAlignments.length === 0) draft.set("alignments", first.alignments?.length ? first.alignments : first.alignment ? [first.alignment] : []);
+            }}
           />
+          {sourceSuggestion && <div className="col-span-full rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+            Suggested from {sourceSuggestion.code}: {sourceSuggestion.pillar} · {businessAlignmentLabels(sourceSuggestion).join(", ") || "No QCDSMT selected"}. The finding describes the condition; the objective describes the result, so a different pillar or alignment may be appropriate.
+            <Button type="button" size="xs" variant="link" onClick={() => { draft.set("pillar", sourceSuggestion.pillar); draft.set("alignments", sourceSuggestion.alignments?.length ? sourceSuggestion.alignments : sourceSuggestion.alignment ? [sourceSuggestion.alignment] : []); }}>Use finding's pillar and alignment</Button>
+            {(sourceSuggestion.pillar !== values.pillar || JSON.stringify([...(sourceSuggestion.alignments || [])].sort()) !== JSON.stringify([...selectedAlignments].sort())) && area("alignmentReason", "Why does this objective use a different pillar or alignment?", "Explain the result's focus for reviewers; this explanation is optional.")}
+          </div>}
           <div className="col-span-full">
             {area(
               "selectionReason",
               "How the objective will help in short-term and long-term period and how it is aligned with the company's vision",
             )}
           </div>
-          <Section title="Priority & objective weightage">
-            Enter each value manually. Weightage is saved as entered.
+          <Section title="Objective priority & weight in company score">
+            SWOT importance ranks the finding. Objective priority ranks this commitment. Weightage is its percentage contribution to the company score; neither ranking sets this percentage.
+            {" "}{budgets.label}.
           </Section>
           {input(
             "priority",
@@ -625,7 +661,7 @@ export function ProgrammeObjectiveEditor({
           )}
           {input(
             "weightage",
-            "Weightage (%)",
+            "Weight in company score (%)",
             "number",
             limit === null
               ? "Choose a primary pillar first."
@@ -654,24 +690,25 @@ export function ProgrammeObjectiveEditor({
             </div>
           )}
           <Section title="Measure & timing" />
-          <BusinessAlignmentFields
+          <div className="col-span-full" data-planning-field="alignments"><BusinessAlignmentFields
             values={selectedAlignments}
             businessFocus={text(values, "otherBusinessFocus")}
             onChange={(selections) => draft.set("alignments", selections)}
             onBusinessFocusChange={(value) =>
               draft.set("otherBusinessFocus", value)
             }
-          />
+          /></div>
           {input("measure", "KPI / measure")}
           {select("direction", "Success means", [
             ["HIGHER", "Increase / at least the target"],
             ["LOWER", "Reduce / at most the target"],
             ["MAINTAIN_MIN", "Maintain at least this level"],
+            ["MAINTAIN_MAX", "Maintain at most this level"],
           ])}
           {input("baseline", "Baseline", "number", undefined, { step: "any" })}
           {input("baselinePeriod", "Baseline period & sample")}
           {input("target", "Target", "number", undefined, { step: "any" })}
-          {input("unit", "Unit")}
+          <PlanningUnitInput value={text(values, "unit")} onChange={(value) => draft.set("unit", value)} />
           {input(
             "endDate",
             "Deadline",
@@ -679,7 +716,7 @@ export function ProgrammeObjectiveEditor({
             `Planning period: ${planningPeriodLabel(document.cycle)}.`,
             { min: period?.startDate, max: period?.endDate },
           )}
-          {input("reviewFrequency", "Review frequency")}
+          {select("reviewFrequency", "Review frequency", reviewFrequencies.map(([code, label]) => [code, label] as const))}
           {area("definition", "Counting rule / KPI definition")}
           {area("dataSource", "Data source & verifier")}
           <Section title="Support & conditions" />
@@ -725,6 +762,7 @@ function ParentSelect({
         >
           {parent.goal.code} · {parent.goal.title || "Untitled commitment"} · v
           {parent.version}
+          {parent.effectiveDate ? ` · Effective ${parent.effectiveDate}` : ""}
         </option>
       ));
   return (
@@ -739,6 +777,7 @@ function ParentSelect({
       }
     >
       <select
+        data-planning-field="parent"
         className={control}
         value={parentKey(value)}
         onChange={(event) => {
@@ -848,6 +887,7 @@ export function ProgrammeDepartmentEditor({
   initial,
   parentObjectiveId,
   parentDocumentId,
+  focusField,
   readOnly: requestedReadOnly = false,
   onClose,
   onSaved,
@@ -857,6 +897,7 @@ export function ProgrammeDepartmentEditor({
   initial?: Goal;
   parentObjectiveId?: string;
   parentDocumentId?: string;
+  focusField?: string;
   readOnly?: boolean;
   onClose: () => void;
   onSaved: (documentId: string, id: string) => void;
@@ -874,13 +915,16 @@ export function ProgrammeDepartmentEditor({
           programmeItemStatus(document, "goal", initial.id) === "APPROVED")));
   const formId = useId(),
     [error, setError] = useState("");
+  useEffect(() => { if (focusField) focusPlanningField(formId, focusField); }, [focusField, formId]);
   const scoped = useScopedDocument("DEPARTMENT", cycle, document);
   const [departmentId, setDepartment] = useState(document?.scopeId || "");
+  const identityLocked = !!initial && !!document && programmeItemVersion(document, "goal", initial.id) > 0;
   const parents = approvedParents(data).filter(
     (parent) =>
       parent.kind === "COMPANY" &&
       parent.cycle === cycle &&
       parentAvailableToDepartment(data, parent, departmentId) &&
+      (!identityLocked || (sameParentIdentity(initial?.parent, parentRef(parent)) && parent.version >= (initial?.parent?.version || 0))) &&
       (parent.itemKind === "OBJECTIVE" ||
         parentKey(initial?.parent) === parentKey(parentRef(parent))) &&
       (!parent.retainedFor ||
@@ -908,10 +952,8 @@ export function ProgrammeDepartmentEditor({
   const selectedParent = parents.find(
     (option) => parentKey(parentRef(option)) === parentKey(parent),
   );
-  const identityLocked =
-    !!initial &&
-    !!document &&
-    programmeItemVersion(document, "goal", initial.id) > 0;
+  const dateBounds = contributionDateBounds(contributionDateBounds(period, document?.data), selectedParent?.goal);
+  const dateIssue = contributionDateIssue(text(values, "endDate"), dateBounds);
   const save = async () => {
     if (busy || readOnly) return;
     try {
@@ -931,7 +973,7 @@ export function ProgrammeDepartmentEditor({
           data: {
             ...goalFields,
             ...numeric,
-            startDate: initial?.startDate || period?.startDate || "",
+            startDate: initial?.startDate || dateBounds.startDate || "",
             departmentIds: [departmentId],
           },
         },
@@ -977,6 +1019,8 @@ export function ProgrammeDepartmentEditor({
         }}
       >
         <ErrorList error={error} />
+        {!readOnly && <ApprovalRequirements values={values} kind="goal" formId={formId} />}
+        <TemplateContentGuidance values={values} />
         <p className="text-sm text-slate-500">
           Set a SMART department goal: specific, measurable, achievable,
           relevant and time-bound.{" "}
@@ -997,12 +1041,12 @@ export function ProgrammeDepartmentEditor({
         <fieldset disabled={busy || readOnly} className="min-w-0 space-y-4">
           {identityLocked && (
             <p className="rounded-lg bg-indigo-50 p-3 text-sm text-slate-700">
-              Its company objective, department and generated ID stay fixed when
-              revising this department goal.
+              The company objective, department and generated goal ID stay fixed.
+              You can select a newer approved version of this same company objective
+              to revise its target or deadline. Review its approved dates below.
             </p>
           )}
           <fieldset
-            disabled={identityLocked}
             className="grid min-w-0 gap-4 sm:grid-cols-2"
           >
             <ParentSelect
@@ -1026,6 +1070,7 @@ export function ProgrammeDepartmentEditor({
               </select>
             </Field>
           </fieldset>
+          {selectedParent && <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">Parent v{selectedParent.version} · Effective {selectedParent.effectiveDate || "on approval"} · Approved dates {selectedParent.goal.startDate || "Not set"} to {selectedParent.goal.endDate || "Not set"}</p>}
           <p className="text-xs text-slate-500">
             <strong className="text-slate-700">Department goal ID:</strong>{" "}
             {initial?.code || "Generated when the goal is saved"}
@@ -1045,7 +1090,7 @@ export function ProgrammeDepartmentEditor({
           </Section>
           <div className="grid gap-4 sm:grid-cols-2">
             {input("measure", "Measure / KPI")}
-            {input("unit", "Unit")}
+            <PlanningUnitInput value={text(values, "unit")} onChange={(value) => draft.set("unit", value)} />
           </div>
           {area(
             "definition",
@@ -1095,14 +1140,15 @@ export function ProgrammeDepartmentEditor({
               "endDate",
               "Deadline",
               "date",
-              `Within ${planningPeriodLabel(cycle)}; no later than the company objective deadline.`,
+              `Allowed dates: ${dateBounds.startDate} to ${dateBounds.endDate}${selectedParent ? `, from approved parent v${selectedParent.version}` : ` within ${planningPeriodLabel(cycle)}`}.`,
               {
-                min: period?.startDate,
-                max: selectedParent?.goal.endDate || period?.endDate,
+                min: dateBounds.startDate,
+                max: dateBounds.endDate,
               },
             )}
             {select("frequency", "Operating review frequency", frequencies)}
           </div>
+          {dateIssue && <p role="alert" className="text-sm text-amber-800">{dateIssue} Select a newer approved parent version if its deadline has changed.</p>}
         </fieldset>
       </form>
     </Modal>
@@ -1139,12 +1185,14 @@ function individualBlock(
 export function ProgrammeIndividualEditor({
   cycle,
   document,
+  focusField,
   readOnly: requestedReadOnly = false,
   onClose,
   onSaved,
 }: {
   cycle: string;
   document?: PlanningDocument;
+  focusField?: string;
   readOnly?: boolean;
   onClose: () => void;
   onSaved: (documentId: string) => void;
@@ -1160,6 +1208,7 @@ export function ProgrammeIndividualEditor({
         document.status === "APPROVED"));
   const formId = useId(),
     nextBlock = useRef(2);
+  useEffect(() => { if (focusField) focusPlanningField(formId, focusField); }, [focusField, formId]);
   const scoped = useScopedDocument("INDIVIDUAL", cycle, document);
   const [employeeId, setEmployee] = useState(
     document?.scopeId ||
@@ -1178,6 +1227,12 @@ export function ProgrammeIndividualEditor({
   );
   const [dirty, setDirty] = useState(false),
     [error, setError] = useState("");
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const [definitionOpen, setDefinitionOpen] = useState(false);
   const canDefineKpi =
     ["SUPER_ADMIN", "ADMIN", "MANAGEMENT", "HOD"].includes(data.actor.role) ||
@@ -1187,7 +1242,7 @@ export function ProgrammeIndividualEditor({
         plan.data.coordinatorIds.includes(data.actor.employeeId),
     );
   const close = useClose(dirty, onClose);
-  const period = planningPeriodBounds(cycle);
+  const period = contributionDateBounds(planningPeriodBounds(cycle), document?.data);
   const employee = data.references.people.find(
     (person) => person.id === employeeId,
   );
@@ -1243,6 +1298,7 @@ export function ProgrammeIndividualEditor({
             return [key, raw === "" ? null : Number(raw)];
           }),
         );
+        const parent = approvedParents(data).find((option) => parentKey(parentRef(option)) === parentKey(block.fields.parent as ParentGoal | null));
         return {
           ...(block.fields.id ? { id: String(block.fields.id) } : {}),
           data: {
@@ -1250,7 +1306,7 @@ export function ProgrammeIndividualEditor({
             ...numeric,
             ownerId: employeeId,
             startDate:
-              text(block.fields, "startDate") || period?.startDate || "",
+              text(block.fields, "startDate") || contributionDateBounds(period, parent?.goal).startDate,
             departmentIds: employee?.departmentId
               ? [employee.departmentId]
               : [],
@@ -1346,6 +1402,7 @@ export function ProgrammeIndividualEditor({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Employee">
               <select
+                data-planning-field="ownerId"
                 className={control}
                 value={employeeId}
                 disabled={!!document || !!scoped.createdId}
@@ -1400,6 +1457,8 @@ export function ProgrammeIndividualEditor({
             const parentRow = parents.find(
               (option) => parentKey(parentRef(option)) === parentKey(parent),
             );
+            const dateBounds = contributionDateBounds(period, parentRow?.goal);
+            const dateIssue = contributionDateIssue(text(fields, "endDate"), dateBounds);
             const input = (
               name: string,
               label: string,
@@ -1408,14 +1467,15 @@ export function ProgrammeIndividualEditor({
             ) => (
               <Field label={label} hint={hint}>
                 <input
+                  data-planning-field={name}
                   className={control}
                   type={type}
                   value={text(fields, name)}
                   step={type === "number" ? "any" : undefined}
-                  min={type === "date" ? period?.startDate : undefined}
+                  min={type === "date" ? dateBounds.startDate : undefined}
                   max={
                     type === "date"
-                      ? parentRow?.goal.endDate || period?.endDate
+                      ? dateBounds.endDate
                       : undefined
                   }
                   onChange={(event) =>
@@ -1434,6 +1494,7 @@ export function ProgrammeIndividualEditor({
             const area = (name: string, label: string) => (
               <Field label={label}>
                 <textarea
+                  data-planning-field={name}
                   className={control}
                   rows={3}
                   maxLength={4000}
@@ -1451,6 +1512,7 @@ export function ProgrammeIndividualEditor({
             ) => (
               <Field label={label}>
                 <select
+                  data-planning-field={name}
                   className={control}
                   value={text(fields, name)}
                   onChange={(event) =>
@@ -1515,6 +1577,7 @@ export function ProgrammeIndividualEditor({
                   value={parent}
                   onChange={(value) => update(block.key, "parent", value)}
                 />
+                {parentRow && <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Parent {parentRow.goal.code} v{parentRow.version}: {parentRow.goal.startDate || "Not set"} to {parentRow.goal.endDate || "Not set"}</p>}
                 {!readOnly && parents.length === 0 && (
                   <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
                     No approved department goals are available for this planning
@@ -1525,7 +1588,7 @@ export function ProgrammeIndividualEditor({
                 {area("title", "What will this person achieve?")}
                 <div className="grid gap-4 sm:grid-cols-2">
                   {input("measure", "Measure / KPI")}
-                  {input("unit", "Unit")}
+                  <PlanningUnitInput value={text(fields, "unit")} onChange={(value) => update(block.key, "unit", value)} />
                 </div>
                 {area("definition", "How will it be measured?")}
                 <div className="grid gap-4 sm:grid-cols-3">
@@ -1543,10 +1606,11 @@ export function ProgrammeIndividualEditor({
                     "endDate",
                     "Deadline",
                     "date",
-                    "Within the planning period and no later than the parent goal.",
+                    `Allowed dates: ${dateBounds.startDate} to ${dateBounds.endDate}.`,
                   )}
                   {select("frequency", "Review frequency", frequencies)}
                 </div>
+                {dateIssue && <p className="text-sm text-amber-800" role="alert">{dateIssue}</p>}
                 {input("source", "Data source & verifier")}
                 <ProgrammeIndividualKpis
                   assignments={block.assignments}

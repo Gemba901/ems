@@ -17,7 +17,7 @@ export function FindingWeightage({ weightage }: { weightage?: unknown }) {
     <span
       className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 text-xs font-medium ${color}`}
     >
-      {findingWeightageText(weightage)}
+      {findingWeightageText(weightage).replace("Weightage", "SWOT importance")}
     </span>
   );
 }

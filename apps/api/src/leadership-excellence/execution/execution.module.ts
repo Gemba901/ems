@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
-import { TenancyModule } from 'src/tenancy/tenancy.module';
-import { PrismaModule } from 'src/prisma/prisma.module';
-import { AuthModule } from 'src/auth/auth.module';
-import { ModuleGuard } from 'src/auth/guards/module.guard';
+import { TenancyModule } from '../../tenancy/tenancy.module';
+import { PrismaModule } from '../../prisma/prisma.module';
+import { AuthModule } from '../../auth/auth.module';
+import { ModuleGuard } from '../../auth/guards/module.guard';
+import { PerformancePlanningModule } from '../performance-planning/performance-planning.module';
 import { ExecutionController } from './execution.controller';
 import { ExecutionService } from './execution.service';
 
 @Module({
-  imports: [TenancyModule, PrismaModule, AuthModule],
+  imports: [TenancyModule, PrismaModule, AuthModule, PerformancePlanningModule],
   controllers: [ExecutionController],
   providers: [ExecutionService, ModuleGuard],
   exports: [ExecutionService],

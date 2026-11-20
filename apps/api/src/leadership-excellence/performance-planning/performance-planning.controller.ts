@@ -43,6 +43,7 @@ import { PlanningReferencesService } from './planning-references.service';
 import { PlanningLibraryService } from './planning-library.service';
 import { PlanningLibraryQueryDto } from './dto/planning-library-query.dto';
 import type { Frequency } from './planning.types';
+import { resultSchedules } from './planning-result-periods';
 
 @TenantRequired()
 @Controller('leadership-excellence/performance-planning')
@@ -189,6 +190,20 @@ export class PerformancePlanningController {
   @Header('Cache-Control', 'no-store')
   workspace(@CurrentUser() user: AccessTokenPayload) {
     return this.service.getWorkspace(user);
+  }
+
+  @Get('result-periods')
+  @Header('Cache-Control', 'no-store')
+  async resultPeriods(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('documentId') documentId: string,
+    @Query('itemId') itemId: string,
+  ) {
+    // Reuse the workspace permission projection; raw planning state is not exposed.
+    const view = await this.service.getWorkspace(user);
+    const document = view.documents.find((item) => item.id === documentId);
+    if (!document) throw new NotFoundException('Planning record not found.');
+    return resultSchedules(document, itemId, view.references.timeZone);
   }
 
   @Post('commands')

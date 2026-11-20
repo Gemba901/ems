@@ -2300,12 +2300,13 @@ export function PlanSettings({
   }
   return (
     <Modal
-      title="Plan settings & access"
-      description={`Planning period ${planningPeriodLabel(document.cycle)}`}
+      title={document.kind === "SWOT" ? "Assessment settings" : "Plan settings"}
+      description={`${document.code} · ${document.data.title} · Planning period ${planningPeriodLabel(document.cycle)}`}
       onClose={onClose}
     >
       <div className="space-y-5">
         <ErrorList error={error} />
+        <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">These are the saved settings for {document.kind === "SWOT" ? "this SWOT assessment" : "this plan"}. When it was first created, EMS generated its name and period dates and selected available owner/reviewer defaults. They may have been updated since creation. Owner, reviewer and contributor selections below control responsibility and access; the dates control this plan's period.</p>
         <Field label="Plan name">
           <input
             className={control}

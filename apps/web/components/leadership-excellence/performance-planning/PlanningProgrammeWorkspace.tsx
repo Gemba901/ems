@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { SourceLink } from "@/services/leadership-excellence/performance-planning/types";
 import {
   programmeItemIssues,
@@ -33,7 +33,9 @@ import {
   type ProgrammeActionSeed,
 } from "./PlanningProgrammeActions";
 import { PlanningFindingEditor } from "./PlanningFindingEditor";
-import { ReviewFinding } from "./PlanningFindingsWorkspace";
+import { ReviewFinding, type FindingReviewDraft } from "./PlanningFindingsWorkspace";
+import { setPlanningUrl } from "./PlanningUrlState";
+import { approvalIssueField } from "@/services/leadership-excellence/performance-planning/editor-guidance";
 import { reviewedSwotSources } from "./PlanningSources";
 import { PlanSettings } from "./PlanningEditors";
 import { planningToday } from "./PlanningLinks";
@@ -59,6 +61,7 @@ type Editor =
       documentId: string;
       itemId?: string;
       source?: SourceLink;
+      focusField?: string;
     }
   | {
       kind: "goal";
@@ -66,8 +69,9 @@ type Editor =
       itemId?: string;
       parentObjectiveId?: string;
       parentDocumentId?: string;
+      focusField?: string;
     }
-  | { kind: "individual"; documentId?: string }
+  | { kind: "individual"; documentId?: string; focusField?: string }
   | { kind: "finding"; documentId: string; initial?: Record<string, unknown> };
 type Approval = {
   documentId: string;
@@ -76,13 +80,32 @@ type Approval = {
   revision?: boolean;
 };
 
+function savedEditorId(editor: Editor | null) {
+  if (!editor) return "";
+  if (editor.kind === "finding") return String(editor.initial?.id || "");
+  if (editor.kind === "individual") return editor.documentId || "";
+  return editor.itemId || "";
+}
+
 export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
+  return <Suspense fallback={<p className="p-5 text-sm text-slate-500">Loading planning workspace…</p>}><ProgrammeWorkspaceContent stage={stage} /></Suspense>;
+}
+
+function ProgrammeWorkspaceContent({ stage }: { stage: Stage }) {
   const { data, run, busy } = usePlanning();
   const { cycle } = useProgrammePeriod();
   const router = useRouter();
-  const [editor, setEditor] = useState<Editor | null>(null);
+  const searchParams = useSearchParams();
+  const [editor, setEditorState] = useState<Editor | null>(null);
+  const setEditor = (value: Editor | null) => {
+    setEditorState(value);
+    const savedId = savedEditorId(value);
+    setPlanningUrl({ edit: value && value.documentId && savedId ? `${value.kind}/${value.documentId}/${savedId}` : null });
+  };
   const [approval, setApproval] = useState<Approval | null>(null);
-  const [review, setReview] = useState<ProgrammeFinding | null>(null);
+  const [review, setReviewState] = useState<ProgrammeFinding | null>(null);
+  const setReview = (value: ProgrammeFinding | null) => { setReviewState(value); setPlanningUrl({ finding: value?.finding.id || null }); };
+  const [reviewDraft, setReviewDraft] = useState<FindingReviewDraft | undefined>();
   const [batch, setBatch] = useState<ProgrammeFinding[] | null>(null);
   const [action, setAction] = useState<ProgrammeActionSeed | null>(null);
   const [guide, setGuide] = useState(false);
@@ -100,6 +123,39 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
     null,
   );
   const [error, setError] = useState("");
+  const editParam = searchParams.get("edit"), findingParam = searchParams.get("finding");
+  useEffect(() => {
+    const plan = data.documents.find((item) => item.permissions.canRead && item.cycle === cycle && item.data.findings.some((finding) => finding.id === findingParam));
+    const finding = plan?.data.findings.find((finding) => finding.id === findingParam);
+    if (editParam) {
+      const [kind, documentId, itemId] = editParam.split("/");
+      const document = data.documents.find((item) => item.id === documentId && item.cycle === cycle && item.permissions.canRead);
+      if (!document) {
+        setEditorState(null);
+        setReviewState(null);
+        return;
+      }
+      let restored: Editor | null = null;
+      if (kind === "finding") {
+        const item = document.data.findings.find((item) => item.id === itemId);
+        if (item) restored = { kind, documentId, initial: { ...item } };
+      } else if (kind === "objective" && document.data.objectives.some((item) => item.id === itemId)) restored = { kind, documentId, itemId };
+      else if (kind === "goal" && document.data.goals.some((item) => item.id === itemId)) restored = { kind, documentId, itemId };
+      else if (kind === "individual" && document.kind === "INDIVIDUAL" && itemId === documentId) restored = { kind, documentId };
+      const next = restored;
+      setEditorState((current) => next && current?.kind === next.kind && current.documentId === next.documentId && savedEditorId(current) === savedEditorId(next) ? current : next);
+      if (plan && finding) setReturnToReview({ document: plan, finding });
+      setReviewState(null);
+    } else {
+      setEditorState((current) => savedEditorId(current) ? null : current);
+      setReviewState(plan && finding ? { document: plan, finding } : null);
+    }
+  }, [editParam, findingParam, cycle, data.documents]);
+  const closeEditor = () => {
+    setEditor(null);
+    if (returnToReview) { setReview(returnToReview); setReturnToReview(null); }
+    if (returnToApproval) { setApproval(returnToApproval); setReturnToApproval(null); }
+  };
   const document =
     editor && "documentId" in editor
       ? data.documents.find((item) => item.id === editor.documentId)
@@ -243,6 +299,7 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
       return;
     }
     if (event.action === "open") {
+      setReviewDraft(undefined);
       setEditor({
         kind: "finding",
         documentId: event.document.id,
@@ -251,6 +308,7 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
       return;
     }
     if (event.action === "review") {
+      setReviewDraft(undefined);
       setReview(event);
       return;
     }
@@ -336,13 +394,16 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
             (item) => item.id === editor.itemId,
           )}
           source={editor.source}
+          focusField={editor.focusField}
           readOnly={
             !!editor.itemId &&
             programmeItemState(document, "objective", editor.itemId).approved
           }
-          onClose={() => setEditor(null)}
+          onClose={closeEditor}
           onSaved={() => {
-            setEditor(null);
+            closeEditor();
+            if (returnToApproval) return;
+            if (stage === "company") return;
             router.push(
               "/leadership-excellence/performance-planning/objectives",
             );
@@ -359,14 +420,17 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
           )}
           parentObjectiveId={editor.parentObjectiveId}
           parentDocumentId={editor.parentDocumentId}
+          focusField={editor.focusField}
           readOnly={
             !!document &&
             !!editor.itemId &&
             programmeItemState(document, "goal", editor.itemId).approved
           }
-          onClose={() => setEditor(null)}
+          onClose={closeEditor}
           onSaved={() => {
-            setEditor(null);
+            closeEditor();
+            if (returnToApproval) return;
+            if (stage === "department") return;
             router.push(
               "/leadership-excellence/performance-planning/department-plans",
             );
@@ -375,36 +439,43 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
       )}
       {editor?.kind === "individual" && (
         <ProgrammeIndividualEditor
+          key={editor.documentId || "new"}
           cycle={cycle}
           document={document}
+          focusField={editor.focusField}
           readOnly={document?.status === "APPROVED"}
-          onClose={() => setEditor(null)}
-          onSaved={() => setEditor(null)}
+          onClose={closeEditor}
+          onSaved={closeEditor}
         />
       )}
       {editor?.kind === "finding" && document && (
         <PlanningFindingEditor
+          key={`${document.id}/${savedEditorId(editor) || "new"}`}
           document={document}
           initial={editor.initial}
-          onClose={() => setEditor(null)}
-          onSaved={() => setEditor(null)}
+          onClose={closeEditor}
+          onSaved={closeEditor}
         />
       )}
       {review && freshReview && (
         <ReviewFinding
+          key={`${freshReview.id}/${review.finding.id}`}
           document={freshReview}
+          initialReview={reviewDraft}
           finding={
             freshReview.data.findings.find(
               (item) => item.id === review.finding.id,
             ) || review.finding
           }
-          onClose={() => setReview(null)}
-          onSettings={() => {
+          onClose={() => { setReview(null); setReviewDraft(undefined); }}
+          onSettings={(draft) => {
+            setReviewDraft(draft);
             setReturnToReview(review);
             setReview(null);
             setSettings(freshReview.id);
           }}
           onNextAction={() => {
+            setReviewDraft(undefined);
             const finding =
               freshReview.data.findings.find(
                 (item) => item.id === review.finding.id,
@@ -412,13 +483,15 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
             setReview(null);
             findingAction({ action: "follow", document: freshReview, finding });
           }}
-          onEdit={() => {
+          onEdit={(draft) => {
+            setReviewDraft({ ...draft, checked: false });
+            setReturnToReview(review);
             setEditor({
               kind: "finding",
               documentId: freshReview.id,
-              initial: { ...review.finding },
+              initial: { ...(freshReview.data.findings.find((finding) => finding.id === review.finding.id) || review.finding) },
             });
-            setReview(null);
+            setReviewState(null);
           }}
         />
       )}
@@ -436,6 +509,11 @@ export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
         <ProgrammeApproval
           event={approval}
           onClose={() => setApproval(null)}
+          onEdit={(focusField) => {
+            setReturnToApproval(approval);
+            setApproval(null);
+            setEditor(approval.kind === "individual" ? { kind: "individual", documentId: approval.documentId, focusField } : { kind: approval.kind, documentId: approval.documentId, itemId: approval.itemId, focusField });
+          }}
           onSettings={(id) => {
             setReturnToApproval(approval);
             setApproval(null);
@@ -501,11 +579,13 @@ function ProgrammeApproval({
   onClose,
   onSettings,
   onRevised,
+  onEdit,
 }: {
   event: Approval;
   onClose: () => void;
   onSettings: (id: string) => void;
   onRevised: () => void;
+  onEdit: (field: string) => void;
 }) {
   const { data, run, busy } = usePlanning();
   const [revision] = useState(data.revision);
@@ -644,9 +724,11 @@ function ProgrammeApproval({
               <>
                 <strong>Complete these checks before approval</strong>
                 <ul className="mt-3 list-disc space-y-2 pl-5">
-                  {issues.map((issue) => (
-                    <li key={issue}>{issue}</li>
-                  ))}
+                  {issues.map((issue) => {
+                    const field = approvalIssueField(issue);
+                    const editable = field === "settings" ? plan.permissions.canConfigure : plan.permissions.canEdit;
+                    return <li key={issue}>{issue}{editable && <Button type="button" variant="link" size="xs" onClick={() => field === "settings" ? onSettings(plan.id) : onEdit(field)}>Go to field</Button>}</li>;
+                  })}
                 </ul>
               </>
             ) : (

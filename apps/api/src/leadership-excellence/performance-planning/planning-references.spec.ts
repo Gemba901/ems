@@ -1,5 +1,7 @@
 import { PlanningReferencesService } from './planning-references.service';
 import { DEFAULT_SCHEDULE } from 'src/work/work-schedule';
+import { permissions } from './planning.rules';
+import type { PlanningCalendar, PlanningDocument } from './planning.types';
 
 function fixture() {
   const db = {
@@ -58,6 +60,70 @@ function fixture() {
 }
 
 describe('planning dependency adapters', () => {
+  it('includes active and probation staff while keeping employment eligibility separate from permissions', async () => {
+    const { db, service, user } = fixture();
+    const original = (await db.employee.findMany())[0];
+    const candidates = [
+      { ...original, employmentStatus: 'PROBATION' },
+      { ...original, id: 'active-2', userId: null, employmentStatus: 'ACTIVE' },
+      {
+        ...original,
+        id: 'former-3',
+        userId: null,
+        employmentStatus: 'RESIGNED',
+      },
+      {
+        ...original,
+        id: 'suspended-4',
+        userId: null,
+        employmentStatus: 'SUSPENDED',
+      },
+    ];
+    db.employee.findMany.mockImplementation(
+      async (query: { where: { employmentStatus: { in: string[] } } }) =>
+        candidates.filter((person) =>
+          query.where.employmentStatus.in.includes(person.employmentStatus),
+        ),
+    );
+    const { references, actor } = await service.get(
+      Object.assign({}, user, { roleLevel: 'EMPLOYEE' }),
+    );
+    expect(references.people.map((person) => person.id)).toEqual([
+      'emp-1',
+      'active-2',
+    ]);
+    expect(references.teams[0].memberIds).toEqual(['emp-1', 'active-2']);
+    expect(actor).toMatchObject({
+      employeeId: 'emp-1',
+      departmentId: 'dept-1',
+      role: 'EMPLOYEE',
+    });
+    expect(
+      permissions(
+        {
+          kind: 'COMPANY',
+          data: {
+            ownerId: 'other',
+            approverId: 'other',
+            coordinatorIds: [],
+            contributorIds: [],
+          },
+        } as unknown as PlanningDocument,
+        actor,
+      ).canApprove,
+    ).toBe(false);
+  });
+
+  it('never matches an unlinked employee to the actor by name', async () => {
+    const { db, service, user } = fixture();
+    const original = (await db.employee.findMany())[0];
+    db.employee.findMany.mockResolvedValue([{ ...original, userId: null }]);
+    const { actor, references } = await service.get(user);
+    expect(references.people).toHaveLength(1);
+    expect(actor.employeeId).toBe('');
+    expect(actor.departmentId).toBe('');
+  });
+
   it('uses existing organisation time zone and shared observed holidays without writing records', async () => {
     const { db, service, user } = fixture();
     const { references, actor } = await service.get(user);
@@ -72,6 +138,8 @@ describe('planning dependency adapters', () => {
     expect(references.dependencyStatus?.library).toBe('LOCAL_CATALOGUE');
     expect(references.direction).toBeNull();
     expect(references.dependencyStatus?.direction).toBe('UNAVAILABLE');
+    expect(references.dependencyStatus?.pillarWeights).toBe('UNAVAILABLE');
+    expect(references.pillarWeights).toBeUndefined();
     expect(actor.name).toBe('Asha Account');
     expect(references.sourceUpdatedAt).toBe('2026-11-01T10:00:00.000Z');
     expect(db.employee.findMany.mock.calls[0][0].where.organizationId).toBe(
@@ -115,6 +183,62 @@ describe('planning dependency adapters', () => {
       mission: '',
     });
     expect((await service.get(user)).references.direction?.values).toEqual([]);
+  });
+
+  it('consumes only approved versioned Area 01 pillar weights without sharing mutable provider data', async () => {
+    const { service, direction, user } = fixture();
+    const allocation = {
+      source: 'AREA_01',
+      approved: true,
+      version: 'allocation-v3',
+      weights: { LEX: 15, PEX: 15, OPX: 25, CMX: 25, SGEX: 10, FPEX: 10 },
+    };
+    direction.getApprovedPillarWeights = jest
+      .fn()
+      .mockResolvedValue(allocation);
+    const { references } = await service.get(user);
+    expect(direction.getApprovedPillarWeights).toHaveBeenCalledWith('org-1');
+    expect(references.pillarWeights).toEqual(allocation);
+    expect(references.dependencyStatus?.pillarWeights).toBe('APPROVED');
+    allocation.weights.OPX = 30;
+    expect(references.pillarWeights?.weights.OPX).toBe(25);
+
+    direction.getApprovedPillarWeights = jest.fn().mockResolvedValue({
+      ...allocation,
+      approved: false,
+    });
+    const unpublished = (await service.get(user)).references;
+    expect(unpublished.pillarWeights).toBeUndefined();
+    expect(unpublished.dependencyStatus?.pillarWeights).toBe('UNAVAILABLE');
+  });
+
+  it.each([
+    { version: '' },
+    { version: 0 },
+    { source: 'WORK_SETTINGS' },
+    { weights: { LEX: 10, PEX: 20, OPX: 20, CMX: 20, SGEX: 10, FPEX: 10 } },
+    {
+      weights: {
+        LEX: 10,
+        PEX: 20,
+        OPX: Number.NaN,
+        CMX: 20,
+        SGEX: 10,
+        FPEX: 10,
+      },
+    },
+  ])('rejects an invalid approved pillar publication %j', async (invalid) => {
+    const { service, direction, user } = fixture();
+    direction.getApprovedPillarWeights = jest.fn().mockResolvedValue({
+      source: 'AREA_01',
+      approved: true,
+      version: 1,
+      weights: { LEX: 10, PEX: 20, OPX: 30, CMX: 20, SGEX: 10, FPEX: 10 },
+      ...invalid,
+    });
+    await expect(service.get(user)).rejects.toThrow(
+      'approved Area 01 pillar allocation',
+    );
   });
 
   it('uses stable provider positions including vacancies, never job-title based IDs', async () => {
@@ -180,5 +304,53 @@ describe('planning dependency adapters', () => {
     });
     const current = await service.getCalendar('org-1');
     expect(old.version).not.toBe(current.version);
+  });
+
+  it('detaches approved calendar snapshots from later provider mutations', async () => {
+    const { service, framework } = fixture();
+    const approved: PlanningCalendar = {
+      ...(await service.getCalendar('org-1')),
+      id: 'approved-calendar',
+      version: 4,
+      source: 'AREA_02',
+      approved: true,
+      frequencies: ['WEEKLY', 'MONTHLY'],
+    };
+    framework.getApprovedPlanningCalendar = jest
+      .fn()
+      .mockResolvedValue(approved);
+    const saved = await service.getCalendar('org-1');
+    approved.version = 5;
+    approved.workingDays.push(0);
+    approved.holidays.push('2026-12-25');
+    approved.frequencies?.push('DAILY');
+    expect(saved.version).toBe(4);
+    expect(saved.workingDays).not.toContain(0);
+    expect(saved.holidays).not.toContain('2026-12-25');
+    expect(saved.frequencies).toEqual(['WEEKLY', 'MONTHLY']);
+  });
+
+  it('rejects an unversioned approved calendar instead of relabelling fallback data as approved', async () => {
+    const { service, framework } = fixture();
+    const approved = {
+      ...(await service.getCalendar('org-1')),
+      source: 'AREA_02',
+      approved: true,
+      version: '',
+    };
+    framework.getApprovedPlanningCalendar = jest
+      .fn()
+      .mockResolvedValue(approved);
+    await expect(service.getCalendar('org-1')).rejects.toThrow(
+      'published version',
+    );
+    framework.getApprovedPlanningCalendar = jest.fn().mockResolvedValue({
+      ...approved,
+      source: 'WORK_SETTINGS',
+      version: 1,
+    });
+    await expect(service.getCalendar('org-1')).rejects.toThrow(
+      'source is invalid',
+    );
   });
 });

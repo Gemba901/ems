@@ -1,6 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { formatDateOnly } from "@/lib/work/format";
+import { useAuthStore } from "@/store/auth.store";
+import { PerformancePlanningService } from "@/services/leadership-excellence/performance-planning.service";
+import { resultPeriodOptions } from "@/services/leadership-excellence/performance-planning/result-periods";
 import type { ProgrammeResult } from "@/services/leadership-excellence/performance-planning/types";
 import {
   programmeCommitments,
@@ -8,7 +13,6 @@ import {
   programmeResultMeetsTarget,
   type ProgrammeCommitment,
 } from "@/services/leadership-excellence/performance-planning/programme";
-import { planningPeriodBounds } from "@/services/leadership-excellence/performance-planning/planning-period";
 import { usePlanning } from "./PlanningProvider";
 import { planningToday } from "./PlanningLinks";
 import { Button, control, ErrorList, Field, Modal } from "./PlanningUi";
@@ -224,7 +228,8 @@ export function PlanningProgrammeResults({
                       </p>
                       {label === "Latest verified period" && latest && (
                         <p className="text-xs text-slate-500">
-                          {latest.periodStart} – {latest.periodEnd}
+                          {formatDateOnly(latest.periodStart)} –{" "}
+                          {formatDateOnly(latest.periodEnd)}
                         </p>
                       )}
                     </div>
@@ -300,7 +305,8 @@ export function PlanningProgrammeResults({
                         <td className="min-w-48">
                           <strong>{item.title}</strong>
                           <p className="mt-1 text-slate-500">
-                            {row.periodStart} – {row.periodEnd} · v{row.version}
+                            {formatDateOnly(row.periodStart)} –{" "}
+                            {formatDateOnly(row.periodEnd)} · v{row.version}
                           </p>
                         </td>
                         <td>
@@ -393,7 +399,10 @@ export function PlanningProgrammeResults({
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm">{row.note}</p>
                 <p className="mt-3 text-xs text-slate-500">
-                  {name(row.reviewedBy)} · Next review {row.nextReviewDate}
+                  {name(row.reviewedBy)} · Next review{" "}
+                  {row.nextReviewDate
+                    ? formatDateOnly(row.nextReviewDate)
+                    : "Not set"}
                 </p>
               </article>
             ))}
@@ -413,7 +422,6 @@ export function PlanningProgrammeResults({
       </section>
       {record !== null && (
         <ProgrammeResultEditor
-          cycle={cycle}
           commitments={commitments}
           initial={record}
           onClose={() => setRecord(null)}
@@ -439,7 +447,8 @@ export function PlanningProgrammeResults({
             <strong>
               {verify.actual} {resultTitle(verify).unit}
             </strong>{" "}
-            · {verify.periodStart} – {verify.periodEnd}
+            · {formatDateOnly(verify.periodStart)} –{" "}
+            {formatDateOnly(verify.periodEnd)}
           </p>
           <p className="mt-4 text-sm">
             <strong>Source:</strong> {verify.source}
@@ -524,41 +533,56 @@ export function PlanningProgrammeResults({
 }
 
 function ProgrammeResultEditor({
-  cycle,
   commitments,
   initial,
   onClose,
 }: {
-  cycle: string;
   commitments: ProgrammeCommitment[];
   initial: string;
   onClose: () => void;
 }) {
-  const { run, busy } = usePlanning();
+  const { data, run, busy } = usePlanning();
+  const token = useAuthStore((state) => state.accessToken);
+  const organizationId = useAuthStore((state) => state.user?.organizationId);
+  const [openingRevision] = useState(data.revision);
   const [selected, setSelected] = useState(initial);
-  const [month, setMonth] = useState("");
+  const [periodKey, setPeriodKey] = useState("");
   const [value, setValue] = useState("");
   const [numerator, setNumerator] = useState("");
   const [denominator, setDenominator] = useState("");
   const [source, setSource] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
-  const bounds = planningPeriodBounds(cycle);
+  const commitment = commitments.find((item) => key(item) === selected);
+  const schedules = useQuery({
+    queryKey: [
+      "planning-result-periods",
+      organizationId,
+      data.actor.userId,
+      data.actor.role,
+      commitment?.document.id,
+      commitment?.item.id,
+      data.revision,
+    ],
+    queryFn: ({ signal }) =>
+      PerformancePlanningService.resultPeriods(
+        token!,
+        commitment!.document.id,
+        commitment!.item.id,
+        signal,
+      ),
+    enabled: !!token && !!commitment,
+    retry: false,
+  });
+  const periods = resultPeriodOptions(schedules.data || []);
+  const selectedPeriod = periods.find((period) => period.key === periodKey);
+  const schedule = schedules.data?.find(
+    (item) => item.version === selectedPeriod?.version,
+  );
   async function save() {
-    const target = commitments.find((item) => key(item) === selected);
-    if (!target || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
-      setError("Choose an approved commitment and a measurement month.");
-      return;
-    }
-    const last = new Date(
-      Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
-    )
-      .toISOString()
-      .slice(0, 10);
-    const first = `${month}-01`;
-    if (bounds && (last < bounds.startDate || first > bounds.endDate)) {
+    if (!commitment || !selectedPeriod?.canRecord || schedules.isFetching) {
       setError(
-        "Choose a measurement month within the selected planning period.",
+        "Choose an approved commitment and a completed reporting period.",
       );
       return;
     }
@@ -567,18 +591,19 @@ function ProgrammeResultEditor({
       await run(
         "SAVE_RESULT",
         {
-          itemId: target.item.id,
-          version: target.version,
-          periodStart:
-            bounds && first < bounds.startDate ? bounds.startDate : first,
-          periodEnd: bounds && last > bounds.endDate ? bounds.endDate : last,
+          itemId: commitment.item.id,
+          version: selectedPeriod.version,
+          periodStart: selectedPeriod.start,
+          periodEnd: selectedPeriod.end,
           actual: numberOrNull(value),
-          numerator: numberOrNull(numerator),
-          denominator: numberOrNull(denominator),
+          numerator: schedule?.unit === "%" ? numberOrNull(numerator) : null,
+          denominator:
+            schedule?.unit === "%" ? numberOrNull(denominator) : null,
           source,
           notes,
         },
-        target.document.id,
+        commitment.document.id,
+        openingRevision,
       );
       onClose();
     } catch (cause) {
@@ -597,7 +622,12 @@ function ProgrammeResultEditor({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={busy} onClick={() => void save()}>
+          <Button
+            disabled={
+              busy || schedules.isFetching || !selectedPeriod?.canRecord
+            }
+            onClick={() => void save()}
+          >
             Save for verification
           </Button>
         </>
@@ -612,7 +642,10 @@ function ProgrammeResultEditor({
           <select
             className={control}
             value={selected}
-            onChange={(event) => setSelected(event.target.value)}
+            onChange={(event) => {
+              setSelected(event.target.value);
+              setPeriodKey("");
+            }}
           >
             {commitments.map((item) => (
               <option value={key(item)} key={key(item)}>
@@ -626,16 +659,72 @@ function ProgrammeResultEditor({
             ))}
           </select>
         </Field>
-        <Field label="Measurement period">
-          <input
-            type="month"
-            min={bounds?.startDate.slice(0, 7)}
-            max={bounds?.endDate.slice(0, 7)}
+        <Field
+          label="Reporting period"
+          hint="Periods come from the approved reporting schedule. The target version is selected automatically for each period."
+        >
+          <select
             className={control}
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-          />
+            value={periodKey}
+            disabled={schedules.isFetching || !periods.length}
+            onChange={(event) => setPeriodKey(event.target.value)}
+          >
+            <option value="">
+              {schedules.isFetching
+                ? "Loading reporting periods…"
+                : "Select a reporting period…"}
+            </option>
+            {periods.map((period) => (
+              <option
+                key={period.key}
+                value={period.key}
+                disabled={!period.canRecord}
+              >
+                {formatDateOnly(period.start)}
+                {period.start !== period.end
+                  ? ` – ${formatDateOnly(period.end)}`
+                  : ""}{" "}
+                · v{period.version}
+                {!period.canRecord
+                  ? period.scheduled === false
+                    ? " · Not scheduled"
+                    : " · Period not finished"
+                  : ""}
+              </option>
+            ))}
+          </select>
         </Field>
+        {schedules.error && <ErrorList error={schedules.error.message} />}
+        {!schedules.isPending && !schedules.error && !periods.length && (
+          <p className="text-sm text-amber-700">
+            This commitment has no reporting periods. Set its measurement
+            frequency and dates in a revised plan before entering results.
+          </p>
+        )}
+        {selectedPeriod && schedule && (
+          <div
+            className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm"
+            role="status"
+          >
+            <strong>
+              Approved target: {selectedPeriod.target ?? "Not set"}{" "}
+              {selectedPeriod.unit}
+            </strong>
+            <p className="mt-1">
+              Version {schedule.version} · Effective{" "}
+              {formatDateOnly(schedule.effectiveDate)} ·{" "}
+              {schedule.frequency.replaceAll("_", " ").toLowerCase()}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {schedule.calendarSource === "AREA_02"
+                ? "Approved reporting calendar"
+                : schedule.calendarSource === "WORK_SETTINGS"
+                  ? "Work Settings calendar captured at approval"
+                  : "Original reporting schedule (no calendar snapshot)"}
+              {schedule.calendarVersion ? ` · ${schedule.calendarVersion}` : ""}
+            </p>
+          </div>
+        )}
         <Field
           label="Measured value"
           hint="Use the commitment's unit. Zero is valid; an empty value is not zero."
@@ -648,37 +737,39 @@ function ProgrammeResultEditor({
             onChange={(event) => setValue(event.target.value)}
           />
         </Field>
-        <details className="rounded-lg border border-slate-200 p-4">
-          <summary className="cursor-pointer text-xs font-semibold">
-            Calculate a percentage from counts
-          </summary>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Count meeting the measure">
-              <input
-                type="number"
-                min={0}
-                step={1}
-                className={control}
-                value={numerator}
-                onChange={(event) => setNumerator(event.target.value)}
-              />
-            </Field>
-            <Field label="Total eligible count">
-              <input
-                type="number"
-                min={1}
-                step={1}
-                className={control}
-                value={denominator}
-                onChange={(event) => setDenominator(event.target.value)}
-              />
-            </Field>
-          </div>
-          <p className="mt-3 text-xs text-slate-500">
-            Use the same population and counting rule as the baseline. Valid
-            counts replace the direct value.
-          </p>
-        </details>
+        {schedule?.unit === "%" && (
+          <details className="rounded-lg border border-slate-200 p-4">
+            <summary className="cursor-pointer text-xs font-semibold">
+              Calculate a percentage from counts
+            </summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="Count meeting the measure">
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  className={control}
+                  value={numerator}
+                  onChange={(event) => setNumerator(event.target.value)}
+                />
+              </Field>
+              <Field label="Total eligible count">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className={control}
+                  value={denominator}
+                  onChange={(event) => setDenominator(event.target.value)}
+                />
+              </Field>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Use the same population and counting rule as the baseline. Valid
+              counts replace the direct value.
+            </p>
+          </details>
+        )}
         <Field label="Source record / location">
           <input
             className={control}

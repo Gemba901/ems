@@ -5,6 +5,7 @@ import { SlidersHorizontal } from "lucide-react";
 import type {
   Objective,
   Pillar,
+  PlanningDocument,
 } from "@/services/leadership-excellence/performance-planning/types";
 import {
   PILLAR_BUDGETS,
@@ -12,28 +13,34 @@ import {
   formatObjectiveWeight,
   objectiveAllocation,
   objectiveWeightLimit,
+  planningPillarBudgets,
 } from "@/services/leadership-excellence/performance-planning/objective-weightage";
 import { Button, Modal } from "./PlanningUi";
+import { usePlanning } from "./PlanningProvider";
 
 export function ObjectiveWeightSummary({
   objective,
+  document,
 }: {
   objective: Objective;
+  document?: PlanningDocument;
 }) {
-  const limit = objectiveWeightLimit(objective.pillar);
+  const { data } = usePlanning();
+  const plan = document || data.documents.find((plan) => plan.data.objectives.some((item) => item.id === objective.id));
+  const limit = objectiveWeightLimit(objective.pillar, planningPillarBudgets(plan, data.references).weights);
   return (
     <div
       className="space-y-1.5 text-xs text-slate-500 sm:shrink-0"
       aria-label={`Priority and weightage for ${objective.title || objective.code}`}
     >
       <p>
-        Priority:{" "}
+        Objective priority:{" "}
         <strong className="font-semibold text-slate-900">
           {objective.priority == null ? "Not set" : `${objective.priority}/10`}
         </strong>
       </p>
       <p>
-        Weightage:{" "}
+        Weight in company score:{" "}
         <strong className="font-semibold text-slate-900">
           {objective.weightage == null
             ? "Unassigned"
@@ -52,11 +59,15 @@ export function ObjectiveWeightSummary({
 export function ObjectiveAllocationNotice({
   objectives,
   pillar,
+  document,
 }: {
   objectives: readonly Objective[];
   pillar: Pillar;
+  document?: PlanningDocument;
 }) {
-  const allocation = objectiveAllocation(objectives, pillar);
+  const { data } = usePlanning();
+  const plan = document || data.documents.find((plan) => plan.data.objectives.some((item) => objectives.some((objective) => objective.id === item.id)));
+  const allocation = objectiveAllocation(objectives, pillar, planningPillarBudgets(plan, data.references).weights);
   if (!allocation.count || allocation.balanced) return null;
   return (
     <p role="status" className="text-xs leading-5 text-amber-800">
@@ -68,12 +79,17 @@ export function ObjectiveAllocationNotice({
 
 export function ObjectiveAllocation({
   objectives,
+  document,
 }: {
   objectives: readonly Objective[];
+  document?: PlanningDocument;
 }) {
+  const { data } = usePlanning();
+  const plan = document || data.documents.find((plan) => plan.data.objectives.some((item) => objectives.some((objective) => objective.id === item.id)));
+  const budgets = planningPillarBudgets(plan, data.references);
   const [open, setOpen] = useState(false);
   const allocations = (Object.keys(PILLAR_BUDGETS) as Pillar[]).map((pillar) =>
-    objectiveAllocation(objectives, pillar),
+    objectiveAllocation(objectives, pillar, budgets.weights),
   );
   return (
     <>
@@ -92,6 +108,7 @@ export function ObjectiveAllocation({
           }
         >
           <div className="space-y-3">
+            <p className="text-xs leading-5 text-slate-500">{budgets.label}.</p>
             {allocations.map((allocation) => (
               <section
                 key={allocation.pillar}
@@ -115,9 +132,7 @@ export function ObjectiveAllocation({
               </section>
             ))}
             <p className="text-xs leading-5 text-slate-500">
-              You can save incomplete drafts. Objectives in each used pillar
-              must total its fixed allocation before approval. Values are never
-              redistributed automatically.
+              Individual objectives can be approved within the pillar budget while allocation remains incomplete. Whole-plan approval requires each used pillar's total to match its allocation. Unallocated weight is a planning gap, not failed performance. Values are never redistributed automatically.
             </p>
           </div>
         </Modal>

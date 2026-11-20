@@ -4,6 +4,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { calendarPeriods } from './planning-calendar';
+import { measurementValueIssue } from './planning-measurements';
 import {
   cleanNumber,
   cleanText,
@@ -22,15 +24,18 @@ import {
   assignmentReadinessIssues,
   planSetupIssues,
   validatePlan,
+  approvedPlanningItems,
 } from './planning.rules';
 import type {
   Goal,
+  Frequency,
   Objective,
   PlanningActor,
   PlanningDocument,
   PlanningReferences,
   PlanningState,
   ProgrammeResult,
+  TargetPeriod,
 } from './planning.types';
 
 export function programmeItemLocked(
@@ -74,6 +79,13 @@ export function programmeItemIssues(
   );
   need(item.definition?.trim(), 'Explain exactly how this measure is counted.');
   need(numeric(item.target), 'Enter a numerical target; zero is valid.');
+  for (const [label, value] of [
+    ['Baseline', item.baseline],
+    ['Target', item.target],
+  ] as const) {
+    const issue = measurementValueIssue(item.unit, value, label);
+    if (issue) errors.push(issue);
+  }
   need(person(item.ownerId), 'Choose the responsible person from EMS.');
   need(
     validDate(item.endDate) &&
@@ -134,7 +146,7 @@ export function programmeItemIssues(
       need(o.otherBusinessFocus?.trim(), 'Describe the Business focus.');
     need(o.dataSource?.trim(), 'Identify the source of the company measure.');
     need(
-      o.reviewFrequency?.trim(),
+      FREQUENCIES.includes(o.reviewFrequency as Frequency),
       'Choose the company measurement review frequency.',
     );
     need(o.selectionReason?.trim(), 'Explain why this objective was selected.');
@@ -151,15 +163,17 @@ export function programmeItemIssues(
       'Enter priority as a whole number from 1 to 10.',
     );
     need(
-      validObjectiveWeightage(o.weightage, o.pillar),
+      validObjectiveWeightage(o.weightage, o.pillar, refs, document),
       'Enter weightage within the selected pillar allocation.',
     );
-    const allocation = objectiveAllocations(document.data.objectives).find(
-      (a) => a.pillar === o.pillar,
-    );
+    const allocation = objectiveAllocations(
+      document.data.objectives,
+      refs,
+      document,
+    ).find((a) => a.pillar === o.pillar);
     need(
-      allocation?.balanced,
-      `${o.pillar || 'Selected pillar'}: objective weightages must total exactly ${allocation?.target || 'the pillar allocation'}%.`,
+      allocation && allocation.total <= allocation.target,
+      `${o.pillar || 'Selected pillar'}: objective weightages must not exceed ${allocation?.target || 'the pillar allocation'}%.`,
     );
     errors.push(
       ...sourceIssues(
@@ -238,6 +252,17 @@ export function planningReadinessIssues(
   if (!programme) return validatePlan(document, state, refs, today);
   const errors = planSetupIssues(document, state, refs);
   if (!rows.length) errors.push('Add at least one measurable commitment.');
+  if (document.kind === 'COMPANY')
+    for (const allocation of objectiveAllocations(
+      document.data.objectives,
+      refs,
+      document,
+    )) {
+      if (allocation.count && !allocation.balanced)
+        errors.push(
+          `${allocation.pillar}: objective weightages must total exactly ${allocation.target}% before approving the whole plan. Currently ${allocation.total}%.`,
+        );
+    }
   for (const row of rows)
     errors.push(
       ...programmeItemIssues(
@@ -261,7 +286,11 @@ export function programmeCommitment(
   const snapshot = document.versions.find((v) => v.version === version);
   if (!snapshot)
     throw new BadRequestException('Choose an approved commitment version.');
-  if (snapshot.approvedItem && snapshot.approvedItem.itemId !== itemId)
+  if (
+    (snapshot.approvedItem && snapshot.approvedItem.itemId !== itemId) ||
+    (snapshot.itemVersions?.[itemId] &&
+      snapshot.itemVersions[itemId] !== version)
+  )
     throw new BadRequestException(
       'Choose this commitment’s own approval version.',
     );
@@ -275,6 +304,79 @@ export function programmeCommitment(
       'This commitment was not approved in that version.',
     );
   return { snapshot, item };
+}
+
+/** The initial approval can report the commitment's earlier planning periods.
+ * Subsequent revisions start on their effective dates. A revision inside a
+ * calendar period creates two explicit segments, each with one immutable target. */
+export function programmeResultPeriods(
+  document: PlanningDocument,
+  itemId: string,
+  version: number,
+): TargetPeriod[] {
+  const { snapshot, item } = programmeCommitment(document, itemId, version);
+  const history = document.versions
+    .filter((entry) =>
+      approvedPlanningItems(document, entry).some(
+        (row) => row.goal.id === itemId,
+      ),
+    )
+    .sort((a, b) => a.version - b.version);
+  const first = history[0];
+  if (!first) return [];
+  const start = item.startDate || snapshot.data.startDate;
+  const end = item.endDate || snapshot.data.endDate;
+  const frequency = (
+    document.kind === 'COMPANY'
+      ? (item as Objective).reviewFrequency
+      : (item as Goal).frequency
+  ) as Frequency;
+  const periods = calendarPeriods(start, end, frequency, snapshot.calendar);
+  const effective = (entry: typeof snapshot) =>
+    entry.version === first.version ? start : entry.effectiveDate;
+  const activeAt = (date: string) => history.filter((entry) => effective(entry) <= date).at(-1);
+  const previousDay = (value: string) =>
+    new Date(Date.parse(`${value}T00:00:00Z`) - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  const boundaries = [
+    ...new Set([
+      start,
+      ...history.map(effective).filter((date) => date > start && date <= end),
+    ]),
+  ].sort().filter((date) => date === start || activeAt(date)?.version !== activeAt(previousDay(date))?.version);
+  const result: TargetPeriod[] = [];
+  for (const period of periods) {
+    const cuts = [
+      period.start,
+      ...boundaries.filter((date) => date > period.start && date <= period.end),
+    ];
+    for (let index = 0; index < cuts.length; index++) {
+      const segmentStart = cuts[index];
+      const active = activeAt(segmentStart);
+      if (active?.version !== version) continue;
+      const segmentEnd =
+        index + 1 < cuts.length ? previousDay(cuts[index + 1]) : period.end;
+      const segment = calendarPeriods(
+        segmentStart,
+        segmentEnd,
+        frequency,
+        snapshot.calendar,
+      )[0];
+      result.push({
+        ...segment,
+        id: `${segmentStart}/${segmentEnd}`,
+        label:
+          segmentStart === segmentEnd
+            ? segmentStart
+            : `${segmentStart} – ${segmentEnd}`,
+        start: segmentStart,
+        end: segmentEnd,
+        target: item.target ?? null,
+      });
+    }
+  }
+  return result;
 }
 export function programmeTargetMet(actual: number, item: Objective | Goal) {
   if (typeof item.target !== 'number' || !Number.isFinite(item.target))
@@ -313,11 +415,29 @@ export function recordProgrammeResult(
     !validDate(periodStart) ||
     !validDate(periodEnd) ||
     periodStart > periodEnd ||
-    periodStart < document.data.startDate ||
-    periodEnd > document.data.endDate
+    periodStart < snapshot.data.startDate ||
+    periodEnd > snapshot.data.endDate
   )
     throw new BadRequestException(
       'Choose a measurement period within the planning period.',
+    );
+  if (periodEnd > today)
+    throw new BadRequestException(
+      'Actual results cannot include future dates. Choose a completed reporting period.',
+    );
+  const reportingPeriod = programmeResultPeriods(
+    document,
+    itemId,
+    version,
+  ).find(
+    (period) =>
+      period.start === periodStart &&
+      period.end === periodEnd &&
+      period.scheduled !== false,
+  );
+  if (!reportingPeriod)
+    throw new BadRequestException(
+      'Choose a scheduled reporting period for the approval version effective during that period. Split a period at a revision effective date.',
     );
   if (
     (state.programmeResults || []).some(
@@ -355,6 +475,8 @@ export function recordProgrammeResult(
     throw new BadRequestException(
       'Enter a valid measured value; zero is valid and a blank value is not zero.',
     );
+  const actualIssue = measurementValueIssue(item.unit, actual, 'Actual');
+  if (actualIssue) throw new BadRequestException(actualIssue);
   const source = cleanText(payload.source),
     notes = cleanText(payload.notes);
   if (!source || !notes)

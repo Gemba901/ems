@@ -110,16 +110,21 @@ export const LEX_AREAS: LexArea[] = [
     label: "Performance Execution",
     name: "Department & Employee Performance Execution",
     basePath: `${BASE}/execution`,
-    href: `${BASE}/execution/results-entry`,
+    href: `${BASE}/execution`,
     items: [
       {
+        code: "04.01",
+        label: "My Department & My Performance",
+        href: `${BASE}/execution`,
+      },
+      {
         code: "04.02",
-        label: "Performance results",
+        label: "KPI results",
         href: `${BASE}/execution/results-entry`,
       },
       {
         code: "04.02",
-        label: "Delivery actions",
+        label: "My actions",
         href: `${BASE}/execution/delivery-actions`,
       },
       {

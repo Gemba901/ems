@@ -60,6 +60,13 @@ describe('EMS department directory', () => {
     expect(f.db.department.findMany.mock.calls[0][0].where).toEqual({ organizationId: 'one' });
     expect(f.db.employee.groupBy.mock.calls[0][0].where).toEqual({ organizationId: 'one' });
   });
+  it('totals each branch across the whole company (people with no department included) for branch colours', async () => {
+    const f = fixture(); const result = await departmentDirectory(f.db, 'one');
+    expect(result.branches).toEqual([
+      { key: '', total: 2, active: 0, label: 'Branch not recorded' },
+      { key: 'north', total: 7, active: 7, label: 'North' },
+    ]);
+  });
   it('shows confirmed HOD scopes even without employees in that branch', async () => {
     const f = fixture(); f.assignment.branchKey = 'south'; f.assignment.branchLabel = 'South';
     const result = await departmentDirectory(f.db, 'one');

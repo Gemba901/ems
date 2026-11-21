@@ -1,5 +1,5 @@
 import type { DepartmentPeopleQuery } from './ems-department-directory';
-import { Controller, Get, Param, Query, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { TrustedTenantContextGuard } from 'src/tenancy/trusted-tenant-context.guard';
 import { TenantGuard } from 'src/tenancy/tenant.guard';
@@ -12,7 +12,10 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { RequiresModule } from 'src/auth/decorators/module.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { departmentDirectory, departmentPeople } from './ems-department-directory';
+import { departmentHodChoices, saveDepartmentBranchHod, type DepartmentHodQuery } from './ems-department-hod';
+import { UpdateDepartmentBranchHodDto } from './dto/department-hod.dto';
 
 @Controller('ems/organisation/departments')
 @TenantRequired()
@@ -30,5 +33,15 @@ export class EmsDepartmentDirectoryController {
   @Get(':id/people')
   people(@Param('id') id: string, @Query() query: DepartmentPeopleQuery, @Req() request: TenantRequest) {
     return departmentPeople(this.db, this.company(request), id, query);
+  }
+  /** Choose HOD, for one department at one branch (?branch=<directory key>). */
+  @Get(':id/hod')
+  hod(@Param('id') id: string, @Query() query: DepartmentHodQuery, @Req() request: TenantRequest) {
+    return departmentHodChoices(this.db, this.company(request), id, query);
+  }
+  @Patch(':id/hod')
+  saveHod(@Param('id') id: string, @Body() dto: UpdateDepartmentBranchHodDto, @Req() request: TenantRequest,
+    @CurrentUser() user: { userId: string }) {
+    return saveDepartmentBranchHod(this.db, this.company(request), id, dto, user?.userId);
   }
 }

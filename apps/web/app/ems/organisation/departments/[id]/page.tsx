@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef, useState, type Ref } from "react";
+import { use, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Search, X } from "lucide-react";
@@ -8,11 +8,16 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
 import { EmsOrganisationService } from "@/services/ems-organisation.service";
-import { BranchLabel, HodLine, IssueList, OrganisationHeader } from "@/components/ems/OrganisationParts";
+import { BranchLabel, branchShade, HodLine, IssueList, OrganisationHeader } from "@/components/ems/OrganisationParts";
+import { DepartmentHodDialog } from "@/components/ems/DepartmentHodDialog";
 import { personFullName } from "@/components/ems/person-name";
-import { activeOnly, departmentIssues, hasSeveralBranches, initials } from "@/components/ems/department-directory";
+import { activeOnly, departmentIssues, departmentsBackHref, hasSeveralBranches, initials } from "@/components/ems/department-directory";
+import { coloursForGroups } from "@/components/ems/branch-colours";
 
-const field = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500";
+const field = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500";
+/** Every box on the page: an edge that stands off the grey background (darker outline + a light shadow). */
+const box = "border border-slate-300 bg-white shadow-sm";
+const linkButton = "text-sm font-medium text-purple-900 hover:underline";
 const secondary = "inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
 
 const STATUS_TONE: Record<string, string> = { ACTIVE: "bg-emerald-100 text-emerald-800", PROBATION: "bg-blue-100 text-blue-800" };
@@ -32,14 +37,27 @@ function Department({ id }: { id: string }) {
   const department = all.find(d => d.id === id);
   const multi = hasSeveralBranches(all);
   const several = multi && (department?.branches.length ?? 0) > 1;
+  // The same branch colours as the Departments page and the org chart (ranked across the whole company).
+  const colours = useMemo(() => coloursForGroups((directory.data?.branches ?? []).map(b => ({ id: b.key, name: b.label, people: b.total, activePeople: b.active }))), [directory.data]);
   // "Show them" (people without a manager) filters the people list and scrolls to it.
   const [noManager, setNoManager] = useState(false);
   const peopleRef = useRef<HTMLElement>(null);
   const showUnmanaged = () => { setNoManager(true); peopleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  // Back returns to the Departments view you came from (its address arrives as ?from=…; anything else goes to the plain list).
+  const [back, setBack] = useState("/ems/organisation");
+  useEffect(() => { setBack(departmentsBackHref(new URLSearchParams(window.location.search).get("from"))); }, []);
+  // Choose HOD / Change, here as on the Departments page: Super Admin, Admin and HR.
+  const canChoose = user?.roleLevel === Role.ADMIN || user?.roleLevel === Role.SUPER_ADMIN || user?.roleLevel === Role.HR;
+  const [choosing, setChoosing] = useState<string | null>(null), [feedback, setFeedback] = useState<string | null>(null);
+  const choose = (branchKey: string) => { setFeedback(null); setChoosing(branchKey); };
+  const shade = (key: string) => branchShade(colours, key);
+  const chooseLink = (hod: { state: string }, branchKey: string) => canChoose
+    ? <button type="button" className={linkButton} onClick={() => choose(branchKey)}>{hod.state === "NOT_RECORDED" ? "Choose HOD" : "Change"}</button> : null;
 
   return <div className="mx-auto max-w-6xl space-y-5">
     <OrganisationHeader />
-    <Link href="/ems/organisation" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-violet-700"><ArrowLeft size={15} /> Departments</Link>
+    <Link href={back} className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-purple-900"><ArrowLeft size={15} /> Departments</Link>
+    {feedback && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">{feedback}</p>}
     {directory.isPending ? <p role="status" className="text-sm text-slate-600">Loading department…</p>
       : directory.error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{(directory.error as Error).message}</p>
       : !department ? <p className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">This department doesn’t exist in this company, or has been removed.</p>
@@ -48,37 +66,42 @@ function Department({ id }: { id: string }) {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900">{department.name}</h2>
-            {multi && department.branches.length > 0 && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{department.branches.map(b => <BranchLabel key={b.key} label={b.label} />)}</div>}
+            {multi && department.branches.length > 0 && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{department.branches.map(b => <BranchLabel key={b.key} label={b.label} colour={shade(b.key)} />)}</div>}
           </div>
           <dl className="flex gap-2">
             {([["Active", activeOnly(department)], ["Probation", department.probation], ["Inactive", department.inactive]] as const).map(([label, value]) =>
-              <div key={label} className="min-w-20 rounded-lg border border-slate-200 bg-white px-3 py-2"><dd className="text-lg font-bold text-slate-900">{value}</dd><dt className="text-xs text-slate-500">{label}</dt></div>)}
+              <div key={label} className={`min-w-20 rounded-lg px-3 py-2 ${box}`}><dd className="text-lg font-bold text-slate-900">{value}</dd><dt className="text-xs text-slate-500">{label}</dt></div>)}
           </dl>
         </div>
 
         <div className={several ? "space-y-4" : "grid gap-4 lg:grid-cols-2"}>
-          <section aria-labelledby="hods" className="rounded-xl border border-slate-200 bg-white p-4">
+          <section aria-labelledby="hods" className={`rounded-xl p-4 ${box}`}>
             <h3 id="hods" className="text-sm font-semibold text-slate-900">{several ? "Head of department, by branch" : "Head of department"}</h3>
             {!department.branches.length ? <p className="mt-2 text-sm text-slate-500">No people or HOD recorded yet.</p>
               : several ? <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {department.branches.map(b => <li key={b.key} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <BranchLabel label={b.label} className="mb-2" />
+                {department.branches.map(b => <li key={b.key} className="flex flex-col rounded-lg border-2 bg-white p-3" style={{ borderColor: shade(b.key) }}>
+                  <BranchLabel label={b.label} colour={shade(b.key)} className="mb-2" />
                   <HodLine hod={b.hod} />
-                  <p className="mt-2 text-xs text-slate-500">{b.total} people · {activeOnly(b)} active · {b.probation} probation · {b.inactive} inactive</p>
+                  <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-2">
+                    <p className="text-xs text-slate-500">{b.total} people · {activeOnly(b)} active · {b.probation} probation · {b.inactive} inactive</p>
+                    {chooseLink(b.hod, b.key)}
+                  </div>
                 </li>)}
               </ul>
-              : <div className="mt-3"><HodLine hod={department.branches[0].hod} /></div>}
+              : <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><HodLine hod={department.branches[0].hod} />{chooseLink(department.branches[0].hod, department.branches[0].key)}</div>}
           </section>
 
-          <section aria-labelledby="attention" className="rounded-xl border border-slate-200 bg-white p-4">
+          <section aria-labelledby="attention" className={`rounded-xl p-4 ${box}`}>
             <h3 id="attention" className="text-sm font-semibold text-slate-900">Needs attention</h3>
-            <div className="mt-3"><IssueList issues={departmentIssues(department, several)}
-              action={issue => issue.kind === "NO_MANAGER" ? <button type="button" onClick={showUnmanaged} className="shrink-0 text-sm font-medium text-violet-800 hover:underline">Show them</button> : null} /></div>
+            <div className="mt-3"><IssueList issues={departmentIssues(department, several)} onBranch={canChoose ? (_, key) => choose(key) : undefined}
+              action={issue => issue.kind === "NO_MANAGER" ? <button type="button" onClick={showUnmanaged} className="shrink-0 text-sm font-medium text-purple-900 hover:underline">Show them</button> : null} /></div>
           </section>
         </div>
 
         {accessToken && <People ref={peopleRef} key={`${user?.organizationId}:${department.id}`} id={department.id} total={department.total} token={accessToken} company={user?.organizationId}
           branches={several ? department.branches.map(b => [b.key, b.label] as [string, string]) : []} noManager={noManager} setNoManager={setNoManager} />}
+        {choosing !== null && accessToken && <DepartmentHodDialog key={`${department.id}:${choosing}`} department={department} branches={department.branches}
+          initialBranch={choosing} company={user?.organizationId} token={accessToken} onClose={() => setChoosing(null)} onSaved={setFeedback} />}
       </>}
   </div>;
 }
@@ -103,9 +126,9 @@ function People({ ref, id, total, token, company, branches, noManager, setNoMana
     queryFn: () => EmsOrganisationService.people(id, { page, search: term, branch, activity, noManager }, token) });
   const pages = Math.max(1, people.data?.pagination.pages ?? 1);
   const chip = (value: string, label: string) => <button key={value} type="button" aria-pressed={activity === value} onClick={() => { setActivity(value); setPage(1); }}
-    className={`min-h-9 rounded-full border px-3 py-1 text-sm ${activity === value ? "border-violet-700 bg-violet-50 font-semibold text-violet-900" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>{label}</button>;
+    className={`min-h-9 rounded-full border px-3 py-1 text-sm ${activity === value ? "border-purple-900 bg-purple-50 font-semibold text-purple-950" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>{label}</button>;
 
-  return <section ref={ref} aria-labelledby="people" className="scroll-mt-20 rounded-xl border border-slate-200 bg-white p-4">
+  return <section ref={ref} aria-labelledby="people" className={`scroll-mt-20 rounded-xl p-4 ${box}`}>
     <h3 id="people" className="text-sm font-semibold text-slate-900">People ({total})</h3>
     <div className="mt-3 flex flex-wrap items-end gap-3">
       <label className="min-w-52 flex-1 text-xs font-medium text-slate-600">Find a person
@@ -137,7 +160,7 @@ function People({ ref, id, total, token, company, branches, noManager, setNoMana
             {people.data.data.map(person => { const name = personFullName(person); return <tr key={person.id} className="border-t border-slate-100">
               <td className="py-2.5 pr-4"><div className="flex items-center gap-2.5">
                 <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-700">{initials(name)}</span>
-                <Link href={`/ems/employees/${encodeURIComponent(person.id)}`} className="font-medium text-violet-800 hover:underline">{name}</Link>
+                <Link href={`/ems/employees/${encodeURIComponent(person.id)}`} className="font-medium text-purple-900 hover:underline">{name}</Link>
               </div></td>
               <td className="py-2.5 pr-4 text-slate-700">{person.employeeCode ?? "—"}</td>
               <td className="py-2.5 pr-4 text-slate-700">{person.jobTitle ?? "—"}</td>

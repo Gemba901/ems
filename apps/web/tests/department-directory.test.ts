@@ -33,16 +33,16 @@ test('active excludes probation, and branches only show when there are several r
 
 test('issues are one clear line each, and the HOD column summarises branches without a HOD', () => {
   const production = dept('p', 'Production', [branch('ho', 'Head Office', { hod: hod('NOT_RECORDED') }), branch('im', 'Injection Moulding', { hod: hod('PENDING', 'Pat Ndungu'), withoutManager: 3 })]);
-  assert.deepEqual(departmentIssues(production, true).map(i => i.text), ['1 of 2 branches have no HOD', 'HOD not registered yet at Injection Moulding', '3 people have no manager']);
+  assert.deepEqual(departmentIssues(production, true).map(i => i.text), ['1 of 2 branches have no HOD: Head Office', 'HOD not registered yet at Injection Moulding', '3 people have no manager']);
   assert.deepEqual(departmentIssues(production, false).map(i => i.text), ['No HOD', 'HOD not registered yet', '3 people have no manager']);
   assert.ok(departmentIssues(production, true).every(i => i.help.length > 20), 'every issue explains itself');
   assert.deepEqual(departmentIssues(dept('q', 'Quality', [branch('ho', 'Head Office', { hod: hod('UNASSIGNED') })]), false), []);
   assert.deepEqual(departmentIssues(dept('e', 'Empty', []), false).map(i => i.kind), ['EMPTY']);
   const nowhere = dept('s', 'Safety', ['A', 'B', 'C', 'D'].map(l => branch(l, l, { hod: hod('NOT_RECORDED'), withoutManager: 0 })));
-  assert.equal(departmentIssues(nowhere, true)[0].text, 'No HOD at any of its 4 branches');
+  assert.equal(departmentIssues(nowhere, true)[0].text, 'No HOD at any of its 4 branches: A, B, C +1');
   const column = hodColumn(production);
-  assert.deepEqual([column.shown.map(b => b.label), column.missingText], [['Injection Moulding'], 'No HOD at 1 branch: Head Office']);
-  assert.equal(hodColumn(nowhere).missingText, 'No HOD at any of its 4 branches: A, B, C +1');
+  assert.deepEqual([column.shown.map(b => b.label), column.missing.map(b => b.label)], [['Injection Moulding'], ['Head Office']]);
+  assert.equal(hodColumn(nowhere).missing.length, 4);
 });
 
 test('HOD view: one row per department and branch, with a missing-only filter', () => {

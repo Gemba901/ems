@@ -52,9 +52,16 @@ export async function departmentDirectory(db: PrismaService, organizationId: str
       if (!value) { value = { key, label: label.trim() || 'Branch not recorded', total: 0, active: 0, probation: 0, inactive: 0, withoutManager: 0, hod: hodSummary(undefined, organizationId) }; row.branches.set(key, value); }
       return value;
     };
+    // Whole-company totals per branch (people with no department included), so branch colours rank like the org chart's.
+    const companyBranches = new Map<string, { key: string; total: number; active: number; labels: Map<string, number> }>();
     for (const group of groups) {
       const size = group._count._all, active = isActiveEmployment(group.employmentStatus), probation = group.employmentStatus === 'PROBATION' ? size : 0;
       counts.total += size; counts[active ? 'active' : 'inactive'] += size; counts.probation += probation;
+      const key = branchKey(group.plantBranch), label = group.plantBranch?.trim() ?? '';
+      const place = companyBranches.get(key) ?? { key, total: 0, active: 0, labels: new Map<string, number>() };
+      place.total += size; if (active) place.active += size;
+      if (label) place.labels.set(label, (place.labels.get(label) ?? 0) + size);
+      companyBranches.set(key, place);
       if (!group.departmentId || !knownIds.has(group.departmentId)) { counts.unassigned += size; continue; }
       const row = rows.get(group.departmentId)!;
       row.total += size; row[active ? 'active' : 'inactive'] += size; row.probation += probation;
@@ -69,7 +76,11 @@ export async function departmentDirectory(db: PrismaService, organizationId: str
     for (const department of departments) for (const assignment of department.hodAssignments) {
       branch(department.id, assignment.branchKey, assignment.branchLabel).hod = hodSummary(assignment, organizationId);
     }
-    return { source: 'EMS' as const, asOf: new Date().toISOString(), counts, departments: [...rows.values()].map(row => ({ ...row,
+    // The most used spelling names each branch; "Branch not recorded" when nobody wrote one.
+    const branches = [...companyBranches.values()].map(({ labels, ...place }) => ({ ...place,
+      label: [...labels].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? 'Branch not recorded' }))
+      .sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key));
+    return { source: 'EMS' as const, asOf: new Date().toISOString(), counts, branches, departments: [...rows.values()].map(row => ({ ...row,
       branches: [...row.branches.values()].sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key)),
     })) };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

@@ -12,7 +12,14 @@ import {
   audienceLabel,
   emptyAudience,
 } from "./calendar-audience";
+import type {
+  ApprovedCalendarSummary,
+  CalendarAssignmentResult,
+  PerformanceCalendarProvider,
+} from "../../common/contracts";
 import {
+  approvedCalendarSummaries,
+  departmentAssignment,
   assignmentConflicts,
   audienceMatches,
   compareCalendars,
@@ -78,7 +85,7 @@ export function calendarCapabilities(role: Role) {
 }
 
 @Injectable()
-export class RulesCalendarService {
+export class RulesCalendarService implements PerformanceCalendarProvider {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(CALENDAR_PEOPLE_SOURCE)
@@ -573,13 +580,42 @@ export class RulesCalendarService {
     return compareCalendars(month, data.directory, relevant);
   }
 
-  /** Draft contract for Area 03: current directory matching, not historical employment reconstruction.
-   * The consumer must confirm and pin calendarId + version. Existing plans never call this to silently rebind. */
+  /** Cross-area contract (common/contracts.ts, Area 02): the company's current approved calendars, to offer as choices. */
+  async listApproved(organizationId: string): Promise<ApprovedCalendarSummary[]> {
+    return tenantTransaction(this.prisma, organizationId, async (tx) =>
+      approvedCalendarSummaries(await this.published(tx, organizationId)),
+    );
+  }
+
+  /** Cross-area contract (common/contracts.ts, Area 02): which calendar applies to a department on a date
+   * (the department's own, then company-wide). Current settings, not history; the consumer confirms and pins. */
+  async getDepartmentAssignment(
+    organizationId: string,
+    departmentId: string,
+    localDate: string,
+  ): Promise<CalendarAssignmentResult> {
+    if (!validDate(localDate))
+      throw new BadRequestException("Choose a valid assignment date.");
+    return tenantTransaction(this.prisma, organizationId, async (tx) => {
+      const directory = await this.people.read(tx, organizationId);
+      if (!directory.departments.some((d) => d.id === departmentId))
+        throw new NotFoundException("Department not found in this company.");
+      return departmentAssignment(
+        departmentId,
+        localDate,
+        await this.published(tx, organizationId),
+      );
+    });
+  }
+
+  /** Cross-area contract (common/contracts.ts, Area 02): current directory matching, not historical employment
+   * reconstruction. The consumer must confirm and pin calendarId + version. Existing plans never call this to
+   * silently rebind. */
   async getCurrentAssignment(
     organizationId: string,
     employeeId: string,
     localDate: string,
-  ) {
+  ): Promise<CalendarAssignmentResult> {
     if (!validDate(localDate))
       throw new BadRequestException("Choose a valid assignment date.");
     return tenantTransaction(this.prisma, organizationId, async (tx) => {
@@ -637,7 +673,7 @@ export class RulesCalendarService {
     });
   }
 
-  /** Cross-area contract: approved snapshots only. Pin calendarId AND version
+  /** Cross-area contract (common/contracts.ts, Area 02): approved snapshots only. Pin calendarId AND version
    * on a plan. Never silently substitute the latest version for a missing one. */
   async getApproved(
     organizationId: string,

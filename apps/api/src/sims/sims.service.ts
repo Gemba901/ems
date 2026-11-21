@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SuggestionStatus, ImplementationStatus, DecisionType, KaizenTrigger } from 'db';
+import { SuggestionStatus, ImplementationStatus, DecisionType, KaizenTrigger, SgaStartingReason } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import {
@@ -15,6 +15,7 @@ import {
 } from './dto/sims.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { KaizenService } from 'src/kaizen/kaizen.service';
+import { SgaService } from 'src/sga/sga.service';
 
 // Suggestions begin life at WAITING_FOR_REVIEW
 const ALLOWED_TRANSITIONS: Record<SuggestionStatus, SuggestionStatus[]> = {
@@ -59,6 +60,7 @@ export class SimsService {
     private prisma: PrismaService,
     private notifications: NotificationsService,
     private kaizenService: KaizenService,
+    private sgaService: SgaService,
   ) { }
 
   private async resolveEmployee(userId: string, organizationId: string) {
@@ -393,6 +395,8 @@ export class SimsService {
           },
         },
         hod: { select: employeeSelect },
+        kaizen: { select: { id: true, title: true, status: true, employeeId: true, kaizenOwnerId: true } },
+        sga: { select: { id: true, title: true, status: true } },
         ...reviewInclude,
       },
     });
@@ -405,10 +409,13 @@ export class SimsService {
       const employee = await this.resolveEmployee(userId, organizationId);
       const isResponsibleParty =
         (suggestion.decisionDetails as Record<string, any> | null)?.responsibleEmployeeId === employee.id;
-      if (suggestion.employeeId !== employee.id && !isResponsibleParty) {
+      // The Kaizen raised from this suggestion links back to it, so its raiser/owner can open it
+      const isLinkedKaizenOwner =
+        suggestion.kaizen?.employeeId === employee.id || suggestion.kaizen?.kaizenOwnerId === employee.id;
+      if (suggestion.employeeId !== employee.id && !isResponsibleParty && !isLinkedKaizenOwner) {
         throw new ForbiddenException('You can only view your own suggestions');
       }
-      return suggestion;
+      return suggestion.employeeId === employee.id ? suggestion : this.maskAnonymous(suggestion);
     }
 
     if (roleLevel === Role.HOD) {
@@ -656,8 +663,8 @@ export class SimsService {
 
     // Raise a lightweight draft Kaizen the moment a suggestion is approved for implementation
     // as a Daily Gemba Kaizen (once per suggestion). The reviewer only picks a kaizen owner —
-    // the reason (1.1), reference (1.2) and condition/evidence (1.3) auto-fill from the
-    // suggestion, and the owner completes the rest of the wizard themselves from 1.4 onward,
+    // the reason (1.1) and condition/evidence (1.3) auto-fill from the suggestion, which is
+    // linked through Suggestion.linkedKaizenId (the reference (1.2) is left for external refs), and the owner completes the rest of the wizard themselves from 1.4 onward,
     // same as any other draft they'd started from scratch.
     let createdKaizenId: string | null = null;
     if (
@@ -690,14 +697,31 @@ export class SimsService {
         kaizenOwner.id,
         {
           trigger: KaizenTrigger.EMPLOYEE_SUGGESTION_OR_IDEA,
-          referenceValue: `SIMS Suggestion: "${suggestion.title}"`,
-          referenceApplicability: 'APPLICABLE',
           conditionDescription,
           conditionEvidenceUrls: beforePhotoUrl ? [beforePhotoUrl] : undefined,
         },
         organizationId,
       );
       createdKaizenId = createdKaizen.id;
+    }
+
+    // Raise a draft SGA the moment a suggestion is selected for SGA (once per suggestion). The
+    // responsible person becomes its raiser and owner and completes the wizard from there; the
+    // suggestion moves to IMPLEMENTED when the SGA is verified and closed (see SgaService).
+    let createdSgaId: string | null = null;
+    if (dto.statusChanged === 'SELECTED_FOR_SGA' && !suggestion.linkedSgaId) {
+      const createdSga = await this.sgaService.createSgaForEmployee(
+        responsiblePartyId!,
+        {
+          startingReason: SgaStartingReason.EMPLOYEE_SUGGESTION_SELECTED_FOR_SGA,
+          title: suggestion.title,
+          problemDescription: suggestion.description,
+          mainDepartmentId: suggestion.departmentId ?? undefined,
+          beforeFileUrls: suggestion.imageUrl ? [suggestion.imageUrl] : [],
+        },
+        organizationId,
+      );
+      createdSgaId = createdSga.id;
     }
 
     const review = await this.prisma.$transaction(async (tx) => {
@@ -711,6 +735,7 @@ export class SimsService {
           ...(dto.decisionDetails && { decisionDetails: dto.decisionDetails }),
           ...(forwardCommitteeId && { committeeId: forwardCommitteeId, forwardedToCommitteeAt: new Date() }),
           ...(createdKaizenId && { linkedKaizenId: createdKaizenId }),
+          ...(createdSgaId && { linkedSgaId: createdSgaId, implementationStatus: 'SHIFTED_TO_SGA' }),
           // Optionally update the assigned hodId to the person who actually reviewed it
           hodId: reviewer.id,
         }
@@ -749,16 +774,17 @@ export class SimsService {
         'Workplace correction assigned to you — action needed';
       const message =
         dto.statusChanged === 'ON_HOLD' ? `Suggestion "${suggestion.title}" has been put on hold and you've been assigned as the responsible person.` :
+        dto.statusChanged === 'SELECTED_FOR_SGA' && createdSgaId ? `Suggestion "${suggestion.title}" has been selected for SGA and you've been assigned as the responsible person. A draft SGA was raised for you to complete.` :
         dto.statusChanged === 'SELECTED_FOR_SGA' ? `Suggestion "${suggestion.title}" has been selected for SGA and you've been assigned as the responsible person.` :
         `Suggestion "${suggestion.title}" requires a workplace correction and you've been assigned as the responsible person.`;
       await this.notifications.create({
         employeeId: responsiblePartyId,
         type: 'ALERT',
-        module: 'SIMS',
+        module: createdSgaId ? 'SGA' : 'SIMS',
         title,
         message,
-        actionUrl: `/sims/${id}`,
-        metadata: { suggestionId: id },
+        actionUrl: createdSgaId ? `/sga/${createdSgaId}` : `/sims/${id}`,
+        metadata: { suggestionId: id, ...(createdSgaId && { sgaId: createdSgaId }) },
       });
     }
 

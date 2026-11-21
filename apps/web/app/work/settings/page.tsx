@@ -82,7 +82,7 @@ function ScheduleForm({ settings }: { settings: WorkSettings }) {
           <Field label="Starts at" htmlFor="work-start">
             <input id="work-start" type="time" required disabled={readOnly} className={inputClass} value={draft.workStartTime} onChange={(e) => set("workStartTime", e.target.value)} />
           </Field>
-          <Field label="Ends at" htmlFor="work-end">
+          <Field label="Ends at" htmlFor="work-end" hint="Open attendance sessions are automatically closed 30 minutes after this time, with an in-app notification. The finish time saved at clock-in applies to that session.">
             <input id="work-end" type="time" required disabled={readOnly} className={inputClass} value={draft.workEndTime} onChange={(e) => set("workEndTime", e.target.value)} />
           </Field>
           <Field label="Grace period (minutes)" htmlFor="work-grace" hint="Clock-ins within this window still count as on time.">

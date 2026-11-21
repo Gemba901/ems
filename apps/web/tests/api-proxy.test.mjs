@@ -170,3 +170,10 @@ test('forwards Team Workspace routes with their query', async () => {
   });
   assert.equal(response.status, 200);
 });
+test('forwards 5S routes with their query', async () => {
+  const response = await proxyRequest(req('five-s/actions?view=mine'), ['five-s', 'actions'], config, async (url) => {
+    assert.equal(url.href, 'https://internal.example.test/five-s/actions?view=mine');
+    return json([]);
+  });
+  assert.equal(response.status, 200);
+});

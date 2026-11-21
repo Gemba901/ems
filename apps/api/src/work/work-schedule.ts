@@ -131,6 +131,65 @@ export function punctuality(record: {
     };
 }
 
+type Session = Parameters<typeof punctuality>[0] & { id?: string; employeeId: string; workDate: string };
+
+export type AttendanceDay<T extends Session = Session> = {
+    sessions: T[];
+    workedSeconds: number;
+    open: boolean;
+    firstClockInAt: Date;
+    // Null while a session is still open.
+    lastClockOutAt: Date | null;
+    // Late from the first clock-in; early leave from the last clock-out, once the day is closed.
+    lateMinutes: number;
+    earlyLeaveMinutes: number;
+};
+
+export function dayKey(record: { employeeId: string; workDate: string }): string {
+    return `${record.employeeId}|${record.workDate}`;
+}
+
+// Groups clock-in sessions into one entry per employee and work date. Worked time is the sum of
+// closed sessions, so gaps between a clock-out and the next clock-in are not counted.
+export function attendanceDays<T extends Session>(records: T[]): Map<string, AttendanceDay<T>> {
+    const grouped = new Map<string, T[]>();
+    for (const r of records) {
+        const list = grouped.get(dayKey(r)) ?? [];
+        list.push(r);
+        grouped.set(dayKey(r), list);
+    }
+
+    const days = new Map<string, AttendanceDay<T>>();
+    for (const [key, sessions] of grouped) {
+        sessions.sort((a, b) => a.clockInAt.getTime() - b.clockInAt.getTime());
+        const first = sessions[0];
+        const last = sessions[sessions.length - 1];
+        const open = sessions.some((s) => !s.clockOutAt);
+        const workedSeconds = sessions.reduce(
+            (sum, s) => sum + (s.clockOutAt ? Math.max(0, Math.floor((s.clockOutAt.getTime() - s.clockInAt.getTime()) / 1000)) : 0),
+            0,
+        );
+        days.set(key, {
+            sessions,
+            workedSeconds,
+            open,
+            firstClockInAt: first.clockInAt,
+            lastClockOutAt: open ? null : last.clockOutAt,
+            lateMinutes: punctuality(first).lateMinutes,
+            earlyLeaveMinutes: open ? 0 : punctuality(last).earlyLeaveMinutes,
+        });
+    }
+    return days;
+}
+
+// A session's share of its day's punctuality: only the first can be late and only the last can leave early.
+export function sessionPunctuality(day: AttendanceDay, sessionId: string): { lateMinutes: number; earlyLeaveMinutes: number } {
+    return {
+        lateMinutes: day.sessions[0].id === sessionId ? day.lateMinutes : 0,
+        earlyLeaveMinutes: day.sessions[day.sessions.length - 1].id === sessionId ? day.earlyLeaveMinutes : 0,
+    };
+}
+
 @Injectable()
 export class WorkScheduleService {
     constructor(private prisma: PrismaService) {}

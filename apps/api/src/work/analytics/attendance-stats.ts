@@ -1,5 +1,5 @@
 import { AttendanceLocationCheck } from 'db';
-import { WorkCalendar, punctuality } from '../work-schedule';
+import { WorkCalendar, attendanceDays } from '../work-schedule';
 import { eachDate } from '../work-date';
 
 // One employee's attendance inputs for a date range.
@@ -33,7 +33,7 @@ export type AttendanceTotals = {
     leaveDays: number;
     // Attendance on holidays and non-working days; not counted in expectedDays.
     offDayWorkDays: number;
-    // Clock-ins (any day) flagged outside the employee's approved places.
+    // Days (any day) with a clock-in flagged outside the employee's approved places.
     outsideLocationDays: number;
     averageLateMinutes: number;
     workedMinutes: number;
@@ -72,11 +72,6 @@ function finish(acc: Accumulator): AttendanceTotals {
     };
 }
 
-function workedMinutes(record: StatsRecord): number {
-    if (!record.clockOutAt) return 0;
-    return Math.max(0, Math.round((record.clockOutAt.getTime() - record.clockInAt.getTime()) / 60_000));
-}
-
 // Attendance over [from, to], where `to` should already be clamped to today. Today is
 // never counted absent: the day isn't over. Absence before an employee joined isn't counted.
 export function attendanceStats(
@@ -87,13 +82,8 @@ export function attendanceStats(
     to: string,
     today: string,
 ): { totals: AttendanceTotals; trend: TrendPoint[]; byEmployee: Map<string, AttendanceTotals> } {
-    const byKey = new Map<string, StatsRecord>();
-    for (const r of records) {
-        // Keep the first clock-in of the day.
-        const key = `${r.employeeId}|${r.workDate}`;
-        const existing = byKey.get(key);
-        if (!existing || r.clockInAt < existing.clockInAt) byKey.set(key, r);
-    }
+    // A day with several clock-in sessions counts once.
+    const days = attendanceDays(records);
 
     const total = emptyAccumulator();
     const perEmployee = new Map<string, Accumulator>();
@@ -108,26 +98,26 @@ export function attendanceStats(
             if (employee.joinedOn && date < employee.joinedOn) continue;
             const acc = perEmployee.get(employee.id) ?? emptyAccumulator();
             perEmployee.set(employee.id, acc);
-            const record = byKey.get(`${employee.id}|${date}`);
+            const day = days.get(`${employee.id}|${date}`);
 
             const add = (fn: (a: Accumulator) => void) => {
                 fn(acc);
                 fn(total);
             };
 
-            if (record) add((a) => (a.workedMinutes += workedMinutes(record)));
-            if (record?.locationCheck === AttendanceLocationCheck.OUTSIDE) add((a) => a.outsideLocationDays++);
+            if (day) add((a) => (a.workedMinutes += Math.round(day.workedSeconds / 60)));
+            if (day?.sessions.some((s) => s.locationCheck === AttendanceLocationCheck.OUTSIDE)) add((a) => a.outsideLocationDays++);
 
             if (!working) {
-                if (record) add((a) => a.offDayWorkDays++);
+                if (day) add((a) => a.offDayWorkDays++);
                 continue;
             }
             if (employee.leaveDates.has(date)) {
                 add((a) => a.leaveDays++);
-                if (record) add((a) => a.offDayWorkDays++);
+                if (day) add((a) => a.offDayWorkDays++);
                 continue;
             }
-            if (!record) {
+            if (!day) {
                 if (date < today) {
                     add((a) => {
                         a.expectedDays++;
@@ -139,21 +129,20 @@ export function attendanceStats(
                 continue;
             }
 
-            const p = punctuality(record);
             add((a) => {
                 a.expectedDays++;
                 a.presentDays++;
-                if (p.lateMinutes > 0) {
+                if (day.lateMinutes > 0) {
                     a.lateDays++;
-                    a.lateMinutes += p.lateMinutes;
+                    a.lateMinutes += day.lateMinutes;
                 } else {
                     a.onTimeDays++;
                 }
-                if (p.earlyLeaveMinutes > 0) a.earlyLeaveDays++;
+                if (day.earlyLeaveMinutes > 0) a.earlyLeaveDays++;
             });
             point.expected++;
             point.present++;
-            if (p.lateMinutes > 0) point.late++;
+            if (day.lateMinutes > 0) point.late++;
             else point.onTime++;
         }
         trend.push(point);

@@ -55,6 +55,7 @@ model Suggestion {
   committeeId            String?
   forwardedToCommitteeAt DateTime?
   linkedKaizenId         String?               @unique
+  linkedSgaId            String?               @unique
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
@@ -64,6 +65,7 @@ model Suggestion {
   hod          Employee?          @relation("HODSuggestions", fields: [hodId], references: [id], onDelete: SetNull)
   committee    SteeringCommittee? @relation(fields: [committeeId], references: [id], onDelete: SetNull)
   kaizen       Kaizen?            @relation(fields: [linkedKaizenId], references: [id], onDelete: SetNull)
+  sga          Sga?               @relation(fields: [linkedSgaId], references: [id], onDelete: SetNull)
   reviews      SuggestionReview[]
 }
 

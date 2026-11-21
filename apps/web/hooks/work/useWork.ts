@@ -169,8 +169,19 @@ export function useUpdateTask() {
     mutationFn: ({ taskId, data }: { taskId: string; data: UpdateTaskPayload }) => WorkService.updateTask(taskId, data, token),
     onSuccess: (task) => {
       qc.setQueryData([...scope, "task", task.id], task);
+      qc.invalidateQueries({ queryKey: [...scope, "activity", task.id] });
       invalidate();
     },
+  });
+}
+
+export function useTaskActivity(taskId: string, page: number) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "activity", taskId, page],
+    queryFn: () => WorkService.listActivity(taskId, token, page),
+    retry: retryTransient,
+    enabled,
   });
 }
 
@@ -287,6 +298,7 @@ export function useAttendanceStatus() {
     retry: retryTransient,
     enabled,
     refetchOnWindowFocus: "always",
+    refetchInterval: 30_000,
     gcTime: 0,
   });
 }
@@ -309,6 +321,18 @@ export function useTeamAttendance(range: AttendanceRange & { employeeId?: string
     queryFn: () => WorkService.teamAttendance(range, token),
     retry: retryTransient,
     enabled: enabled && enabledFlag,
+    gcTime: 0,
+  });
+}
+
+export function useAttendanceWeek(params: { date?: string; employeeId?: string }, enabledFlag = true) {
+  const { token, enabled, scope } = useScope();
+  return useQuery({
+    queryKey: [...scope, "attendance", "week", params],
+    queryFn: () => WorkService.attendanceWeek(params, token),
+    retry: retryTransient,
+    enabled: enabled && enabledFlag,
+    refetchOnWindowFocus: "always",
     gcTime: 0,
   });
 }

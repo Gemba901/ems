@@ -23,7 +23,13 @@ function LocationButton({ record, onOpen }: { record: Row; onOpen: () => void })
 }
 
 function ClockOut({ record }: { record: Row }) {
-  if (record.clockOutAt) return <>{formatTime(record.clockOutAt, record.timezoneAtClockIn)}</>;
+  if (record.clockOutAt)
+    return (
+      <>
+        {formatTime(record.clockOutAt, record.timezoneAtClockIn)}
+        {record.autoClockedOutAt && <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Auto</span>}
+      </>
+    );
   return <span className="font-medium text-amber-700">Still clocked in</span>;
 }
 
@@ -35,11 +41,7 @@ function LocationFlag({ record }: { record: Row }) {
 // Against the schedule saved when the person clocked in.
 function Punctuality({ record }: { record: Row }) {
   if (record.lateMinutes > 0) {
-    return (
-      <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
-        Late {formatMinutes(record.lateMinutes)}
-      </span>
-    );
+    return <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Late {formatMinutes(record.lateMinutes)}</span>;
   }
   return null;
 }
@@ -56,6 +58,33 @@ function LeftEarly({ record }: { record: Row }) {
 function Edited({ record }: { record: Row }) {
   if (!record.edited) return null;
   return <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">Edited</span>;
+}
+
+// Sessions arrive grouped by day; the date shows once per day, with the day total when there are several.
+function isDayStart(records: Row[], i: number) {
+  const prev = records[i - 1];
+  return !prev || prev.workDate !== records[i].workDate || prev.employeeId !== records[i].employeeId;
+}
+
+function DayCell({ record, first }: { record: Row; first: boolean }) {
+  const several = record.daySessionCount > 1;
+  if (!first)
+    return several ? (
+      <span className="text-xs text-slate-500">
+        Session {record.sessionNumber} of {record.daySessionCount}
+      </span>
+    ) : null;
+  return (
+    <>
+      {formatDateOnly(record.workDate, { weekday: "short" })}
+      <Edited record={record} />
+      {several && (
+        <span className="block text-xs text-slate-500">
+          {record.daySessionCount} sessions · {formatDuration(record.dayWorkedSeconds)} total
+        </span>
+      )}
+    </>
+  );
 }
 
 /** A table on wider screens, stacked rows on phones. Times are shown in the zone the day was recorded in. */
@@ -78,12 +107,26 @@ export function AttendanceTable({
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              {showEmployee && <th scope="col" className="px-4 py-2.5 font-semibold">Employee</th>}
-              <th scope="col" className="px-4 py-2.5 font-semibold">Date</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Clock in</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Clock out</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Duration</th>
-              <th scope="col" className="px-4 py-2.5 font-semibold">Location</th>
+              {showEmployee && (
+                <th scope="col" className="px-4 py-2.5 font-semibold">
+                  Employee
+                </th>
+              )}
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Date
+              </th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Clock in
+              </th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Clock out
+              </th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Duration
+              </th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">
+                Location
+              </th>
               {onCorrect && (
                 <th scope="col" className="px-4 py-2.5 font-semibold">
                   <span className="sr-only">Actions</span>
@@ -92,12 +135,12 @@ export function AttendanceTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {records.map((r) => (
+            {records.map((r, i) => (
               <tr key={r.id}>
-                {showEmployee && <td className="px-4 py-2.5 font-medium text-slate-900">{r.employee?.name}</td>}
+                {showEmployee && <td className="px-4 py-2.5 font-medium text-slate-900">{isDayStart(records, i) && r.employee?.name}</td>}
                 <td className="whitespace-nowrap px-4 py-2.5 text-slate-800">
-                  {formatDateOnly(r.workDate, { weekday: "short" })}
-                  <Edited record={r} />
+                  <DayCell record={r} first={isDayStart(records, i)} />
+                  {!isDayStart(records, i) && <Edited record={r} />}
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-slate-800">
                   {formatTime(r.clockInAt, r.timezoneAtClockIn)}
@@ -136,14 +179,14 @@ export function AttendanceTable({
       </div>
 
       <ul className="divide-y divide-slate-100 sm:hidden">
-        {records.map((r) => (
+        {records.map((r, i) => (
           <li key={r.id} className="space-y-1.5 px-4 py-3">
             <div className="flex items-start justify-between gap-2">
               <div>
-                {showEmployee && <p className="text-sm font-semibold text-slate-900">{r.employee?.name}</p>}
+                {showEmployee && isDayStart(records, i) && <p className="text-sm font-semibold text-slate-900">{r.employee?.name}</p>}
                 <p className="text-sm text-slate-800">
-                  {formatDateOnly(r.workDate, { weekday: "short" })}
-                  <Edited record={r} />
+                  <DayCell record={r} first={isDayStart(records, i)} />
+                  {!isDayStart(records, i) && <Edited record={r} />}
                 </p>
               </div>
               <LocationButton record={r} onOpen={() => onDetails(r)} />

@@ -29,6 +29,7 @@ import { SteelDomainModule } from './steel/steel-domain.module';
 import { KaizenModule } from './kaizen/kaizen.module';
 import { SgaModule } from './sga/sga.module';
 import { WorkModule } from './work/work.module';
+import { FiveSModule } from './five-s/five-s.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
 
@@ -69,6 +70,7 @@ import { ProxySecretGuard } from './common/guards/proxy-secret.guard';
     KaizenModule,
     SgaModule,
     WorkModule,
+    FiveSModule,
   ],
   controllers: [AppController],
   providers: [

@@ -7,6 +7,7 @@ import {
   IsNumberString,
   IsOptional,
   IsString,
+  IsUUID,
   MinLength,
   ValidateIf,
   ValidateNested,
@@ -227,4 +228,11 @@ export class SubmitVerificationStageDto {
   @IsOptional()
   @IsString()
   verifiedBenefitCurrency?: string;
+}
+
+// Join 10: raise a Kaizen or SGA from a DWMS alert / abnormality
+export class RaiseFromAlertDto {
+  @IsOptional()
+  @IsUUID()
+  ownerId?: string;
 }

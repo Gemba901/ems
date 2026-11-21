@@ -108,6 +108,26 @@ export class DwmsController {
   }
 
   // --- My DWMS Endpoints ---
+  @Get('task-definitions/:id')
+  @TenantRequired()
+  @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
+  @RequiresModule(ModuleType.DWMS)
+  getTaskDefinitionDetail(
+    @CurrentUser() user: UserPayload,
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('status') status?: string,
+    @Query('date') date?: string,
+  ) {
+    return this.dwmsService.getTaskDefinitionDetail(
+      user,
+      id,
+      page,
+      status,
+      date,
+    );
+  }
+
   @Get('myDwms/tasks')
   @TenantRequired()
   @UseGuards(TrustedTenantContextGuard, JwtAuthGuard, TenantGuard, ModuleGuard)
@@ -311,12 +331,16 @@ export class DwmsController {
     @Query('assignedPage') assignedPage?: string,
     @Query('currentAlertPage') currentAlertPage?: string,
     @Query('abnormalityPage') abnormalityPage?: string,
+    @Query('routineCategory') routineCategory?: string,
+    @Query('search') search?: string,
   ) {
     return this.dwmsService.getEmployeeDwmsProfile(user, employeeId, {
       routinePage: Number(routinePage) || 1,
       assignedPage: Number(assignedPage) || 1,
       currentAlertPage: Number(currentAlertPage) || 1,
       abnormalityPage: Number(abnormalityPage) || 1,
+      routineCategory,
+      search,
     });
   }
   @Get('employees/:employeeId/activities')

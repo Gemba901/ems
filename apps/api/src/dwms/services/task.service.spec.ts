@@ -628,3 +628,84 @@ describe('DWMS occurrence progress and approval', () => {
     expect((service as any).recordTaskInstanceEvent).not.toHaveBeenCalled();
   });
 });
+
+
+describe('DWMS reporting-chain task access', () => {
+  const user = { userId: 'manager-user', organizationId: 'org', roleLevel: 'EMPLOYEE' };
+  const now = new Date('2026-10-13T00:00:00Z');
+  let prisma: any;
+  let service: TestTaskService;
+  beforeEach(() => {
+    prisma = {
+      employee: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'manager' }),
+        findUnique: jest.fn().mockImplementation(({ where }) => Promise.resolve(where.id === 'owner' ? { reportingManagerId: 'direct' } : where.id === 'direct' ? { reportingManagerId: 'manager' } : null)),
+        findMany: jest.fn().mockImplementation(({ where }) => Promise.resolve(where.reportingManagerId.in.includes('manager') ? [{ id: 'direct' }] : where.reportingManagerId.in.includes('direct') ? [{ id: 'owner' }] : [])),
+      },
+      taskInstance: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'instance', ownerId: 'owner', status: 'PENDING', frequency: 'DAILY', scheduledFor: now, dueAt: now, comments: [], events: [], alerts: [], task: { ownerId: 'owner', assignedById: null, approvedById: null } }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      taskInstanceComment: { create: jest.fn().mockResolvedValue({ id: 'comment', comment: 'Review this', createdAt: now, updatedAt: now, author: { id: 'manager', firstName: 'Higher', lastName: 'Manager' } }) },
+      taskInstanceEvent: { create: jest.fn() },
+    };
+    service = new TestTaskService(prisma, {});
+    jest.spyOn(service, 'serializeTaskInstance').mockReturnValue({ description: 'Full details' } as any);
+    jest.spyOn(service as any, 'getOrganizationTimeZone').mockResolvedValue('UTC');
+  });
+
+  it('loads paginated task history with status and date filters without generating instances', async () => {
+    prisma.task = { findFirst: jest.fn().mockResolvedValue({ id: 'task', title: 'Safety check', ownerId: 'owner', owner: { id: 'owner', firstName: 'Task', lastName: 'Owner' }, frequency: 'DAILY', isActive: true }) };
+    prisma.taskInstance.count = jest.fn().mockResolvedValue(21);
+    prisma.taskInstance.findMany.mockResolvedValue([{ id: 'occurrence', titleSnapshot: 'Safety check', scheduledFor: now, dueAt: now, status: 'DONE', completionPercent: 100, completedAt: now }]);
+    const result = await service.getTaskDefinitionDetail(user, 'task', '2', 'DONE', '2026-10-13');
+    expect(result).toMatchObject({ task: { taskId: 'task', frequency: 'DAILY' }, instances: [{ instanceId: 'occurrence', status: 'DONE', isOverdue: false }], pagination: { page: 2, limit: 20, total: 21, pages: 2 } });
+    expect(prisma.task.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'task', owner: { organizationId: 'org' } } }));
+    expect(prisma.taskInstance.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { taskId: 'task', status: 'DONE', scheduledFor: { gte: now, lte: new Date('2026-10-13T23:59:59.999Z') } }, skip: 20, take: 20 }));
+    await expect(service.getTaskDefinitionDetail(user, 'task', '1', 'INVALID')).rejects.toThrow('Invalid task status');
+    await expect(service.getTaskDefinitionDetail(user, 'task', '1', undefined, 'invalid')).rejects.toThrow('Invalid instance date');
+  });
+
+  it('denies task history to unrelated employees before loading instances', async () => {
+    prisma.task = { findFirst: jest.fn().mockResolvedValue({ id: 'task', ownerId: 'owner' }) };
+    prisma.employee.findUnique.mockResolvedValue(null);
+    await expect(service.getTaskDefinitionDetail(user, 'task')).rejects.toThrow('Task not found');
+    expect(prisma.taskInstance.findMany).not.toHaveBeenCalled();
+  });
+
+  it.each(['MANAGEMENT', 'HR', 'ADMIN'])('allows %s task history within the organization', async (roleLevel) => {
+    prisma.task = { findFirst: jest.fn().mockResolvedValue({ id: 'task', ownerId: 'owner', title: 'Safety', owner: { id: 'owner', firstName: 'Task', lastName: 'Owner' } }) };
+    prisma.employee.findUnique.mockResolvedValue(null);
+    prisma.taskInstance.count = jest.fn().mockResolvedValue(0);
+    await expect(service.getTaskDefinitionDetail({ ...user, roleLevel }, 'task')).resolves.toMatchObject({ instances: [], pagination: { total: 0, pages: 1 } });
+    prisma.task.findFirst.mockResolvedValue(null);
+    await expect(service.getTaskDefinitionDetail({ ...user, roleLevel }, 'other-org-task')).rejects.toThrow('Task not found');
+  });
+
+  it('gives the manager of a manager full task details and comment access', async () => {
+    await expect(service.getMyDwmsTaskInstanceDetail(user, 'instance')).resolves.toMatchObject({ access: 'full', task: { description: 'Full details' } });
+    await expect(service.addMyDwmsTaskComment(user, 'instance', { comment: 'Review this' })).resolves.toMatchObject({ message: 'Comment added' });
+    expect(prisma.taskInstance.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({ task: { owner: { organizationId: 'org' } }, OR: expect.arrayContaining([{ ownerId: { in: ['direct', 'owner'] } }]) }) }));
+    for (const [query] of prisma.employee.findUnique.mock.calls) expect(query.where.organizationId).toBe('org');
+    for (const [query] of prisma.employee.findMany.mock.calls) expect(query.where.organizationId).toBe('org');
+  });
+
+  it('keeps unrelated employees on restricted details and rejects their comments', async () => {
+    prisma.employee.findUnique.mockResolvedValue(null);
+    prisma.employee.findMany.mockResolvedValue([]);
+    await expect(service.getMyDwmsTaskInstanceDetail(user, 'instance')).resolves.toMatchObject({ access: 'relation', task: { description: null } });
+    prisma.taskInstance.findFirst.mockResolvedValue(null);
+    await expect(service.addMyDwmsTaskComment(user, 'instance', { comment: 'Review this' })).rejects.toThrow('Task instance not found');
+    expect(prisma.taskInstanceComment.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['MANAGEMENT', 'HR', 'ADMIN', 'SUPER_ADMIN'])('allows %s full task details and comments without a reporting relationship', async (roleLevel) => {
+    prisma.employee.findUnique.mockResolvedValue(null);
+    prisma.employee.findMany.mockResolvedValue([]);
+    await expect(service.getMyDwmsTaskInstanceDetail({ ...user, roleLevel }, 'instance')).resolves.toMatchObject({ access: 'full', task: { description: 'Full details' } });
+    await expect(service.addMyDwmsTaskComment({ ...user, roleLevel }, 'instance', { comment: 'Review this' })).resolves.toMatchObject({ message: 'Comment added' });
+    expect(prisma.taskInstance.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: 'instance', task: { owner: { organizationId: 'org' } } } }));
+    prisma.taskInstance.findFirst.mockResolvedValue(null);
+    await expect(service.getMyDwmsTaskInstanceDetail({ ...user, roleLevel }, 'other-org-instance')).rejects.toThrow('Task instance not found');
+  });
+});

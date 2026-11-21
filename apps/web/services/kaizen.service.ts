@@ -1,4 +1,7 @@
+import type { LinkedFiveSStandard } from "./five-s.service";
 import { apiClient } from "@/lib/api-client";
+import type { SuggestionStatus } from "./sims.service";
+import type { SgaStatus } from "./sga.service";
 const API_URL = "/api";
 
 function authHeaders(token: string) {
@@ -202,6 +205,11 @@ export interface Kaizen {
   wasteImpacts: KaizenWasteImpact[];
   verifications: KaizenVerification[];
   reviews: KaizenReview[];
+  sourceSuggestion?: { id: string; title: string; status: SuggestionStatus } | null;
+  linkedSga?: { id: string; title: string | null; status: SgaStatus } | null;
+  sourceFiveSAction?: { id: string; reference: string; finding: string } | null;
+  sourceAlert?: { id: string; title: string; isAbnormality: boolean } | null;
+  fiveSStandards?: LinkedFiveSStandard[];
 }
 
 // Part 1

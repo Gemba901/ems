@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { useAuthStore } from "@/store/auth.store";
 import {
@@ -196,6 +197,8 @@ function TaskDetailContent() {
         <ArrowLeft className="h-4 w-4" />
         Back
       </button>
+
+      {task?.taskId && <Link href={`/dwms/task-definitions/${task.taskId}`} className="text-sm font-medium text-indigo-700">View task and all instances →</Link>}
 
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">

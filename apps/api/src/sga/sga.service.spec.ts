@@ -36,13 +36,21 @@ function setup(sga: SgaWithInclude, { employee = RAISER, roles = ['EMPLOYEE'] } 
         userOrganization: { findMany: jest.fn().mockResolvedValue(roles.map((name) => ({ role: { name } }))) },
         department: { findFirst: jest.fn().mockResolvedValue({ id: 'dept-1' }), count: jest.fn() },
         sgaReview: { create: jest.fn() },
-        sgaActionItem: { update: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
+        sgaActionItem: { findUnique: jest.fn(), update: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
         $transaction: jest.fn(),
     };
     prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => unknown) => fn(prisma));
     const notifications = { createMany: jest.fn() };
-    const service = new SgaService(prisma as never, notifications as never);
-    return { service, prisma };
+    const bridge = {
+        upsertFromSource: jest.fn(),
+        syncParentFromSource: jest.fn(),
+        closeFromSource: jest.fn(),
+        reopenFromSource: jest.fn(),
+        deactivateFromSource: jest.fn(),
+    };
+    const taskEvents = { onStatusChange: jest.fn() };
+    const service = new SgaService(prisma as never, notifications as never, bridge as never, taskEvents as never);
+    return { service, prisma, bridge, taskEvents };
 }
 
 describe('getDraftMissingItems', () => {
@@ -173,5 +181,130 @@ describe('SgaService action items', () => {
         expect(data[0]).toMatchObject({ id: 'act-1', status: 'IN_PROGRESS', improvementAction: 'Replace rail and add PM check' });
         expect(data[1].id).toBeUndefined();
         expect(data[1].status).toBeUndefined();
+    });
+
+    it('puts each action with a responsible person on their DWMS list, closing done ones', async () => {
+        const done = { ...action, id: 'act-2', status: 'DONE' };
+        const unassigned = { ...action, id: 'act-3', responsiblePersonId: null };
+        const { service, bridge } = setup(running({ actionItems: [action, done, unassigned] } as never));
+        await service.updateActionPlan('sga-1', 'user-1', { actionItems: [] }, ORG);
+
+        const [parent, inputs, closedIds] = bridge.syncParentFromSource.mock.calls[0];
+        expect(parent).toEqual({ sourceModule: 'SGA', sourceParentId: 'sga-1' });
+        expect(inputs).toHaveLength(1);
+        expect(inputs[0]).toMatchObject({
+            sourceId: 'act-1',
+            ownerId: 'emp-resp',
+            title: 'SGA action: Replace rail',
+            frequency: 'PLANNED',
+            // falls back to the SGA target date when the action has none
+            dueDate: new Date('2026-12-01'),
+        });
+        expect(closedIds).toEqual(['act-2']);
+    });
+
+    it('closes the DWMS task when an action is ticked off and reopens it when unticked', async () => {
+        const { service, bridge } = setup(running(), { employee: { ...OTHER, id: 'emp-resp' } });
+        await service.updateActionItemStatus('sga-1', 'act-1', 'user-1', { status: 'DONE' }, ORG);
+        expect(bridge.closeFromSource).toHaveBeenCalledWith({ sourceModule: 'SGA', sourceId: 'act-1' });
+
+        const reopened = setup(running({ actionItems: [{ ...action, status: 'DONE' }] } as never), { employee: { ...OTHER, id: 'emp-resp' } });
+        await reopened.service.updateActionItemStatus('sga-1', 'act-1', 'user-1', { status: 'IN_PROGRESS' }, ORG);
+        expect(reopened.bridge.reopenFromSource).toHaveBeenCalledWith({ sourceModule: 'SGA', sourceId: 'act-1' });
+    });
+
+    it('does not fail the save when the DWMS sync fails', async () => {
+        const { service, bridge } = setup(running());
+        bridge.syncParentFromSource.mockRejectedValue(new Error('db down'));
+        jest.spyOn((service as any).logger, 'error').mockImplementation(() => undefined);
+        await expect(service.updateActionPlan('sga-1', 'user-1', { actionItems: [] }, ORG)).resolves.toBeDefined();
+    });
+});
+
+describe('SgaService meeting task', () => {
+    const pending = (overrides: Partial<SgaWithInclude> = {}) =>
+        draft({ status: 'PENDING_HOD_APPROVAL', actionItems: [], meetingDay: 'TUESDAY', meetingTime: '09:00', ...overrides } as never);
+    const HOD = { ...OTHER, id: 'emp-hod' };
+
+    it('makes the meeting plan a recurring task for the owner on approval', async () => {
+        const { service, bridge } = setup(pending(), { employee: HOD, roles: ['HOD'] });
+        await service.submitHodApproval('sga-1', 'user-1', { decision: 'APPROVED' } as never, ORG);
+
+        expect(bridge.upsertFromSource).toHaveBeenCalledWith(expect.objectContaining({
+            sourceModule: 'SGA_MEETING',
+            sourceId: 'sga-1',
+            ownerId: RAISER.id,
+            frequency: 'WEEKLY',
+            recurrenceUnit: 'WEEK',
+            recurrenceInterval: 1,
+            recurrenceWeekdays: [2],
+            description: 'Time: 09:00',
+        }));
+    });
+
+    it('maps a biweekly plan to every second week', async () => {
+        const { service, bridge } = setup(pending({ meetingFrequency: 'BIWEEKLY' } as never), { employee: HOD, roles: ['HOD'] });
+        await service.submitHodApproval('sga-1', 'user-1', { decision: 'APPROVED' } as never, ORG);
+        expect(bridge.upsertFromSource.mock.calls[0][0]).toMatchObject({ recurrenceUnit: 'WEEK', recurrenceInterval: 2 });
+    });
+
+    it('creates no meeting task for a custom plan or a rejected SGA', async () => {
+        const custom = setup(pending({ meetingFrequency: 'CUSTOM' } as never), { employee: HOD, roles: ['HOD'] });
+        await custom.service.submitHodApproval('sga-1', 'user-1', { decision: 'APPROVED' } as never, ORG);
+        expect(custom.bridge.upsertFromSource).not.toHaveBeenCalled();
+
+        const rejected = setup(pending(), { employee: HOD, roles: ['HOD'] });
+        await rejected.service.submitHodApproval('sga-1', 'user-1', { decision: 'REJECTED' } as never, ORG);
+        expect(rejected.bridge.upsertFromSource).not.toHaveBeenCalled();
+    });
+});
+
+describe('SgaService action items from DWMS', () => {
+    function change(toStatus: string) {
+        return { sourceModule: 'SGA', sourceId: 'item-1', sourceParentId: 'sga-1', toStatus } as never;
+    }
+
+    function withItem(status: string, sgaStatus = 'IN_PROGRESS') {
+        const ctx = setup(draft());
+        ctx.prisma.sgaActionItem.findUnique.mockResolvedValue({ id: 'item-1', status, completedAt: null, sga: { status: sgaStatus } });
+        return ctx;
+    }
+
+    it('subscribes to SGA action item tasks', () => {
+        const { service, taskEvents } = setup(draft());
+        service.onModuleInit();
+        expect(taskEvents.onStatusChange).toHaveBeenCalledWith('SGA', expect.any(Function));
+    });
+
+    it('marks the item done when its task is ticked done, without echoing back to DWMS', async () => {
+        const { service, prisma, bridge } = withItem('OPEN');
+        await service.updateActionItemFromDwms(change('DONE'));
+
+        const { where, data } = prisma.sgaActionItem.update.mock.calls[0][0];
+        expect(where).toEqual({ id: 'item-1' });
+        expect(data.status).toBe('DONE');
+        expect(data.completedAt).toBeInstanceOf(Date);
+        expect(bridge.closeFromSource).not.toHaveBeenCalled();
+    });
+
+    it('moves a partly done task to in progress and reopens a done item set back to pending', async () => {
+        const partly = withItem('OPEN');
+        await partly.service.updateActionItemFromDwms(change('PARTLY_DONE'));
+        expect(partly.prisma.sgaActionItem.update.mock.calls[0][0].data).toEqual({ status: 'IN_PROGRESS', completedAt: null });
+
+        const reopened = withItem('DONE');
+        await reopened.service.updateActionItemFromDwms(change('PENDING'));
+        expect(reopened.prisma.sgaActionItem.update.mock.calls[0][0].data).toEqual({ status: 'OPEN', completedAt: null });
+    });
+
+    it('leaves the item alone once the SGA is past implementation, or for a status with no meaning', async () => {
+        const closed = withItem('OPEN', 'VERIFIED_CLOSED');
+        await closed.service.updateActionItemFromDwms(change('DONE'));
+        expect(closed.prisma.sgaActionItem.update).not.toHaveBeenCalled();
+
+        const inProgress = withItem('IN_PROGRESS');
+        await inProgress.service.updateActionItemFromDwms(change('PENDING'));
+        await inProgress.service.updateActionItemFromDwms(change('NOT_APPLICABLE'));
+        expect(inProgress.prisma.sgaActionItem.update).not.toHaveBeenCalled();
     });
 });

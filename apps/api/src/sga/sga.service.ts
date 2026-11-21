@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
     CreateSgaDto,
@@ -23,7 +23,10 @@ import {
 } from './dto/sga.dto';
 import { Role } from 'src/common/enum/role.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { Prisma, SgaStatus, SgaVerificationStage } from 'db';
+import { Prisma, RecurrenceUnit, SgaActionStatus, SgaStatus, SgaVerificationStage, SgaWeekday, TaskFrequency, TaskSourceModule, TaskStatus } from 'db';
+import { DwmsTaskBridge, DwmsTaskSourceInput } from 'src/dwms/services/dwms-task-bridge.service';
+import { DwmsTaskEvents, DwmsTaskStatusChange } from 'src/dwms/services/dwms-task-events.service';
+import { recurrenceFrequency } from 'src/dwms/utils/taskSchedule';
 
 const employeeSelect = {
     id: true,
@@ -58,6 +61,16 @@ const sgaInclude = {
         orderBy: { createdAt: 'asc' as const },
         include: { reviewer: { select: { id: true, firstName: true, lastName: true } } },
     },
+    sourceSuggestion: { select: { id: true, title: true, status: true } },
+    sourceKaizen: { select: { id: true, title: true, status: true } },
+    sourceAlert: { select: { id: true, title: true, isAbnormality: true } },
+    sourceFiveSAction: { select: { id: true, reference: true, finding: true } },
+    // Join 12: current 5S standards written from this improvement
+    fiveSStandards: {
+        where: { status: { not: 'SUPERSEDED' as const } },
+        orderBy: { createdAt: 'asc' as const },
+        select: { id: true, title: true, status: true, revision: true, area: { select: { id: true, name: true } } },
+    },
 };
 
 export type SgaWithInclude = Prisma.SgaGetPayload<{ include: typeof sgaInclude }>;
@@ -91,12 +104,148 @@ export function getDraftMissingItems(sga: SgaWithInclude): SgaDraftMissingItem[]
 
 const TEAM_EDITABLE_STATUSES: SgaStatus[] = ['IN_PROGRESS', 'RETURNED_FOR_REWORK'];
 
+// DWMS recurrence weekdays: 0 = Sunday ... 6 = Saturday
+const SGA_WEEKDAY_NUMBERS: Record<SgaWeekday, number> = {
+    SUNDAY: 0,
+    MONDAY: 1,
+    TUESDAY: 2,
+    WEDNESDAY: 3,
+    THURSDAY: 4,
+    FRIDAY: 5,
+    SATURDAY: 6,
+};
+
+// What a DWMS status means for an SGA action item. Statuses not listed (awaiting approval,
+// not applicable) leave the item as it is.
+const ACTION_STATUS_FOR_TASK: Partial<Record<TaskStatus, SgaActionStatus>> = {
+    [TaskStatus.DONE]: SgaActionStatus.DONE,
+    [TaskStatus.IN_PROGRESS]: SgaActionStatus.IN_PROGRESS,
+    [TaskStatus.PARTLY_DONE]: SgaActionStatus.IN_PROGRESS,
+    [TaskStatus.LESS_THAN_50]: SgaActionStatus.IN_PROGRESS,
+    [TaskStatus.PENDING]: SgaActionStatus.OPEN,
+};
+
 @Injectable()
-export class SgaService {
+export class SgaService implements OnModuleInit {
+    private readonly logger = new Logger(SgaService.name);
+
     constructor(
         private prisma: PrismaService,
         private notifications: NotificationsService,
+        private dwmsTasks: DwmsTaskBridge,
+        private dwmsTaskEvents: DwmsTaskEvents,
     ) {}
+
+    onModuleInit() {
+        this.dwmsTaskEvents.onStatusChange(TaskSourceModule.SGA, (change) => this.updateActionItemFromDwms(change));
+    }
+
+    // DWMS -> SGA: ticking an action item's task on the DWMS list updates the item, while the team can
+    // still update actions. A meeting task (SGA_MEETING) needs a written report, so it doesn't flow back.
+    async updateActionItemFromDwms(change: DwmsTaskStatusChange) {
+        const status = ACTION_STATUS_FOR_TASK[change.toStatus];
+        if (!status) return;
+        const item = await this.prisma.sgaActionItem.findUnique({
+            where: { id: change.sourceId },
+            select: { id: true, status: true, completedAt: true, sga: { select: { status: true } } },
+        });
+        if (!item || item.status === status || !TEAM_EDITABLE_STATUSES.includes(item.sga.status)) return;
+        // Back to pending only reopens a finished item; it doesn't undo work that was under way.
+        if (status === SgaActionStatus.OPEN && item.status !== SgaActionStatus.DONE) return;
+
+        await this.prisma.sgaActionItem.update({
+            where: { id: item.id },
+            data: {
+                status,
+                completedAt: status === SgaActionStatus.DONE ? (item.completedAt ?? new Date()) : null,
+            },
+        });
+    }
+
+    // SGA -> DWMS: each action item becomes a task for its responsible person, and the meeting plan a
+    // recurring task for the owner. Runs after the SGA is saved and never fails the request; the sync
+    // is idempotent, so the next save repairs anything a failure left behind.
+    private async syncDwmsTasks(sgaId: string, action: (bridge: DwmsTaskBridge) => Promise<unknown>) {
+        try {
+            await action(this.dwmsTasks);
+        } catch (error) {
+            this.logger.error(`DWMS task sync failed for SGA ${sgaId}`, error instanceof Error ? error.stack : error);
+        }
+    }
+
+    // Items without a responsible person or any due date (own or the SGA's target) get no task;
+    // items already DONE are closed rather than (re)created.
+    private syncActionItemTasks(sga: SgaWithInclude, assignedById: string) {
+        const sgaTitle = sga.title ?? 'Untitled SGA';
+        const inputs: DwmsTaskSourceInput[] = [];
+        const closedIds: string[] = [];
+        for (const item of sga.actionItems) {
+            if (item.status === 'DONE') {
+                closedIds.push(item.id);
+                continue;
+            }
+            const dueDate = item.dueDate ?? sga.targetCompletionDate;
+            if (!item.responsiblePersonId || !dueDate) continue;
+            inputs.push({
+                sourceModule: TaskSourceModule.SGA,
+                sourceId: item.id,
+                sourceParentId: sga.id,
+                sourceRef: `SGA · ${sgaTitle}`,
+                ownerId: item.responsiblePersonId,
+                title: `SGA action: ${item.improvementAction}`,
+                description: `Root cause: ${item.confirmedRootCause}`,
+                departmentId: sga.mainDepartmentId,
+                assignedById,
+                frequency: TaskFrequency.PLANNED,
+                dueDate,
+            });
+        }
+        return this.syncDwmsTasks(sga.id, (bridge) => bridge.syncParentFromSource(
+            { sourceModule: TaskSourceModule.SGA, sourceParentId: sga.id },
+            inputs,
+            closedIds,
+        ));
+    }
+
+    // The meeting plan as a recurring task for the owner, from approval (or the start date if later).
+    // CUSTOM plans, and weekly plans without a day, have no schedule DWMS can generate.
+    private syncMeetingTask(sga: SgaWithInclude, assignedById: string) {
+        if (!sga.ownerId || !sga.meetingFrequency) return;
+        const weekday = sga.meetingDay ? SGA_WEEKDAY_NUMBERS[sga.meetingDay] : null;
+        const schedule: Partial<Record<NonNullable<SgaWithInclude['meetingFrequency']>, { unit: RecurrenceUnit; interval: number; weekdays: number[] } | null>> = {
+            DAILY: { unit: RecurrenceUnit.DAY, interval: 1, weekdays: [] },
+            WEEKLY: weekday === null ? null : { unit: RecurrenceUnit.WEEK, interval: 1, weekdays: [weekday] },
+            BIWEEKLY: weekday === null ? null : { unit: RecurrenceUnit.WEEK, interval: 2, weekdays: [weekday] },
+            MONTHLY: { unit: RecurrenceUnit.MONTH, interval: 1, weekdays: [] },
+        };
+        const rule = schedule[sga.meetingFrequency];
+        if (!rule) return;
+
+        const today = new Date();
+        const startsOn = sga.startDate && sga.startDate > today ? sga.startDate : today;
+        const time = [sga.meetingTime, sga.meetingEndTime].filter(Boolean).join('–');
+        const description = [time && `Time: ${time}`, sga.meetingLocation && `Location: ${sga.meetingLocation}`]
+            .filter(Boolean)
+            .join('\n');
+        const sgaTitle = sga.title ?? 'Untitled SGA';
+
+        return this.syncDwmsTasks(sga.id, (bridge) => bridge.upsertFromSource({
+            sourceModule: TaskSourceModule.SGA_MEETING,
+            sourceId: sga.id,
+            sourceParentId: sga.id,
+            sourceRef: `SGA · ${sgaTitle}`,
+            ownerId: sga.ownerId!,
+            title: `SGA meeting: ${sgaTitle}`,
+            description: description || null,
+            departmentId: sga.mainDepartmentId,
+            assignedById,
+            frequency: recurrenceFrequency(rule.unit, rule.interval),
+            recurrenceUnit: rule.unit,
+            recurrenceInterval: rule.interval,
+            recurrenceWeekdays: rule.weekdays,
+            recurrenceStartsOn: startsOn,
+        }));
+    }
 
     private async resolveEmployee(userId: string, organizationId: string) {
         const employee = await this.prisma.employee.findFirst({
@@ -226,7 +375,36 @@ export class SgaService {
     // with sensible defaults so the guided steps start partly filled in.
     async createSga(userId: string, dto: CreateSgaDto, organizationId: string) {
         const employee = await this.resolveEmployee(userId, organizationId);
+        return this.createSgaRecord(employee, dto, organizationId);
+    }
 
+    // create an SGA draft on behalf of another employee (e.g. the SIMS responsible person when a
+    // suggestion is SELECTED_FOR_SGA). They become the raiser and owner, so they can edit the
+    // draft as if they'd started it. The caller stores the link on its own record
+    // (Suggestion.linkedSgaId).
+    async createSgaForEmployee(
+        employeeId: string,
+        dto: CreateSgaDto & { ownerId?: string; sourceAlertId?: string; sourceFiveSActionId?: string },
+        organizationId: string,
+    ) {
+        const employee = await this.prisma.employee.findFirst({
+            where: { id: employeeId, organizationId },
+            select: { id: true, departmentId: true },
+        });
+        if (!employee) throw new NotFoundException('Employee not found');
+        return this.createSgaRecord(employee, dto, organizationId, dto.ownerId ?? employee.id, {
+            sourceAlertId: dto.sourceAlertId,
+            sourceFiveSActionId: dto.sourceFiveSActionId,
+        });
+    }
+
+    private async createSgaRecord(
+        employee: { id: string; departmentId: string | null },
+        dto: CreateSgaDto,
+        organizationId: string,
+        ownerId?: string,
+        links: { sourceAlertId?: string; sourceFiveSActionId?: string } = {},
+    ) {
         const mainDepartmentId = dto.mainDepartmentId || employee.departmentId || undefined;
         if (dto.mainDepartmentId) {
             const dept = await this.prisma.department.findFirst({ where: { id: dto.mainDepartmentId, organizationId } });
@@ -241,6 +419,7 @@ export class SgaService {
             data: {
                 organizationId,
                 employeeId: employee.id,
+                ownerId,
                 startingReason: dto.startingReason,
                 title,
                 problemDescription,
@@ -250,6 +429,8 @@ export class SgaService {
                 startDate: new Date(),
                 meetingFrequency: 'WEEKLY',
                 status: 'DRAFT',
+                sourceAlertId: links.sourceAlertId,
+                sourceFiveSActionId: links.sourceFiveSActionId,
             },
             include: sgaInclude,
         });
@@ -695,6 +876,11 @@ export class SgaService {
             return result;
         });
 
+        if (newStatus === 'IN_PROGRESS') {
+            await this.syncMeetingTask(updated, reviewer.id);
+            await this.syncActionItemTasks(updated, reviewer.id);
+        }
+
         const recipientIds = [...new Set([sga.employeeId, sga.ownerId].filter((id): id is string => !!id))];
         await this.notifications.createMany(
             recipientIds
@@ -867,7 +1053,9 @@ export class SgaService {
             }
         });
 
-        return this.findSgaOrThrow(sgaId, organizationId);
+        const saved = await this.findSgaOrThrow(sgaId, organizationId);
+        await this.syncActionItemTasks(saved, employee.id);
+        return saved;
     }
 
     // Step 4 §10: the team or the person responsible can move one action along
@@ -889,6 +1077,13 @@ export class SgaService {
                 completedAt: dto.status === 'DONE' ? (item.completedAt ?? new Date()) : null,
             },
         });
+
+        const key = { sourceModule: TaskSourceModule.SGA, sourceId: itemId };
+        if (dto.status === 'DONE' && item.status !== 'DONE') {
+            await this.syncDwmsTasks(sgaId, (bridge) => bridge.closeFromSource(key));
+        } else if (dto.status !== 'DONE' && item.status === 'DONE') {
+            await this.syncDwmsTasks(sgaId, (bridge) => bridge.reopenFromSource(key));
+        }
         return this.findSgaOrThrow(sgaId, organizationId);
     }
 
@@ -1103,7 +1298,7 @@ export class SgaService {
             }
         }
 
-        const updated = await this.prisma.$transaction(async (tx) => {
+        const { updated, implementedSuggestion } = await this.prisma.$transaction(async (tx) => {
             await tx.sgaVerification.update({
                 where: { sgaId_stage: { sgaId, stage: dto.stage } },
                 data: {
@@ -1134,6 +1329,7 @@ export class SgaService {
             }
 
             let result = sga;
+            let implementedSuggestion: Awaited<ReturnType<SgaService['closeLinkedSuggestion']>> = null;
             if (newStatus !== sga.status) {
                 result = await tx.sga.update({
                     where: { id: sgaId },
@@ -1141,13 +1337,23 @@ export class SgaService {
                     include: sgaInclude,
                 });
                 await this.recordReview(sgaId, verifier.id, newStatus, dto.remarks);
+                if (newStatus === 'VERIFIED_CLOSED') {
+                    implementedSuggestion = await this.closeLinkedSuggestion(tx, sgaId, verifier.id);
+                }
             } else {
                 result = await tx.sga.findFirstOrThrow({ where: { id: sgaId }, include: sgaInclude });
             }
-            return result;
+            return { updated: result, implementedSuggestion };
         });
 
         const closed = updated.status === 'VERIFIED_CLOSED';
+        if (closed) {
+            await this.syncDwmsTasks(sgaId, async (bridge) => {
+                await bridge.closeFromSource({ sourceModule: TaskSourceModule.SGA, sourceParentId: sgaId });
+                await bridge.deactivateFromSource({ sourceModule: TaskSourceModule.SGA_MEETING, sourceId: sgaId });
+            });
+        }
+
         const recipientIds = [...new Set([sga.employeeId, sga.ownerId].filter((id): id is string => !!id))];
         await this.notifications.createMany(
             recipientIds
@@ -1167,6 +1373,48 @@ export class SgaService {
                 }))
         );
 
+        if (implementedSuggestion) {
+            await this.notifications.create({
+                employeeId: implementedSuggestion.employeeId,
+                type: 'INFO',
+                module: 'SIMS',
+                title: 'Your suggestion has been implemented',
+                message: `Suggestion "${implementedSuggestion.title}" was implemented through SGA "${updated.title}", which has now been verified and closed.`,
+                actionUrl: `/sims/${implementedSuggestion.id}`,
+                metadata: { suggestionId: implementedSuggestion.id, sgaId },
+            });
+        }
+
         return updated;
+    }
+
+    // Join 2: once an SGA reaches VERIFIED_CLOSED, move the suggestion it was raised from (if any)
+    // to IMPLEMENTED (implementationStatus stays SHIFTED_TO_SGA) and record it in the suggestion's
+    // review trail. Updates Prisma directly because SgaModule can't import SimsModule (SimsModule
+    // already imports SgaModule). Returns the suggestion so the caller can notify its submitter.
+    private async closeLinkedSuggestion(
+        tx: Prisma.TransactionClient,
+        sgaId: string,
+        verifierId: string,
+    ) {
+        const suggestion = await tx.suggestion.findUnique({
+            where: { linkedSgaId: sgaId },
+            select: { id: true, title: true, status: true, employeeId: true },
+        });
+        if (!suggestion || suggestion.status !== 'SELECTED_FOR_SGA') return null;
+
+        await tx.suggestion.update({
+            where: { id: suggestion.id },
+            data: { status: 'IMPLEMENTED' },
+        });
+        await tx.suggestionReview.create({
+            data: {
+                suggestionId: suggestion.id,
+                reviewerId: verifierId,
+                statusChanged: 'IMPLEMENTED',
+                note: 'Implemented through SGA (verified and closed)',
+            },
+        });
+        return suggestion;
     }
 }

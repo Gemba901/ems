@@ -92,6 +92,19 @@ export class TeamAttendanceQueryDto extends AttendanceRangeQueryDto {
     employeeId?: string;
 }
 
+export class AttendanceWeekQueryDto {
+    // Any date in the week; defaults to today in the organization's time zone.
+    @IsOptional()
+    @IsDateOnly()
+    date?: string;
+
+    // Defaults to the caller.
+    @IsOptional()
+    @IsString()
+    @Length(1, 64)
+    employeeId?: string;
+}
+
 // Omitted times stay as they are. A clock-out can be added or moved, never removed.
 export class CorrectAttendanceDto {
     @ValidateIf((_, value) => value !== undefined)

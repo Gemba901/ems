@@ -1,5 +1,7 @@
 import { uploadImage } from "./uploads.service";
 import { apiClient } from "@/lib/api-client";
+import type { KaizenStatus } from "./kaizen.service";
+import type { SgaStatus } from "./sga.service";
 const API_URL = "/api";
 
 function authHeaders(token: string) {
@@ -91,10 +93,14 @@ export interface Suggestion {
   committeeId: string | null;
   forwardedToCommitteeAt: string | null;
   linkedKaizenId: string | null;
+  linkedSgaId: string | null;
   createdAt: string;
   updatedAt: string;
   employee: { id: string; firstName: string; lastName: string; department: { id: string; name: string } | null } | null;
   reviews: SuggestionReview[];
+  // Only on the detail endpoint
+  kaizen?: { id: string; title: string | null; status: KaizenStatus } | null;
+  sga?: { id: string; title: string | null; status: SgaStatus } | null;
 }
 
 export interface PaginatedSuggestions {

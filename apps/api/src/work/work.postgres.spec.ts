@@ -11,6 +11,7 @@ import request from 'supertest';
 import { ProxySecretGuard } from '../common/guards/proxy-secret.guard';
 import { SafeExceptionFilter } from '../operations/safe-exception.filter';
 import { PrismaService } from '../prisma/prisma.service';
+import { AttendanceAutoClockOutService } from './attendance/attendance-auto-clock-out.service';
 import { WorkModule } from './work.module';
 
 // Explicit opt-in: never fall back to the application DATABASE_URL.
@@ -236,6 +237,26 @@ suite('Team Workspace API on PostgreSQL', () => {
       await api('admin').post(`/work/projects/${projectId}/tasks`, { title: '   ' }).expect(400);
     });
 
+    it('records priorities and history, rejects stale and concurrent edits, and protects history access', async () => {
+      const created = await api('admin').post(`/work/projects/${projectId}/tasks`, { title: 'Accountability', priority: 'HIGH' }).expect(201);
+      const taskId = created.body.id;
+      expect(created.body).toMatchObject({ priority: 'HIGH', version: 1 });
+      await api('member').patch(`/work/tasks/${taskId}`, { priority: 'URGENT' }).expect(400);
+      const results = await Promise.all([
+        api('member').patch(`/work/tasks/${taskId}`, { expectedVersion: 1, priority: 'URGENT' }),
+        api('member').patch(`/work/tasks/${taskId}`, { expectedVersion: 1, title: 'Concurrent change' }),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+      await api('member').patch(`/work/tasks/${taskId}`, { expectedVersion: 1, title: 'Stale' }).expect(409);
+      const history = await api('member').get(`/work/tasks/${taskId}/activity`).expect(200);
+      expect(history.body.total).toBe(2);
+      expect(history.body.items[0]).toMatchObject({ action: 'UPDATED', actorId: emp('member') });
+      expect(history.body.items[1].action).toBe('CREATED');
+      await api('outsider').get(`/work/tasks/${taskId}/activity`).expect(404);
+      const foreign = await api('foreign').get(`/work/tasks/${taskId}/activity`);
+      expect([401, 403, 404]).toContain(foreign.status);
+    });
+
     it('refuses to remove a member who still has tasks, and lists them', async () => {
       const { body } = await api('admin')
         .patch(`/work/projects/${projectId}`, { members: [{ employeeId: emp('admin'), role: 'MANAGER' }] })
@@ -276,9 +297,9 @@ suite('Team Workspace API on PostgreSQL', () => {
       expect(body).toMatchObject({ status: 'PLANNED', taskCounts: { total: 0, done: 0, percent: 0 } });
       sprintId = body.id;
 
-      await api('member').patch(`/work/tasks/${datedTask}`, { sprintId }).expect(403);
-      await api('admin').patch(`/work/tasks/${datedTask}`, { sprintId }).expect(200);
-      await api('admin').patch(`/work/tasks/${undatedTask}`, { sprintId }).expect(200);
+      await api('member').patch(`/work/tasks/${datedTask}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: datedTask } })).version, sprintId }).expect(403);
+      await api('admin').patch(`/work/tasks/${datedTask}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: datedTask } })).version, sprintId }).expect(200);
+      await api('admin').patch(`/work/tasks/${undatedTask}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: undatedTask } })).version, sprintId }).expect(200);
 
       const bySprint = await api('member').get(`/work/projects/${projectId}/tasks?view=${sprintId}`).expect(200);
       expect(bySprint.body.total).toBe(2);
@@ -305,7 +326,7 @@ suite('Team Workspace API on PostgreSQL', () => {
     });
 
     it('completes a sprint with a frozen snapshot and returns unfinished work to the backlog', async () => {
-      await api('member').patch(`/work/tasks/${datedTask}`, { status: 'DONE' }).expect(200);
+      await api('member').patch(`/work/tasks/${datedTask}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: datedTask } })).version, status: 'DONE' }).expect(200);
 
       const { body } = await api('admin').post(`/work/sprints/${sprintId}/complete`).expect(200);
       expect(body.status).toBe('COMPLETED');
@@ -319,14 +340,14 @@ suite('Team Workspace API on PostgreSQL', () => {
     });
 
     it('moves a reopened task out of a completed sprint without changing the snapshot', async () => {
-      const { body } = await api('member').patch(`/work/tasks/${datedTask}`, { status: 'IN_PROGRESS' }).expect(200);
+      const { body } = await api('member').patch(`/work/tasks/${datedTask}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: datedTask } })).version, status: 'IN_PROGRESS' }).expect(200);
       expect(body.sprint).toBeNull();
 
       const sprint = await api('member').get(`/work/sprints/${sprintId}`).expect(200);
       expect(sprint.body.taskCounts.done).toBe(1);
       expect(sprint.body.completionSnapshot.tasks).toHaveLength(2);
 
-      const assign = await api('admin').patch(`/work/tasks/${datedTask}`, { sprintId }).expect(400);
+      const assign = await api('admin').patch(`/work/tasks/${datedTask}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: datedTask } })).version, sprintId }).expect(400);
       expect(assign.body.code).toBe('SPRINT_NOT_ASSIGNABLE');
     });
 
@@ -402,14 +423,33 @@ suite('Team Workspace API on PostgreSQL', () => {
       expect(again.body.clockOutAt).toBe(clockOutAt);
     });
 
-    it('allows one record per work day', async () => {
-      const { body } = await api('member').post('/work/attendance/clock-in', { requestId: randomUUID(), ...missing }).expect(409);
-      expect(body.code).toBe('ATTENDANCE_DAY_COMPLETED');
+    it('lets the employee clock in again the same day and groups the sessions', async () => {
+      const second = await api('member').post('/work/attendance/clock-in', { requestId: randomUUID(), ...missing }).expect(200);
+      expect(second.body).toMatchObject({ isOpen: true, sessionNumber: 2, daySessionCount: 2, earlyLeaveMinutes: 0 });
+      // Only the day's first session can be late.
+      expect(second.body.lateMinutes).toBe(0);
+      await api('member').post(`/work/attendance/${second.body.id}/clock-out`, { requestId: randomUUID() }).expect(200);
+
+      const status = await api('member').get('/work/attendance/me/status').expect(200);
+      expect(status.body.openRecord).toBeNull();
+      expect(status.body.todaySessions.map((r: { id: string }) => r.id)).toEqual([recordId, second.body.id]);
+      expect(status.body.todayWorkedSeconds).toBe(
+        status.body.todaySessions.reduce((sum: number, r: { durationSeconds: number }) => sum + r.durationSeconds, 0),
+      );
+
+      const week = await api('member').get('/work/attendance/week').expect(200);
+      const today = week.body.days.find((d: { date: string }) => d.date === status.body.today);
+      expect(week.body.days).toHaveLength(7);
+      expect(today).toMatchObject({ status: 'PRESENT', isOpen: false, workedSeconds: status.body.todayWorkedSeconds });
+      expect(today.sessions).toHaveLength(2);
+      await api('member').get(`/work/attendance/week?employeeId=${emp('admin')}`).expect(403);
+      await api('hr').get(`/work/attendance/week?employeeId=${emp('member')}`).expect(200);
     });
 
     it('returns coordinates only to the owner and attendance managers', async () => {
       const mine = await api('member').get('/work/attendance/me').expect(200);
-      expect(mine.body.total).toBe(1);
+      // Two sessions today.
+      expect(mine.body.total).toBe(2);
       expect(JSON.stringify(mine.body)).not.toContain('36.8167');
 
       const own = await api('member').get(`/work/attendance/${recordId}/location`).expect(200);
@@ -423,7 +463,7 @@ suite('Team Workspace API on PostgreSQL', () => {
     it('limits the team view to attendance managers', async () => {
       await api('member').get('/work/attendance/team').expect(403);
       const { body } = await api('hr').get(`/work/attendance/team?employeeId=${emp('member')}`).expect(200);
-      expect(body.items).toHaveLength(1);
+      expect(body.items).toHaveLength(2);
       expect(body.items[0].employee.name).toBe('Mary Member');
 
       const range = await api('hr').get('/work/attendance/team?from=2026-10-10&to=2026-10-01').expect(400);
@@ -484,6 +524,32 @@ suite('Team Workspace API on PostgreSQL', () => {
         expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
         expect(await db.attendanceCorrection.count({ where: { attendanceRecordId: recordId } })).toBe(2);
       });
+    });
+  });
+
+  describe('automatic clock-out', () => {
+    it('closes at the saved cutoff and notifies exactly once across competing workers', async () => {
+      const record = await db.attendanceRecord.create({ data: {
+        organizationId: orgId, employeeId: emp('onsite'), workDate: new Date('2020-01-06T00:00:00Z'),
+        timezoneAtClockIn: 'Africa/Nairobi', clockInAt: new Date('2020-01-06T06:00:00Z'),
+        scheduledStartAt: new Date('2020-01-06T06:00:00Z'), scheduledEndAt: new Date('2020-01-06T14:00:00Z'),
+        scheduledBreakMinutes: 0, lateGraceMinutes: 0,
+        locationStatus: 'MISSING', locationMissingReason: 'Automatic clock-out integration test', clockInRequestId: randomUUID(),
+      } });
+      const worker = app.get(AttendanceAutoClockOutService);
+      const cutoff = new Date('2020-01-06T14:30:00Z');
+      const filter = { employeeId: emp('onsite'), module: 'WORK', metadata: { path: ['attendanceRecordId'], equals: record.id } };
+      await worker.processDue(new Date('2020-01-06T14:29:59Z'));
+      expect((await db.attendanceRecord.findUniqueOrThrow({ where: { id: record.id } })).clockOutAt).toBeNull();
+      await Promise.all([worker.processDue(cutoff), worker.processDue(cutoff)]);
+      await worker.processDue(cutoff);
+      const closed = await db.attendanceRecord.findUniqueOrThrow({ where: { id: record.id } });
+      expect(closed.clockOutAt).toEqual(cutoff);
+      expect(closed.autoClockedOutAt).toEqual(cutoff);
+      expect(closed.version).toBe(2);
+      expect(await db.notification.count({ where: filter })).toBe(1);
+      const response = await api('onsite').get('/work/attendance/me?from=2020-01-06&to=2020-01-06').expect(200);
+      expect(response.body.items[0].autoClockedOutAt).toBe(cutoff.toISOString());
     });
   });
 
@@ -634,11 +700,11 @@ suite('Team Workspace API on PostgreSQL', () => {
       const late = await api('admin')
         .post(`/work/projects/${project.body.id}/tasks`, { title: 'Late', dueDate: '2026-01-02', assigneeId: emp('admin') })
         .expect(201);
-      const done = await api('admin').patch(`/work/tasks/${late.body.id}`, { status: 'DONE' }).expect(200);
+      const done = await api('admin').patch(`/work/tasks/${late.body.id}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: late.body.id } })).version, status: 'DONE' }).expect(200);
       expect(done.body.completedAt).not.toBeNull();
-      const reopened = await api('admin').patch(`/work/tasks/${late.body.id}`, { status: 'TODO' }).expect(200);
+      const reopened = await api('admin').patch(`/work/tasks/${late.body.id}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: late.body.id } })).version, status: 'TODO' }).expect(200);
       expect(reopened.body.completedAt).toBeNull();
-      await api('admin').patch(`/work/tasks/${late.body.id}`, { status: 'DONE' }).expect(200);
+      await api('admin').patch(`/work/tasks/${late.body.id}`, { expectedVersion: (await db.workTask.findUniqueOrThrow({ where: { id: late.body.id } })).version, status: 'DONE' }).expect(200);
 
       const before = await api('admin').get('/work/analytics?scope=organisation').expect(200);
       expect(before.body.projects.projectsOverdue.map((p: { id: string }) => p.id)).toContain(project.body.id);

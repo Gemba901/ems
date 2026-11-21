@@ -1,4 +1,7 @@
+import type { LinkedFiveSStandard } from "./five-s.service";
 import { apiClient } from "@/lib/api-client";
+import type { SuggestionStatus } from "./sims.service";
+import type { KaizenStatus } from "./kaizen.service";
 const API_URL = "/api";
 
 function authHeaders(token: string) {
@@ -61,6 +64,7 @@ export type SgaStartingReason =
   | "AUDIT_FINDING_OR_GEMBA_WALK_OBSERVATION"
   | "MANAGEMENT_IMPROVEMENT_PRIORITY"
   | "DAILY_KAIZEN_UPGRADED_TO_SGA"
+  | "EMPLOYEE_SUGGESTION_SELECTED_FOR_SGA"
   | "OTHER";
 
 export type SgaReferenceApplicability = "APPLICABLE" | "NOT_APPLICABLE" | "REFERENCE_NOT_FOUND";
@@ -353,6 +357,11 @@ export interface Sga {
   qcdsmtBenefits: SgaQcdsmtBenefit[];
   verifications: SgaVerification[];
   reviews: SgaReview[];
+  sourceSuggestion?: { id: string; title: string; status: SuggestionStatus } | null;
+  sourceKaizen?: { id: string; title: string | null; status: KaizenStatus } | null;
+  sourceAlert?: { id: string; title: string; isAbnormality: boolean } | null;
+  sourceFiveSAction?: { id: string; reference: string; finding: string } | null;
+  fiveSStandards?: LinkedFiveSStandard[];
 }
 
 // Step 1 §1

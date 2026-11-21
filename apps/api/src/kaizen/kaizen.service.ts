@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateKaizenReasonDto,
@@ -15,7 +15,10 @@ import {
 } from './dto/kaizen.dto';
 import { Role } from 'src/common/enum/role.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
-import { Prisma, KaizenStatus, KaizenVerificationStage, KaizenReferenceApplicability } from 'db';
+import { Prisma, KaizenStatus, KaizenVerificationStage, KaizenReferenceApplicability, SgaStartingReason, TaskFrequency, TaskSourceModule, TaskStatus } from 'db';
+import { DwmsTaskBridge, DwmsTaskSourceInput } from 'src/dwms/services/dwms-task-bridge.service';
+import { DwmsTaskEvents, DwmsTaskStatusChange } from 'src/dwms/services/dwms-task-events.service';
+import { SgaService } from 'src/sga/sga.service';
 
 const employeeSelect = {
     id: true,
@@ -38,6 +41,16 @@ const kaizenInclude = {
     reviews: {
         orderBy: { createdAt: 'asc' as const },
         include: { reviewer: { select: { id: true, firstName: true, lastName: true } } },
+    },
+    sourceSuggestion: { select: { id: true, title: true, status: true } },
+    linkedSga: { select: { id: true, title: true, status: true } },
+    sourceFiveSAction: { select: { id: true, reference: true, finding: true } },
+    sourceAlert: { select: { id: true, title: true, isAbnormality: true } },
+    // Join 12: current 5S standards written from this improvement
+    fiveSStandards: {
+        where: { status: { not: 'SUPERSEDED' as const } },
+        orderBy: { createdAt: 'asc' as const },
+        select: { id: true, title: true, status: true, revision: true, area: { select: { id: true, name: true } } },
     },
 };
 
@@ -74,11 +87,88 @@ export function getKaizenDraftMissingItems(kaizen: KaizenWithInclude): KaizenDra
 const MAX_DURATION_DAYS = 30;
 
 @Injectable()
-export class KaizenService {
+export class KaizenService implements OnModuleInit {
+    private readonly logger = new Logger(KaizenService.name);
+
     constructor(
         private prisma: PrismaService,
-        private notifications: NotificationsService
+        private notifications: NotificationsService,
+        private dwmsTasks: DwmsTaskBridge,
+        private sgaService: SgaService,
+        private dwmsTaskEvents: DwmsTaskEvents,
     ) { }
+
+    onModuleInit() {
+        this.dwmsTaskEvents.onStatusChange(TaskSourceModule.KAIZEN, (change) => this.implementationTaskDoneInDwms(change));
+    }
+
+    // DWMS -> Kaizen: a kaizen can't close itself from a ticked task (part 9 needs the action taken and
+    // after photos, then three-stage verification), so a task done in DWMS prompts the owner instead:
+    // their own task to record part 9 and submit, a team member's to say that part is finished.
+    async implementationTaskDoneInDwms(change: DwmsTaskStatusChange) {
+        if (change.toStatus !== TaskStatus.DONE || change.fromStatus === TaskStatus.DONE) return;
+        const kaizen = await this.prisma.kaizen.findUnique({
+            where: { id: change.sourceParentId ?? change.sourceId.split(':')[0] },
+            select: { id: true, title: true, status: true, kaizenOwnerId: true, actionTaken: true },
+        });
+        if (!kaizen?.kaizenOwnerId || !['IN_IMPLEMENTATION', 'RETURNED_FOR_REWORK'].includes(kaizen.status)) return;
+
+        const title = kaizen.title ?? 'Untitled kaizen';
+        const base = { employeeId: kaizen.kaizenOwnerId, module: 'KAIZEN', actionUrl: `/kaizen/${kaizen.id}`, metadata: { kaizenId: kaizen.id } };
+        if (change.ownerId === kaizen.kaizenOwnerId) {
+            await this.notifications.create({
+                ...base,
+                type: 'ACTION_REQUIRED',
+                title: 'Kaizen done — submit it for verification',
+                message: kaizen.actionTaken
+                    ? `You marked "${title}" done in DWMS. Submit it for verification.`
+                    : `You marked "${title}" done in DWMS. Record the action taken and after photos, then submit it for verification.`,
+            });
+            return;
+        }
+
+        const member = await this.prisma.employee.findUnique({
+            where: { id: change.ownerId },
+            select: { firstName: true, lastName: true },
+        });
+        const name = member ? `${member.firstName} ${member.lastName}`.trim() : 'A team member';
+        await this.notifications.create({
+            ...base,
+            type: 'INFO',
+            title: 'Kaizen team task done',
+            message: `${name} finished their part of "${title}".`,
+        });
+    }
+
+    // Kaizen -> DWMS: once approved for implementation, the owner and each team member get a task due
+    // on the target completion date. Runs after the kaizen is saved and never fails the request; the
+    // sync is idempotent, so the next lifecycle step repairs anything a failure left behind.
+    private async syncDwmsTasks(kaizenId: string, action: (bridge: DwmsTaskBridge) => Promise<unknown>) {
+        try {
+            await action(this.dwmsTasks);
+        } catch (error) {
+            this.logger.error(`DWMS task sync failed for kaizen ${kaizenId}`, error instanceof Error ? error.stack : error);
+        }
+    }
+
+    private implementationTaskInputs(kaizen: KaizenWithInclude, assignedById: string): DwmsTaskSourceInput[] {
+        if (!kaizen.kaizenOwnerId || !kaizen.targetCompletionDate) return [];
+        const title = kaizen.title ?? 'Untitled kaizen';
+        const memberIds = [kaizen.kaizenOwnerId, ...kaizen.teamMembers.map((m) => m.id)];
+        return [...new Set(memberIds)].map((employeeId) => ({
+            sourceModule: TaskSourceModule.KAIZEN,
+            sourceId: `${kaizen.id}:${employeeId}`,
+            sourceParentId: kaizen.id,
+            sourceRef: `Kaizen · ${title}`,
+            ownerId: employeeId,
+            title: employeeId === kaizen.kaizenOwnerId ? `Implement kaizen: ${title}` : `Kaizen team: ${title}`,
+            description: kaizen.conditionDescription,
+            departmentId: kaizen.departmentId,
+            assignedById,
+            frequency: TaskFrequency.PLANNED,
+            dueDate: kaizen.targetCompletionDate,
+        }));
+    }
 
     private async resolveEmployee(userId: string, organizationId: string) {
         const employee = await this.prisma.employee.findFirst({
@@ -209,6 +299,8 @@ export class KaizenService {
             targetCompletionDate: string;
             referenceValue: string;
             referenceApplicability: KaizenReferenceApplicability;
+            sourceFiveSActionId: string;
+            sourceAlertId: string;
         }>,
     ) {
         if (!employee.departmentId) {
@@ -231,6 +323,8 @@ export class KaizenService {
                 organizationId,
                 status: overrides?.status ?? 'DRAFT',
                 kaizenOwnerId: overrides?.kaizenOwnerId,
+                sourceFiveSActionId: overrides?.sourceFiveSActionId,
+                sourceAlertId: overrides?.sourceAlertId,
             },
             include: kaizenInclude,
         });
@@ -251,6 +345,8 @@ export class KaizenService {
             status?: KaizenStatus;
             referenceValue?: string;
             referenceApplicability?: KaizenReferenceApplicability;
+            sourceFiveSActionId?: string;
+            sourceAlertId?: string;
         },
         organizationId: string,
     ) {
@@ -269,6 +365,8 @@ export class KaizenService {
             targetCompletionDate: dto.targetCompletionDate,
             referenceValue: dto.referenceValue,
             referenceApplicability: dto.referenceApplicability,
+            sourceFiveSActionId: dto.sourceFiveSActionId,
+            sourceAlertId: dto.sourceAlertId,
         });
     }
 
@@ -631,7 +729,21 @@ export class KaizenService {
         };
         const newStatus = statusByDecision[dto.decision];
 
+        // Join 6: moving to SGA raises a draft SGA (once per kaizen) for the kaizen owner, prefilled
+        // with the problem and evidence. A kaizen that came from a suggestion hands that link on, so
+        // the suggestion is closed when the SGA is verified.
+        const movedSga = newStatus === 'MOVED_TO_SGA' && !kaizen.linkedSgaId ? await this.raiseSgaFromKaizen(kaizen, organizationId) : null;
+        const carriedSuggestion = movedSga && kaizen.sourceSuggestion
+            ? await this.prisma.suggestion.findFirst({ where: { id: kaizen.sourceSuggestion.id, linkedSgaId: null }, select: { id: true } })
+            : null;
+
         const updated = await this.prisma.$transaction(async (tx) => {
+            if (carriedSuggestion) {
+                await tx.suggestion.update({
+                    where: { id: carriedSuggestion.id },
+                    data: { linkedSgaId: movedSga!.id, implementationStatus: 'SHIFTED_TO_SGA' },
+                });
+            }
             const result = await tx.kaizen.update({
                 where: { id: kaizenId },
                 data: {
@@ -640,12 +752,32 @@ export class KaizenService {
                     hodPreReviewRemarks: dto.remarks,
                     hodPreReviewById: reviewer.id,
                     hodPreReviewAt: new Date(),
+                    ...(movedSga && { linkedSgaId: movedSga.id }),
                 },
                 include: kaizenInclude,
             });
             await this.recordReview(kaizenId, reviewer.id, newStatus, dto.remarks);
             return result;
         });
+
+        if (movedSga && movedSga.employeeId !== reviewer.id) {
+            await this.notifications.create({
+                employeeId: movedSga.employeeId,
+                type: 'ACTION_REQUIRED',
+                module: 'SGA',
+                title: 'Kaizen moved to SGA — complete the draft',
+                message: `Kaizen "${kaizen.title ?? kaizen.conditionDescription}" needs a team to solve. A draft SGA was raised for you to complete.`,
+                actionUrl: `/sga/${movedSga.id}`,
+                metadata: { kaizenId, sgaId: movedSga.id },
+            });
+        }
+
+        if (newStatus === 'IN_IMPLEMENTATION') {
+            await this.syncDwmsTasks(kaizenId, (bridge) => bridge.syncParentFromSource(
+                { sourceModule: TaskSourceModule.KAIZEN, sourceParentId: kaizenId },
+                this.implementationTaskInputs(updated, reviewer.id),
+            ));
+        }
 
         await this.notifications.create({
             employeeId: kaizen.employeeId,
@@ -658,6 +790,22 @@ export class KaizenService {
         });
 
         return updated;
+    }
+
+    private raiseSgaFromKaizen(kaizen: KaizenWithInclude, organizationId: string) {
+        // The kaizen owner raises and owns the SGA, so they get the same rights over the draft as if
+        // they had started it themselves.
+        return this.sgaService.createSgaForEmployee(
+            kaizen.kaizenOwnerId ?? kaizen.employeeId,
+            {
+                startingReason: SgaStartingReason.DAILY_KAIZEN_UPGRADED_TO_SGA,
+                title: kaizen.title ?? undefined,
+                problemDescription: kaizen.conditionDescription,
+                mainDepartmentId: kaizen.departmentId,
+                beforeFileUrls: kaizen.conditionEvidenceUrls,
+            },
+            organizationId,
+        );
     }
 
     // Part 9: implementation and evidence
@@ -722,6 +870,10 @@ export class KaizenService {
             await this.recordReview(kaizenId, employee.id, 'PENDING_VERIFICATION');
             return result;
         });
+
+        await this.syncDwmsTasks(kaizenId, (bridge) => bridge.closeFromSource(
+            { sourceModule: TaskSourceModule.KAIZEN, sourceParentId: kaizenId },
+        ));
 
         const hodIds = await this.findDepartmentHODs(kaizen.departmentId, organizationId);
         const committeeMemberIds = await this.getSteeringCommitteeMemberIds(organizationId);
@@ -838,6 +990,13 @@ export class KaizenService {
         });
 
         const closed = updated.status === 'VERIFIED_CLOSED';
+        const parent = { sourceModule: TaskSourceModule.KAIZEN, sourceParentId: kaizenId };
+        if (updated.status === 'RETURNED_FOR_REWORK') {
+            await this.syncDwmsTasks(kaizenId, (bridge) => bridge.reopenFromSource(parent));
+        } else if (closed) {
+            await this.syncDwmsTasks(kaizenId, (bridge) => bridge.closeFromSource(parent));
+        }
+
         await this.notifications.create({
             employeeId: kaizen.kaizenOwnerId ?? kaizen.employeeId,
             type: dto.decision === 'RETURN' ? 'ACTION_REQUIRED' : 'INFO',

@@ -1,0 +1,440 @@
+// 5S WORKPLACE ORGANISATION (20 Keys, Key 1: Cleaning and Organising to Make Work Easy)
+//
+// Levels are stored as integer tenths (35 = level 3.5) so the audit formula
+// ROUND(3.5 - ROUNDUP(total/4, 0) * 0.1, 1) is computed exactly, without float drift.
+
+enum FiveSPractice {
+  SORT
+  SET_IN_ORDER
+  SHINE
+  STANDARDIZE
+  SUSTAIN
+}
+
+// Module responsibilities granted on top of the app role.
+enum FiveSResponsibility {
+  ADMIN
+  AUDITOR
+  VERIFIER
+  VIEWER
+}
+
+enum FiveSAuditFrequency {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+  QUARTERLY
+}
+
+// Each template is one assessment method. Results from different templates are never compared.
+enum FiveSAuditTemplate {
+  PRODUCTION_SHOPFLOOR_V1
+}
+
+enum FiveSAuditStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum FiveSActionSource {
+  AUDIT
+  MANUAL
+}
+
+enum FiveSActionStatus {
+  OPEN
+  AWAITING_VERIFICATION
+  VERIFIED
+}
+
+enum FiveSActionEventType {
+  CREATED
+  ASSIGNED
+  DUE_DATE_CHANGED
+  UPDATED
+  SUBMITTED_FOR_VERIFICATION
+  VERIFIED
+  RETURNED_FOR_REWORK
+  KAIZEN_RAISED
+  SGA_RAISED
+}
+
+enum FiveSRedTagReason {
+  UNNECESSARY
+  OBSOLETE
+  DAMAGED
+  EXCESS
+  UNIDENTIFIED
+}
+
+enum FiveSRedTagDecision {
+  RETAIN
+  RELOCATE
+  REPAIR
+  RECYCLE
+  DISPOSE
+}
+
+// PENDING: awaiting review. DECIDED: decision recorded, disposition not yet done (still pending).
+enum FiveSRedTagStatus {
+  PENDING
+  DECIDED
+  RESOLVED
+}
+
+enum FiveSStandardStatus {
+  DRAFT
+  APPROVED
+  SUPERSEDED
+}
+
+enum FiveSRoutineCategory {
+  ARRANGEMENT
+  CLEANING
+  INSPECTION
+  RETURN_ITEMS
+}
+
+enum FiveSRoutineFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum FiveSRoutineOutcome {
+  DONE
+  DONE_WITH_EXCEPTION
+  NOT_DONE
+}
+
+model FiveSResponsibilityAssignment {
+  id             String              @id @default(uuid())
+  organizationId String
+  employeeId     String
+  responsibility FiveSResponsibility
+  createdById    String?
+  createdAt      DateTime            @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation("FiveSResponsibility", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, responsibility])
+  @@index([organizationId, responsibility])
+}
+
+// Per-company running numbers for human-readable references (5S-AUD-0001 etc.).
+model FiveSCounter {
+  organizationId String
+  kind           String
+  value          Int    @default(0)
+
+  @@id([organizationId, kind])
+}
+
+model FiveSArea {
+  id                String              @id @default(uuid())
+  organizationId    String
+  name              String
+  departmentId      String?
+  ownerId           String?
+  description       String?
+  auditFrequency    FiveSAuditFrequency @default(MONTHLY)
+  targetLevelTenths Int                 @default(30)
+  isActive          Boolean             @default(true)
+  isSample          Boolean             @default(false)
+  createdById       String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?     @relation("FiveSAreaDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+  owner        Employee?       @relation("FiveSAreaOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  audits       FiveSAudit[]
+  actions      FiveSAction[]
+  redTags      FiveSRedTag[]
+  standards    FiveSStandard[]
+  routines     FiveSRoutine[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+  @@index([departmentId])
+  @@index([ownerId])
+}
+
+model FiveSAudit {
+  id             String             @id @default(uuid())
+  organizationId String
+  reference      String
+  areaId         String
+  template       FiveSAuditTemplate @default(PRODUCTION_SHOPFLOOR_V1)
+  status         FiveSAuditStatus   @default(DRAFT)
+  auditDate      DateTime           @db.Date
+  auditorId      String
+  auditeeId      String?
+  auditeeName    String?
+  remarks        String?
+  photoUrls      String[]           @default([])
+
+  // Snapshot of the result, written once at submission and never changed afterwards.
+  sortPoints        Int?
+  setInOrderPoints  Int?
+  shinePoints       Int?
+  standardizePoints Int?
+  sustainPoints     Int?
+  totalPoints       Int?
+  levelTenths       Int?
+  targetLevelTenths Int?
+  submittedAt       DateTime?
+  submittedById     String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  area         FiveSArea            @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  auditor      Employee             @relation("FiveSAuditor", fields: [auditorId], references: [id])
+  auditee      Employee?            @relation("FiveSAuditee", fields: [auditeeId], references: [id], onDelete: SetNull)
+  submittedBy  Employee?            @relation("FiveSAuditSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  responses    FiveSAuditResponse[]
+  actions      FiveSAction[]
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status, auditDate])
+  @@index([areaId, status, auditDate])
+}
+
+// No row (or a null count) means the checkpoint has not been answered. It is never read as zero.
+model FiveSAuditResponse {
+  id                String   @id @default(uuid())
+  auditId           String
+  checkpointNo      Int
+  // 0-4 problem locations, 5 means "5 or more".
+  locationCount     Int?
+  affectedLocations String?
+  remark            String?
+  photoUrls         String[] @default([])
+  updatedAt         DateTime @updatedAt
+
+  audit FiveSAudit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@unique([auditId, checkpointNo])
+}
+
+model FiveSAction {
+  id                     String            @id @default(uuid())
+  organizationId         String
+  reference              String
+  areaId                 String
+  source                 FiveSActionSource
+  auditId                String?
+  checkpointNo           Int?
+  practice               FiveSPractice
+  // Copied from the audit response so the action reads correctly on its own.
+  locationCount          Int?
+  checkpointText         String?
+  finding                String
+  ownerId                String?
+  dueDate                DateTime?         @db.Date
+  status                 FiveSActionStatus @default(OPEN)
+  completionDescription  String?
+  completionEvidenceUrls String[]          @default([])
+  submittedAt            DateTime?
+  verifiedById           String?
+  verifiedAt             DateTime?
+  verificationRemarks    String?
+  createdById            String
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  area              FiveSArea               @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  audit             FiveSAudit?             @relation(fields: [auditId], references: [id], onDelete: Restrict)
+  owner             Employee?               @relation("FiveSActionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  verifiedBy        Employee?               @relation("FiveSActionVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  createdBy         Employee                @relation("FiveSActionCreatedBy", fields: [createdById], references: [id])
+  events            FiveSActionEvent[]
+  correctiveActions FiveSCorrectiveAction[]
+  raisedKaizen      Kaizen?
+  // Join 8: SGA raised for a checkpoint that keeps failing audits
+  raisedSga         Sga?
+
+  @@unique([organizationId, reference])
+  @@unique([auditId, checkpointNo])
+  @@index([organizationId, status])
+  @@index([areaId, status])
+  @@index([ownerId, status])
+}
+
+// One step of an action plan. Each has its own owner and due date and is ticked done on its own;
+// the plan can only be sent for verification once every step is done.
+model FiveSCorrectiveAction {
+  id            String    @id @default(uuid())
+  actionId      String
+  sortOrder     Int
+  description   String
+  ownerId       String?
+  dueDate       DateTime? @db.Date
+  completedAt   DateTime?
+  completedById String?
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  action      FiveSAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  owner       Employee?   @relation("FiveSCorrectiveActionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  completedBy Employee?   @relation("FiveSCorrectiveActionCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  createdBy   Employee    @relation("FiveSCorrectiveActionCreatedBy", fields: [createdById], references: [id])
+
+  @@index([actionId, sortOrder])
+  @@index([ownerId, completedAt])
+}
+
+model FiveSActionEvent {
+  id        String               @id @default(uuid())
+  actionId  String
+  actorId   String
+  type      FiveSActionEventType
+  note      String?
+  fromValue String?
+  toValue   String?
+  createdAt DateTime             @default(now())
+
+  action FiveSAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  actor  Employee    @relation("FiveSActionEventActor", fields: [actorId], references: [id])
+
+  @@index([actionId, createdAt])
+}
+
+model FiveSRedTag {
+  id                String               @id @default(uuid())
+  organizationId    String
+  reference         String
+  areaId            String
+  itemName          String
+  location          String
+  quantity          String?
+  reason            FiveSRedTagReason
+  reasonDetails     String?
+  ownerId           String?
+  raisedById        String
+  raisedOn          DateTime             @db.Date
+  reviewDueDate     DateTime?            @db.Date
+  photoUrls         String[]             @default([])
+  status            FiveSRedTagStatus    @default(PENDING)
+  decision          FiveSRedTagDecision?
+  decisionNotes     String?
+  approvalReference String?
+  decidedById       String?
+  decidedAt         DateTime?
+  resolutionDetails String?
+  resolvedById      String?
+  resolvedOn        DateTime?            @db.Date
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  area         FiveSArea    @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  owner        Employee?    @relation("FiveSRedTagOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  raisedBy     Employee     @relation("FiveSRedTagRaisedBy", fields: [raisedById], references: [id])
+  decidedBy    Employee?    @relation("FiveSRedTagDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  resolvedBy   Employee?    @relation("FiveSRedTagResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+  @@index([areaId, status])
+}
+
+// Revisions of one standard share a seriesId. At most one revision per series is APPROVED.
+model FiveSStandard {
+  id             String              @id @default(uuid())
+  organizationId String
+  areaId         String
+  seriesId       String
+  revision       Int                 @default(1)
+  title          String
+  instructions   String
+  ownerId        String?
+  referenceUrls  String[]            @default([])
+  status         FiveSStandardStatus @default(DRAFT)
+  changeNote     String?
+  approvedById   String?
+  approvedAt     DateTime?
+  createdById    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  // Join 12: the closed Kaizen or SGA this standard locks in ("Standardise"); kept on each revision
+  sourceKaizenId String?
+  sourceSgaId    String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  area         FiveSArea    @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  owner        Employee?    @relation("FiveSStandardOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  approvedBy   Employee?    @relation("FiveSStandardApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  sourceKaizen Kaizen?      @relation(fields: [sourceKaizenId], references: [id], onDelete: SetNull)
+  sourceSga    Sga?         @relation(fields: [sourceSgaId], references: [id], onDelete: SetNull)
+
+  @@unique([seriesId, revision])
+  @@index([organizationId, areaId, status])
+  @@index([sourceKaizenId])
+  @@index([sourceSgaId])
+}
+
+model FiveSRoutine {
+  id             String                @id @default(uuid())
+  organizationId String
+  areaId         String
+  title          String
+  checkLocation  String
+  instructions   String?
+  category       FiveSRoutineCategory
+  frequency      FiveSRoutineFrequency
+  responsibleId  String?
+  startDate      DateTime              @db.Date
+  isActive       Boolean               @default(true)
+  createdById    String
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  area         FiveSArea                @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  responsible  Employee?                @relation("FiveSRoutineResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  completions  FiveSRoutineCompletion[]
+
+  @@index([organizationId, areaId, isActive])
+  @@index([responsibleId])
+}
+
+model FiveSRoutineCompletion {
+  id            String              @id @default(uuid())
+  routineId     String
+  scheduledDate DateTime            @db.Date
+  outcome       FiveSRoutineOutcome
+  exception     String?
+  completedById String
+  completedAt   DateTime            @default(now())
+
+  routine     FiveSRoutine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  completedBy Employee     @relation("FiveSRoutineCompletedBy", fields: [completedById], references: [id])
+
+  @@unique([routineId, scheduledDate])
+  @@index([routineId, scheduledDate])
+}
+
+// Record of important changes across the module (areas, audits, red tags, standards, routines, responsibilities).
+model FiveSChangeLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  action         String
+  summary        String
+  actorId        String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        Employee?    @relation("FiveSChangeLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+}

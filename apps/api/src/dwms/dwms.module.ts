@@ -9,6 +9,8 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { ActivityIngestionProcessor } from './activity-ingestion.processor';
+import { DwmsTaskBridge } from './services/dwms-task-bridge.service';
+import { DwmsTaskEvents } from './services/dwms-task-events.service';
 
 @Module({
   imports: [TenancyModule, ConfigModule, PrismaModule, AuthModule, NotificationsModule],
@@ -18,7 +20,9 @@ import { ActivityIngestionProcessor } from './activity-ingestion.processor';
     DwmsOverdueAlertService,
     DwmsTaskInstanceSchedulerService,
     ActivityIngestionProcessor,
+    DwmsTaskBridge,
+    DwmsTaskEvents,
   ],
-  exports: [DwmsService],
+  exports: [DwmsService, DwmsTaskBridge, DwmsTaskEvents],
 })
 export class DwmsModule {}

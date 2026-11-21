@@ -18,6 +18,8 @@ import {
 } from "@/components/kaizen/kaizen-ui";
 import { getKaizenGating, getStageStates, KaizenAccessContext } from "@/components/kaizen/gating";
 import KaizenDraftWizard from "@/components/kaizen/KaizenDraftWizard";
+import LinkedRecordChip from "@/components/ui/LinkedRecordChip";
+import StandardiseLinks from "@/components/five-s/StandardiseLinks";
 import NextActionBanner from "@/components/kaizen/NextActionBanner";
 
 import ReasonSection from "./sections/01-Reason";
@@ -107,6 +109,34 @@ export default function KaizenForm({
             <span className="text-xs text-slate-400">
               {kaizen.employee.firstName} {kaizen.employee.lastName} · {kaizen.department?.name ?? "No department"}
             </span>
+            {kaizen.sourceSuggestion && (
+              <LinkedRecordChip
+                href={`/sims/${kaizen.sourceSuggestion.id}`}
+                label="From suggestion:"
+                title={kaizen.sourceSuggestion.title}
+                tone="suggestion"
+              />
+            )}
+            {kaizen.sourceFiveSAction && (
+              <LinkedRecordChip
+                href={`/five-s/actions/${kaizen.sourceFiveSAction.id}`}
+                label="From 5S action:"
+                title={kaizen.sourceFiveSAction.reference}
+                tone="fiveS"
+              />
+            )}
+            {kaizen.sourceAlert && (
+              <LinkedRecordChip
+                href={`/dwms/alerts/${kaizen.sourceAlert.id}`}
+                label={kaizen.sourceAlert.isAbnormality ? "From abnormality:" : "From alert:"}
+                title={kaizen.sourceAlert.title}
+                tone="alert"
+              />
+            )}
+            {kaizen.linkedSga && (
+              <LinkedRecordChip href={`/sga/${kaizen.linkedSga.id}`} label="Moved to SGA:" title={kaizen.linkedSga.title} tone="sga" />
+            )}
+            <StandardiseLinks kind="kaizen" id={kaizen.id} status={kaizen.status} standards={kaizen.fiveSStandards} />
           </div>
         </div>
       </div>

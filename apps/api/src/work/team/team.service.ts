@@ -7,7 +7,7 @@ import { AnalyticsService } from '../analytics/analytics.service';
 import { AttendanceTotals, attendanceStats, leaveDateSets } from '../analytics/attendance-stats';
 import { WORK_SETTINGS_ROLES } from '../work-access.policy';
 import { WorkAccessService, WorkActor } from '../work-access.service';
-import { DayType, WorkScheduleService, punctuality } from '../work-schedule';
+import { DayType, WorkScheduleService, attendanceDays, dayKey, punctuality, sessionPunctuality } from '../work-schedule';
 import { addDays, fromDbDate, localDateIn, toDbDate } from '../work-date';
 
 // What the Team Workspace UI needs to know about the caller to show the right sections.
@@ -156,18 +156,20 @@ export class TeamService {
             }),
         ]);
 
+        const sessions = recent.map((r) => ({ ...r, employeeId, workDate: fromDbDate(r.workDate) }));
+        const days = attendanceDays(sessions);
         return {
             ...view,
             openTasks: openTasks.map((t) => ({ ...t, dueDate: t.dueDate ? fromDbDate(t.dueDate) : null })),
-            recentAttendance: recent.map((r) => ({
+            recentAttendance: sessions.map((r) => ({
                 id: r.id,
-                workDate: fromDbDate(r.workDate),
+                workDate: r.workDate,
                 clockInAt: r.clockInAt,
                 clockOutAt: r.clockOutAt,
                 locationCheck: r.locationCheck,
                 checkedPlaceName: r.checkedPlaceName,
                 distanceMeters: r.distanceMeters,
-                ...punctualityOf(r),
+                ...sessionPunctuality(days.get(dayKey(r))!, r.id),
             })),
         };
     }
@@ -284,9 +286,4 @@ export class TeamService {
             };
         });
     }
-}
-
-function punctualityOf(record: Parameters<typeof punctuality>[0]) {
-    const { lateMinutes, earlyLeaveMinutes } = punctuality(record);
-    return { lateMinutes, earlyLeaveMinutes };
 }

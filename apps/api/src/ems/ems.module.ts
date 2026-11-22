@@ -1,3 +1,4 @@
+import { EmsDirectoryModule } from './directory/ems-directory.module';
 import { EmsRegistrationService } from './ems-registration.service';
 import { EmsDepartmentDirectoryController } from './ems-department-directory.controller';
 import { EmsAccountLinksService } from './ems-account-links';
@@ -16,8 +17,9 @@ import { RateLimitModule } from 'src/common/rate-limit/rate-limit.module';
 import { EmsOrgChartModule } from './org-chart/org-chart.module';
 
 @Module({
-  imports: [TenancyModule, ConfigModule, PrismaModule, DwmsModule, NotificationsModule, RateLimitModule, EmsOrgChartModule],
+  imports: [EmsDirectoryModule, TenancyModule, ConfigModule, PrismaModule, DwmsModule, NotificationsModule, RateLimitModule, EmsOrgChartModule],
   providers: [EmsRegistrationService, EmsService, EmsInvitationsService, EmsAccountLinksService, ModuleGuard],
   controllers: [EmsController, EmsInvitationsController, EmsDepartmentDirectoryController],
+  exports: [EmsDirectoryModule],
 })
 export class EmsModule {}

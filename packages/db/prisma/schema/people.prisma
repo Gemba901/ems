@@ -216,6 +216,10 @@ model Employee {
   steelMeltingActivityLogs         SteelMeltingActivityLog[]           @relation("SteelMeltingPerformedBy")
   heatMaterialChargesRecorded      HeatMaterialCharge[]                @relation("HeatMaterialChargeChargedBy")
   heatCycleEventsRecorded          HeatCycleEvent[]                    @relation("HeatCycleEventRecordedBy")
+  lexDirectionsSubmitted      LexStrategicDirection[]        @relation("LexDirectionSubmittedBy")
+  lexDirectionVersionsApproved LexStrategicDirectionVersion[] @relation("LexDirectionApprovedBy")
+  lexDirectionEvents          LexStrategicDirectionEvent[]   @relation("LexDirectionEventActor")
+
 
   @@index([pendingFirstRelieverRecordId])
   @@index([pendingSecondRelieverRecordId])

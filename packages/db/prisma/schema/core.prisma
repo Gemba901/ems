@@ -36,6 +36,7 @@ enum ModuleType {
   SGA
   WORK
   FIVE_S
+  LEADERSHIP_EXCELLENCE
 }
 
 enum CommitteeType {
@@ -199,6 +200,10 @@ model Organization {
   steelProductionRoutes       SteelProductionRoute[]
   steelMaterialMasters        SteelMaterialMaster[]
   steelFinishedGoodsStocks    SteelFinishedGoodsStock[]
+  lexStrategicDirection       LexStrategicDirection?
+
+
+  lexPerformanceCalendars LexPerformanceCalendar[] // LEX 02.03
 }
 
 //specific user

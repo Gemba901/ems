@@ -1,6 +1,7 @@
 export type ChartPerson = {
   id: string;
   name: string;
+  employeeCode?: string | null;
   jobTitle: string | null;
   department: { id: string; name: string } | null;
   branch: null;

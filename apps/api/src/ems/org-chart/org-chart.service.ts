@@ -15,6 +15,7 @@ export class EmsOrgChartService {
         orderBy: [{ firstName: "asc" }, { id: "asc" }],
         select: {
           id: true,
+          employeeCode: true,
           firstName: true,
           middleName: true,
           lastName: true,
@@ -40,6 +41,7 @@ export class EmsOrgChartService {
           unavailable.push(p.id);
         return {
           id: p.id,
+          employeeCode: p.employeeCode,
           name: personFullName(p),
           jobTitle: p.jobTitle,
           department: p.departmentId

@@ -62,6 +62,13 @@ export function buildView(
     const id = parent(p);
     if (id) children.set(id, [...(children.get(id) ?? []), p.id]);
   });
+  for (const ids of children.values())
+    ids.sort(
+      (a, b) =>
+        byId.get(a)!.name.localeCompare(byId.get(b)!.name, undefined, {
+          numeric: true,
+        }) || a.localeCompare(b),
+    );
   let focused: Set<string> | null = null;
   if (filters.focus && byId.has(filters.focus)) {
     focused = new Set();

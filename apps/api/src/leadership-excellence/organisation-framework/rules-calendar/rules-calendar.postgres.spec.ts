@@ -1,3 +1,4 @@
+import { calendarTestService } from './calendar-test-source';
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -34,7 +35,7 @@ suite("02.03 persisted calendar workflow on PostgreSQL", () => {
       ),
     });
     await db.$executeRawUnsafe(
-      'CREATE TABLE "Organization" (id TEXT PRIMARY KEY)',
+      'CREATE TABLE "Organization" (id TEXT PRIMARY KEY, name TEXT)',
     );
     const sql = readFileSync(
       resolve(
@@ -49,14 +50,14 @@ suite("02.03 persisted calendar workflow on PostgreSQL", () => {
       .map((s) => s.trim())
       .filter(Boolean))
       await db.$executeRawUnsafe(statement);
-    await db.$executeRaw`INSERT INTO "Organization" VALUES ('org-a'), ('org-b')`;
+    await db.$executeRaw`INSERT INTO "Organization" (id, name) VALUES ('org-a', 'A'), ('org-b', 'B')`;
     await db.$executeRawUnsafe(
       'CREATE TABLE "Department" (id TEXT PRIMARY KEY, name TEXT NOT NULL, "organizationId" TEXT NOT NULL)',
     );
     await db.$executeRawUnsafe(
-      'CREATE TABLE "Employee" (id TEXT PRIMARY KEY, "firstName" TEXT NOT NULL, "middleName" TEXT, "lastName" TEXT NOT NULL, "employeeCode" TEXT, "jobTitle" TEXT, "departmentId" TEXT, "plantBranch" TEXT, "employmentStatus" TEXT NOT NULL, "organizationId" TEXT NOT NULL)',
+      'CREATE TABLE "Employee" ("section" TEXT, "avatarUrl" TEXT, "reportingManagerId" TEXT, "reportingBody" TEXT, "reportsToBoard" BOOLEAN DEFAULT false, "pendingReportingRecordId" TEXT, id TEXT PRIMARY KEY, "firstName" TEXT NOT NULL, "middleName" TEXT, "lastName" TEXT NOT NULL, "employeeCode" TEXT, "jobTitle" TEXT, "departmentId" TEXT, "plantBranch" TEXT, "employmentStatus" TEXT NOT NULL, "organizationId" TEXT NOT NULL)',
     );
-    service = new RulesCalendarService(db as unknown as PrismaService);
+    service = calendarTestService(db as unknown as PrismaService);
   });
   afterAll(async () => {
     if (db) await db.$disconnect();

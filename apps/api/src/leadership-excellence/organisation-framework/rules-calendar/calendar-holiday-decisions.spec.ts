@@ -1,3 +1,4 @@
+import { calendarTestService } from './calendar-test-source';
 import { initialRules, CalendarRules } from "./calendar-model";
 import { parseRules } from "./calendar-validation";
 import { RulesCalendarService } from "./rules-calendar.service";
@@ -40,7 +41,7 @@ function setup(draft = before()) {
   const db = { $transaction: jest.fn(async (work) => work(tx)) };
   return {
     tx,
-    service: new RulesCalendarService(db as unknown as PrismaService),
+    service: calendarTestService(db as unknown as PrismaService),
   };
 }
 describe("accepted holiday changes", () => {

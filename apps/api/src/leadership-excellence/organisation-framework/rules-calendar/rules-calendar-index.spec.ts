@@ -1,3 +1,4 @@
+import { calendarTestService } from './calendar-test-source';
 import { RulesCalendarService } from "./rules-calendar.service";
 import { PrismaService } from "src/prisma/prisma.service";
 import { Role } from "src/common/enum/role.enum";
@@ -33,7 +34,7 @@ describe("calendar overview summaries", () => {
       tx,
       draft,
       published,
-      service: new RulesCalendarService(db as unknown as PrismaService),
+      service: calendarTestService(db as unknown as PrismaService),
     };
   }
   it("gives editors draft dates without serializing the full draft into the list", async () => {

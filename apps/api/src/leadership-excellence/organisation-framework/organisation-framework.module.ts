@@ -1,3 +1,4 @@
+import { EmsDirectoryModule } from 'src/ems/directory/ems-directory.module';
 import { RulesCalendarModule } from "./rules-calendar/rules-calendar.module";
 import { Module } from "@nestjs/common";
 import { TenancyModule } from "src/tenancy/tenancy.module";
@@ -8,30 +9,30 @@ import { OrganisationFrameworkController } from "./organisation-framework.contro
 import { OrganisationFrameworkService } from "./organisation-framework.service";
 import { OrganogramController } from "./organogram/organogram.controller";
 import { OrganogramService } from "./organogram/organogram.service";
-import { CoreRecordsStructureSource } from "./organogram/core-records-structure.source";
+import { EmsStructureSource } from "./ems/ems-structure.source";
 import { ORGANISATION_STRUCTURE_SOURCE } from "./organogram/organisation-structure.contract";
 import { PositionChartController } from "./positions/position-chart.controller";
 import { PositionChartService } from "./positions/position-chart.service";
-import { CoreRecordsPositionsSource } from "./positions/core-records-positions.source";
+import { EmsPositionsSource } from "./ems/ems-positions.source";
 import { POSITION_CHART_SOURCE } from "./positions/position-chart.contract";
 
 @Module({
-  imports: [RulesCalendarModule, TenancyModule, PrismaModule, AuthModule],
+  imports: [EmsDirectoryModule, RulesCalendarModule, TenancyModule, PrismaModule, AuthModule],
   controllers: [OrganisationFrameworkController, OrganogramController, PositionChartController],
   providers: [
     OrganisationFrameworkService,
     ModuleGuard,
     OrganogramService,
-    // 02.01's structure source. TEMPORARY: core records until the EMS service is on this branch; then bind EMS's service here.
+    // EMS owns people and HOD records; LEX owns the unit presentation.
     {
       provide: ORGANISATION_STRUCTURE_SOURCE,
-      useClass: CoreRecordsStructureSource,
+      useClass: EmsStructureSource,
     },
     PositionChartService,
-    // 02.02's positions source. TEMPORARY: worked out from core people records until EMS's service is on this branch.
+    // Employee-backed chart until EMS supplies recorded positions.
     {
       provide: POSITION_CHART_SOURCE,
-      useClass: CoreRecordsPositionsSource,
+      useClass: EmsPositionsSource,
     },
   ],
   exports: [

@@ -4,6 +4,7 @@ import type { Position, PositionChart, PositionCheck, PositionHolder } from './p
 export type PositionEmployee = {
   id: string; firstName: string; middleName?: string | null; lastName: string; jobTitle: string | null;
   departmentId: string | null; plantBranch: string | null; employmentStatus: string; reportingManagerId: string | null;
+  reportsToBody?: string | null; reportingUnavailable?: boolean;
 };
 export type PositionInput = {
   company: { id: string; name: string };
@@ -44,7 +45,7 @@ export function buildPositionChart(input: PositionInput): PositionChart {
 
   // Whose manager is usable (active and in the records), who reports to whom, and reporting loops.
   const managerOf = (e: PositionEmployee) => {
-    if (!e.reportingManagerId || e.reportingManagerId === e.id) return null;
+    if (e.reportingUnavailable || !e.reportingManagerId || e.reportingManagerId === e.id) return null;
     const m = byId.get(e.reportingManagerId);
     return m && isActive(m) ? m : null;
   };
@@ -58,7 +59,7 @@ export function buildPositionChart(input: PositionInput): PositionChart {
   const leads = (e: PositionEmployee) => (team.get(e.id) ?? []).length > 0;
 
   // Who is on the chart: the top people (no manager, but leading a team), and everyone connected below them.
-  const tops = active.filter(e => !e.reportingManagerId && !inLoop.has(e.id) && leads(e));
+  const tops = active.filter(e => !e.reportingUnavailable && !e.reportingManagerId && !inLoop.has(e.id) && (leads(e) || !!e.reportsToBody));
   const onChart = new Set<string>();
   const stack = [...tops];
   while (stack.length) { const e = stack.pop()!; if (onChart.has(e.id)) continue; onChart.add(e.id); stack.push(...(team.get(e.id) ?? [])); }
@@ -102,14 +103,14 @@ export function buildPositionChart(input: PositionInput): PositionChart {
   // Checks: what kept people off the chart, and gaps on it.
   const checks: PositionCheck[] = [];
   const names = (list: PositionEmployee[]) => list.map(personName).sort(naturally);
-  const missing = active.filter(e => e.reportingManagerId && (e.reportingManagerId === e.id || !byId.has(e.reportingManagerId)));
+  const missing = active.filter(e => e.reportingUnavailable || (e.reportingManagerId && (e.reportingManagerId === e.id || !byId.has(e.reportingManagerId))));
   const left = active.filter(e => { const m = e.reportingManagerId ? byId.get(e.reportingManagerId) : undefined; return m && m.id !== e.id && !isActive(m); });
-  const noManager = active.filter(e => !e.reportingManagerId && !leads(e));
+  const noManager = active.filter(e => !e.reportingUnavailable && !e.reportingManagerId && !e.reportsToBody && !leads(e));
   const looped = active.filter(e => inLoop.has(e.id));
   const untitled = active.filter(e => onChart.has(e.id) && !clean(e.jobTitle));
   const ids = (list: PositionEmployee[]) => [...list].sort((a, b) => naturally(personName(a), personName(b))).map(e => e.id);
   if (missing.length) checks.push({ kind: 'MANAGER_MISSING', severity: 'ERROR', count: missing.length, people: names(missing), employeeIds: ids(missing),
-    message: `${plural(missing.length, 'person reports', 'people report')} to someone who isn't in the records (or to themselves)` });
+    message: `${plural(missing.length, 'person reports', 'people report')} through an unavailable, conflicting or pending link (or to themselves)` });
   if (looped.length) checks.push({ kind: 'REPORTING_LOOP', severity: 'ERROR', count: looped.length, people: names(looped), employeeIds: ids(looped),
     message: `${plural(looped.length, 'person is', 'people are')} in a reporting loop` });
   if (left.length) checks.push({ kind: 'MANAGER_INACTIVE', severity: 'WARNING', count: left.length, people: names(left), employeeIds: ids(left),

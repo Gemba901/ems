@@ -11,6 +11,7 @@ import { NotificationsBell } from "./NotificationsBell";
 
 interface HeaderProps {
   onMenuClick?: () => void;
+  title?: string;
 }
 
 function BrandGear({ size = 18, teeth = 8 }: { size?: number; teeth?: number }) {
@@ -122,7 +123,7 @@ function resolveTitle(pathname: string): string {
   return "";
 }
 
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header({ onMenuClick, title }: HeaderProps) {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
   const { hasModule } = useOrgModules();
@@ -130,7 +131,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const getInitials = (name: string) =>
     name.split(" ").map((n) => n[0]).join("").toUpperCase();
 
-  const pageTitle = resolveTitle(pathname);
+  const pageTitle = title ?? resolveTitle(pathname);
 
   const [visible, setVisible] = useState(true);
   const lastScrollY = useRef(0);

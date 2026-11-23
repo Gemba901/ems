@@ -16,7 +16,8 @@ import type {
   CalendarAudience,
   CalendarDirectory,
 } from "./calendar-audience.types";
-import { CoreCalendarPeopleSource } from "./calendar-people.source";
+import { EmsCalendarPeopleSource } from '../ems/ems-calendar-people.source';
+import { EmsDirectoryService } from 'src/ems/directory/ems-directory.service';
 import { Prisma } from "db";
 const person = (id: string, departmentId = "office", active = true) => ({
   id,
@@ -250,6 +251,7 @@ describe("calendar assignment semantics", () => {
   });
   it("reads only company-scoped work directory fields and preserves stable IDs", async () => {
     const tx = {
+      organization: { findUnique: jest.fn().mockResolvedValue({ id: 'org-a', name: 'A' }) },
       department: {
         findMany: jest.fn().mockResolvedValue(directory.departments),
       },
@@ -269,7 +271,7 @@ describe("calendar assignment semantics", () => {
         ]),
       },
     };
-    const result = await new CoreCalendarPeopleSource().read(
+    const result = await new EmsCalendarPeopleSource(new EmsDirectoryService({} as never)).read(
       tx as unknown as Prisma.TransactionClient,
       "org-a",
     );

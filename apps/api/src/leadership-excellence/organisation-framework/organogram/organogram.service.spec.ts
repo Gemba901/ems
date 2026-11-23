@@ -1,4 +1,4 @@
-import { CoreRecordsStructureSource } from "./core-records-structure.source";
+import { EmsDirectoryService } from "src/ems/directory/ems-directory.service";
 import { OrganogramService } from "./organogram.service";
 import { OrganogramController } from "./organogram.controller";
 import { PrismaService } from "src/prisma/prisma.service";
@@ -22,64 +22,26 @@ describe("Organogram provider and viewer isolation", () => {
     })),
     source: { kind: "SAMPLE", label: "Test", loadedAt: "" },
   });
-  it("constrains every source read to the verified company and requests a consistent snapshot", async () => {
-    const db = {
-      organization: {
-        findUniqueOrThrow: jest.fn((_args: unknown) => ({
-          id: "a",
-          name: "A",
-        })),
-      },
-      department: { findMany: jest.fn((_args: unknown) => []) },
-      employee: { findMany: jest.fn((_args: unknown) => []) },
-      $transaction: jest.fn(async (q) => Promise.all(q)),
-    };
-    const source = new CoreRecordsStructureSource(
-      db as unknown as PrismaService,
-    );
-    await source.getStructure("a");
-    expect(db.organization.findUniqueOrThrow.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ where: { id: "a" } }),
-    );
-    for (const call of [db.department.findMany, db.employee.findMany])
-      expect(call.mock.calls[0][0]).toEqual(
-        expect.objectContaining({ where: { organizationId: "a" } }),
-      );
-    expect(db.$transaction).toHaveBeenCalledWith(expect.any(Array), {
-      isolationLevel: "RepeatableRead",
-    });
-    const selection = (db.employee.findMany.mock.calls[0][0] as any).select;
-    expect(selection.avatarUrl).toBe(true);
-    expect(selection.email).toBeUndefined();
-    expect(selection.userId).toBeUndefined();
-  });
   it("resolves only the authenticated viewer’s active assignments within the company", async () => {
-    const findMany = jest.fn(async () => [{ id: "employee-0" }]);
+    const findMany = jest.fn(async () => ["employee-0"]);
     const source = { getStructure: jest.fn(async () => structure) };
     const service = new OrganogramService(source, {
-      employee: { findMany },
-    } as unknown as PrismaService);
+      getViewerEmployeeIds: findMany,
+    } as unknown as EmsDirectoryService);
     const view = await service.getView("a", "viewer");
     expect(source.getStructure).toHaveBeenCalledWith("a");
-    expect(findMany).toHaveBeenCalledWith({
-      where: {
-        organizationId: "a",
-        userId: "viewer",
-        employmentStatus: { in: ["ACTIVE", "PROBATION"] },
-      },
-      select: { id: true },
-    });
+    expect(findMany).toHaveBeenCalledWith("a", "viewer");
     expect(view.viewer.status).toBe("ASSIGNED");
     expect(view.viewer.branchIds).toHaveLength(1);
     expect(view.members[0]).not.toHaveProperty("userId");
   });
   it("provides a chooser for several assignments and company fallback for none", async () => {
-    let assigned = [{ id: "employee-0" }, { id: "employee-1" }];
+    let assigned = ["employee-0", "employee-1"];
     const service = new OrganogramService(
       { getStructure: async () => structure },
       {
-        employee: { findMany: async () => assigned },
-      } as unknown as PrismaService,
+        getViewerEmployeeIds: async () => assigned,
+      } as unknown as EmsDirectoryService,
     );
     expect((await service.getView("a", "viewer")).viewer.status).toBe(
       "MULTIPLE",

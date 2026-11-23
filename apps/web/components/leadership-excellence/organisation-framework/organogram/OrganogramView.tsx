@@ -1,5 +1,6 @@
 "use client";
 
+import { hodMessage } from './hod-message';
 import {
   useEffect,
   useLayoutEffect,
@@ -944,8 +945,9 @@ export function Organogram({
         </p>
         <p>
           Read-only. Branch and section names are grouped from employee records;
-          they are not approved branch master records. Recorded HODs, site codes
-          and location details are not connected by the temporary source.
+          they are not approved branch master records. Department HODs come from
+          the choices recorded in EMS for each branch. Site codes and location
+          details are not available in this view yet.
         </p>
         <p>
           Inferred leads are suggestions from reporting lines. They do not grant
@@ -1113,7 +1115,7 @@ function UnitCard({
               </>
             ) : (
               <small>
-                {u.people.total ? "Lead not confirmed" : "No people recorded"}
+                {hodMessage(u) ?? (u.people.total ? "Lead not confirmed" : "No people recorded")}
               </small>
             )}
           </span>
@@ -1276,7 +1278,7 @@ function UnitDetails({
                 </small>
               </>
             ) : (
-              "Not confirmed. The available records do not establish a single lead."
+              hodMessage(unit) ?? "Not confirmed. The available records do not establish a single lead."
             )}
           </dd>
           {unit.type === "BRANCH" && (

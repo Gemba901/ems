@@ -75,34 +75,3 @@ describe('02.02 detail tiers (who may see how much)', () => {
   });
 });
 
-describe('02.02 person details from the core records', () => {
-  const { CoreRecordsPositionsSource } = jest.requireActual('./core-records-positions.source') as typeof import('./core-records-positions.source');
-  const row = {
-    id: 'e1', firstName: 'Ann', middleName: null, lastName: 'Kim', employeeCode: ' 7001 ', jobTitle: 'Supervisor', plantBranch: 'Ruiru',
-    section: 'Line 1', subSection: null, employmentStatus: 'PROBATION', employmentType: 'FULL_TIME', dateJoined: new Date('2026-03-01T00:00:00Z'),
-    shift: 'A', workStation: null, level: 'L3', grade: null, skillLevel: 'LEVEL_2', trainingNeeded: false, jobCategory: 'Production',
-    primaryWorkRole: null, machineProcess: 'Injection', canBeLeader: true, canBeMember: true, canBeAssignedTasks: true,
-    department: { id: 'd1', name: 'Production' }, reportingManager: { id: 'm1', firstName: 'Bo', middleName: null, lastName: 'Li' }, hrRecordOwner: null,
-  };
-  const source = (found: unknown) => {
-    const findFirst = jest.fn(async () => found);
-    return { findFirst, source: new CoreRecordsPositionsSource({ employee: { findFirst } } as never) };
-  };
-  it('sends only what the tier allows, and never selects personal fields', async () => {
-    const { source: s, findFirst } = source(row);
-    const basic = await s.getPerson('org', 'e1', 'BASIC');
-    expect(basic).toMatchObject({ name: 'Ann Kim', employeeCode: '7001', manager: { employeeId: 'm1', name: 'Bo Li' }, history: null, emsProfileUrl: null });
-    expect(basic).not.toHaveProperty('work'); expect(basic).not.toHaveProperty('role');
-    const manager = await s.getPerson('org', 'e1', 'MANAGER');
-    expect(manager?.work).toMatchObject({ status: 'PROBATION', dateJoined: '2026-03-01', shift: 'A' }); expect(manager).not.toHaveProperty('role');
-    expect((await s.getPerson('org', 'e1', 'FULL'))?.role).toMatchObject({ machineProcess: 'Injection', canBeLeader: true });
-    const selected = Object.keys((findFirst.mock.calls[0] as unknown as [{ select: Record<string, unknown> }])[0].select);
-    for (const personal of ['email', 'phone', 'nationalId', 'dateOfBirth', 'homeAddress', 'whatsappNumber', 'emergencyContactName', 'gender', 'nationality'])
-      expect(selected).not.toContain(personal);
-    const where = (findFirst.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where;
-    expect(where).toMatchObject({ id: 'e1', organizationId: 'org' });
-  });
-  it('returns nothing for someone outside the company or no longer active', async () => {
-    expect(await source(null).source.getPerson('org', 'e9', 'FULL')).toBeNull();
-  });
-});

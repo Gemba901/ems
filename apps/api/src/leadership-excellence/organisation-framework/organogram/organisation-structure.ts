@@ -18,12 +18,18 @@ export type StructureEmployee = {
   section: string | null;
   employmentStatus: string;
   reportingManagerId: string | null;
+  reportsToBody?: string | null;
+  reportingUnavailable?: boolean;
 };
 export type StructureInput = {
   company: { id: string; name: string };
   departments: { id: string; name: string }[];
   employees: StructureEmployee[];
   source: OrganisationStructure["source"];
+  branchKeyOf?: (label: string | null) => string;
+  recordedHods?: { departmentId: string; branchKey: string; branchLabel: string;
+    state: NonNullable<OrganisationUnit['hodState']>;
+    person: { id: string; name: string; jobTitle: string | null; avatarUrl: string | null } | null }[];
 };
 const ACTIVE = new Set(["ACTIVE", "PROBATION"]);
 const isActive = (e: StructureEmployee) => ACTIVE.has(e.employmentStatus);
@@ -48,6 +54,7 @@ export function buildOrganisationStructure(
   ];
   const byId = new Map(employees.map((e) => [e.id, e]));
   const departments = new Map(input.departments.map((d) => [d.id, d]));
+  const branchKey = (label: string | null) => input.branchKeyOf ? input.branchKeyOf(label) || null : key(label);
   const branchNames = new Map<string, string>();
   // Deterministic display spelling, independent of DB row order.
   for (const e of [...employees].sort((a, b) =>
@@ -56,8 +63,11 @@ export function buildOrganisationStructure(
       "en",
     ),
   )) {
-    const k = key(e.plantBranch);
+    const k = branchKey(e.plantBranch);
     if (k && !branchNames.has(k)) branchNames.set(k, clean(e.plantBranch)!);
+  }
+  for (const h of input.recordedHods ?? []) {
+    if (departments.has(h.departmentId) && h.branchKey && !branchNames.has(h.branchKey)) branchNames.set(h.branchKey, clean(h.branchLabel) ?? 'Branch not recorded');
   }
   const units = new Map<string, OrganisationUnit>();
   const direct = new Map<string, StructureEmployee[]>();
@@ -86,7 +96,7 @@ export function buildOrganisationStructure(
   add("company", null, "COMPANY", input.company.name);
   let withoutDepartment = 0;
   for (const e of employees) {
-    const bk = key(e.plantBranch),
+    const bk = branchKey(e.plantBranch),
       branch = bk ? branchNames.get(bk)! : null;
     const branchId = branchNames.size
       ? add(
@@ -133,6 +143,14 @@ export function buildOrganisationStructure(
       probation: e.employmentStatus === "PROBATION",
     });
   }
+  // A recorded HOD scope may exist before anybody is assigned to that department/branch.
+  for (const h of input.recordedHods ?? []) {
+    const department = departments.get(h.departmentId);
+    if (!department) continue;
+    const bk = h.branchKey || null, branch = bk ? branchNames.get(bk) ?? clean(h.branchLabel) : null;
+    const parent = branchNames.size ? add(`branch:${JSON.stringify(bk)}`, 'company', 'BRANCH', branch ?? 'Branch not recorded', null, branch) : 'company';
+    add(`dept:${JSON.stringify([h.departmentId, bk])}`, parent, 'DEPARTMENT', department.name, h.departmentId, branch);
+  }
   const used = new Set([...units.values()].map((u) => u.departmentId));
   for (const d of departments.values())
     if (!used.has(d.id))
@@ -156,6 +174,7 @@ export function buildOrganisationStructure(
     if (
       isActive(e) &&
       e.reportingManagerId &&
+      !e.reportingUnavailable &&
       isActive(
         byId.get(e.reportingManagerId) ?? { ...e, employmentStatus: "MISSING" },
       )
@@ -189,7 +208,7 @@ export function buildOrganisationStructure(
       inside = new Set(active.map((e) => e.id));
     const candidates = active.filter(
       (e) =>
-        !loops.has(e.id) &&
+        !loops.has(e.id) && !e.reportingUnavailable &&
         (!e.reportingManagerId ||
           (!inside.has(e.reportingManagerId) &&
             byId.has(e.reportingManagerId) &&
@@ -228,7 +247,12 @@ export function buildOrganisationStructure(
       probation: all.filter((e) => e.employmentStatus === "PROBATION").length,
       inactive: all.length - active.length,
     };
-    u.lead = leadOf(all);
+    if (u.type === 'DEPARTMENT' && input.recordedHods) {
+      const h = input.recordedHods.find(h => h.departmentId === u.departmentId && h.branchKey === (branchKey(u.branch) ?? ''));
+      u.hodState = h?.state ?? 'NOT_RECORDED';
+      u.lead = h?.state === 'ASSIGNED' && h.person ? { employeeId: h.person.id, name: h.person.name,
+        jobTitle: h.person.jobTitle, avatarUrl: h.person.avatarUrl, basis: 'RECORDED_HOD' } : null;
+    } else u.lead = leadOf(all);
   }
   const checks: StructureCheck[] = [],
     active = employees.filter(isActive);
@@ -243,7 +267,7 @@ export function buildOrganisationStructure(
   }
   const noManager = active.filter(
     (e) =>
-      !e.reportingManagerId && e.id !== units.get("company")!.lead?.employeeId,
+      !e.reportingManagerId && !e.reportsToBody && !e.reportingUnavailable && e.id !== units.get("company")!.lead?.employeeId,
   ).length;
   check(
     "NO_MANAGER",
@@ -252,13 +276,13 @@ export function buildOrganisationStructure(
     `${noManager} people have no manager recorded. Confirm whether these are intentional top-level roles.`,
   );
   const missing = active.filter(
-    (e) => e.reportingManagerId && !byId.has(e.reportingManagerId),
+    (e) => e.reportingUnavailable || (e.reportingManagerId && !byId.has(e.reportingManagerId)),
   ).length;
   check(
     "MANAGER_MISSING",
     "ERROR",
     missing,
-    `${missing} reporting links point outside the available company records.`,
+    `${missing} reporting links are unavailable, conflicting, or waiting for registration. Review them in EMS.`,
   );
   check(
     "REPORTING_LOOP",
@@ -294,12 +318,12 @@ export function buildOrganisationStructure(
           `${u.name}${u.branch ? ` · ${u.branch}` : ""}: no active people${u.people.inactive ? ` (${u.people.inactive} inactive)` : ""}.`,
           u.id,
         );
-      else if (!u.lead)
+      else if (!u.lead && u.hodState !== "UNASSIGNED")
         check(
           "NO_LEAD",
           "WARNING",
           1,
-          `${u.name}${u.branch ? ` · ${u.branch}` : ""}: a single lead cannot be inferred. Check the recorded HOD in EMS.`,
+          `${u.name}${u.branch ? ` · ${u.branch}` : ""}: ${u.hodState === 'PENDING' ? 'the chosen HOD is waiting for registration in EMS' : u.hodState === 'NEEDS_ATTENTION' ? 'the recorded HOD needs attention in EMS' : u.hodState === 'NOT_RECORDED' ? 'no HOD has been recorded in EMS' : 'a single lead cannot be inferred; check the recorded HOD in EMS'}.`,
           u.id,
         );
     }

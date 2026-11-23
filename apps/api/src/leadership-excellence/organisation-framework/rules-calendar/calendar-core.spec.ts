@@ -1,3 +1,4 @@
+import { calendarTestService } from './calendar-test-source';
 import {
   initialRules,
   enabledFrequencies,
@@ -22,7 +23,7 @@ describe("selected reporting rules and stable versions", () => {
   it("allows unnamed date previews while requiring a name at approval", () => {
     const r = initialRules(2027);
     expect(makePeriods(r, "monthly")).toHaveLength(12);
-    const service = new RulesCalendarService({} as PrismaService);
+    const service = calendarTestService({} as PrismaService);
     expect(service.preview(r, "monthly").periods).toHaveLength(12);
     expect(() => approvalSnapshot(r)).toThrow(/name/);
   });
@@ -228,7 +229,7 @@ describe("stored approval compatibility", () => {
         }),
       },
     };
-    const service = new RulesCalendarService({
+    const service = calendarTestService({
       $transaction: async (fn: (t: unknown) => unknown) => fn(tx),
     } as unknown as PrismaService);
     const result = await service.getApproved("org-a", "cycle", 1);

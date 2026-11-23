@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { PrismaService } from "src/prisma/prisma.service";
+import { EmsDirectoryService } from "src/ems/directory/ems-directory.service";
 import {
   ORGANISATION_STRUCTURE_SOURCE,
   type OrganisationStructureProvider,
@@ -11,7 +11,7 @@ export class OrganogramService implements OrganisationStructureProvider {
   constructor(
     @Inject(ORGANISATION_STRUCTURE_SOURCE)
     private readonly source: OrganisationStructureProvider,
-    private readonly db: PrismaService,
+    private readonly directory: EmsDirectoryService,
   ) {}
   getStructure(organizationId: string) {
     return this.source.getStructure(organizationId);
@@ -22,16 +22,9 @@ export class OrganogramService implements OrganisationStructureProvider {
   ): Promise<OrganogramViewData> {
     const [structure, assigned] = await Promise.all([
       this.getStructure(organizationId),
-      this.db.employee.findMany({
-        where: {
-          organizationId,
-          userId,
-          employmentStatus: { in: ["ACTIVE", "PROBATION"] },
-        },
-        select: { id: true },
-      }),
+      this.directory.getViewerEmployeeIds(organizationId, userId),
     ]);
-    const ids = new Set(assigned.map((e) => e.id)),
+    const ids = new Set(assigned),
       units = new Map(structure.units.map((u) => [u.id, u]));
     const branchIds = new Set<string>();
     for (const member of structure.members)

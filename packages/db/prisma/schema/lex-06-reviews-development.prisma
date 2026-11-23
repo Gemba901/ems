@@ -1,0 +1,189 @@
+// Leadership Excellence — 06-reviews-development. Owner: see docs/leadership-excellence/README.md
+// 06.01 performance reviews · 06.02 feedback & coaching · 06.03 action effectiveness.
+// Results come from Area 05 (verified only); actions stay in Area 04 — no copies here.
+
+enum LexReviewType {
+  DEPARTMENT
+  PERSONAL
+}
+
+enum LexReviewStatus {
+  DRAFT
+  SUBMITTED // participant reflection submitted, waiting for the reviewer
+  APPROVED // locked; changes need a revision with a reason
+}
+
+enum LexCoachingKind {
+  RECOGNITION
+  FEEDBACK
+  COACHING
+}
+
+enum LexEffectivenessStatus {
+  EFFECTIVE
+  PARTLY_EFFECTIVE
+  NOT_EFFECTIVE
+}
+
+/// 06.01 One review per approved plan and period. One subject, one reviewer.
+model LexReview {
+  id             String          @id @default(uuid())
+  organizationId String
+  code           String
+  type           LexReviewType
+  status         LexReviewStatus @default(DRAFT)
+
+  planDocumentId String
+  departmentId   String?
+  periodStart    DateTime @db.Date
+  periodEnd      DateTime @db.Date
+
+  subjectId  String // employee id
+  reviewerId String // employee id
+
+  meetingDate DateTime @db.Date
+
+  // Participant reflection (only the subject writes these).
+  achievements          String    @default("")
+  challenges            String    @default("")
+  learning              String    @default("")
+  supportNeeded         String    @default("")
+  reflectionSubmittedAt DateTime?
+
+  // Reviewer discussion (only the reviewer writes these).
+  recognition     String    @default("")
+  findings        String    @default("")
+  decisions       String    @default("")
+  noInputReason   String    @default("")
+  dataLimitReason String    @default("")
+  nextReviewDate  DateTime? @db.Date
+
+  /// Verified results and actions as read from Areas 03–05 when last refreshed.
+  snapshot     Json
+  version      Int     @default(1)
+  reason       String? // why this revision was opened
+  returnReason String? // last clarification request
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions        LexReviewVersion[]
+  acknowledgement LexReviewAcknowledgement[]
+  actionLinks     LexDevelopmentActionLink[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, planDocumentId, periodStart, periodEnd])
+  @@index([organizationId, subjectId])
+  @@index([organizationId, reviewerId])
+}
+
+/// Frozen copy of each approved version; the latest is the official review.
+model LexReviewVersion {
+  id           String   @id @default(uuid())
+  reviewId     String
+  version      Int
+  data         Json
+  approvedById String
+  approvedAt   DateTime @default(now())
+
+  review LexReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, version])
+}
+
+/// Subject confirms receipt of an approved version (not agreement); may raise a concern.
+model LexReviewAcknowledgement {
+  id         String   @id @default(uuid())
+  reviewId   String
+  version    Int
+  employeeId String
+  comment    String   @default("")
+  concern    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  review LexReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, version])
+}
+
+/// 06.02 Feedback / coaching between formal reviews. Visible to its two participants only.
+model LexCoachingRecord {
+  id             String          @id @default(uuid())
+  organizationId String
+  code           String
+  kind           LexCoachingKind
+
+  planDocumentId String
+  departmentId   String?
+  subjectId      String // employee id
+  reviewerId     String // employee id
+
+  date      DateTime @db.Date
+  topic     String
+  /// "role" | "goal:<id>" | "kpi:<id>" | "kra:<id>"
+  relatesTo String   @default("role")
+  notes     String   @default("") // reviewer
+  support   String   @default("") // reviewer
+  response  String   @default("") // subject
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actionLinks  LexDevelopmentActionLink[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, subjectId])
+  @@index([organizationId, reviewerId])
+}
+
+/// An Area 04 action linked to a review or a coaching record (never copied).
+model LexDevelopmentActionLink {
+  id         String   @id @default(uuid())
+  reviewId   String?
+  coachingId String?
+  actionId   String // Area 04 action id
+  createdAt  DateTime @default(now())
+
+  review   LexReview?         @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  coaching LexCoachingRecord? @relation(fields: [coachingId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, actionId])
+  @@unique([coachingId, actionId])
+  @@index([actionId])
+}
+
+/// 06.03 Did a completed (checked) action actually help? One current assessment per action.
+model LexActionEffectiveness {
+  id             String                 @id @default(uuid())
+  organizationId String
+  actionId       String // Area 04 action id
+  status         LexEffectivenessStatus
+  note           String
+  evidence       String
+  assessedById   String // employee id; never the action owner
+  assessedAt     DateTime               @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, actionId])
+}
+
+/// Audit trail for everything above ("Review created", "Reflection submitted", ...).
+model LexDevelopmentEvent {
+  id             String   @id @default(uuid())
+  organizationId String
+  entity         String // "REVIEW" | "COACHING" | "EFFECTIVENESS"
+  entityId       String
+  action         String
+  note           String?
+  before         Json?
+  after          Json?
+  actorId        String? // employee id
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entity, entityId, createdAt])
+}

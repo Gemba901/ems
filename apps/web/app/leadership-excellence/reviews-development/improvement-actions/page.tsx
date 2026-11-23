@@ -1,1 +1,5 @@
-export default function Page() { return null; }
+import { ImprovementActionsPage } from "@/components/leadership-excellence/reviews-development/ImprovementActionsPage";
+
+export default function Page() {
+  return <ImprovementActionsPage />;
+}

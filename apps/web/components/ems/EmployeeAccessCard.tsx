@@ -13,6 +13,7 @@ const when = (value: string) => new Date(value).toLocaleString("en-GB", { day: "
 
 function historyLine(change: AccessChange) {
   if (change.kind === "DECLINED") return `Declined suggested ${accessLabel(change.suggestedRole)}`;
+  if (change.kind === "SUGGESTED") return `Suggested ${accessLabel(change.suggestedRole)}`;
   const move = change.fromRole === change.toRole ? accessLabel(change.toRole) : `${accessLabel(change.fromRole)} → ${accessLabel(change.toRole)}`;
   return change.kind === "APPROVED" ? `Approved suggestion: ${move}` : move;
 }
@@ -51,11 +52,15 @@ export default function EmployeeAccessCard({ employeeId, name, token }: { employ
       <span className={`inline-block rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${ROLE_TONE[data.role ?? ""] ?? "bg-slate-100 text-slate-600"}`}>{accessLabel(data.role)}</span>
       {data.canChange && data.accountLinked && <button type="button" onClick={() => { setNotice(null); setChanging(true); }}
         className="rounded-lg border border-purple-900 px-2.5 py-1 text-xs font-semibold text-purple-900 hover:bg-purple-50">Change access</button>}
+      {data.canSuggest && <button type="button" onClick={() => { setNotice(null); setChanging(true); }}
+        className="rounded-lg border border-purple-900 px-2.5 py-1 text-xs font-semibold text-purple-900 hover:bg-purple-50">Suggest a change</button>}
     </div>
     {!data.accountLinked && <p className="text-xs text-slate-500">No BEES account linked yet. Access can be changed once they have one.</p>}
 
     {pending && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950" data-access-suggestion>
-      <p>Their import suggested <strong>{accessLabel(data.suggestedAccess)}</strong>{data.sheetValue ? ` (“${data.sheetValue}”)` : ""}. Waiting for an Admin.</p>
+      {data.suggestedBy
+        ? <p>{data.suggestedBy.by ?? "HR"} suggested <strong>{accessLabel(data.suggestedAccess)}</strong>: “{data.suggestedBy.reason}”. Waiting for an Admin.</p>
+        : <p>Their import suggested <strong>{accessLabel(data.suggestedAccess)}</strong>{data.sheetValue ? ` (“${data.sheetValue}”)` : ""}. Waiting for an Admin.</p>}
       {data.canChange && <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" disabled={decide.isPending || !data.accountLinked} onClick={() => decide.mutate("APPROVE")}
           className="rounded-lg bg-purple-900 px-2.5 py-1 font-semibold text-white hover:bg-purple-950 disabled:opacity-50">Approve {accessLabel(data.suggestedAccess)}</button>
@@ -63,7 +68,7 @@ export default function EmployeeAccessCard({ employeeId, name, token }: { employ
           className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Decline</button>
       </div>}
     </div>}
-    {!pending && data.suggestedAccessState && <p className="text-xs text-slate-500">Import suggested {accessLabel(data.suggestedAccess)} · {data.suggestedAccessState === "APPROVED" ? "approved" : "declined"}</p>}
+    {!pending && data.suggestedAccessState && <p className="text-xs text-slate-500">Suggested {accessLabel(data.suggestedAccess)} · {data.suggestedAccessState === "APPROVED" ? "approved" : "declined"}</p>}
     {(notice || decide.error) && <p role="status" className="text-xs text-slate-700">{notice ?? (decide.error as Error).message}</p>}
 
     <div>
@@ -79,7 +84,7 @@ export default function EmployeeAccessCard({ employeeId, name, token }: { employ
     </div>
 
     {changing && <ChangeAccessDialog token={token} people={[{ id: employeeId, name, role: data.role, revision: data.revision }]}
-      onClose={() => setChanging(false)}
-      onDone={result => { setNotice(result.changed ? "Access changed." : null); refresh(); }} />}
+      mode={data.canChange ? "change" : "suggest"} onClose={() => setChanging(false)}
+      onDone={result => { setNotice(result.changed ? (data.canChange ? "Access changed." : "Suggestion sent to the Admins.") : null); refresh(); }} />}
   </div>;
 }

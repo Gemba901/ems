@@ -54,6 +54,8 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
       { header: 1, defval: "" },
     );
   }, [workbook, sheetName]);
+    // Merged cells (e.g. the key line across row 1) span their columns here, as in Excel.
+  const merges = useMemo(() => (workbook && sheetName ? workbook.Sheets[sheetName]["!merges"] ?? [] : []), [workbook, sheetName]);
 
   // Colour the header row the way the import will treat each column.
   const headerIndex = useMemo(() => (rows.length ? findHeaderRow(rows) : -1), [rows]);
@@ -196,6 +198,9 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
                       {rows.map((row, rowIndex) => (
                         <tr key={rowIndex}>
                           {row.map((cell, cellIndex) => {
+                            const merge = merges.find(m => m.s.r === rowIndex && m.s.c === cellIndex);
+                            // A cell covered by a merge started elsewhere isn't drawn: the merge's first cell spans over it.
+                            if (!merge && merges.some(m => rowIndex >= m.s.r && rowIndex <= m.e.r && cellIndex >= m.s.c && cellIndex <= m.e.c)) return null;
                             const kind = rowIndex === headerIndex ? headerKinds[cellIndex] : null;
                             const isYourChannel =
                               kind === "channel" && channelField !== null &&
@@ -203,6 +208,8 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
                             return (
                               <td
                                 key={cellIndex}
+                                colSpan={merge ? merge.e.c - merge.s.c + 1 : undefined}
+                                rowSpan={merge ? merge.e.r - merge.s.r + 1 : undefined}
                                 className={`min-w-28 whitespace-nowrap border border-slate-200 px-3 py-2 ${
                                   kind ? `${KIND_STYLE[kind].cell} font-semibold` : ""
                                 }`}

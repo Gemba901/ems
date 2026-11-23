@@ -15,10 +15,11 @@ const plural = (n: number) => `${n} ${n === 1 ? "record" : "records"}`;
  * and a "Treat as" choice that fixes every record with it. Blank employment statuses (required) get "Set these to": HR picks
  * the status, with nothing pre-selected, after seeing whose it is.
  */
-export default function OnboardingValueFixes({ records, role, disabled, dirty, onApply, onShow, remembered = [], onForget }: {
+export default function OnboardingValueFixes({ records, role, disabled, dirty, onApply, onShow, shown = null, remembered = [], onForget }: {
   records: Records; role?: string | null; disabled: boolean; dirty: boolean;
   onApply: (fix: ValueFixRequest, count: number, label: string) => void;
-  onShow: (field: ValueFixField) => void;
+  /** Show (or Hide) the records with this value in the list below; `shown` is the value showing now ("field:key"). */
+  onShow: (group: ValueFixGroup) => void; shown?: string | null;
   /** This company's remembered choices: offered pre-selected, never applied by themselves. */
   remembered?: RememberedChoice[]; onForget?: (choice: { field: string; value: string }) => void;
 }) {
@@ -71,10 +72,7 @@ export default function OnboardingValueFixes({ records, role, disabled, dirty, o
       </div>}
 
       {[...byField.entries()].map(([field, list]) => <div key={field}>
-        <div className="flex items-center gap-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{VALUE_FIX_FIELD_LABELS[field]}</h4>
-          <button type="button" disabled={disabled} onClick={() => onShow(field)} className="text-xs font-medium text-purple-900 underline disabled:opacity-50">Show records</button>
-        </div>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{VALUE_FIX_FIELD_LABELS[field]}</h4>
         {field === "beesAccessLevel" && !valueFixAllowed(field, "ADMIN", role) &&
           <p className="mt-0.5 text-xs text-slate-500">You can choose Employee. An Admin must choose anything above it.</p>}
         <ul className="mt-1 divide-y divide-slate-100 rounded-lg border border-slate-200">
@@ -84,6 +82,8 @@ export default function OnboardingValueFixes({ records, role, disabled, dirty, o
             const label = `“${group.value}” treated as ${VALUE_FIX_CHOICES[field][picked]}`;
             return <li key={id} className="flex flex-wrap items-center gap-2 px-3 py-2" data-value-fix={id}>
               <p className="min-w-0 basis-full break-words text-sm text-slate-800 sm:flex-1 sm:basis-auto">“{group.value}” <span className="text-slate-500">· {plural(group.count)}</span>
+                <button type="button" disabled={disabled} onClick={() => onShow(group)} aria-pressed={shown === id}
+                  className="ml-1.5 text-xs font-medium text-purple-900 underline disabled:opacity-50">{shown === id ? "Hide" : "Show"}</button>
                 {saved && <span className="ml-1 text-xs text-slate-500">· remembered as {VALUE_FIX_CHOICES[field][saved.choice]}
                   {onForget && <button type="button" disabled={off} onClick={() => onForget({ field, value: saved.value })} className="ml-1 underline disabled:opacity-50">Forget</button>}</span>}</p>
               <label className="sr-only" htmlFor={`fix-${id}`}>Treat “{group.value}” as</label>

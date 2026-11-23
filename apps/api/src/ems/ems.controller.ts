@@ -87,6 +87,13 @@ export class EmsController {
     return this.invitations.cancel(user.organizationId, id);
   }
 
+  /** Choices for the employee-list filters, with counts; must precede employees/:id. */
+  @Get('employees/filter-options')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async getEmployeeFilterOptions(@CurrentUser() user: { organizationId: string }) {
+    return this.ems.getEmployeeFilterOptions(user.organizationId);
+  }
+
   /** Import sources for the employee-list filter; must precede employees/:id. */
   @Get('employees/import-batches')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)

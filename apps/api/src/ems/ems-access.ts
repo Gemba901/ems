@@ -1,13 +1,14 @@
 import { BadRequestException, ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ASSIGNABLE_ROLES, ACCESS_ROLE_LABELS, canChangeAccess, type OnboardingAccountRole } from './onboarding-access';
+import { ASSIGNABLE_ROLES, ACCESS_ROLE_LABELS, canChangeAccess, canRegisterOnboarding, type OnboardingAccountRole } from './onboarding-access';
 import { retryOnboardingTransaction } from './onboarding-transaction';
 
 /**
  * Company access in EMS. A person's access is their company role (UserOrganization → Role). Everyone imported
  * registers as Employee; the sheet's value becomes a suggestion an Admin approves or declines. Every change and
- * decision is recorded in EmsAccessChange (who, from → to, when, why). Only Admins act; HR can look.
+ * decision is recorded in EmsAccessChange (who, from → to, when, why). Only Admins act; HR can look and suggest
+ * (a suggestion waits for an Admin, the same as an import's).
  */
 export type AccessDecision = 'APPROVE' | 'DECLINE';
 type Actor = { userId?: string; role?: string | null };
@@ -47,9 +48,26 @@ function requireAdmin(actor: Actor) {
 }
 
 /** The Access card on a profile: current role, the import's suggestion, and the history. */
+/**
+ * Who made each waiting suggestion: HR (with their reason), or the import when no later HR suggestion exists.
+ * Reads the latest suggestion or decision per person; a SUGGESTED row after the last decision means HR.
+ */
+async function suggestionSources(prisma: PrismaService, organizationId: string, employeeIds: string[]) {
+  const rows = employeeIds.length ? await prisma.emsAccessChange.findMany({
+    where: { organizationId, employeeId: { in: employeeIds }, kind: { in: ['SUGGESTED', 'APPROVED', 'DECLINED'] } },
+    orderBy: { changedAt: 'desc' }, select: { employeeId: true, kind: true, actorName: true, reason: true, changedAt: true },
+  }) : [];
+  const latest = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) if (row.employeeId && !latest.has(row.employeeId)) latest.set(row.employeeId, row);
+  const sources = new Map<string, { by: string | null; reason: string; at: Date }>();
+  for (const [id, row] of latest) if (row.kind === 'SUGGESTED') sources.set(id, { by: row.actorName, reason: row.reason, at: row.changedAt });
+  return sources;
+}
+
 export async function employeeAccess(prisma: PrismaService, organizationId: string, employeeId: string, viewerRole?: string | null) {
   const person = await prisma.employee.findFirst({ where: { id: employeeId, organizationId }, select: personSelect(organizationId) });
   if (!person) throw new NotFoundException('Employee not found');
+  const source = person.suggestedAccessState === 'PENDING' ? (await suggestionSources(prisma, organizationId, [employeeId])).get(employeeId) ?? null : null;
   const history = await prisma.emsAccessChange.findMany({
     where: { organizationId, employeeId }, orderBy: { changedAt: 'desc' }, take: 21,
     select: { id: true, kind: true, fromRole: true, toRole: true, suggestedRole: true, reason: true, actorName: true, actorUserId: true, changedAt: true },
@@ -57,8 +75,8 @@ export async function employeeAccess(prisma: PrismaService, organizationId: stri
   return {
     employeeId, role: currentRole(person), accountLinked: !!person.user?.organizations.length,
     sheetValue: person.beesAccessLevel, suggestedAccess: person.suggestedAccess, suggestedAccessState: person.suggestedAccessState,
-    revision: person.accessRevision, canChange: canChangeAccess(viewerRole),
-    history: history.slice(0, 20), hasMoreHistory: history.length > 20,
+    revision: person.accessRevision, canChange: canChangeAccess(viewerRole), canSuggest: viewerRole === 'HR',
+    suggestedBy: source, history: history.slice(0, 20), hasMoreHistory: history.length > 20,
   };
 }
 
@@ -67,12 +85,15 @@ export async function accessSuggestions(prisma: PrismaService, organizationId: s
   const where: Prisma.EmployeeWhereInput = { organizationId, suggestedAccessState: 'PENDING',
     ...(query.batchId ? { emsOnboardingRecord: { batchId: query.batchId } } : {}) };
   const people = await prisma.employee.findMany({ where, select: personSelect(organizationId), orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }], take: 500 });
+  const sources = await suggestionSources(prisma, organizationId, people.map(p => p.id));
   return {
     canDecide: canChangeAccess(viewerRole),
     suggestions: people.map(person => ({
       employeeId: person.id, name: fullName(person), employeeCode: person.employeeCode, department: person.department?.name ?? null,
       jobTitle: person.jobTitle, role: currentRole(person), accountLinked: !!person.user?.organizations.length,
       suggestedAccess: person.suggestedAccess, sheetValue: person.beesAccessLevel, revision: person.accessRevision,
+      source: sources.has(person.id) ? 'HR' as const : 'IMPORT' as const,
+      suggestedBy: sources.get(person.id)?.by ?? null, suggestionReason: sources.get(person.id)?.reason ?? null,
     })),
   };
 }
@@ -157,4 +178,42 @@ export async function decideAccessSuggestions(prisma: PrismaService, organizatio
     if (!ASSIGNABLE_ROLES.includes(person.suggestedAccess as OnboardingAccountRole)) return 'This suggestion can’t be given in EMS';
     return { person, to: person.suggestedAccess as OnboardingAccountRole, kind: 'APPROVED' };
   });
+}
+
+/**
+ * HR's "Suggest access change": records a suggestion (with HR's reason) for an Admin to approve or decline,
+ * exactly like an import's. Nothing about the person's access changes yet. A newer suggestion replaces a waiting one.
+ */
+export async function suggestAccess(prisma: PrismaService, organizationId: string, actor: Actor,
+  dto: { employeeIds: string[]; role: string; reason: string; expectedRevisions?: Record<string, number> }) {
+  if (!actor.userId) throw new UnauthorizedException();
+  if (!canRegisterOnboarding(actor.role)) throw new ForbiddenException('Only HR or an Admin can suggest access.');
+  const to = dto.role as OnboardingAccountRole;
+  if (!ASSIGNABLE_ROLES.includes(to)) throw new BadRequestException('Choose Employee, Executive, HOD, HR or Admin.');
+  const reason = cleanReason(dto.reason);
+  const ids = cleanIds(dto.employeeIds);
+  return retryOnboardingTransaction(() => prisma.$transaction(async tx => {
+    const people = await tx.employee.findMany({ where: { organizationId, id: { in: ids } }, select: personSelect(organizationId) });
+    const byId = new Map(people.map(person => [person.id, person]));
+    const actorName = (await tx.user.findUnique({ where: { id: actor.userId! }, select: { name: true } }))?.name ?? null;
+    const done: string[] = [], skipped: Skip[] = [];
+    for (const id of ids) {
+      const person = byId.get(id);
+      if (!person) { skipped.push({ employeeId: id, name: 'Unknown employee', reason: 'Not found in this company' }); continue; }
+      const name = fullName(person), from = currentRole(person);
+      if (dto.expectedRevisions?.[id] !== undefined && dto.expectedRevisions[id] !== person.accessRevision) {
+        skipped.push({ employeeId: id, name, reason: 'Changed since you opened it. Reload and try again.' }); continue;
+      }
+      if (person.userId && person.userId === actor.userId) { skipped.push({ employeeId: id, name, reason: "You can't suggest your own access" }); continue; }
+      if (from === 'SUPER_ADMIN') { skipped.push({ employeeId: id, name, reason: 'Super Admin access is managed outside EMS' }); continue; }
+      if (from === to) { skipped.push({ employeeId: id, name, reason: `Already ${roleLabel(to)}` }); continue; }
+      await tx.employee.update({ where: { id }, data: { suggestedAccess: to, suggestedAccessState: 'PENDING', accessRevision: { increment: 1 } } });
+      await tx.emsAccessChange.create({ data: {
+        organizationId, employeeId: id, subjectEmployeeId: id, userId: person.userId, kind: 'SUGGESTED',
+        fromRole: from as never, toRole: from as never, suggestedRole: to, reason, actorUserId: actor.userId!, actorName,
+      } });
+      done.push(id);
+    }
+    return { changed: done.length, changedIds: done, skipped };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 }));
 }

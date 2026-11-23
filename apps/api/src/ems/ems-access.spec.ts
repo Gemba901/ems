@@ -5,7 +5,7 @@ import { validateSync } from 'class-validator';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Role } from 'src/common/enum/role.enum';
 import { ROLES_KEY } from 'src/auth/decorators/roles.decorator';
-import { accessSuggestions, changeAccess, decideAccessSuggestions, employeeAccess } from './ems-access';
+import { accessSuggestions, changeAccess, decideAccessSuggestions, employeeAccess, suggestAccess } from './ems-access';
 import { EmsAccessController } from './ems-access.controller';
 import { ChangeAccessDto, DecideAccessSuggestionsDto } from './dto/access.dto';
 import { suggestedAccessRole } from './onboarding-access';
@@ -36,6 +36,7 @@ function setup(people: P[]) {
         const p = state.people.find(p => p.id === where.id)!;
         p.accessRevision += data.accessRevision.increment;
         if (data.suggestedAccessState) p.suggestedAccessState = data.suggestedAccessState;
+        if (data.suggestedAccess) p.suggestedAccess = data.suggestedAccess;
         return p;
       }),
     },
@@ -48,7 +49,9 @@ function setup(people: P[]) {
     },
     emsAccessChange: {
       create: jest.fn(async ({ data }: any) => { state.changes.push(data); return data; }),
-      findMany: jest.fn(async () => [...state.changes].reverse()),
+      findMany: jest.fn(async ({ where }: any) => [...state.changes].reverse().filter((c: any) =>
+        (!where?.employeeId || (typeof where.employeeId === 'string' ? c.employeeId === where.employeeId : where.employeeId.in.includes(c.employeeId)))
+        && (!where?.kind || where.kind.in.includes(c.kind)))),
     },
   };
   return { prisma: prisma as PrismaService & typeof prisma, state, role: (id: string) => state.people.find(p => p.id === id)!.role };
@@ -160,5 +163,38 @@ describe('Suggested access from imports', () => {
     expect(bad(ChangeAccessDto, { employeeIds: ['a'], role: 'HOD', reason: 'x' })).toBeGreaterThan(0);
     expect(bad(DecideAccessSuggestionsDto, { employeeIds: ['a'], decision: 'APPROVE' })).toBe(0);
     expect(bad(DecideAccessSuggestionsDto, { employeeIds: ['a'], decision: 'MAYBE' })).toBeGreaterThan(0);
+  });
+});
+
+describe('HR suggests a change of access', () => {
+  const hr = { userId: 'u-hr', role: Role.HR };
+  it('records a pending suggestion with the reason, changes nothing yet, and an Admin can approve it', async () => {
+    const { prisma, state, role } = setup([{ id: 'a', userId: 'u-a', role: 'EMPLOYEE' }]);
+    const result = await suggestAccess(prisma, 'org', hr, { employeeIds: ['a'], role: 'HOD', reason: 'Runs the Stores team' });
+    expect(result).toMatchObject({ changed: 1, skipped: [] });
+    expect(role('a')).toBe('EMPLOYEE');
+    expect(state.people[0]).toMatchObject({ suggestedAccess: 'HOD', suggestedAccessState: 'PENDING', accessRevision: 1 });
+    expect(state.changes[0]).toMatchObject({ kind: 'SUGGESTED', fromRole: 'EMPLOYEE', suggestedRole: 'HOD', reason: 'Runs the Stores team', actorUserId: 'u-hr' });
+    const list = await accessSuggestions(prisma, 'org', {}, Role.ADMIN);
+    expect(list.suggestions[0]).toMatchObject({ employeeId: 'a', source: 'HR', suggestedBy: 'Ada Admin', suggestionReason: 'Runs the Stores team' });
+    expect(await employeeAccess(prisma, 'org', 'a', Role.HR)).toMatchObject({ canChange: false, canSuggest: true, suggestedBy: { reason: 'Runs the Stores team' } });
+    await decideAccessSuggestions(prisma, 'org', admin, { employeeIds: ['a'], decision: 'APPROVE' });
+    expect(role('a')).toBe('HOD');
+    expect((await accessSuggestions(prisma, 'org', {}, Role.ADMIN)).suggestions).toEqual([]);
+  });
+  it('shows an import suggestion as coming from the import', async () => {
+    const { prisma } = setup([{ id: 'i', userId: 'u-i', role: 'EMPLOYEE', suggestedAccess: 'HR', suggestedAccessState: 'PENDING' }]);
+    expect((await accessSuggestions(prisma, 'org', {}, Role.HR)).suggestions[0]).toMatchObject({ source: 'IMPORT', suggestedBy: null });
+  });
+  it('skips yourself, the same level and a Super Admin; employees cannot suggest; a reason is required', async () => {
+    const { prisma } = setup([{ id: 'me', userId: 'u-hr', role: 'HR' }, { id: 'h', userId: 'u-h', role: 'HOD' }, { id: 'sa', userId: 'u-sa', role: 'SUPER_ADMIN' }]);
+    const result = await suggestAccess(prisma, 'org', hr, { employeeIds: ['me', 'h', 'sa'], role: 'HOD', reason: 'Tidy up' });
+    expect(result.skipped.map(s => s.reason)).toEqual(["You can't suggest your own access", 'Already HOD', 'Super Admin access is managed outside EMS']);
+    await expect(suggestAccess(prisma, 'org', { userId: 'e', role: Role.EMPLOYEE }, { employeeIds: ['h'], role: 'HR', reason: 'Please' })).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(suggestAccess(prisma, 'org', hr, { employeeIds: ['h'], role: 'HR', reason: '' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+  it('route: HR and Admins can suggest', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, EmsAccessController.prototype.suggest)).toBeUndefined();
+    expect(Reflect.getMetadata(ROLES_KEY, EmsAccessController)).toEqual([Role.SUPER_ADMIN, Role.ADMIN, Role.HR]);
   });
 });

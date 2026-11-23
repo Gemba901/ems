@@ -203,7 +203,20 @@ export interface EmployeeWithCompletion extends EmployeeProfile {
   sourceImport?: EmployeeImportSource | null;
   invitation?: InvitationSummary | null;
   completion: CompletionResult;
+  /** Company role (null: no BEES account yet), and a suggestion waiting for an Admin. */
+  access?: string | null;
+  suggestedAccess?: string | null;
 }
+
+/** Choices for the Employees list filters, with how many people have each. */
+export type EmployeeFilterOptions = {
+  departments: { id: string; name: string; count: number }[];
+  jobTitles: { value: string; count: number }[];
+  branches: { value: string; count: number }[];
+  shifts: { value: string; count: number }[];
+  managers: { id: string; name: string; jobTitle: string | null; count: number }[];
+};
+export type EmployeeAccessFilter = 'EMPLOYEE' | 'MANAGEMENT' | 'HOD' | 'HR' | 'ADMIN' | 'SUPER_ADMIN' | 'SUGGESTION_WAITING' | 'NO_ACCOUNT';
 
 export interface GroupSummaryItem {
   key: GroupKey;
@@ -569,6 +582,7 @@ export type EmployeeInvitationFilter = 'NOT_INVITED' | 'PENDING' | 'ACCEPTED' | 
 export type EmployeeListFilters = {
   departmentId?: string; employmentStatus?: EmploymentStatus; activityState?: 'ACTIVE' | 'INACTIVE'; search?: string;
   source?: 'IMPORTED' | 'UNLINKED'; importBatchId?: string; sort?: EmployeeListSort; invitation?: EmployeeInvitationFilter;
+  access?: EmployeeAccessFilter; jobTitle?: string; branch?: string; shift?: string; employmentType?: EmploymentType; reportsTo?: string;
 };
 /** Who to invite: explicit employees, or everyone matching employee-list filters. */
 export type InvitationSelection = { employeeIds?: string[]; filters?: EmployeeListFilters; resend?: boolean };
@@ -646,6 +660,10 @@ export const EmsService = {
       .join("&");
     const res = await apiClient(`${API_URL}/ems/employees${q ? `?${q}` : ""}`, { headers: authHeaders(token) }, token);
     return handleResponse(res);
+  },
+
+  async getEmployeeFilterOptions(token: string): Promise<EmployeeFilterOptions> {
+    return handleResponse(await apiClient(`${API_URL}/ems/employees/filter-options`, { headers: authHeaders(token) }, token));
   },
 
   async getEmployeeImportBatches(token: string): Promise<EmployeeImportBatch[]> {

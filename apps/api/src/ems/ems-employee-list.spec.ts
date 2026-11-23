@@ -4,7 +4,7 @@ import { validate } from 'class-validator';
 import { EmsService } from './ems.service';
 import { EmsController } from './ems.controller';
 import { QueryEmsEmployeesDto } from './dto/ems.dto';
-import { employeeListWhere, employeeImportSource } from './ems-employee-list';
+import { employeeFilterOptions, employeeListWhere, employeeImportSource } from './ems-employee-list';
 
 const query = (values: Record<string, unknown> = {}) => plainToInstance(QueryEmsEmployeesDto, values);
 const source = (id: string, batchId: string, createdAt = '2026-10-20T12:00:00Z') => ({ id, batchId, organizationId:'org', status:'REGISTERED', rowNumber:4, registeredAt:new Date(createdAt), batch:{id:batchId,organizationId:'org',label:'Same label',sourceFileName:'staff.xlsx',createdAt:new Date(createdAt)} });
@@ -21,10 +21,14 @@ function matches(row: any, where: any): boolean {
       if ('is' in value) return row?.[key] != null && matches(row[key],value.is);
       if ('isNot' in value) return row?.[key] == null || !matches(row[key],value.isNot);
       if ('in' in value) return value.in.includes(row?.[key]);
+      if ('some' in value) return (row?.[key] ?? []).some((item: any) => matches(item,value.some));
+      if ('none' in value) return !(row?.[key] ?? []).some((item: any) => matches(item,value.none));
       if ('not' in value) return row?.[key] !== value.not;
       if ('equals' in value) return row?.[key] != null && String(row[key]).toLowerCase() === value.equals.toLowerCase();
       if ('startsWith' in value) return row?.[key] != null && String(row[key]).toLowerCase().startsWith(value.startsWith.replace(/\\([\\%_])/g,'$1').toLowerCase());
       if ('contains' in value) return String(row?.[key] ?? '').toLowerCase().includes(value.contains.replace(/\\([\\%_])/g,'$1').toLowerCase());
+      // A nested relation filter, e.g. role: { name: 'HOD' }.
+      return row?.[key] != null && matches(row[key], value);
     }
     return row?.[key] === value;
   });
@@ -138,7 +142,7 @@ test('a later prefix match appears on page one ahead of 45 earlier substring mat
   const f=fixture([...Array.from({length:45},(_,i)=>employee(`d${i}`,{firstName:'Diana'})),employee('prefix',{firstName:'Nancy'})]);
   const result=await f.service.getEmployees('org',query({search:'na',limit:20}));
   expect(result.data[0].id).toBe('prefix');expect(result.pagination).toEqual({page:1,pages:3,total:46,limit:20});
-  expect(f.calls.reduce((sum,c)=>sum+c.take,0)).toBe(20);expect(f.prisma.employee.count.mock.calls.length).toBeLessThanOrEqual(3);
+  expect(f.calls.reduce((sum,c)=>sum+c.take,0)).toBe(20);expect(f.prisma.employee.count.mock.calls.length).toBeLessThanOrEqual(4);
 });
 test('pagination crosses all three ranks without repeats, gaps or unstable ties',async()=>{
   const f=fixture([employee('x',{firstName:'Na'}),employee('b',{firstName:'Nancy'}),employee('a',{firstName:'Nancy'}),employee('c',{firstName:'Naomi'}),employee('d',{firstName:'Diana'}),employee('e',{firstName:'Luna'})]);
@@ -208,4 +212,60 @@ describe('account verification invitation filters', () => {
       status: 'NOTICE_SENT', kind: 'ACCESS_NOTICE', skipReason: { not: null },
     });
   });
+});
+
+test('"ke" lists first names starting with Ke before a surname starting with Ke, then other matches', async () => {
+  const f = fixture([employee('surname', { firstName: 'Akinyi', lastName: 'Kemunto' }), employee('kevin', { firstName: 'Kevin', lastName: 'Ochieng' }),
+    employee('kelvin', { firstName: 'Kelvin', lastName: 'Otieno' }), employee('contains', { firstName: 'Mike', lastName: 'Ndegwa' })]);
+  expect((await f.service.getEmployees('org', query({ search: 'ke' }))).data.map(e => e.id)).toEqual(['kelvin', 'kevin', 'surname', 'contains']);
+});
+test('search also finds job titles, after name and code matches', async () => {
+  const f = fixture([employee('title', { firstName: 'Amos', lastName: 'Kariuki', jobTitle: 'Stores Supervisor' }), employee('name', { firstName: 'Superia', jobTitle: 'Clerk' })]);
+  expect((await f.service.getEmployees('org', query({ search: 'super' }))).data.map(e => e.id)).toEqual(['name', 'title']);
+});
+test('access, job title, branch, shift, type and reports-to filters narrow the list', async () => {
+  const role = (name: string) => ({ organizations: [{ organizationId: 'org', role: { name } }] });
+  const f = fixture([
+    employee('hod', { userId: 'u1', user: role('HOD'), jobTitle: 'Production Manager', plantBranch: 'Head Office', shift: 'Day', employmentType: 'FULL_TIME', reportingManagerId: 'boss' }),
+    employee('emp', { userId: 'u2', user: role('EMPLOYEE'), jobTitle: 'production manager', plantBranch: 'head office', shift: 'Night', employmentType: 'CASUAL', reportingManagerId: 'boss', suggestedAccessState: 'PENDING' }),
+    employee('none', { userId: null, user: null, jobTitle: null, plantBranch: null }),
+  ]);
+  const ids = async (values: Record<string, unknown>) => (await f.service.getEmployees('org', query(values))).data.map(e => e.id);
+  expect(await ids({ access: 'HOD' })).toEqual(['hod']);
+  expect(await ids({ access: 'SUGGESTION_WAITING' })).toEqual(['emp']);
+  expect(await ids({ access: 'NO_ACCOUNT' })).toEqual(['none']);
+  expect((await ids({ jobTitle: 'PRODUCTION MANAGER' })).sort()).toEqual(['emp', 'hod']);
+  expect(await ids({ jobTitle: 'NONE' })).toEqual(['none']);
+  expect((await ids({ branch: 'Head Office' })).sort()).toEqual(['emp', 'hod']);
+  expect(await ids({ branch: 'NONE' })).toEqual(['none']);
+  expect(await ids({ shift: 'night' })).toEqual(['emp']);
+  expect(await ids({ employmentType: 'FULL_TIME' })).toEqual(['hod']);
+  expect((await ids({ reportsTo: 'boss', access: 'EMPLOYEE' }))).toEqual(['emp']);
+});
+test('the list shows each person\'s access and a waiting suggestion', async () => {
+  const f = fixture([employee('a', { user: { organizations: [{ role: { name: 'HR' } }] }, suggestedAccess: 'ADMIN', suggestedAccessState: 'PENDING' }),
+    employee('b', { user: null, suggestedAccess: 'HOD', suggestedAccessState: 'DECLINED' })]);
+  const rows = (await f.service.getEmployees('org', query())).data;
+  expect(rows.map(r => [r.id, r.access, r.suggestedAccess])).toEqual([['a', 'HR', 'ADMIN'], ['b', null, null]]);
+});
+test('filter options count job titles, branches and shifts case-insensitively, most common first', async () => {
+  const rows = [
+    { jobTitle: 'Machine Operator', plantBranch: 'Head Office', shift: 'Day', reportingManagerId: 'm', department: { id: 'd1', name: 'Production' } },
+    { jobTitle: 'machine operator', plantBranch: 'head office', shift: null, reportingManagerId: 'm', department: { id: 'd1', name: 'Production' } },
+    { jobTitle: 'Clerk', plantBranch: null, shift: 'Day', reportingManagerId: null, department: null },
+  ];
+  const db: any = { employee: { findMany: jest.fn(async ({ where }: any) => where.id
+    ? [{ id: 'm', firstName: 'Grace', lastName: 'Wanjiru', jobTitle: 'MD' }] : rows) } };
+  expect(await employeeFilterOptions(db, 'org')).toEqual({
+    departments: [{ id: 'd1', name: 'Production', count: 2 }],
+    jobTitles: [{ value: 'Machine Operator', count: 2 }, { value: 'Clerk', count: 1 }],
+    branches: [{ value: 'Head Office', count: 2 }],
+    shifts: [{ value: 'Day', count: 2 }],
+    managers: [{ id: 'm', name: 'Grace Wanjiru', jobTitle: 'MD', count: 2 }],
+  });
+});
+test('DTO checks the new filters', async () => {
+  expect(await validate(query({ access: 'HOD', jobTitle: 'Clerk', branch: 'NONE', shift: 'Day', employmentType: 'CASUAL', reportsTo: 'e1' }))).toEqual([]);
+  expect((await validate(query({ access: 'ROOT' }))).length).toBeGreaterThan(0);
+  expect((await validate(query({ employmentType: 'PERM' }))).length).toBeGreaterThan(0);
 });

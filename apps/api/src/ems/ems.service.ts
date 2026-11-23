@@ -2,7 +2,7 @@ import { RegistrationRunHooks, registrationErrorCode } from './ems-registration.
 import { createPendingAccountLink } from './ems-account-links';
 import { normaliseFiveSLocation, FIVE_S_LOCATION_ERROR } from './five-s-location';
 import { importedAccountRole, canRegisterOnboarding, registrationAccess, suggestedAccessRole, REGISTRATION_ROLE } from './onboarding-access';
-import { employeeListWhere, employeeNameOrder, employeeSearchGroups, registeredSourceWhere, EMPLOYEE_SOURCE_SELECT, employeeImportSource } from './ems-employee-list';
+import { employeeFilterOptions, employeeListWhere, employeeNameOrder, employeeSearchGroups, registeredSourceWhere, EMPLOYEE_SOURCE_SELECT, employeeImportSource } from './ems-employee-list';
 import { assertProfileBirthDate } from './employee-profile-dates';
 import { readExtraFields, reviseExtraFields, extraProfileData, blockingFindings, ExtraFieldsError, isExtraProfileField } from './onboarding-extra-fields';
 import { isReportingBody, reportingBodyLabel } from './reporting-bodies';
@@ -308,7 +308,10 @@ export class EmsService {
     const limit = query.limit ?? 20;
     const where = employeeListWhere(organizationId, query);
     const select = { ...EMS_EMPLOYEE_SELECT, emsOnboardingRecord: { select: EMPLOYEE_SOURCE_SELECT },
-      emsInvitation: { select: { status: true, kind: true, expiresAt: true, skipReason: true } } };
+      emsInvitation: { select: { status: true, kind: true, expiresAt: true, skipReason: true } },
+      // Access column: the company role, and a suggestion waiting for an Admin.
+      user: { select: { organizations: { where: { organizationId }, select: { role: { select: { name: true } } } } } },
+      suggestedAccess: true, suggestedAccessState: true };
     // One read snapshot keeps totals, clamped page and rows consistent during registration.
     return this.prisma.$transaction(async tx => {
       const total = await tx.employee.count({ where });
@@ -324,7 +327,7 @@ export class EmsService {
         let remaining = total;
         for (let index = 0; index < groups.length && employees.length < limit && remaining > 0; index++) {
           const groupWhere: Prisma.EmployeeWhereInput = { AND: [where, groups[index]] };
-          // The final count is the remainder: at most two extra count queries.
+          // The final count is the remainder: at most three extra count queries.
           const count = index === groups.length - 1 ? remaining : await tx.employee.count({ where: groupWhere });
           remaining -= count;
           if (offset >= count) { offset -= count; continue; }
@@ -352,12 +355,19 @@ export class EmsService {
       } else {
         employees = await tx.employee.findMany({ where, select, skip, take: limit, orderBy: employeeNameOrder(query.sort === 'NAME_DESC') });
       }
-      const data = employees.map(({ emsOnboardingRecord, emsInvitation, ...emp }) => ({
+      const data = employees.map(({ emsOnboardingRecord, emsInvitation, user, suggestedAccess, suggestedAccessState, ...emp }) => ({
         ...emp, completion: calcEmployeeCompletion(emp as Record<string, unknown>), invitation: emsInvitation ?? null,
         sourceImport: employeeImportSource(emsOnboardingRecord, organizationId),
+        access: user?.organizations[0]?.role.name ?? null,
+        suggestedAccess: suggestedAccessState === 'PENDING' ? suggestedAccess : null,
       }));
       return { data, pagination: { page, limit, total, pages } };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
+
+  /** Choices for the Employees list filters (job titles, branches, shifts, departments, managers) with counts. */
+  getEmployeeFilterOptions(organizationId: string) {
+    return employeeFilterOptions(this.prisma, organizationId);
   }
 
   // Small source list only; excludes batches with no linked registered employees.

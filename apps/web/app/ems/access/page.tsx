@@ -48,7 +48,7 @@ export default function AccessSuggestionsPage() {
         <Link href="/ems/employees" aria-label="Back to Employees" className="text-slate-500 hover:text-purple-800"><ArrowLeft className="h-5 w-5" /></Link>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Access suggestions</h1>
-          <p className="text-sm text-slate-500">Everyone registers as Employee. An Admin approves anything higher that an import suggested.</p>
+          <p className="text-sm text-slate-500">Everyone registers as Employee. An Admin approves or declines anything higher that an import or HR suggested.</p>
         </div>
       </div>
       {batchId && <p className="text-sm text-slate-600">From one import only. <Link href="/ems/access" onClick={() => setBatchId(undefined)} className="font-medium text-purple-900 underline">Show all imports</Link></p>}
@@ -76,7 +76,7 @@ export default function AccessSuggestionsPage() {
             <thead className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500"><tr>
               {canDecide && <th scope="col" className="w-10 px-4 py-3"><input type="checkbox" aria-label="Select all" checked={all}
                 onChange={() => setPicked(all ? new Set() : new Set(rows.map(r => r.employeeId)))} /></th>}
-              {["Name", "Department", "Job title", "Now", "Suggested"].map(h => <th key={h} scope="col" className="px-4 py-3 font-semibold">{h}</th>)}
+              {["Name", "Department", "Job title", "Now", "Suggested", "From"].map(h => <th key={h} scope="col" className="px-4 py-3 font-semibold">{h}</th>)}
             </tr></thead>
             <tbody className="divide-y divide-slate-100">{rows.map(r => <tr key={r.employeeId} className="align-top">
               {canDecide && <td className="px-4 py-3"><input type="checkbox" aria-label={`Select ${r.name}`} checked={picked.has(r.employeeId)} onChange={() => toggle(r.employeeId)} /></td>}
@@ -86,7 +86,10 @@ export default function AccessSuggestionsPage() {
               <td className="px-4 py-3 text-slate-600">{r.jobTitle ?? "—"}</td>
               <td className="px-4 py-3 text-slate-600">{accessLabel(r.role)}{!r.accountLinked && <span className="block text-xs text-amber-800">No account linked yet</span>}</td>
               <td className="px-4 py-3"><span className="font-semibold text-slate-900">{accessLabel(r.suggestedAccess)}</span>
-                {r.sheetValue && <span className="block text-xs text-slate-500">Sheet: “{r.sheetValue}”</span>}</td>
+                {r.source !== 'HR' && r.sheetValue && <span className="block text-xs text-slate-500">Sheet: “{r.sheetValue}”</span>}</td>
+              <td className="min-w-48 px-4 py-3 text-xs text-slate-600">{r.source === 'HR'
+                ? <><span className="font-semibold text-slate-800">{r.suggestedBy ?? 'HR'}</span><span className="block break-words">“{r.suggestionReason}”</span></>
+                : 'Import'}</td>
             </tr>)}</tbody>
           </table></div>}
       </div>

@@ -17,7 +17,7 @@ import {DUPLICATE_FILTERS, duplicateFilterState, chainRegistrationNotice, type D
 import OnboardingBatchProgress from '@/components/ems/OnboardingBatchProgress';
 import OnboardingValueFixes from '@/components/ems/OnboardingValueFixes';
 import { EmsAccessService } from '@/services/ems-access.service';
-import { type ValueFixRequest } from '@/components/ems/onboarding-value-fixes';
+import { VALUE_FIX_FIELD_LABELS, valueKey, type ValueFixField, type ValueFixGroup, type ValueFixRequest } from '@/components/ems/onboarding-value-fixes';
 import { ISSUE_GROUPS, findingInGroup, issueFilterFromParam, type IssueFilter } from '@/components/ems/onboarding-issue-groups';
 import { isChainFinding, waitingOnChain, needsDuplicateReview, summarizeBatchProgress } from '@/components/ems/onboarding-batch-progress';
 import { DepartmentHodEditor, PersonLinkPicker, PersonSuggestions, PersonSummary, RelieverEditor } from '@/components/ems/OnboardingPeopleLinks';
@@ -178,7 +178,9 @@ function editorFindings(record: OnboardingRecord, draft: UpdateOnboardingRecordP
 
 type RecordSort = 'import' | 'fewest' | 'most' | 'name' | 'recent';
 type RecordFilters = { search: string; department: string; status: '' | OnboardingRecordStatus | 'WAITING' | 'NEEDS_REVIEW';
-  duplicate: DuplicateFilter; issue: IssueFilter; sort: RecordSort; reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT' };
+  duplicate: DuplicateFilter; issue: IssueFilter; sort: RecordSort; reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT';
+  /** "Show" in Values to sort out: only the waiting records with this odd value (not kept in the address). */
+  value?: { field: ValueFixField; key: string; label: string } };
 const EMPTY_FILTERS: RecordFilters = {search: '', department: '', status: '', duplicate: '', issue: '', sort: 'import', reportingTarget: '', reportingLabel: '', scope: 'BRANCH'};
 const RECORD_SORTS: {value: RecordSort; label: string}[] = [
   {value: 'import', label: 'Reporting order'}, {value: 'fewest', label: 'Fewest issues first'}, {value: 'most', label: 'Most issues first'},
@@ -229,7 +231,7 @@ function filtersFromUrl(search: string): Partial<RecordFilters> {
 }
 const normaliseFilter = (value: string | null | undefined) => (value ?? '').normalize('NFKD').replace(/\p{M}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase();
 const departmentKey = (value: string | null) => normaliseFilter(value) ? `department:${normaliseFilter(value)}` : 'MISSING';
-const hasFilters = (filters: RecordFilters) => !!(filters.search.trim() || filters.department || filters.status || filters.duplicate || filters.issue || filters.reportingTarget);
+const hasFilters = (filters: RecordFilters) => !!(filters.search.trim() || filters.department || filters.status || filters.duplicate || filters.issue || filters.reportingTarget || filters.value);
 
 // Use person IDs and known reporting edges. Never infer a link from matching names.
 function reportingFilterModel(batch?: OnboardingBatchDetail) {
@@ -299,6 +301,7 @@ function matchingRecordIds(batch: OnboardingBatchDetail | undefined, filters: Re
       && (!filters.status || filters.status === status)
       && (!filters.duplicate || duplicateFilterState(record) === filters.duplicate)
       && (!filters.issue || (record.validationErrors ?? []).some(finding => findingInGroup(finding, filters.issue)))
+      && (!filters.value || (!['REGISTERED', 'EXCLUDED'].includes(record.status) && valueKey(record[filters.value.field]) === filters.value.key))
       && (!selected || branch.has(model.canonical(`record:${record.id}`)));
   }).map(record => record.id));
 }
@@ -1371,6 +1374,24 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     // Preserve the open draft. If it falls outside the filters, show it explicitly as an extra row.
     setFilters(next); setRevealedId(null); setPageNumber(1);
   };
+  // Values to sort out → Show: the list switches to that value's records and scrolls to it; Hide puts the earlier view back.
+  const [valueShow, setValueShow] = useState<{ previous: RecordFilters } | null>(null);
+  const scrollTo = (selector: string) => requestAnimationFrame(() =>
+    document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  const showValue = (group: ValueFixGroup) => {
+    if (foregroundBusy) return;
+    const previous = valueShow?.previous ?? filters;
+    setValueShow({ previous });
+    changeFilters({ ...EMPTY_FILTERS, value: { field: group.field, key: group.key, label: group.value } });
+    scrollTo('[data-viewport-anchor="batch-filters"]');
+  };
+  const hideValue = (scroll = true) => {
+    if (!valueShow || foregroundBusy) return;
+    changeFilters(valueShow.previous); setValueShow(null);
+    if (scroll) scrollTo('[data-value-fixes]');
+  };
+  // Another filter replaced the value view: forget the saved view.
+  useEffect(() => { if (!filters.value && valueShow) setValueShow(null); }, [filters.value, valueShow]);
   const hideExtraRecords = () => {
     if (busy) return;
     if (openRow && !matchingIds.has(openRow)) {
@@ -1539,6 +1560,10 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     mutationFn: (vars: {fix: ValueFixRequest; count: number; label: string}) => EmsService.replaceOnboardingValues(id, vars.fix, accessToken!),
     onSuccess: (updated, vars) => {
       finishBatchAction(updated, `${vars.label} · ${vars.count} ${vars.count === 1 ? 'record' : 'records'}`);
+      // Those records no longer have the value: leave the value view.
+      if (filters.value && filters.value.field === vars.fix.field && !vars.fix.blanks && valueKey(vars.fix.from) === filters.value.key && valueShow) {
+        setFilters(valueShow.previous); setValueShow(null); setPageNumber(1);
+      }
       if (vars.fix.remember) void queryClient.invalidateQueries({queryKey: ['ems-import-value-choices']});
     },
     onError: (error: Error) => failedAction('values', error),
@@ -1922,7 +1947,8 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         {batch && !closed && canRegisterOnboarding(user?.roleLevel) && <OnboardingValueFixes records={records} role={user?.roleLevel}
           disabled={busy} dirty={editorDirty}
           onApply={(fix, count, label) => fixValues.mutate({fix, count, label})}
-          onShow={field => changeFilters({...EMPTY_FILTERS, issue: field === 'beesAccessLevel' ? 'access' : 'format'})}
+          shown={filters.value ? `${filters.value.field}:${filters.value.key}` : null}
+          onShow={group => filters.value && filters.value.field === group.field && filters.value.key === group.key ? hideValue() : showValue(group)}
           remembered={valueChoices.data?.choices ?? []} onForget={choice => forgetChoice.mutate(choice)} />}
 
         {suggestionsWaiting > 0 && <p data-access-suggestions className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -2037,6 +2063,12 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             </fieldset>
             <p id="reporting-filter-help" className="text-xs text-slate-500">Full branch includes the selected person and their known descendants. Direct reports shows the next level. Only this import's records are listed.</p>
           </div>
+          {filters.value && <div className="flex min-w-0 flex-wrap gap-1.5" data-value-chip>
+            <button type="button" disabled={foregroundBusy} onClick={() => hideValue()} aria-label="Stop showing only this value"
+              className="max-w-full break-words rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-left text-xs text-amber-950 disabled:opacity-50">
+              Value: “{filters.value.label}” ({VALUE_FIX_FIELD_LABELS[filters.value.field]}) <span aria-hidden="true">×</span>
+            </button>
+          </div>}
           {advancedFilterCount > 0 && <div aria-label="Active additional filters" className="flex min-w-0 flex-wrap gap-1.5">
             {filters.reportingTarget && <button type="button" disabled={foregroundBusy} onClick={() => changeFilters({...filters, reportingTarget: '', reportingLabel: ''})}
               aria-label="Remove reporting branch filter" className="max-w-full break-words rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-left text-xs text-purple-900 disabled:opacity-50">

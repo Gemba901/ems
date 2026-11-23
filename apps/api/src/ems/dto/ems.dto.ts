@@ -117,6 +117,16 @@ export class QueryEmsEmployeesDto {
   @IsString() @MinLength(1) @MaxLength(128) @IsOptional() importBatchId?: string;
   @IsEnum(EmployeeListSortDto) @IsOptional() sort?: EmployeeListSortDto;
 
+  /** Company role, or SUGGESTION_WAITING (pending suggestion) or NO_ACCOUNT. */
+  @IsIn(['EMPLOYEE', 'MANAGEMENT', 'HOD', 'HR', 'ADMIN', 'SUPER_ADMIN', 'SUGGESTION_WAITING', 'NO_ACCOUNT']) @IsOptional() access?: 'EMPLOYEE' | 'MANAGEMENT' | 'HOD' | 'HR' | 'ADMIN' | 'SUPER_ADMIN' | 'SUGGESTION_WAITING' | 'NO_ACCOUNT';
+  /** Exact job title, branch or shift (case-insensitive); "NONE" for job title or branch = not recorded. */
+  @IsString() @MaxLength(200) @IsOptional() jobTitle?: string;
+  @IsString() @MaxLength(200) @IsOptional() branch?: string;
+  @IsString() @MaxLength(100) @IsOptional() shift?: string;
+  @IsEnum(EmploymentTypeDto) @IsOptional() employmentType?: EmploymentTypeDto;
+  /** Direct reports of this employee. */
+  @IsString() @MaxLength(128) @IsOptional() reportsTo?: string;
+
   @Type(() => Number) @IsInt() @Min(1) @Max(2147483647) @IsOptional() page: number = 1;
   @Type(() => Number) @IsInt() @Min(1) @Max(100) @IsOptional() limit: number = 20;
 }

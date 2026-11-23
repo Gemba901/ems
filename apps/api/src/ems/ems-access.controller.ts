@@ -12,7 +12,7 @@ import { RequiresModule } from 'src/auth/decorators/module.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role } from 'src/common/enum/role.enum';
 import { ModuleType } from 'db';
-import { accessSuggestions, changeAccess, decideAccessSuggestions, employeeAccess } from './ems-access';
+import { accessSuggestions, changeAccess, decideAccessSuggestions, employeeAccess, suggestAccess } from './ems-access';
 import { AccessSuggestionsQueryDto, ChangeAccessDto, DecideAccessSuggestionsDto } from './dto/access.dto';
 
 type Viewer = { userId: string; roleLevel: Role };
@@ -47,6 +47,12 @@ export class EmsAccessController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   change(@Body() dto: ChangeAccessDto, @Req() request: TenantRequest, @CurrentUser() user: Viewer) {
     return changeAccess(this.db, this.company(request), { userId: user?.userId, role: user?.roleLevel }, dto);
+  }
+
+  /** POST /ems/access/suggest — HR suggests a change; it waits for an Admin like an import's suggestion. */
+  @Post('suggest')
+  suggest(@Body() dto: ChangeAccessDto, @Req() request: TenantRequest, @CurrentUser() user: Viewer) {
+    return suggestAccess(this.db, this.company(request), { userId: user?.userId, role: user?.roleLevel }, dto);
   }
 
   /** POST /ems/access/suggestions/decide — approve or decline suggested access. */

@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 jest.mock('bcrypt');
 
 const mockPrisma = {
+    emsAccountLink: { findFirst: jest.fn() },
     userOrganization: { findMany: jest.fn() },
     refreshToken: { create: jest.fn() },
     employee: { findFirst: jest.fn() },
@@ -104,7 +105,7 @@ describe('AuthService', () => {
             expect(result.user.name).toBe('John Doe');
             expect(result.user.userId).toBe('user-1');
         });
-    });
+        });
 
     // ─────────────────────────────────────────────────────────────
     // verifyFirstTimeUser

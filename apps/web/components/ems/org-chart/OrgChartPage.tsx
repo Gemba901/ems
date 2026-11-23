@@ -34,7 +34,7 @@ export function OrgChartPage() {
   const { accessToken, user } = useAuthStore();
   return (
     <Chart
-      key={user?.organizationId ?? "none"}
+      key={`${user?.organizationId}:${user?.userId}:${user?.roleLevel}`}
       token={accessToken}
       organizationId={user?.organizationId}
     />
@@ -48,12 +48,12 @@ function Chart({
   organizationId?: string | null;
 }) {
   const query = useQuery({
-    queryKey: ["ems-org-chart", organizationId],
+    queryKey: ["ems-org-chart", organizationId, useAuthStore.getState().user?.userId, useAuthStore.getState().user?.roleLevel],
     queryFn: ({ signal }) => readOrgChart(token!, signal),
     enabled: !!token && !!organizationId,
     staleTime: 30_000,
   });
-  const data = query.data ?? empty;
+  const data = query.isError ? empty : query.data ?? empty;
   const [department, setDepartment] = useState(""),
     [branch, setBranch] = useState("");
   const [inactive, setInactive] = useState(false),
@@ -158,7 +158,7 @@ function Chart({
     showAll,
   ]);
   const view = useMemo(
-    () => buildView(data, { department, branch, inactive, issuesOnly, focus }),
+    () => buildView(data, { department, branch, inactive: !!data.capabilities?.inactivePeople && inactive, issuesOnly, focus }),
     [data, department, branch, inactive, issuesOnly, focus],
   );
   const departments = [
@@ -342,7 +342,7 @@ function Chart({
           {query.error instanceof Error
             ? query.error.message
             : "Unable to load chart."}{" "}
-          {query.data ? "Showing the last loaded chart." : ""}{" "}
+          {query.data ? "Reload to confirm your current access." : ""}{" "}
           <button
             type="button"
             className="underline"
@@ -441,7 +441,8 @@ function Chart({
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={inactive}
+              disabled={!data.capabilities?.inactivePeople}
+              checked={!!data.capabilities?.inactivePeople && inactive}
               onChange={(e) => setInactive(e.target.checked)}
             />
             Include inactive employees
@@ -583,7 +584,7 @@ function Chart({
             <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
               <h2 className="font-semibold">
                 {!data.people.length
-                  ? "No registered employees yet"
+                  ? "No employees are available in your chart"
                   : !view.matches.size
                     ? "No people match this view"
                     : group === "connected"

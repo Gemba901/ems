@@ -99,7 +99,7 @@ describe("EMS org chart", () => {
     const db = { $transaction: jest.fn((fn) => fn(tx)) };
     const result = await new EmsOrgChartService(db as any).read("org-a");
     expect(tx.employee.findMany.mock.calls[0][0].where).toEqual({
-      organizationId: "org-a",
+      organizationId: "org-a", employmentStatus: {in: ["ACTIVE", "PROBATION"]},
     });
     expect(tx.department.findMany.mock.calls[0][0].where).toEqual({
       organizationId: "org-a",
@@ -107,6 +107,7 @@ describe("EMS org chart", () => {
     expect(result.people[0]).toMatchObject({
       name: "Jane Test",
       employeeCode: "EMP-0042",
+      active: true, status: null,
       managerId: null,
       department: null,
     });

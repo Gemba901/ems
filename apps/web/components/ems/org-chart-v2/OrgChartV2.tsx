@@ -72,7 +72,7 @@ function PersonCard({ person, index, onFocus, colour, focused = false }: { perso
 
 export function OrgChartV2() {
   const { accessToken, user } = useAuthStore();
-  const chart = useQuery({ queryKey: ["ems-org-chart", user?.organizationId], queryFn: ({ signal }) => readOrgChart(accessToken!, signal) as Promise<ChartData>, enabled: !!accessToken });
+  const chart = useQuery({ queryKey: ["ems-org-chart", user?.organizationId, user?.userId, user?.roleLevel], queryFn: ({ signal }) => readOrgChart(accessToken!, signal) as Promise<ChartData>, enabled: !!accessToken });
   const data = chart.data;
   const index = useMemo(() => data ? indexChart(data) : null, [data]);
 
@@ -119,7 +119,7 @@ export function OrgChartV2() {
 
   if (chart.isPending) return <p role="status" className="text-sm text-slate-600">Loading the organisation chart…</p>;
   if (chart.error || !data || !index) return <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{(chart.error as Error)?.message ?? "Unable to load the organisation chart"}</p>;
-  if (!data.people.length) return <p className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">Nobody is registered yet, so there’s no chart to show.</p>;
+  if (!data.people.length) return <p className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">No employees are available in your chart.</p>;
 
   const focused = (state.focus && index.byId.get(state.focus)) || index.start!;
   const chain = index.chain(focused.id);
@@ -157,7 +157,7 @@ export function OrgChartV2() {
       <dt className="text-slate-500">Branch</dt><dd className="min-w-0 truncate">{branchName(focused) ?? "—"}</dd>
       <dt className="text-slate-500">Reports to</dt><dd className="min-w-0 truncate">{manager ? <button type="button" onClick={() => focusOn(manager.id)} className="text-violet-800 hover:underline">{manager.name}</button> : focused.reportsToBody ? BODY_LABEL[focused.reportsToBody] ?? focused.reportsToBody : "—"}</dd>
       <dt className="text-slate-500">Team</dt><dd>{team.length} direct · {index.everyoneBelow(focused.id)} in all</dd>
-      <dt className="text-slate-500">Status</dt><dd>{focused.status.charAt(0) + focused.status.slice(1).toLowerCase().replace(/_/g, " ")}</dd>
+      <dt className="text-slate-500">Status</dt><dd>{focused.status ? focused.status.charAt(0) + focused.status.slice(1).toLowerCase().replace(/_/g, " ") : "Current employee"}</dd>
     </dl>
     {(index.issuesFor.get(focused.id) ?? []).length > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{(index.issuesFor.get(focused.id) ?? []).map(k => ISSUE_LABEL[k] ?? k).join(" · ")}</p>}
     <Link href={`/ems/employees/${encodeURIComponent(focused.id)}`} className="block rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50">Open profile</Link>
@@ -168,7 +168,7 @@ export function OrgChartV2() {
     <div className="min-w-0"><p className="truncate font-semibold text-slate-900">{focused.name}</p><p className="truncate text-xs text-slate-600">{focused.jobTitle ?? "No job title"}</p></div>
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
       <dt className="text-slate-500">Location</dt><dd className="min-w-0 truncate">{branchName(focused) ?? "—"}</dd>
-      <dt className="text-slate-500">Status</dt><dd>{focused.status.charAt(0) + focused.status.slice(1).toLowerCase().replace(/_/g, " ")}</dd>
+      <dt className="text-slate-500">Status</dt><dd>{focused.status ? focused.status.charAt(0) + focused.status.slice(1).toLowerCase().replace(/_/g, " ") : "Current employee"}</dd>
     </dl>
     {(index.issuesFor.get(focused.id) ?? []).length > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{(index.issuesFor.get(focused.id) ?? []).map(k => ISSUE_LABEL[k] ?? k).join(" · ")}</p>}
     <div className="flex flex-wrap gap-2">

@@ -25,11 +25,12 @@ export type Person = {
   branchText: string | null;
   managerId: string | null;
   reportsToBody: string | null;
-  status: string;
+  status: string | null; active?: boolean;
   photoUrl: string | null;
   directReports?: number;
 };
 export type ChartData = {
+  capabilities?: { employmentDetails: boolean; inactivePeople: boolean };
   people: Person[];
   issues: { employeeId: string; kind: string }[];
   source: string;
@@ -49,7 +50,7 @@ export const ISSUE: Record<string, string> = {
   LOOP: "Reporting loop",
   CONFLICTING_REPORTING: "Manager and reporting body both assigned",
 };
-export const active = (p: Person) => ["ACTIVE", "PROBATION"].includes(p.status);
+export const active = (p: Person) => (p.active ?? ["ACTIVE", "PROBATION"].includes(p.status ?? ""));
 export const branchName = (p: Person) => p.branch?.name || p.branchText || "";
 export const branchKey = (p: Person) => personBranchKey(branchName(p));
 export const human = (s: string | null | undefined) =>

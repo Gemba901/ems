@@ -7,12 +7,13 @@ export type Person = {
   branchText: string | null;
   managerId: string | null;
   reportsToBody: string | null;
-  status: string;
+  status: string | null; active?: boolean;
   photoUrl: string | null;
   directReports: number;
 };
 export type Issue = { employeeId: string; kind: string };
 export type ChartData = {
+  capabilities?: { employmentDetails: boolean; inactivePeople: boolean };
   people: Person[];
   issues: Issue[];
   source: string;
@@ -32,7 +33,7 @@ export const bodyLabels: Record<string, string> = {
   MANAGEMENT_COMMITTEE: "Management Committee",
   OWNER: "Owner",
 };
-export const active = (p: Person) => ["ACTIVE", "PROBATION"].includes(p.status);
+export const active = (p: Person) => (p.active ?? ["ACTIVE", "PROBATION"].includes(p.status ?? ""));
 export function buildView(
   data: ChartData,
   filters: {

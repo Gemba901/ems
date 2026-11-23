@@ -62,13 +62,13 @@ import {
 export function OrgChartV3() {
   const { accessToken, user } = useAuthStore();
   const chart = useQuery({
-    queryKey: ["ems-chart-v3", user?.organizationId, user?.userId],
+    queryKey: ["ems-chart-v3", user?.organizationId, user?.userId, user?.roleLevel],
     queryFn: ({ signal }) => readOrgChart(accessToken!, signal),
     enabled: !!accessToken && !!user?.organizationId,
     staleTime: 30_000,
   });
   const myself = useQuery({
-    queryKey: ["ems-chart-self", user?.organizationId, user?.userId],
+    queryKey: ["ems-chart-self", user?.organizationId, user?.userId, user?.roleLevel],
     queryFn: async () =>
       (await EmsService.getMyProfile(accessToken!)).employee?.id || null,
     enabled: !!accessToken && !!user?.organizationId,
@@ -97,7 +97,7 @@ export function OrgChartV3() {
   const canReadEmployment = canViewDepartments(user?.roleLevel);
   if (chart.isPending)
     return <p role="status">Loading the organisation chart…</p>;
-  if (!chart.data)
+  if (chart.isError || !chart.data)
     return (
       <div role="alert">
         <p>Unable to load the organisation chart.</p>
@@ -223,7 +223,7 @@ export function ChartV3({
   };
   const storageKey = `ems-chart-v3:v2:${identity}`;
   const normalise = (next: ViewState) =>
-    normaliseBranchView(next, [...indexRef.current.byId.values()]);
+    normaliseBranchView(data.capabilities?.inactivePeople ? next : {...next, inactive: false, inactiveOnly: false}, [...indexRef.current.byId.values()]);
   const sameSavedView = (
     saved: Saved | null | undefined,
     next: ViewState,
@@ -283,6 +283,7 @@ export function ChartV3({
   const searchText = (s: ViewState, i = indexRef.current) =>
     s.query || (s.searchPicked ? i.byId.get(s.selected)?.name || "" : "");
   const update = (next: ViewState, push = true) => {
+    next = normalise(next);
     next = {
       ...next,
       searchPicked: !!(next.searchPicked && next.selected && !next.query),
@@ -1238,7 +1239,7 @@ export function ChartV3({
           )}
         </span>
       </div>
-      <label className={styles.statusChoice} data-active={state.inactive}>
+      {data.capabilities?.inactivePeople && <label className={styles.statusChoice} data-active={state.inactive}>
         <span className={styles.desktopLabel}>Employment status</span>
         <span className={styles.mobileLabel} aria-hidden="true">
           Status
@@ -1260,7 +1261,7 @@ export function ChartV3({
           <option value="inactive">Inactive</option>
           <option value="all">All</option>
         </select>
-      </label>
+      </label>}
       {(state.query || filterCount > 0) && (
         <div
           className={styles.activeFilters}
@@ -2057,7 +2058,7 @@ export function ChartV3({
                   </p>
                   <p>Branch / site: {branchName(selected) || "Not recorded"}</p>
                   <p>
-                    {human(selected.status)} ·{" "}
+                    {selected.status ? human(selected.status) : "Current employee"} ·{" "}
                     {
                       (index.children.get(selected.id) || []).filter(
                         (id) => state.inactive || active(index.byId.get(id)!),

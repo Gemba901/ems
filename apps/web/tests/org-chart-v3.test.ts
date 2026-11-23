@@ -1213,3 +1213,15 @@ test("hit testing follows zoom/pan and excludes governing labels and invisible n
     undefined,
   );
 });
+
+// The public API sends current eligibility separately from restricted HR status.
+test("current employees remain searchable and connected when employment status is redacted", () => {
+  const people = [
+    {id:"m",name:"Manager",jobTitle:"Lead",department:null,branch:null,branchText:null,managerId:null,reportsToBody:"BOARD",status:null,active:true,photoUrl:null},
+    {id:"e",name:"Employee",jobTitle:"Technician",department:null,branch:null,branchText:null,managerId:"m",reportsToBody:null,status:null,active:true,photoUrl:null},
+  ];
+  const index = indexChart({people,issues:[],source:"EMS",refreshedAt:""});
+  const view = buildView(index,{...initialState(),query:"Technician"});
+  assert.ok(view.matches.has("e"));
+  assert.ok(view.included.has("m"));
+});

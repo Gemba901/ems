@@ -142,8 +142,10 @@ export function PersonDetails({
     queryFn: () => loadEmployment!(person.id),
     enabled: !!loadEmployment,
     retry: false,
-    staleTime: 30_000,
+    staleTime: 0,
+    gcTime: 0,
   });
+  const employment = loadEmployment && !profile.isError ? profile.data : undefined;
   const visible = (id: string) =>
     includeInactive || active(index.byId.get(id)!);
   const direct = (index.children.get(person.id) || []).filter(visible),
@@ -157,18 +159,18 @@ export function PersonDetails({
     (i) => ISSUE[i] || i,
   );
   const fields: [string, string | null | undefined][] = [
-    ["Employee code", person.employeeCode || profile.data?.employeeCode],
+    ["Employee code", person.employeeCode || employment?.employeeCode],
     [
       "Employment type",
-      profile.data?.employmentType ? human(profile.data.employmentType) : null,
+      employment?.employmentType ? human(employment.employmentType) : null,
     ],
-    ["Work area", profile.data?.workStation],
-    ["Section", profile.data?.section],
-    ["Subsection", profile.data?.subSection],
-    ["Shift", profile.data?.shift],
-    ["Level", profile.data?.level],
-    ["Grade", profile.data?.grade],
-    ["Primary work role", profile.data?.primaryWorkRole],
+    ["Work area", employment?.workStation],
+    ["Section", employment?.section],
+    ["Subsection", employment?.subSection],
+    ["Shift", employment?.shift],
+    ["Level", employment?.level],
+    ["Grade", employment?.grade],
+    ["Primary work role", employment?.primaryWorkRole],
   ];
   return (
     <section
@@ -232,7 +234,7 @@ export function PersonDetails({
         </div>
         <div>
           <dt>Employment status</dt>
-          <dd>{human(person.status)}</dd>
+          <dd>{person.status ? human(person.status) : "Current employee"}</dd>
         </div>
         <div>
           <dt>Reports to</dt>
@@ -267,10 +269,10 @@ export function PersonDetails({
             </div>
           ))}
       </dl>
-      {profile.data?.jobDescription && (
+      {employment?.jobDescription && (
         <div className={styles.roleDescription}>
           <h3>Role & responsibilities</h3>
-          <p>{profile.data.jobDescription}</p>
+          <p>{employment.jobDescription}</p>
         </div>
       )}
       {loadEmployment && profile.isPending && (

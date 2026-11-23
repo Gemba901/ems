@@ -7,10 +7,11 @@ export type ChartPerson = {
   department: { id: string; name: string } | null;
   branch: { id: string; name: string } | null; branchText: string | null;
   managerId: string | null; reportsToBody: string | null;
-  status: string; photoUrl: string | null; directReports?: number;
+  status: string | null; active?: boolean; photoUrl: string | null; directReports?: number;
 };
 export type ChartIssue = { employeeId: string; kind: string };
-export type ChartData = { people: ChartPerson[]; issues: ChartIssue[]; source: string; refreshedAt: string };
+export type ChartData = {
+  capabilities?: { employmentDetails: boolean; inactivePeople: boolean }; people: ChartPerson[]; issues: ChartIssue[]; source: string; refreshedAt: string };
 
 export const BODY_LABEL: Record<string, string> = { BOARD: 'Board', COMMITTEE: 'Committee', MANAGEMENT_COMMITTEE: 'Management Committee', OWNER: 'Owner' };
 export const ISSUE_LABEL: Record<string, string> = {

@@ -1,3 +1,4 @@
+import { Header } from "@nestjs/common";
 import {
   Controller,
   Get,
@@ -21,9 +22,10 @@ import { EmsOrgChartService } from "./org-chart.service";
 export class EmsOrgChartController {
   constructor(private readonly chart: EmsOrgChartService) {}
   @Get()
+  @Header("Cache-Control", "private, no-store")
   read(@Req() request: TenantRequest) {
-    if (!request.tenant?.organizationId)
+    if (!request.tenant?.organizationId || !request.user?.userId || request.user.organizationId !== request.tenant.organizationId)
       throw new UnauthorizedException("Company context is required");
-    return this.chart.read(request.tenant.organizationId);
+    return this.chart.read(request.tenant.organizationId, request.user.roleLevel);
   }
 }

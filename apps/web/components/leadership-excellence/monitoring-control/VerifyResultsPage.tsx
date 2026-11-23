@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   MonitoringError,
+  checkAction,
+  getActionChecks,
   getVerificationHistory,
   getVerificationQueue,
   returnResults,
   verifyResults,
 } from "@/services/leadership-excellence/monitoring-control.service";
 import { Empty, ErrorBox, Filters, HowTo, Loading, NoteDialog, PageHeader, Pill, fmt, periodLabel, targetLabel, useDirectory, when } from "./shared";
-import type { MonitoringFilters, QueueRow, RowFailure } from "./types";
+import type { MonitoringFilters, PendingActionCheck, QueueRow, RowFailure } from "./types";
 
 type Decision = "verify" | "return";
 
@@ -36,12 +38,14 @@ export function VerifyResultsPage() {
         <p><strong className="text-foreground">What is it?</strong> Results waiting for you, as the assigned verifier, to check against their evidence.</p>
         <p><strong className="text-foreground">How to use:</strong> select the rows that are ready and choose Verify, or Return with a reason so the provider can correct them. A row with a problem cannot be verified until it is fixed.</p>
         <p><strong className="text-foreground">What happens:</strong> a verified value becomes the official result used in 05.02 and later areas. A correction keeps the old official value until the new one is verified.</p>
+        <p><strong className="text-foreground">Actions:</strong> delivery actions their owners marked done also wait here for a completion check. Accept them, or send them back with what is still missing.</p>
         <p><strong className="text-foreground">Next:</strong> open 05.02 · Performance &amp; Gaps to see how the verified results compare with their targets.</p>
       </HowTo>
       <Filters value={filters} onChange={setFilters} monthLabel="Period ending in" />
       {queue.isPending ? <Loading label="Loading results…" />
         : queue.error ? <ErrorBox error={queue.error} />
         : <Queue rows={queue.data} />}
+      <ActionChecks />
       <History filters={filters} />
     </div>
   );
@@ -74,6 +78,11 @@ function Queue({ rows }: { rows: QueueRow[] }) {
       void client.invalidateQueries({ queryKey: ["lex05-queue"] });
       void client.invalidateQueries({ queryKey: ["lex05-history"] });
       void client.invalidateQueries({ queryKey: ["lex05-performance"] });
+    },
+    // Area 04 saves one result at a time, so a refusal can come after some were saved.
+    onError: () => {
+      void client.invalidateQueries({ queryKey: ["lex05-queue"] });
+      void client.invalidateQueries({ queryKey: ["lex05-history"] });
     },
   });
   const failures: RowFailure[] = mutation.error instanceof MonitoringError ? mutation.error.failures : [];
@@ -159,6 +168,85 @@ function Queue({ rows }: { rows: QueueRow[] }) {
           )}
           onConfirm={note => mutation.mutate({ kind: decision, note })}
           onClose={() => setDecision(null)}
+        />
+      )}
+    </Card>
+  );
+}
+
+type CheckDecision = { row: PendingActionCheck; kind: "COMPLETE" | "RETURN" };
+
+/** Actions their owners marked done; the caller checks whether they really are. */
+function ActionChecks() {
+  const { accessToken, user } = useAuthStore();
+  const { person } = useDirectory();
+  const client = useQueryClient();
+  const [open, setOpen] = useState<CheckDecision | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const checks = useQuery({
+    queryKey: ["lex05-action-checks", user?.organizationId],
+    queryFn: ({ signal }) => getActionChecks(accessToken!, signal),
+    enabled: !!accessToken,
+  });
+  const mutation = useMutation({
+    mutationFn: ({ row, kind, note }: CheckDecision & { note: string }) => checkAction(accessToken!, row.id, kind, note),
+    onSuccess: (_a, { row, kind }) => {
+      setDone(`${row.title}: ${kind === "COMPLETE" ? "completion accepted" : "sent back to the owner"}.`);
+      setOpen(null);
+      void client.invalidateQueries({ queryKey: ["lex05-action-checks"] });
+      void client.invalidateQueries({ queryKey: ["lex05-alerts"] });
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Actions ready for a completion check</CardTitle>
+        <CardDescription>Delivery actions whose owner says they are done. Check the evidence before accepting.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {done && <p role="status" className="rounded-md border border-gemba-lime/40 bg-gemba-lime/10 p-3 text-sm text-gemba-lime-ink">{done}</p>}
+        {checks.isPending ? <Loading label="Loading actions…" />
+          : checks.error ? <ErrorBox error={checks.error} />
+          : !checks.data.length ? <Empty>No actions are waiting for your check. They appear here when an owner marks one done in Key Functional Area 4.</Empty>
+          : <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[48rem] text-left text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                <tr><th className="p-3">Action</th><th className="p-3">Owner</th><th className="p-3">Due</th><th className="p-3">Owner&apos;s note / evidence</th><th className="p-3"><span className="sr-only">Decision</span></th></tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {checks.data.map(a => (
+                  <tr key={`${a.documentId ?? ""}/${a.id}`}>
+                    <td className="p-3 align-top font-medium text-foreground">{a.title}</td>
+                    <td className="p-3 align-top">{person(a.ownerId)}<span className="block text-xs text-muted-foreground">marked done {when(a.updatedAt)}</span></td>
+                    <td className="p-3 align-top">{new Date(a.dueAt).toLocaleDateString()}</td>
+                    <td className="p-3 align-top">
+                      {a.ownerNote && <span className="block">{a.ownerNote}</span>}
+                      <span className="block text-xs text-muted-foreground">{a.evidence || "No evidence given"}</span>
+                    </td>
+                    <td className="p-3 align-top">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button size="sm" onClick={() => { mutation.reset(); setOpen({ row: a, kind: "COMPLETE" }); }}><CheckCircle2 /> Accept</Button>
+                        <Button size="sm" variant="outline" onClick={() => { mutation.reset(); setOpen({ row: a, kind: "RETURN" }); }}><RotateCcw /> Send back</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>}
+      </CardContent>
+      {open && (
+        <NoteDialog
+          title={open.kind === "COMPLETE" ? "Accept completion" : "Send back to the owner"}
+          description={<><span className="font-medium text-foreground">{open.row.title}</span> · {person(open.row.ownerId)}</>}
+          label={open.kind === "COMPLETE" ? "Note" : "What still needs to be done"}
+          required={open.kind === "RETURN"}
+          confirm={open.kind === "COMPLETE" ? "Accept" : "Send back"}
+          busy={mutation.isPending}
+          error={mutation.error && <ErrorBox error={mutation.error} />}
+          onConfirm={note => mutation.mutate({ ...open, note })}
+          onClose={() => setOpen(null)}
         />
       )}
     </Card>

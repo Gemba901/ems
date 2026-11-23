@@ -148,4 +148,20 @@ export interface TrackedAction {
   assignmentId: string | null;
   dueAt: string;
   status: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "VERIFIED" | "CANCELLED";
+  documentId?: string;
+}
+
+/** A delivery action its owner marked done, waiting for your completion check. */
+export interface PendingActionCheck extends TrackedAction {
+  goalId: string | null;
+  ownerNote: string | null;
+  evidence: string | null;
+  updatedById: string;
+  updatedAt: string;
+}
+
+/** 05.02 organisation setting: "needs attention" band as % of target. */
+export interface MonitoringSettings {
+  warningTolerancePct: number;
+  canEdit: boolean;
 }

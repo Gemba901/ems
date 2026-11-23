@@ -26,6 +26,7 @@ enum LexAlertAction {
   REOPENED
 }
 
+/// UNUSED since the Area 04 merge (official values live in Area 04). Drop in a migration once that merge reaches main.
 model LexOfficialResult {
   id             String   @id @default(uuid())
   organizationId String
@@ -120,4 +121,15 @@ model LexMonitoringAlertEvent {
 
   @@index([alertId, createdAt])
   @@index([organizationId])
+}
+
+/// One row per organisation; missing row = defaults in calc-rules.ts.
+model LexMonitoringSettings {
+  organizationId      String   @id
+  /// "Needs attention" band as % of target, used when a KPI has no tolerance of its own.
+  warningTolerancePct Decimal  @default(5) @db.Decimal(5, 2)
+  updatedById         String?
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }

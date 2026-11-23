@@ -8,10 +8,12 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { tenantTransaction } from 'src/prisma/tenant-transaction';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import type {
+  DecisionOutcome,
   ExecutionProvider,
   SubmittedResult,
 } from '../../common/contracts';
 import {
+  ActionCheckDto,
   MonitoringQueryDto,
   ReturnResultsDto,
   VerifyResultsDto,
@@ -19,7 +21,6 @@ import {
 import { MONITORING_EXECUTION_SOURCE } from '../monitoring-control.sources';
 import {
   canSeeAssignment,
-  dateOnly,
   loadActor,
   ymd,
   type MonitoringActor,
@@ -63,11 +64,7 @@ export class VerificationService {
         (!q.departmentId || s.assignment.departmentId === q.departmentId) &&
         (!q.month || s.target.end.startsWith(q.month)),
     );
-    const official = await this.loadOfficial(
-      this.prisma,
-      user.organizationId,
-      rows,
-    );
+    const official = await this.loadOfficial(user.organizationId, rows);
 
     return rows.map((s) => {
       const prev = official.get(key(s.assignmentId, s.periodId));
@@ -184,99 +181,67 @@ export class VerificationService {
     ];
   }
 
-  /** All-or-nothing: one failing row means nothing is verified. */
+  /**
+   * Every selected row is checked first; one failing row means nothing is
+   * sent. Area 04 then verifies one result at a time and stores the official
+   * value; Area 05 keeps the history only.
+   */
   async verify(user: AccessTokenPayload, dto: VerifyResultsDto) {
     const actor = await loadActor(this.prisma, user);
     const orgId = user.organizationId;
 
-    return tenantTransaction(this.prisma, orgId, async (tx) => {
-      // Re-load inside the transaction: a row may have changed since the queue was shown.
-      const rows = await this.loadRequested(orgId, dto.submissionIds);
-      const official = await this.loadOfficial(tx, orgId, [...rows.values()]);
+    const rows = await this.loadRequested(orgId, dto.submissionIds);
+    const official = await this.loadOfficial(orgId, [...rows.values()]);
 
-      const seen = new Set<string>();
-      const failures: RowFailure[] = dto.submissionIds.flatMap((id) => {
-        const s = rows.get(id);
-        if (!s)
-          return [
-            {
-              submissionId: id,
-              problems: ['Not found, or no longer waiting for verification.'],
-            },
-          ];
-        const k = key(s.assignmentId, s.periodId);
-        const problems = this.checkSubmission(
-          actor,
-          s,
-          official.get(k) ?? null,
+    const seen = new Set<string>();
+    const failures: RowFailure[] = dto.submissionIds.flatMap((id) => {
+      const s = rows.get(id);
+      if (!s)
+        return [
+          {
+            submissionId: id,
+            problems: ['Not found, or no longer waiting for verification.'],
+          },
+        ];
+      const k = key(s.assignmentId, s.periodId);
+      const problems = this.checkSubmission(actor, s, official.get(k) ?? null);
+      if (seen.has(k))
+        problems.push(
+          'Another selected result is for the same KPI and period.',
         );
-        if (seen.has(k))
-          problems.push(
-            'Another selected result is for the same KPI and period.',
-          );
-        seen.add(k);
-        return problems.length ? [{ submissionId: id, problems }] : [];
-      });
-      if (failures.length) {
-        throw new UnprocessableEntityException({
-          message: 'No results were verified.',
-          failures,
-        });
-      }
-
-      const now = new Date();
-      for (const id of dto.submissionIds) {
-        const s = rows.get(id)!;
-        const prev = official.get(key(s.assignmentId, s.periodId));
-        const snapshot = this.snapshot(s, dto.note);
-        const values = {
-          periodStart: dateOnly(s.target.start),
-          periodEnd: dateOnly(s.target.end),
-          departmentId: s.assignment.departmentId,
-          submissionId: s.id,
-          actual: s.actual,
-          inputA: s.inputA,
-          inputB: s.inputB,
-          evidence: s.evidence,
-          note: s.note,
-          snapshot,
-          verifiedById: actor.employeeId!,
-          verifiedAt: now,
-        };
-        await tx.lexOfficialResult.upsert({
-          where: {
-            organizationId_assignmentId_periodId: {
-              organizationId: orgId,
-              assignmentId: s.assignmentId,
-              periodId: s.periodId,
-            },
-          },
-          create: {
-            organizationId: orgId,
-            assignmentId: s.assignmentId,
-            periodId: s.periodId,
-            ...values,
-          },
-          update: { ...values, revision: { increment: 1 } },
-        });
-        await tx.lexVerificationEvent.create({
-          data: {
-            organizationId: orgId,
-            submissionId: s.id,
-            assignmentId: s.assignmentId,
-            periodId: s.periodId,
-            action: 'VERIFIED',
-            actual: s.actual,
-            previousActual: prev?.actual ?? null,
-            reason: prev ? s.correctionReason : null,
-            snapshot,
-            actorId: actor.employeeId!,
-          },
-        });
-      }
-      await this.execution.markVerified(tx, orgId, dto.submissionIds);
-      return { verified: dto.submissionIds.length };
+      seen.add(k);
+      return problems.length ? [{ submissionId: id, problems }] : [];
     });
+    if (failures.length) {
+      throw new UnprocessableEntityException({
+        message: 'No results were verified.',
+        failures,
+      });
+    }
+
+    const outcome = await this.execution.decide(
+      user,
+      dto.submissionIds,
+      'VERIFY',
+      dto.note?.trim() ?? '',
+    );
+    await this.record(
+      orgId,
+      actor.employeeId!,
+      outcome.done,
+      (s) => {
+        const prev = official.get(key(s.assignmentId, s.periodId));
+        return {
+          action: 'VERIFIED' as const,
+          previousActual: prev?.actual ?? null,
+          reason: prev ? s.correctionReason : null,
+          snapshot: this.snapshot(s, dto.note),
+        };
+      },
+      rows,
+    );
+    this.stopped(outcome, dto.submissionIds.length, 'verified');
+    return { verified: outcome.done.length };
   }
 
   /** Sends results back to the submitter. An existing official value stays official. */
@@ -287,45 +252,67 @@ export class VerificationService {
     if (!reason)
       throw new UnprocessableEntityException('Explain what must be corrected.');
 
-    return tenantTransaction(this.prisma, orgId, async (tx) => {
-      const rows = await this.loadRequested(orgId, dto.submissionIds);
-      const failures: RowFailure[] = dto.submissionIds.flatMap((id) => {
-        const s = rows.get(id);
-        if (!s)
-          return [
-            {
-              submissionId: id,
-              problems: ['Not found, or no longer waiting for verification.'],
-            },
-          ];
-        const problems = this.authorityProblems(actor, s);
-        return problems.length ? [{ submissionId: id, problems }] : [];
+    const rows = await this.loadRequested(orgId, dto.submissionIds);
+    const failures: RowFailure[] = dto.submissionIds.flatMap((id) => {
+      const s = rows.get(id);
+      if (!s)
+        return [
+          {
+            submissionId: id,
+            problems: ['Not found, or no longer waiting for verification.'],
+          },
+        ];
+      const problems = this.authorityProblems(actor, s);
+      return problems.length ? [{ submissionId: id, problems }] : [];
+    });
+    if (failures.length) {
+      throw new UnprocessableEntityException({
+        message: 'No results were returned.',
+        failures,
       });
-      if (failures.length) {
-        throw new UnprocessableEntityException({
-          message: 'No results were returned.',
-          failures,
-        });
-      }
+    }
 
-      await tx.lexVerificationEvent.createMany({
-        data: dto.submissionIds.map((id) => {
-          const s = rows.get(id)!;
-          return {
-            organizationId: orgId,
-            submissionId: s.id,
-            assignmentId: s.assignmentId,
-            periodId: s.periodId,
-            action: 'RETURNED' as const,
-            actual: s.actual,
-            reason,
-            snapshot: this.snapshot(s),
-            actorId: actor.employeeId!,
-          };
-        }),
-      });
-      await this.execution.markReturned(tx, orgId, dto.submissionIds, reason);
-      return { returned: dto.submissionIds.length };
+    const outcome = await this.execution.decide(
+      user,
+      dto.submissionIds,
+      'RETURN',
+      reason,
+    );
+    await this.record(
+      orgId,
+      actor.employeeId!,
+      outcome.done,
+      (s) => ({
+        action: 'RETURNED' as const,
+        previousActual: null,
+        reason,
+        snapshot: this.snapshot(s),
+      }),
+      rows,
+    );
+    this.stopped(outcome, dto.submissionIds.length, 'returned');
+    return { returned: outcome.done.length };
+  }
+
+  /** 05.01: actions their owners marked done that this caller may check. */
+  listActionChecks(user: AccessTokenPayload) {
+    return this.execution.listActionsPendingCheck(user);
+  }
+
+  /** Accept the completion, or send it back with what is still missing. */
+  async checkAction(
+    user: AccessTokenPayload,
+    actionId: string,
+    dto: ActionCheckDto,
+  ) {
+    const note = dto.note?.trim() ?? '';
+    if (dto.decision === 'RETURN' && !note)
+      throw new UnprocessableEntityException(
+        'Explain what still needs to be done.',
+      );
+    return this.execution.checkActionCompletion(user, actionId, {
+      approve: dto.decision === 'COMPLETE',
+      note,
     });
   }
 
@@ -386,28 +373,65 @@ export class VerificationService {
     return new Map(all.filter((s) => wanted.has(s.id)).map((s) => [s.id, s]));
   }
 
-  private async loadOfficial(
-    db: Prisma.TransactionClient | PrismaService,
-    orgId: string,
-    rows: SubmittedResult[],
-  ) {
+  /** Current official values, keyed by KPI and period (stored by Area 04). */
+  private async loadOfficial(orgId: string, rows: SubmittedResult[]) {
     if (!rows.length) return new Map<string, { actual: number }>();
-    const found = await db.lexOfficialResult.findMany({
-      where: {
-        organizationId: orgId,
-        OR: rows.map((s) => ({
-          assignmentId: s.assignmentId,
-          periodId: s.periodId,
-        })),
-      },
-      select: { assignmentId: true, periodId: true, actual: true },
-    });
+    const found = await this.execution.listOfficial(orgId, [
+      ...new Set(rows.map((s) => s.assignmentId)),
+    ]);
     return new Map(
-      found.map((o) => [
-        key(o.assignmentId, o.periodId),
-        { actual: Number(o.actual) },
-      ]),
+      found.map((o) => [key(o.assignmentId, o.periodId), { actual: o.actual }]),
     );
+  }
+
+  /** History for the results Area 04 accepted. */
+  private async record(
+    orgId: string,
+    actorId: string,
+    ids: string[],
+    build: (s: SubmittedResult) => {
+      action: 'VERIFIED' | 'RETURNED';
+      previousActual: number | null;
+      reason: string | null;
+      snapshot: Prisma.InputJsonValue;
+    },
+    rows: Map<string, SubmittedResult>,
+  ) {
+    if (!ids.length) return;
+    await tenantTransaction(this.prisma, orgId, (tx) =>
+      tx.lexVerificationEvent.createMany({
+        data: ids.map((id) => {
+          const s = rows.get(id)!;
+          return {
+            organizationId: orgId,
+            submissionId: s.id,
+            assignmentId: s.assignmentId,
+            periodId: s.periodId,
+            actual: s.actual,
+            actorId,
+            ...build(s),
+          };
+        }),
+      }),
+    );
+  }
+
+  /** Area 04 stopped part-way: say what was saved and what refused. */
+  private stopped(
+    outcome: DecisionOutcome,
+    total: number,
+    verb: 'verified' | 'returned',
+  ) {
+    if (!outcome.failed) return;
+    throw new UnprocessableEntityException({
+      message: `${outcome.done.length} of ${total} results were ${verb} before one was refused. Refresh and review the rest.`,
+      failures: [
+        {
+          submissionId: outcome.failed.id,
+          problems: [outcome.failed.message],
+        },
+      ],
+    });
   }
 
   /** Plan + target exactly as submitted, so later re-planning never rewrites history. */

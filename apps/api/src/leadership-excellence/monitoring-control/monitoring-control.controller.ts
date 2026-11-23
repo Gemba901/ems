@@ -5,9 +5,9 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
 import { ModuleType } from 'db';
 import { TenantRequired } from 'src/tenancy/tenant-route.decorator';
@@ -21,6 +21,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import {
+  MONITORING_ORG_WIDE,
   MONITORING_READERS,
   MONITORING_VERIFIERS,
 } from './monitoring-control.roles';
@@ -28,12 +29,13 @@ import { VerificationService } from './verification/verification.service';
 import { PerformanceService } from './performance/performance.service';
 import { AlertsService } from './alerts/alerts.service';
 import { DirectoryService } from './directory/directory.service';
-import { SampleCallerInterceptor } from './monitoring-control.sample-interceptor';
 import {
+  ActionCheckDto,
   AlertNoteDto,
   AlertQueryDto,
   LinkFollowUpDto,
   MonitoringQueryDto,
+  MonitoringSettingsDto,
   ReturnResultsDto,
   VerifyResultsDto,
 } from './dto/monitoring-control.dto';
@@ -48,8 +50,6 @@ import {
   ModuleGuard,
 )
 @RequiresModule(ModuleType.LEADERSHIP_EXCELLENCE)
-// DEV ONLY (no-op unless LEX05_SAMPLE_DATA=true); remove with the sample source.
-@UseInterceptors(SampleCallerInterceptor)
 export class MonitoringControlController {
   constructor(
     private readonly verification: VerificationService,
@@ -102,6 +102,22 @@ export class MonitoringControlController {
     return this.verification.returnForCorrection(user, dto);
   }
 
+  @Get('verification/actions')
+  @Roles(...MONITORING_VERIFIERS)
+  actionChecks(@CurrentUser() user: AccessTokenPayload) {
+    return this.verification.listActionChecks(user);
+  }
+
+  @Post('verification/actions/:actionId/check')
+  @Roles(...MONITORING_VERIFIERS)
+  checkAction(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('actionId') actionId: string,
+    @Body() dto: ActionCheckDto,
+  ) {
+    return this.verification.checkAction(user, actionId, dto);
+  }
+
   // ── 05.02 Performance & gaps ──────────────────────────
   @Get('performance')
   @Roles(...MONITORING_READERS)
@@ -110,6 +126,21 @@ export class MonitoringControlController {
     @Query() q: MonitoringQueryDto,
   ) {
     return this.performance.getOverview(user, q);
+  }
+
+  @Get('settings')
+  @Roles(...MONITORING_READERS)
+  getSettings(@CurrentUser() user: AccessTokenPayload) {
+    return this.performance.getSettings(user);
+  }
+
+  @Put('settings')
+  @Roles(...MONITORING_ORG_WIDE)
+  updateSettings(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() dto: MonitoringSettingsDto,
+  ) {
+    return this.performance.updateSettings(user, dto);
   }
 
   @Get('performance/:assignmentId')

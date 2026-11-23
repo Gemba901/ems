@@ -1,8 +1,8 @@
-import { PrismaService } from 'src/prisma/prisma.service';
+import type { ExecutionProvider, OfficialValue } from '../common/contracts';
 import { MonitoringControlService } from './monitoring-control.service';
 
 describe('MonitoringControlService (provider for Areas 06 / 07)', () => {
-  it('returns only this company’s official results, oldest first, as plain numbers', async () => {
+  it('passes on Area 04 official values for one KPI, oldest first', async () => {
     const target = {
       periodId: 'p-sep',
       start: '2026-09-01',
@@ -11,40 +11,48 @@ describe('MonitoringControlService (provider for Areas 06 / 07)', () => {
       dueAt: '',
       value: 108,
     };
-    const findMany = jest.fn(async () => [
-      {
+    const row = (
+      periodId: string,
+      start: string,
+      end: string,
+      actual: number,
+    ) =>
+      ({
+        submissionId: `r-${periodId}`,
         assignmentId: 'kpi-1',
-        periodId: 'p-sep',
-        periodStart: new Date('2026-09-01T00:00:00.000Z'),
-        periodEnd: new Date('2026-09-30T00:00:00.000Z'),
-        actual: '110.500000', // Prisma.Decimal at runtime; Number() handles both
-        snapshot: { target, assignment: {} },
+        periodId,
+        periodStart: start,
+        periodEnd: end,
+        actual,
+        inputA: null,
+        inputB: null,
+        evidence: 'report',
+        target: { ...target, periodId, start, end },
         verifiedById: 'emp-verifier',
         verifiedAt: new Date('2026-10-03T10:00:00.000Z'),
         revision: 2,
-      },
+      }) satisfies OfficialValue;
+    const listOfficial = jest.fn(async () => [
+      row('p-sep', '2026-09-01', '2026-09-30', 110.5),
+      row('p-aug', '2026-08-01', '2026-08-31', 100),
     ]);
     const service = new MonitoringControlService({
-      lexOfficialResult: { findMany },
-    } as unknown as PrismaService);
+      listOfficial,
+    } as unknown as ExecutionProvider);
 
     const rows = await service.getOfficialResults('org-1', 'kpi-1');
-    expect(findMany).toHaveBeenCalledWith({
-      where: { organizationId: 'org-1', assignmentId: 'kpi-1' },
-      orderBy: { periodStart: 'asc' },
+    expect(listOfficial).toHaveBeenCalledWith('org-1', ['kpi-1']);
+    expect(rows.map((r) => r.periodId)).toEqual(['p-aug', 'p-sep']);
+    expect(rows[1]).toEqual({
+      assignmentId: 'kpi-1',
+      periodId: 'p-sep',
+      periodStart: '2026-09-01',
+      periodEnd: '2026-09-30',
+      actual: 110.5,
+      target: { ...target },
+      verifiedById: 'emp-verifier',
+      verifiedAt: new Date('2026-10-03T10:00:00.000Z'),
+      revision: 2,
     });
-    expect(rows).toEqual([
-      {
-        assignmentId: 'kpi-1',
-        periodId: 'p-sep',
-        periodStart: '2026-09-01',
-        periodEnd: '2026-09-30',
-        actual: 110.5,
-        target,
-        verifiedById: 'emp-verifier',
-        verifiedAt: new Date('2026-10-03T10:00:00.000Z'),
-        revision: 2,
-      },
-    ]);
   });
 });

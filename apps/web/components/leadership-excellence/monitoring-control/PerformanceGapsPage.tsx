@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, X } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { getPerformance, getPerformanceDetail } from "@/services/leadership-excellence/monitoring-control.service";
+import { getMonitoringSettings, getPerformance, getPerformanceDetail, updateMonitoringSettings } from "@/services/leadership-excellence/monitoring-control.service";
 import { DataPill, Empty, ErrorBox, Filters, HowTo, Loading, PageHeader, PerformancePill, Pill, fmt, periodLabel, pretty, targetLabel, useDirectory } from "./shared";
 import type { AssignmentSummary, KpiDirection, MonitoringFilters } from "./types";
 
@@ -37,9 +38,11 @@ export function PerformanceGapsPage() {
         <p><strong className="text-foreground">What is it?</strong> Every KPI you can see, with its verified result, target and gap so far.</p>
         <p><strong className="text-foreground">How to read it:</strong> quantities are added up, rates are recalculated from their combined inputs, and closing values use the latest period. When a due period is not yet verified, the summary is marked incomplete and no gap is shown.</p>
         <p><strong className="text-foreground">How to use:</strong> select a KPI to see every period, its evidence and its data status. Use Up to month to see the position at the end of an earlier month.</p>
+        <p><strong className="text-foreground">Needs attention:</strong> a miss within the warning band below is amber; a bigger miss is red. A KPI&apos;s own tolerance from its plan takes priority.</p>
         <p><strong className="text-foreground">Next:</strong> open 05.03 · Alerts &amp; Follow-up for the KPIs that need action.</p>
       </HowTo>
       <Filters value={filters} onChange={setFilters} monthLabel="Up to month" />
+      <WarningBand />
       {list.isPending ? <Loading label="Loading performance…" />
         : list.error ? <ErrorBox error={list.error} />
         : !list.data.length ? <Empty>No approved KPIs in this view yet. KPIs appear once their plans are approved in Key Functional Area 3.</Empty>
@@ -65,6 +68,47 @@ export function PerformanceGapsPage() {
           </Card>
         </>}
       {open && <Detail assignmentId={open} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+/** The organisation's "needs attention" band. Admin and management can change it. */
+function WarningBand() {
+  const { accessToken, user } = useAuthStore();
+  const client = useQueryClient();
+  const [draft, setDraft] = useState<string | null>(null);
+  const settings = useQuery({
+    queryKey: ["lex05-settings", user?.organizationId],
+    queryFn: ({ signal }) => getMonitoringSettings(accessToken!, signal),
+    enabled: !!accessToken,
+  });
+  const save = useMutation({
+    mutationFn: (pct: number) => updateMonitoringSettings(accessToken!, pct),
+    onSuccess: data => {
+      client.setQueryData(["lex05-settings", user?.organizationId], data);
+      void client.invalidateQueries({ queryKey: ["lex05-performance"] });
+      void client.invalidateQueries({ queryKey: ["lex05-alerts"] });
+      setDraft(null);
+    },
+  });
+  if (!settings.data) return null;
+  const pct = Number(draft);
+  const valid = draft !== null && draft.trim() !== "" && Number.isFinite(pct) && pct >= 0 && pct <= 50;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted-foreground">Warning band:</span>
+      {draft === null ? <>
+        <span className="font-medium">{settings.data.warningTolerancePct > 0 ? `within ${settings.data.warningTolerancePct}% of target` : "off (every miss is below target)"}</span>
+        {settings.data.canEdit && <Button size="sm" variant="ghost" onClick={() => setDraft(String(settings.data.warningTolerancePct))}>Change</Button>}
+      </> : <form className="flex flex-wrap items-center gap-2" onSubmit={e => { e.preventDefault(); if (valid) save.mutate(pct); }}>
+        <label className="sr-only" htmlFor="lex05-band">Warning band, % of target</label>
+        <Input id="lex05-band" type="number" min={0} max={50} step={0.5} className="h-8 w-24" value={draft} onChange={e => setDraft(e.target.value)} />
+        <span className="text-muted-foreground">% of target (0 turns it off)</span>
+        <Button size="sm" type="submit" disabled={!valid || save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
+        <Button size="sm" type="button" variant="ghost" onClick={() => { setDraft(null); save.reset(); }}>Cancel</Button>
+        {save.error && <span role="alert" className="text-destructive">{save.error.message}</span>}
+      </form>}
     </div>
   );
 }

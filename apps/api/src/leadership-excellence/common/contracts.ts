@@ -1,3 +1,5 @@
+import type { AccessTokenPayload } from '../../auth/access-token-payload';
+
 // ── 01 Strategic Direction → all later areas ─────────────────────────────
 
 /** Lightweight status other areas read (02 header, 03 planning gate). */
@@ -59,8 +61,8 @@ export interface StrategicDirectionProvider {
 }
 
 // ── 03 Performance Planning → 04 · 05 · 06 · 07 ──────────────────────────
-// Served to Area 05 by Area 04's execution module (GET /execution/assignments,
-// /execution/assignments/:id/targets, /execution/goals).
+// Served to Area 05 in-process from Area 04's execution workspace
+// (monitoring-control/monitoring-control.execution-source.ts).
 export type KpiDirection = 'higher' | 'lower' | 'range' | 'zero';
 export type KpiAggregation =
   | 'sum'
@@ -118,17 +120,17 @@ export interface ApprovedGoal {
 }
 
 export interface PerformancePlanningProvider {
-  /** GET /execution/assignments */
+  /** One row per KPI assignment: its current approved version. */
   listApprovedAssignments(
     organizationId: string,
   ): Promise<ApprovedKpiAssignment[]>;
-  /** GET /execution/assignments/:assignmentId/targets?documentId=&version= */
+  /** Period targets pinned to one approved plan version. */
   getPeriodTargets(
     organizationId: string,
     assignmentId: string,
     ref: { documentId: string; version: number },
   ): Promise<PeriodTarget[]>;
-  /** GET /execution/goals */
+  /** Approved goals and objectives. */
   listGoals(organizationId: string): Promise<ApprovedGoal[]>;
 }
 
@@ -180,53 +182,72 @@ export interface FollowUpActionInput {
   sourceAlertKey: string; // Area 05 alert this follows up
 }
 
+/** An Area 04 result that is official (verified). A correction may be pending. */
+export interface OfficialValue {
+  submissionId: string;
+  assignmentId: string;
+  periodId: string;
+  periodStart: string;
+  periodEnd: string;
+  actual: number;
+  inputA: number | null;
+  inputB: number | null;
+  evidence: string | null;
+  target: PeriodTarget;
+  verifiedById: string; // employee id
+  verifiedAt: Date;
+  revision: number; // 1 = first verification
+}
+
+/** Verify / return stop at the first refusal; `done` were already saved. */
+export interface DecisionOutcome {
+  done: string[];
+  failed: { id: string; message: string } | null;
+}
+
+/**
+ * Reads take the organisation and return everything; Area 05 applies its own
+ * visibility rules. Changes take the signed-in user, so Area 04 enforces its
+ * own permissions (assigned verifier, no self-verification, checker).
+ */
 export interface ExecutionProvider {
-  /** GET /execution/submissions. Results in SUBMITTED state only. */
+  /** Results in SUBMITTED state only. */
   listSubmitted(
     organizationId: string,
     assignmentIds?: string[],
   ): Promise<SubmittedResult[]>;
-  /** GET /execution/actions */
+  /** Official values. Area 04 stores them; Area 05 never keeps a copy. */
+  listOfficial(
+    organizationId: string,
+    assignmentIds?: string[],
+  ): Promise<OfficialValue[]>;
   listActions(organizationId: string): Promise<TrackedAction[]>;
-  /** GET /execution/actions/:actionId?documentId= */
   getAction(
     organizationId: string,
     actionId: string,
     documentId?: string,
   ): Promise<TrackedAction | null>;
-  /** GET /execution/actions/pending-check (Area 04 decides who may check). */
+  /** Actions the owner sent for a completion check that this user may check. */
   listActionsPendingCheck(
-    organizationId: string,
-    checkerId: string,
+    user: AccessTokenPayload,
   ): Promise<PendingActionCheck[]>;
-  /** POST /execution/actions/:actionId/completion-check */
   checkActionCompletion(
-    organizationId: string,
+    user: AccessTokenPayload,
     actionId: string,
-    decision: { approve: boolean; note: string; checkerId: string },
+    decision: { approve: boolean; note: string },
   ): Promise<TrackedAction>;
-  /** POST /execution/actions/follow-up */
+  /** Not offered by Area 04 yet (actions live in the Area 03 plans). */
   createFollowUpAction(
-    organizationId: string,
+    user: AccessTokenPayload,
     input: FollowUpActionInput,
-    createdById: string,
   ): Promise<TrackedAction>;
-  /**
-   * POST /execution/results/:resultId/verify and /return.
-   * OPEN: Area 04's endpoints also save the official value; Area 05 does that
-   * too (LexOfficialResult). Agree which area owns it before wiring.
-   */
-  markVerified(
-    tx: unknown,
-    organizationId: string,
+  /** Verify or return, one result at a time, in the order given. */
+  decide(
+    user: AccessTokenPayload,
     submissionIds: string[],
-  ): Promise<void>;
-  markReturned(
-    tx: unknown,
-    organizationId: string,
-    submissionIds: string[],
-    reason: string,
-  ): Promise<void>;
+    decision: 'VERIFY' | 'RETURN',
+    note: string,
+  ): Promise<DecisionOutcome>;
 }
 
 // ── 05 Monitoring & Control → 06 · 07 ─────────────────────────────────────

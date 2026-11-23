@@ -214,13 +214,13 @@ describe('PerformanceService scope', () => {
     reports: string[] = [],
   ) => {
     const db = {
+      lexMonitoringSettings: { findUnique: jest.fn(async () => null) },
       employee: {
         findFirst: jest.fn(
           async () => me && { ...me, employmentStatus: 'ACTIVE' },
         ),
         findMany: jest.fn(async () => reports.map((id) => ({ id }))),
       },
-      lexOfficialResult: { findMany: jest.fn(async () => []) },
     };
     const planning: PerformancePlanningProvider = {
       listApprovedAssignments: jest.fn(async () => [
@@ -233,9 +233,11 @@ describe('PerformanceService scope', () => {
     };
     const execution = {
       listSubmitted: jest.fn(async () => []),
+      listOfficial: jest.fn(async () => []),
     } as unknown as ExecutionProvider;
     return {
       db,
+      execution,
       service: new PerformanceService(
         db as unknown as PrismaService,
         planning,
@@ -245,19 +247,17 @@ describe('PerformanceService scope', () => {
   };
 
   it('an employee sees KPIs they own / provide / verify and their direct reports’', async () => {
-    const { service, db } = make(
+    const { service, execution } = make(
       { id: 'emp-provider', departmentId: 'dept-9' },
       ['emp-report'],
     );
     const rows = await service.getOverview(user(Role.EMPLOYEE), {});
     expect(rows.map((r) => r.assignmentId)).toEqual(['kpi-1', 'kpi-3']);
     expect(rows[0]).not.toHaveProperty('periods');
-    expect(db.lexOfficialResult.findMany).toHaveBeenCalledWith({
-      where: {
-        organizationId: 'org-1',
-        assignmentId: { in: ['kpi-1', 'kpi-3'] },
-      },
-    });
+    expect(execution.listOfficial).toHaveBeenCalledWith('org-1', [
+      'kpi-1',
+      'kpi-3',
+    ]);
   });
   it('an HOD sees their department', async () => {
     const { service } = make({ id: 'emp-hod', departmentId: 'dept-2' });

@@ -200,6 +200,7 @@ model Organization {
   lexOfficialResults      LexOfficialResult[]      // LEX 05
   lexVerificationEvents   LexVerificationEvent[]   // LEX 05
   lexMonitoringAlerts     LexMonitoringAlert[]     // LEX 05
+  lexMonitoringSettings   LexMonitoringSettings?   // LEX 05
 }
 
 //specific user

@@ -5,11 +5,14 @@ import {
   IsArray,
   IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 const NOTE_MAX = 1500;
@@ -79,4 +82,23 @@ export class AlertNoteDto {
 export class LinkFollowUpDto extends AlertNoteDto {
   @IsUUID()
   actionId!: string;
+}
+
+/** 05.01 completion check of a delivery action the owner marked done. */
+export class ActionCheckDto {
+  @IsIn(['COMPLETE', 'RETURN'])
+  decision!: 'COMPLETE' | 'RETURN';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(NOTE_MAX)
+  note?: string;
+}
+
+/** 05.02 organisation setting: the "needs attention" band as % of target. */
+export class MonitoringSettingsDto {
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(50)
+  warningTolerancePct!: number;
 }

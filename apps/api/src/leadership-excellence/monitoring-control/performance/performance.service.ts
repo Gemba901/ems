@@ -6,17 +6,19 @@ import type {
   ExecutionProvider,
   PerformancePlanningProvider,
 } from '../../common/contracts';
-import { MonitoringQueryDto } from '../dto/monitoring-control.dto';
+import {
+  MonitoringQueryDto,
+  MonitoringSettingsDto,
+} from '../dto/monitoring-control.dto';
+import { tenantTransaction } from 'src/prisma/tenant-transaction';
+import { MONITORING_ORG_WIDE } from '../monitoring-control.roles';
 import {
   MONITORING_EXECUTION_SOURCE,
   MONITORING_PLANNING_SOURCE,
 } from '../monitoring-control.sources';
 import { canSeeAssignment, loadActor } from '../monitoring-scope';
-import {
-  buildAssignmentView,
-  toOfficialRow,
-  type AssignmentView,
-} from './performance-view';
+import { CALC_RULES } from '../calc/calc-rules';
+import { buildAssignmentView, type AssignmentView } from './performance-view';
 
 /** Last day of a YYYY-MM month as YYYY-MM-DD. */
 const monthEnd = (month: string) => {
@@ -81,10 +83,8 @@ export class PerformanceService {
   ): Promise<AssignmentView[]> {
     if (!assignments.length) return [];
     const ids = assignments.map((a) => a.id);
-    const [official, pending, targets] = await Promise.all([
-      this.prisma.lexOfficialResult.findMany({
-        where: { organizationId, assignmentId: { in: ids } },
-      }),
+    const [official, pending, targets, tolerancePct] = await Promise.all([
+      this.execution.listOfficial(organizationId, ids),
       this.execution.listSubmitted(organizationId, ids),
       Promise.all(
         assignments.map((a) =>
@@ -94,17 +94,54 @@ export class PerformanceService {
           }),
         ),
       ),
+      this.warningTolerancePct(organizationId),
     ]);
 
     return assignments.map((a, i) =>
       buildAssignmentView(
         a,
         targets[i],
-        official.filter((o) => o.assignmentId === a.id).map(toOfficialRow),
+        official.filter((o) => o.assignmentId === a.id),
         pending.filter((p) => p.assignmentId === a.id),
         now,
         until,
+        tolerancePct,
       ),
     );
+  }
+
+  /** Settings screen: current band and whether the caller may change it. */
+  async getSettings(user: AccessTokenPayload) {
+    return {
+      warningTolerancePct: await this.warningTolerancePct(user.organizationId),
+      canEdit: MONITORING_ORG_WIDE.includes(user.roleLevel),
+    };
+  }
+
+  async updateSettings(user: AccessTokenPayload, dto: MonitoringSettingsDto) {
+    const organizationId = user.organizationId;
+    const data = {
+      warningTolerancePct: dto.warningTolerancePct,
+      updatedById: user.userId,
+    };
+    await tenantTransaction(this.prisma, organizationId, (tx) =>
+      tx.lexMonitoringSettings.upsert({
+        where: { organizationId },
+        create: { organizationId, ...data },
+        update: data,
+      }),
+    );
+    return this.getSettings(user);
+  }
+
+  /** The organisation's "needs attention" band (% of target); default until someone sets it. */
+  async warningTolerancePct(organizationId: string): Promise<number> {
+    const row = await this.prisma.lexMonitoringSettings.findUnique({
+      where: { organizationId },
+      select: { warningTolerancePct: true },
+    });
+    return row
+      ? Number(row.warningTolerancePct)
+      : CALC_RULES.defaultWarningTolerancePct;
   }
 }

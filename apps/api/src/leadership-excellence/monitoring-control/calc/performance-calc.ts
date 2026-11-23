@@ -67,6 +67,20 @@ export function assess(
   return { status: 'BELOW_TARGET', gap };
 }
 
+/**
+ * Tolerance in KPI units for one target. The KPI's own tolerance wins;
+ * otherwise the organisation's % of the target (range: % of the band's edge).
+ */
+export function toleranceFor(
+  kpiTolerance: number,
+  target: number | null,
+  orgPct: number,
+): number {
+  if (kpiTolerance > 0) return kpiTolerance;
+  if (!finite(target) || !(orgPct > 0)) return 0;
+  return (Math.abs(target) * orgPct) / 100;
+}
+
 /** PDF Part 5.2. null = not calculable under the approved rules. */
 export function achievementPct(
   actual: number | null,
@@ -81,7 +95,7 @@ export function achievementPct(
     if (target === 0) return null;
     pct = (actual / target) * 100;
   } else {
-    if (actual === 0) return CALC_RULES.lowerIsBetterZeroActual;
+    if (actual === 0) return CALC_RULES.achievementCap ?? 100; // lowerIsBetterZeroActual: 'CAP'
     pct = (target / actual) * 100;
   }
   const cap = CALC_RULES.achievementCap;
@@ -179,7 +193,7 @@ export function summarise(
         ...base,
         actual:
           b === 0 ? null : (sum(ok.map((p) => p.inputA)) / b) * multiplier,
-        target: latest.target, // TODO: confirm elapsed-period target rule for rates
+        target: latest.target, // rates are judged against the latest period's target (confirmed)
       };
     }
     case 'average':

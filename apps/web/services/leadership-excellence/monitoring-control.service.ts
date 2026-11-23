@@ -7,6 +7,8 @@ import type {
   HistoryRow,
   MonitoringAlert,
   MonitoringFilters,
+  MonitoringSettings,
+  PendingActionCheck,
   QueueRow,
   RowFailure,
   TrackedAction,
@@ -15,7 +17,7 @@ import type {
 // Area 05 · Monitoring & Control: calls to /leadership-excellence/monitoring-control/*.
 const BASE = "/api/leadership-excellence/monitoring-control";
 
-/** An API error that may list which rows failed (verify / return are all-or-nothing). */
+/** An API error that may list which rows failed (verify / return). */
 export class MonitoringError extends Error {
   constructor(message: string, readonly failures: RowFailure[] = []) {
     super(message);
@@ -59,9 +61,21 @@ export const verifyResults = (token: string, submissionIds: string[], note?: str
 export const returnResults = (token: string, submissionIds: string[], reason: string) =>
   post<{ returned: number }>("/verification/return", token, { submissionIds, reason });
 
+export const getActionChecks = (token: string, signal?: AbortSignal) =>
+  call<PendingActionCheck[]>("/verification/actions", token, { signal });
+
+export const checkAction = (token: string, actionId: string, decision: "COMPLETE" | "RETURN", note: string) =>
+  post<TrackedAction>(`/verification/actions/${encodeURIComponent(actionId)}/check`, token, { decision, note: note || undefined });
+
 // ---- 05.02 · Performance & gaps ----
 export const getPerformance = (token: string, filters: MonitoringFilters, signal?: AbortSignal) =>
   call<AssignmentSummary[]>(`/performance${query(filters)}`, token, { signal });
+
+export const getMonitoringSettings = (token: string, signal?: AbortSignal) =>
+  call<MonitoringSettings>("/settings", token, { signal });
+
+export const updateMonitoringSettings = (token: string, warningTolerancePct: number) =>
+  call<MonitoringSettings>("/settings", token, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ warningTolerancePct }) });
 
 export const getPerformanceDetail = (token: string, assignmentId: string, signal?: AbortSignal) =>
   call<AssignmentDetail>(`/performance/${encodeURIComponent(assignmentId)}`, token, { signal });

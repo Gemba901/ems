@@ -8,6 +8,7 @@ import {
   assess,
   improvementProgressPct,
   summarise,
+  toleranceFor,
   variance,
   type Assessment,
   type DataStatus,
@@ -95,6 +96,7 @@ function dataStatus(
 /**
  * One KPI assignment's periods and summary.
  * `until` (YYYY-MM-DD, inclusive) limits the view to periods ending on or before it.
+ * `tolerancePct` is the organisation's "needs attention" band, used when the KPI has none.
  */
 export function buildAssignmentView(
   a: ApprovedKpiAssignment,
@@ -103,6 +105,7 @@ export function buildAssignmentView(
   pending: SubmittedResult[],
   now: Date,
   until?: string,
+  tolerancePct = 0,
 ): AssignmentView {
   const officialBy = new Map(officials.map((o) => [o.periodId, o]));
   const pendingPeriods = new Set(pending.map((p) => p.periodId));
@@ -135,7 +138,7 @@ export function buildAssignmentView(
               o.actual,
               { value: target.value, upper: target.upper },
               dir,
-              a.warningTolerance,
+              toleranceFor(a.warningTolerance, target.value, tolerancePct),
             )
           : null,
       };
@@ -185,7 +188,7 @@ export function buildAssignmentView(
           summary.actual,
           { value: summary.target, upper: latestVerified?.upper },
           dir,
-          a.warningTolerance,
+          toleranceFor(a.warningTolerance, summary.target, tolerancePct),
         )
       : null,
     achievementPct: judge
@@ -196,32 +199,5 @@ export function buildAssignmentView(
       : null,
     variance: judge ? variance(summary.actual, summary.target, dir) : null,
     latestVerified,
-  };
-}
-
-/** Prisma row → OfficialRow (Decimal columns arrive as Prisma.Decimal). */
-export function toOfficialRow(r: {
-  periodId: string;
-  actual: unknown;
-  inputA: unknown;
-  inputB: unknown;
-  evidence: string | null;
-  snapshot: unknown;
-  revision: number;
-  verifiedById: string;
-  verifiedAt: Date;
-}): OfficialRow {
-  const num = (v: unknown) =>
-    v === null || v === undefined ? null : Number(v);
-  return {
-    periodId: r.periodId,
-    actual: Number(r.actual),
-    inputA: num(r.inputA),
-    inputB: num(r.inputB),
-    evidence: r.evidence,
-    target: (r.snapshot as { target: PeriodTarget }).target,
-    revision: r.revision,
-    verifiedById: r.verifiedById,
-    verifiedAt: r.verifiedAt,
   };
 }

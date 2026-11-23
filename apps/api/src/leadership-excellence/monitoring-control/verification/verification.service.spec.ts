@@ -4,6 +4,7 @@ import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { Role } from 'src/common/enum/role.enum';
 import type {
   ApprovedKpiAssignment,
+  DecisionOutcome,
   ExecutionProvider,
   PeriodTarget,
   SubmittedResult,
@@ -74,9 +75,10 @@ const user = (roleLevel = Role.EMPLOYEE): AccessTokenPayload => ({
   isAdminOrg: false,
 });
 
+type Official = { assignmentId: string; periodId: string; actual: number };
+
 function makeDb(
   me: { id: string; departmentId?: string; employmentStatus?: string } | null,
-  official: { assignmentId: string; periodId: string; actual: unknown }[] = [],
 ) {
   const db: any = {
     employee: {
@@ -85,10 +87,6 @@ function makeDb(
           me && { departmentId: 'dept-1', employmentStatus: 'ACTIVE', ...me },
       ),
       findMany: jest.fn(async () => []),
-    },
-    lexOfficialResult: {
-      findMany: jest.fn(async () => official),
-      upsert: jest.fn(async () => ({})),
     },
     lexVerificationEvent: {
       create: jest.fn(async () => ({})),
@@ -100,15 +98,24 @@ function makeDb(
   db.$transaction = jest.fn(async (work: (tx: unknown) => unknown) => work(db));
   return db;
 }
-const makeExecution = (rows: SubmittedResult[]) => ({
+const makeExecution = (rows: SubmittedResult[], official: Official[]) => ({
   listSubmitted: jest.fn(async () => rows),
+  listOfficial: jest.fn(async () => official),
   listActions: jest.fn(async () => []),
   getAction: jest.fn(async () => null),
-  markVerified: jest.fn(async () => undefined),
-  markReturned: jest.fn(async () => undefined),
+  decide: jest.fn(
+    async (_user: unknown, ids: string[]): Promise<DecisionOutcome> => ({
+      done: ids,
+      failed: null,
+    }),
+  ),
 });
-const make = (db: any, rows: SubmittedResult[] = []) => {
-  const execution = makeExecution(rows);
+const make = (
+  db: any,
+  rows: SubmittedResult[] = [],
+  official: Official[] = [],
+) => {
+  const execution = makeExecution(rows, official);
   const service = new VerificationService(
     db as unknown as PrismaService,
     execution as unknown as ExecutionProvider,
@@ -301,10 +308,12 @@ describe('VerificationService.getQueue', () => {
     expect(rows[0].isCorrection).toBe(false);
   });
   it('flags corrections and shows the current official value', async () => {
-    const db = makeDb({ id: 'emp-verifier' }, [
-      { assignmentId: 'kpi-1', periodId: 'p-sep', actual: '100.000000' },
-    ]);
-    const { service } = make(db, [submission({ correctionReason: 'Recount' })]);
+    const db = makeDb({ id: 'emp-verifier' });
+    const { service } = make(
+      db,
+      [submission({ correctionReason: 'Recount' })],
+      [{ assignmentId: 'kpi-1', periodId: 'p-sep', actual: 100 }],
+    );
     const [row] = await service.getQueue(user(), {});
     expect(row.isCorrection).toBe(true);
     expect(row.currentOfficial).toBe(100);
@@ -317,7 +326,7 @@ describe('VerificationService.getQueue', () => {
 });
 
 describe('VerificationService.verify', () => {
-  it('writes the official result, the event and tells Area 04, in one transaction', async () => {
+  it('asks Area 04 to verify, then records the history event', async () => {
     const db = makeDb({ id: 'emp-verifier' });
     const { service, execution } = make(db, [submission()]);
     await expect(
@@ -326,47 +335,55 @@ describe('VerificationService.verify', () => {
       verified: 1,
     });
 
-    expect(db.$transaction).toHaveBeenCalledTimes(1);
-    const upsert = db.lexOfficialResult.upsert.mock.calls[0][0];
-    expect(upsert.where.organizationId_assignmentId_periodId).toEqual({
-      organizationId: 'org-1',
-      assignmentId: 'kpi-1',
-      periodId: 'p-sep',
-    });
-    expect(upsert.create).toEqual(
-      expect.objectContaining({
-        actual: 110,
-        submissionId: 'sub-1',
-        verifiedById: 'emp-verifier',
-        departmentId: 'dept-1',
-      }),
+    expect(execution.decide).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: expect.any(String) }),
+      ['sub-1'],
+      'VERIFY',
+      'Checked log',
     );
-    expect(upsert.create.periodEnd.toISOString()).toBe(
-      '2026-09-30T00:00:00.000Z',
-    );
-    expect(upsert.create.snapshot.verifierNote).toBe('Checked log');
-    expect(upsert.update.revision).toEqual({ increment: 1 });
-
-    expect(db.lexVerificationEvent.create.mock.calls[0][0].data).toEqual(
+    const [event] = db.lexVerificationEvent.createMany.mock.calls[0][0].data;
+    expect(event).toEqual(
       expect.objectContaining({
         action: 'VERIFIED',
+        submissionId: 'sub-1',
         actual: 110,
         previousActual: null,
         actorId: 'emp-verifier',
       }),
     );
-    expect(execution.markVerified).toHaveBeenCalledWith(db, 'org-1', ['sub-1']);
+    expect(event.snapshot.verifierNote).toBe('Checked log');
+  });
+
+  it('when Area 04 stops part-way, keeps history for the saved ones and says which refused', async () => {
+    const db = makeDb({ id: 'emp-verifier' });
+    const second = submission({ id: 'sub-2', periodId: 'p-aug' });
+    const { service, execution } = make(db, [submission(), second]);
+    execution.decide.mockResolvedValueOnce({
+      done: ['sub-1'],
+      failed: { id: 'sub-2', message: 'Execution records changed.' },
+    });
+    const err = await service
+      .verify(user(), { submissionIds: ['sub-1', 'sub-2'] })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(UnprocessableEntityException);
+    const body = (err as UnprocessableEntityException).getResponse() as any;
+    expect(body.message).toMatch(/^1 of 2 results were verified/);
+    expect(body.failures).toEqual([
+      { submissionId: 'sub-2', problems: ['Execution records changed.'] },
+    ]);
+    const data = db.lexVerificationEvent.createMany.mock.calls[0][0].data;
+    expect(data.map((e: any) => e.submissionId)).toEqual(['sub-1']);
   });
 
   it('records the replaced value and reason on a correction', async () => {
-    const db = makeDb({ id: 'emp-verifier' }, [
-      { assignmentId: 'kpi-1', periodId: 'p-sep', actual: '100' },
-    ]);
-    const { service } = make(db, [
-      submission({ correctionReason: 'Recount after audit' }),
-    ]);
+    const db = makeDb({ id: 'emp-verifier' });
+    const { service } = make(
+      db,
+      [submission({ correctionReason: 'Recount after audit' })],
+      [{ assignmentId: 'kpi-1', periodId: 'p-sep', actual: 100 }],
+    );
     await service.verify(user(), { submissionIds: ['sub-1'] });
-    expect(db.lexVerificationEvent.create.mock.calls[0][0].data).toEqual(
+    expect(db.lexVerificationEvent.createMany.mock.calls[0][0].data[0]).toEqual(
       expect.objectContaining({
         previousActual: 100,
         reason: 'Recount after audit',
@@ -394,18 +411,20 @@ describe('VerificationService.verify', () => {
       'sub-2',
       'sub-missing',
     ]);
-    expect(db.lexOfficialResult.upsert).not.toHaveBeenCalled();
-    expect(db.lexVerificationEvent.create).not.toHaveBeenCalled();
-    expect(execution.markVerified).not.toHaveBeenCalled();
+    expect(db.lexVerificationEvent.createMany).not.toHaveBeenCalled();
+    expect(execution.decide).not.toHaveBeenCalled();
   });
 
   it('rejects two submissions for the same KPI period in one batch', async () => {
     const db = makeDb({ id: 'emp-verifier' });
-    const { service } = make(db, [submission(), submission({ id: 'sub-2' })]);
+    const { service, execution } = make(db, [
+      submission(),
+      submission({ id: 'sub-2' }),
+    ]);
     await expect(
       service.verify(user(), { submissionIds: ['sub-1', 'sub-2'] }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
-    expect(db.lexOfficialResult.upsert).not.toHaveBeenCalled();
+    expect(execution.decide).not.toHaveBeenCalled();
   });
 });
 
@@ -427,13 +446,12 @@ describe('VerificationService.returnForCorrection', () => {
         actorId: 'emp-verifier',
       }),
     );
-    expect(execution.markReturned).toHaveBeenCalledWith(
-      db,
-      'org-1',
+    expect(execution.decide).toHaveBeenCalledWith(
+      expect.anything(),
       ['sub-1'],
+      'RETURN',
       'Attach the log',
     );
-    expect(db.lexOfficialResult.upsert).not.toHaveBeenCalled();
   });
   it('only the assigned verifier can return', async () => {
     const db = makeDb({ id: 'emp-other' });
@@ -444,7 +462,7 @@ describe('VerificationService.returnForCorrection', () => {
         reason: 'Fix it',
       }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
-    expect(execution.markReturned).not.toHaveBeenCalled();
+    expect(execution.decide).not.toHaveBeenCalled();
   });
   it('a blank reason is refused', async () => {
     const { service } = make(makeDb({ id: 'emp-verifier' }), [submission()]);

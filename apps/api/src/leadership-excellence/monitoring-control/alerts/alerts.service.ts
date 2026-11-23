@@ -114,7 +114,7 @@ export class AlertsService {
    * Reconcile LexMonitoringAlert with the current conditions:
    * new issue → OPENED; closed issue back → REOPENED; issue gone → CLOSED.
    * Returns the approved assignments it read (list() reuses them for scope).
-   * Called from list() for now; move to a scheduled job when volumes grow.
+   * Runs hourly (AlertsSyncJob) and on list(), so the screen is never stale.
    */
   async sync(
     organizationId: string,

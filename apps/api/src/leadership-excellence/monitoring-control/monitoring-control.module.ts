@@ -8,55 +8,43 @@ import { MonitoringControlService } from './monitoring-control.service';
 import { VerificationService } from './verification/verification.service';
 import { PerformanceService } from './performance/performance.service';
 import { AlertsService } from './alerts/alerts.service';
+import { AlertsSyncJob } from './alerts/alerts-sync.job';
 import { DirectoryService } from './directory/directory.service';
 import {
   MONITORING_EXECUTION_SOURCE,
   MONITORING_PLANNING_SOURCE,
-  UnavailableExecutionSource,
-  UnavailablePlanningSource,
 } from './monitoring-control.sources';
-import { SampleCallerInterceptor } from './monitoring-control.sample-interceptor';
-import {
-  SampleMonitoringSource,
-  sampleDataEnabled,
-} from './monitoring-control.sample-source';
-
-// DEV ONLY: LEX05_SAMPLE_DATA=true serves sample Area 03/04 data (never in production).
-const sample = sampleDataEnabled();
+import { MonitoringExecutionSource } from './monitoring-control.execution-source';
+import { PerformancePlanningModule } from '../performance-planning/performance-planning.module';
+import { ExecutionModule } from '../execution/execution.module';
 
 @Module({
-  // Later, once 03 and 04 export their providers: PerformancePlanningModule,
-  // ExecutionModule. Imports only point upstream.
-  imports: [TenancyModule, PrismaModule, AuthModule],
+  // Imports only point upstream (03 plans, 04 execution).
+  imports: [
+    TenancyModule,
+    PrismaModule,
+    AuthModule,
+    PerformancePlanningModule,
+    ExecutionModule,
+  ],
   controllers: [MonitoringControlController],
   providers: [
     MonitoringControlService,
     VerificationService,
     PerformanceService,
     AlertsService,
+    AlertsSyncJob,
     DirectoryService,
     ModuleGuard,
-    // TEMPORARY: swap useClass / useExisting for the real Area 03 / 04 providers.
-    SampleMonitoringSource,
-    SampleCallerInterceptor,
-    sample
-      ? {
-          provide: MONITORING_PLANNING_SOURCE,
-          useExisting: SampleMonitoringSource,
-        }
-      : {
-          provide: MONITORING_PLANNING_SOURCE,
-          useClass: UnavailablePlanningSource,
-        },
-    sample
-      ? {
-          provide: MONITORING_EXECUTION_SOURCE,
-          useExisting: SampleMonitoringSource,
-        }
-      : {
-          provide: MONITORING_EXECUTION_SOURCE,
-          useClass: UnavailableExecutionSource,
-        },
+    MonitoringExecutionSource,
+    {
+      provide: MONITORING_PLANNING_SOURCE,
+      useExisting: MonitoringExecutionSource,
+    },
+    {
+      provide: MONITORING_EXECUTION_SOURCE,
+      useExisting: MonitoringExecutionSource,
+    },
   ],
   exports: [MonitoringControlService],
 })

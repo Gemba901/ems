@@ -154,7 +154,7 @@ function ActionDialog({ pending: { kind, alert }, onClose }: { pending: Pending;
       {kind === "link" && (
         actions.isPending ? <Loading label="Loading actions…" />
           : actions.error ? <ErrorBox error={actions.error} />
-          : !actions.data.length ? <Empty>No open actions you can link. Create one in Key Functional Area 4 first.</Empty>
+          : !actions.data.length ? <Empty>No open actions you can link. Add the action to the department plan (Key Functional Area 3); once approved it appears here.</Empty>
           : <label className="block space-y-1 text-sm">
             <span className="font-medium">Action</span>
             <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={actionId} onChange={e => setActionId(e.target.value)}>

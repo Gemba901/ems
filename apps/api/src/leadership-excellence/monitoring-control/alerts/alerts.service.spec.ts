@@ -49,13 +49,16 @@ const sep: PeriodTarget = {
   value: 108,
 };
 const officialRow = (actual: number) => ({
+  submissionId: 'res-1',
   assignmentId: 'kpi-1',
   periodId: 'p-sep',
-  actual: String(actual),
+  periodStart: sep.start,
+  periodEnd: sep.end,
+  actual,
   inputA: null,
   inputB: null,
   evidence: 'log',
-  snapshot: { target: sep },
+  target: sep,
   revision: 1,
   verifiedById: 'emp-verifier',
   verifiedAt: NOW,
@@ -141,6 +144,7 @@ function setup() {
 
   const db: any = {
     $executeRaw: jest.fn(async () => 1),
+    lexMonitoringSettings: { findUnique: jest.fn(async () => null) },
     employee: {
       findFirst: jest.fn(
         async ({ where }) => employees.find((e) => matches(e, where)) ?? null,
@@ -149,7 +153,6 @@ function setup() {
         employees.filter((e) => matches(e, where)),
       ),
     },
-    lexOfficialResult: { findMany: jest.fn(async () => state.official) },
     lexMonitoringAlert: {
       findMany: jest.fn(async ({ where }) =>
         alerts.filter((a) => matches(a, where)).map((a) => ({ ...a })),
@@ -194,6 +197,7 @@ function setup() {
   };
   const execution = {
     listSubmitted: jest.fn(async () => []),
+    listOfficial: jest.fn(async () => state.official),
     listActions: jest.fn(async () => state.actions),
     getAction: jest.fn(
       async (_org: string, id: string) =>

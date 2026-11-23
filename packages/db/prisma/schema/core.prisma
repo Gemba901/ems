@@ -195,6 +195,9 @@ model Organization {
 
 
   lexPerformanceCalendars LexPerformanceCalendar[] // LEX 02.03
+  lexOfficialResults      LexOfficialResult[]      // LEX 05
+  lexVerificationEvents   LexVerificationEvent[]   // LEX 05
+  lexMonitoringAlerts     LexMonitoringAlert[]     // LEX 05
 }
 
 //specific user

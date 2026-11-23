@@ -287,6 +287,14 @@ export interface AttendanceStatus {
   };
 }
 
+// Older API builds return one todayRecord instead of the multi-session fields.
+// The attendance query normalises either response before passing it to the UI.
+export type AttendanceStatusResponse = Omit<AttendanceStatus, "todaySessions" | "todayWorkedSeconds"> & {
+  todaySessions?: AttendanceRecord[] | null;
+  todayWorkedSeconds?: number | null;
+  todayRecord?: AttendanceRecord | null;
+};
+
 export type AttendanceWeekStatus = "PRESENT" | "ABSENT" | "LEAVE" | "HOLIDAY" | "DAY_OFF" | "TODAY" | "UPCOMING" | "NOT_JOINED";
 
 export interface AttendanceWeekDay {
@@ -641,7 +649,7 @@ export const WorkService = {
   },
 
   // Attendance (the caller is always the employee; no employeeId is ever sent for clocking)
-  attendanceStatus(token: string): Promise<AttendanceStatus> {
+  attendanceStatus(token: string): Promise<AttendanceStatusResponse> {
     return get("/attendance/me/status", token);
   },
   myAttendance(range: AttendanceRange, token: string): Promise<Page<AttendanceRecord>> {

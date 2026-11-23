@@ -17,6 +17,13 @@ import { JwtStrategy } from '../auth/jwt.strategy';
 import { Role } from '../common/enum/role.enum';
 import { OrgStatus } from 'db';
 import request from 'supertest';
+import { RateLimitService } from '../common/rate-limit/rate-limit.service';
+import { RateLimitGuard } from '../common/rate-limit/rate-limit.guard';
+
+// Explicit public token endpoints; new endpoints must opt in individually.
+function publicInvitation(route: { prefix: string; path: string }) {
+  return route.prefix === 'ems/invitations' && ['lookup', 'accept', 'account/lookup', 'account/verify', 'account/accept', 'account/decline'].includes(route.path);
+}
 
 // Discover controllers so future business endpoints must opt into tenant guards.
 function controllerFiles(directory: string): string[] {
@@ -45,6 +52,11 @@ describe('Business route tenant coverage', () => {
     expect(marked).toBe(true);
     expect(route.guards[0]).toBe(TrustedTenantContextGuard);
     if (route.prefix === 'dwms' && route.path.startsWith('auth/')) return;
+    if (publicInvitation(route)) {
+      expect(route.guards).toContain(RateLimitGuard);
+      expect(route.guards).not.toContain(JwtAuthGuard);
+      return;
+    }
     expect(route.guards.slice(0, 3)).toEqual([TrustedTenantContextGuard, JwtAuthGuard, TenantGuard]);
     // Reauthenticating after membership would restore stale JWT permissions.
     expect(route.guards.slice(3)).not.toContain(JwtAuthGuard);
@@ -62,7 +74,7 @@ describe('Business HTTP tenant boundary', () => {
     organization: { findUnique: jest.fn().mockResolvedValue({ id: 'org-one', slug: 'acme', name: 'Acme', status: OrgStatus.ACTIVE, modules: [], isAdminOrg: false }) },
     userOrganization: { findUnique: jest.fn() },
   };
-  const samples = business.map(controller => routes.find(route => route.controller === controller && !route.path.startsWith('auth/'))!).filter(Boolean);
+  const samples = business.map(controller => routes.find(route => route.controller === controller && !route.path.startsWith('auth/') && !publicInvitation(route))!).filter(Boolean);
 
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
@@ -73,7 +85,7 @@ describe('Business HTTP tenant boundary', () => {
     }));
     const module = await Test.createTestingModule({
       imports: [ConfigModule, PrismaModule, TenancyModule], controllers: business,
-      providers: [...providers, JwtStrategy],
+      providers: [...providers, JwtStrategy, { provide: RateLimitService, useValue: { consume: jest.fn().mockResolvedValue(undefined) } }],
     }).overrideProvider(PrismaService).useValue(prisma)
       .overrideProvider(ConfigService).useValue(new ConfigService({ TENANT_BASE_DOMAIN: 'gembapms.co.in', TENANT_PROXY_SECRET: proxySecret }))
       .compile();
@@ -104,6 +116,18 @@ describe('Business HTTP tenant boundary', () => {
   it.each(samples.map(route => [route.prefix, route] as const))('%s rejects a valid JWT for another company', async (_, route) => {
     await send(route, 'org-two').expect(403);
     expect(calls).not.toHaveBeenCalled();
+  });
+
+  it.each(routes.filter(publicInvitation))('public invitation $path still requires trusted company context', async route => {
+    await request(app.getHttpServer()).post(`/${route.prefix}/${route.path}`).send({ token: 't'.repeat(40) }).expect(401);
+    expect(calls).not.toHaveBeenCalled();
+  });
+
+  it.each(routes.filter(publicInvitation))('public invitation $path forwards the trusted company without requiring a JWT', async route => {
+    await request(app.getHttpServer()).post(`/${route.prefix}/${route.path}`)
+      .set('x-gemba-proxy-secret', proxySecret).set('x-gemba-tenant-hostname', 'acme.gembapms.co.in')
+      .send({ token: 't'.repeat(40), newPassword: 'Abcdefghij12' }).expect(200);
+    expect(calls.mock.calls[0][0]).toBe('org-one');
   });
 
   it('rejects revoked membership before department access', async () => {

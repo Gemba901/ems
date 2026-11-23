@@ -12,6 +12,8 @@ import {
   fitChart,
   layoutChart,
   type TreeItem,
+  cardMode,
+  type CardMode,
 } from "./chart-layout";
 export type { TreeItem } from "./chart-layout";
 const control =
@@ -24,25 +26,46 @@ export function ChartTree({
   storageKey,
   selectedId,
   fitRequest = 0,
+  selectionRequest = 0,
+  highlightedIds,
+  defaultView = "readable",
 }: {
   items: TreeItem[];
-  renderCard: (id: string) => ReactNode;
+  renderCard: (
+    id: string,
+    presentation: { zoom: number; mode: CardMode },
+  ) => ReactNode;
   outline?: boolean;
   storageKey?: string;
   selectedId?: string;
   fitRequest?: number;
+  selectionRequest?: number;
+  highlightedIds?: Set<string>;
+  defaultView?: "readable" | "fit";
 }) {
-  const layout = useMemo(() => layoutChart(items), [items]);
   const signature = items
     .map((item) => `${item.id}:${item.parentId ?? ""}`)
     .join("|");
   const viewport = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
+  const layout = useMemo(
+    () =>
+      layoutChart(items, defaultView === "readable" ? size.width : undefined),
+    [items, defaultView, size.width],
+  );
+  const [autoView, setAutoView] = useState(defaultView);
   const [manualScale, setManualScale] = useState<number | null>(null);
   const ready = useRef(false);
   const previousFitRequest = useRef(fitRequest);
+  const previousDefaultView = useRef(defaultView);
   const pendingPosition = useRef<{ x: number; y: number } | null>(null);
-  const anchor = useRef<{ x: number; y: number } | null>(null);
+  const anchor = useRef<{
+    x: number;
+    y: number;
+    screenX?: number;
+    screenY?: number;
+  } | null>(null);
+  const previousSelection = useRef(-1);
   const drag = useRef<{
     x: number;
     y: number;
@@ -63,10 +86,16 @@ export function ChartTree({
   const fit = fitChart(layout.width, layout.height, size.width, size.height);
   const structureChanged =
     !!previousCamera.current && previousCamera.current.signature !== signature;
-  const explicitFit = previousFitRequest.current !== fitRequest;
+  const explicitFit =
+    previousFitRequest.current !== fitRequest ||
+    previousDefaultView.current !== defaultView;
   const zoom =
     manualScale ??
-    (structureChanged && !explicitFit ? previousCamera.current!.zoom : fit);
+    (structureChanged && !explicitFit
+      ? previousCamera.current!.zoom
+      : autoView === "fit"
+        ? fit
+        : 1);
   const minimum = Math.min(0.05, fit);
   const left =
     frame?.left ?? Math.max(0, (size.width - layout.width * zoom) / 2);
@@ -82,13 +111,15 @@ export function ChartTree({
     top + layout.height * zoom,
   );
   const remember = () => {
-    if (!ready.current || !storageKey || !viewport.current) return;
+    if (!ready.current || !storageKey || !viewport.current || size.width <= 1)
+      return;
     try {
       sessionStorage.setItem(
         storageKey,
         JSON.stringify({
           signature,
           scale: manualScale,
+          autoView,
           x: viewport.current.scrollLeft,
           y: viewport.current.scrollTop,
           frame,
@@ -122,6 +153,8 @@ export function ChartTree({
       try {
         const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? "null");
         if (saved?.signature === signature) {
+          if (saved.autoView === "fit" || saved.autoView === "readable")
+            setAutoView(saved.autoView);
           if (
             Number.isFinite(saved.scale) &&
             saved.scale > 0 &&
@@ -188,11 +221,15 @@ export function ChartTree({
     } else if (anchor.current) {
       box.scrollLeft = Math.max(
         0,
-        left + anchor.current.x * zoom - box.clientWidth / 2,
+        left +
+          anchor.current.x * zoom -
+          (anchor.current.screenX ?? box.clientWidth / 2),
       );
       box.scrollTop = Math.max(
         0,
-        top + anchor.current.y * zoom - box.clientHeight / 2,
+        top +
+          anchor.current.y * zoom -
+          (anchor.current.screenY ?? box.clientHeight / 2),
       );
       anchor.current = null;
     } else if (manualScale === null && !structureChanged) {
@@ -213,16 +250,18 @@ export function ChartTree({
   useLayoutEffect(() => {
     if (!explicitFit) return;
     previousFitRequest.current = fitRequest;
+    previousDefaultView.current = defaultView;
     anchor.current = null;
     branchAnchor.current = null;
     pendingPosition.current = null;
     setFrame(null);
     setManualScale(null);
+    setAutoView(defaultView);
     if (viewport.current) {
       viewport.current.scrollLeft = 0;
       viewport.current.scrollTop = 0;
     }
-  }, [fitRequest, explicitFit]);
+  }, [fitRequest, explicitFit, defaultView]);
   const changeZoom = (next: number | null) => {
     const box = viewport.current;
     branchAnchor.current = null;
@@ -236,12 +275,73 @@ export function ChartTree({
           };
     }
     setFrame(null);
+    if (next === null) setAutoView("fit");
     setManualScale(next === null ? null : Math.max(minimum, Math.min(2, next)));
   };
   useLayoutEffect(() => {
     previousCamera.current = { signature, zoom };
     remember();
-  }, [manualScale, size, signature, frame, zoom]);
+  }, [manualScale, size, signature, frame, zoom, autoView]);
+  const centreSelected = () => {
+    const box = viewport.current,
+      point = selectedId ? layout.positions.get(selectedId) : undefined;
+    if (!box || !point) return;
+    if (outline) {
+      const node = Array.from(
+        box.querySelectorAll<HTMLElement>("[data-outline-id]"),
+      ).find((n) => n.dataset.outlineId === selectedId);
+      if (node)
+        box.scrollTop = Math.max(
+          0,
+          node.offsetTop -
+            box.offsetTop -
+            box.clientHeight / 2 +
+            node.clientHeight / 2,
+        );
+    } else {
+      box.scrollLeft = Math.max(
+        0,
+        left + (point.x + CARD_WIDTH / 2) * zoom - box.clientWidth / 2,
+      );
+      box.scrollTop = Math.max(
+        0,
+        top + (point.y + CARD_HEIGHT / 2) * zoom - box.clientHeight / 2,
+      );
+    }
+  };
+  useLayoutEffect(() => {
+    if (previousSelection.current === selectionRequest || size.width <= 1)
+      return;
+    previousSelection.current = selectionRequest;
+    centreSelected();
+  }, [selectionRequest, selectedId, layout, size, zoom]);
+  useLayoutEffect(() => {
+    const box = viewport.current;
+    if (!box || outline) return;
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      const bounds = box.getBoundingClientRect(),
+        screenX = event.clientX - bounds.left,
+        screenY = event.clientY - bounds.top;
+      anchor.current = {
+        x: (box.scrollLeft + screenX - left) / zoom,
+        y: (box.scrollTop + screenY - top) / zoom,
+        screenX,
+        screenY,
+      };
+      branchAnchor.current = null;
+      setFrame(null);
+      setManualScale(
+        Math.max(
+          minimum,
+          Math.min(2, zoom * (event.deltaY < 0 ? 1.15 : 1 / 1.15)),
+        ),
+      );
+    };
+    box.addEventListener("wheel", wheel, { passive: false });
+    return () => box.removeEventListener("wheel", wheel);
+  }, [outline, zoom, left, top, minimum]);
   return (
     <div
       className="space-y-2"
@@ -270,11 +370,11 @@ export function ChartTree({
       {!outline && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
           <span>
-            Expand teams without changing zoom. Use Fit to see the whole
-            displayed tree.
+            Overview opens with names and photos. Drag to pan; Ctrl + wheel
+            zooms.
           </span>
           <div
-            className="flex items-center gap-1"
+            className="flex flex-wrap items-center gap-1"
             role="group"
             aria-label="Chart zoom"
           >
@@ -291,7 +391,12 @@ export function ChartTree({
               aria-label="Zoom level"
               className="w-14 text-center tabular-nums"
             >
-              {zoom < 0.01 ? "<1" : Math.round(zoom * 100)}%
+              {zoom < 0.01
+                ? "<1"
+                : zoom < 0.1
+                  ? (zoom * 100).toFixed(1)
+                  : Math.round(zoom * 100)}
+              %
             </output>
             <button
               type="button"
@@ -309,6 +414,15 @@ export function ChartTree({
             >
               100%
             </button>
+            {selectedId && (
+              <button
+                type="button"
+                className={control}
+                onClick={centreSelected}
+              >
+                Centre selected
+              </button>
+            )}
             <button
               type="button"
               className={`${control} !border-violet-300 !text-violet-800`}
@@ -332,7 +446,7 @@ export function ChartTree({
         role="region"
         aria-label={outline ? "Reporting outline" : "Reporting chart canvas"}
         tabIndex={0}
-        className="overflow-auto rounded-xl border border-slate-200 bg-slate-50 focus-visible:outline-violet-600"
+        className="relative overflow-auto rounded-xl border border-slate-200 bg-white focus-visible:outline-violet-600"
         style={{
           height: "clamp(300px, 62vh, 680px)",
           scrollbarGutter: "stable",
@@ -381,11 +495,12 @@ export function ChartTree({
             {layout.order.map((item) => (
               <li
                 key={item.id}
+                data-outline-id={item.id}
                 className="border-l-2 border-violet-200 pl-3"
                 style={{ marginLeft: Math.min(item.depth, 8) * 14 }}
               >
                 <div style={{ maxWidth: CARD_WIDTH + 80, height: CARD_HEIGHT }}>
-                  {renderCard(item.id)}
+                  {renderCard(item.id, { zoom: 1, mode: "full" })}
                 </div>
               </li>
             ))}
@@ -395,9 +510,9 @@ export function ChartTree({
             data-chart-surface="true"
             style={{
               position: "relative",
+              overflow: "hidden",
               width: surfaceWidth,
               height: surfaceHeight,
-              overflow: "hidden",
             }}
           >
             <div
@@ -427,8 +542,19 @@ export function ChartTree({
                     data-chart-edge={`${edge.parent}:${edge.child}`}
                     d={edge.path}
                     fill="none"
-                    stroke="#7c3aed"
-                    strokeWidth={Math.max(2, 1.25 / zoom)}
+                    stroke={
+                      highlightedIds?.has(edge.child) &&
+                      highlightedIds?.has(edge.parent)
+                        ? "#7c3aed"
+                        : "#a78bfa"
+                    }
+                    strokeWidth={Math.max(
+                      2,
+                      (highlightedIds?.has(edge.child) &&
+                      highlightedIds?.has(edge.parent)
+                        ? 2.5
+                        : 1) / zoom,
+                    )}
                     strokeLinejoin="round"
                   />
                 ))}
@@ -445,7 +571,7 @@ export function ChartTree({
                     height: CARD_HEIGHT,
                   }}
                 >
-                  {renderCard(point.id)}
+                  {renderCard(point.id, { zoom, mode: cardMode(zoom) })}
                 </div>
               ))}
             </div>
@@ -454,8 +580,9 @@ export function ChartTree({
       </div>
       {!outline && zoom < 0.5 && (
         <p className="text-xs text-slate-600">
-          Fitted overview. Click a person to read their details, or focus a team
-          to enlarge its branch.
+          {zoom < 0.3
+            ? "Company shape: colours show departments. Select a block for readable person and team details below, or zoom in for names."
+            : "Compact view: select a person for team details. Zoom in for photos and full cards."}
         </p>
       )}
     </div>

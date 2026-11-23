@@ -208,9 +208,9 @@ export function writePageState(state: DepartmentsPageState): string {
   if (state.hod) p.set('hod', state.hod);
   return p.toString();
 }
-/** Back from a department: the list exactly as it was, but only ever a Departments address on this site. */
+/** Back from a department: the list exactly as it was, but only an explicitly allowed Organisation address on this site. */
 export function departmentsBackHref(from: string | null | undefined): string {
-  return from && /^\/ems\/organisation(?:\?[^#]*)?$/.test(from) ? from : '/ems/organisation';
+  return from && /^\/ems\/organisation(?:\/chart(?:-v[23])?)?(?:\?[^#]*)?$/.test(from) ? from : '/ems/organisation';
 }
 
 // ---------- Export ----------

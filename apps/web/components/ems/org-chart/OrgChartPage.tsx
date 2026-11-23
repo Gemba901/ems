@@ -4,7 +4,13 @@ import Link from "next/link";
 import { ChartTree, type TreeItem } from "./ChartTree";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
-import { TenantImage } from "@/components/files/TenantImage";
+import { ChartPersonCard } from "./ChartPersonCard";
+import { TeamInspector } from "./TeamInspector";
+import {
+  departmentPalette,
+  findChartPeople,
+  reportingPath,
+} from "./chart-presentation";
 import { readOrgChart } from "@/services/ems-org-chart.service";
 import {
   active,
@@ -24,36 +30,11 @@ const empty: ChartData = {
   source: "EMS registered employees",
   refreshedAt: "",
 };
-function Portrait({ person }: { person: Person }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [person.photoUrl]);
-  return (
-    <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-violet-100 text-xs font-semibold text-violet-800">
-      <span>
-        {person.name
-          .split(/\s+/)
-          .filter(Boolean)
-          .slice(0, 2)
-          .map((s) => Array.from(s)[0])
-          .join("")}
-      </span>
-      {person.photoUrl && !failed && (
-        <TenantImage
-          src={person.photoUrl}
-          alt=""
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      )}
-    </div>
-  );
-}
 export function OrgChartPage() {
   const { accessToken, user } = useAuthStore();
   return (
     <Chart
-      key={user?.organizationId ?? "none"}
+      key={`${user?.organizationId}:${user?.userId}:${user?.roleLevel}`}
       token={accessToken}
       organizationId={user?.organizationId}
     />
@@ -67,12 +48,12 @@ function Chart({
   organizationId?: string | null;
 }) {
   const query = useQuery({
-    queryKey: ["ems-org-chart", organizationId],
+    queryKey: ["ems-org-chart", organizationId, useAuthStore.getState().user?.userId, useAuthStore.getState().user?.roleLevel],
     queryFn: ({ signal }) => readOrgChart(token!, signal),
     enabled: !!token && !!organizationId,
     staleTime: 30_000,
   });
-  const data = query.data ?? empty;
+  const data = query.isError ? empty : query.data ?? empty;
   const [department, setDepartment] = useState(""),
     [branch, setBranch] = useState("");
   const [inactive, setInactive] = useState(false),
@@ -85,6 +66,8 @@ function Chart({
     [outline, setOutline] = useState(false);
   const [group, setGroup] = useState<"connected" | "unconnected">("connected");
   const [fitRequest, setFitRequest] = useState(0);
+  const [selectionRequest, setSelectionRequest] = useState(0);
+  const inspector = useRef<HTMLDivElement>(null);
   const [showAll, setShowAll] = useState(false),
     [hydrated, setHydrated] = useState(false);
   const restored = useRef(false),
@@ -99,25 +82,35 @@ function Chart({
     } catch {}
   };
   useEffect(() => {
-    const p = new URLSearchParams(window.location.search);
-    setDepartment(p.get("department") ?? "");
-    setBranch(p.get("branch") ?? "");
-    setFocus(p.get("focus") ?? "");
-    setInactive(p.get("inactive") === "1");
-    setIssuesOnly(p.get("issues") === "1");
-    setExpanded(new Set((p.get("open") ?? "").split(",").filter(Boolean)));
-    setCollapsed(new Set((p.get("closed") ?? "").split(",").filter(Boolean)));
-    setGroup(p.get("group") === "unconnected" ? "unconnected" : "connected");
-    setOutline(p.get("outline") === "1");
-    setShowAll(p.get("all") === "1");
-    setHydrated(true);
+    const readLocation = () => {
+      const p = new URLSearchParams(window.location.search);
+      setDepartment(p.get("department") ?? "");
+      setBranch(p.get("branch") ?? "");
+      setFocus(p.get("focus") ?? "");
+      setInactive(p.get("inactive") === "1");
+      setIssuesOnly(p.get("issues") === "1");
+      setExpanded(new Set((p.get("open") ?? "").split(",").filter(Boolean)));
+      setCollapsed(new Set((p.get("closed") ?? "").split(",").filter(Boolean)));
+      setGroup(p.get("group") === "unconnected" ? "unconnected" : "connected");
+      setOutline(p.get("outline") === "1");
+      setShowAll(p.get("all") === "1");
+      setSelected(p.get("selected") ?? "");
+      setHydrated(true);
+      setSelectionRequest((n) => n + 1);
+    };
+    readLocation();
+    window.addEventListener("popstate", readLocation);
+    return () => window.removeEventListener("popstate", readLocation);
   }, []);
   useEffect(() => {
     if (!query.data || !hydrated || restored.current) return;
     restored.current = true;
     try {
       const saved = JSON.parse(sessionStorage.getItem(stateKey) ?? "null");
-      if (saved) {
+      if (
+        saved &&
+        !new URLSearchParams(window.location.search).has("selected")
+      ) {
         setSelected(saved.selected ?? "");
         requestAnimationFrame(() => window.scrollTo(0, Number(saved.y) || 0));
       }
@@ -134,6 +127,7 @@ function Chart({
   useEffect(() => {
     if (!hydrated) return;
     const p = new URLSearchParams();
+    if (selected) p.set("selected", selected);
     if (department) p.set("department", department);
     if (branch) p.set("branch", branch);
     if (focus) p.set("focus", focus);
@@ -151,6 +145,7 @@ function Chart({
     );
   }, [
     hydrated,
+    selected,
     department,
     branch,
     focus,
@@ -163,7 +158,7 @@ function Chart({
     showAll,
   ]);
   const view = useMemo(
-    () => buildView(data, { department, branch, inactive, issuesOnly, focus }),
+    () => buildView(data, { department, branch, inactive: !!data.capabilities?.inactivePeople && inactive, issuesOnly, focus }),
     [data, department, branch, inactive, issuesOnly, focus],
   );
   const departments = [
@@ -183,15 +178,8 @@ function Chart({
         ]),
     ).entries(),
   ].sort((a, b) => a[1].localeCompare(b[1]));
-  const results = search.trim()
-    ? data.people
-        .filter((p) =>
-          `${p.name} ${p.jobTitle ?? ""} ${p.department?.name ?? ""}`
-            .toLocaleLowerCase()
-            .includes(search.trim().toLocaleLowerCase()),
-        )
-        .slice(0, 20)
-    : [];
+  const results = useMemo(() => findChartPeople(data, search), [data, search]);
+  const palette = useMemo(() => departmentPalette(data.people), [data.people]);
   const issues = data.issues.filter((i) => view.matches.has(i.employeeId));
   const issueMap = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -303,6 +291,26 @@ function Chart({
     overview();
   };
   const detail = view.byId.get(selected);
+  const path = reportingPath(view, selected);
+  const highlighted = new Set(path.map((p) => p.id));
+  if (path[0]?.reportsToBody) highlighted.add(`body:${path[0].reportsToBody}`);
+  const selectPerson = (id: string) => {
+    if (!view.byId.has(id)) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("selected", id);
+    window.history.pushState(
+      window.history.state,
+      "",
+      `${window.location.pathname}?${params}`,
+    );
+    setSelected(id);
+    setSelectionRequest((n) => n + 1);
+    const ancestors = reportingPath(view, id)
+      .slice(0, -1)
+      .map((p) => p.id);
+    setExpanded((s) => new Set([...s, ...ancestors]));
+    setCollapsed((s) => new Set([...s].filter((k) => !ancestors.includes(k))));
+  };
   const chartKey = `${group}:${department}:${branch}:${focus}:${inactive}:${issuesOnly}:${outline}`;
   return (
     <div className="min-w-0 space-y-4 text-slate-900">
@@ -311,9 +319,10 @@ function Chart({
           <p className="text-xs font-semibold uppercase tracking-widest text-violet-700">
             EMS · Organisation
           </p>
-          <h1 className="mt-1 text-2xl font-bold">Org chart</h1>
+          <h1 className="mt-1 text-2xl font-bold">Reporting chart</h1>
           <p className="mt-1 text-sm text-slate-600">
-            People and reporting relationships across your company.
+            See the whole reporting structure, then explore one person and their
+            team.
           </p>
         </div>
         <button
@@ -333,7 +342,7 @@ function Chart({
           {query.error instanceof Error
             ? query.error.message
             : "Unable to load chart."}{" "}
-          {query.data ? "Showing the last loaded chart." : ""}{" "}
+          {query.data ? "Reload to confirm your current access." : ""}{" "}
           <button
             type="button"
             className="underline"
@@ -408,7 +417,10 @@ function Chart({
                   type="button"
                   key={p.id}
                   className="block w-full border-b p-2 text-left text-sm hover:bg-violet-50"
-                  onClick={() => focusPerson(p.id)}
+                  onClick={() => {
+                    focusPerson(p.id);
+                    selectPerson(p.id);
+                  }}
                 >
                   <strong>{p.name}</strong> ·{" "}
                   {p.jobTitle || "Job title not set"} ·{" "}
@@ -420,7 +432,8 @@ function Chart({
               <p className="p-3 text-sm">No matching people.</p>
             )}
             <p className="p-2 text-xs text-slate-500">
-              Up to 20 results. Select a person to focus their reporting branch.
+              Up to 20 results. Names, roles, departments and branches are
+              searched together.
             </p>
           </div>
         )}
@@ -428,7 +441,8 @@ function Chart({
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={inactive}
+              disabled={!data.capabilities?.inactivePeople}
+              checked={!!data.capabilities?.inactivePeople && inactive}
               onChange={(e) => setInactive(e.target.checked)}
             />
             Include inactive employees
@@ -480,6 +494,20 @@ function Chart({
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
+              {detail && (
+                <button
+                  type="button"
+                  className={button}
+                  onClick={() =>
+                    inspector.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    })
+                  }
+                >
+                  Selected team ↓
+                </button>
+              )}
               <button type="button" className={button} onClick={overview}>
                 Overview
               </button>
@@ -487,12 +515,13 @@ function Chart({
                 type="button"
                 className={button}
                 onClick={() => {
+                  setFitRequest((n) => n + 1);
                   setShowAll(true);
                   setExpanded(new Set());
                   setCollapsed(new Set());
                 }}
               >
-                Show all
+                Show all & fit
               </button>
               <button
                 type="button"
@@ -500,7 +529,7 @@ function Chart({
                 aria-pressed={outline}
                 onClick={() => setOutline(!outline)}
               >
-                {outline ? "Show chart" : "Show outline"}
+                {outline ? "Chart view" : "List view"}
               </button>
             </div>
           </div>
@@ -555,7 +584,7 @@ function Chart({
             <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
               <h2 className="font-semibold">
                 {!data.people.length
-                  ? "No registered employees yet"
+                  ? "No employees are available in your chart"
                   : !view.matches.size
                     ? "No people match this view"
                     : group === "connected"
@@ -581,11 +610,14 @@ function Chart({
             <ChartTree
               key={chartKey}
               fitRequest={fitRequest}
+              defaultView={showAll ? "fit" : "readable"}
               items={items}
               outline={outline}
-              storageKey={`ems-chart-camera:${organizationId}:${chartKey}`}
+              storageKey={`ems-chart-camera-v2:${organizationId}:${chartKey}`}
               selectedId={selected}
-              renderCard={(id) => {
+              selectionRequest={selectionRequest}
+              highlightedIds={highlighted}
+              renderCard={(id, presentation) => {
                 const body = bodies.get(id);
                 if (body)
                   return (
@@ -604,58 +636,19 @@ function Chart({
                 const kids = (view.children.get(id) ?? []).filter((child) =>
                   view.included.has(child),
                 );
-                const ownIssues = issueMap.get(id) ?? [];
                 return (
-                  <div className="relative h-full">
-                    <button
-                      type="button"
-                      aria-label={`Details for ${person.name}`}
-                      aria-pressed={selected === id}
-                      onClick={() => setSelected(selected === id ? "" : id)}
-                      title={[person.name, person.jobTitle, ...ownIssues]
-                        .filter(Boolean)
-                        .join(" · ")}
-                      className={`flex h-full w-full flex-col justify-center overflow-hidden rounded-xl border-2 bg-white p-2.5 text-left shadow-sm ${selected === id ? "border-violet-600 ring-2 ring-violet-200" : ownIssues.length ? "border-amber-400" : "border-slate-300"} ${!view.matches.has(id) ? "border-dashed" : ""}`}
-                    >
-                      <div className="flex w-full items-center gap-2">
-                        <Portrait person={person} />
-                        <strong className="line-clamp-2 min-w-0 text-xs leading-4 text-slate-950">
-                          {person.name || "Unnamed employee"}
-                        </strong>
-                      </div>
-                      <span className="mt-1 line-clamp-1 w-full text-[11px] text-slate-600">
-                        {person.jobTitle || "Job title not set"}
-                      </span>
-                      <span className="line-clamp-1 w-full text-[10px] text-slate-500">
-                        {person.department?.name || "No department"} ·{" "}
-                        {person.branch?.name ||
-                          person.branchText ||
-                          "No branch"}
-                      </span>
-                      {(ownIssues.length > 0 ||
-                        !active(person) ||
-                        !view.matches.has(id)) && (
-                        <span className="mt-0.5 text-[10px] text-amber-800">
-                          {ownIssues.length
-                            ? "Reporting needs review"
-                            : !active(person)
-                              ? "Inactive · reporting context"
-                              : "Reporting context"}
-                        </span>
-                      )}
-                    </button>
-                    {kids.length > 0 && (
-                      <button
-                        type="button"
-                        className="absolute -bottom-3.5 left-1/2 z-10 -translate-x-1/2 rounded-full border-2 border-violet-600 bg-white px-2 py-0.5 text-xs font-semibold text-violet-800 shadow-sm"
-                        aria-expanded={open(id)}
-                        aria-label={`${open(id) ? "Collapse" : "Expand"} reports of ${person.name}`}
-                        onClick={() => toggle(id)}
-                      >
-                        {open(id) ? "−" : "+"} {kids.length}
-                      </button>
-                    )}
-                  </div>
+                  <ChartPersonCard
+                    person={person}
+                    colour={palette.colour(person)}
+                    selected={selected === id}
+                    context={!view.matches.has(id)}
+                    issues={issueMap.get(id) ?? []}
+                    kids={kids.length}
+                    expanded={open(id)}
+                    onPick={() => selectPerson(id)}
+                    onToggle={() => toggle(id)}
+                    mode={presentation.mode}
+                  />
                 );
               }}
             />
@@ -685,98 +678,72 @@ function Chart({
               </ul>
             </details>
           )}
+          <details className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+            <summary className="cursor-pointer font-semibold text-slate-700">
+              Chart key & departments
+            </summary>
+            <div className="mt-3 flex flex-wrap gap-4 text-slate-600">
+              <span>
+                <strong className="text-violet-700">Purple line</strong> ·
+                selected reporting path
+              </span>
+              <span>
+                <strong className="text-indigo-950">Dark card</strong> ·
+                selected person
+              </span>
+              <span>Dashed card · manager outside filters</span>
+              <span>
+                Amber border · body-level leader or reporting warning; read card
+                details
+              </span>
+            </div>
+            <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+              {palette.legend.map((d) => (
+                <li key={d.id} className="flex items-center gap-1.5">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: d.colour }}
+                  />
+                  {d.name}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-slate-500">
+              Colours repeat after ten departments; names remain the identifier.
+            </p>
+          </details>
+          {detail && (
+            <div ref={inspector} className="scroll-mt-20">
+              <TeamInspector
+                key={detail.id}
+                view={view}
+                id={detail.id}
+                colour={palette.colour}
+                issues={issueMap.get(detail.id) ?? []}
+                onPick={(id) => {
+                  if (!view.included.has(id)) focusPerson(id);
+                  selectPerson(id);
+                }}
+                onFocus={focusPerson}
+                onClose={() => setSelected("")}
+                onProfile={savePosition}
+              />
+            </div>
+          )}
           <footer className="text-xs text-slate-500">
             Source: {data.source} · Last refreshed:{" "}
             {data.refreshedAt
               ? new Date(data.refreshedAt).toLocaleString()
               : "—"}
             <p className="mt-1">
-              Overview folds deeper teams; use + or Show all to expand them. Fit
-              includes every displayed card. Group counts follow your filters.
-              Statistics cover both groups; layers include reporting context.
-              Profile access follows your existing permissions.
+              Overview opens at readable size and folds deeper teams; scroll to
+              see further rows. Use + or Show all to expand them. Fit includes
+              every displayed card. Group counts follow your filters. Statistics
+              cover both groups; layers include reporting context. Profile
+              access follows your existing permissions.
             </p>
           </footer>
         </>
-      )}
-      {detail && (
-        <section
-          role="region"
-          aria-label="Selected person details"
-          className="fixed bottom-4 right-4 z-40 max-h-[48vh] w-[calc(100vw-2rem)] max-w-sm overflow-auto rounded-2xl border border-violet-300 bg-white p-4 shadow-xl"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 gap-3">
-              <Portrait person={detail} />
-              <div className="min-w-0">
-                <h2 className="break-words font-semibold">{detail.name}</h2>
-                <p className="text-sm text-slate-600">
-                  {detail.jobTitle || "Job title not set"}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="text-sm text-violet-700 underline"
-              onClick={() => setSelected("")}
-            >
-              Close
-            </button>
-          </div>
-          <p className="mt-3 text-sm">
-            {detail.department ? (
-              <Link
-                href="/ems/departments"
-                className="text-violet-700 underline"
-                onClick={() => savePosition(detail.id)}
-              >
-                {detail.department.name}
-              </Link>
-            ) : (
-              "No department"
-            )}{" "}
-            · {detail.branch?.name || detail.branchText || "No branch"}
-          </p>
-          <p className="mt-2 text-sm">
-            Reports to:{" "}
-            {detail.managerId
-              ? view.byId.get(detail.managerId)?.name || "Unavailable manager"
-              : bodyLabels[detail.reportsToBody ?? ""] || "Not assigned"}
-          </p>
-          {!view.connected.has(detail.id) && (
-            <p className="mt-2 text-xs text-amber-800">
-              This reporting chain is unconnected; an assignment in the chain
-              needs review.
-            </p>
-          )}
-          {!active(detail) && (
-            <p className="mt-2 text-xs text-amber-800">Inactive employee</p>
-          )}
-          {(issueMap.get(detail.id) ?? []).map((message) => (
-            <p key={message} className="mt-1 text-xs text-amber-800">
-              {message}
-            </p>
-          ))}
-          <div className="mt-3 flex flex-wrap gap-3 text-sm">
-            <Link
-              href={`/ems/employees/${encodeURIComponent(detail.id)}`}
-              onClick={() => savePosition(detail.id)}
-              className="font-semibold text-violet-700 underline"
-            >
-              Open profile
-            </Link>
-            <button
-              type="button"
-              className="font-semibold text-violet-700 underline"
-              onClick={() => {
-                focusPerson(detail.id);
-                setSelected("");
-              }}
-            >
-              Focus team
-            </button>
-          </div>
-        </section>
       )}
     </div>
   );

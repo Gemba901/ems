@@ -13,6 +13,7 @@ import { DepartmentHodDialog } from "@/components/ems/DepartmentHodDialog";
 import { personFullName } from "@/components/ems/person-name";
 import { activeOnly, departmentIssues, departmentsBackHref, hasSeveralBranches, initials } from "@/components/ems/department-directory";
 import { coloursForGroups } from "@/components/ems/branch-colours";
+import { isOrgChartAddress } from "@/components/ems/organisation-navigation";
 
 const field = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500";
 /** Every box on the page: an edge that stands off the grey background (darker outline + a light shadow). */
@@ -56,7 +57,7 @@ function Department({ id }: { id: string }) {
 
   return <div className="mx-auto max-w-6xl space-y-5">
     <OrganisationHeader />
-    <Link href={back} className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-purple-900"><ArrowLeft size={15} /> Departments</Link>
+    <Link href={back} className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-purple-900"><ArrowLeft size={15} /> {isOrgChartAddress(back) ? "Back to org chart" : "Departments"}</Link>
     {feedback && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">{feedback}</p>}
     {directory.isPending ? <p role="status" className="text-sm text-slate-600">Loading department…</p>
       : directory.error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{(directory.error as Error).message}</p>

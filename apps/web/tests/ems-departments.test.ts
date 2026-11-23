@@ -73,7 +73,7 @@ describe('EMS Departments place in the address', () => {
     assert.equal(readPageState(new URLSearchParams('missing=1')).hodState, 'MISSING');
     assert.equal(readPageState(new URLSearchParams('hod=%3Cscript%3E')).hod, null);
   });
-  it('Back only ever returns to a Departments address on this site', () => {
+  it('Back only returns to approved Organisation addresses on this site', () => {
     assert.equal(departmentsBackHref('/ems/organisation?view=HODS&group=BRANCH'), '/ems/organisation?view=HODS&group=BRANCH');
     for (const bad of ['https://evil.example', '//evil.example', '/ems/organisationX', '/ems/employees', 'javascript:alert(1)', null, ''])
       assert.equal(departmentsBackHref(bad), '/ems/organisation');

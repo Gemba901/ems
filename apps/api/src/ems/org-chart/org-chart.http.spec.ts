@@ -66,18 +66,23 @@ describe("Org chart HTTP permissions", () => {
       organization: { status: OrgStatus.ACTIVE, isAdminOrg: false },
     });
   });
-  const send = (org = "org-one") =>
+  const send = (org = "org-one", claimedRole = Role.EMPLOYEE) =>
     request(app.getHttpServer())
       .get("/ems/organisation/chart")
       .set("x-gemba-proxy-secret", proxy)
       .set("x-gemba-tenant-hostname", "acme.gembapms.co.in")
       .set(
         "Authorization",
-        `Bearer ${jwt.sign({ tokenType: "ACCESS", userId: "u", organizationId: org, roleId: 1, roleLevel: Role.EMPLOYEE, email: null, isAdminOrg: false })}`,
+        `Bearer ${jwt.sign({ tokenType: "ACCESS", userId: "u", organizationId: org, roleId: 1, roleLevel: claimedRole, email: null, isAdminOrg: false })}`,
       );
   it("allows ordinary employees within their company", async () => {
     await send().expect(200);
-    expect(read).toHaveBeenCalledWith("org-one");
+    expect(read).toHaveBeenCalledWith("org-one", Role.EMPLOYEE);
+  });
+  it("uses the current membership role after an HR token has been downgraded", async () => {
+    const response = await send("org-one", Role.HR).expect(200);
+    expect(read).toHaveBeenCalledWith("org-one", Role.EMPLOYEE);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
   });
   it("rejects a valid other-company token", async () => {
     await send("org-two").expect(403);

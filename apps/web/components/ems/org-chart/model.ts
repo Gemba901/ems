@@ -7,12 +7,13 @@ export type Person = {
   branchText: string | null;
   managerId: string | null;
   reportsToBody: string | null;
-  status: string;
+  status: string | null; active?: boolean;
   photoUrl: string | null;
   directReports: number;
 };
 export type Issue = { employeeId: string; kind: string };
 export type ChartData = {
+  capabilities?: { employmentDetails: boolean; inactivePeople: boolean };
   people: Person[];
   issues: Issue[];
   source: string;
@@ -32,7 +33,7 @@ export const bodyLabels: Record<string, string> = {
   MANAGEMENT_COMMITTEE: "Management Committee",
   OWNER: "Owner",
 };
-export const active = (p: Person) => ["ACTIVE", "PROBATION"].includes(p.status);
+export const active = (p: Person) => (p.active ?? ["ACTIVE", "PROBATION"].includes(p.status ?? ""));
 export function buildView(
   data: ChartData,
   filters: {
@@ -62,6 +63,13 @@ export function buildView(
     const id = parent(p);
     if (id) children.set(id, [...(children.get(id) ?? []), p.id]);
   });
+  for (const ids of children.values())
+    ids.sort(
+      (a, b) =>
+        byId.get(a)!.name.localeCompare(byId.get(b)!.name, undefined, {
+          numeric: true,
+        }) || a.localeCompare(b),
+    );
   let focused: Set<string> | null = null;
   if (filters.focus && byId.has(filters.focus)) {
     focused = new Set();

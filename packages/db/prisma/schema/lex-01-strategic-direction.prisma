@@ -1,0 +1,100 @@
+enum LexStrategicDirectionAction {
+    DRAFT_SAVED
+    SUBMITTED
+    RETURNED
+    WITHDRAWN
+    APPROVED
+    REVISION_STARTED
+}
+
+// Leadership Excellence — 01-strategic-direction. Owner: see docs/leadership-excellence/README.md
+ model LexStrategicDirection {
+    id                 String       @id @default(uuid())
+    organizationId     String       @unique
+    status             LexWorkflowStatus  @default(DRAFT)
+    company            String?
+    business           String?
+    purpose            String?
+    vision             String?
+    visionWhy          String?
+    mission            String?
+    missionWhy         String?
+
+    values             Json  @default("[]")
+    // Percent per pillar code (01.02); later areas weight scores with it.
+    pillarWeights      Json  @default("{\"LEX\":10,\"PEX\":20,\"OPX\":30,\"CMX\":20,\"SGEX\":10,\"FPEX\":10}")
+    sectionMeta        Json  @default("{}")
+
+    submittedAt        DateTime? 
+    submittedById      String?
+    submittedBy        Employee? @relation("LexDirectionSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+
+
+    returnReason       String?
+    revisionReason     String?
+
+    currentVersion     Int?
+
+    createdAt          DateTime @default(now())
+    updatedAt          DateTime @updatedAt
+
+    organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    versions     LexStrategicDirectionVersion[]
+    events       LexStrategicDirectionEvent[]
+
+ }
+
+ model LexStrategicDirectionVersion {
+    id                String @id @default(uuid())
+    directionId       String
+    organizationId    String    
+    version           Int   
+
+    snapshot          Json
+    sectionMeta       Json
+
+    approvedAt        DateTime @default(now())
+    approvedById   String?
+    approvedBy     Employee? @relation("LexDirectionApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+    direction    LexStrategicDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+
+    @@unique([directionId, version])
+    @@index([organizationId])
+ }
+
+ model LexStrategicDirectionEvent {
+    id                String @id @default(uuid())
+    directionId       String
+    organizationId    String
+
+    action            LexStrategicDirectionAction
+    changes           Json
+    reason            String?
+    version           Int?
+
+    actorId        String?
+    actor          Employee? @relation("LexDirectionEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+    createdAt         DateTime @default(now())
+    direction    LexStrategicDirection @relation(fields: [directionId], references: [id], onDelete: Cascade)
+
+    @@index([directionId, createdAt])
+    @@index([organizationId])
+ }
+
+ // The people the company chooses to approve its direction. Kept per organisation
+ // so they can be chosen before the first draft exists.
+ model LexStrategicDirectionApprover {
+    id                String   @id @default(uuid())
+    organizationId    String
+    employeeId        String
+    addedById         String?
+    createdAt         DateTime @default(now())
+
+    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    employee     Employee     @relation("LexDirectionApprover", fields: [employeeId], references: [id], onDelete: Cascade)
+    addedBy      Employee?    @relation("LexDirectionApproverAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+    @@unique([organizationId, employeeId])
+ }

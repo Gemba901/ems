@@ -5,26 +5,32 @@ import Link from "next/link";
 import { CheckCircle2, ExternalLink, Info, MapPin } from "lucide-react";
 import { HOD_STATE_LABEL, initials, type DepartmentHod, type DepartmentIssue } from "./department-directory";
 import { colourOf } from "./branch-colours";
+import { useAuthStore } from "@/store/auth.store";
+import { canViewDepartments, ORG_CHART_PATH } from "./organisation-navigation";
 
 /** A branch's colour on these pages. "Branch not recorded" gets a visible grey instead of the chart's near-white fill. */
 export const branchShade = (colours: ReadonlyMap<string, string>, key: string) => key ? colourOf(colours, key) : "#94a3b8";
 
-/** Organisation's title and tabs. Only Departments exists so far; the org chart tab is shown as coming. */
-export function OrganisationHeader({ actions }: { actions?: ReactNode }) {
+/** Organisation's shared navigation. Department records remain restricted to HR and administrators. */
+export function OrganisationHeader({ actions, activeTab = "departments" }: { actions?: ReactNode; activeTab?: "departments" | "chart" }) {
+  const { user } = useAuthStore();
+  const departments = canViewDepartments(user?.roleLevel);
+  const tabClass = (tab: "departments" | "chart") => activeTab === tab
+    ? "-mb-px border-b-2 border-purple-900 px-3 py-2.5 text-sm font-semibold text-purple-900"
+    : "border-b-2 border-transparent px-3 py-2.5 text-sm text-slate-600 hover:text-purple-900";
   return <header className="space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p className="text-xs text-slate-500"><Link href="/ems" className="hover:text-purple-900 hover:underline">EMS</Link> / Organisation</p>
+        <p className="text-xs text-slate-500">{departments ? <Link href="/ems" className="hover:text-purple-900 hover:underline">EMS</Link> : "EMS"} / Organisation</p>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">Organisation</h1>
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
     <nav aria-label="Organisation views" className="flex gap-1 border-b border-slate-200">
-      <Link href="/ems/organisation" aria-current="page"
-        className="-mb-px border-b-2 border-purple-900 px-3 py-2.5 text-sm font-semibold text-purple-900">Departments</Link>
-      <span aria-disabled="true" className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm text-slate-400">
-        Org chart <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">Soon</span>
-      </span>
+      {departments && <Link href="/ems/organisation" aria-current={activeTab === "departments" ? "page" : undefined}
+        className={tabClass("departments")}>Departments</Link>}
+      <Link href={ORG_CHART_PATH} aria-current={activeTab === "chart" ? "page" : undefined}
+        className={tabClass("chart")}>Org chart</Link>
     </nav>
   </header>;
 }

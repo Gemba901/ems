@@ -79,6 +79,7 @@ describe("EMS org chart", () => {
           .mockResolvedValue([
             {
               id: "a",
+              employeeCode: "EMP-0042",
               firstName: "Jane",
               middleName: "N/A",
               lastName: "Test",
@@ -98,13 +99,15 @@ describe("EMS org chart", () => {
     const db = { $transaction: jest.fn((fn) => fn(tx)) };
     const result = await new EmsOrgChartService(db as any).read("org-a");
     expect(tx.employee.findMany.mock.calls[0][0].where).toEqual({
-      organizationId: "org-a",
+      organizationId: "org-a", employmentStatus: {in: ["ACTIVE", "PROBATION"]},
     });
     expect(tx.department.findMany.mock.calls[0][0].where).toEqual({
       organizationId: "org-a",
     });
     expect(result.people[0]).toMatchObject({
       name: "Jane Test",
+      employeeCode: "EMP-0042",
+      active: true, status: null,
       managerId: null,
       department: null,
     });
@@ -114,6 +117,7 @@ describe("EMS org chart", () => {
       kind: "MANAGER_UNAVAILABLE",
     });
     const fields = Object.keys(tx.employee.findMany.mock.calls[0][0].select);
+    expect(fields).toContain("employeeCode");
     for (const field of ["email", "phone", "userId", "dateOfBirth"])
       expect(fields).not.toContain(field);
   });

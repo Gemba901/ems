@@ -1,3 +1,5 @@
+import { Role } from "src/common/enum/role.enum";
+import { canReadCompanyEmployment } from "./chart-visibility";
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "src/prisma/prisma.service";
 import { tenantTransaction } from "src/prisma/tenant-transaction";
@@ -7,14 +9,16 @@ const bodies = new Set(["BOARD", "COMMITTEE", "MANAGEMENT_COMMITTEE", "OWNER"]);
 @Injectable()
 export class EmsOrgChartService {
   constructor(private readonly db: PrismaService) {}
-  async read(organizationId: string) {
+  async read(organizationId: string, role?: Role) {
+    const employmentDetails = canReadCompanyEmployment(role);
     return tenantTransaction(this.db, organizationId, async (tx) => {
       // Explicit allowlist: no contacts, identity documents, family, access roles or credentials.
       const rows = await tx.employee.findMany({
-        where: { organizationId },
+        where: { organizationId, ...(employmentDetails ? {} : { employmentStatus: { in: ["ACTIVE", "PROBATION"] as ("ACTIVE" | "PROBATION")[] } }) },
         orderBy: [{ firstName: "asc" }, { id: "asc" }],
         select: {
           id: true,
+          employeeCode: true,
           firstName: true,
           middleName: true,
           lastName: true,
@@ -40,6 +44,7 @@ export class EmsOrgChartService {
           unavailable.push(p.id);
         return {
           id: p.id,
+          employeeCode: p.employeeCode,
           name: personFullName(p),
           jobTitle: p.jobTitle,
           department: p.departmentId
@@ -70,6 +75,8 @@ export class EmsOrgChartService {
       );
       return {
         ...result,
+        people: result.people.map(p => ({...p, active: p.status === "ACTIVE" || p.status === "PROBATION", status: employmentDetails ? p.status : null})),
+        capabilities: { employmentDetails, inactivePeople: employmentDetails },
         source: "EMS registered employees",
         refreshedAt: new Date().toISOString(),
       };

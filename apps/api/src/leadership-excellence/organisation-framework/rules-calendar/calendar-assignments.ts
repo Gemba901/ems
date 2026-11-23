@@ -5,7 +5,8 @@ import type {
   CalendarDirectory,
   AudienceConflict,
 } from "./calendar-audience.types";
-import type { CalendarRules } from "./calendar-model";
+import type { ApprovedCalendarSummary } from "../../common/contracts";
+import { enabledFrequencies, type CalendarRules } from "./calendar-model";
 import {
   audienceLabel,
   audiencePriority,
@@ -244,4 +245,66 @@ export function compareCalendars(
           a.calendarId.localeCompare(b.calendarId),
       ),
   };
+}
+
+/**
+ * Which approved calendar applies to a department on a date: a calendar assigned to that department, otherwise the
+ * company-wide one. Like a person's assignment, a tie at the same level is a CONFLICT with its candidates, never a guess.
+ */
+export function departmentAssignment(
+  departmentId: string,
+  date: string,
+  calendars: PublishedCalendar[],
+): CalendarAssignmentResult {
+  if (!validDate(date))
+    throw new Error("Choose a valid date for the calendar assignment.");
+  const covers = (c: PublishedCalendar) =>
+    c.rules.start <= date && c.rules.end >= date;
+  const own = calendars.filter(
+    (c) =>
+      c.rules.audience?.kind === "DEPARTMENTS" &&
+      c.rules.audience.departmentIds.includes(departmentId) &&
+      covers(c),
+  );
+  const company = calendars.filter(
+    (c) => c.rules.audience?.kind === "COMPANY" && covers(c),
+  );
+  const available = own.length ? own : company;
+  const candidates = available.map((c) => ({
+    calendarId: c.id,
+    version: c.version,
+    name: c.rules.name,
+  }));
+  if (!available.length)
+    return { status: "UNASSIGNED", basis: "CURRENT_PEOPLE_RECORDS", candidates };
+  return available.length === 1
+    ? {
+        status: "ASSIGNED",
+        basis: "CURRENT_PEOPLE_RECORDS",
+        calendarId: available[0].id,
+        version: available[0].version,
+        candidates,
+      }
+    : { status: "CONFLICT", basis: "CURRENT_PEOPLE_RECORDS", candidates };
+}
+
+/** The current approved calendars, as offered to other areas for selection (sorted by start date, then name). */
+export function approvedCalendarSummaries(
+  calendars: PublishedCalendar[],
+): ApprovedCalendarSummary[] {
+  return calendars
+    .map((c) => ({
+      calendarId: c.id,
+      version: c.version,
+      name: c.rules.name,
+      start: c.rules.start,
+      end: c.rules.end,
+      timeZone: c.rules.timeZone,
+      audience: {
+        kind: (c.rules.audience ?? emptyAudience()).kind,
+        label: audienceLabel(c.rules.audience),
+      },
+      frequencies: enabledFrequencies(c.rules),
+    }))
+    .sort((a, b) => a.start.localeCompare(b.start) || a.name.localeCompare(b.name));
 }

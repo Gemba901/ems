@@ -10,13 +10,16 @@ import {
   ClipboardCheck,
   ClipboardList,
   Compass,
-  FileCheck2,
+  Eye,
+  Gem,
   HelpCircle,
+  Landmark,
   ListChecks,
   MessageSquare,
   Network,
   ShieldCheck,
   Target,
+  Telescope,
   Users,
   Wrench,
   type LucideIcon,
@@ -25,10 +28,12 @@ import {
   ModuleSidebar,
   type SidebarNavGroup,
 } from "@/components/shell/ModuleSidebar";
-import { getLexArea, LEX_AREAS } from "./lex-navigation";
+import { useAuthStore } from "@/store/auth.store";
+import { DIRECTION_EDITORS } from "@/components/leadership-excellence/strategic-direction/roles";
+import { DIRECTION_REVIEW, getLexArea, LEX_AREAS } from "./lex-navigation";
 
 const ICONS: Record<string, LucideIcon[]> = {
-  "01": [Compass, Building2, FileCheck2],
+  "01": [Building2, Telescope, Compass, Gem, Landmark, Eye],
   "02": [Network, Users, CalendarDays],
   "03": [ClipboardList, ClipboardCheck, Target, Building2, Users, BarChart3],
   "04": [ClipboardList, ListChecks, MessageSquare],
@@ -56,16 +61,21 @@ interface LexSidebarProps {
 export function LexSidebar(props: LexSidebarProps) {
   const pathname = usePathname();
   const area = getLexArea(pathname) || LEX_AREAS[2];
+  const role = useAuthStore((s) => s.user?.roleLevel);
+  // Only editors have the review section, so readers don't get a link to it.
+  const canReview = !!role && DIRECTION_EDITORS.includes(role);
   const groups: SidebarNavGroup[] = [
     {
       name: area.label,
-      items: area.items.map((item, index) => ({
+      items: area.items
+        .map((item, index) => ({
         label: item.label,
         href: item.href,
         icon: ICONS[area.id]?.[index] || ClipboardList,
         shortLabel:
           area.id === "03" ? PLANNING_SHORT_LABELS[index] : item.label,
-      })),
+        }))
+        .filter((item) => canReview || item.href !== DIRECTION_REVIEW),
     },
   ];
 

@@ -194,6 +194,7 @@ model Organization {
   lexStrategicDirection       LexStrategicDirection?
   lexPlanningWorkspace        LexPlanningWorkspace?
   lexExecutionWorkspace       LexExecutionWorkspace?
+  lexDirectionApprovers       LexStrategicDirectionApprover[]
 
 
   lexPerformanceCalendars LexPerformanceCalendar[] // LEX 02.03

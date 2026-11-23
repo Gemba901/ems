@@ -1,4 +1,7 @@
 const BASE = "/leadership-excellence";
+const DIRECTION = `${BASE}/strategic-direction/company-direction`;
+/** Only direction editors have the review section; LexSidebar hides this link from readers. */
+export const DIRECTION_REVIEW = `${DIRECTION}#review-section`;
 
 export interface LexNavigationItem {
   code: string;
@@ -24,22 +27,14 @@ export const LEX_AREAS: LexArea[] = [
     name: "Strategic Direction",
     basePath: `${BASE}/strategic-direction`,
     href: `${BASE}/strategic-direction/company-direction`,
+    // One page; each link jumps to a section of it (ids in strategic-direction/useSectionSpy.ts).
     items: [
-      {
-        code: "01.01",
-        label: "Company direction",
-        href: `${BASE}/strategic-direction/company-direction`,
-      },
-      {
-        code: "01.02",
-        label: "Six excellence pillars",
-        href: `${BASE}/strategic-direction/pillars`,
-      },
-      {
-        code: "01.03",
-        label: "Preview & finalise",
-        href: `${BASE}/strategic-direction/preview`,
-      },
+      { code: "01.01", label: "Company & purpose", href: `${DIRECTION}#organisation` },
+      { code: "01.01", label: "Vision", href: `${DIRECTION}#vision-section` },
+      { code: "01.01", label: "Mission", href: `${DIRECTION}#mission-section` },
+      { code: "01.01", label: "Core values", href: `${DIRECTION}#values-section` },
+      { code: "01.02", label: "Six excellence pillars", href: `${DIRECTION}#pillars-section` },
+      { code: "01.03", label: "Preview & send", href: DIRECTION_REVIEW },
     ],
   },
   {

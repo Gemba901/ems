@@ -180,6 +180,8 @@ model Employee {
   lexDirectionsSubmitted      LexStrategicDirection[]        @relation("LexDirectionSubmittedBy")
   lexDirectionVersionsApproved LexStrategicDirectionVersion[] @relation("LexDirectionApprovedBy")
   lexDirectionEvents          LexStrategicDirectionEvent[]   @relation("LexDirectionEventActor")
+  lexDirectionApprover        LexStrategicDirectionApprover[] @relation("LexDirectionApprover")
+  lexDirectionApproversAdded  LexStrategicDirectionApprover[] @relation("LexDirectionApproverAddedBy")
 
 
   @@unique([email, organizationId])

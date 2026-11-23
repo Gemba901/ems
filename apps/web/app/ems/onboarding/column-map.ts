@@ -12,7 +12,7 @@ export type MapField = Field | "fullName" | "extra" | `profile:${ExtraProfileFie
 const POSITION_ROLE_HEADERS: Record<string, MapField> = {};
 const TITLE_HEADER_GROUPS: { prefixes: string[]; field: Field }[] = [
   { prefixes: ['job'], field: 'jobDesignation' },
-  { prefixes: ['hod', 'headofdepartment'], field: 'hodDesignation' },
+  { prefixes: ['hod', 'headofdepartment', 'headofdept', 'departmenthead'], field: 'hodDesignation' },
   { prefixes: ['reportingto', 'reportingmanager'], field: 'reportingToDesignation' },
   { prefixes: ['reliever1', 'firstreliever', '1streliever'], field: 'reliever1Designation' },
   { prefixes: ['reliever2', 'secondreliever', '2ndreliever'], field: 'reliever2Designation' },
@@ -118,6 +118,28 @@ const HEADER_MAP: Record<string, MapField> = {
   workareasection:  "workArea",
   beesaccesslevels: "beesAccessLevel",
   accesslevels:     "beesAccessLevel",
+
+  // Head of department, written out. "(Name)" / "(Job title)" notes lose their brackets when normalised.
+  hod:                          "hodName",
+  headofdepartment:             "hodName",
+  headofdepartmentname:         "hodName",
+  headofdept:                   "hodName",
+  headofdeptname:               "hodName",
+  departmenthead:               "hodName",
+  departmentheadname:           "hodName",
+  headofdepartmentjobtitle:     "hodDesignation",
+  headofdepartmentdesignation:  "hodDesignation",
+  headofdepartmenttitle:        "hodDesignation",
+  headofdeptjobtitle:           "hodDesignation",
+  headofdeptdesignation:        "hodDesignation",
+  headofdepttitle:              "hodDesignation",
+  departmentheadjobtitle:       "hodDesignation",
+  departmentheaddesignation:    "hodDesignation",
+  // The sheet's access column is a suggestion an Admin confirms; it still fills the access field.
+  suggestedaccess:              "beesAccessLevel",
+  suggestedaccesslevel:         "beesAccessLevel",
+  suggestedbeesaccess:          "beesAccessLevel",
+  suggestedbeesaccesslevel:     "beesAccessLevel",
 };
 
 export function normaliseHeader(value: unknown): string {
@@ -158,6 +180,25 @@ const limit = Math.min(searchDepth, grid.length);
   return bestScore >= 2 ? bestIndex : -1;
 }
 
+/**
+ * The sheet to open first when a workbook loads: the one whose headings BEES recognises.
+ * Order: has a header row at all → not named "example" → more recognised headings → more filled rows → earlier sheet.
+ * With no recognisable headings anywhere, the first sheet (as before). HR can still pick any sheet.
+ */
+export function pickHeaderSheet(sheets: { name: string; grid: unknown[][] }[], searchDepth = 20): string | undefined {
+  let best: { name: string; key: number[] } | undefined;
+  sheets.forEach(({ name, grid }, index) => {
+    const row = findHeaderRow(grid, searchDepth);
+    const score = row >= 0 ? scoreHeaderRow(grid[row]) : 0;
+    const filled = row >= 0 ? grid.slice(row + 1).filter(cells => cells?.some(cell => String(cell ?? "").trim())).length : 0;
+    const key = [row >= 0 ? 1 : 0, /example/i.test(name) ? 0 : 1, score, filled, -index];
+    // Compare left to right: the first position that differs decides.
+    const diff = best ? key.map((value, i) => value - best!.key[i]).find(d => d !== 0) ?? 0 : 1;
+    if (diff > 0) best = { name, key };
+  });
+  return best?.name;
+}
+
 /** Every field a column can map to, in the order shown in the picker. */
 export const MAPPABLE_FIELDS: { key: MapField; label: string }[] = [
   { key: "employeeCode",           label: "Employee code" },
@@ -180,7 +221,7 @@ export const MAPPABLE_FIELDS: { key: MapField; label: string }[] = [
   { key: "shift",                  label: "Shift" },
   { key: "employmentStatus",       label: "Employment status" },
   { key: "employmentType",         label: "Employment type" },
-  { key: "beesAccessLevel",        label: "BEES access level" },
+  { key: "beesAccessLevel",        label: "Suggested access (an Admin approves)" },
   { key: "hodName",                label: "HOD name" },
   { key: "hodDesignation",         label: "HOD job title" },
   { key: "reportingToName",        label: "Reporting to" },
@@ -194,7 +235,7 @@ export const MAPPABLE_FIELDS: { key: MapField; label: string }[] = [
 
 /** Fields every record needs, whatever the organisation's channel. Keep in sync with the API's validateOnboardingBatch. */
 export const ALWAYS_REQUIRED_FIELDS: Field[] = [
-  "employeeCode", "firstName", "lastName", "mobileNumber", "currentDepartment", "beesAccessLevel", "jobDesignation", "reportingToName", "reportingToDesignation",
+  "employeeCode", "firstName", "lastName", "mobileNumber", "currentDepartment", "jobDesignation", "reportingToName", "reportingToDesignation", "employmentStatus",
 ];
 
 /** The contact field each channel makes required. */

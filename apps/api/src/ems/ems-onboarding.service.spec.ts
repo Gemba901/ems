@@ -10,7 +10,7 @@ const row = (id = 'r1', mobileNumber = '0712345678') => ({
   id, organizationId: 'org1', batchId: 'b1', employeeCode: id, updatedAt: new Date('2026-10-14T12:00:00Z'),
   firstName: id === 'manager' ? 'Samuel' : id === 'r2' ? 'Alice' : 'Test', lastName: id === 'manager' ? 'Kiprono' : id === 'r2' ? 'Winter' : 'Person', companyCode: 'ACME',
   mobileNumber, whatsappNumber: mobileNumber as string | null, workEmail: null as string | null, currentDepartment: 'HR',
-  beesAccessLevel: 'employee', status: 'READY',
+  employmentStatus: 'Active', beesAccessLevel: 'employee', status: 'READY',
   jobDesignation: 'Clerk' as string | null,
   reportingToName: 'Jane Boss' as string | null,
   reportingToDesignation: 'HR Manager' as string | null,
@@ -294,6 +294,21 @@ describe('EMS placeholder and N/A rules', () => {
     batch.records = [{ ...row(), status: 'DRAFT', jobDesignation: 'nil' }];
     await service.validateOnboardingBatch('org1', 'b1');
     expect(findingsFor(db, 'r1')).toEqual([{ field: 'jobDesignation', message: 'Required' }]);
+  });
+
+  it.each([null, '', 'nil'])('requires an employment status (%s blocks the row: a blank would register someone as Active)', async value => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), status: 'DRAFT', employmentStatus: value } as any];
+    await service.validateOnboardingBatch('org1', 'b1');
+    expect(findingsFor(db, 'r1')).toEqual([{ field: 'employmentStatus', message: 'Required' }]);
+    expect(db.emsOnboardingRecord.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'NEEDS_FIXING' }) }));
+  });
+
+  it('does not accept N/A as an employment status', async () => {
+    const { db, service, batch } = fixture();
+    batch.records = [{ ...row(), status: 'DRAFT', employmentStatus: 'N/A' } as any];
+    await service.validateOnboardingBatch('org1', 'b1');
+    expect(findingsFor(db, 'r1')).toEqual([{ field: 'employmentStatus', message: expect.stringContaining('N/A is not accepted') }]);
   });
 
   it('rejects N/A in a required field with one clear message', async () => {

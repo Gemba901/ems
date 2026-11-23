@@ -764,6 +764,31 @@ export const EmsService = {
     return handleResponse(res);
   },
 
+  /** This company's remembered "Treat as" choices (field, value as written, choice). */
+  async importValueChoices(token: string): Promise<{ choices: { field: string; valueKey: string; value: string; choice: string }[] }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/value-choices`, { headers: authHeaders(token) }, token);
+    return handleResponse(res);
+  },
+
+  async forgetImportValueChoice(data: { field: string; value: string }, token: string): Promise<{ forgotten: number }> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/value-choices`, {
+      method: "DELETE", headers: authHeaders(token), body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
+  /** "Treat as": one odd value (or blank employment statuses) in a fixed-list field, for every unregistered record. */
+  async replaceOnboardingValues(
+    id: string, data: { field: string; to: string; from?: string; blanks?: boolean; remember?: boolean }, token: string,
+  ): Promise<OnboardingBatchDetail> {
+    const res = await apiClient(`${API_URL}/ems/onboarding/batches/${id}/values`, {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }, token);
+    return handleResponse(res);
+  },
+
   /** Send one extra column to a profile field (or null: keep for reference) for every unregistered record. */
   async setOnboardingColumnDestination(
     id: string, data: { column: number; heading: string; target: string | null }, token: string,

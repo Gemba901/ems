@@ -24,7 +24,8 @@ import { ModuleType } from 'db';
 import { Post, Delete, Put } from '@nestjs/common';   // add Post to the existing { Controller, Get, Patch, ... } import
 import { AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto,
   UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto, ConfirmOnboardingDuplicateDto,
-  ExcludeRemainingOnboardingRecordsDto, ForgetImportColumnChoicesDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto } from './dto/onboarding.dto';
+  ExcludeRemainingOnboardingRecordsDto, ForgetImportColumnChoicesDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto,
+  ReplaceOnboardingValuesDto, ForgetImportValueChoiceDto } from './dto/onboarding.dto';
 
 @TenantRequired()
 @Controller('ems')
@@ -336,6 +337,31 @@ export class EmsController {
     @CurrentUser() user: { organizationId: string; userId: string },
   ) {
     return this.ems.setOnboardingColumnDestination(user.organizationId, id, user.userId, dto);
+  }
+
+  /** PATCH /ems/onboarding/batches/:id/values — "Treat as": one odd value (or blank status) for all unregistered records */
+  @Patch('onboarding/batches/:id/values')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async replaceOnboardingValues(
+    @Param('id') id: string,
+    @Body() dto: ReplaceOnboardingValuesDto,
+    @CurrentUser() user: { organizationId: string; roleLevel: Role; userId: string },
+  ) {
+    return this.ems.replaceOnboardingValues(user.organizationId, id, user.roleLevel, dto, user.userId);
+  }
+
+  /** GET /ems/onboarding/value-choices — this company's remembered "Treat as" choices */
+  @Get('onboarding/value-choices')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async importValueChoices(@CurrentUser() user: { organizationId: string }) {
+    return this.ems.importValueChoices(user.organizationId);
+  }
+
+  /** DELETE /ems/onboarding/value-choices — forget one remembered choice */
+  @Delete('onboarding/value-choices')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.HR)
+  async forgetImportValueChoice(@Body() dto: ForgetImportValueChoiceDto, @CurrentUser() user: { organizationId: string }) {
+    return this.ems.forgetImportValueChoice(user.organizationId, dto);
   }
 
   /** POST /ems/onboarding/batches/:id/register — start or return a durable registration run */

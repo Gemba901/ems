@@ -8,6 +8,8 @@ import EmployeeImportedInformation from "@/components/ems/EmployeeImportedInform
 import EmployeePeopleLinksCard from "@/components/ems/EmployeePeopleLinksCard";
 
 import EmployeeReportingCard from "@/components/ems/EmployeeReportingCard";
+import EmployeeAccessCard from "@/components/ems/EmployeeAccessCard";
+import { accessLabel } from "@/components/ems/ChangeAccessDialog";
 import EmployeeOnboardingIdentity from "@/components/ems/EmployeeOnboardingIdentity";
 import { TenantImage } from "@/components/files/TenantImage";
 import { useState, useEffect, useRef, type ElementType } from "react";
@@ -147,13 +149,6 @@ const ROLE_COLORS: Record<string, string> = {
   EMPLOYEE: "bg-slate-100 text-slate-600",
 };
 
-const ROLE_OPTIONS = [
-  { id: 2, name: "ADMIN" },
-  { id: 3, name: "MANAGEMENT" },
-  { id: 6, name: "HR" },
-  { id: 4, name: "HOD" },
-  { id: 5, name: "EMPLOYEE" },
-];
 
 type Tab = "profile" | "master-data" | "dwms" | "activity";
 
@@ -185,9 +180,7 @@ export default function EmployeeDetailPage() {
   const [avatarInput, setAvatarInput] = useState("");
   const [editingPersonal, setEditingPersonal] = useState(false);
   const [personalForm, setPersonalForm] = useState({ firstName: "", lastName: "", email: "", phone: "" });
-  const [editingRole, setEditingRole] = useState(false);
   const [editingDept, setEditingDept] = useState(false);
-  const [selectedRoleId, setSelectedRoleId] = useState<number>(5);
   const [selectedDeptId, setSelectedDeptId] = useState<string>("");
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetResult, setResetResult] = useState<{ tempPassword: string; expiresInMinutes: number } | null>(null);
@@ -242,7 +235,6 @@ export default function EmployeeDetailPage() {
   const completion: CompletionResult | null = emsData?.completion ?? null;
   const userOrg = empRaw?.user?.organizations?.find((o) => o.organizationId === empRaw?.organizationId);
   const systemRole = userOrg?.role?.name?.toUpperCase() ?? "—";
-  const systemRoleId = userOrg?.role?.id ?? 5;
   const canEditAvatar = viewer?.userId === empRaw?.userId;
 
   // Initialise EMS form once
@@ -287,7 +279,6 @@ export default function EmployeeDetailPage() {
       email: employee.email ?? "",
       phone: empRaw?.phone ?? employee.phone ?? "",
     });
-    setSelectedRoleId(systemRoleId);
     setSelectedDeptId(employee.departmentId ?? "");
     setAvatarInput(employee.avatarUrl ?? "");
     setFormInitialized(true);
@@ -331,14 +322,6 @@ export default function EmployeeDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
       queryClient.invalidateQueries({queryKey: ['ems-onboarding-batch']});
       setEditingPersonal(false);
-    },
-  });
-
-  const roleMutation = useMutation({
-    mutationFn: (roleId: number) => EmployeeService.updateRole(id!, roleId, accessToken!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employee", id] });
-      setEditingRole(false);
     },
   });
 
@@ -425,7 +408,7 @@ export default function EmployeeDetailPage() {
               {employee.employeeCode}
             </span>
           )}
-          {accessToken && <EmployeeListNav employeeId={id} token={accessToken} blocked={editingPersonal || editingRole || editingDept} />}
+          {accessToken && <EmployeeListNav employeeId={id} token={accessToken} blocked={editingPersonal || editingDept} />}
         </div>
 
         {/* ── Tabs ─────────────────────────────────────────────────────── */}
@@ -501,7 +484,7 @@ export default function EmployeeDetailPage() {
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {systemRole !== "—" && (
                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide ${ROLE_COLORS[systemRole] ?? "bg-slate-100 text-slate-600"}`}>
-                      {systemRole}
+                      {accessLabel(systemRole)}
                     </span>
                   )}
                   {employee.department?.name && (
@@ -613,42 +596,14 @@ export default function EmployeeDetailPage() {
                 </div>
 
                 <div className="p-5 space-y-4">
-                  {/* Role */}
+                  {/* Access: the actual company role, read-only here; Admins use Change access (recorded in the history). */}
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">System Role</p>
-                      {isAdminOnly && !editingRole && (
-                        <button onClick={() => setEditingRole(true)}
-                          className="text-slate-400 hover:text-indigo-600 transition-colors">
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                    {editingRole ? (
-                      <div className="space-y-2">
-                        <select value={selectedRoleId} onChange={(e) => setSelectedRoleId(Number(e.target.value))}
-                          className={selectCls}>
-                          {ROLE_OPTIONS.map((r) => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                          ))}
-                        </select>
-                        <div className="flex gap-2">
-                          <button onClick={() => setEditingRole(false)}
-                            className="flex-1 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-                            Cancel
-                          </button>
-                          <button onClick={() => roleMutation.mutate(selectedRoleId)}
-                            disabled={roleMutation.isPending}
-                            className="flex-1 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                            {roleMutation.isPending ? "…" : "Save"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <span className={`inline-block text-[11px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-lg ${ROLE_COLORS[systemRole] ?? "bg-slate-100 text-slate-600"}`}>
-                        {systemRole}
-                      </span>
-                    )}
+                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono mb-2">Access</p>
+                    {isAdminOrHr && accessToken
+                      ? <EmployeeAccessCard employeeId={id} name={fullName} token={accessToken} />
+                      : <span className={`inline-block text-[11px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-lg ${ROLE_COLORS[systemRole] ?? "bg-slate-100 text-slate-600"}`}>
+                          {systemRole === "—" ? "—" : accessLabel(systemRole)}
+                        </span>}
                   </div>
 
                   {/* Department */}

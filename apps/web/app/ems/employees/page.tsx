@@ -9,11 +9,14 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { EmsService, type EmployeeListSort, type EmploymentStatus, type EmployeeInvitationFilter, type EmployeeListFilters, EMPLOYMENT_STATUS_LABELS, completionBg } from "@/services/ems.service";
 import InvitationDialog from "@/components/ems/InvitationDialog";
+import ChangeAccessDialog from "@/components/ems/ChangeAccessDialog";
+import { canChangeAccess } from "@/components/ems/onboarding-access";
+import { EmsAccessService } from "@/services/ems-access.service";
 import { invitationBadge } from "@/components/ems/ems-invitations";
 import { saveEmployeeNav } from "@/components/ems/employee-navigation";
 import { reviewRecordHref } from "@/components/ems/onboarding-review-navigation";
-import { Search, ChevronLeft, ChevronRight, Loader2, ArrowLeft, Send } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Search, ChevronLeft, ChevronRight, Loader2, ArrowLeft, Send, KeyRound } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const PAGE_SIZE = 20;
 // Invitation states share the status filter (as "INVITE:…") rather than taking a permanent column.
@@ -54,6 +57,16 @@ export default function EmsEmployeesPage() {
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [allMatching, setAllMatching] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Change access for the ticked people (Admins only; not "all matching": an access change names each person).
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [accessNotice, setAccessNotice] = useState<string | null>(null);
+  const isAdmin = canChangeAccess(user?.roleLevel);
+  const client = useQueryClient();
+  const suggestions = useQuery({
+    queryKey: ['ems-access-suggestions', user?.organizationId, 'all'],
+    queryFn: () => EmsAccessService.suggestions(accessToken!), enabled: !!accessToken,
+  });
+  const waiting = suggestions.data?.suggestions.length ?? 0;
   useEffect(() => { setAllMatching(false); }, [filters.search, filters.status, filters.source]);
   const sources = useQuery({
     queryKey: ['ems-employee-import-batches', user?.organizationId],
@@ -101,7 +114,10 @@ export default function EmsEmployeesPage() {
       <div className="flex items-center gap-3">
         <Link href="/ems" aria-label="Back to EMS" className="text-slate-500 hover:text-purple-800"><ArrowLeft className="h-5 w-5" /></Link>
         <div><h1 className="text-2xl font-bold text-slate-900">Employees</h1><p className="text-sm text-slate-500">Profiles and completeness across your organisation</p></div>
-        <Link href="/ems/organisation" className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Departments</Link>
+        <div className="ml-auto flex flex-wrap justify-end gap-2">
+          {waiting > 0 && <Link href="/ems/access" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100">Access suggestions · {waiting}</Link>}
+          <Link href="/ems/organisation" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Departments</Link>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -158,10 +174,18 @@ export default function EmsEmployeesPage() {
             {!allMatching && pageAllSelected && total > pageIds.length && <> <button type="button" className="font-semibold underline" onClick={() => setAllMatching(true)}>Select all {total} employees{narrowed ? ' matching your search/filters' : ''}</button></>}
             {' '}<button type="button" className="text-purple-800 underline" onClick={() => { setSelected(new Map()); setAllMatching(false); }}>Clear</button>
           </span>
-          <button type="button" onClick={() => setInviteOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-700">
-            <Send className="h-3.5 w-3.5" /> Send invitations
-          </button>
+          <span className="flex flex-wrap gap-2">
+            {isAdmin && <button type="button" disabled={allMatching || selected.size > 200} onClick={() => { setAccessNotice(null); setAccessOpen(true); }}
+              title={allMatching ? 'Tick the people to change (up to 200); access isn\'t changed for "all matching"' : selected.size > 200 ? 'Up to 200 people at a time' : undefined}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-purple-900 bg-white px-3 py-1.5 font-semibold text-purple-900 hover:bg-purple-50 disabled:opacity-50">
+              <KeyRound className="h-3.5 w-3.5" /> Change access
+            </button>}
+            <button type="button" onClick={() => setInviteOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-700">
+              <Send className="h-3.5 w-3.5" /> Send invitations
+            </button>
+          </span>
         </div>}
+        {accessNotice && <p role="status" className="border-b border-slate-100 px-4 py-2 text-xs text-slate-700">{accessNotice}</p>}
         {isLoading ? <p className="py-12 text-center text-sm text-slate-500">Loading employees…</p> : error ?
           <div role="alert" className="px-5 py-6 text-sm text-red-700"><p>{error instanceof Error ? error.message : 'Could not load employees.'}</p><button onClick={() => void refetch()} className="mt-2 rounded border border-red-200 px-3 py-2 font-medium">Retry</button></div> :
           <div className="overflow-x-auto">
@@ -204,6 +228,14 @@ export default function EmsEmployeesPage() {
         title={allMatching ? 'Invite selected employees' : `Invite ${selectionCount} employee${selectionCount === 1 ? '' : 's'}`}
         selection={allMatching ? { filters: listFilters, ...(selected.size ? { employeeIds: [...selected.keys()] } : {}) } : { employeeIds: [...selected.keys()] }}
         onClose={() => setInviteOpen(false)} />}
+      {accessOpen && accessToken && <ChangeAccessDialog token={accessToken}
+        people={[...selected.entries()].map(([id, name]) => ({ id, name }))}
+        onClose={() => setAccessOpen(false)}
+        onDone={result => {
+          setAccessNotice(`Access changed for ${result.changed} ${result.changed === 1 ? 'person' : 'people'}${result.skipped.length ? `; ${result.skipped.length} skipped` : ''}.`);
+          void client.invalidateQueries({ queryKey: ['ems-access'] });
+          void client.invalidateQueries({ queryKey: ['ems-access-suggestions'] });
+        }} />}
     </div>
   </ProtectedRoute>;
 }

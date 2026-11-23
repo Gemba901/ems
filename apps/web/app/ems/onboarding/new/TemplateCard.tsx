@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { Download, Eye, Loader2, X } from "lucide-react";
 import { CommunicationChannel } from "@/services/ems.service";
-import { ALWAYS_REQUIRED_FIELDS, findHeaderRow, mapHeaders, MapField } from "../column-map";
+import { ALWAYS_REQUIRED_FIELDS, findHeaderRow, mapHeaders, MapField, pickHeaderSheet } from "../column-map";
 
 const TEMPLATE_URL = "/BEES%20onboarding%20staff-template.xlsx";
 
@@ -83,7 +83,9 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
       }
 
       setWorkbook(parsed);
-      setSheetName(parsed.SheetNames[0]);
+      // Preview the employee sheet (the one with the headings), not the Instructions tab.
+      setSheetName(pickHeaderSheet(parsed.SheetNames.map(name => ({ name,
+        grid: XLSX.utils.sheet_to_json<unknown[]>(parsed.Sheets[name], { header: 1, blankrows: true, defval: "" }) }))) ?? parsed.SheetNames[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Preview failed.");
     } finally {

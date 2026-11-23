@@ -1,5 +1,6 @@
 import { EmsRegistrationService } from './ems-registration.service';
 import { EmsDepartmentDirectoryController } from './ems-department-directory.controller';
+import { EmsAccessController } from './ems-access.controller';
 import { EmsAccountLinksService } from './ems-account-links';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { ConfigModule } from '@nestjs/config';
@@ -18,6 +19,6 @@ import { EmsOrgChartModule } from './org-chart/org-chart.module';
 @Module({
   imports: [TenancyModule, ConfigModule, PrismaModule, DwmsModule, NotificationsModule, RateLimitModule, EmsOrgChartModule],
   providers: [EmsRegistrationService, EmsService, EmsInvitationsService, EmsAccountLinksService, ModuleGuard],
-  controllers: [EmsController, EmsInvitationsController, EmsDepartmentDirectoryController],
+  controllers: [EmsController, EmsInvitationsController, EmsDepartmentDirectoryController, EmsAccessController],
 })
 export class EmsModule {}

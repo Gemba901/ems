@@ -5,127 +5,141 @@ on:
     branches:
       - main
       - staging
+  workflow_dispatch:
+
+# one deploy per branch at a time; never cancel a deploy halfway through. 
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/gemba901/ems-api
 
 jobs:
   build-and-push-api:
-    name: Build and Push API Image
+    name: Build and push API image (GHCR)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      channel: ${{ steps.vars.outputs.channel }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set image tag
+      - name: Pick channel tag
         id: vars
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "channel=prod" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=staging-latest" >> "$GITHUB_OUTPUT"
+            echo "channel=staging" >> "$GITHUB_OUTPUT"
+          fi
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ steps.vars.outputs.channel }}
+          cache-from: type=gha,scope=api-${{ steps.vars.outputs.channel }}
+          cache-to: type=gha,mode=max,scope=api-${{ steps.vars.outputs.channel }}
+
+  deploy-api:
+    name: Deploy API to VPS (${{ github.ref_name }})
+    runs-on: ubuntu-latest
+    needs: build-and-push-api
+    # "production" gets a required reviewer in Github settings; "staging" does not.
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Pick container settings
+        id: cfg
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "name=gemba-api"             >> "$GITHUB_OUTPUT"
+            echo "port=5000"                  >> "$GITHUB_OUTPUT"
+            echo "memory=2g"                  >> "$GITHUB_OUTPUT"
+            echo "envfile=/home/deploy/.env"  >> "$GITHUB_OUTPUT"
+          else
+            echo "name=gemba-api-staging"             >> "$GITHUB_OUTPUT"
+            echo "port=5001"                          >> "$GITHUB_OUTPUT"
+            echo "memory=1g"                          >> "$GITHUB_OUTPUT"
+            echo "envfile=/home/deploy/.env.staging"  >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build and Push API Image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ steps.vars.outputs.tag }}
-        run: |
-          docker build -f apps/api/Dockerfile \
-            -t $ECR_REGISTRY/gemba-api:${{ github.sha }} \
-            -t $ECR_REGISTRY/gemba-api:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/gemba-api:${{ github.sha }}
-          docker push $ECR_REGISTRY/gemba-api:$IMAGE_TAG
-
-  deploy-api-prod:
-    name: Deploy API to EC2 (production)
-    runs-on: ubuntu-latest
-    needs: build-and-push-api
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Deploy API container
+      - name: Pull and restart container
         uses: appleboy/ssh-action@v1.2.0
         env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_REF: ${{ env.IMAGE }}:${{ github.sha }}
+          NAME: ${{ steps.cfg.outputs.name }}
+          HOST_PORT: ${{ steps.cfg.outputs.port }}
+          MEMORY: ${{ steps.cfg.outputs.memory }}
+          ENV_FILE: ${{ steps.cfg.outputs.envfile }}
         with:
-          host: ${{ secrets.API_EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          envs: AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.VPS_HOST_FINGERPRINT }}
+          envs: GHCR_USER,GHCR_TOKEN,IMAGE_REF,NAME,HOST_PORT,MEMORY,ENV_FILE
+          script_stop: true
           script: |
-            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-            ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-            aws ecr get-login-password --region "$AWS_REGION" \
-              | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-            docker pull "$ECR_REGISTRY/gemba-api:latest"
-            docker stop gemba-api || true
-            docker rm gemba-api || true
-            docker run -d \
-              --name gemba-api \
-              --restart unless-stopped \
-              --memory 448m \
-              --memory-swap 704m \
-              -e NODE_OPTIONS=--max-old-space-size=320 \
-              -p 5000:5000 \
-              --env-file /home/ubuntu/.env \
-              --log-driver=awslogs \
-              --log-opt awslogs-region="$AWS_REGION" \
-              --log-opt awslogs-group=/gemba/api/production \
-              --log-opt mode=non-blocking \
-              --log-opt max-buffer-size=4m \
-              "$ECR_REGISTRY/gemba-api:latest"
-            docker image prune -f
+            set -eu
 
-  deploy-api-staging:
-    name: Deploy API to EC2 (staging)
-    runs-on: ubuntu-latest
-    needs: build-and-push-api
-    if: github.ref == 'refs/heads/staging'
+            # The job token expires when the job ends; log out anyway so nothing lingers.
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker pull "$IMAGE_REF"
+            docker logout ghcr.io
 
-    steps:
-      - name: Deploy API container
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        with:
-          host: ${{ secrets.API_EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          envs: AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
-          script: |
-            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-            ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-            aws ecr get-login-password --region "$AWS_REGION" \
-              | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-            docker pull "$ECR_REGISTRY/gemba-api:staging-latest"
-            docker stop gemba-api-staging || true
-            docker rm gemba-api-staging || true
+            # Remember what was running so a rollback is one command.
+            PREV=$(docker inspect --format '{{.Config.Image}}' "$NAME" 2>/dev/null || echo none)
+            echo "Previous image: $PREV"
+
+            docker stop "$NAME" || true
+            docker rm "$NAME" || true
             docker run -d \
-              --name gemba-api-staging \
+              --name "$NAME" \
               --restart unless-stopped \
-              --memory 320m \
-              --memory-swap 576m \
-              -e NODE_OPTIONS=--max-old-space-size=224 \
-              -p 5001:5000 \
-              --env-file /home/ubuntu/.env.staging \
-              --log-driver=awslogs \
-              --log-opt awslogs-region="$AWS_REGION" \
-              --log-opt awslogs-group=/gemba/api/staging \
-              --log-opt mode=non-blocking \
-              --log-opt max-buffer-size=4m \
-              "$ECR_REGISTRY/gemba-api:staging-latest"
-            docker image prune -f
+              --network gemba \
+              --memory "$MEMORY" \
+              -p "127.0.0.1:${HOST_PORT}:5000" \
+              --env-file "$ENV_FILE" \
+              --log-driver json-file \
+              --log-opt max-size=10m \
+              --log-opt max-file=5 \
+              "$IMAGE_REF"
+
+            # Health check: GET / is public (@PublicHealth). Give Nest up to ~60s.
+            for i in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:${HOST_PORT}/" > /dev/null; then
+                echo "Healthy: $IMAGE_REF"
+                docker image prune -f
+                exit 0
+              fi
+              sleep 2
+            done
+
+            echo "Health check FAILED. Last logs:"
+            docker logs --tail 50 "$NAME" || true
+            echo "Roll back with: docker rm -f $NAME && docker run ... $PREV"
+            exit 1

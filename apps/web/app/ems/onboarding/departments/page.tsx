@@ -17,7 +17,15 @@ export default function DepartmentSetupPage() {
   return <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN]}><DepartmentSetup /></ProtectedRoute>;
 }
 
+// Opened from Organisation → Departments, Back returns there; otherwise it returns to the import, as before.
+const RETURN_TARGETS: Record<string, string> = { "/ems/organisation": "Back to Organisation" };
+
 function DepartmentSetup() {
+  const [back, setBack] = useState({ href: "/ems/onboarding/new", label: "Back to new import" });
+  useEffect(() => {
+    const target = new URLSearchParams(window.location.search).get("returnTo");
+    if (target && RETURN_TARGETS[target]) setBack({ href: target, label: RETURN_TARGETS[target] });
+  }, []);
   const { accessToken } = useAuthStore();
   const [departments, setDepartments] = useState<DepartmentWithCount[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,7 +153,7 @@ function DepartmentSetup() {
 
   return <div className="mx-auto max-w-4xl space-y-5 pb-8">
     <div className="flex items-start gap-3">
-      <Link href="/ems/onboarding/new" aria-label="Back to new import" className="mt-1 rounded p-1 text-slate-600 hover:bg-slate-100"><ArrowLeft className="h-5 w-5" /></Link>
+      <Link href={back.href} aria-label={back.label} className="mt-1 rounded p-1 text-slate-600 hover:bg-slate-100"><ArrowLeft className="h-5 w-5" /></Link>
       <div><h1 className="text-2xl font-bold text-slate-900">Set up departments</h1>
         <p className="mt-1 text-sm text-slate-600">Add the departments in this organization before importing employees.</p></div>
     </div>

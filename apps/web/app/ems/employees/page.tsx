@@ -101,7 +101,7 @@ export default function EmsEmployeesPage() {
       <div className="flex items-center gap-3">
         <Link href="/ems" aria-label="Back to EMS" className="text-slate-500 hover:text-purple-800"><ArrowLeft className="h-5 w-5" /></Link>
         <div><h1 className="text-2xl font-bold text-slate-900">Employees</h1><p className="text-sm text-slate-500">Profiles and completeness across your organisation</p></div>
-        <Link href="/ems/departments" className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Departments</Link>
+        <Link href="/ems/organisation" className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Departments</Link>
       </div>
 
       <div className="space-y-2">

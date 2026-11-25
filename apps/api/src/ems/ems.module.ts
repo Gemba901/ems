@@ -13,9 +13,10 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
 import { EmsInvitationsService } from './ems-invitations';
 import { EmsInvitationsController } from './ems-invitations.controller';
 import { RateLimitModule } from 'src/common/rate-limit/rate-limit.module';
+import { EmsOrgChartModule } from './org-chart/org-chart.module';
 
 @Module({
-  imports: [TenancyModule, ConfigModule, PrismaModule, DwmsModule, NotificationsModule, RateLimitModule],
+  imports: [TenancyModule, ConfigModule, PrismaModule, DwmsModule, NotificationsModule, RateLimitModule, EmsOrgChartModule],
   providers: [EmsRegistrationService, EmsService, EmsInvitationsService, EmsAccountLinksService, ModuleGuard],
   controllers: [EmsController, EmsInvitationsController, EmsDepartmentDirectoryController],
 })

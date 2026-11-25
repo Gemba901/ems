@@ -15,7 +15,9 @@
     "test:proxy-integration": "node tests/proxy-route.integration.mjs",
     "test:ui-patterns": "jest --runInBand tests/patterns",
     "test:ui-templates": "jest --runInBand tests/templates",
-    "test:ui-kit": "jest --runInBand"
+    "test:ui-kit": "jest --runInBand",
+    "ui:drift": "node scripts/ui-drift-report.mjs",
+    "test:ui-drift": "node --test tests/ui-drift.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

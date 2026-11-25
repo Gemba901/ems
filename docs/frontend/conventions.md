@@ -2,7 +2,7 @@
 
 **Owner:** Rodgers Munene. **Status:** implemented for team review, 28 October 2026.
 
-These are the Phase 0 foundations for new shared UI work. Existing modules migrate in Phase 5; automated lint/CI enforcement is Phase 4. Review these rules and the visual presentation before merging the foundation changes.
+Use these foundations for new shared UI work. Existing modules migrate in Phase 5. Phase 4 adds ESLint warnings and a CI baseline check for module UI. See the [enforcement workflow](roadmap.md#phase-4-enforcement-m) for local commands and baseline updates.
 
 ## Layers and folders
 
@@ -108,7 +108,7 @@ Send the frontend owner a request containing:
 3. A sketch/example plus required loading, empty, error, disabled and keyboard states.
 4. Whether a second module can reuse it and any accessibility requirements.
 
-The owner decides whether to extend a primitive, create a shared pattern/template, or approve a module-specific exception. Record the decision in the relevant issue/PR; do not create an unreviewed duplicate. Requests and exceptions are reviewed by people until Phase 4 enforcement is built.
+The owner decides whether to extend a primitive, create a shared pattern/template, or approve a module-specific exception. Record the decision in the relevant issue/PR; do not create an unreviewed duplicate. The frontend owner reviews shared additions and module-specific exceptions.
 
 ## Verification and review
 

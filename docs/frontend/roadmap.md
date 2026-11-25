@@ -130,19 +130,22 @@ The goal is to stop every module laying out its pages differently.
 
 The goal is to make the rules automatic instead of relying on reminders.
 
-- [ ] ESLint rules (`no-restricted-syntax`, scoped to `app/**` and `components/<module>/**`, excluding the kit folders):
-  - raw `<button>`, `<input>`, `<select>`, `<textarea>`, `<table>` → use the kit
-  - hex colour literals in `className` / `style` → use tokens
-  - raw Tailwind palette classes (`bg-blue-600`, `text-red-500`…) → use semantic tokens
-  - hand-rolled modals (`fixed inset-0`) → use `Dialog` / `Sheet`
-  - imports from another module's `components/<module>/` → move the part to the kit
-- [ ] **Ratchet script** (`scripts/ui-drift-report`): counts violations per module and compares the counts with a committed `ui-drift-baseline.json`. CI fails if any module's count goes up, and the baseline is lowered as modules are migrated. New code must be clean, and old code isn't forced to change all at once.
-- [ ] Add the lint and the ratchet to the CI gate.
-- [ ] PR template checklist: "uses kit components / tokens / a page template; new shared needs requested from the frontend owner".
-- [ ] Add the kit rules to `apps/web/CLAUDE.md` so AI-generated code follows them.
-- [ ] Add a CODEOWNERS entry for `components/ui/`, `components/patterns/`, `components/templates/` and `app/globals.css` (frontend owner).
+- [x] Scoped ESLint warnings for native controls, hard-coded colours, raw Tailwind palettes, fixed overlays and cross-module component imports.
+- [x] UI drift report and committed baseline grouped by module and rule.
+- [x] GitHub Actions check for pull requests and merge queues.
+- [x] PR template and frontend-kit guidance in `apps/web/CLAUDE.md`.
+- [x] CODEOWNERS entries for the shared kit, design tokens and enforcement configuration.
 
-**Exit:** CI blocks any rise in drift, and kit folders need the owner's review.
+Run `pnpm --filter web ui:drift` to print current counts, and add `--check`
+to validate the committed baseline. After removing violations, add `--write`
+to record the lower counts and commit the baseline with the cleanup. CI
+compares the proposed baseline with the target branch's baseline, so raising
+the proposed counts cannot accommodate regressions. For the initial rollout,
+CI checks the proposed baseline against the scan.
+
+**Exit:** Make `UI drift` a required check and enable required code owner
+reviews in the protected branch rules. GitHub must recognise the CODEOWNERS
+account as having write access.
 
 ### Phase 5: Module migration (L, rolling)
 
@@ -188,6 +191,6 @@ Checklist for each module:
 | 1. Primitives  | In review   | Kit and showcase implemented; see [Phase 1 report](phase-1-report.md) for verification and owner decisions.                                                          |
 | 2. Patterns    | In review   | Pattern kit, Tickets fixture compositions and behaviour tests implemented; see [report](phase-2-report.md).                                                          |
 | 3. Templates   | In review   | Four templates implemented with fixture examples, documentation and tests; see [report](phase-3-report.md).                                                          |
-| 4. Enforcement | Not started | Phase 4 can start in parallel with Phase 2 as lint rules in `warn` mode.                                                                                             |
+| 4. Enforcement | In review   | Rules, baseline, CI and ownership files implemented. Required check and review settings pending.                                                                                             |
 | 5. Migration   | Not started |                                                                                                                                                                      |
 | 6. Lock-in     | Not started |                                                                                                                                                                      |

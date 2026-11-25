@@ -288,8 +288,8 @@ export interface MonitoringProvider {
 // ── 02 Organisation Framework → later areas ──────────────────────────────
 //
 // Read-only views of the organisation (02.01, 02.02) and the approved performance calendars (02.03).
-// The organisation views describe EMS's records (until EMS's service is connected, a temporary read-only source
-// works from the core people records); corrections are made in EMS. Only approved calendar versions cross area
+// The organisation views read the shared EMS service; corrections are made in EMS.
+// Only approved calendar versions cross area
 // boundaries — drafts and in-review revisions never leave Area 02.
 
 // 02.01 · Organogram: the company's units (company → branch → department → section).
@@ -321,6 +321,8 @@ export interface OrganisationUnit {
   departmentId: string | null;
   branch: string | null;
   lead: UnitLead | null;
+  /** Present on department occurrences supplied by EMS; no inferred HOD fallback. */
+  hodState?: 'ASSIGNED' | 'PENDING' | 'UNASSIGNED' | 'NOT_RECORDED' | 'NEEDS_ATTENTION';
   people: UnitPeople;
 }
 

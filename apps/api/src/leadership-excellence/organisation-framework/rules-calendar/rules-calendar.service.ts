@@ -4,7 +4,6 @@ import {
 } from "./calendar-holiday-decisions";
 import {
   CALENDAR_PEOPLE_SOURCE,
-  CoreCalendarPeopleSource,
   type CalendarPeopleSource,
 } from "./calendar-people.source";
 import {
@@ -89,7 +88,7 @@ export class RulesCalendarService implements PerformanceCalendarProvider {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(CALENDAR_PEOPLE_SOURCE)
-    private readonly people: CalendarPeopleSource = new CoreCalendarPeopleSource(),
+    private readonly people: CalendarPeopleSource,
   ) {}
 
   private access(

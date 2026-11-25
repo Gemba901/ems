@@ -21,7 +21,7 @@ export interface OrganogramViewData extends OrganisationStructure {
   };
 }
 
-/** Nest injection token for whichever source currently provides the structure (temporary core records, then EMS). */
+/** Nest injection token for the EMS-backed organisation source. */
 export const ORGANISATION_STRUCTURE_SOURCE = Symbol(
   "ORGANISATION_STRUCTURE_SOURCE",
 );

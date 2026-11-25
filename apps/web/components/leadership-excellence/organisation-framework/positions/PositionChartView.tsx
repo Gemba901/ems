@@ -798,14 +798,15 @@ function serviceLength(from: string | null) {
 
 /**
  * One employee's details, fetched when they're in focus and limited by the API to what this viewer may see.
- * Personal and sensitive details never reach LEX; their full record is in EMS ("View in EMS" once EMS is connected).
+ * Personal contact details stay in EMS. The shared EMS service supplies permitted work fields and profile links.
  */
 function EmployeeDetails({ employeeId }: { employeeId: string }) {
   const { accessToken, user } = useAuthStore();
   const query = useQuery({
-    queryKey: ["lex-person", user?.organizationId, employeeId],
+    queryKey: ["lex-person", user?.organizationId, user?.userId, user?.roleLevel, employeeId],
     queryFn: ({ signal }) => getPersonDetails(accessToken!, employeeId, signal),
-    enabled: !!accessToken, staleTime: 60_000,
+    enabled: !!accessToken && !!user?.organizationId && !!user?.userId,
+    staleTime: 0, gcTime: 0,
   });
   if (query.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading details…</p>;
   if (query.error) return <p role="alert" className="text-sm text-destructive">{(query.error as Error).message}</p>;
@@ -841,7 +842,7 @@ function EmployeeDetails({ employeeId }: { employeeId: string }) {
         {row("Can lead / be a member / take tasks", [d.role.canBeLeader, d.role.canBeMember, d.role.canBeAssignedTasks].map(v => v ? "Yes" : "No").join(" / "))}
       </>}
     </dl>
-    <p className="text-xs text-muted-foreground">{TIER_NOTE[d.tier]}{d.tier !== "BASIC" && " History (positions held, moves, manager changes) comes from EMS once it's connected."}</p>
+    <p className="text-xs text-muted-foreground">{TIER_NOTE[d.tier]}{d.tier !== "BASIC" && " Position and reporting history is not available yet."}</p>
   </div>;
 }
 

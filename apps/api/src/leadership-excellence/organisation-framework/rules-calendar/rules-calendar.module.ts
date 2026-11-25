@@ -1,7 +1,8 @@
 import {
   CALENDAR_PEOPLE_SOURCE,
-  CoreCalendarPeopleSource,
 } from "./calendar-people.source";
+import { EmsDirectoryModule } from 'src/ems/directory/ems-directory.module';
+import { EmsCalendarPeopleSource } from '../ems/ems-calendar-people.source';
 import { Module } from "@nestjs/common";
 import { TenancyModule } from "src/tenancy/tenancy.module";
 import { PrismaModule } from "src/prisma/prisma.module";
@@ -11,12 +12,12 @@ import { RulesCalendarController } from "./rules-calendar.controller";
 import { RulesCalendarService } from "./rules-calendar.service";
 
 @Module({
-  imports: [TenancyModule, PrismaModule, AuthModule],
+  imports: [EmsDirectoryModule, TenancyModule, PrismaModule, AuthModule],
   controllers: [RulesCalendarController],
   providers: [
     RulesCalendarService,
     ModuleGuard,
-    { provide: CALENDAR_PEOPLE_SOURCE, useClass: CoreCalendarPeopleSource },
+    { provide: CALENDAR_PEOPLE_SOURCE, useClass: EmsCalendarPeopleSource },
   ],
   exports: [RulesCalendarService],
 })

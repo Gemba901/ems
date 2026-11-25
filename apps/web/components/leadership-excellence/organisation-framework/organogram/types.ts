@@ -29,6 +29,7 @@ export interface OrganisationUnit {
   departmentId: string | null;
   branch: string | null;
   lead: UnitLead | null;
+  hodState?: 'ASSIGNED' | 'PENDING' | 'UNASSIGNED' | 'NOT_RECORDED' | 'NEEDS_ATTENTION';
   people: UnitPeople;
 }
 /** Minimal directory data for the selected unit; no contacts, account IDs or personal identifiers. */

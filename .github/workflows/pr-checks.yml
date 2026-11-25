@@ -3,7 +3,8 @@ name: PR Checks
 on:
   pull_request:
     branches:
-      - feat/leadership-excellence
+      - staging
+      - main
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
@@ -27,6 +28,8 @@ jobs:
         continue-on-error: true
       - run: pnpm --filter api exec tsc --noEmit -p tsconfig.build.json
       - run: pnpm --filter api build
+      - name: Unit tests
+        run: pnpm --filter api test -- --ci --maxWorkers=2
 
   web:
     name: Web - types, build

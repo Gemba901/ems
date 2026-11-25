@@ -72,13 +72,13 @@ describe('durable registration record transactions', () => {
     expect(db.user.create).not.toHaveBeenCalled(); expect(db.employee.create).not.toHaveBeenCalled();
     expect(db.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
   });
-  it('uses the current role inside the transaction if an Admin becomes HR', async () => {
+  it('HR can register a row the sheet suggested for Admin: it registers as Employee with the suggestion pending', async () => {
     const {db, service, batch} = fixture(), run = hooks();
     batch.records[0].beesAccessLevel = 'Admin';
     run.authorize.mockResolvedValue(Role.HR);
     await service.registerOnboardingRecords('org1','b1',Role.ADMIN,run);
-    expect(db.user.create).not.toHaveBeenCalled(); expect(db.employee.create).not.toHaveBeenCalled();
-    expect(run.checkpoint).toHaveBeenCalledWith(db,'r1','awaitingAdmin');
+    expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({data: expect.objectContaining({suggestedAccess: 'ADMIN', suggestedAccessState: 'PENDING'})}));
+    expect(run.checkpoint).toHaveBeenCalledWith(db,'r1','registered');
   });
   it('skips a target registered by an earlier committed attempt', async () => {
     const {db,service,batch} = fixture(), run = hooks();

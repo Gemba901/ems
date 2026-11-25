@@ -13,7 +13,7 @@ import {
 } from "@/services/ems.service";
 import { ArrowLeft, Loader2, Upload, AlertCircle, FileSpreadsheet, CheckCircle2, Info, ArrowDown } from "lucide-react";
 import {
-  findHeaderRow, scoreHeaderRow, MAPPABLE_FIELDS, MapField, NameOrder, requiredFields, findMappingConflicts,
+  findHeaderRow, scoreHeaderRow, pickHeaderSheet, MAPPABLE_FIELDS, MapField, NameOrder, requiredFields, findMappingConflicts,
 } from "../column-map";
 import {
   importHeaderCells, initialImportMapping, buildImportRows, packImportRows,
@@ -279,7 +279,9 @@ export default function NewOnboardingImportPage() {
       const wb = XLSX.read(buffer, { type: "array", cellNF: true });
       setWorkbook(wb);
 
-      const first = wb.SheetNames[0];
+      // Open the sheet that has the headings (e.g. the template's employee sheet, not its Instructions); HR can still switch.
+      const first = pickHeaderSheet(wb.SheetNames.map(name => ({ name,
+        grid: XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, blankrows: true, defval: "" }) }))) ?? wb.SheetNames[0];
       setSheetName(first);
       loadSheet(wb, first);
     } catch (e: any) {

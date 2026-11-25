@@ -3,7 +3,7 @@ import { useEmsRegistration } from '@/hooks/useEmsRegistration';
 import RegistrationProgressPanel from '@/components/ems/RegistrationProgressPanel';
 import { personFullName } from '@/components/ems/person-name';
 import { FIVE_S_LOCATION_LABELS, normaliseFiveSLocation } from "@/components/ems/five-s-location";
-import { ADMIN_REGISTRATION_MESSAGE, canRegisterOnboarding, registrationAccess } from '@/components/ems/onboarding-access';
+import { canRegisterOnboarding, registrationAccess } from '@/components/ems/onboarding-access';
 import ImportedExtraFields from "@/components/ems/ImportedExtraFields";
 import { REPORTING_BODIES, isReportingBody, reportingBodyLabel } from '@/components/ems/reporting-bodies';
 
@@ -15,6 +15,10 @@ import OnboardingStickyProgress from '@/components/ems/OnboardingStickyProgress'
 import OnboardingChainNotice from '@/components/ems/OnboardingChainNotice';
 import {DUPLICATE_FILTERS, duplicateFilterState, chainRegistrationNotice, type DuplicateFilter} from '@/components/ems/onboarding-editor-controls';
 import OnboardingBatchProgress from '@/components/ems/OnboardingBatchProgress';
+import OnboardingValueFixes from '@/components/ems/OnboardingValueFixes';
+import { EmsAccessService } from '@/services/ems-access.service';
+import { VALUE_FIX_FIELD_LABELS, valueKey, type ValueFixField, type ValueFixGroup, type ValueFixRequest } from '@/components/ems/onboarding-value-fixes';
+import { ISSUE_GROUPS, findingInGroup, issueFilterFromParam, type IssueFilter } from '@/components/ems/onboarding-issue-groups';
 import { isChainFinding, waitingOnChain, needsDuplicateReview, summarizeBatchProgress } from '@/components/ems/onboarding-batch-progress';
 import { DepartmentHodEditor, PersonLinkPicker, PersonSuggestions, PersonSummary, RelieverEditor } from '@/components/ems/OnboardingPeopleLinks';
 
@@ -73,7 +77,7 @@ const EDITABLE_FIELDS: { key: Exclude<keyof UpdateOnboardingRecordPayload, "extr
   { key: "shift",                  label: "Shift" },
   { key: "employmentStatus",       label: "Employment status" },
   { key: "employmentType",         label: "Employment type" },
-  { key: "beesAccessLevel",        label: "Access level" },
+  { key: "beesAccessLevel",        label: "Suggested access" },
   { key: "hodName",                label: "HOD name" },
   { key: "hodDesignation",         label: "HOD job title" },
   { key: "reportingToName",        label: "Reporting to" },
@@ -97,7 +101,7 @@ const EDITOR_CHOICES: Partial<Record<keyof UpdateOnboardingRecordPayload, Record
   gender: {MALE: 'Male', FEMALE: 'Female', OTHER: 'Other'},
   employmentStatus: EMPLOYMENT_STATUS_LABELS,
   employmentType: EMPLOYMENT_TYPE_LABELS,
-  beesAccessLevel: {EMPLOYEE: 'Employee', SUPERVISOR: 'Supervisor', MANAGEMENT: 'Management', HOD: 'Head of department', HR: 'HR', ADMIN: 'Admin'},
+  beesAccessLevel: {EMPLOYEE: 'Employee', SUPERVISOR: 'Supervisor', MANAGEMENT: 'Executive', HOD: 'Head of department', HR: 'HR', ADMIN: 'Admin'},
 };
 const editorValueKey = (value?: string | null) => (value ?? '').replace(/[\n\r]+/g, ' ').replace(/\([^)]*\)/g, '')
   .replace(/\s*\/\s*/g, ' ').replace(/[^a-zA-Z0-9]+/g, '').toLowerCase();
@@ -117,7 +121,7 @@ function editorChoice(key: keyof UpdateOnboardingRecordPayload, value?: string |
   const normalised = editorValueKey(value);
   if (key === 'gender' && ['m', 'f'].includes(normalised)) return normalised === 'm' ? 'MALE' : 'FEMALE';
   if (key === 'beesAccessLevel') {
-    const aliases: Record<string, string> = {manager: 'MANAGEMENT', headofdepartment: 'HOD', humanresources: 'HR', administrator: 'ADMIN', systemadministrator: 'ADMIN'};
+    const aliases: Record<string, string> = {management: 'MANAGEMENT', executive: 'MANAGEMENT', exec: 'MANAGEMENT', seniormanagement: 'MANAGEMENT', director: 'MANAGEMENT', managingdirector: 'MANAGEMENT', md: 'MANAGEMENT', ceo: 'MANAGEMENT', headofdepartment: 'HOD', humanresources: 'HR', administrator: 'ADMIN', systemadministrator: 'ADMIN'};
     if (aliases[normalised]) return aliases[normalised];
   }
   return Object.keys(EDITOR_CHOICES[key] ?? {}).find(choice => editorValueKey(choice) === normalised) ?? '__imported__';
@@ -163,35 +167,25 @@ function editorFindings(record: OnboardingRecord, draft: UpdateOnboardingRecordP
       if (message && !editorNA(draft[key])) local(key, message);
     }
     for (const key of Object.keys(EDITOR_CHOICES) as Exclude<keyof UpdateOnboardingRecordPayload, "extraFields">[]) {
-      if (editorChoice(key, draft[key]) === '__imported__') local(key, 'Choose one of the listed values.');
+      if (editorChoice(key, draft[key]) !== '__imported__') continue;
+      // Suggested access is optional: an odd value only means no suggestion (they register as Employee).
+      if (key === 'beesAccessLevel') add(key, 'Not a recognised access level. They will register as Employee with no suggestion.', false, true);
+      else local(key, 'Choose one of the listed values.');
     }
   }
   return result;
 }
 
-type IssueType = '' | 'imported' | 'contact' | 'reporting' | 'duplicate' | 'identity' | 'work';
 type RecordSort = 'import' | 'fewest' | 'most' | 'name' | 'recent';
 type RecordFilters = { search: string; department: string; status: '' | OnboardingRecordStatus | 'WAITING' | 'NEEDS_REVIEW';
-  duplicate: DuplicateFilter; issue: IssueType; sort: RecordSort; reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT' };
+  duplicate: DuplicateFilter; issue: IssueFilter; sort: RecordSort; reportingTarget: string; reportingLabel: string; scope: 'BRANCH' | 'DIRECT';
+  /** "Show" in Values to sort out: only the waiting records with this odd value (not kept in the address). */
+  value?: { field: ValueFixField; key: string; label: string } };
 const EMPTY_FILTERS: RecordFilters = {search: '', department: '', status: '', duplicate: '', issue: '', sort: 'import', reportingTarget: '', reportingLabel: '', scope: 'BRANCH'};
-const ISSUE_TYPES: {value: IssueType; label: string}[] = [
-  {value: '', label: 'All issue types'}, {value: 'imported', label: 'Imported values (dates etc.)'}, {value: 'contact', label: 'Contact numbers & email'},
-  {value: 'reporting', label: 'Reporting, HOD & relievers'}, {value: 'duplicate', label: 'Possible duplicates'},
-  {value: 'identity', label: 'Names & employee code'}, {value: 'work', label: 'Work details'},
-];
 const RECORD_SORTS: {value: RecordSort; label: string}[] = [
   {value: 'import', label: 'Reporting order'}, {value: 'fewest', label: 'Fewest issues first'}, {value: 'most', label: 'Most issues first'},
   {value: 'name', label: 'Name A–Z'}, {value: 'recent', label: 'Recently changed'},
 ];
-/** Which kind of problem a finding is, for the Issue type filter. */
-function issueTypeOf(field: string, code?: string): Exclude<IssueType, ''> {
-  if (field === 'duplicateReview' || code === 'DUPLICATE_PERSON') return 'duplicate';
-  if (field === 'extraFields') return 'imported';
-  if (['mobileNumber', 'whatsappNumber', 'workEmail'].includes(field)) return 'contact';
-  if (/^(reportingTo|reportingTarget|hod|reliever)/.test(field)) return 'reporting';
-  if (['firstName', 'middleName', 'lastName', 'employeeCode'].includes(field)) return 'identity';
-  return 'work';
-}
 /** Issues that stop registration (warnings don't count). */
 const blockingCount = (record: OnboardingRecord) => (record.validationErrors ?? []).filter(finding => finding.severity !== 'warning').length;
 const fullName = (record: OnboardingRecord) => personFullName(record);
@@ -231,13 +225,13 @@ function filtersFromUrl(search: string): Partial<RecordFilters> {
   const status = params.get(FILTER_PARAMS.status);
   if (status && ['DRAFT', 'READY', 'NEEDS_FIXING', 'REGISTERED', 'EXCLUDED', 'WAITING', 'NEEDS_REVIEW'].includes(status)) found.status = status as RecordFilters['status'];
   const duplicate = params.get(FILTER_PARAMS.duplicate); if (duplicate && DUPLICATE_FILTERS.some(option => option.value === duplicate)) found.duplicate = duplicate as DuplicateFilter;
-  const issue = params.get(FILTER_PARAMS.issue); if (issue && ISSUE_TYPES.some(option => option.value === issue)) found.issue = issue as IssueType;
+  const issue = issueFilterFromParam(params.get(FILTER_PARAMS.issue)); if (issue) found.issue = issue;
   const sort = params.get(FILTER_PARAMS.sort); if (sort && RECORD_SORTS.some(option => option.value === sort)) found.sort = sort as RecordSort;
   return found;
 }
 const normaliseFilter = (value: string | null | undefined) => (value ?? '').normalize('NFKD').replace(/\p{M}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase();
 const departmentKey = (value: string | null) => normaliseFilter(value) ? `department:${normaliseFilter(value)}` : 'MISSING';
-const hasFilters = (filters: RecordFilters) => !!(filters.search.trim() || filters.department || filters.status || filters.duplicate || filters.issue || filters.reportingTarget);
+const hasFilters = (filters: RecordFilters) => !!(filters.search.trim() || filters.department || filters.status || filters.duplicate || filters.issue || filters.reportingTarget || filters.value);
 
 // Use person IDs and known reporting edges. Never infer a link from matching names.
 function reportingFilterModel(batch?: OnboardingBatchDetail) {
@@ -306,7 +300,8 @@ function matchingRecordIds(batch: OnboardingBatchDetail | undefined, filters: Re
       && (!filters.department || filters.department === departmentKey(record.currentDepartment))
       && (!filters.status || filters.status === status)
       && (!filters.duplicate || duplicateFilterState(record) === filters.duplicate)
-      && (!filters.issue || (record.validationErrors ?? []).some(finding => issueTypeOf(finding.field, finding.code) === filters.issue))
+      && (!filters.issue || (record.validationErrors ?? []).some(finding => findingInGroup(finding, filters.issue)))
+      && (!filters.value || (!['REGISTERED', 'EXCLUDED'].includes(record.status) && valueKey(record[filters.value.field]) === filters.value.key))
       && (!selected || branch.has(model.canonical(`record:${record.id}`)));
   }).map(record => record.id));
 }
@@ -1111,18 +1106,17 @@ function RecordEditor({
             </label>
             {requiredHere && <span aria-hidden="true" className="text-[11px] font-semibold text-red-500"> *</span>}
             {choices ? <select {...props} value={selected}>
-              <option value="">{key === 'beesAccessLevel' ? 'Choose access level' : key === 'employmentStatus' ? 'Not provided — registers as Active' : 'Not provided'}</option>
+              <option value="">{key === 'beesAccessLevel' ? 'No suggestion (Employee)' : key === 'employmentStatus' ? 'Choose a status' : 'Not provided'}</option>
               {selected === '__imported__' && <option value="__imported__" disabled>Imported: {draft[key]} — not recognised</option>}
               {Object.entries(choices).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
-              {!['beesAccessLevel', 'fiveSLocationCategory'].includes(key) && <option value="N/A">{key === 'employmentStatus' ? 'N/A — registers as Active' : 'Not applicable (N/A)'}</option>}
+              {!['beesAccessLevel', 'fiveSLocationCategory', 'employmentStatus'].includes(key) && <option value="N/A">Not applicable (N/A)</option>}
             </select> : (key === 'currentDepartment' || key === 'jobDesignation') ? <OnboardingWorkField {...props}
               value={draft[key] ?? ''} label={label} options={workOptions[key]}
               onChangeValue={value => { setHighlightReview(false); setFeedback(null); setDraft(d => ({...d, [key]: value})); }} />
               : <input {...props} type="text" value={draft[key] ?? ''} />}
             {key === 'beesAccessLevel' && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-600">
-              {!locked && registrationAccess(actorRole, draft.beesAccessLevel) === 'ADMIN_REQUIRED'
-                ? `${ADMIN_REGISTRATION_MESSAGE} You can save this choice for them.`
-                : 'Account permissions are separate from job title and HOD assignment. Supervisor uses Employee access.'}
+              Everyone registers as Employee. Anything higher is a suggestion an Admin approves after registration.
+              Account access is separate from job title and HOD assignment.
             </p>}
             {(key === 'firstName' || key === 'lastName') && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-500">At least 2 letters; spaces and punctuation do not count.</p>}
             {(key === 'currentDepartment' || key === 'jobDesignation') && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-500">
@@ -1380,6 +1374,24 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     // Preserve the open draft. If it falls outside the filters, show it explicitly as an extra row.
     setFilters(next); setRevealedId(null); setPageNumber(1);
   };
+  // Values to sort out → Show: the list switches to that value's records and scrolls to it; Hide puts the earlier view back.
+  const [valueShow, setValueShow] = useState<{ previous: RecordFilters } | null>(null);
+  const scrollTo = (selector: string) => requestAnimationFrame(() =>
+    document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  const showValue = (group: ValueFixGroup) => {
+    if (foregroundBusy) return;
+    const previous = valueShow?.previous ?? filters;
+    setValueShow({ previous });
+    changeFilters({ ...EMPTY_FILTERS, value: { field: group.field, key: group.key, label: group.value } });
+    scrollTo('[data-viewport-anchor="batch-filters"]');
+  };
+  const hideValue = (scroll = true) => {
+    if (!valueShow || foregroundBusy) return;
+    changeFilters(valueShow.previous); setValueShow(null);
+    if (scroll) scrollTo('[data-value-fixes]');
+  };
+  // Another filter replaced the value view: forget the saved view.
+  useEffect(() => { if (!filters.value && valueShow) setValueShow(null); }, [filters.value, valueShow]);
   const hideExtraRecords = () => {
     if (busy) return;
     if (openRow && !matchingIds.has(openRow)) {
@@ -1542,6 +1554,34 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
     onError: (error: Error, recordId) => failedAction('include', error, recordId),
   });
 
+  // "Treat as" / "Set blanks to Active": one value for every matching unregistered record, then the import is validated again.
+  const fixValues = useMutation({
+    onMutate: beginAction,
+    mutationFn: (vars: {fix: ValueFixRequest; count: number; label: string}) => EmsService.replaceOnboardingValues(id, vars.fix, accessToken!),
+    onSuccess: (updated, vars) => {
+      finishBatchAction(updated, `${vars.label} · ${vars.count} ${vars.count === 1 ? 'record' : 'records'}`);
+      // Those records no longer have the value: leave the value view.
+      if (filters.value && filters.value.field === vars.fix.field && !vars.fix.blanks && valueKey(vars.fix.from) === filters.value.key && valueShow) {
+        setFilters(valueShow.previous); setValueShow(null); setPageNumber(1);
+      }
+      if (vars.fix.remember) void queryClient.invalidateQueries({queryKey: ['ems-import-value-choices']});
+    },
+    onError: (error: Error) => failedAction('values', error),
+  });
+
+  // Remembered "Treat as" choices for this company, offered pre-selected in Values to sort out.
+  const valueChoices = useQuery({ queryKey: ['ems-import-value-choices', user?.organizationId], queryFn: () => EmsService.importValueChoices(accessToken!),
+    enabled: !!accessToken && canRegisterOnboarding(user?.roleLevel) });
+  const forgetChoice = useMutation({
+    mutationFn: (choice: {field: string; value: string}) => EmsService.forgetImportValueChoice(choice, accessToken!),
+    onSuccess: () => queryClient.invalidateQueries({queryKey: ['ems-import-value-choices']}),
+  });
+  // People this import suggested for access above Employee, waiting for an Admin.
+  const accessSuggestions = useQuery({ queryKey: ['ems-access-suggestions', user?.organizationId, id],
+    queryFn: () => EmsAccessService.suggestions(accessToken!, id),
+    enabled: !!accessToken && canRegisterOnboarding(user?.roleLevel) && (batch?.records ?? []).some(r => r.status === 'REGISTERED') });
+  const suggestionsWaiting = accessSuggestions.data?.suggestions.length ?? 0;
+
   const registration = useEmsRegistration(id, accessToken, canRegisterOnboarding(user?.roleLevel));
   const register = registration.start;
 
@@ -1602,7 +1642,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
   const [hodBulkError, setHodBulkError] = useState<string | null>(null);
   const hodSuggestions = useMemo(() => suggestedHodConfirmations(batch), [batch]);
   const foregroundBusy = saveHod.isPending || undoDuplicate.isPending || confirmDuplicate.isPending || save.isPending || exclude.isPending || include.isPending ||
-    updateCountry.isPending || validate.isPending || hodBulkRunning;
+    updateCountry.isPending || validate.isPending || hodBulkRunning || fixValues.isPending;
   const busy = foregroundBusy || registration.busy;
   async function confirmSuggestedHods(keys: string[]) {
     setHodBulkRunning(true); setHodBulkError(null);
@@ -1904,6 +1944,18 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
 
         {mutationError && <p role="alert" className="text-sm text-red-600">{mutationError}</p>}
 
+        {batch && !closed && canRegisterOnboarding(user?.roleLevel) && <OnboardingValueFixes records={records} role={user?.roleLevel}
+          disabled={busy} dirty={editorDirty}
+          onApply={(fix, count, label) => fixValues.mutate({fix, count, label})}
+          shown={filters.value ? `${filters.value.field}:${filters.value.key}` : null}
+          onShow={group => filters.value && filters.value.field === group.field && filters.value.key === group.key ? hideValue() : showValue(group)}
+          remembered={valueChoices.data?.choices ?? []} onForget={choice => forgetChoice.mutate(choice)} />}
+
+        {suggestionsWaiting > 0 && <p data-access-suggestions className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {suggestionsWaiting} {suggestionsWaiting === 1 ? 'person' : 'people'} from this import {suggestionsWaiting === 1 ? 'was' : 'were'} suggested for higher access.
+          They registered as Employee. <Link href={`/ems/access?batch=${encodeURIComponent(id)}`} className="font-semibold underline">Review access</Link>
+        </p>}
+
         {batch && <OnboardingHierarchyChart batch={batch} busy={foregroundBusy} dirty={editorDirty} onViewRecord={visitChartRecord} />}
 
         {batch && <section aria-label="Filter records" data-viewport-anchor="batch-filters" className="rounded-xl border border-slate-200 bg-white px-3 py-2 space-y-2">
@@ -1972,9 +2024,9 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
               </select>
             </div>
             <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-issue">Issue type</label>
-              <select id="onboarding-filter-issue" disabled={foregroundBusy} value={filters.issue} onChange={event => changeFilters({...filters, issue: event.target.value as IssueType})}
+              <select id="onboarding-filter-issue" disabled={foregroundBusy} value={filters.issue} onChange={event => changeFilters({...filters, issue: event.target.value as IssueFilter})}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
-                {ISSUE_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                {ISSUE_GROUPS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
             <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-sort">Sort</label>
@@ -2011,6 +2063,12 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
             </fieldset>
             <p id="reporting-filter-help" className="text-xs text-slate-500">Full branch includes the selected person and their known descendants. Direct reports shows the next level. Only this import's records are listed.</p>
           </div>
+          {filters.value && <div className="flex min-w-0 flex-wrap gap-1.5" data-value-chip>
+            <button type="button" disabled={foregroundBusy} onClick={() => hideValue()} aria-label="Stop showing only this value"
+              className="max-w-full break-words rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-left text-xs text-amber-950 disabled:opacity-50">
+              Value: “{filters.value.label}” ({VALUE_FIX_FIELD_LABELS[filters.value.field]}) <span aria-hidden="true">×</span>
+            </button>
+          </div>}
           {advancedFilterCount > 0 && <div aria-label="Active additional filters" className="flex min-w-0 flex-wrap gap-1.5">
             {filters.reportingTarget && <button type="button" disabled={foregroundBusy} onClick={() => changeFilters({...filters, reportingTarget: '', reportingLabel: ''})}
               aria-label="Remove reporting branch filter" className="max-w-full break-words rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-left text-xs text-purple-900 disabled:opacity-50">

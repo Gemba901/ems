@@ -68,64 +68,40 @@ describe('Onboarding access authority', () => {
     expect(db.userOrganization.upsert).toHaveBeenCalledWith(expect.objectContaining({update:{}, create:expect.objectContaining({organizationId:'org1',roleId:10})}));
   });
 
-  it.each(['HOD', 'HR', 'Management', 'Admin', 'Head of Department', 'System Administrator'])('HR skips %s without changing Ready or creating accounts', async access => {
+  it.each(['HOD', 'HR', 'Management', 'Executive', 'Admin', 'Head of Department', 'System Administrator'])('HR registers %s as Employee and records the suggestion', async access => {
     const {service, db, batch} = fixture();
     batch.records[0].beesAccessLevel = access;
-    const before = JSON.stringify(batch);
-    expect(await service.registerOnboardingBatch('org1', 'b1', Role.HR)).toMatchObject({registered:0, failed:0, awaitingAdmin:1});
-    expect(JSON.stringify(batch)).toBe(before);
-    expect(db.$transaction).not.toHaveBeenCalled();
-    expect(db.user.create).not.toHaveBeenCalled();
-    expect(db.userOrganization.upsert).not.toHaveBeenCalled();
-    expect(db.employee.create).not.toHaveBeenCalled();
-    expect(db.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
-    expect(db.emsOnboardingBatch.updateMany).not.toHaveBeenCalled();
+    expect(await service.registerOnboardingBatch('org1', 'b1', Role.HR)).toMatchObject({registered:1, failed:0, awaitingAdmin:0});
+    expect(db.userOrganization.upsert).toHaveBeenCalledWith(expect.objectContaining({update:{}, create:expect.objectContaining({roleId:10})}));
+    expect(db.employee.create).toHaveBeenCalledWith(expect.objectContaining({data: expect.objectContaining({
+      beesAccessLevel: access, suggestedAccess: importedAccountRole(access), suggestedAccessState: 'PENDING'})}));
   });
 
-  it.each([Role.ADMIN, Role.SUPER_ADMIN])('%s can register each supported organisation role', async actor => {
-    for (const access of ['Employee','HOD','HR','Management','Admin']) {
+  it.each([Role.ADMIN, Role.SUPER_ADMIN])('%s also registers everyone as Employee; Employee and Supervisor carry no suggestion', async actor => {
+    for (const access of ['Employee','Supervisor','HOD','HR','Management','Admin']) {
       const {service, db, batch} = fixture();
       batch.records[0].beesAccessLevel = access;
       expect(await service.registerOnboardingBatch('org1', 'b1', actor)).toMatchObject({registered:1, failed:0, awaitingAdmin:0});
-      const assigned = db.userOrganization.upsert.mock.calls[0][0].create.roleId;
-      expect((await db.role.findMany()).find((r:{id:number}) => r.id === assigned)?.name).toBe(importedAccountRole(access));
+      expect(db.userOrganization.upsert.mock.calls[0][0].create.roleId).toBe(10);
+      const pending = importedAccountRole(access) !== 'EMPLOYEE';
+      expect(db.employee.create.mock.calls[0][0].data).toMatchObject({suggestedAccess: pending ? importedAccountRole(access) : null, suggestedAccessState: pending ? 'PENDING' : null});
     }
   });
 
-  it('registers eligible rows in a mixed batch and leaves the elevated row Ready for an Admin', async () => {
+  it('registers a mixed batch in one go', async () => {
     const {service, db, batch} = fixture();
     batch.records.push({...row('r2', '0712345679'), beesAccessLevel:'Admin'});
-    expect(await service.registerOnboardingBatch('org1', 'b1', Role.HR)).toMatchObject({registered:1, failed:0, awaitingAdmin:1});
-    expect(batch.records.map(r => r.status)).toEqual(['REGISTERED','READY']);
-    expect(db.employee.create).toHaveBeenCalledTimes(1);
-    expect(db.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
-    expect(db.emsOnboardingBatch.updateMany).toHaveBeenCalledWith(expect.objectContaining({data:{status:'PARTIALLY_REGISTERED'}}));
-    expect(await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN)).toMatchObject({registered:1, failed:0, awaitingAdmin:0});
+    expect(await service.registerOnboardingBatch('org1', 'b1', Role.HR)).toMatchObject({registered:2, failed:0, awaitingAdmin:0});
     expect(batch.records.map(r => r.status)).toEqual(['REGISTERED','REGISTERED']);
     expect(db.employee.create).toHaveBeenCalledTimes(2);
   });
 
-  it('rechecks access after a concurrent row change before any account writes', async () => {
-    const {service, db, batch} = fixture();
-    db.$transaction.mockImplementation(async callback => {
-      batch.records[0].beesAccessLevel = 'Admin';
-      return callback(db);
-    });
-    expect(await service.registerOnboardingBatch('org1', 'b1', Role.HR)).toMatchObject({registered:0, failed:0, awaitingAdmin:1});
-    expect(batch.records[0].status).toBe('READY');
-    expect(db.user.create).not.toHaveBeenCalled();
-    expect(db.userOrganization.upsert).not.toHaveBeenCalled();
-    expect(db.employee.create).not.toHaveBeenCalled();
-    expect(db.emsOnboardingRecord.updateMany).not.toHaveBeenCalled();
-  });
-
-  it.each(['SUPER_ADMIN', 'super admin', '__proto__', 'constructor'])('never creates platform or unknown access from %s', async access => {
+  it.each(['SUPER_ADMIN', 'super admin', '__proto__', 'constructor', 'Team Lead', ''])('never suggests platform or unknown access from %s', async access => {
     const {service, db, batch} = fixture();
     batch.records[0].beesAccessLevel = access;
-    expect(await service.registerOnboardingBatch('org1', 'b1', Role.SUPER_ADMIN)).toMatchObject({registered:0, failed:1, awaitingAdmin:0});
-    expect(db.user.create).not.toHaveBeenCalled();
-    expect(db.userOrganization.upsert).not.toHaveBeenCalled();
-    expect(db.employee.create).not.toHaveBeenCalled();
+    expect(await service.registerOnboardingBatch('org1', 'b1', Role.SUPER_ADMIN)).toMatchObject({registered:1, failed:0});
+    expect(db.userOrganization.upsert.mock.calls[0][0].create.roleId).toBe(10);
+    expect(db.employee.create.mock.calls[0][0].data).toMatchObject({suggestedAccess: null, suggestedAccessState: null});
   });
 
   it('a Head of Department designation does not grant HOD account permissions', async () => {
@@ -139,7 +115,7 @@ describe('Onboarding access authority', () => {
     expect(db.emsDepartmentHod.findMany).toHaveBeenCalled();
   });
 
-  it('preserves an existing account membership instead of replacing its role from the sheet', async () => {
+  it('preserves an existing account membership; a new link carries Employee and the sheet value stays a suggestion', async () => {
     const {service, db, batch} = fixture();
     batch.records[0].beesAccessLevel = 'Admin';
     db.$queryRaw.mockImplementation(async sql => String(sql[0]).includes('SELECT id, phone, email')
@@ -147,7 +123,8 @@ describe('Onboarding access authority', () => {
     await service.registerOnboardingBatch('org1', 'b1', Role.ADMIN);
     expect(db.user.create).not.toHaveBeenCalled();
     expect(db.userOrganization.upsert).not.toHaveBeenCalled();
-    expect(db.emsAccountLink.create).toHaveBeenCalledWith(expect.objectContaining({data: expect.objectContaining({userId: 'existing', roleId: 14})}));
+    expect(db.emsAccountLink.create).toHaveBeenCalledWith(expect.objectContaining({data: expect.objectContaining({userId: 'existing', roleId: 10})}));
+    expect(db.employee.create.mock.calls[0][0].data).toMatchObject({suggestedAccess: 'ADMIN', suggestedAccessState: 'PENDING'});
   });
 
   it('passes the trusted actor and company to the durable run and keeps its route roles', async () => {

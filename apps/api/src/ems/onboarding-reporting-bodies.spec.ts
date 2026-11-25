@@ -10,10 +10,10 @@ import { UpdateEmployeeReportingDto, UpdateOnboardingRecordDto } from './dto/onb
 function setup() {
   const manager: any = { id: 'manager', batchId: 'batch', organizationId: 'org', status: 'NEEDS_FIXING',
     firstName: 'Peter', lastName: 'Otieno', jobDesignation: 'HOD', employeeCode: 'M1', mobileNumber: 'bad', whatsappNumber: 'bad',
-    beesAccessLevel: 'employee', currentDepartment: 'Production', reportingToName: null, reportingToDesignation: 'Board' };
+    employmentStatus: 'Active', beesAccessLevel: 'employee', currentDepartment: 'Production', reportingToName: null, reportingToDesignation: 'Board' };
   const ann: any = { id: 'ann', batchId: 'batch', organizationId: 'org', status: 'READY',
     firstName: 'Ann', lastName: 'Akinyi', employeeCode: 'A1', jobDesignation: 'Operator', mobileNumber: '0712345678', whatsappNumber: '0712345678',
-    beesAccessLevel: 'employee', currentDepartment: 'Production', reportingToRecordId: 'manager', reportingToName: 'Peter Otieno', reportingToDesignation: 'HOD' };
+    employmentStatus: 'Active', beesAccessLevel: 'employee', currentDepartment: 'Production', reportingToRecordId: 'manager', reportingToName: 'Peter Otieno', reportingToDesignation: 'HOD' };
   const batch: any = { id: 'batch', organizationId: 'org', status: 'READY', defaultPhoneCountry: 'KE', records: [ann, manager] };
   const employees: any[] = [];
   const db: any = {

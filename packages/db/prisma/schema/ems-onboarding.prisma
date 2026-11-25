@@ -171,6 +171,24 @@ model EmsImportColumnChoice {
   @@unique([organizationId, headingKey])
 }
 
+/// "Treat as" choices remembered for a company: an odd value in a fixed-list import column and what it means,
+/// e.g. employmentType "perm" → FULL_TIME. Offered pre-selected on later imports; HR still applies them.
+model EmsImportValueChoice {
+  id             String   @id @default(uuid())
+  organizationId String
+  field          String   @db.VarChar(40)
+  /// Value compared case-, space- and punctuation-insensitively, e.g. "perm".
+  valueKey       String   @db.VarChar(200)
+  /// Last spelling as written, for display.
+  value          String   @db.VarChar(200)
+  choice         String   @db.VarChar(40)
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, field, valueKey])
+}
+
 /// The current account invitation for one employee (one row per employee; resending replaces it).
 /// Only a hash of the link token is stored. Status is SENT (email), SHARED (link created for
 /// WhatsApp or copying), NOTICE_SENT (no link: already has a password, or a shared contact),

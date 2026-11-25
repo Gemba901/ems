@@ -25,7 +25,14 @@ model Employee {
   plantBranch  String?
 
   companyCode     String?
+  /// The import sheet's access text, kept for reference. It never grants access; see suggestedAccess.
   beesAccessLevel String?
+  /// Access the import sheet suggested above Employee. Everyone registers as Employee; an Admin approves or declines.
+  suggestedAccess      RoleName?
+  suggestedAccessState EmsAccessSuggestionState?
+  /// Bumped on every access change or decision, for "changed since you opened it" checks.
+  accessRevision       Int @default(0)
+  accessChanges        EmsAccessChange[]
   hodName         String?
   hodDesignation  String?
 
@@ -373,6 +380,34 @@ model EmsEmploymentStatusChange {
   previousJobTitle String?
   activitySync String @default("PENDING")
   @@unique([organizationId, requestId])
+  @@index([organizationId, employeeId, changedAt])
+}
+
+enum EmsAccessSuggestionState {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+/// Access history: every change of a person's company role made in EMS, and every decision on a suggestion.
+/// kind: CHANGED (Change access), APPROVED / DECLINED (a suggestion from an import).
+model EmsAccessChange {
+  id                String    @id @default(uuid())
+  organizationId    String
+  employeeId        String?
+  employee          Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  /// Kept if the profile is later deleted.
+  subjectEmployeeId String
+  userId            String?
+  kind              String    @db.VarChar(20)
+  fromRole          RoleName?
+  toRole            RoleName?
+  suggestedRole     RoleName?
+  reason            String    @db.VarChar(500)
+  actorUserId       String
+  actorName         String?
+  changedAt         DateTime  @default(now())
+
   @@index([organizationId, employeeId, changedAt])
 }
 

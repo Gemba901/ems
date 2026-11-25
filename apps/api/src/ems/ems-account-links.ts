@@ -67,7 +67,8 @@ export class EmsAccountLinksService {
     return row.employee.organizationId === row.organizationId && row.organization.status === 'ACTIVE'
       && row.employee.userId === null && isActiveEmployment(row.employee.employmentStatus)
       && storedPhone(row.employee.phone) === row.requestedPhone && storedPhone(row.user.phone) === row.requestedPhone
-      && importedAccountRole(row.employee.beesAccessLevel) === row.role.name;
+      // New links carry Employee (everyone registers as Employee); older ones carry the imported access.
+      && (row.role.name === 'EMPLOYEE' || importedAccountRole(row.employee.beesAccessLevel) === row.role.name);
   }
 
   async preview(organizationId: string, employeeId: string, resend: boolean) {

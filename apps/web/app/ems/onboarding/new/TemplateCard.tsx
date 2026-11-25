@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { Download, Eye, Loader2, X } from "lucide-react";
 import { CommunicationChannel } from "@/services/ems.service";
-import { ALWAYS_REQUIRED_FIELDS, findHeaderRow, mapHeaders, MapField } from "../column-map";
+import { ALWAYS_REQUIRED_FIELDS, findHeaderRow, mapHeaders, MapField, pickHeaderSheet } from "../column-map";
 
 const TEMPLATE_URL = "/BEES%20onboarding%20staff-template.xlsx";
 
@@ -54,6 +54,8 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
       { header: 1, defval: "" },
     );
   }, [workbook, sheetName]);
+    // Merged cells (e.g. the key line across row 1) span their columns here, as in Excel.
+  const merges = useMemo(() => (workbook && sheetName ? workbook.Sheets[sheetName]["!merges"] ?? [] : []), [workbook, sheetName]);
 
   // Colour the header row the way the import will treat each column.
   const headerIndex = useMemo(() => (rows.length ? findHeaderRow(rows) : -1), [rows]);
@@ -83,7 +85,9 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
       }
 
       setWorkbook(parsed);
-      setSheetName(parsed.SheetNames[0]);
+      // Preview the employee sheet (the one with the headings), not the Instructions tab.
+      setSheetName(pickHeaderSheet(parsed.SheetNames.map(name => ({ name,
+        grid: XLSX.utils.sheet_to_json<unknown[]>(parsed.Sheets[name], { header: 1, blankrows: true, defval: "" }) }))) ?? parsed.SheetNames[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Preview failed.");
     } finally {
@@ -194,6 +198,9 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
                       {rows.map((row, rowIndex) => (
                         <tr key={rowIndex}>
                           {row.map((cell, cellIndex) => {
+                            const merge = merges.find(m => m.s.r === rowIndex && m.s.c === cellIndex);
+                            // A cell covered by a merge started elsewhere isn't drawn: the merge's first cell spans over it.
+                            if (!merge && merges.some(m => rowIndex >= m.s.r && rowIndex <= m.e.r && cellIndex >= m.s.c && cellIndex <= m.e.c)) return null;
                             const kind = rowIndex === headerIndex ? headerKinds[cellIndex] : null;
                             const isYourChannel =
                               kind === "channel" && channelField !== null &&
@@ -201,6 +208,8 @@ export default function TemplateCard({ channel = null }: { channel?: Communicati
                             return (
                               <td
                                 key={cellIndex}
+                                colSpan={merge ? merge.e.c - merge.s.c + 1 : undefined}
+                                rowSpan={merge ? merge.e.r - merge.s.r + 1 : undefined}
                                 className={`min-w-28 whitespace-nowrap border border-slate-200 px-3 py-2 ${
                                   kind ? `${KIND_STYLE[kind].cell} font-semibold` : ""
                                 }`}

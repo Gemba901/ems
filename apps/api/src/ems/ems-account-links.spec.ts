@@ -136,12 +136,26 @@ describe('existing-account verification and consent', () => {
     expect(await f.service.lookup('a',token)).toMatchObject({valid:false});
   });
 
-  it('changed role, phone or account linkage blocks stale acceptance', async () => {
-    for (const change of [{beesAccessLevel:'Admin'},{phone:'254711222333'},{userId:'different-user'}]) {
+  it('changed phone or account linkage blocks stale acceptance', async () => {
+    for (const change of [{phone:'254711222333'},{userId:'different-user'}]) {
       const f=fixture({status:'VERIFIED',verifiedAt:new Date()});f.setRow({employee:{...f.row.employee,...change}});
       await expect(f.service.accept('a',token,true,'Abcdefghij12')).rejects.toThrow();
       expect(f.db.userOrganization.upsert).not.toHaveBeenCalled();
     }
+  });
+
+  it('an older link carrying the imported access still needs the sheet value to match', async () => {
+    for (const change of [{beesAccessLevel:'Admin'}]) {
+      const f=fixture({status:'VERIFIED',verifiedAt:new Date(),role:{name:'HOD'}});f.setRow({employee:{...f.row.employee,...change}});
+      await expect(f.service.accept('a',token,true,'Abcdefghij12')).rejects.toThrow();
+      expect(f.db.userOrganization.upsert).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a new Employee link is not blocked by a later change to the sheet access text (it grants nothing)', async () => {
+    const f=fixture({status:'VERIFIED',verifiedAt:new Date()});f.setRow({employee:{...f.row.employee,beesAccessLevel:'Admin'}});
+    await f.service.accept('a',token,true,'Abcdefghij12');
+    expect(f.db.userOrganization.upsert).toHaveBeenCalledWith(expect.objectContaining({create:expect.objectContaining({roleId:1})}));
   });
 
   it('checks again inside the transaction rather than trusting a pre-hash snapshot', async () => {

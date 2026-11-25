@@ -8,7 +8,7 @@ function fixture() {
     firstName: 'Grace', middleName: 'Muthoni', lastName: 'Wanjiru', employeeCode: `EMP-${id}`,
     mobileNumber: id === 'a' ? '0712345678' : '0712345679', whatsappNumber: null,
     workEmail: `${id}@example.test`, currentDepartment: 'Administration', jobDesignation: 'Director',
-    plantBranchCode: 'Nairobi', beesAccessLevel: 'Employee', gender: 'Female', nationality: 'Kenyan',
+    plantBranchCode: 'Nairobi', employmentStatus: 'Active', beesAccessLevel: 'Employee', gender: 'Female', nationality: 'Kenyan',
     reportingToName: null, reportingToDesignation: 'Board', reportingToBoard: true,
     reportingToEmployeeId: null, reportingToRecordId: null, employeeId: null,
     status: 'DRAFT', validationErrors: null, duplicateReviewReceipt: null, updatedAt: new Date('2026-10-14T12:00:00Z'), ...changes });

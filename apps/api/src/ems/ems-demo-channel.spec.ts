@@ -66,7 +66,7 @@ function channelFixture(channel: string | null = 'EMAIL') {
 function registrationFixture(lockedChannels: (string | null)[] = ['EMAIL', 'EMAIL']) {
   const records = ['one', 'two'].map((id, i) => ({
     id, status: 'READY', employeeCode: id, firstName: 'Demo', lastName: id,
-    mobileNumber: `+25471234567${8 + i}`, beesAccessLevel: 'Employee',
+    mobileNumber: `+25471234567${8 + i}`, employmentStatus: 'Active', beesAccessLevel: 'Employee',
     currentDepartment: 'Quality', jobDesignation: 'Inspector', reportingToDesignation: 'Board',
     reportingToBoard: true, workEmail: `${id}@example.test`,
   }));
@@ -165,7 +165,7 @@ describe('EMS demo-only communication reset', () => {
     let channel: string | null = 'EMAIL';
     const records = ['unregistered', 'personal-error', 'registered', 'excluded'].map((id, i) => ({
       id, employeeCode: id, firstName: 'Demo', lastName: i === 1 ? null : 'Person',
-      mobileNumber: `+25471234567${i + 5}`, currentDepartment: 'Quality', beesAccessLevel: 'Employee',
+      mobileNumber: `+25471234567${i + 5}`, currentDepartment: 'Quality', employmentStatus: 'Active', beesAccessLevel: 'Employee',
       jobDesignation: 'Inspector', reportingToDesignation: 'Board', reportingToBoard: true,
       workEmail: null, whatsappNumber: null,
       status: i < 2 ? 'NEEDS_FIXING' : i === 2 ? 'REGISTERED' : 'EXCLUDED',

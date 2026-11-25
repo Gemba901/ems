@@ -1,8 +1,8 @@
 import { RegistrationRunHooks, registrationErrorCode } from './ems-registration.types';
 import { createPendingAccountLink } from './ems-account-links';
 import { normaliseFiveSLocation, FIVE_S_LOCATION_ERROR } from './five-s-location';
-import { importedAccountRole, canRegisterOnboarding, registrationAccess } from './onboarding-access';
-import { employeeListWhere, employeeNameOrder, employeeSearchGroups, registeredSourceWhere, EMPLOYEE_SOURCE_SELECT, employeeImportSource } from './ems-employee-list';
+import { importedAccountRole, canRegisterOnboarding, registrationAccess, suggestedAccessRole, REGISTRATION_ROLE } from './onboarding-access';
+import { employeeFilterOptions, employeeListWhere, employeeNameOrder, employeeSearchGroups, registeredSourceWhere, EMPLOYEE_SOURCE_SELECT, employeeImportSource } from './ems-employee-list';
 import { assertProfileBirthDate } from './employee-profile-dates';
 import { readExtraFields, reviseExtraFields, extraProfileData, blockingFindings, ExtraFieldsError, isExtraProfileField } from './onboarding-extra-fields';
 import { isReportingBody, reportingBodyLabel } from './reporting-bodies';
@@ -15,6 +15,7 @@ import { assertPeopleLinksAllowBatchRemoval, employeePeopleLinks, loadPeopleLink
 import { peopleLinkFindings } from './onboarding-people-links';
 import { buildExcludeRemainingPreview, isRemainingRecord } from './onboarding-exclude-remaining';
 import { columnHeadingKey, normaliseColumnChoices } from './onboarding-column-choices';
+import { BLANK_FIX_FIELDS, matchesValueFix, valueFixNeedsAdmin, valueFixText } from './onboarding-value-fixes';
 import { cleanRecord, isBlankValue, isNotApplicable, matchEnumValue, normaliseKey, middleNameOrNull } from './onboarding-text';
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -27,7 +28,7 @@ import { getKenyaPublicHolidays } from 'src/calendar/kenya-holidays';
 import { DwmsService } from 'src/dwms/dwms.service';
 import { 
   AddOnboardingRecordsDto, CreateOnboardingBatchDto, UpdateCommunicationChannelDto, UpdateOnboardingRecordDto, ExcludeOnboardingRecordDto, UpdateOnboardingBatchCountryDto,
-  ExcludeRemainingOnboardingRecordsDto, ForgetImportColumnChoicesDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto,
+  ExcludeRemainingOnboardingRecordsDto, ForgetImportColumnChoicesDto, LookupImportColumnChoicesDto, SaveImportColumnChoicesDto, SetOnboardingColumnDestinationDto, ReplaceOnboardingValuesDto, ForgetImportValueChoiceDto,
 } from './dto/onboarding.dto';
 import { Prisma } from 'db';
 import { getCountries } from 'libphonenumber-js/max';
@@ -202,12 +203,12 @@ const EMPLOYMENT_TYPE_VALUES = new Set([
 /** Fields every record needs. N/A is never accepted for these. Keep in sync with ALWAYS_REQUIRED_FIELDS on the web. */
 const REQUIRED_RECORD_FIELDS = [
   'employeeCode', 'firstName', 'lastName', 'mobileNumber', 'currentDepartment',
-  'beesAccessLevel', 'jobDesignation', 'reportingToName', 'reportingToDesignation',
+  'jobDesignation', 'reportingToName', 'reportingToDesignation', 'employmentStatus',
 ] as const;
 
 /** Optional fields with a format check. When one says N/A, the check is skipped. */
 const FORMAT_CHECKED_OPTIONAL_FIELDS = [
-  'whatsappNumber', 'workEmail', 'gender', 'employmentStatus', 'employmentType',
+  'whatsappNumber', 'workEmail', 'gender', 'employmentType', 'beesAccessLevel',
 ] as const;
 
 function notApplicableMessage(field: string): string {
@@ -307,7 +308,10 @@ export class EmsService {
     const limit = query.limit ?? 20;
     const where = employeeListWhere(organizationId, query);
     const select = { ...EMS_EMPLOYEE_SELECT, emsOnboardingRecord: { select: EMPLOYEE_SOURCE_SELECT },
-      emsInvitation: { select: { status: true, kind: true, expiresAt: true, skipReason: true } } };
+      emsInvitation: { select: { status: true, kind: true, expiresAt: true, skipReason: true } },
+      // Access column: the company role, and a suggestion waiting for an Admin.
+      user: { select: { organizations: { where: { organizationId }, select: { role: { select: { name: true } } } } } },
+      suggestedAccess: true, suggestedAccessState: true };
     // One read snapshot keeps totals, clamped page and rows consistent during registration.
     return this.prisma.$transaction(async tx => {
       const total = await tx.employee.count({ where });
@@ -323,7 +327,7 @@ export class EmsService {
         let remaining = total;
         for (let index = 0; index < groups.length && employees.length < limit && remaining > 0; index++) {
           const groupWhere: Prisma.EmployeeWhereInput = { AND: [where, groups[index]] };
-          // The final count is the remainder: at most two extra count queries.
+          // The final count is the remainder: at most three extra count queries.
           const count = index === groups.length - 1 ? remaining : await tx.employee.count({ where: groupWhere });
           remaining -= count;
           if (offset >= count) { offset -= count; continue; }
@@ -351,12 +355,19 @@ export class EmsService {
       } else {
         employees = await tx.employee.findMany({ where, select, skip, take: limit, orderBy: employeeNameOrder(query.sort === 'NAME_DESC') });
       }
-      const data = employees.map(({ emsOnboardingRecord, emsInvitation, ...emp }) => ({
+      const data = employees.map(({ emsOnboardingRecord, emsInvitation, user, suggestedAccess, suggestedAccessState, ...emp }) => ({
         ...emp, completion: calcEmployeeCompletion(emp as Record<string, unknown>), invitation: emsInvitation ?? null,
         sourceImport: employeeImportSource(emsOnboardingRecord, organizationId),
+        access: user?.organizations[0]?.role.name ?? null,
+        suggestedAccess: suggestedAccessState === 'PENDING' ? suggestedAccess : null,
       }));
       return { data, pagination: { page, limit, total, pages } };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
+
+  /** Choices for the Employees list filters (job titles, branches, shifts, departments, managers) with counts. */
+  getEmployeeFilterOptions(organizationId: string) {
+    return employeeFilterOptions(this.prisma, organizationId);
   }
 
   // Small source list only; excludes batches with no linked registered employees.
@@ -1241,7 +1252,10 @@ export class EmsService {
         findings.push({ field: 'gender', message: `Unrecognised value "${record.gender}"` });
       }
 
-      if (record.employmentStatus?.trim() && !matchEnumValue(record.employmentStatus, EMPLOYMENT_STATUS_VALUES)) {
+      // Required: a blank would register someone as Active, even if they have left. HR chooses (one action in Values to sort out).
+      if (!record.employmentStatus?.trim()) {
+        findings.push({ field: 'employmentStatus', message: 'Required' });
+      } else if (!matchEnumValue(record.employmentStatus, EMPLOYMENT_STATUS_VALUES)) {
         findings.push({ field: 'employmentStatus', message: `Unrecognised value "${record.employmentStatus}"` });
       }
 
@@ -1249,12 +1263,12 @@ export class EmsService {
         findings.push({ field: 'employmentType', message: `Unrecognised value "${record.employmentType}"` });
       }
 
-      if (!record.beesAccessLevel?.trim()) {
-        findings.push({ field: 'beesAccessLevel', message: 'Required' });
-      } else if (!importedAccountRole(record.beesAccessLevel)) {
+      // Suggested access is optional: everyone registers as Employee. An odd value is only a warning.
+      if (record.beesAccessLevel?.trim() && !importedAccountRole(record.beesAccessLevel)) {
         findings.push({
           field: 'beesAccessLevel',
-          message: `Unrecognised access level "${record.beesAccessLevel}"`,
+          message: `Unrecognised access level "${record.beesAccessLevel}". They will register as Employee with no suggestion.`,
+          severity: 'warning',
         });
       }
 
@@ -1569,6 +1583,61 @@ export class EmsService {
     return this.getOnboardingBatch(organizationId, batchId);
   }
 
+  /**
+   * "Treat as": rewrite one odd value (or, for employment status, every blank) in all unregistered records of an import,
+   * then validate the import again. Mapping access to anything above Employee needs an Admin.
+   */
+  async replaceOnboardingValues(organizationId: string, batchId: string, actorRole: string | undefined, dto: ReplaceOnboardingValuesDto, userId?: string) {
+    const text = valueFixText(dto.field, dto.to);
+    if (!text) throw new BadRequestException('Choose one of the listed values');
+    if (dto.blanks ? !BLANK_FIX_FIELDS.includes(dto.field) : !normaliseKey(dto.from ?? null)) throw new BadRequestException('Choose the value to replace');
+    if (valueFixNeedsAdmin(dto.field, dto.to) && actorRole !== Role.ADMIN && actorRole !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException('An Admin must map access to anything above Employee.');
+    }
+    await retryOnboardingTransaction(() => this.prisma.$transaction(async tx => {
+      await this.lockReporting(tx, organizationId);
+      await tx.$queryRaw`SELECT id FROM "EmsOnboardingBatch" WHERE id = ${batchId} AND "organizationId" = ${organizationId} FOR UPDATE`;
+      const batch = await tx.emsOnboardingBatch.findFirst({
+        where: { id: batchId, organizationId },
+        select: { status: true, records: { select: { id: true, status: true, beesAccessLevel: true, employmentStatus: true, employmentType: true, gender: true } } },
+      });
+      if (!batch) throw new NotFoundException('Onboarding batch not found');
+      if (batch.status === 'CANCELLED') throw new BadRequestException('This import is cancelled');
+      const ids = batch.records
+        .filter(record => isRemainingRecord(record.status) && matchesValueFix(record[dto.field], dto))
+        .map(record => record.id);
+      if (!ids.length) throw new BadRequestException('No unregistered records in this import have that value any more.');
+      await tx.emsOnboardingRecord.updateMany({
+        where: { id: { in: ids }, batchId, organizationId, status: { notIn: ['REGISTERED', 'EXCLUDED'] } },
+        data: dto.field === 'beesAccessLevel' ? { beesAccessLevel: text } : dto.field === 'employmentStatus' ? { employmentStatus: text }
+          : dto.field === 'employmentType' ? { employmentType: text } : { gender: text },
+      });
+      await this.validateOnboardingBatchLocked(tx, organizationId, batchId);
+      const valueKey = normaliseKey(dto.from ?? null);
+      if (dto.remember && !dto.blanks && valueKey) await tx.emsImportValueChoice.upsert({
+        where: { organizationId_field_valueKey: { organizationId, field: dto.field, valueKey: valueKey.slice(0, 200) } },
+        create: { organizationId, field: dto.field, valueKey: valueKey.slice(0, 200), value: dto.from!.trim().slice(0, 200), choice: dto.to, updatedById: userId ?? null },
+        update: { value: dto.from!.trim().slice(0, 200), choice: dto.to, updatedById: userId ?? null },
+      });
+    }, { timeout: 20000 }));
+    return this.getOnboardingBatch(organizationId, batchId);
+  }
+
+  /** "Treat as" choices remembered for this company, offered pre-selected on the review page. */
+  async importValueChoices(organizationId: string) {
+    const rows = await this.prisma.emsImportValueChoice.findMany({
+      where: { organizationId }, select: { field: true, valueKey: true, value: true, choice: true }, orderBy: [{ field: 'asc' }, { value: 'asc' }], take: 1000,
+    });
+    return { choices: rows };
+  }
+
+  async forgetImportValueChoice(organizationId: string, dto: ForgetImportValueChoiceDto) {
+    const valueKey = normaliseKey(dto.value);
+    if (!valueKey) return { forgotten: 0 };
+    const { count } = await this.prisma.emsImportValueChoice.deleteMany({ where: { organizationId, field: dto.field, valueKey } });
+    return { forgotten: count };
+  }
+
   async previewExcludeRemainingOnboardingRecords(organizationId: string, batchId: string) {
     const { preview } = await this.prisma.$transaction(tx => this.excludeRemainingPlan(tx, organizationId, batchId),
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 20000 });
@@ -1741,9 +1810,10 @@ export class EmsService {
           if (duplicates.length > 1) {
             throw new BadRequestException('This phone number appears on another record in this import');
           }
-          const roleName = importedAccountRole(record.beesAccessLevel);
-          const roleId = roleName ? roleIds.get(roleName) : undefined;
-          if (!roleId) throw new BadRequestException('The selected access level is not configured');
+          // Everyone starts as Employee; the sheet's access is a suggestion an Admin decides on later.
+          const roleId = roleIds.get(REGISTRATION_ROLE);
+          if (!roleId) throw new BadRequestException('The Employee access level is not configured');
+          const suggested = suggestedAccessRole(record.beesAccessLevel);
           // N/A is a valid answer, but never an address to send to.
           const email = isNotApplicable(record.workEmail) ? null : record.workEmail?.toLowerCase() ?? null;
           let user = await this.checkOnboardingIdentity(tx, organizationId, phone, employeeSnapshot);
@@ -1788,6 +1858,8 @@ export class EmsService {
               employmentStatus: (matchEnumValue(record.employmentStatus, EMPLOYMENT_STATUS_VALUES) ?? 'ACTIVE') as any,
               employmentType: matchEnumValue(record.employmentType, EMPLOYMENT_TYPE_VALUES) as any,
               beesAccessLevel: record.beesAccessLevel,
+              suggestedAccess: suggested ?? null,
+              suggestedAccessState: suggested ? 'PENDING' : null,
               ...additional.data,
               ...(found.extraFields == null ? {} : { importedExtraFields: readExtraFields(found.extraFields) }),
               ...personLinks,

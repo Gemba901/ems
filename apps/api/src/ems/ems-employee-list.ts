@@ -11,7 +11,20 @@ export function registeredSourceWhere(organizationId: string): Prisma.EmsOnboard
 export function employeeListWhere(organizationId: string, query: QueryEmsEmployeesDto): Prisma.EmployeeWhereInput {
   const { departmentId, employmentStatus, activityState, source, importBatchId } = query;
   const where: Prisma.EmployeeWhereInput = { organizationId };
+  const extra: Prisma.EmployeeWhereInput[] = [];
   if (departmentId) where.departmentId = departmentId;
+  // Access: the person's company role; "Suggestion waiting" = an import or HR suggestion an Admin hasn't decided.
+  if (query.access === 'SUGGESTION_WAITING') where.suggestedAccessState = 'PENDING';
+  else if (query.access === 'NO_ACCOUNT') extra.push({ OR: [{ userId: null }, { user: { is: { organizations: { none: { organizationId } } } } }] });
+  else if (query.access) extra.push({ user: { is: { organizations: { some: { organizationId, role: { name: query.access } } } } } });
+  if (query.jobTitle?.trim()) extra.push(query.jobTitle === 'NONE' ? { OR: [{ jobTitle: null }, { jobTitle: '' }] }
+    : { jobTitle: { equals: query.jobTitle.trim(), mode: 'insensitive' } });
+  if (query.employmentType) where.employmentType = query.employmentType;
+  if (query.shift?.trim()) where.shift = { equals: query.shift.trim(), mode: 'insensitive' };
+  if (query.reportsTo) where.reportingManagerId = query.reportsTo;
+  // Branch, job title and shift match whatever case they were typed in; "NONE" = not recorded.
+  if (query.branch) extra.push(query.branch === 'NONE' ? { OR: [{ plantBranch: null }, { plantBranch: '' }] }
+    : { plantBranch: { equals: query.branch.trim(), mode: 'insensitive' } });
   if (query.invitation) Object.assign(where, invitationWhere(query.invitation, new Date()));
   if (activityState) where.employmentStatus = { in: activityState === 'ACTIVE' ? ACTIVE_EMPLOYMENT_STATUSES : INACTIVE_EMPLOYMENT_STATUSES };
   if (employmentStatus) {
@@ -27,11 +40,13 @@ export function employeeListWhere(organizationId: string, query: QueryEmsEmploye
 
   // Every word must match a name part or code. Escape PostgreSQL LIKE wildcards
   // so an entered underscore or percent sign is searched literally.
+  // Job titles count too, so "supervisor" finds every supervisor (ranked after name and code matches).
   const words = query.search?.trim().split(/\s+/).filter(Boolean) ?? [];
-  if (words.length) where.AND = words.map(word => {
+  const search = words.map(word => {
     const contains = word.replace(/[\\%_]/g, '\\$&');
-    return { OR: ['firstName', 'middleName', 'lastName', 'employeeCode'].map(field => ({ [field]: { contains, mode: 'insensitive' } })) };
+    return { OR: ['firstName', 'middleName', 'lastName', 'employeeCode', 'jobTitle'].map(field => ({ [field]: { contains, mode: 'insensitive' } })) };
   });
+  if (search.length || extra.length) where.AND = [...search, ...extra];
   return where;
 }
 
@@ -62,6 +77,11 @@ export function employeeSearchGroups(search: string): Prisma.EmployeeWhereInput[
   const exact: Prisma.EmployeeWhereInput = {
     OR: [equals(phrase), { AND: words.map(equals) }],
   };
+  // Someone whose first name starts with the text comes before someone whose surname does ("ke": Kevin before Akinyi Kemunto).
+  const firstStarts = (word: string): Prisma.EmployeeWhereInput => ({ OR: [
+    { firstName: { startsWith: literal(word), mode: 'insensitive' } },
+    ...[' ', '-', "'", '’'].map(boundary => ({ firstName: { contains: boundary + literal(word), mode: 'insensitive' as const } })),
+  ] });
   const prefix: Prisma.EmployeeWhereInput = { AND: words.map(word => ({
     OR: fields.flatMap(field => [
       comparison(field, { startsWith: literal(word), mode: 'insensitive' }),
@@ -71,7 +91,8 @@ export function employeeSearchGroups(search: string): Prisma.EmployeeWhereInput[
         comparison(field, { contains: boundary + literal(word), mode: 'insensitive' }))),
     ]),
   })) };
-  return [exact, { AND: [{ NOT: exact }, prefix] }, { AND: [{ NOT: exact }, { NOT: prefix }] }];
+  const firstPrefix: Prisma.EmployeeWhereInput = { AND: [prefix, firstStarts(words[0] ?? '')] };
+  return [exact, { AND: [{ NOT: exact }, firstPrefix] }, { AND: [{ NOT: exact }, { NOT: firstPrefix }, prefix] }, { AND: [{ NOT: exact }, { NOT: prefix }] }];
 }
 
 export const EMPLOYEE_SOURCE_SELECT = {
@@ -103,4 +124,41 @@ export function invitationWhere(filter: string, now: Date): Prisma.EmployeeWhere
     { status: 'NOTICE_SENT', kind: 'ACCESS_NOTICE', skipReason: { not: null } },
   ] } } };
   throw new BadRequestException('Unknown invitation filter');
+}
+
+type OptionsDb = Pick<Prisma.TransactionClient, 'employee'>;
+/** Values to offer in the Employees list filters, with how many people have each (case-insensitive, most common first). */
+export async function employeeFilterOptions(db: OptionsDb, organizationId: string) {
+  const people = await db.employee.findMany({
+    where: { organizationId },
+    select: { jobTitle: true, plantBranch: true, shift: true, reportingManagerId: true,
+      department: { select: { id: true, name: true } } },
+  });
+  const tally = (values: (string | null | undefined)[]) => {
+    const groups = new Map<string, { value: string; count: number }>();
+    for (const raw of values) {
+      const value = raw?.trim(); if (!value) continue;
+      const key = value.toLowerCase();
+      const group = groups.get(key) ?? { value, count: 0 }; group.count++; groups.set(key, group);
+    }
+    return [...groups.values()].sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+  };
+  const departments = new Map<string, { id: string; name: string; count: number }>();
+  for (const p of people) if (p.department) {
+    const d = departments.get(p.department.id) ?? { ...p.department, count: 0 }; d.count++; departments.set(d.id, d);
+  }
+  const managerCounts = new Map<string, number>();
+  for (const p of people) if (p.reportingManagerId) managerCounts.set(p.reportingManagerId, (managerCounts.get(p.reportingManagerId) ?? 0) + 1);
+  const managers = managerCounts.size ? await db.employee.findMany({
+    where: { organizationId, id: { in: [...managerCounts.keys()] } },
+    select: { id: true, firstName: true, lastName: true, jobTitle: true },
+  }) : [];
+  return {
+    departments: [...departments.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    jobTitles: tally(people.map(p => p.jobTitle)),
+    branches: tally(people.map(p => p.plantBranch)),
+    shifts: tally(people.map(p => p.shift)),
+    managers: managers.map(m => ({ id: m.id, name: [m.firstName, m.lastName].filter(Boolean).join(' '), jobTitle: m.jobTitle, count: managerCounts.get(m.id) ?? 0 }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
 }

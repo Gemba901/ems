@@ -1,7 +1,8 @@
 import { EXTRA_PROFILE_FIELDS, ImportedExtraField } from '../onboarding-extra-fields';
+import { VALUE_FIX_FIELDS, type ValueFixField } from '../onboarding-value-fixes';
 import { Transform, Type } from 'class-transformer';
 import {
-  ArrayMaxSize, Max, Min, IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
+  ArrayMaxSize, Max, Min, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateNested,
 } from 'class-validator';
 import { getCountries } from 'libphonenumber-js';
 import { OrgCommunicationChannel } from 'db';
@@ -172,6 +173,25 @@ export class SetOnboardingColumnDestinationDto {
   @Type(() => Number) @IsInt() @Min(1) @Max(16384) column!: number;
   @IsString() @MaxLength(200) heading!: string;
   @IsOptional() @IsIn([null, ...EXTRA_PROFILE_FIELDS.map(field => field.key)]) target!: string | null;
+}
+
+/** "Treat as": one odd value (or blanks) in a fixed-list field, for every unregistered record in an import. */
+export class ReplaceOnboardingValuesDto {
+  @IsIn(VALUE_FIX_FIELDS) field!: ValueFixField;
+  /** The value as written in the sheet; matched ignoring case, spaces and punctuation. */
+  @IsOptional() @IsString() @MaxLength(200) from?: string;
+  /** Replace blanks instead (employment status only). */
+  @IsOptional() @IsBoolean() blanks?: boolean;
+  /** The choice's key, e.g. ACTIVE, FULL_TIME, EMPLOYEE. */
+  @IsString() @MaxLength(40) to!: string;
+  /** Remember this choice for the company's later imports (offered pre-selected; never applied by itself). */
+  @IsOptional() @IsBoolean() remember?: boolean;
+}
+
+/** Forget one remembered "Treat as" choice. */
+export class ForgetImportValueChoiceDto {
+  @IsIn(VALUE_FIX_FIELDS) field!: ValueFixField;
+  @IsString() @MaxLength(200) value!: string;
 }
 
 export class UpdateCommunicationChannelDto {

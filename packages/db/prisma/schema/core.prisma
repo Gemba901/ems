@@ -194,9 +194,18 @@ model Organization {
   lexStrategicDirection       LexStrategicDirection?
   lexPlanningWorkspace        LexPlanningWorkspace?
   lexExecutionWorkspace       LexExecutionWorkspace?
+  lexDirectionApprovers       LexStrategicDirectionApprover[]
 
 
   lexPerformanceCalendars LexPerformanceCalendar[] // LEX 02.03
+  lexOfficialResults      LexOfficialResult[]      // LEX 05
+  lexVerificationEvents   LexVerificationEvent[]   // LEX 05
+  lexMonitoringAlerts     LexMonitoringAlert[]     // LEX 05
+  lexMonitoringSettings   LexMonitoringSettings?   // LEX 05
+  lexReviews              LexReview[]              // LEX 06
+  lexCoachingRecords      LexCoachingRecord[]      // LEX 06
+  lexActionEffectiveness  LexActionEffectiveness[] // LEX 06
+  lexDevelopmentEvents    LexDevelopmentEvent[]    // LEX 06
 }
 
 //specific user

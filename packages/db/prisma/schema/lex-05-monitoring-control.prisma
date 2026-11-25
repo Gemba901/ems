@@ -1,1 +1,135 @@
-// Leadership Excellence — 05-monitoring-control. Owner: see docs/leadership-excellence/README.md
+enum LexVerificationAction {
+  VERIFIED
+  RETURNED
+}
+
+enum LexAlertKind {
+  MISSING_RESULT
+  VERIFIED_GAP
+  OVERDUE_ACTION
+}
+
+enum LexAlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  ESCALATED
+  FOLLOW_UP_LINKED
+  CLOSED
+}
+
+enum LexAlertAction {
+  OPENED
+  ACKNOWLEDGED
+  ESCALATED
+  FOLLOW_UP_LINKED
+  CLOSED
+  REOPENED
+}
+
+/// UNUSED since the Area 04 merge (official values live in Area 04). Drop in a migration once that merge reaches main.
+model LexOfficialResult {
+  id             String   @id @default(uuid())
+  organizationId String
+  assignmentId   String
+  periodId       String
+  periodStart    DateTime @db.Date
+  periodEnd      DateTime @db.Date
+  departmentId   String?
+
+  submissionId String
+  actual       Decimal  @db.Decimal(20, 6)
+  inputA       Decimal? @db.Decimal(20, 6)
+  inputB       Decimal? @db.Decimal(20, 6)
+  evidence     String?
+  note         String?
+
+  snapshot Json
+  revision Int  @default(1)
+
+  verifiedById String
+  verifiedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, assignmentId, periodId])
+  @@index([organizationId, departmentId, periodEnd])
+}
+
+model LexVerificationEvent {
+  id             String @id @default(uuid())
+  organizationId String
+  submissionId   String
+  assignmentId   String
+  periodId       String
+
+  action         LexVerificationAction
+  actual         Decimal?              @db.Decimal(20, 6)
+  previousActual Decimal?              @db.Decimal(20, 6)
+  reason         String?
+  snapshot       Json
+
+  actorId   String
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, assignmentId, periodId])
+  @@index([organizationId, createdAt])
+}
+
+model LexMonitoringAlert {
+  id             String         @id @default(uuid())
+  organizationId String
+  key            String
+  kind           LexAlertKind
+  status         LexAlertStatus @default(OPEN)
+  title          String
+  detail         String?
+
+  assignmentId   String?
+  actionId       String?
+  departmentId   String?
+  ownerId        String
+  escalatedToId  String?
+  linkedActionId String?
+  comment        String?
+
+  openedAt  DateTime  @default(now())
+  closedAt  DateTime?
+  updatedAt DateTime  @updatedAt
+
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       LexMonitoringAlertEvent[]
+
+  @@unique([organizationId, key])
+  @@index([organizationId, status])
+  @@index([organizationId, ownerId])
+}
+
+model LexMonitoringAlertEvent {
+  id             String         @id @default(uuid())
+  alertId        String
+  organizationId String
+  action         LexAlertAction
+  note           String?
+  actorId        String?
+  createdAt      DateTime       @default(now())
+
+  alert LexMonitoringAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId, createdAt])
+  @@index([organizationId])
+}
+
+/// One row per organisation; missing row = defaults in calc-rules.ts.
+model LexMonitoringSettings {
+  organizationId      String   @id
+  /// "Needs attention" band as % of target, used when a KPI has no tolerance of its own.
+  warningTolerancePct Decimal  @default(5) @db.Decimal(5, 2)
+  updatedById         String?
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}

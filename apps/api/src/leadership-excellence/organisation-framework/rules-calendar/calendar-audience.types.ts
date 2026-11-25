@@ -1,10 +1,7 @@
-/** Calendar audiences are approved calendar settings, not organisation master records. */
-export interface CalendarAudience {
-  kind: "UNASSIGNED" | "COMPANY" | "DEPARTMENTS" | "PEOPLE";
-  label: string;
-  departmentIds: string[];
-  employeeIds: string[];
-}
+// CalendarAudience and CalendarAssignmentResult cross area boundaries, so they live in common/contracts.ts
+// (Area 02 section); re-exported here so Area 02's own files keep their imports.
+import type { CalendarAudience } from "../../common/contracts";
+export type { CalendarAudience, CalendarAssignmentResult } from "../../common/contracts";
 export interface CalendarDirectory {
   source: "CORE_RECORDS" | "EMS";
   loadedAt: string;
@@ -65,11 +62,4 @@ export interface CalendarComparison {
       conflicts: number;
     }[];
   }[];
-}
-export interface CalendarAssignmentResult {
-  status: "ASSIGNED" | "UNASSIGNED" | "CONFLICT" | "INACTIVE";
-  basis: "CURRENT_PEOPLE_RECORDS";
-  calendarId?: string;
-  version?: number;
-  candidates: { calendarId: string; version: number; name: string }[];
 }

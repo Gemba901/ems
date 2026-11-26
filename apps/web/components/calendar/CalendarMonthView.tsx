@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { AgendaItem } from "@/services/calendar.service";
 import { DayCell } from "./DayCell";
@@ -45,23 +47,23 @@ export function CalendarMonthView({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
-        <button onClick={onPrev} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-slate-100">
-          <ChevronLeft className="h-4 w-4 text-slate-500" />
-        </button>
-        <h2 className="text-base font-bold text-slate-800">{MONTHS[month - 1]} {year}</h2>
-        <button onClick={onNext} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-slate-100">
-          <ChevronRight className="h-4 w-4 text-slate-500" />
-        </button>
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
+        <Button variant="ghost" aria-label="Previous period" onClick={onPrev} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-muted">
+          <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+        </Button>
+        <h2 className="text-base font-bold text-foreground">{MONTHS[month - 1]} {year}</h2>
+        <Button variant="ghost" aria-label="Next period" onClick={onNext} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-muted">
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </Button>
       </div>
-      <div className="grid shrink-0 grid-cols-7 border-b border-slate-100">
+      <div className="grid shrink-0 grid-cols-7 border-b border-border">
         {DAYS.map((d, i) => (
-          <div key={d} className={`py-2 text-center text-[10px] font-bold uppercase tracking-wide ${i === 0 ? "text-red-500" : "text-slate-400"}`}>{d}</div>
+          <div key={d} className={`py-2 text-center text-[10px] font-bold uppercase tracking-wide ${i === 0 ? "text-danger" : "text-muted-foreground"}`}>{d}</div>
         ))}
       </div>
       {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-20 text-sm text-slate-400">
+        <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </div>
       ) : (

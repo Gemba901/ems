@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 import { useState } from "react";
 import { CalendarService } from "@/services/calendar.service";
 
@@ -22,22 +25,22 @@ export function RequestActions({
   };
 
   return (
-    <div className="border-t border-purple-100 pt-2 space-y-1.5">
-      <input
-        className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-300"
+    <div className="border-t border-primary/20 pt-2 space-y-1.5">
+      <Input
+        className="w-full text-xs border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
         placeholder="Optional response note…"
         value={note}
         onChange={(e) => setNote(e.target.value)}
       />
       <div className="flex gap-2">
-        <button onClick={() => respond("APPROVED")} disabled={saving}
-          className="flex-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded-lg transition-colors disabled:opacity-50">
+        <Button variant="ghost" onClick={() => respond("APPROVED")} disabled={saving}
+          className="flex-1 text-xs font-semibold bg-success hover:bg-success text-success-foreground py-1.5 rounded-lg transition-colors disabled:opacity-50">
           Approve
-        </button>
-        <button onClick={() => respond("REJECTED")} disabled={saving}
-          className="flex-1 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white py-1.5 rounded-lg transition-colors disabled:opacity-50">
+        </Button>
+        <Button variant="ghost" onClick={() => respond("REJECTED")} disabled={saving}
+          className="flex-1 text-xs font-semibold bg-danger hover:bg-danger text-danger-foreground py-1.5 rounded-lg transition-colors disabled:opacity-50">
           Reject
-        </button>
+        </Button>
       </div>
     </div>
   );

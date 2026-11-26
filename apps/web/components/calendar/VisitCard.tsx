@@ -1,5 +1,10 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -23,7 +28,7 @@ export function StatusBadge({ status }: { status: VisitStatus }) {
   );
 }
 
-const inputCls = "w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all";
+const inputCls = "w-full border border-border rounded-lg px-2.5 py-1.5 text-xs bg-card focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-all";
 
 export function VisitCard({
   visit, token, isAdmin, onSaved, onDelete,
@@ -63,12 +68,12 @@ export function VisitCard({
 
   if (!visit.isOwn && !isAdmin) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-2">
-        <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+      <div className="rounded-xl border border-border bg-muted p-3 flex items-center gap-2">
+        <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <div>
-          <p className="text-sm font-semibold text-slate-500">Occupied</p>
+          <p className="text-sm font-semibold text-muted-foreground">Occupied</p>
           {(visit.startTime || visit.endTime) && (
-            <p className="text-xs text-slate-400">{visit.startTime} {visit.endTime ? `– ${visit.endTime}` : ""}</p>
+            <p className="text-xs text-muted-foreground">{visit.startTime} {visit.endTime ? `– ${visit.endTime}` : ""}</p>
           )}
         </div>
       </div>
@@ -98,22 +103,22 @@ export function VisitCard({
 
   if (!isAdmin) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+      <div className="rounded-xl border border-border bg-card p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-semibold text-slate-800 leading-tight">{visit.title}</p>
+          <p className="text-sm font-semibold text-foreground leading-tight">{visit.title}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <StatusBadge status={visit.status} />
           {visit.clientOrgName && (
-            <span className="flex items-center gap-1 text-xs text-slate-500">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Building2 className="h-3 w-3" /> {visit.clientOrgName}
             </span>
           )}
         </div>
         {visit.notes && (
-          <div className="border-t border-slate-100 pt-2">
-            <p className="text-[10px] font-bold text-slate-400 mb-0.5">AGENDA</p>
-            <p className="text-xs text-slate-500 leading-relaxed">{visit.notes}</p>
+          <div className="border-t border-border pt-2">
+            <p className="text-[10px] font-bold text-muted-foreground mb-0.5">AGENDA</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{visit.notes}</p>
           </div>
         )}
       </div>
@@ -121,61 +126,61 @@ export function VisitCard({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+    <div className="rounded-xl border border-border bg-card p-3 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-800 leading-tight">{visit.title}</p>
+          <p className="text-sm font-semibold text-foreground leading-tight">{visit.title}</p>
           {isMultiDay && (
-            <p className="text-[10px] text-indigo-500 font-medium mt-0.5">
+            <p className="text-[10px] text-primary font-medium mt-0.5">
               Multi-day · ends {visit.endDate}
             </p>
           )}
           {visit.recurrencePattern && (
-            <p className="text-[10px] text-violet-500 font-medium flex items-center gap-1 mt-0.5">
+            <p className="text-[10px] text-primary font-medium flex items-center gap-1 mt-0.5">
               <RefreshCw className="h-2.5 w-2.5" /> {RECURRENCE_LABELS[visit.recurrencePattern]}
             </p>
           )}
         </div>
-        <button onClick={() => onDelete(visit.id)} className="shrink-0 text-slate-400 hover:text-red-500 transition-colors">
+        <Button variant="ghost" onClick={() => onDelete(visit.id)} className="shrink-0 text-muted-foreground hover:text-danger transition-colors">
           <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
 
       {visit.clientOrgName && (
-        <span className="flex items-center gap-1 text-xs text-slate-500">
+        <span className="flex items-center gap-1 text-xs text-muted-foreground">
           <Building2 className="h-3 w-3" /> {visit.clientOrgName}
         </span>
       )}
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[10px] font-semibold text-slate-400 block mb-1">Date</label>
+          <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Date</label>
           <div className="flex items-center gap-1.5">
-            <input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} />
+            <Input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} />
           </div>
-          {date && <p className="mt-0.5 text-[9px] uppercase tracking-wide text-slate-400">{weekdayLabel(date)}</p>}
+          {date && <p className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{weekdayLabel(date)}</p>}
         </div>
         <div>
-          <label className="text-[10px] font-semibold text-slate-400 block mb-1">Status</label>
-          <select className={`${inputCls} bg-white`} value={status} onChange={e => setStatus(e.target.value as VisitStatus)}>
+          <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Status</label>
+          <NativeSelect className={`${inputCls} bg-card`} value={status} onChange={e => setStatus(e.target.value as VisitStatus)}>
             <option value="TENTATIVE">Tentative</option>
             <option value="CONFIRMED">Confirmed</option>
             <option value="COMPLETED">Completed</option>
             <option value="CANCELLED">Cancelled</option>
-          </select>
+          </NativeSelect>
         </div>
       </div>
 
       {(visit.startTime || visit.endTime) && (
-        <span className="flex items-center gap-1 text-xs text-slate-400">
+        <span className="flex items-center gap-1 text-xs text-muted-foreground">
           <Clock className="h-3 w-3" />
           {visit.startTime ?? ""}{visit.endTime ? ` – ${visit.endTime}` : ""}
         </span>
       )}
 
       <div>
-        <label className="text-[10px] font-semibold text-slate-400 block mb-1">Agenda</label>
-        <textarea
+        <label className="text-[10px] font-semibold text-muted-foreground block mb-1">Agenda</label>
+        <Textarea
           rows={3} className={`${inputCls} resize-none`} value={notes}
           onChange={e => setNotes(e.target.value)} placeholder="What will be covered during this visit?"
         />
@@ -183,62 +188,62 @@ export function VisitCard({
 
       {status === "COMPLETED" && (
         <div>
-          <label className="text-[10px] font-semibold text-blue-500 block mb-1">Completion Summary</label>
-          <textarea
-            rows={2} className={`${inputCls} resize-none border-blue-200 focus:border-blue-400 focus:ring-blue-500/20`}
+          <label className="text-[10px] font-semibold text-info block mb-1">Completion Summary</label>
+          <Textarea
+            rows={2} className={`${inputCls} resize-none border-info/20 focus:border-ring focus:ring-ring/20`}
             value={completionNote} onChange={e => setCompletionNote(e.target.value)} placeholder="What was accomplished during this visit?"
           />
         </div>
       )}
 
-      {error && <p className="text-xs text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg">{error}</p>}
+      {error && <p className="text-xs text-danger bg-danger-subtle px-2.5 py-1.5 rounded-lg">{error}</p>}
 
       {dirty && (
-        <button
+        <Button variant="ghost"
           onClick={handleSave}
           disabled={saving}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          className="h-auto min-w-0 whitespace-normal flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
           {saving ? "Saving…" : "Save Changes"}
-        </button>
+        </Button>
       )}
 
       {visit.clientOrgId && (
-        <div className="border-t border-slate-100 pt-2">
-          <button type="button" onClick={() => setShowAttendees(s => !s)} className="flex items-center gap-2 w-full text-xs font-semibold text-slate-500">
-            <Users className="h-3.5 w-3.5 text-indigo-400" />
+        <div className="border-t border-border pt-2">
+          <Button variant="ghost" type="button" onClick={() => setShowAttendees(s => !s)} className="h-auto min-w-0 whitespace-normal flex items-center gap-2 w-full text-xs font-semibold text-muted-foreground">
+            <Users className="h-3.5 w-3.5 text-primary" />
             Attendees
-            <span className="ml-auto text-slate-400">{visit.attendees?.length ?? 0}</span>
+            <span className="ml-auto text-muted-foreground">{visit.attendees?.length ?? 0}</span>
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAttendees ? "rotate-180" : ""}`} />
-          </button>
+          </Button>
           {showAttendees && (
             <div className="mt-2 space-y-2">
               {(visit.attendees ?? []).map(a => (
                 <div key={a.id} className="flex items-center gap-2 text-xs">
-                  <div className="h-6 w-6 rounded-full bg-indigo-100 flex items-center justify-center text-[9px] font-bold text-indigo-600 shrink-0">
+                  <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary shrink-0">
                     {a.name.charAt(0)}
                   </div>
-                  <span className="flex-1 text-slate-700">{a.name}</span>
-                  {a.jobTitle && <span className="text-slate-400">{a.jobTitle}</span>}
-                  <button type="button" onClick={() => removeAttendeeMutation.mutate({ employeeId: a.employeeId })} className="text-slate-300 hover:text-red-500 transition-colors">
+                  <span className="flex-1 text-foreground">{a.name}</span>
+                  {a.jobTitle && <span className="text-muted-foreground">{a.jobTitle}</span>}
+                  <Button variant="ghost" type="button" onClick={() => removeAttendeeMutation.mutate({ employeeId: a.employeeId })} className="text-muted-foreground hover:text-danger transition-colors">
                     <X className="h-3 w-3" />
-                  </button>
+                  </Button>
                 </div>
               ))}
-              <div className="border-t border-slate-100 pt-2">
-                <p className="text-[10px] text-slate-400 font-semibold mb-1.5">ADD FROM PARTNER ORG</p>
+              <div className="border-t border-border pt-2">
+                <p className="text-[10px] text-muted-foreground font-semibold mb-1.5">ADD FROM PARTNER ORG</p>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
                   {orgEmployees.filter(e => !currentAttendeeIds.has(e.id)).map(e => (
-                    <button key={e.id} type="button" onClick={() => addAttendeeMutation.mutate({ employeeId: e.id })}
-                      className="flex items-center gap-2 w-full text-xs text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 transition-colors">
+                    <Button variant="ghost" key={e.id} type="button" onClick={() => addAttendeeMutation.mutate({ employeeId: e.id })}
+                      className="h-auto min-w-0 whitespace-normal flex items-center gap-2 w-full text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg px-2 py-1 transition-colors">
                       <UserPlus className="h-3 w-3 shrink-0" />
                       {e.firstName} {e.lastName}
-                      {e.jobTitle && <span className="text-slate-400 ml-auto">{e.jobTitle}</span>}
-                    </button>
+                      {e.jobTitle && <span className="text-muted-foreground ml-auto">{e.jobTitle}</span>}
+                    </Button>
                   ))}
                   {orgEmployees.filter(e => !currentAttendeeIds.has(e.id)).length === 0 && (
-                    <p className="text-xs text-slate-400 px-2 py-1">All employees added</p>
+                    <p className="text-xs text-muted-foreground px-2 py-1">All employees added</p>
                   )}
                 </div>
               </div>

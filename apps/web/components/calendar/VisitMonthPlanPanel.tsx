@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarService, PartnerOrg, VisitPlanSlot,
@@ -23,8 +28,12 @@ interface VisitMonthPlanPanelProps {
 
 export function VisitMonthPlanPanel({ orgs, token, year, month }: VisitMonthPlanPanelProps) {
   const queryClient = useQueryClient();
-  const [selectedOrgId, setSelectedOrgId] = useState<string>(orgs[0]?.id ?? "");
-  const [pendingDays, setPendingDays]     = useState<number | null>(null);
+  const [chosenOrgId, setSelectedOrgId] = useState("");
+  const selectedOrgId = chosenOrgId || orgs[0]?.id || "";
+  const periodKey = `${selectedOrgId}:${year}:${month}`;
+  const [draft, setDraft] = useState<{ key: string; days: number } | null>(null);
+  const pendingDays = draft?.key === periodKey ? draft.days : null;
+  const setPendingDays = (days: number | null) => setDraft(days === null ? null : { key: periodKey, days });
 
   const planQueryKey = ["visit-month-plan", selectedOrgId, year, month];
 
@@ -35,9 +44,6 @@ export function VisitMonthPlanPanel({ orgs, token, year, month }: VisitMonthPlan
       : Promise.resolve(null),
     enabled: !!token && !!selectedOrgId,
   });
-
-  // Reset pending days when plan or org changes
-  useEffect(() => { setPendingDays(null); }, [selectedOrgId, year, month]);
 
   const upsertMutation = useMutation({
     mutationFn: (data: { clientOrgId: string; year: number; month: number; plannedDays: number }) =>
@@ -65,85 +71,85 @@ export function VisitMonthPlanPanel({ orgs, token, year, month }: VisitMonthPlan
   };
 
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-6">
+    <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden sticky top-6">
       {/* Header */}
-      <div className="px-4 py-3.5 border-b border-slate-100 bg-slate-50">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+      <div className="px-4 py-3.5 border-b border-border bg-muted">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">
           Monthly Visit Plan · {MONTHS[month - 1]} {year}
         </p>
 
         {/* Org selector */}
-        <select
+        <NativeSelect
           value={selectedOrgId}
-          onChange={(e) => setSelectedOrgId(e.target.value)}
-          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+          onChange={(e) => { setSelectedOrgId(e.target.value); setDraft(null); }}
+          className="w-full border border-border rounded-lg px-2.5 py-1.5 text-sm text-foreground bg-card focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-all"
         >
           {orgs.map((o) => (
             <option key={o.id} value={o.id}>{o.name}</option>
           ))}
-        </select>
+        </NativeSelect>
 
         {/* Planned days row */}
         <div className="flex items-center gap-2 mt-2.5">
-          <span className="text-xs text-slate-500 flex-1">Planned visits:</span>
-          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
-            <button
+          <span className="text-xs text-muted-foreground flex-1">Planned visits:</span>
+          <div className="flex items-center border border-border rounded-lg overflow-hidden bg-card">
+            <Button variant="ghost"
               onClick={() => setPendingDays(Math.max(1, displayedDays - 1))}
-              className="h-7 w-7 flex items-center justify-center hover:bg-slate-50 transition-colors border-r border-slate-100"
+              className="h-7 w-7 flex items-center justify-center hover:bg-muted transition-colors border-r border-border"
             >
-              <Minus className="h-3 w-3 text-slate-500" />
-            </button>
-            <input
+              <Minus className="h-3 w-3 text-muted-foreground" />
+            </Button>
+            <Input
               type="number"
               min={1}
               max={31}
               value={displayedDays}
               onChange={(e) => setPendingDays(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))}
-              className="w-8 text-center text-sm font-bold text-slate-800 outline-none"
+              className="w-8 text-center text-sm font-bold text-foreground outline-none"
             />
-            <button
+            <Button variant="ghost"
               onClick={() => setPendingDays(Math.min(31, displayedDays + 1))}
-              className="h-7 w-7 flex items-center justify-center hover:bg-slate-50 transition-colors border-l border-slate-100"
+              className="h-7 w-7 flex items-center justify-center hover:bg-muted transition-colors border-l border-border"
             >
-              <Plus className="h-3 w-3 text-slate-500" />
-            </button>
+              <Plus className="h-3 w-3 text-muted-foreground" />
+            </Button>
           </div>
-          <button
+          <Button variant="ghost"
             onClick={handleSavePlan}
             disabled={upsertMutation.isPending || (!isDirty && !isNew)}
-            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            className="flex items-center gap-1 bg-primary hover:bg-primary/90 disabled:opacity-40 text-primary-foreground px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors"
           >
             {upsertMutation.isPending
               ? <Loader2 className="h-3 w-3 animate-spin" />
               : <Save className="h-3 w-3" />}
             {isNew ? "Create" : "Update"}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Slot list */}
-      <div className="max-h-[calc(100vh-22rem)] overflow-y-auto divide-y divide-slate-50">
+      <div className="max-h-[calc(100vh-22rem)] overflow-y-auto divide-y divide-border">
         {isLoading ? (
-          <div className="flex items-center justify-center py-10 text-slate-400 gap-2 text-xs">
+          <div className="flex items-center justify-center py-10 text-muted-foreground gap-2 text-xs">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
           </div>
         ) : !plan ? (
-          <div className="py-10 text-center text-slate-400 px-4">
-            <Building2 className="h-7 w-7 mx-auto mb-2 text-slate-200" />
-            <p className="text-xs font-medium text-slate-500">No plan for this month</p>
-            <p className="text-[11px] mt-0.5 text-slate-400">Set the number of visits above and click Create</p>
+          <div className="py-10 text-center text-muted-foreground px-4">
+            <Building2 className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-xs font-medium text-muted-foreground">No plan for this month</p>
+            <p className="text-[11px] mt-0.5 text-muted-foreground">Set the number of visits above and click Create</p>
           </div>
         ) : plan.slots.length === 0 ? (
-          <div className="py-8 text-center text-xs text-slate-400">No slots — update the plan to add visits</div>
+          <div className="py-8 text-center text-xs text-muted-foreground">No slots — update the plan to add visits</div>
         ) : (
           plan.slots.map((slot) => (
             <SlotRow
-              key={slot.id}
+              key={JSON.stringify([slot.id, slot.date, slot.agenda])}
               slot={slot}
               index={slot.slotIndex}
               month={month}
               year={year}
-              saving={slotMutation.isPending && (slotMutation.variables as any)?.slotIndex === slot.slotIndex}
+              saving={slotMutation.isPending && slotMutation.variables?.slotIndex === slot.slotIndex}
               onSave={(data) => slotMutation.mutate({ planId: plan.id, slotIndex: slot.slotIndex, data })}
             />
           ))
@@ -173,9 +179,6 @@ function SlotRow({
   const [dirty,   setDirty]   = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  // Sync if slot prop changes (after save)
-  useEffect(() => { setDate(savedDate); setAgenda(savedAgenda); setDirty(false); }, [slot.id, savedDate, savedAgenda]);
-
   const hasDate   = !!date;
   const hasAgenda = !!agenda.trim();
   const isComplete = hasDate && hasAgenda;
@@ -189,33 +192,33 @@ function SlotRow({
     <div className="px-4 py-3">
       <div className="flex items-start gap-2.5">
         {/* Badge */}
-        <button
+        <Button variant="ghost"
           onClick={() => setExpanded((v) => !v)}
           className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors ${
             isComplete
-              ? "bg-emerald-100 text-emerald-700"
+              ? "bg-success-subtle text-success"
               : hasDate
-                ? "bg-blue-100 text-blue-700"
-                : "bg-slate-100 text-slate-500"
+                ? "bg-info-subtle text-info"
+                : "bg-muted text-muted-foreground"
           }`}
         >
           {isComplete ? <CheckCircle2 className="h-3 w-3" /> : index + 1}
-        </button>
+        </Button>
 
         <div className="flex-1 min-w-0 space-y-2">
           {/* Date row */}
           <div className="flex items-center gap-2">
-            <CalendarDays className="h-3 w-3 text-slate-400 shrink-0" />
-            <input
+            <CalendarDays className="h-3 w-3 text-muted-foreground shrink-0" />
+            <Input
               type="date"
               value={date}
               min={`${year}-${String(month).padStart(2, "0")}-01`}
               max={`${year}-${String(month).padStart(2, "0")}-31`}
               onChange={(e) => { setDate(e.target.value); setDirty(true); setExpanded(true); }}
-              className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all bg-white"
+              className="flex-1 border border-border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-all bg-card"
             />
             {date && (
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
                 {new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" })}
               </span>
             )}
@@ -223,37 +226,37 @@ function SlotRow({
 
           {/* Agenda — shown when expanded or has content */}
           {(expanded || hasAgenda) && (
-            <textarea
+            <Textarea
               rows={2}
               placeholder="Agenda for this visit…"
               value={agenda}
               onChange={(e) => { setAgenda(e.target.value); setDirty(true); }}
-              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder:text-slate-300 bg-white"
+              className="w-full border border-border rounded-lg px-2.5 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-all placeholder:text-muted-foreground bg-card"
             />
           )}
 
           {/* Save / status */}
           <div className="flex items-center gap-2">
             {dirty && (
-              <button
+              <Button variant="ghost"
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors"
+                className="h-auto min-w-0 whitespace-normal flex items-center gap-1 bg-success hover:bg-success disabled:opacity-50 text-success-foreground px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors"
               >
                 {saving ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Save className="h-2.5 w-2.5" />}
                 Save
-              </button>
+              </Button>
             )}
             {!dirty && !hasAgenda && hasDate && (
-              <button
+              <Button variant="ghost"
                 onClick={() => setExpanded((v) => !v)}
-                className="text-[10px] text-slate-400 hover:text-blue-600 transition-colors"
+                className="h-auto min-w-0 whitespace-normal text-[10px] text-muted-foreground hover:text-info transition-colors"
               >
                 {expanded ? "Hide agenda" : "+ Add agenda"}
-              </button>
+              </Button>
             )}
             {!dirty && isComplete && (
-              <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-0.5">
+              <span className="text-[10px] text-success font-medium flex items-center gap-0.5">
                 <CheckCircle2 className="h-2.5 w-2.5" /> Set
               </span>
             )}

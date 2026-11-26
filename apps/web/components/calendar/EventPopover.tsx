@@ -1,5 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+
 import { X, Clock } from "lucide-react";
 import {
   AgendaItem, EVENT_COLOR_CONFIG, EventColor, HolisticCalendarEvent,
@@ -32,24 +36,21 @@ export function EventPopover({
   const orgColor = item.orgColor || undefined;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 fade-in"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent showCloseButton={false} className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+        <div className="flex items-start gap-3 border-b border-border px-5 py-4">
           <span style={orgColor ? { backgroundColor: orgColor } : undefined} className={`mt-1 h-3 w-3 shrink-0 rounded-full ${orgColor ? "" : c.dot}`} />
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold leading-snug text-slate-900">{item.title}</h2>
+            <DialogTitle className="text-base font-bold leading-snug text-foreground">{item.title}</DialogTitle>
             {!item.allDay ? (
-              <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
+              <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" /> {fmtDateTime(item.startAt)} – {fmtTime(item.endAt)}
               </p>
             ) : (
-              <p className="mt-0.5 text-xs text-slate-400">{fmtDateTime(item.startAt).split(",")[0]} · All day</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{fmtDateTime(item.startAt).split(",")[0]} · All day</p>
             )}
           </div>
-          <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+          <Button variant="ghost" aria-label="Close dialog" onClick={onClose} className="shrink-0 text-muted-foreground hover:text-muted-foreground"><X className="h-4 w-4" /></Button>
         </div>
 
         <div className="space-y-4 overflow-y-auto p-5">
@@ -64,7 +65,7 @@ export function EventPopover({
             onClose={onClose}
           />
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

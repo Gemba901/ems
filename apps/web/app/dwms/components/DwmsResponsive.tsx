@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -49,14 +50,14 @@ export function DwmsMobileDataCard({
   onClick?: () => void;
 }) {
   const classes = cn(
-    "w-full min-w-0 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm",
+    "w-full min-w-0 rounded-2xl border border-border bg-card p-4 text-left shadow-sm",
     onClick &&
-      "cursor-pointer transition hover:border-blue-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+      "cursor-pointer transition hover:border-info hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info",
     className,
   );
 
   if (onClick) {
-    return <button type="button" onClick={onClick} className={classes}>{children}</button>;
+    return <Button variant="ghost" type="button" onClick={onClick} className={classes}>{children}</Button>;
   }
 
   return <article className={classes}>{children}</article>;
@@ -73,8 +74,8 @@ export function DwmsDataField({
 }) {
   return (
     <div className={cn("min-w-0", className)}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-      <div className="mt-1 break-words text-sm text-slate-700">{children}</div>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <div className="mt-1 break-words text-sm text-foreground">{children}</div>
     </div>
   );
 }

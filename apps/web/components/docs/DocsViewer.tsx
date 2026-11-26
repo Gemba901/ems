@@ -1,11 +1,14 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableHead, TableCell } from "@/components/ui/table";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
-import { ArrowLeft, BookOpenText, ChevronRight, X, ZoomIn } from "lucide-react";
+import { ArrowLeft, BookOpenText, ChevronRight, ZoomIn } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { apiClient } from "@/lib/api-client";
 import type { DocsChapter } from "./types";
@@ -55,13 +58,14 @@ function MarkdownImage({ src, alt, protectedImages }: { src: string; alt: string
 
   return (
     <>
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => setOpen(true)}
-        className="group relative mx-auto my-6 block w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:border-indigo-300 hover:shadow-md"
+        className="group h-auto whitespace-normal relative mx-auto my-6 block w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition hover:border-primary hover:shadow-md"
         aria-label={`Open screenshot full size: ${alt}`}
       >
-        <span className="relative flex h-56 items-center justify-center overflow-hidden bg-slate-100 p-3 sm:h-72 lg:h-80">
+        <span className="relative flex h-56 items-center justify-center overflow-hidden bg-muted p-3 sm:h-72 lg:h-80">
           {imageUrl ? <Image
             src={imageUrl}
             alt={alt}
@@ -69,67 +73,53 @@ function MarkdownImage({ src, alt, protectedImages }: { src: string; alt: string
             height={1358}
             unoptimized
             className="h-full w-auto max-w-full rounded-lg object-contain shadow-sm transition duration-200 group-hover:scale-[1.015]"
-          /> : <span className="text-sm text-slate-500">Loading image...</span>}
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/80 px-3 py-1.5 text-xs font-semibold text-white shadow-lg transition group-hover:bg-indigo-700">
+          /> : <span className="text-sm text-muted-foreground">Loading image...</span>}
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-semibold text-background shadow-lg transition group-hover:bg-primary">
             <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
             Open full size
           </span>
         </span>
-        <span className="block border-t border-slate-200 bg-white px-4 py-3 text-center text-sm leading-6 text-slate-600">
+        <span className="block border-t border-border bg-card px-4 py-3 text-center text-sm leading-6 text-muted-foreground">
           {alt}
         </span>
-      </button>
-      {open && imageUrl &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-label={alt}
-            onClick={() => setOpen(false)}
-          >
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900 shadow-lg"
-              aria-label="Close screenshot"
-            >
-              <X className="h-5 w-5" />
-            </button>
+      </Button>
+      {open && imageUrl && (
+        <Dialog open onOpenChange={setOpen}>
+          <DialogContent className="max-h-[96dvh] overflow-y-auto sm:max-w-[min(96vw,72rem)]">
+            <DialogTitle className="sr-only">{alt || "Documentation screenshot"}</DialogTitle>
             <Image
               src={imageUrl}
               alt={alt}
               width={1120}
               height={1358}
               unoptimized
-              className="max-h-[92vh] w-auto max-w-full rounded-xl object-contain shadow-2xl"
-              onClick={(event) => event.stopPropagation()}
+              className="mx-auto max-h-[88dvh] w-auto max-w-full rounded-lg object-contain"
             />
-          </div>,
-          document.body,
-        )}
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
 
 const markdownComponents: Omit<Components, "img"> = {
-  h1: ({ children }) => <h1 className="break-words text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl lg:text-4xl">{children}</h1>,
-  h2: ({ children }) => <h2 className="scroll-mt-24 break-words pt-8 text-xl font-bold tracking-tight text-slate-950 sm:text-2xl lg:text-3xl">{children}</h2>,
-  h3: ({ children }) => <h3 className="pt-4 text-lg font-bold text-slate-950">{children}</h3>,
-  p: ({ children }) => <p className="my-4 leading-7 text-slate-700">{children}</p>,
-  strong: ({ children }) => <strong className="font-bold text-slate-950">{children}</strong>,
-  ul: ({ children }) => <ul className="my-4 list-disc space-y-2 pl-6 marker:text-indigo-500">{children}</ul>,
-  ol: ({ children }) => <ol className="my-4 list-decimal space-y-3 pl-6 marker:font-bold marker:text-indigo-600">{children}</ol>,
-  li: ({ children }) => <li className="pl-1 leading-7 text-slate-700">{children}</li>,
-  blockquote: ({ children }) => <blockquote className="my-6 rounded-xl border border-blue-200 bg-blue-50 px-5 py-1 text-blue-950">{children}</blockquote>,
-  hr: () => <hr className="my-8 border-slate-200" />,
-  table: ({ children }) => <div className="my-6 overflow-x-auto"><table className="min-w-full border-collapse text-left text-sm">{children}</table></div>,
-  th: ({ children }) => <th className="border border-slate-200 bg-slate-50 px-3 py-2 font-bold text-slate-900">{children}</th>,
-  td: ({ children }) => <td className="border border-slate-200 px-3 py-2 align-top text-slate-700">{children}</td>,
-  pre: ({ children }) => <pre className="my-6 max-w-full overflow-x-auto rounded-xl bg-slate-950 p-4 text-sm text-slate-100">{children}</pre>,
+  h1: ({ children }) => <h1 className="break-words text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl lg:text-4xl">{children}</h1>,
+  h2: ({ children }) => <h2 className="scroll-mt-24 break-words pt-8 text-xl font-bold tracking-tight text-foreground sm:text-2xl lg:text-3xl">{children}</h2>,
+  h3: ({ children }) => <h3 className="pt-4 text-lg font-bold text-foreground">{children}</h3>,
+  p: ({ children }) => <p className="my-4 leading-7 text-foreground">{children}</p>,
+  strong: ({ children }) => <strong className="font-bold text-foreground">{children}</strong>,
+  ul: ({ children }) => <ul className="my-4 list-disc space-y-2 pl-6 marker:text-primary">{children}</ul>,
+  ol: ({ children }) => <ol className="my-4 list-decimal space-y-3 pl-6 marker:font-bold marker:text-primary">{children}</ol>,
+  li: ({ children }) => <li className="pl-1 leading-7 text-foreground">{children}</li>,
+  blockquote: ({ children }) => <blockquote className="my-6 rounded-xl border border-info bg-info-subtle px-5 py-1 text-info">{children}</blockquote>,
+  hr: () => <hr className="my-8 border-border" />,
+  table: ({ children }) => <div className="my-6 overflow-x-auto"><Table className="min-w-full border-collapse text-left text-sm">{children}</Table></div>,
+  th: ({ children }) => <TableHead className="border border-border bg-muted px-3 py-2 font-bold text-foreground">{children}</TableHead>,
+  td: ({ children }) => <TableCell className="whitespace-normal border border-border px-3 py-2 align-top text-foreground">{children}</TableCell>,
+  pre: ({ children }) => <pre className="my-6 max-w-full overflow-x-auto rounded-xl bg-foreground p-4 text-sm text-muted-foreground">{children}</pre>,
   a: ({ href = "", children }) => {
     const external = href.startsWith("http");
-    return <Link href={href} target={external ? "_blank" : undefined} className="font-semibold text-indigo-700 underline decoration-indigo-200 underline-offset-4 hover:decoration-indigo-600">{children}</Link>;
+    return <Link href={href} target={external ? "_blank" : undefined} className="font-semibold text-primary underline decoration-primary underline-offset-4 hover:decoration-primary">{children}</Link>;
   },
 };
 
@@ -141,31 +131,31 @@ export default function DocsViewer({ chapters, activeChapter, markdown, basePath
   };
   return (
       <div className="mx-auto flex h-[calc(100vh-3.5rem)] w-full max-w-[1600px] items-start gap-6 overflow-hidden px-3 py-4 sm:px-6 sm:py-6 lg:gap-8 lg:px-8 lg:py-8">
-        <aside className="sticky top-20 hidden h-[calc(100vh-6rem)] w-72 shrink-0 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block">
-          <div className="mb-4 flex items-center gap-2 px-2 text-sm font-bold text-slate-900"><BookOpenText className="h-5 w-5 text-indigo-600" aria-hidden="true" />{title}</div>
-          <Link href={backHref} className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel}</Link>
+        <aside className="sticky top-20 hidden h-[calc(100vh-6rem)] w-72 shrink-0 overflow-y-auto rounded-2xl border border-border bg-card p-4 shadow-sm lg:block">
+          <div className="mb-4 flex items-center gap-2 px-2 text-sm font-bold text-foreground"><BookOpenText className="h-5 w-5 text-primary" aria-hidden="true" />{title}</div>
+          <Link href={backHref} className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel}</Link>
           <nav aria-label="Documentation chapters" className="space-y-1">
             {chapters.map((chapter, index) => {
               const active = chapter.slug === activeChapter.slug;
-              return <Link key={chapter.slug} href={chapterHref(chapter.slug)} aria-current={active ? "page" : undefined} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active ? "bg-indigo-50 font-semibold text-indigo-800" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${active ? "bg-indigo-600 text-white" : "border border-slate-200 text-slate-500"}`}>{index + 1}</span><span>{chapter.label}</span></Link>;
+              return <Link key={chapter.slug} href={chapterHref(chapter.slug)} aria-current={active ? "page" : undefined} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active ? "bg-accent font-semibold text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${active ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground"}`}>{index + 1}</span><span>{chapter.label}</span></Link>;
             })}
           </nav>
         </aside>
 
-        <main className="h-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain">
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:mb-6 sm:p-4 lg:hidden">
-            <Link href={backHref} className="mb-3 flex items-center gap-2 text-sm font-semibold text-indigo-700"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel}</Link>
-            <label htmlFor="docs-chapter" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">Documentation chapter</label>
-            <select id="docs-chapter" value={activeChapter.slug} onChange={(event) => { window.location.href = chapterHref(event.target.value); }} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900">
+        <div className="h-full min-w-0 flex-1 overflow-y-auto overscroll-y-contain">
+          <div className="mb-4 rounded-2xl border border-border bg-card p-3 shadow-sm sm:mb-6 sm:p-4 lg:hidden">
+            <Link href={backHref} className="mb-3 flex items-center gap-2 text-sm font-semibold text-primary"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel}</Link>
+            <label htmlFor="docs-chapter" className="mb-2 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Documentation chapter</label>
+            <NativeSelect id="docs-chapter" value={activeChapter.slug} onChange={(event) => { window.location.href = chapterHref(event.target.value); }} className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground">
               {chapters.map((chapter, index) => <option key={chapter.slug} value={chapter.slug}>{index + 1}. {chapter.label}</option>)}
-            </select>
+            </NativeSelect>
           </div>
 
-          <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-6 shadow-sm sm:px-8 sm:py-8 lg:px-12">
-            <div className="mb-6 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-4 text-xs font-semibold text-indigo-700 sm:mb-8 sm:pb-5 sm:text-sm"><span>{sectionLabel}</span><ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{activeChapter.label}</span></div>
+          <article className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card px-4 py-6 shadow-sm sm:px-8 sm:py-8 lg:px-12">
+            <div className="mb-6 flex flex-wrap items-center gap-2 border-b border-border pb-4 text-xs font-semibold text-primary sm:mb-8 sm:pb-5 sm:text-sm"><span>{sectionLabel}</span><ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{activeChapter.label}</span></div>
             <div className="max-w-4xl break-words text-[15px]"><ReactMarkdown components={components}>{markdown}</ReactMarkdown></div>
           </article>
-        </main>
+        </div>
       </div>
   );
 }

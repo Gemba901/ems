@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { DwmsService, getDwmsErrorMessage } from "@/services/dwms.service";
 import { useAuthStore } from "@/store/auth.store";
@@ -17,7 +20,6 @@ import {
   Paperclip,
   Send,
   UserRound,
-  X,
 } from "lucide-react";
 import {
   formatOrganizationDate,
@@ -46,20 +48,20 @@ type ActionCardProps =
     };
 
 const taskStatusTone: Record<DwmsTaskStatus, string> = {
-  PENDING: "border-slate-200 bg-slate-100 text-slate-700",
-  IN_PROGRESS: "border-blue-200 bg-blue-100 text-blue-700",
-  DONE: "border-emerald-200 bg-emerald-100 text-emerald-700",
-  APPROVAL_PENDING: "border-cyan-200 bg-cyan-100 text-cyan-700",
-  PARTLY_DONE: "border-amber-200 bg-amber-100 text-amber-700",
-  LESS_THAN_50: "border-orange-200 bg-orange-100 text-orange-700",
-  NOT_APPLICABLE: "border-violet-200 bg-violet-100 text-violet-700",
-  OVERDUE: "border-rose-200 bg-rose-100 text-rose-700",
+  PENDING: "border-border bg-muted text-foreground",
+  IN_PROGRESS: "border-info bg-info-subtle text-info",
+  DONE: "border-success bg-success-subtle text-success",
+  APPROVAL_PENDING: "border-info bg-info-subtle text-info",
+  PARTLY_DONE: "border-warning bg-warning-subtle text-warning",
+  LESS_THAN_50: "border-warning bg-warning-subtle text-warning",
+  NOT_APPLICABLE: "border-info bg-info-subtle text-info",
+  OVERDUE: "border-danger bg-danger-subtle text-danger",
 };
 
 const severityTone: Record<string, string> = {
-  MEDIUM: "border-blue-100 bg-blue-50 text-blue-700",
-  HIGH: "border-amber-200 bg-amber-50 text-amber-700",
-  CRITICAL: "border-rose-200 bg-rose-50 text-rose-700",
+  MEDIUM: "border-info bg-info-subtle text-info",
+  HIGH: "border-warning bg-warning-subtle text-warning",
+  CRITICAL: "border-danger bg-danger-subtle text-danger",
 };
 
 function label(value?: string | null) {
@@ -85,11 +87,11 @@ function DetailRow({
   value?: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+    <div className="rounded-2xl border border-border bg-muted px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
         {title}
       </p>
-      <div className="mt-1.5 text-sm font-medium text-slate-800">
+      <div className="mt-1.5 text-sm font-medium text-foreground">
         {value || "Not set"}
       </div>
     </div>
@@ -100,34 +102,11 @@ export default function ActionCard(props: ActionCardProps) {
   if (!props.open || !props.item) return null;
 
   return (
-    <div
-      className="dwms-dialog-backdrop fixed inset-0 z-[100000] flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-[2px]"
-      onClick={props.onClose}
-    >
-      <article
-        className="dwms-dialog-panel w-full max-w-3xl overflow-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-h-[88vh] sm:rounded-[28px] sm:p-7"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-600">
-              {props.type === "alert"
-                ? "Alert Action Card"
-                : "Task Action Card"}
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-              {props.item.title}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={props.onClose}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-            aria-label="Close action card"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) props.onClose(); }}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader className="pr-8">
+          <DialogTitle>{props.item.title}</DialogTitle>
+        </DialogHeader>
 
         {props.type === "task" ? (
           <TaskDetails
@@ -139,8 +118,8 @@ export default function ActionCard(props: ActionCardProps) {
         ) : (
           <AlertDetails alert={props.item} />
         )}
-      </article>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -183,21 +162,21 @@ function TaskDetails({
         >
           {label(task.status)}
         </span>
-        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+        <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
           {label(task.frequency)}
         </span>
         {task.priority && (
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+          <span className="rounded-full border border-warning bg-warning-subtle px-3 py-1 text-xs font-medium text-warning">
             {label(task.priority)} Priority
           </span>
         )}
       </div>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+      <section className="mt-5 rounded-2xl border border-border bg-card p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
           Description
         </p>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-foreground">
           {task.description || "No description available for this task."}
         </p>
       </section>
@@ -231,16 +210,16 @@ function TaskDetails({
         />
       </div>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <section className="mt-5 rounded-2xl border border-border bg-muted p-4">
         <div className="flex items-center justify-between text-sm">
-          <span className="font-semibold text-slate-700">Completion</span>
-          <span className="font-semibold text-slate-900">
+          <span className="font-semibold text-foreground">Completion</span>
+          <span className="font-semibold text-foreground">
             {task.completionPercent}%
           </span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
           <div
-            className="h-full rounded-full bg-blue-600"
+            className="h-full rounded-full bg-info"
             style={{
               width: `${Math.min(100, Math.max(0, task.completionPercent))}%`,
             }}
@@ -249,15 +228,15 @@ function TaskDetails({
       </section>
 
       {task.completionAttachmentUrl && (
-        <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-700">
+        <section className="mt-5 rounded-xl border border-border bg-muted p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-info">
             Completion File
           </p>
           <a
             href={task.completionAttachmentUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 transition hover:text-blue-800"
+            className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-info transition hover:text-info"
           >
             <Paperclip className="h-4 w-4" />
             <span>
@@ -268,30 +247,30 @@ function TaskDetails({
         </section>
       )}
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <MessageSquare className="h-4 w-4 text-slate-500" />
+      <section className="mt-5 rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
           <span>Task Comments</span>
         </div>
 
         <div className="mt-4 space-y-3">
           {(task.comments ?? []).length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+            <p className="rounded-xl border border-dashed border-border bg-muted px-3 py-4 text-sm text-muted-foreground">
               No comments added yet.
             </p>
           ) : (
             (task.comments ?? []).map((item) => (
               <div
                 key={item.id}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3"
+                className="rounded-xl border border-border bg-muted px-3 py-3"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                  <span className="font-semibold text-slate-700">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">
                     {item.author?.name || "Unknown user"}
                   </span>
                   <span>{formatDate(item.createdAt, true, timeZone)}</span>
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
                   {item.comment}
                 </p>
               </div>
@@ -300,21 +279,21 @@ function TaskDetails({
         </div>
 
         <form onSubmit={submitComment} className="mt-4 space-y-3">
-          <textarea
+          <Textarea
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             rows={3}
             placeholder="Add a task comment..."
-            className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            className="w-full resize-none rounded-xl border border-border px-3 py-2 text-sm font-normal text-foreground outline-none transition focus:border-info focus:ring-2 focus:ring-info"
           />
           {commentError && (
-            <p className="text-xs font-medium text-rose-600">{commentError}</p>
+            <p className="text-xs font-medium text-danger">{commentError}</p>
           )}
           <div className="flex justify-end">
-            <button
+            <Button
               type="submit"
               disabled={savingComment || !comment.trim() || !token}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-info px-4 text-xs font-semibold text-primary-foreground transition hover:bg-info disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingComment ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -322,7 +301,7 @@ function TaskDetails({
                 <Send className="h-3.5 w-3.5" />
               )}
               <span>{savingComment ? "Adding..." : "Add Comment"}</span>
-            </button>
+            </Button>
           </div>
         </form>
       </section>
@@ -344,17 +323,17 @@ function ApprovalTaskDetails({ task }: { task: DwmsAssignedTaskHistoryItem }) {
           {label(String(task.status || "APPROVAL_PENDING"))}
         </span>
         {priority && (
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+          <span className="rounded-full border border-warning bg-warning-subtle px-3 py-1 text-xs font-medium text-warning">
             {label(priority)} Priority
           </span>
         )}
       </div>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+      <section className="mt-5 rounded-2xl border border-border bg-card p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
           Description
         </p>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-foreground">
           {task.description || "No description available for this task."}
         </p>
       </section>
@@ -384,27 +363,27 @@ function ApprovalTaskDetails({ task }: { task: DwmsAssignedTaskHistoryItem }) {
       </div>
 
       {task.completionNote && (
-        <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
+        <section className="mt-5 rounded-xl border border-border bg-muted p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-success">
             <CheckCircle2 className="h-4 w-4" />
             Completion Note
           </div>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-900/80">
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-success/80">
             {task.completionNote}
           </p>
         </section>
       )}
 
       {task.completionAttachmentUrl && (
-        <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-700">
+        <section className="mt-5 rounded-xl border border-border bg-muted p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-info">
             Completion File
           </p>
           <a
             href={task.completionAttachmentUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 transition hover:text-blue-800"
+            className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-info transition hover:text-info"
           >
             <Paperclip className="h-4 w-4" />
             <span>
@@ -431,20 +410,20 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
           {label(normalizedSeverity)}
         </span>
         <span
-          className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+          className="rounded-full border border-info bg-info-subtle px-3 py-1 text-xs font-semibold text-info"
         >
           {alert.pendingAcknowledgments ? "Not Acknowledged" : "Acknowledged"}
         </span>
-        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+        <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground">
           {label(alert.type)}
         </span>
       </div>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+      <section className="mt-5 rounded-2xl border border-border bg-card p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
           Description
         </p>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-foreground">
           {alert.description || "No description available for this alert."}
         </p>
       </section>
@@ -486,16 +465,16 @@ function AlertDetails({ alert }: { alert: DwmsAlertItem }) {
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          <UserRound className="h-4 w-4 text-slate-500" />
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted p-4 text-sm text-foreground">
+          <UserRound className="h-4 w-4 text-muted-foreground" />
           <span>{alert.raisedBy?.name || "Unknown raiser"}</span>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          <CalendarClock className="h-4 w-4 text-slate-500" />
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted p-4 text-sm text-foreground">
+          <CalendarClock className="h-4 w-4 text-muted-foreground" />
           <span>{formatDate(alert.createdAt, false, timeZone)}</span>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          <AlertTriangle className="h-4 w-4 text-slate-500" />
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted p-4 text-sm text-foreground">
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           <span>{alert.isAbnormality ? "Abnormality" : "Alert"}</span>
         </div>
       </div>

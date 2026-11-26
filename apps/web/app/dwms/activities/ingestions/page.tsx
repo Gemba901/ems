@@ -1,5 +1,9 @@
 "use client";
 
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -31,9 +35,9 @@ function formatDateTime(value?: string | null, timeZone?: string | null) {
 }
 
 function statusClass(status: string) {
-  if (status === "COMPLETED") return "bg-emerald-50 text-emerald-700";
-  if (status === "FAILED") return "bg-rose-50 text-rose-700";
-  return "bg-blue-50 text-blue-700";
+  if (status === "COMPLETED") return "bg-success-subtle text-success";
+  if (status === "FAILED") return "bg-danger-subtle text-danger";
+  return "bg-info-subtle text-info";
 }
 
 export default function ActivityIngestionsPage() {
@@ -92,36 +96,38 @@ function ActivityIngestionsContent() {
 
   return (
     <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-10 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
+      <PageHeader title="Ingestion History" />
       <ActivityTabs active="ingestions" />
       {message && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+        <div className="rounded-xl border border-danger bg-danger-subtle p-4 text-xs text-danger">
           {message}
         </div>
       )}
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="relative flex-1 md:max-w-lg">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search file, uploader, status..."
-            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
+            className="min-h-11 w-full rounded-xl border border-border bg-card py-2.5 pr-4 pl-10 text-sm font-medium text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-info focus:ring-2 focus:ring-info sm:rounded-full"
           />
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex">
-          <button
+          <Button
+            variant="ghost"
             type="button"
             disabled={loading}
             onClick={() => setRefreshKey((value) => value + 1)}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 sm:rounded-full sm:px-4"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground shadow-sm hover:bg-muted disabled:opacity-50 sm:rounded-full sm:px-4"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
-          </button>
+          </Button>
           <Link
             href="/dwms/actions/new?mode=ACTIVITY"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:rounded-full sm:px-4"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-info px-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-info sm:rounded-full sm:px-4"
           >
             <FileSpreadsheet className="h-4 w-4" />
             <span>Import sheet</span>
@@ -129,14 +135,14 @@ function ActivityIngestionsContent() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border-app bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading ingestion history...
           </div>
         ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-sm text-slate-500">
+          <div className="py-16 text-center text-sm text-muted-foreground">
             No ingestion history found.
           </div>
         ) : (
@@ -145,79 +151,79 @@ function ActivityIngestionsContent() {
             {filtered.map((ingestion) => (
               <DwmsMobileDataCard key={ingestion.id}>
                 <div className="flex min-w-0 items-start justify-between gap-3">
-                  <p className="min-w-0 break-all font-semibold text-slate-900">{ingestion.fileName}</p>
+                  <p className="min-w-0 break-all font-semibold text-foreground">{ingestion.fileName}</p>
                   <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(ingestion.status)}`}>{ingestion.status}</span>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3">
                   <DwmsDataField label="Uploaded by">{ingestion.uploadedBy?.name ?? "Unknown"}</DwmsDataField>
                   <DwmsDataField label="Uploaded">{formatDateTime(ingestion.createdAt, user?.organizationTimeZone)}</DwmsDataField>
                   <DwmsDataField label="Total rows">{ingestion.totalRows}</DwmsDataField>
-                  <DwmsDataField label="Result"><span className="text-emerald-700">{ingestion.successfulRows} created</span><span className="mx-1 text-slate-300">·</span><span className="text-rose-700">{ingestion.failedRows} declined</span></DwmsDataField>
+                  <DwmsDataField label="Result"><span className="text-success">{ingestion.successfulRows} created</span><span className="mx-1 text-muted-foreground">·</span><span className="text-danger">{ingestion.failedRows} declined</span></DwmsDataField>
                 </div>
-                <Link href={`/dwms/activities/ingestions/${ingestion.id}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">
+                <Link href={`/dwms/activities/ingestions/${ingestion.id}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-info px-4 text-sm font-semibold text-primary-foreground">
                   View row details <ArrowRight className="h-4 w-4" />
                 </Link>
               </DwmsMobileDataCard>
             ))}
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">File</th>
-                  <th className="px-5 py-3">Uploaded By</th>
-                  <th className="px-5 py-3">Rows</th>
-                  <th className="px-5 py-3">Created</th>
-                  <th className="px-5 py-3">Declined</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Uploaded</th>
-                  <th className="px-5 py-3 text-right">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+            <Table className="min-w-full divide-y divide-border text-sm">
+              <TableHeader className="bg-muted text-left text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <TableRow>
+                  <TableHead className="px-5 py-3">File</TableHead>
+                  <TableHead className="px-5 py-3">Uploaded By</TableHead>
+                  <TableHead className="px-5 py-3">Rows</TableHead>
+                  <TableHead className="px-5 py-3">Created</TableHead>
+                  <TableHead className="px-5 py-3">Declined</TableHead>
+                  <TableHead className="px-5 py-3">Status</TableHead>
+                  <TableHead className="px-5 py-3">Uploaded</TableHead>
+                  <TableHead className="px-5 py-3 text-right">Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-border">
                 {filtered.map((ingestion) => (
-                  <tr key={ingestion.id} className="hover:bg-slate-50/70">
-                    <td className="px-5 py-4 font-semibold text-slate-900">
+                  <TableRow key={ingestion.id} className="hover:bg-muted/70">
+                    <TableCell className="px-5 py-4 font-semibold text-foreground">
                       {ingestion.fileName}
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-muted-foreground">
                       {ingestion.uploadedBy?.name ?? "Unknown"}
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-muted-foreground">
                       {ingestion.totalRows}
-                    </td>
-                    <td className="px-5 py-4 text-emerald-700">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-success">
                       {ingestion.successfulRows}
-                    </td>
-                    <td className="px-5 py-4 text-rose-700">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-danger">
                       {ingestion.failedRows}
-                    </td>
-                    <td className="px-5 py-4">
+                    </TableCell>
+                    <TableCell className="px-5 py-4">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(ingestion.status)}`}
                       >
                         {ingestion.status}
                       </span>
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-muted-foreground">
                       {formatDateTime(
                         ingestion.createdAt,
                         user?.organizationTimeZone,
                       )}
-                    </td>
-                    <td className="px-5 py-4 text-right">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-right">
                       <Link
                         href={`/dwms/activities/ingestions/${ingestion.id}`}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-100"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted"
                         title="View row details"
                       >
                         <ArrowRight className="h-4 w-4" />
                       </Link>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           </>
         )}

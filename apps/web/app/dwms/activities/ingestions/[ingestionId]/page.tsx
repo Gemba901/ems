@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -182,16 +185,16 @@ function ActivityIngestionDetailContent() {
         <div className="space-y-2">
           <Link
             href="/dwms/activities/ingestions"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-800"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Back to ingestion history</span>
           </Link>
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+            <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
               {ingestion?.fileName ?? "Activity ingestion"}
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               Uploaded{" "}
               {formatDateTime(ingestion?.createdAt, user?.organizationTimeZone)}{" "}
               by {ingestion?.uploadedBy?.name ?? "Unknown"}
@@ -200,34 +203,36 @@ function ActivityIngestionDetailContent() {
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex">
           {ingestion && ingestion.failedRows > 0 && (
-            <button
+            <Button
+              variant="ghost"
               type="button"
               onClick={() => downloadFailedRows(ingestion.fileName, rows)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:rounded-full sm:px-4"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground shadow-sm hover:bg-muted sm:rounded-full sm:px-4"
             >
               <Download className="h-4 w-4" />
               Failed rows
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="ghost"
             type="button"
             disabled={loading}
             onClick={() => setRefreshKey((value) => value + 1)}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 sm:rounded-full sm:px-4"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground shadow-sm hover:bg-muted disabled:opacity-50 sm:rounded-full sm:px-4"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
 
       {message && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+        <div className="rounded-xl border border-danger bg-danger-subtle p-4 text-xs text-danger">
           {message}
         </div>
       )}
       {ingestion?.failureMessage && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+        <div className="rounded-xl border border-danger bg-danger-subtle p-4 text-xs text-danger">
           {cleanDwmsMessage(ingestion.failureMessage, "The ingestion failed")}
         </div>
       )}
@@ -251,12 +256,12 @@ function ActivityIngestionDetailContent() {
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search row, activity, job role, reason..."
-            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm font-medium text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
+            className="min-h-11 w-full rounded-xl border border-border bg-card py-2.5 pr-4 pl-10 text-sm font-medium text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-info focus:ring-2 focus:ring-info sm:rounded-full"
           />
         </div>
         <div className="md:w-48">
@@ -265,19 +270,19 @@ function ActivityIngestionDetailContent() {
             options={STATUS_OPTIONS}
             onChange={setStatus}
             placeholder="Rows"
-            triggerClassName="h-10 rounded-full border-slate-200 px-4 text-sm font-medium shadow-sm"
+            triggerClassName="h-10 rounded-full border-border px-4 text-sm font-medium shadow-sm"
           />
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border-app bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading row details...
           </div>
         ) : filteredRows.length === 0 ? (
-          <div className="py-16 text-center text-sm text-slate-500">
+          <div className="py-16 text-center text-sm text-muted-foreground">
             No rows found.
           </div>
         ) : (
@@ -287,43 +292,43 @@ function ActivityIngestionDetailContent() {
               <DwmsMobileDataCard key={row.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-900">Row {row.rowNumber}</p>
-                    <p className="mt-1 break-words text-sm font-semibold text-slate-700">{row.activityName || "Not captured"}</p>
-                    <p className="mt-0.5 text-xs text-slate-400">{row.activityCode || "No code"}</p>
+                    <p className="font-semibold text-foreground">Row {row.rowNumber}</p>
+                    <p className="mt-1 break-words text-sm font-semibold text-foreground">{row.activityName || "Not captured"}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{row.activityCode || "No code"}</p>
                   </div>
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === "CREATED" ? "bg-emerald-50 text-emerald-700" : row.status === "FAILED" ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700"}`}>{row.status}</span>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === "CREATED" ? "bg-success-subtle text-success" : row.status === "FAILED" ? "bg-danger-subtle text-danger" : "bg-info-subtle text-info"}`}>{row.status}</span>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3">
                   <DwmsDataField label="Scope">{row.scope?.replaceAll("_", " ") || "Legacy"}</DwmsDataField>
                   <DwmsDataField label="Target">{row.scopeTarget || "Organisation"}</DwmsDataField>
                   <DwmsDataField label="Matched">{row.assignedCount ?? 0}</DwmsDataField>
                   <DwmsDataField label="Links">{row.activityId ? "Activity linked" : "No activity"} · {row.taskId ? "Task linked" : "No task"}</DwmsDataField>
                 </div>
-                <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm leading-5 text-slate-600">{cleanDwmsMessage(row.message, "No message")}</div>
+                <div className="mt-3 rounded-xl bg-muted p-3 text-sm leading-5 text-muted-foreground">{cleanDwmsMessage(row.message, "No message")}</div>
               </DwmsMobileDataCard>
             ))}
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Row</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Activity</th>
-                  <th className="px-5 py-3">Assignment target</th>
-                  <th className="px-5 py-3">Reason</th>
-                  <th className="px-5 py-3">Links</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+            <Table className="min-w-full divide-y divide-border text-sm">
+              <TableHeader className="bg-muted text-left text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <TableRow>
+                  <TableHead className="px-5 py-3">Row</TableHead>
+                  <TableHead className="px-5 py-3">Status</TableHead>
+                  <TableHead className="px-5 py-3">Activity</TableHead>
+                  <TableHead className="px-5 py-3">Assignment target</TableHead>
+                  <TableHead className="px-5 py-3">Reason</TableHead>
+                  <TableHead className="px-5 py-3">Links</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-border">
                 {filteredRows.map((row) => (
-                  <tr key={row.id} className="align-top hover:bg-slate-50/70">
-                    <td className="px-5 py-4 font-semibold text-slate-900">
+                  <TableRow key={row.id} className="align-top hover:bg-muted/70">
+                    <TableCell className="px-5 py-4 font-semibold text-foreground">
                       {row.rowNumber}
-                    </td>
-                    <td className="px-5 py-4">
+                    </TableCell>
+                    <TableCell className="px-5 py-4">
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === "CREATED" ? "bg-emerald-50 text-emerald-700" : row.status === "FAILED" ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700"}`}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === "CREATED" ? "bg-success-subtle text-success" : row.status === "FAILED" ? "bg-danger-subtle text-danger" : "bg-info-subtle text-info"}`}
                       >
                         {row.status === "CREATED" ? (
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -334,43 +339,43 @@ function ActivityIngestionDetailContent() {
                         )}
                         {row.status}
                       </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-800">
+                    </TableCell>
+                    <TableCell className="px-5 py-4">
+                      <p className="font-semibold text-foreground">
                         {row.activityName || "Not captured"}
                       </p>
-                      <p className="mt-1 text-xs text-slate-400">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {row.activityCode || "No code"}
                       </p>
-                    </td>
-                    <td className="px-5 py-4 text-xs text-slate-600">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-xs text-muted-foreground">
                       <p className="font-semibold">
                         {row.scope?.replaceAll("_", " ") || "Legacy"}
                       </p>
                       <p>{row.scopeTarget || "Organisation"}</p>
                       <p>{row.assignedCount ?? 0} matched</p>
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-muted-foreground">
                       {cleanDwmsMessage(row.message, "No message")}
-                    </td>
-                    <td className="px-5 py-4 text-xs font-semibold">
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-xs font-semibold">
                       <div className="flex flex-col gap-1">
                         {row.activityId ? (
-                          <span className="text-blue-600">Activity linked</span>
+                          <span className="text-info">Activity linked</span>
                         ) : (
-                          <span className="text-slate-400">No activity</span>
+                          <span className="text-muted-foreground">No activity</span>
                         )}
                         {row.taskId ? (
-                          <span className="text-emerald-600">Task linked</span>
+                          <span className="text-success">Task linked</span>
                         ) : (
-                          <span className="text-slate-400">No task</span>
+                          <span className="text-muted-foreground">No task</span>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           </>
         )}
@@ -390,13 +395,13 @@ function SummaryTile({
 }) {
   const toneClass =
     tone === "emerald"
-      ? "text-emerald-700"
+      ? "text-success"
       : tone === "rose"
-        ? "text-rose-700"
-        : "text-slate-900";
+        ? "text-danger"
+        : "text-foreground";
   return (
-    <div className="min-w-0 rounded-2xl border border-border-app bg-white p-3 shadow-sm sm:p-5">
-      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+    <div className="min-w-0 rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-5">
+      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
       <p className={`mt-2 break-words text-xl font-extrabold sm:text-2xl ${toneClass}`}>{value}</p>

@@ -16,7 +16,7 @@ export default function DwmsLayout({
   const { collapsed: sidebarCollapsed, toggle: toggleSidebar } = useSidebarCollapsed();
   return (
     <ModuleGuard moduleKey="DWMS">
-      <div className="dwms-shell min-h-screen bg-[#F4F7FA] font-sans">
+      <div className="dwms-shell min-h-screen bg-background font-sans">
         <Sidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}

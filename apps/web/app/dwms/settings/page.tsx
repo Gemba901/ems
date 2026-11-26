@@ -1,11 +1,13 @@
 "use client";
 
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/patterns/LoadingState";
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
-  Loader2,
   Shield,
   Users,
 } from "lucide-react";
@@ -39,17 +41,17 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-visible rounded-2xl border border-slate-100 bg-white shadow-sm">
-      <div className="flex items-center gap-3 border-b border-slate-50 px-4 py-4 sm:px-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50">
-          <Icon className="h-5 w-5 text-slate-500" />
+    <div className="overflow-visible rounded-2xl border border-border bg-card shadow-sm">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+          <Icon className="h-5 w-5 text-muted-foreground" />
         </div>
         <div>
-          <h2 className="text-sm font-bold text-slate-800">{title}</h2>
-          <p className="text-xs text-slate-400">{description}</p>
+          <h2 className="text-sm font-bold text-foreground">{title}</h2>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
-      <div className="divide-y divide-slate-50 overflow-visible">
+      <div className="divide-y divide-border overflow-visible">
         {children}
       </div>
     </div>
@@ -68,8 +70,8 @@ function SettingRow({
   return (
     <div className="relative flex flex-col gap-4 overflow-visible px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0 flex-1 pr-2">
-        <p className="text-sm font-medium text-slate-700">{title}</p>
-        <p className="mt-0.5 text-xs text-slate-400">{hint}</p>
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
       </div>
       <div className="relative w-full min-w-0 overflow-visible md:w-auto md:max-w-[560px] md:shrink-0">
         {control}
@@ -136,7 +138,7 @@ function ViewLevelSelect({
         }
         disabled={disabled}
         placeholder="Select view level"
-        triggerClassName="rounded-2xl border-slate-200 px-4 py-2.5 text-sm text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+        triggerClassName="rounded-2xl border-border px-4 py-2.5 text-sm text-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
       />
     </div>
   );
@@ -282,20 +284,21 @@ function DwmsSettingsContent() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
+      <PageHeader title="RTM Settings" />
       <div className="space-y-6">
         <DwmsTabHeader
           activeTab={activeTab}
           onTabChange={setActiveTab}
           tabs={[
-            { key: "EDIT", label: "Edit Rules", dotColor: "bg-blue-500" },
-            { key: "SUMMARY", label: "Summary", dotColor: "bg-emerald-500" },
+            { key: "EDIT", label: "Edit Rules", dotColor: "bg-info" },
+            { key: "SUMMARY", label: "Summary", dotColor: "bg-success" },
           ]}
         />
 
         {error && (
           <div
             role="alert"
-            className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+            className="flex items-start gap-3 rounded-2xl border border-danger bg-danger-subtle px-4 py-3 text-sm text-danger"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
@@ -304,7 +307,7 @@ function DwmsSettingsContent() {
         {success && (
           <div
             role="status"
-            className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+            className="flex items-start gap-3 rounded-2xl border border-success bg-success-subtle px-4 py-3 text-sm text-success"
           >
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{success}</span>
@@ -314,10 +317,7 @@ function DwmsSettingsContent() {
         {activeTab === "EDIT" ? (
           <div className="space-y-6">
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 shadow-sm">
-                <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-slate-400" />
-                Loading RTM settings...
-              </div>
+              <LoadingState label="Loading RTM settings…" />
             ) : (
               <>
                 <SectionCard
@@ -392,41 +392,42 @@ function DwmsSettingsContent() {
                   />
                 </SectionCard>
                 <div className="flex justify-stretch pt-1 sm:justify-end">
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     onClick={() => void handleSave()}
                     disabled={!canEdit || saving}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:rounded-2xl"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-info px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:rounded-2xl"
                   >
                     {saving ? "Saving..." : "Save RTM settings"}
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
           </div>
         ) : (
-          <div className="rounded-2xl border border-slate-100 bg-white px-4 py-5 shadow-sm sm:px-6">
+          <div className="rounded-2xl border border-border bg-card px-4 py-5 shadow-sm sm:px-6">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
-                <Users className="h-4 w-4 text-slate-500" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                <Users className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-800">
+                <p className="text-sm font-bold text-foreground">
                   Selected Values
                 </p>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-muted-foreground">
                   Read-only snapshot of the current settings.
                 </p>
               </div>
             </div>
-            <div className="mt-4 divide-y divide-slate-100">
+            <div className="mt-4 divide-y divide-border">
               {summary.map((item) => (
                 <div
                   key={item.label}
                   className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between"
                 >
-                  <span className="text-xs text-slate-500">{item.label}</span>
-                  <span className="text-xs font-semibold text-slate-700 sm:max-w-[70%] sm:text-right">
+                  <span className="text-xs text-muted-foreground">{item.label}</span>
+                  <span className="text-xs font-semibold text-foreground sm:max-w-[70%] sm:text-right">
                     {item.value}
                   </span>
                 </div>

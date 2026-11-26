@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { ErrorState } from "@/components/patterns/ErrorState";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
@@ -19,7 +21,8 @@ type ViewerProps = Omit<React.ComponentProps<typeof DocsViewer>, "chapters" | "a
 export default function ModuleDocsPage({ slug, apiPath, ...viewer }: ViewerProps & { slug: string; apiPath: string }) {
   const router = useRouter();
   const token = useAuthStore((state) => state.accessToken);
-  const requestKey = `${slug}:${token ?? ""}`;
+  const [attempt, setAttempt] = useState(0);
+  const requestKey = `${slug}:${token ?? ""}:${attempt}`;
   const [document, setDocument] = useState<{ key: string; value: DocumentResponse } | null>(null);
   const [error, setError] = useState<{ key: string; message: string } | null>(null);
 
@@ -29,6 +32,7 @@ export default function ModuleDocsPage({ slug, apiPath, ...viewer }: ViewerProps
     // apiClient refreshes an expired access token once before giving up.
     void apiClient(`${apiPath}/${encodeURIComponent(slug)}`, { signal: controller.signal }, token)
       .then(async (response) => {
+        if (controller.signal.aborted) return;
         if (response.status === 401) {
           router.replace("/login");
           return;
@@ -38,8 +42,11 @@ export default function ModuleDocsPage({ slug, apiPath, ...viewer }: ViewerProps
           return;
         }
         if (!response.ok) throw new Error(response.status === 404 ? "Chapter not found." : "Unable to load documentation.");
-        setDocument({ key: requestKey, value: (await response.json()) as DocumentResponse });
-        setError(null);
+        const value = (await response.json()) as DocumentResponse;
+        if (!controller.signal.aborted) {
+          setDocument({ key: requestKey, value });
+          setError(null);
+        }
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -49,8 +56,8 @@ export default function ModuleDocsPage({ slug, apiPath, ...viewer }: ViewerProps
     return () => controller.abort();
   }, [apiPath, requestKey, router, slug, token]);
 
-  if (error?.key === requestKey) return <p className="p-8 text-sm text-rose-700">{error.message}</p>;
-  if (document?.key !== requestKey) return <div className="p-8 text-sm text-slate-500">Loading documentation...</div>;
+  if (error?.key === requestKey) return <ErrorState title="Unable to load documentation" description={error.message} onRetry={() => setAttempt((value) => value + 1)} />;
+  if (document?.key !== requestKey) return <LoadingState label="Loading documentation…" />;
   return <DocsViewer
     chapters={document.value.chapters}
     activeChapter={document.value.chapter}

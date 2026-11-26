@@ -43,18 +43,18 @@ export function ActivityRelationChain({
     : Math.round((completedCount / chain.length) * 100);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-900 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-4 text-foreground shadow-sm">
       {mode === "instance" && (
         <>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-900">Progress</p>
-            <p className="text-xs font-semibold text-slate-600">
+            <p className="text-sm font-semibold text-foreground">Progress</p>
+            <p className="text-xs font-semibold text-muted-foreground">
               {completedCount} of {chain.length} complete
             </p>
           </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border">
             <div
-              className="h-full rounded-full bg-emerald-500"
+              className="h-full rounded-full bg-success"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -77,12 +77,12 @@ export function ActivityRelationChain({
                   className={[
                     "relative z-10 inline-flex h-[22px] w-[22px] items-center justify-center rounded-full border text-xs",
                     isCompleted
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                      ? "border-success/30 bg-success-subtle text-success"
                       : isCurrent
-                        ? "border-blue-400 bg-blue-50 text-blue-600"
+                        ? "border-info bg-info-subtle text-info"
                         : isLocked
-                          ? "border-slate-200 bg-slate-50 text-slate-400"
-                          : "border-slate-200 bg-white text-slate-500",
+                          ? "border-border bg-muted text-muted-foreground"
+                          : "border-border bg-card text-muted-foreground",
                   ].join(" ")}
                 >
                   {isCompleted ? (
@@ -94,13 +94,13 @@ export function ActivityRelationChain({
                   )}
                 </span>
                 {index < chain.length - 1 && (
-                  <span className="absolute left-1/2 top-1/2 h-full w-px -translate-x-1/2 bg-slate-200" />
+                  <span className="absolute left-1/2 top-1/2 h-full w-px -translate-x-1/2 bg-border" />
                 )}
               </div>
               <div
                 className={[
                   "min-w-0 rounded-lg px-3 py-2",
-                  isCurrent ? "bg-blue-50 ring-1 ring-blue-200" : "",
+                  isCurrent ? "bg-info-subtle ring-1 ring-ring" : "",
                 ].join(" ")}
               >
                 <div className="flex min-w-0 items-start justify-between gap-3">
@@ -109,10 +109,10 @@ export function ActivityRelationChain({
                       className={[
                         "truncate text-sm font-semibold",
                         isCurrent
-                          ? "text-blue-700"
+                          ? "text-info"
                           : isLocked
-                            ? "text-slate-500"
-                            : "text-slate-900",
+                            ? "text-muted-foreground"
+                            : "text-foreground",
                       ].join(" ")}
                     >
                       {activity.name}
@@ -120,14 +120,14 @@ export function ActivityRelationChain({
                     <p
                       className={[
                         "mt-0.5 truncate text-xs font-medium",
-                        isLocked ? "text-slate-400" : "text-slate-500",
+                        isLocked ? "text-muted-foreground" : "text-muted-foreground",
                       ].join(" ")}
                     >
                       {activity.code || "No code"}
                     </p>
                   </div>
                   {isFirstIncomplete && (
-                    <span className="shrink-0 rounded-full bg-blue-100 px-2 py-1 text-[11px] font-semibold text-blue-700">
+                    <span className="shrink-0 rounded-full bg-info-subtle px-2 py-1 text-[11px] font-semibold text-info">
                       {labelStatus(status)}
                     </span>
                   )}
@@ -137,7 +137,7 @@ export function ActivityRelationChain({
           );
 
           return href ? (
-            <Link key={activity.id} href={href} className="block cursor-pointer rounded-lg outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-200">
+            <Link key={activity.id} href={href} className="block cursor-pointer rounded-lg outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
               {content}
             </Link>
           ) : (

@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type {
   DwmsTaskItem as TaskItem,
   DwmsTaskStatus as TaskStatus,
@@ -28,40 +29,11 @@ export default function TaskDetailModal({
   }
 
   return (
-    <div
-      className="dwms-dialog-backdrop fixed inset-0 z-[100000] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-[2px] transition-colors duration-200"
-      onClick={onClose}
-    >
-      <article
-        className="dwms-dialog-panel w-full max-w-3xl overflow-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl transition-colors duration-200 sm:max-h-[88vh] sm:rounded-[28px] sm:p-7"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-600">
-              Task details
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-              {task.title}
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-            aria-label="Close task details"
-          >
-            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
-              <path
-                d="M5 5l10 10M15 5L5 15"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader className="pr-8">
+          <DialogTitle>{task.title}</DialogTitle>
+        </DialogHeader>
 
         <div className="mt-4 flex flex-wrap gap-2">
           <span
@@ -69,43 +41,43 @@ export default function TaskDetailModal({
           >
             {statusLabel(task.status)}
           </span>
-          <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 border border-slate-200">
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground border border-border">
             Frequency: {task.frequency}
           </span>
-          <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 border border-slate-200">
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground border border-border">
             Assigned by: {task.assignedBy?.name || "System"}
           </span>
-          <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 border border-slate-200">
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground border border-border">
             Owner: {task.owner.name}
           </span>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-border-app bg-white p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+        <div className="mt-5 rounded-2xl border border-border bg-card p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
             Description
           </p>
-          <p className="mt-2 text-sm leading-7 text-slate-700">
+          <p className="mt-2 text-sm leading-7 text-foreground">
             {task.description || "No description available for this task."}
           </p>
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
+          <div className="rounded-2xl bg-muted p-4 border border-border">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600 font-semibold">Completion</span>
-              <span className="font-semibold text-slate-900">
+              <span className="text-muted-foreground font-semibold">Completion</span>
+              <span className="font-semibold text-foreground">
                 {task.completionPercent}%
               </span>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400"
+                className="h-full rounded-full bg-primary"
                 style={{ width: `${task.completionPercent}%` }}
               />
             </div>
           </div>
 
-          <div className="rounded-2xl bg-slate-50 p-4 text-xs text-slate-600 border border-slate-200">
+          <div className="rounded-2xl bg-muted p-4 text-xs text-muted-foreground border border-border">
             <p>Scheduled: {formatDateOnly(task.scheduledFor)}</p>
             <p>
               Acknowledged:{" "}
@@ -123,15 +95,15 @@ export default function TaskDetailModal({
         </div>
 
         {task.completionAttachmentUrl && (
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-700">
+          <div className="mt-5 rounded-xl border border-border bg-muted p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-info">
               Completion file
             </p>
             <a
               href={task.completionAttachmentUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 transition hover:text-blue-800"
+              className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-info transition hover:text-info"
             >
               <Paperclip className="h-4 w-4" />
               <span>
@@ -141,7 +113,7 @@ export default function TaskDetailModal({
             </a>
           </div>
         )}
-      </article>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -15,7 +15,8 @@ const eslintConfig = defineConfig([
   },
   {
     files: [
-      "{app,components}/{sga,sims,five-s,tickets}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
+      "{app,components}/{sga,sims,five-s,tickets,dwms}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
+      "app/docs/dwms/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
       "app/settings/tickets/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
     ],
     rules: Object.fromEntries(Object.keys(uiDriftRules).map((name) => [`ui-drift/${name}`, "error"])),

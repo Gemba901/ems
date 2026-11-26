@@ -154,7 +154,7 @@ Migrate the modules in scope onto the kit in the order below. Leave and Steel Ma
 | Order | Module | Status |
 | --- | --- | --- |
 | 1 | Tickets | All four screens migrated locally. Zero tracked Tickets UI violations and strict lint enabled. Browser verification pending. |
-| 2 | RTM (`dwms`) | In progress. RTM naming and 11 application screens migrated locally, including Alerts, Abnormalities, and Action Creation. Activities, ingestion, settings, and documentation screens remain. |
+| 2 | RTM (`dwms`) | All 17 application screens and both documentation routes migrated locally. RTM naming applied, zero tracked RTM UI violations, and strict RTM lint enabled. Browser verification pending. |
 | 3 | Small Group Activities (`sga`) | Migrated locally. Zero tracked UI violations and strict SGA lint enabled. |
 | 4 | SIMS | Migrated locally. Strict SIMS lint enabled. Browser verification pending. |
 | 5 | Daily Gemba Kaizen | Migrated locally. Overview, detail, HOD review, creation wizard, implementation, verification, All Kaizens, and Reports. Browser verification pending. |
@@ -176,7 +176,8 @@ queue retry, and monthly spreadsheet export. Browser verification is pending.
 
 The previous Tickets and RTM migration changes were local to a temporary
 worktree that is no longer available. Phase 4 (`9cfdcd8`) and the current
-SGA work are available in the durable frontend-kit worktree. The Tickets migration has been reapplied. The core and alert-related RTM screens have been reapplied. Complete the remaining RTM screens before considering Phase 5 complete.
+SGA work are available in the durable frontend-kit worktree. Tickets and
+RTM have been reapplied and saved in local commits.
 
 Checklist for each module:
 
@@ -206,5 +207,5 @@ Checklist for each module:
 | 2. Patterns    | In review   | Pattern kit, Tickets fixture compositions and behaviour tests implemented; see [report](phase-2-report.md).                                                          |
 | 3. Templates   | In review   | Four templates implemented with fixture examples, documentation and tests; see [report](phase-3-report.md).                                                          |
 | 4. Enforcement | In review   | Rules, baseline, CI and ownership files implemented. Required check and review settings pending.                                                                                             |
-| 5. Migration   | In progress | SGA, SIMS, Daily Gemba Kaizen, and 5S Workplace migrated locally. All Tickets screens migrated locally. Eleven RTM application screens migrated locally. Remaining RTM screens are pending.                                                                                                                                                                      |
+| 5. Migration   | In progress | SGA, SIMS, Daily Gemba Kaizen, and 5S Workplace migrated locally. All Tickets screens migrated locally. All RTM application and documentation screens migrated locally.                                                                                                                                                                      |
 | 6. Lock-in     | Not started |                                                                                                                                                                      |

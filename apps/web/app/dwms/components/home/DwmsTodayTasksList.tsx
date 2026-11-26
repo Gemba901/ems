@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import TaskCompletionDialog from "./TaskCompletionDialog";
 import { useMemo, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -163,7 +164,7 @@ export default function DwmsTodayTasksList({ maxItems = 3 }: Props) {
   return (
     <div className="flex flex-col">
       {shownError && (
-        <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+        <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-danger bg-danger-subtle px-3 py-2 text-xs font-medium text-danger">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{shownError}</span>
         </div>
@@ -172,14 +173,14 @@ export default function DwmsTodayTasksList({ maxItems = 3 }: Props) {
       {loading ? (
         <div className="space-y-2 p-4">
           {[0, 1, 2].map((item) => (
-            <div key={item} className="h-8 animate-pulse rounded-md bg-slate-100" />
+            <div key={item} className="h-8 animate-pulse rounded-md bg-muted" />
           ))}
         </div>
       ) : visibleTasks.length === 0 ? (
-        <p className="px-4 py-6 text-center text-sm text-slate-400">No tasks due today.</p>
+        <p className="px-4 py-6 text-center text-sm text-muted-foreground">No tasks due today.</p>
       ) : (
         <>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border">
             {visibleTasks.map((task) => (
               <TaskCompactRow
                 key={task.instanceId}
@@ -192,13 +193,14 @@ export default function DwmsTodayTasksList({ maxItems = 3 }: Props) {
             ))}
           </ul>
           {openTasks.length > visibleTasks.length && (
-            <button
+            <Button
+              variant="ghost"
               type="button"
               onClick={() => router.push("/dwms")}
-              className="border-t border-slate-100 px-4 py-2 text-left text-xs text-slate-500 transition hover:text-slate-900"
+              className="border-t border-border px-4 py-2 text-left text-xs text-muted-foreground transition hover:text-foreground"
             >
               +{openTasks.length - visibleTasks.length} more tasks
-            </button>
+            </Button>
           )}
         </>
       )}

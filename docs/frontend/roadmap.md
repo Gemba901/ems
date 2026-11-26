@@ -160,7 +160,7 @@ Migrate the modules in scope onto the kit in the order below. Leave and Steel Ma
 | 5 | Daily Gemba Kaizen | Migrated locally. Overview, detail, HOD review, creation wizard, implementation, verification, All Kaizens, and Reports. Browser verification pending. |
 | 6 | 5S Workplace | All 20 screens migrated locally. Zero tracked UI violations and strict 5S lint enabled. Browser verification pending. |
 | 7 | Team Workspace | All seven screens migrated locally. Zero tracked Team Workspace UI violations and strict lint enabled. Browser verification pending. |
-| 8 | Dashboard, HR, EMS, Admin, Settings, Reports, Calendar | In progress. Dashboard, Department Dashboard, and both HR screens migrated locally. EMS, Admin, Settings, Reports, Calendar, and the shared shell remain. |
+| 8 | Dashboard, HR, EMS, Admin, Settings, Reports, Calendar | In progress. Dashboard, Department Dashboard, both HR screens, and all four EMS screens migrated locally. Admin, Settings, Reports, Calendar, and the shared shell remain. |
 
 SGA now uses the kit across the overview, detail and review flow, creation
 wizard, All SGAs, and Reports. Shared native selects preserve grouped options
@@ -178,6 +178,11 @@ HR People and Analytics use shared headers, controls, and theme tokens.
 People uses shared sheets for onboarding and department edits and a shared
 confirmation dialog for deletions. HR has zero tracked UI violations and
 strict lint is enabled. Browser verification is pending.
+
+EMS Dashboard, Employees, Employee Detail, and My Profile use shared kit
+controls and theme tokens. The shared My Profile view also serves Operations.
+Strict lint is enabled for the EMS routes and shared profile view. Browser
+verification is pending.
 
 The previous Tickets and RTM migration changes were local to a temporary
 worktree that is no longer available. Phase 4 (`9cfdcd8`) and the current

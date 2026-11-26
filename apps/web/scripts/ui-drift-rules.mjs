@@ -50,6 +50,7 @@ const sharedInfrastructure = new Set([
   "components/ModuleGuard",
   "components/auth/ProtectedRoute",
   "components/files/TenantImage",
+  "components/profile/MyProfileView",
   "components/files/TenantFileLink",
   "components/onboarding/ModuleTour",
   "components/onboarding/tours",

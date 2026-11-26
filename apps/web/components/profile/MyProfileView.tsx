@@ -1,5 +1,10 @@
 "use client";
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import Link from "next/link";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -63,7 +68,7 @@ function Avatar({
     return <TenantImage src={src} alt={`${firstName} ${lastName}`} className={`${className} shrink-0 rounded-full object-cover`} />;
   }
   return (
-    <span className={`${className} flex shrink-0 items-center justify-center rounded-full bg-slate-200 font-semibold text-slate-600`}>
+    <span className={`${className} flex shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground`}>
       {initialsOf(firstName, lastName)}
     </span>
   );
@@ -73,9 +78,9 @@ function Panel({ title, action, children, bodyClassName = "p-5" }: {
   title: string; action?: ReactNode; children: ReactNode; bodyClassName?: string;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white">
-      <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+    <section className="rounded-lg border border-border bg-card">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         {action}
       </header>
       <div className={bodyClassName}>{children}</div>
@@ -87,8 +92,8 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   const empty = value === null || value === undefined || value === "";
   return (
     <div className="min-w-0">
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className={`mt-0.5 break-words text-sm ${empty ? "text-slate-300" : "text-slate-900"}`}>{empty ? "—" : value}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={`mt-0.5 break-words text-sm ${empty ? "text-muted-foreground" : "text-foreground"}`}>{empty ? "—" : value}</dd>
     </div>
   );
 }
@@ -133,55 +138,55 @@ function ProfilePhoto({ employee }: { employee: EmployeeProfile }) {
 
   return (
     <div className="shrink-0">
-      <button
+      <Button variant="ghost"
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={mutation.isPending}
         aria-label="Change profile photo"
         title="Change profile photo"
-        className="group relative block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        className="group relative block h-auto w-auto rounded-full p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <Avatar src={employee.avatarUrl} firstName={employee.firstName} lastName={employee.lastName} className="h-20 w-20 text-xl" />
         <span
-          className={`absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/50 transition-opacity ${
-            mutation.isPending ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          className={`absolute inset-0 flex items-center justify-center rounded-full bg-overlay/50 transition-opacity ${
+            mutation.isPending ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
           }`}
         >
           {mutation.isPending
-            ? <Loader2 className="h-5 w-5 animate-spin text-white" />
-            : <Camera className="h-5 w-5 text-white" />}
+            ? <Loader2 className="h-5 w-5 animate-spin text-background dark:text-foreground" />
+            : <Camera className="h-5 w-5 text-background dark:text-foreground" />}
         </span>
-      </button>
-      <input ref={inputRef} type="file" accept={AVATAR_TYPES.join(",")} className="hidden" onChange={onFile} />
+      </Button>
+      <Input ref={inputRef} type="file" accept={AVATAR_TYPES.join(",")} className="hidden" onChange={onFile} />
     </div>
   );
 }
 
 function ProfileHeader({
-  employee, tabs, tab, onTab,
-}: { employee: EmployeeProfile; tabs: { key: Tab; label: string }[]; tab: Tab; onTab: (tab: Tab) => void }) {
+  employee, tabs,
+}: { employee: EmployeeProfile; tabs: { key: Tab; label: string }[] }) {
   const statusDot =
-    employee.employmentStatus === "ACTIVE" ? "bg-emerald-500"
-    : employee.employmentStatus === "PROBATION" ? "bg-amber-500"
-    : "bg-slate-400";
+    employee.employmentStatus === "ACTIVE" ? "bg-success"
+    : employee.employmentStatus === "PROBATION" ? "bg-warning"
+    : "bg-muted-foreground";
   const subtitle = [employee.jobTitle, employee.department?.name].filter(Boolean).join(" · ");
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white">
+    <section className="rounded-lg border border-border bg-card">
       <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
         <ProfilePhoto employee={employee} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="text-xl font-semibold text-slate-900">
+            <h1 className="text-page-title">
               {employee.firstName} {employee.lastName}
             </h1>
-            <span className="inline-flex items-center gap-1.5 text-sm text-slate-600">
+            <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
               <span className={`h-2 w-2 rounded-full ${statusDot}`} />
               {EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]}
             </span>
           </div>
-          {subtitle && <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>}
-          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-slate-500">
+          {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
+          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-muted-foreground">
             {employee.employeeCode && (
               <li className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5" />{employee.employeeCode}</li>
             )}
@@ -197,24 +202,11 @@ function ProfileHeader({
           </ul>
         </div>
       </div>
-      <nav className="no-scrollbar flex gap-6 overflow-x-auto border-t border-slate-200 px-5 sm:px-6" role="tablist" aria-label="Profile sections">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            onClick={() => onTab(t.key)}
-            className={`shrink-0 border-b-2 py-3 text-sm transition-colors ${
-              tab === t.key
-                ? "border-slate-900 font-medium text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            {t.label}
-          </button>
+      <TabsList variant="line" aria-label="Profile sections" className="w-full justify-start overflow-x-auto border-t border-border px-5 sm:px-6">
+        {tabs.map(({ key, label }) => (
+          <TabsTrigger key={key} value={key} className="flex-none px-3">{label}</TabsTrigger>
         ))}
-      </nav>
+      </TabsList>
     </section>
   );
 }
@@ -228,8 +220,8 @@ function PersonRow({ person, detail }: {
     <div className="flex items-center gap-3">
       <Avatar src={person.avatarUrl} firstName={person.firstName} lastName={person.lastName} className="h-9 w-9 text-xs" />
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-slate-900">{person.firstName} {person.lastName}</p>
-        {detail && <p className="truncate text-xs text-slate-500">{detail}</p>}
+        <p className="truncate text-sm font-medium text-foreground">{person.firstName} {person.lastName}</p>
+        {detail && <p className="truncate text-xs text-muted-foreground">{detail}</p>}
       </div>
     </div>
   );
@@ -243,28 +235,28 @@ function ReportingPanel({ manager, reportees, total }: {
   const hidden = total - shown.length;
   return (
     <Panel title="Reporting line">
-      <p className="mb-2 text-xs text-slate-500">Reports to</p>
-      {manager ? <PersonRow person={manager} detail={manager.jobTitle} /> : <p className="text-sm text-slate-400">No manager assigned</p>}
+      <p className="mb-2 text-xs text-muted-foreground">Reports to</p>
+      {manager ? <PersonRow person={manager} detail={manager.jobTitle} /> : <p className="text-sm text-muted-foreground">No manager assigned</p>}
 
       {total > 0 && (
         <>
-          <p className="mb-2 mt-5 text-xs text-slate-500">Direct reports ({total})</p>
+          <p className="mb-2 mt-5 text-xs text-muted-foreground">Direct reports ({total})</p>
           <ul className="space-y-3">
             {shown.map((person) => (
               <li key={person.id}><PersonRow person={person} detail={person.jobTitle} /></li>
             ))}
           </ul>
           {(hidden > 0 || expanded) && (
-            <button
+            <Button variant="ghost"
               type="button"
               onClick={() => setExpanded((value) => !value)}
-              className="mt-3 text-sm text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
+              className="mt-3 text-sm text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
               {expanded ? "Show less" : `Show ${hidden} more`}
-            </button>
+            </Button>
           )}
           {expanded && total > reportees.length && (
-            <p className="mt-1 text-xs text-slate-400">Showing the first {reportees.length}.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Showing the first {reportees.length}.</p>
           )}
         </>
       )}
@@ -284,10 +276,10 @@ function CompletenessPanel({ completion }: { completion: CompletionResult }) {
           return (
             <li key={key}>
               <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                <span className="truncate text-slate-600">{GROUP_LABELS[key]}</span>
-                <span className="tabular-nums text-slate-500">{pct}%</span>
+                <span className="truncate text-muted-foreground">{GROUP_LABELS[key]}</span>
+                <span className="tabular-nums text-muted-foreground">{pct}%</span>
               </div>
-              <div className="h-1 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-1 overflow-hidden rounded-full bg-muted">
                 <div className={`h-full ${completionBg(pct)}`} style={{ width: `${pct}%` }} />
               </div>
             </li>
@@ -295,7 +287,7 @@ function CompletenessPanel({ completion }: { completion: CompletionResult }) {
         })}
       </ul>
       {completion.overall < 90 && (
-        <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
+        <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
           Some details are missing. Ask HR to update your record.
         </p>
       )}
@@ -320,14 +312,14 @@ function WeekPanel({
   return (
     <Panel
       title="This week"
-      action={<span className="text-xs text-slate-500">{formatDate(days[0].toISOString())} – {formatDate(days[6].toISOString())}</span>}
+      action={<span className="text-xs text-muted-foreground">{formatDate(days[0].toISOString())} – {formatDate(days[6].toISOString())}</span>}
     >
-      <p className="mb-4 text-sm text-slate-600">
-        <span className="font-medium text-slate-900">{shift ?? "General shift"}</span>
-        <span className="text-slate-400"> · </span>
+      <p className="mb-4 text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">{shift ?? "General shift"}</span>
+        <span className="text-muted-foreground"> · </span>
         {workingLabel}
       </p>
-      <ol className="grid grid-cols-7 overflow-hidden rounded-md border border-slate-200 text-center">
+      <ol className="grid grid-cols-7 overflow-hidden rounded-md border border-border text-center">
         {days.map((day) => {
           const key = toDateKey(day);
           const isToday = key === todayKey;
@@ -338,11 +330,11 @@ function WeekPanel({
             <li
               key={key}
               title={holiday}
-              className={`border-l border-slate-200 px-1 py-2.5 first:border-l-0 ${
-                isToday ? "bg-slate-900 text-white" : !working || holiday ? "bg-slate-50 text-slate-400" : "text-slate-900"
+              className={`border-l border-border px-1 py-2.5 first:border-l-0 ${
+                isToday ? "bg-primary text-primary-foreground" : !working || holiday ? "bg-muted text-muted-foreground" : "text-foreground"
               }`}
             >
-              <p className={`text-xs ${isToday ? "text-slate-300" : "text-slate-500"}`}>{DAY_NAMES[day.getDay()]}</p>
+              <p className={`text-xs ${isToday ? "text-muted-foreground" : "text-muted-foreground"}`}>{DAY_NAMES[day.getDay()]}</p>
               <p className="mt-0.5 text-base font-semibold tabular-nums">{day.getDate()}</p>
               <p className="min-h-4 text-[11px]">{note}</p>
             </li>
@@ -357,20 +349,20 @@ function HolidaysPanel({ holidays }: { holidays: PublicHoliday[] }) {
   return (
     <Panel title="Upcoming holidays" bodyClassName="">
       {holidays.length === 0 ? (
-        <p className="px-5 py-4 text-sm text-slate-400">No upcoming public holidays.</p>
+        <p className="px-5 py-4 text-sm text-muted-foreground">No upcoming public holidays.</p>
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-border">
           {holidays.map((holiday) => {
             const date = parseLocalDate(holiday.date);
             return (
               <li key={holiday.date} className="flex items-center gap-4 px-5 py-3">
                 <div className="w-10 shrink-0 text-center">
-                  <p className="text-[11px] uppercase text-slate-500">{date.toLocaleDateString("en-GB", { month: "short" })}</p>
-                  <p className="text-lg font-semibold leading-tight tabular-nums text-slate-900">{date.getDate()}</p>
+                  <p className="text-[11px] uppercase text-muted-foreground">{date.toLocaleDateString("en-GB", { month: "short" })}</p>
+                  <p className="text-lg font-semibold leading-tight tabular-nums text-foreground">{date.getDate()}</p>
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">{holiday.name}</p>
-                  <p className="text-xs text-slate-500">{date.toLocaleDateString("en-GB", { weekday: "long", year: "numeric" })}</p>
+                  <p className="truncate text-sm font-medium text-foreground">{holiday.name}</p>
+                  <p className="text-xs text-muted-foreground">{date.toLocaleDateString("en-GB", { weekday: "long", year: "numeric" })}</p>
                 </div>
               </li>
             );
@@ -442,7 +434,7 @@ function ProfileDetails({ employee }: { employee: EmployeeProfile }) {
         <Field label="Skill level" value={employee.skillLevel ? SKILL_LEVEL_LABELS[employee.skillLevel] : null} />
         <Field label="Training needed" value={employee.trainingNeeded === null ? null : employee.trainingNeeded ? "Yes" : "No"} />
       </FieldSection>
-      <p className="text-xs text-slate-500">These details are managed by HR. Contact them to make changes.</p>
+      <p className="text-xs text-muted-foreground">These details are managed by HR. Contact them to make changes.</p>
     </div>
   );
 }
@@ -461,37 +453,37 @@ function LeaveBalances() {
       title={`Leave balance ${new Date().getFullYear()}`}
       bodyClassName=""
       action={
-        <Link href="/leave/apply" className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
+        <Link href="/leave/apply" className="text-sm font-medium text-primary hover:underline">
           Apply for leave
         </Link>
       }
     >
       {isLoading ? (
-        <p className="flex items-center gap-2 px-5 py-4 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</p>
+        <p className="flex items-center gap-2 px-5 py-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</p>
       ) : balances.length === 0 ? (
-        <p className="px-5 py-4 text-sm text-slate-400">No leave allocated yet.</p>
+        <p className="px-5 py-4 text-sm text-muted-foreground">No leave allocated yet.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-                <th className="px-5 py-2.5 font-medium">Type</th>
-                <th className="px-5 py-2.5 text-right font-medium">Available</th>
-                <th className="px-5 py-2.5 text-right font-medium">Used</th>
-                <th className="px-5 py-2.5 text-right font-medium">Allocated</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
+          <Table className="w-full text-sm">
+            <TableHeader>
+              <TableRow className="border-b border-border text-left text-xs text-muted-foreground">
+                <TableHead className="px-5 py-2.5 font-medium">Type</TableHead>
+                <TableHead className="px-5 py-2.5 text-right font-medium">Available</TableHead>
+                <TableHead className="px-5 py-2.5 text-right font-medium">Used</TableHead>
+                <TableHead className="px-5 py-2.5 text-right font-medium">Allocated</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-border">
               {balances.map((balance) => (
-                <tr key={balance.id}>
-                  <td className="px-5 py-3 text-slate-900">{LEAVE_TYPE_LABELS[balance.type] ?? balance.type}</td>
-                  <td className="px-5 py-3 text-right font-semibold tabular-nums text-slate-900">{balance.allocated - balance.used}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-slate-600">{balance.used}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-slate-600">{balance.allocated}</td>
-                </tr>
+                <TableRow key={balance.id}>
+                  <TableCell className="px-5 py-3 text-foreground">{LEAVE_TYPE_LABELS[balance.type] ?? balance.type}</TableCell>
+                  <TableCell className="px-5 py-3 text-right font-semibold tabular-nums text-foreground">{balance.allocated - balance.used}</TableCell>
+                  <TableCell className="px-5 py-3 text-right tabular-nums text-muted-foreground">{balance.used}</TableCell>
+                  <TableCell className="px-5 py-3 text-right tabular-nums text-muted-foreground">{balance.allocated}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </Panel>
@@ -503,14 +495,14 @@ function LeaveBalances() {
 function Committees({ memberships }: { memberships: EmployeeProfile["committeeMembers"] }) {
   return (
     <Panel title="Committee memberships" bodyClassName="">
-      <ul className="divide-y divide-slate-100">
+      <ul className="divide-y divide-border">
         {memberships.map((membership) => (
           <li key={membership.committee.id} className="flex items-center justify-between gap-3 px-5 py-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-900">{membership.committee.name}</p>
-              <p className="text-xs text-slate-500">{membership.committee.type}</p>
+              <p className="truncate text-sm font-medium text-foreground">{membership.committee.name}</p>
+              <p className="text-xs text-muted-foreground">{membership.committee.type}</p>
             </div>
-            <span className="shrink-0 text-sm text-slate-600">{membership.roleInCommittee ?? "Member"}</span>
+            <span className="shrink-0 text-sm text-muted-foreground">{membership.roleInCommittee ?? "Member"}</span>
           </li>
         ))}
       </ul>
@@ -545,31 +537,37 @@ export function MyProfileView() {
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE]}>
       {loading && (
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-400">
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </div>
       )}
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && <div role="alert" className="rounded-lg border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">{error}</div>}
 
       {employee && completion && (
-        <div className="space-y-5">
-          <ProfileHeader employee={employee} tabs={tabs} tab={tab} onTab={setTab} />
+        <Tabs
+          value={tabs.some(({ key }) => key === tab) ? tab : "overview"}
+          onValueChange={(value) => setTab(value as Tab)}
+          className="gap-5"
+        >
+          <ProfileHeader employee={employee} tabs={tabs} />
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="min-w-0 space-y-5">
-              {tab === "overview" && (
-                <>
-                  <WeekPanel
-                    shift={employee.shift}
-                    workingDays={data?.workingDays ?? [1, 2, 3, 4, 5]}
-                    holidays={data?.upcomingHolidays ?? []}
-                  />
-                  <HolidaysPanel holidays={data?.upcomingHolidays ?? []} />
-                </>
+              <TabsContent value="overview" className="space-y-5">
+                <WeekPanel
+                  shift={employee.shift}
+                  workingDays={data?.workingDays ?? [1, 2, 3, 4, 5]}
+                  holidays={data?.upcomingHolidays ?? []}
+                />
+                <HolidaysPanel holidays={data?.upcomingHolidays ?? []} />
+              </TabsContent>
+              <TabsContent value="profile"><ProfileDetails employee={employee} /></TabsContent>
+              {tabs.some(({ key }) => key === "leave") && (
+                <TabsContent value="leave"><LeaveBalances /></TabsContent>
               )}
-              {tab === "profile" && <ProfileDetails employee={employee} />}
-              {tab === "leave" && <LeaveBalances />}
-              {tab === "committees" && <Committees memberships={employee.committeeMembers} />}
+              {tabs.some(({ key }) => key === "committees") && (
+                <TabsContent value="committees"><Committees memberships={employee.committeeMembers} /></TabsContent>
+              )}
             </div>
 
             <aside className="space-y-5">
@@ -581,7 +579,7 @@ export function MyProfileView() {
               <CompletenessPanel completion={completion} />
             </aside>
           </div>
-        </div>
+        </Tabs>
       )}
     </ProtectedRoute>
   );

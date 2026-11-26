@@ -160,7 +160,7 @@ Migrate the modules in scope onto the kit in the order below. Leave and Steel Ma
 | 5 | Daily Gemba Kaizen | Migrated locally. Overview, detail, HOD review, creation wizard, implementation, verification, All Kaizens, and Reports. Browser verification pending. |
 | 6 | 5S Workplace | All 20 screens migrated locally. Zero tracked UI violations and strict 5S lint enabled. Browser verification pending. |
 | 7 | Team Workspace | All seven screens migrated locally. Zero tracked Team Workspace UI violations and strict lint enabled. Browser verification pending. |
-| 8 | Dashboard, HR, EMS, Admin, Settings, Reports, Calendar | In progress. Dashboard, Department Dashboard, both HR screens, all four EMS screens, all five Admin screens, and the four remaining Settings screens migrated locally. Reports, Calendar, and the shared shell remain. |
+| 8 | Dashboard, HR, EMS, Admin, Settings, Reports, Calendar | In progress. Dashboard, Department Dashboard, both HR screens, all four EMS screens, all five Admin screens, the four remaining Settings screens, and Reports migrated locally. Calendar and the shared shell remain. |
 
 SGA now uses the kit across the overview, detail and review flow, creation
 wizard, All SGAs, and Reports. Shared native selects preserve grouped options

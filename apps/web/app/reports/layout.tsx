@@ -10,7 +10,7 @@ export default function ReportsLayout({ children }: { children: React.ReactNode 
   const { collapsed, toggle } = useSidebarCollapsed();
 
   return (
-    <div className="min-h-screen bg-[#F4F7FA] font-sans">
+    <div className="min-h-screen bg-background font-sans">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggle={toggle} />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "lg:pl-[88px]" : "lg:pl-64"}`}>
         <Header onMenuClick={() => setSidebarOpen(true)} />

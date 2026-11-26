@@ -15,7 +15,7 @@ const eslintConfig = defineConfig([
   },
   {
     files: [
-      "{app,components}/{sga,sims,five-s,tickets,dwms,work,hr,ems,admin,settings}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
+      "{app,components}/{sga,sims,five-s,tickets,dwms,work,hr,ems,admin,settings,reports}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
       "components/profile/MyProfileView.tsx",
       "components/employee-import/ColumnMappingDialog.tsx",
       "app/docs/dwms/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",

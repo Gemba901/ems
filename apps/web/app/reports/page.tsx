@@ -1,5 +1,10 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { ErrorState } from "@/components/patterns/ErrorState";
+
 import { useMemo } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
@@ -8,7 +13,6 @@ import { EmployeeService } from "@/services/employee.service";
 import { SimsService, Suggestion, SuggestionStatus } from "@/services/sims.service";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertCircle,
   CalendarDays,
   Clock,
   ClipboardCheck,
@@ -21,6 +25,9 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
+
+const EMPTY_SUGGESTIONS: Suggestion[] = [];
+const EMPTY_DEPARTMENTS: Awaited<ReturnType<typeof EmployeeService.getDepartments>> = [];
 
 type DepartmentMetric = {
   id: string;
@@ -39,27 +46,27 @@ const STATUS_LABELS: Record<SuggestionStatus, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  WAITING_FOR_REVIEW: "bg-slate-400",
-  UNDER_REVIEW: "bg-amber-500",
-  SELECTED_FOR_SGA: "bg-indigo-500",
-  APPROVED_FOR_IMPLEMENTATION: "bg-teal-500",
-  IMPLEMENTED: "bg-emerald-500",
-  REJECTED: "bg-red-500",
-  ON_HOLD: "bg-orange-500",
+  WAITING_FOR_REVIEW: "bg-muted-foreground",
+  UNDER_REVIEW: "bg-warning",
+  SELECTED_FOR_SGA: "bg-primary",
+  APPROVED_FOR_IMPLEMENTATION: "bg-success",
+  IMPLEMENTED: "bg-success",
+  REJECTED: "bg-danger",
+  ON_HOLD: "bg-warning",
 };
 
 const statStyles = {
   blue: {
-    icon: "bg-blue-50 text-blue-600",
-    trend: "text-blue-500",
+    icon: "bg-info-subtle text-info",
+    trend: "text-info",
   },
   emerald: {
-    icon: "bg-emerald-50 text-emerald-600",
-    trend: "text-emerald-500",
+    icon: "bg-success-subtle text-success",
+    trend: "text-success",
   },
   amber: {
-    icon: "bg-amber-50 text-amber-600",
-    trend: "text-amber-500",
+    icon: "bg-warning-subtle text-warning",
+    trend: "text-warning",
   },
 };
 
@@ -73,25 +80,25 @@ const plannedReports = [
     title: "Attendance Summary",
     description: "Daily attendance, absenteeism, late arrivals, and department punctuality.",
     icon: CalendarDays,
-    accent: "bg-sky-50 text-sky-600",
+    accent: "bg-info-subtle text-info",
   },
   {
     title: "Leave Utilization",
     description: "Leave balances, pending approvals, approved days, and absence patterns.",
     icon: ClipboardCheck,
-    accent: "bg-amber-50 text-amber-600",
+    accent: "bg-warning-subtle text-warning",
   },
   {
     title: "Payroll Overview",
     description: "Payroll totals, deductions, allowances, and monthly compensation trends.",
     icon: WalletCards,
-    accent: "bg-emerald-50 text-emerald-600",
+    accent: "bg-success-subtle text-success",
   },
   {
     title: "Training & Skills",
     description: "Skill gaps, training attendance, certifications, and development progress.",
     icon: GraduationCap,
-    accent: "bg-violet-50 text-violet-600",
+    accent: "bg-primary/10 text-primary",
   },
   {
     title: "Compliance Audit",
@@ -108,14 +115,14 @@ export default function ReportsPage() {
   const role = user?.roleLevel;
   const isHod = role === Role.HOD;
 
-  const { data: departmentRaw = [], isLoading: deptsLoading, error: deptsError } = useQuery({
+  const { data: departmentRaw = EMPTY_DEPARTMENTS, isLoading: deptsLoading, error: deptsError } = useQuery({
     queryKey: ["departments", orgId],
     queryFn: () => EmployeeService.getDepartments(orgId!, accessToken!),
     enabled: !!accessToken && !!orgId,
   });
 
   const { data: suggestionRaw, isLoading: simsLoading, error: simsError } = useQuery({
-    queryKey: ["reports", isHod],
+    queryKey: ["reports", orgId, role],
     queryFn: () => isHod
       ? SimsService.getDepartment(accessToken!, { limit: 1000 }).then((res) => res.data)
       : SimsService.getAll(accessToken!, { limit: 1000 }).then((res) => res.data),
@@ -126,10 +133,10 @@ export default function ReportsPage() {
     departmentRaw.map((d) => ({ id: d.id, name: d.name, count: d._count.employees })),
   [departmentRaw]);
 
-  const suggestions: Suggestion[] = suggestionRaw ?? [];
+  const suggestions: Suggestion[] = suggestionRaw ?? EMPTY_SUGGESTIONS;
   const loading = deptsLoading || simsLoading;
   const errorMsg = deptsError || simsError
-    ? ((deptsError || simsError) as any).message || "Failed to load reports."
+    ? (deptsError || simsError)?.message || "Failed to load reports."
     : null;
   const error = errorMsg;
 
@@ -233,59 +240,42 @@ export default function ReportsPage() {
   return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
       <div className="max-w-7xl mx-auto w-full">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Analytics & Reports</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              {isHod ? "Department-level" : "Organization-wide"} workforce and suggestion metrics from live system data.
-            </p>
-          </div>
+        <PageHeader
+          className="mb-8"
+          title="Analytics & Reports"
+          description={`${isHod ? "Department-level" : "Organization-wide"} workforce and suggestion metrics from live system data.`}
+          actions={<Button variant="outline" type="button" onClick={exportCsv} disabled={loading || !!error}><Download /> Export CSV</Button>}
+        />
 
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={loading || !!error}
-            className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </button>
-        </div>
-
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
-            <p className="text-sm text-red-600">{error}</p>
-          </div>
-        )}
+        {error && <ErrorState title="Could not load reports" description={error} />}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {stats.map((stat) => (
-            <div key={stat.label} className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
+            <div key={stat.label} className="bg-card border border-border rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
               <div className="flex items-center justify-between mb-4">
                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${stat.style.icon}`}>
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <stat.icon className="h-5 w-5" />}
                 </div>
                 <TrendingUp className={`h-4 w-4 ${stat.style.trend} opacity-50`} />
               </div>
-              <h3 className="text-2xl font-bold text-slate-900">{stat.value}</h3>
+              <h3 className="text-2xl font-bold text-foreground">{stat.value}</h3>
               <div className="flex items-center justify-between mt-1 gap-3">
-                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                <p className="text-xs text-slate-400 text-right">{loading ? "Loading" : stat.trend}</p>
+                <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
+                <p className="text-xs text-muted-foreground text-right">{loading ? "Loading" : stat.trend}</p>
               </div>
             </div>
           ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
             <div className="flex items-center justify-between mb-6 gap-4">
-              <h2 className="font-semibold text-slate-800">Headcount by Department</h2>
-              {!loading && <span className="text-xs text-slate-400">{departmentData.length} active departments</span>}
+              <h2 className="font-semibold text-foreground">Headcount by Department</h2>
+              {!loading && <span className="text-xs text-muted-foreground">{departmentData.length} active departments</span>}
             </div>
 
             {loading ? (
-              <div className="flex items-center justify-center py-12 gap-2 text-slate-400">
+              <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm">Loading department data...</span>
               </div>
@@ -294,12 +284,12 @@ export default function ReportsPage() {
                 {departmentData.map((department) => (
                   <div key={department.id}>
                     <div className="flex justify-between text-sm mb-2 gap-3">
-                      <span className="font-medium text-slate-700 truncate">{department.name}</span>
-                      <span className="text-slate-500 shrink-0">{department.count} employees</span>
+                      <span className="font-medium text-foreground truncate">{department.name}</span>
+                      <span className="text-muted-foreground shrink-0">{department.count} employees</span>
                     </div>
-                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-blue-500 rounded-full transition-all duration-700"
+                        className="h-full bg-info rounded-full transition-all duration-700"
                         style={{ width: `${department.percentage}%` }}
                       />
                     </div>
@@ -307,18 +297,18 @@ export default function ReportsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-400 text-center py-12">No department headcount data available.</p>
+              <p className="text-sm text-muted-foreground text-center py-12">No department headcount data available.</p>
             )}
           </div>
 
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
             <div className="flex items-center justify-between mb-6 gap-4">
-              <h2 className="font-semibold text-slate-800">Suggestion Status Breakdown</h2>
-              {!loading && <span className="text-xs text-slate-400">{suggestions.length} total</span>}
+              <h2 className="font-semibold text-foreground">Suggestion Status Breakdown</h2>
+              {!loading && <span className="text-xs text-muted-foreground">{suggestions.length} total</span>}
             </div>
 
             {loading ? (
-              <div className="flex items-center justify-center py-12 gap-2 text-slate-400">
+              <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm">Loading suggestion data...</span>
               </div>
@@ -327,12 +317,12 @@ export default function ReportsPage() {
                 {statusData.map((item) => (
                   <div key={item.status}>
                     <div className="flex justify-between text-sm mb-2 gap-3">
-                      <span className="font-medium text-slate-700">{STATUS_LABELS[item.status as SuggestionStatus] ?? item.status}</span>
-                      <span className="text-slate-500 shrink-0">{item.count} items</span>
+                      <span className="font-medium text-foreground">{STATUS_LABELS[item.status as SuggestionStatus] ?? item.status}</span>
+                      <span className="text-muted-foreground shrink-0">{item.count} items</span>
                     </div>
-                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-700 ${STATUS_COLORS[item.status] ?? "bg-slate-400"}`}
+                        className={`h-full rounded-full transition-all duration-700 ${STATUS_COLORS[item.status] ?? "bg-muted-foreground"}`}
                         style={{ width: `${Math.max(6, item.percentage)}%` }}
                       />
                     </div>
@@ -340,54 +330,54 @@ export default function ReportsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-400 text-center py-12">No suggestion data available.</p>
+              <p className="text-sm text-muted-foreground text-center py-12">No suggestion data available.</p>
             )}
           </div>
 
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)] lg:col-span-2">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)] lg:col-span-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
               <div>
-                <h2 className="font-semibold text-slate-800">Report Library</h2>
-                <p className="text-xs text-slate-400 mt-1">Live reports available now, with planned report surfaces ready for future modules.</p>
+                <h2 className="font-semibold text-foreground">Report Library</h2>
+                <p className="text-xs text-muted-foreground mt-1">Live reports available now, with planned report surfaces ready for future modules.</p>
               </div>
-              <span className="text-xs text-slate-400">{plannedReports.length + 2} report areas</span>
+              <span className="text-xs text-muted-foreground">{plannedReports.length + 2} report areas</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+              <div className="rounded-xl border border-success/20 bg-success-subtle/40 p-4">
                 <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center text-emerald-600 shrink-0">
+                  <div className="h-10 w-10 rounded-lg bg-card flex items-center justify-center text-success shrink-0">
                     <Users className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900">Workforce Snapshot</p>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Live</span>
+                      <p className="text-sm font-semibold text-foreground">Workforce Snapshot</p>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-success bg-success-subtle px-2 py-0.5 rounded-full">Live</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Headcount and department distribution from employee records.
                     </p>
-                    <p className="text-xs font-semibold text-emerald-700 mt-3">
+                    <p className="text-xs font-semibold text-success mt-3">
                       {loading ? "Loading..." : `${metrics.totalHeadcount.toLocaleString()} employees - ${departments.length} departments`}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+              <div className="rounded-xl border border-info/20 bg-info-subtle/40 p-4">
                 <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center text-blue-600 shrink-0">
+                  <div className="h-10 w-10 rounded-lg bg-card flex items-center justify-center text-info shrink-0">
                     <Lightbulb className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900">SIMS Performance</p>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Live</span>
+                      <p className="text-sm font-semibold text-foreground">SIMS Performance</p>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-info bg-info-subtle px-2 py-0.5 rounded-full">Live</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Suggestion totals, open actions, and implementation progress.
                     </p>
-                    <p className="text-xs font-semibold text-blue-700 mt-3">
+                    <p className="text-xs font-semibold text-info mt-3">
                       {loading ? "Loading..." : `${suggestions.length.toLocaleString()} suggestions - ${metrics.implementationRate}% implemented`}
                     </p>
                   </div>
@@ -395,17 +385,17 @@ export default function ReportsPage() {
               </div>
 
               {plannedReports.map((report) => (
-                <div key={report.title} className="rounded-xl border border-slate-100 bg-white p-4">
+                <div key={report.title} className="rounded-xl border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
                     <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${report.accent}`}>
                       <report.icon className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-900">{report.title}</p>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Planned</span>
+                        <p className="text-sm font-semibold text-foreground">{report.title}</p>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Planned</span>
                       </div>
-                      <p className="text-xs text-slate-500 mt-1">{report.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{report.description}</p>
                     </div>
                   </div>
                 </div>

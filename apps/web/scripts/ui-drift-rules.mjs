@@ -7,7 +7,10 @@ const classHelpers = new Set(["cn", "clsx", "classnames", "cva", "twMerge"]);
 
 export function moduleName(path) {
   const [root, section] = path.split("/");
-  if (root === "components") return section;
+  if (root === "components") {
+    if (["Sidebar.tsx", "Header.tsx", "NotificationsBell.tsx"].includes(section)) return "shell";
+    return section;
+  }
   if (section === "(dashboard)" || !section || section.includes(".")) return "dashboard";
   return section.replace(/^\((.+)\)$/, "$1");
 }
@@ -47,6 +50,7 @@ function styleRule(message, check) {
 const sharedInfrastructure = new Set([
   "components/Header",
   "components/Sidebar",
+  "components/NotificationsBell",
   "components/ModuleGuard",
   "components/auth/ProtectedRoute",
   "components/files/TenantImage",

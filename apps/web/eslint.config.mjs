@@ -8,14 +8,15 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["app/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}", "components/*/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}"],
+    files: ["app/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}", "components/*/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}", "components/{Sidebar,Header,NotificationsBell}.tsx"],
     ignores: ["components/{ui,patterns,templates}/**"],
     plugins: { "ui-drift": { rules: uiDriftRules } },
     rules: Object.fromEntries(Object.keys(uiDriftRules).map((name) => [`ui-drift/${name}`, "warn"])),
   },
   {
     files: [
-      "{app,components}/{sga,sims,five-s,tickets,dwms,work,hr,ems,admin,settings,reports,calendar}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
+      "{app,components}/{sga,sims,five-s,tickets,dwms,work,hr,ems,admin,settings,reports,calendar,shell}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
+      "components/{Sidebar,Header,NotificationsBell}.tsx",
       "components/profile/MyProfileView.tsx",
       "components/employee-import/ColumnMappingDialog.tsx",
       "app/docs/dwms/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",

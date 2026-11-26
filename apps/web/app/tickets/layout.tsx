@@ -1,8 +1,9 @@
-"use client"
+"use client";
 
-import { Sidebar } from "@/components/Sidebar";
+import { SIDEBAR_PADDING } from "@/components/shell/ModuleSidebar";
+import { MAIN_SIDEBAR_ID, Sidebar } from "@/components/Sidebar";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
-import { Header } from "@/components/Header";
+import { Header, SkipToMainContent } from "@/components/Header";
 import { useState } from "react";
 
 export default function TicketLayout({
@@ -13,19 +14,20 @@ export default function TicketLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { collapsed, toggle } = useSidebarCollapsed();
   return (
-    <div className="">
+    <div className="min-h-screen bg-background font-sans">
+      <SkipToMainContent />
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         collapsed={collapsed}
         onToggle={toggle}
       />
-      
+
       <div
-        className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? "lg:pl-[88px]" : "lg:pl-64"}`}
+        className={`flex flex-col min-h-screen transition-[padding] duration-300 motion-reduce:transition-none ${collapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded}`}
       >
-        <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 p-4 md:p-6">
+        <Header menuId={MAIN_SIDEBAR_ID} menuOpen={sidebarOpen} onMenuClick={() => setSidebarOpen(true)} />
+        <main id="main-content" tabIndex={-1} className="scroll-mt-16 flex-1 p-4 md:p-6">
           {children}
         </main>
       </div>

@@ -1,10 +1,12 @@
 "use client";
 
+import { SIDEBAR_PADDING } from "@/components/shell/ModuleSidebar";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/Sidebar";
+import { MAIN_SIDEBAR_ID, Sidebar } from "@/components/Sidebar";
 import { LoadingState } from "@/components/patterns/LoadingState";
-import { Header } from "@/components/Header";
+import { Header, SkipToMainContent } from "@/components/Header";
 import { useAuthStore } from "@/store/auth.store";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 import { EmsCompletionBanner } from "@/components/EmsCompletionBanner";
@@ -39,6 +41,7 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-background font-sans">
+      <SkipToMainContent />
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -46,10 +49,10 @@ export default function DashboardLayout({
         onToggle={handleToggleSidebar}
       />
 
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:pl-[88px]" : "lg:pl-64"}`}>
-        <Header onMenuClick={() => setSidebarOpen(true)} />
+      <div className={`flex flex-col min-h-screen transition-[padding] duration-300 motion-reduce:transition-none ${sidebarCollapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded}`}>
+        <Header menuId={MAIN_SIDEBAR_ID} menuOpen={sidebarOpen} onMenuClick={() => setSidebarOpen(true)} />
         <EmsCompletionBanner />
-        <main className="flex-1 p-4 md:p-8">
+        <main id="main-content" tabIndex={-1} className="scroll-mt-16 flex-1 p-4 md:p-8">
           {children}
         </main>
       </div>

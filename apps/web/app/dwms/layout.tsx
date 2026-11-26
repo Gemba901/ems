@@ -1,9 +1,11 @@
 "use client";
 
+import { SIDEBAR_PADDING } from "@/components/shell/ModuleSidebar";
+
 import React, { useState } from "react";
 import { ModuleGuard } from "@/components/ModuleGuard";
 import { Sidebar } from "./components/Sidebar";
-import { Header } from "@/components/Header";
+import { Header, SkipToMainContent } from "@/components/Header";
 import "./dwms.css";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
 
@@ -17,6 +19,7 @@ export default function DwmsLayout({
   return (
     <ModuleGuard moduleKey="DWMS">
       <div className="dwms-shell min-h-screen bg-background font-sans">
+        <SkipToMainContent />
         <Sidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -25,11 +28,11 @@ export default function DwmsLayout({
         />
         <div
           className={`flex min-h-screen flex-col ${
-            sidebarCollapsed ? "lg:pl-[88px]" : "lg:pl-64"
+            sidebarCollapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded
           }`}
         >
-          <Header onMenuClick={() => setSidebarOpen(true)} />
-          <main className="min-w-0 flex-1">{children}</main>
+          <Header menuId="dwms-sidebar" menuOpen={sidebarOpen} onMenuClick={() => setSidebarOpen(true)} />
+          <main id="main-content" tabIndex={-1} className="scroll-mt-16 min-w-0 flex-1">{children}</main>
         </div>
       </div>
     </ModuleGuard>

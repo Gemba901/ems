@@ -1,5 +1,6 @@
 "use client";
 
+import { SkipToMainContent } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 
 import { useEffect, useState } from "react";
@@ -142,6 +143,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     return (
         <div className="min-h-screen bg-background">
+            <SkipToMainContent />
             <AdminSidebar
                 open={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
@@ -149,13 +151,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 onToggle={toggle}
             />
 
-            <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded}`}>
+            <div className={`flex flex-col min-h-screen transition-[padding] duration-300 motion-reduce:transition-none ${collapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded}`}>
                 {/* Mobile top bar */}
                 <div className="lg:hidden flex items-center gap-3 px-4 h-14 bg-card border-b border-border sticky top-0 z-30">
                     <Button variant="ghost"
                         onClick={() => setSidebarOpen(true)}
                         className="p-2 -ml-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
-                        aria-label="Open menu"
+                        aria-label="Open navigation"
+                        aria-haspopup="dialog"
+                        aria-expanded={sidebarOpen}
+                        aria-controls="admin-sidebar"
                     >
                         <Menu className="h-5 w-5" />
                     </Button>
@@ -167,7 +172,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </div>
                 </div>
 
-                <main className="flex-1 px-4 py-5 md:px-8 md:py-7">
+                <main id="main-content" tabIndex={-1} className="scroll-mt-16 flex-1 px-4 py-5 md:px-8 md:py-7">
                     {children}
                 </main>
             </div>

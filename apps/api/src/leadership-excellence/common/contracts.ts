@@ -580,3 +580,155 @@ export interface PerformanceCalendarProvider {
   /** Which calendar applies to a department on a date (the department's, then company-wide). */
   getDepartmentAssignment(organizationId: string, departmentId: string, localDate: string): Promise<CalendarAssignmentResult>;
 }
+// ── 05 → 06 · plan and action facts for reviews ───────────────────────────
+// Served by MonitoringExecutionSource (Area 05's read of Areas 03/04).
+
+/** A current approved department or individual plan that can be reviewed. */
+export interface ReviewablePlan {
+  documentId: string;
+  version: number;
+  kind: 'DEPARTMENT' | 'INDIVIDUAL';
+  cycle: string;
+  title: string;
+  departmentId: string | null;
+  /** INDIVIDUAL: the employee the plan belongs to. DEPARTMENT: the department id. */
+  scopeId: string;
+  goals: {
+    id: string;
+    code: string;
+    title: string;
+    ownerId: string;
+    kind: 'OBJECTIVE' | 'GOAL';
+  }[];
+  /** KPI assignments under the plan (ids match ApprovedKpiAssignment.id). */
+  assignments: {
+    id: string;
+    code: string;
+    name: string;
+    unit: string;
+    ownerId: string;
+    reviewFrequency: string;
+  }[];
+}
+
+/** An Area 04 action with the facts an effectiveness check needs. */
+export interface ActionFacts extends TrackedAction {
+  goalId: string | null;
+  goalTitle: string;
+  goalOwnerId: string | null;
+  expectedResult: string;
+  evidence: string | null;
+  /** Employee who confirmed completion (status VERIFIED); null otherwise. */
+  checkedById: string | null;
+  checkedAt: string | null;
+}
+
+// ── 06 Reviews & Development → 07 ─────────────────────────────────────────
+// Only APPROVED review versions leave Area 06. Every read takes the signed-in
+// user and applies Area 06's permission rules (see reviews-development/README.md).
+
+export interface ReviewReadFilter {
+  /** Reviews whose period overlaps [periodStart, periodEnd] (YYYY-MM-DD). */
+  periodStart?: string;
+  periodEnd?: string;
+  departmentId?: string;
+  /** Subject or reviewer. */
+  employeeId?: string;
+}
+
+export interface ApprovedReviewSummary {
+  id: string;
+  code: string;
+  type: 'DEPARTMENT' | 'PERSONAL';
+  /** Version of the approved content returned (the latest approved). */
+  version: number;
+  /** True while a newer revision is being prepared (status DRAFT/SUBMITTED). */
+  revisionInProgress: boolean;
+  planDocumentId: string;
+  planVersion: number | null;
+  departmentId: string | null;
+  periodStart: string;
+  periodEnd: string;
+  subjectId: string;
+  reviewerId: string;
+  meetingDate: string;
+  nextReviewDate: string | null;
+  approvedById: string;
+  approvedAt: string;
+  acknowledgement: {
+    version: number;
+    employeeId: string;
+    acknowledgedAt: string;
+    concern: boolean;
+    /** Participants only; null for others. */
+    comment: string | null;
+  } | null;
+  linkedActionIds: string[];
+  /** True when the caller may see the metadata but not the review content. */
+  restricted: boolean;
+  /** Approved review content; null when restricted. */
+  content: {
+    achievements: string;
+    challenges: string;
+    learning: string;
+    supportNeeded: string;
+    recognition: string;
+    findings: string;
+    decisions: string;
+    noInputReason: string;
+    dataLimitReason: string;
+    /** Facts the review was approved on (verified results, goals, actions). */
+    snapshot: unknown;
+  } | null;
+}
+
+/** Coaching record metadata; topic, notes, support and response stay with the two participants. */
+export interface CoachingMetadata {
+  id: string;
+  code: string;
+  kind: 'RECOGNITION' | 'FEEDBACK' | 'COACHING';
+  planDocumentId: string;
+  departmentId: string | null;
+  subjectId: string;
+  reviewerId: string;
+  date: string;
+  /** "role" | "goal:<id>" | "kpi:<id>" | "kra:<id>" */
+  relatesTo: string;
+  hasResponse: boolean;
+  linkedActionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EffectivenessAssessment {
+  id: string;
+  /** Area 04 action id. */
+  actionId: string;
+  actionDocumentId: string | null;
+  actionTitle: string;
+  ownerId: string;
+  departmentId: string | null;
+  status: 'EFFECTIVE' | 'PARTLY_EFFECTIVE' | 'NOT_EFFECTIVE';
+  note: string;
+  evidence: string;
+  assessedById: string;
+  assessedAt: string;
+  /** Incremented each time the assessment is changed. */
+  version: number;
+}
+
+/** What ReviewsDevelopmentService exports to Area 07. */
+export interface ReviewsDevelopmentProvider {
+  listApprovedReviews(
+    user: AccessTokenPayload,
+    filter?: ReviewReadFilter,
+  ): Promise<ApprovedReviewSummary[]>;
+  listCoachingMetadata(
+    user: AccessTokenPayload,
+    filter?: ReviewReadFilter,
+  ): Promise<CoachingMetadata[]>;
+  listEffectiveness(
+    user: AccessTokenPayload,
+    filter?: ReviewReadFilter,
+  ): Promise<EffectivenessAssessment[]>;
+}

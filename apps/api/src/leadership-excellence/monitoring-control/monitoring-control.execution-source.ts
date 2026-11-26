@@ -24,6 +24,7 @@ import type {
 } from '../execution/execution.types';
 import type { TargetPeriod } from '../performance-planning/planning.types';
 import type {
+  ActionFacts,
   ApprovedGoal,
   ApprovedKpiAssignment,
   DecisionOutcome,
@@ -33,6 +34,7 @@ import type {
   PendingActionCheck,
   PerformancePlanningProvider,
   PeriodTarget,
+  ReviewablePlan,
   SubmittedResult,
   TrackedAction,
 } from '../common/contracts';
@@ -467,6 +469,79 @@ export class MonitoringExecutionSource
     } finally {
       this.forget(user.organizationId);
     }
+  }
+
+  // ── Area 06 (reviews read plans and action facts) ───────────────────────
+
+  /** Current approved department and individual plans, with their goals and KPIs. */
+  async listReviewablePlans(organizationId: string): Promise<ReviewablePlan[]> {
+    const view = await this.orgView(organizationId);
+    const plans = new Map<string, ReviewablePlan>();
+    for (const g of view.goals) {
+      if (!g.current || (g.kind !== 'DEPARTMENT' && g.kind !== 'INDIVIDUAL'))
+        continue;
+      let plan = plans.get(g.documentId);
+      if (!plan) {
+        plan = {
+          documentId: g.documentId,
+          version: g.version,
+          kind: g.kind,
+          cycle: g.cycle,
+          title: g.planTitle,
+          departmentId: g.departmentId || null,
+          scopeId: g.scopeId,
+          goals: [],
+          assignments: [],
+        };
+        plans.set(g.documentId, plan);
+      }
+      plan.goals.push({
+        id: g.item.id,
+        code: g.item.code,
+        title: g.item.title,
+        ownerId: g.item.ownerId,
+        kind: g.itemKind,
+      });
+    }
+    for (const row of view.assignments) {
+      const plan = plans.get(row.documentId);
+      if (!plan || !row.current) continue;
+      const a = row.assignment;
+      const goal = view.goals.find((g) => g.key === row.goalKey);
+      plan.assignments.push({
+        id: a.id,
+        code: a.code || row.definition.code,
+        name: row.definition.name,
+        unit: row.definition.unit,
+        ownerId: a.ownerId || goal?.item.ownerId || a.providerId,
+        reviewFrequency: String(a.reviewFrequency || ''),
+      });
+    }
+    return [...plans.values()];
+  }
+
+  /** Every Area 04 action (current plan version) with its check details. */
+  async listActionFacts(organizationId: string): Promise<ActionFacts[]> {
+    const view = await this.orgView(organizationId);
+    return view.actions.map((a) => {
+      const update = this.updateOf(view, a);
+      const tracked = this.toAction(a, update);
+      const goal = view.goals.find((g) => g.key === a.goalKey);
+      const check =
+        tracked.status === 'VERIFIED'
+          ? update?.history.filter((h) => h.event === 'COMPLETED').at(-1)
+          : undefined;
+      return {
+        ...tracked,
+        goalId: itemIdOf(a.goalKey),
+        goalTitle: a.goalTitle,
+        goalOwnerId: goal?.item.ownerId ?? null,
+        expectedResult: a.action.expectedResult || '',
+        evidence: update?.evidence || null,
+        checkedById: check ? this.personOf(view, check.by) : null,
+        checkedAt: check?.at ?? null,
+      };
+    });
   }
 
   /** Not offered by Area 04 yet; the screen links an existing action instead. */

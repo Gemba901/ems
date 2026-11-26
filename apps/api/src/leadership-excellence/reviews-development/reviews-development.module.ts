@@ -9,9 +9,11 @@ import { ReviewsDevelopmentSources } from './reviews-development.sources';
 import { ReviewsService } from './reviews/reviews.service';
 import { CoachingService } from './coaching/coaching.service';
 import { ImprovementService } from './improvement/improvement.service';
+import { MonitoringControlModule } from '../monitoring-control/monitoring-control.module';
 
 @Module({
-  imports: [TenancyModule, PrismaModule, AuthModule],
+  // Plans, actions and verified results come only through Area 05.
+  imports: [TenancyModule, PrismaModule, AuthModule, MonitoringControlModule],
   controllers: [ReviewsDevelopmentController],
   providers: [
     ReviewsDevelopmentService,
@@ -21,6 +23,7 @@ import { ImprovementService } from './improvement/improvement.service';
     ImprovementService,
     ModuleGuard,
   ],
+  // Area 07 injects ReviewsDevelopmentService (ReviewsDevelopmentProvider).
   exports: [ReviewsDevelopmentService],
 })
 export class ReviewsDevelopmentModule {}

@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { FormField } from "@/components/patterns/FormField";
 import { FormPageTemplate } from "@/components/templates/FormPageTemplate";
-import { MODULE_LABELS } from "@/components/tickets/tickets-ui";
+import { MODULE_LABELS } from "@/lib/tickets";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";

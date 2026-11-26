@@ -153,7 +153,7 @@ Migrate the modules in scope onto the kit in the order below. Leave and Steel Ma
 
 | Order | Module | Status |
 | --- | --- | --- |
-| 1 | Tickets | In progress. My Tickets and Raise a Ticket migrated locally. Ticket detail and the support queue remain. |
+| 1 | Tickets | All four screens migrated locally. Zero tracked Tickets UI violations and strict lint enabled. Browser verification pending. |
 | 2 | RTM (`dwms`) | Prior migration and rename need recovery or reapplication. |
 | 3 | Small Group Activities (`sga`) | Migrated locally. Zero tracked UI violations and strict SGA lint enabled. |
 | 4 | SIMS | Migrated locally. Strict SIMS lint enabled. Browser verification pending. |
@@ -176,8 +176,8 @@ queue retry, and monthly spreadsheet export. Browser verification is pending.
 
 The previous Tickets and RTM migration changes were local to a temporary
 worktree that is no longer available. Phase 4 (`9cfdcd8`) and the current
-SGA work are available in the durable frontend-kit worktree. Recover or
-reapply the earlier migrations before considering Phase 5 complete.
+SGA work are available in the durable frontend-kit worktree. The Tickets migration has been reapplied. Recover or reapply RTM before
+considering Phase 5 complete.
 
 Checklist for each module:
 
@@ -207,5 +207,5 @@ Checklist for each module:
 | 2. Patterns    | In review   | Pattern kit, Tickets fixture compositions and behaviour tests implemented; see [report](phase-2-report.md).                                                          |
 | 3. Templates   | In review   | Four templates implemented with fixture examples, documentation and tests; see [report](phase-3-report.md).                                                          |
 | 4. Enforcement | In review   | Rules, baseline, CI and ownership files implemented. Required check and review settings pending.                                                                                             |
-| 5. Migration   | In progress | SGA, SIMS, Daily Gemba Kaizen, and 5S Workplace migrated locally. Tickets list and creation migrated locally. RTM still needs recovery or reapplication.                                                                                                                                                                      |
+| 5. Migration   | In progress | SGA, SIMS, Daily Gemba Kaizen, and 5S Workplace migrated locally. All Tickets screens migrated locally. RTM still needs recovery or reapplication.                                                                                                                                                                      |
 | 6. Lock-in     | Not started |                                                                                                                                                                      |

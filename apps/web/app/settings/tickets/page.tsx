@@ -4,105 +4,110 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { Role } from "@/types/role";
+import type { DataTableColumn } from "@/components/patterns/DataTable";
+import { StatusBadge } from "@/components/patterns/StatusBadge";
+import { ListPageTemplate } from "@/components/templates/ListPageTemplate";
+import { Button } from "@/components/ui/button";
+import { formatDateTime, moduleLabel, STATUS_LABELS, STATUS_OPTIONS } from "@/lib/tickets";
+import { TicketsService, type Ticket } from "@/services/tickets.service";
 import { useAuthStore } from "@/store/auth.store";
-import { TicketsService } from "@/services/tickets.service";
-import { StatusPill, moduleLabel, formatDateTime } from "@/components/tickets/tickets-ui";
-import { ArrowLeft, Ticket as TicketIcon, Loader2, ChevronRight } from "lucide-react";
+import { Role } from "@/types/role";
 
-type Tab = "company" | "system";
+type Queue = "company" | "system";
+const queues = [{ id: "company", label: "Company" }, { id: "system", label: "System" }] as const;
 
-export default function TicketsSettingsPage() {
+function raiser(ticket: Ticket) {
+  return `${ticket.raisedBy.firstName} ${ticket.raisedBy.lastName}`;
+}
+
+function columns(queue: Queue): DataTableColumn<Ticket>[] {
+  return [
+    {
+      id: "subject",
+      header: "Subject",
+      cell: (ticket) => (
+        <Link
+          href={`/tickets/${ticket.id}?support=1&queue=${queue}`}
+          className="block min-w-32 max-w-lg whitespace-normal break-words font-medium text-primary hover:underline focus-visible:outline-ring"
+        >
+          {ticket.subject}
+        </Link>
+      ),
+    },
+    { id: "module", header: "Module", cell: (ticket) => moduleLabel(ticket.module) },
+    {
+      id: "raiser",
+      header: "Raised by",
+      cell: (ticket) => (
+        <>
+          {raiser(ticket)}
+          {ticket.department && <p className="text-caption text-muted-foreground">{ticket.department}</p>}
+        </>
+      ),
+    },
+    { id: "status", header: "Status", cell: (ticket) => <StatusBadge status={ticket.status} label={STATUS_LABELS[ticket.status]} /> },
+    {
+      id: "raised",
+      header: "Raised",
+      cell: (ticket) => formatDateTime(ticket.createdAt),
+      sortValue: (ticket) => new Date(ticket.createdAt).getTime(),
+    },
+  ];
+}
+
+function SupportQueue() {
   const { accessToken, user } = useAuthStore();
-  const isSuperAdmin = user?.roleLevel === Role.SUPER_ADMIN;
-  const [tab, setTab] = useState<Tab>("company");
-
-  const { data: companyTickets = [], isLoading: loadingCompany } = useQuery({
-    queryKey: ["tickets-company"],
-    queryFn: () => TicketsService.getCompanyTickets(accessToken!),
-    enabled: !!accessToken && tab === "company",
+  const canViewSystem = user?.isAdminOrg === true && user.roleLevel === Role.SUPER_ADMIN;
+  const [selectedQueue, setSelectedQueue] = useState<Queue>("company");
+  const queue = canViewSystem ? selectedQueue : "company";
+  const { data: tickets = [], isLoading, error, refetch } = useQuery({
+    queryKey: [`tickets-${queue}`],
+    queryFn: () => queue === "system" ? TicketsService.getSystemTickets(accessToken!) : TicketsService.getCompanyTickets(accessToken!),
+    enabled: !!accessToken,
   });
-
-  const { data: systemTickets = [], isLoading: loadingSystem } = useQuery({
-    queryKey: ["tickets-system"],
-    queryFn: () => TicketsService.getSystemTickets(accessToken!),
-    enabled: !!accessToken && isSuperAdmin && tab === "system",
-  });
-
-  const tickets = tab === "company" ? companyTickets : systemTickets;
-  const isLoading = tab === "company" ? loadingCompany : loadingSystem;
 
   return (
+    <ListPageTemplate
+      key={queue}
+      header={{
+        title: "Tickets",
+        description: "Review and resolve tickets raised by your team.",
+        breadcrumbs: [{ label: "Settings", href: "/settings" }, { label: "Support Queue" }],
+      }}
+      beforeTable={canViewSystem && (
+        <div role="group" aria-label="Ticket queue" className="flex flex-wrap gap-2">
+          {queues.map(({ id, label }) => (
+            <Button key={id} type="button" aria-pressed={queue === id} variant={queue === id ? "default" : "outline"} onClick={() => setSelectedQueue(id)}>
+              {label}
+            </Button>
+          ))}
+        </div>
+      )}
+      table={{
+        caption: queue === "company" ? "Company tickets" : "System tickets",
+        rows: tickets,
+        columns: columns(queue),
+        getRowId: (ticket) => ticket.id,
+        searchText: (ticket) => `${ticket.subject} ${moduleLabel(ticket.module)} ${raiser(ticket)} ${ticket.department ?? ""}`,
+        filters: [{
+          id: "status",
+          label: "Status",
+          options: STATUS_OPTIONS.map((status) => ({ value: status, label: STATUS_LABELS[status] })),
+        }],
+        matchesFilters: (ticket, values) => !values.filters.status || ticket.status === values.filters.status,
+        loading: isLoading,
+        error: error?.message,
+        onRetry: () => void refetch(),
+        emptyTitle: tickets.length ? "No tickets match your filters" : `No ${queue} tickets yet`,
+      }}
+    />
+  );
+}
+
+export default function TicketsSettingsPage() {
+  return (
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN]}>
-      <div className="space-y-6">
-        <Link href="/settings" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors">
-          <ArrowLeft className="h-4 w-4" /> Back to Settings
-        </Link>
-
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tickets</h1>
-          <p className="text-sm text-slate-500 mt-1">Review and resolve tickets raised by your team.</p>
-        </div>
-
-        {isSuperAdmin && (
-          <div className="inline-flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-            <button
-              onClick={() => setTab("company")}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${tab === "company" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              Company
-            </button>
-            <button
-              onClick={() => setTab("system")}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${tab === "system" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              System
-            </button>
-          </div>
-        )}
-
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-          {isLoading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-            </div>
-          ) : tickets.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-16 text-center px-6">
-              <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center">
-                <TicketIcon className="h-5 w-5 text-slate-300" />
-              </div>
-              <p className="text-sm font-medium text-slate-500">No {tab} tickets yet</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {tickets.map((t) => (
-                <Link
-                  key={t.id}
-                  href={`/tickets/${t.id}?support=1`}
-                  className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{moduleLabel(t.module)}</span>
-                      <span className="text-slate-200">·</span>
-                      <span className="text-[11px] text-slate-400">
-                        {t.raisedBy.firstName} {t.raisedBy.lastName}{t.department ? ` · ${t.department}` : ""}
-                      </span>
-                      <span className="text-slate-200">·</span>
-                      <span className="text-[11px] text-slate-400">{formatDateTime(t.createdAt)}</span>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-800 truncate">{t.subject}</p>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <StatusPill status={t.status} />
-                    <ChevronRight className="h-4 w-4 text-slate-300" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <SupportQueue />
     </ProtectedRoute>
   );
 }

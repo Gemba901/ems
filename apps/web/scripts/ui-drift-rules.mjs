@@ -46,6 +46,7 @@ function styleRule(message, check) {
 
 const sharedInfrastructure = new Set([
   "components/Header",
+  "components/Sidebar",
   "components/ModuleGuard",
   "components/auth/ProtectedRoute",
   "components/files/TenantImage",
